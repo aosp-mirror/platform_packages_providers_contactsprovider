@@ -19,7 +19,6 @@ package com.android.providers.contacts;
 import com.android.internal.database.ArrayListCursor;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
-
 import android.app.SearchManager;
 import android.content.AbstractTableMerger;
 import android.content.ContentProvider;
@@ -45,6 +44,7 @@ import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
 import android.provider.Contacts;
+import android.provider.LiveFolders;
 import android.provider.SyncConstValue;
 import android.provider.CallLog.Calls;
 import android.provider.Contacts.ContactMethods;
@@ -105,6 +105,9 @@ public class ContactsProvider extends SyncableContentProvider {
     /** this is suitable for local use in methods and should never be passed as a parameter to
      * other methods (other than the DB layer) */
     private final ContentValues mValuesLocal = new ContentValues();
+
+    private String[] mAccounts = new String[0];
+    private final Object mAccountsLock = new Object();
 
     private DatabaseUtils.InsertHelper mDeletedPeopleInserter;
     private DatabaseUtils.InsertHelper mPeopleInserter;
@@ -313,6 +316,11 @@ public class ContactsProvider extends SyncableContentProvider {
             oldVersion = 78;
         }
 
+        if (oldVersion == 78) {
+            db.execSQL("UPDATE photos SET _sync_dirty=0 where _sync_dirty is null;");
+            oldVersion = 79;
+        }
+
         return upgradeWasLossless;
     }
 
@@ -422,7 +430,7 @@ public class ContactsProvider extends SyncableContentProvider {
                 + Photos._SYNC_TIME + " TEXT,"
                 + Photos._SYNC_VERSION + " TEXT,"
                 + Photos._SYNC_LOCAL_ID + " INTEGER,"
-                + Photos._SYNC_DIRTY + " INTEGER,"
+                + Photos._SYNC_DIRTY + " INTEGER NOT NULL DEFAULT 0,"
                 + Photos._SYNC_MARK + " INTEGER,"
                 + "UNIQUE(" + Photos.PERSON_ID + ") "
                 + ")");
@@ -797,7 +805,7 @@ public class ContactsProvider extends SyncableContentProvider {
                         "WHERE " + Groups.NAME + "="
                         + DatabaseUtils.sqlEscapeString(url.getPathSegments().get(2)) + ")");
                 break;
-
+                
             case GROUP_SYSTEM_ID_MEMBERS_FILTER:
                 if (url.getPathSegments().size() > 5) {
                     qb.appendWhere(buildPeopleLookupWhereClause(url.getLastPathSegment()));
@@ -1154,6 +1162,34 @@ public class ContactsProvider extends SyncableContentProvider {
                 qb.setProjectionMap(sExtensionsProjectionMap);
                 break;
 
+            case LIVE_FOLDERS_PEOPLE:
+                qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                break;
+                
+            case LIVE_FOLDERS_PEOPLE_WITH_PHONES:
+                qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                qb.appendWhere(People.PRIMARY_PHONE_ID + " IS NOT NULL");
+                break;
+
+            case LIVE_FOLDERS_PEOPLE_FAVORITES:
+                qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                qb.appendWhere(People.STARRED + " <> 0");
+                break;
+
+            case LIVE_FOLDERS_PEOPLE_GROUP_NAME:
+                qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                qb.appendWhere("people._id IN (SELECT person FROM groupmembership JOIN groups " +
+                        "ON (group_id=groups._id OR " +
+                        "(group_sync_id = groups._sync_id AND " +
+                            "group_sync_account = groups._sync_account)) "+
+                        "WHERE " + Groups.NAME + "="
+                        + DatabaseUtils.sqlEscapeString(url.getLastPathSegment()) + ")");
+                break;
+
             default:
                 throw new IllegalArgumentException("Unknown URL " + url);
         }
@@ -1337,22 +1373,13 @@ public class ContactsProvider extends SyncableContentProvider {
     private ContentValues queryAndroidStarredGroupId(String account) {
         String whereString;
         String[] whereArgs;
-
-        // TODO: the following commented-out code is being replaced with code that ignores
-        // the account.
-        // This is a short-term fix that is known not to work with multiple-accounts but is
-        // sufficient for V1 and safer than the real fix. This code must not be merged back into
-        // the trunk, which already contains the real fix.
-//        if (!TextUtils.isEmpty(account)) {
-//            whereString = "_sync_account=? AND name=?";
-//            whereArgs = new String[]{account, Groups.GROUP_ANDROID_STARRED};
-//        } else {
-//            whereString = "_sync_account is null AND name=?";
-//            whereArgs = new String[]{Groups.GROUP_ANDROID_STARRED};
-//        }
-        whereString = "name=?";
-        whereArgs = new String[]{Groups.GROUP_ANDROID_STARRED};
-
+        if (!TextUtils.isEmpty(account)) {
+            whereString = "_sync_account=? AND name=?";
+            whereArgs = new String[]{account, Groups.GROUP_ANDROID_STARRED};
+        } else {
+            whereString = "_sync_account is null AND name=?";
+            whereArgs = new String[]{Groups.GROUP_ANDROID_STARRED};
+        }
         Cursor cursor = getDatabase().query(sGroupsTable,
                 new String[]{Groups._ID, Groups._SYNC_ID, Groups._SYNC_ACCOUNT},
                 whereString, whereArgs, null, null, null);
@@ -1420,6 +1447,7 @@ public class ContactsProvider extends SyncableContentProvider {
 
             case GROUPS: {
                 ContentValues newMap = new ContentValues(initialValues);
+                ensureSyncAccountIsSet(newMap);
                 newMap.put(Groups._SYNC_DIRTY, 1);
                 // Insert into the groups table
                 rowID = mGroupsInserter.insert(newMap);
@@ -1440,6 +1468,7 @@ public class ContactsProvider extends SyncableContentProvider {
             case PEOPLE: {
                 mValues.clear();
                 mValues.putAll(initialValues);
+                ensureSyncAccountIsSet(mValues);
                 mValues.put(People._SYNC_DIRTY, 1);
                 // Insert into the people table
                 rowID = mPeopleInserter.insert(mValues);
@@ -1452,11 +1481,12 @@ public class ContactsProvider extends SyncableContentProvider {
                         boolean isStarred = starredValue != null && starredValue != 0;
                         fixupGroupMembershipAfterPeopleUpdate(account, rowID, isStarred);
                         // create a photo row for this person
+                        mDb.delete(sPhotosTable, "person=" + rowID, null);
                         mValues.clear();
                         mValues.put(Photos.PERSON_ID, rowID);
                         mValues.put(Photos._SYNC_ACCOUNT, account);
                         mValues.put(Photos._SYNC_ID, syncId);
-                        mDb.delete(sPhotosTable, "person=" + rowID, null);
+                        mValues.put(Photos._SYNC_DIRTY, 0);
                         mPhotosInserter.insert(mValues);
                     }
                 }
@@ -1613,6 +1643,24 @@ public class ContactsProvider extends SyncableContentProvider {
         return resultUri;
     }
 
+    @Override
+    protected void onAccountsChanged(String[] accountsArray) {
+        super.onAccountsChanged(accountsArray);
+        synchronized (mAccountsLock) {
+            mAccounts = new String[accountsArray.length];
+            System.arraycopy(accountsArray, 0, mAccounts, 0, mAccounts.length);
+        }
+    }
+
+    private void ensureSyncAccountIsSet(ContentValues values) {
+        synchronized (mAccountsLock) {
+            String account = values.getAsString(SyncConstValue._SYNC_ACCOUNT);
+            if (account == null && mAccounts.length > 0) {
+                values.put(SyncConstValue._SYNC_ACCOUNT, mAccounts[0]);
+            }
+        }
+    }
+
     private Uri insertOwner(ContentValues values) {
         // Check the permissions
         getContext().enforceCallingPermission("android.permission.WRITE_OWNER_DATA",
@@ -1700,6 +1748,7 @@ public class ContactsProvider extends SyncableContentProvider {
                 long groupId = mGroupsInserter.insert(mValuesLocal);
                 starredGroupInfo = new ContentValues();
                 starredGroupInfo.put(Groups._ID, groupId);
+                starredGroupInfo.put(Groups._SYNC_ACCOUNT, account);
                 // don't put the _SYNC_ID in here since we don't know it yet
             }
 
@@ -1957,9 +2006,11 @@ public class ContactsProvider extends SyncableContentProvider {
             final int dstIdxSyncVersion =
                     mDeletedPeopleInserter.getColumnIndex(SyncConstValue._SYNC_VERSION);
             while (cursor.moveToNext()) {
+                final String syncId = cursor.getString(idxSyncId);
+                if (TextUtils.isEmpty(syncId)) continue;
                 // insert into deleted table
                 mDeletedPeopleInserter.prepareForInsert();
-                mDeletedPeopleInserter.bind(dstIdxSyncId, cursor.getString(idxSyncId));
+                mDeletedPeopleInserter.bind(dstIdxSyncId, syncId);
                 mDeletedPeopleInserter.bind(dstIdxSyncAccount, cursor.getString(idxSyncAccount));
                 mDeletedPeopleInserter.bind(dstIdxSyncVersion, cursor.getString(idxSyncVersion));
                 mDeletedPeopleInserter.execute();
@@ -3578,7 +3629,7 @@ public class ContactsProvider extends SyncableContentProvider {
     private static final String TAG = "ContactsProvider";
 
     /* package private */ static final String DATABASE_NAME = "contacts.db";
-    /* package private */ static final int DATABASE_VERSION = 78;
+    /* package private */ static final int DATABASE_VERSION = 79;
 
     protected static final String CONTACTS_AUTHORITY = "contacts";
     protected static final String CALL_LOG_AUTHORITY = "call_log";
@@ -3662,6 +3713,12 @@ public class ContactsProvider extends SyncableContentProvider {
     private static final int EXTENSIONS_ID = EXTENSIONS_BASE + 2;
 
     private static final int SETTINGS = 12000;
+    
+    private static final int LIVE_FOLDERS_BASE = 13000;
+    private static final int LIVE_FOLDERS_PEOPLE = LIVE_FOLDERS_BASE + 1;
+    private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = LIVE_FOLDERS_BASE + 2;
+    private static final int LIVE_FOLDERS_PEOPLE_WITH_PHONES = LIVE_FOLDERS_BASE + 3;
+    private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = LIVE_FOLDERS_BASE + 4;
 
     private static final UriMatcher sURIMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -3680,6 +3737,7 @@ public class ContactsProvider extends SyncableContentProvider {
     private static final HashMap<String, String> sGroupMembershipProjectionMap;
     private static final HashMap<String, String> sPhotosProjectionMap;
     private static final HashMap<String, String> sExtensionsProjectionMap;
+    private static final HashMap<String, String> sLiveFoldersProjectionMap;
 
     private static final String sPhonesKeyOrderBy;
     private static final String sContactMethodsKeyOrderBy;
@@ -3788,6 +3846,14 @@ public class ContactsProvider extends SyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
                 SEARCH_SUGGESTIONS);
         matcher.addURI(CONTACTS_AUTHORITY, "settings", SETTINGS);
+
+        matcher.addURI(CONTACTS_AUTHORITY, "live_folders/people", LIVE_FOLDERS_PEOPLE);
+        matcher.addURI(CONTACTS_AUTHORITY, "live_folders/people/*",
+                LIVE_FOLDERS_PEOPLE_GROUP_NAME);
+        matcher.addURI(CONTACTS_AUTHORITY, "live_folders/people_with_phones",
+                LIVE_FOLDERS_PEOPLE_WITH_PHONES);
+        matcher.addURI(CONTACTS_AUTHORITY, "live_folders/favorites",
+                LIVE_FOLDERS_PEOPLE_FAVORITES);
 
         // Call log URI matching table
         matcher.addURI(CALL_LOG_AUTHORITY, "calls", CALLS);
@@ -3972,6 +4038,13 @@ public class ContactsProvider extends SyncableContentProvider {
         map.putAll(syncColumns);
         sPhotosProjectionMap = map;
 
+        // Live folder projection
+        map = new HashMap<String, String>();
+        map.put(LiveFolders._ID, "people._id AS " + LiveFolders._ID);
+        map.put(LiveFolders.NAME, DISPLAY_NAME_SQL + " AS " + LiveFolders.NAME);
+        map.put(LiveFolders.ICON_BITMAP, Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
+        sLiveFoldersProjectionMap = map;
+        
         // Order by statements
         sPhonesKeyOrderBy = buildOrderBy(sPhonesTable, Phones.NUMBER);
         sContactMethodsKeyOrderBy = buildOrderBy(sContactMethodsTable,
