@@ -117,6 +117,7 @@ public class ContactsProvider extends SyncableContentProvider {
     private int mIndexPeopleSyncDirty;
     private int mIndexPeopleSyncAccount;
     private int mIndexPeopleName;
+    private int mIndexPeoplePhoneticName;
     private int mIndexPeopleNotes;
     private DatabaseUtils.InsertHelper mGroupsInserter;
     private DatabaseUtils.InsertHelper mPhotosInserter;
@@ -185,6 +186,7 @@ public class ContactsProvider extends SyncableContentProvider {
         mIndexPeopleSyncDirty = mPeopleInserter.getColumnIndex(People._SYNC_DIRTY);
         mIndexPeopleSyncAccount = mPeopleInserter.getColumnIndex(People._SYNC_ACCOUNT);
         mIndexPeopleName = mPeopleInserter.getColumnIndex(People.NAME);
+        mIndexPeoplePhoneticName = mPeopleInserter.getColumnIndex(People.PHONETIC_NAME);
         mIndexPeopleNotes = mPeopleInserter.getColumnIndex(People.NOTES);
 
         mGroupsInserter = new DatabaseUtils.InsertHelper(db, sGroupsTable);
@@ -321,6 +323,15 @@ public class ContactsProvider extends SyncableContentProvider {
             oldVersion = 79;
         }
 
+        if (oldVersion == 79) {
+            try {
+                db.execSQL("ALTER TABLE people ADD phonetic_name TEXT COLLATE LOCALIZED;");
+            } catch (SQLiteException sqle) {
+                // Maybe the table was altered already... Shouldn't be an issue.
+            }
+            oldVersion = 80;
+        }
+
         return upgradeWasLossless;
     }
 
@@ -366,7 +377,8 @@ public class ContactsProvider extends SyncableContentProvider {
                     People.PRIMARY_EMAIL_ID + " INTEGER REFERENCES contact_methods(_id)," +
                     People.PHOTO_VERSION + " TEXT," +
                     People.CUSTOM_RINGTONE + " TEXT," +
-                    People.SEND_TO_VOICEMAIL + " INTEGER" +
+                    People.SEND_TO_VOICEMAIL + " INTEGER," +
+                    People.PHONETIC_NAME + " TEXT COLLATE LOCALIZED" +
                     ");");
 
         db.execSQL("CREATE INDEX peopleNameIndex ON people (" + People.NAME + ");");
@@ -2759,6 +2771,7 @@ public class ContactsProvider extends SyncableContentProvider {
             DatabaseUtils.cursorStringToInsertHelper(diffsCursor, People._SYNC_DIRTY, mPeopleInserter, mIndexPeopleSyncDirty);
             DatabaseUtils.cursorStringToInsertHelper(diffsCursor, People._SYNC_ACCOUNT, mPeopleInserter, mIndexPeopleSyncAccount);
             DatabaseUtils.cursorStringToInsertHelper(diffsCursor, People.NAME, mPeopleInserter, mIndexPeopleName);
+            DatabaseUtils.cursorStringToInsertHelper(diffsCursor, People.PHONETIC_NAME, mPeopleInserter, mIndexPeoplePhoneticName);
             DatabaseUtils.cursorStringToInsertHelper(diffsCursor, People.NOTES, mPeopleInserter, mIndexPeopleNotes);
             long localPersonID = mPeopleInserter.execute();
 
@@ -3334,6 +3347,7 @@ public class ContactsProvider extends SyncableContentProvider {
             DatabaseUtils.cursorStringToContentValues(diffsCursor, People._SYNC_VERSION, mValues);
             DatabaseUtils.cursorStringToContentValues(diffsCursor, People._SYNC_ACCOUNT, mValues);
             DatabaseUtils.cursorStringToContentValues(diffsCursor, People.NAME, mValues);
+            DatabaseUtils.cursorStringToContentValues(diffsCursor, People.PHONETIC_NAME, mValues);
             DatabaseUtils.cursorStringToContentValues(diffsCursor, People.NOTES, mValues);
             mValues.put(People.PRIMARY_PHONE_ID, primaryPhoneId);
             mValues.put(People.PRIMARY_EMAIL_ID, primaryEmailId);
@@ -3629,7 +3643,7 @@ public class ContactsProvider extends SyncableContentProvider {
     private static final String TAG = "ContactsProvider";
 
     /* package private */ static final String DATABASE_NAME = "contacts.db";
-    /* package private */ static final int DATABASE_VERSION = 79;
+    /* package private */ static final int DATABASE_VERSION = 80;
 
     protected static final String CONTACTS_AUTHORITY = "contacts";
     protected static final String CALL_LOG_AUTHORITY = "call_log";
@@ -3871,6 +3885,7 @@ public class ContactsProvider extends SyncableContentProvider {
         peopleColumns.put(PeopleColumns.STARRED, People.STARRED);
         peopleColumns.put(PeopleColumns.CUSTOM_RINGTONE, People.CUSTOM_RINGTONE);
         peopleColumns.put(PeopleColumns.SEND_TO_VOICEMAIL, People.SEND_TO_VOICEMAIL);
+        peopleColumns.put(PeopleColumns.PHONETIC_NAME, People.PHONETIC_NAME);
         peopleColumns.put(PeopleColumns.DISPLAY_NAME,
                 DISPLAY_NAME_SQL + " AS " + People.DISPLAY_NAME);
 
@@ -4068,4 +4083,3 @@ public class ContactsProvider extends SyncableContentProvider {
         sGroupsJoinString = "(" + groupJoinByLocalId + " OR " + groupJoinByServerId + ")";
     }
 }
-
