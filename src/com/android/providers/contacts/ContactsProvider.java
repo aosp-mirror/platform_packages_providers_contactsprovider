@@ -16,9 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.database.ArrayListCursor;
-import com.google.android.collect.Maps;
-import com.google.android.collect.Sets;
 import android.app.SearchManager;
 import android.content.AbstractTableMerger;
 import android.content.ContentProvider;
@@ -29,6 +26,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SyncableContentProvider;
 import android.content.UriMatcher;
+import android.content.AbstractSyncableContentProvider;
 import android.database.Cursor;
 import android.database.CursorJoiner;
 import android.database.DatabaseUtils;
@@ -43,36 +41,23 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
+import android.provider.CallLog.Calls;
 import android.provider.Contacts;
+import android.provider.Contacts.*;
 import android.provider.LiveFolders;
 import android.provider.SyncConstValue;
-import android.provider.CallLog.Calls;
-import android.provider.Contacts.ContactMethods;
-import android.provider.Contacts.Extensions;
-import android.provider.Contacts.GroupMembership;
-import android.provider.Contacts.Groups;
-import android.provider.Contacts.GroupsColumns;
-import android.provider.Contacts.Intents;
-import android.provider.Contacts.Organizations;
-import android.provider.Contacts.People;
-import android.provider.Contacts.PeopleColumns;
-import android.provider.Contacts.Phones;
-import android.provider.Contacts.Photos;
-import android.provider.Contacts.Presence;
-import android.provider.Contacts.PresenceColumns;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Config;
 import android.util.Log;
+import com.android.internal.database.ArrayListCursor;
+import com.google.android.collect.Maps;
+import com.google.android.collect.Sets;
 
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-public class ContactsProvider extends SyncableContentProvider {
+public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String STREQUENT_ORDER_BY = "times_contacted DESC, display_name ASC";
     private static final String STREQUENT_LIMIT =
             "(SELECT COUNT(*) FROM people WHERE starred = 1) + 25";
@@ -460,12 +445,14 @@ public class ContactsProvider extends SyncableContentProvider {
         db.execSQL("CREATE TABLE _deleted_people (" +
                     "_sync_version TEXT," + // From the sync source
                     "_sync_id TEXT," +
+                    (isTemporary() ? "_sync_local_id INTEGER," : "") + // Used while syncing,
                     "_sync_account TEXT," +
                     "_sync_mark INTEGER)"); // Used to filter out new rows
 
         db.execSQL("CREATE TABLE _deleted_groups (" +
                     "_sync_version TEXT," + // From the sync source
                     "_sync_id TEXT," +
+                    (isTemporary() ? "_sync_local_id INTEGER," : "") + // Used while syncing,
                     "_sync_account TEXT," +
                     "_sync_mark INTEGER)"); // Used to filter out new rows
 
@@ -2172,7 +2159,12 @@ public class ContactsProvider extends SyncableContentProvider {
             case PHOTOS_ID:
                 mValues.clear();
                 mValues.putAll(values);
-                if (!mValues.containsKey(Photos._SYNC_DIRTY)) mValues.put(Photos._SYNC_DIRTY, 1);
+
+                // The _SYNC_DIRTY flag should only be set if the data was modified and if
+                // it isn't already provided. 
+                if (!mValues.containsKey(Photos._SYNC_DIRTY) && mValues.containsKey(Photos.DATA)) {
+                    mValues.put(Photos._SYNC_DIRTY, 1);
+                }
                 StringBuilder where;
                 if (matchedUriId == PEOPLE_PHOTO) {
                     where = new StringBuilder("_id=" + url.getPathSegments().get(1));
