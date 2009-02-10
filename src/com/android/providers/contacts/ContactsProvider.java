@@ -3750,20 +3750,26 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String sOrganizationsKeyOrderBy;
     private static final String sGroupmembershipKeyOrderBy;
 
-    private static final String DISPLAY_NAME_SQL = "CASE WHEN (name IS NOT NULL AND name != '') "
-        + "THEN name "
-        + "ELSE "
-            + "(CASE WHEN primary_phone IS NOT NULL THEN "
-                +"(SELECT number FROM phones WHERE phones._id = primary_phone) "
+    private static final String DISPLAY_NAME_SQL
+            = "(CASE WHEN (name IS NOT NULL AND name != '') "
+                + "THEN name "
             + "ELSE "
-                + "(CASE WHEN primary_email IS NOT NULL THEN "
-                    + "(SELECT data FROM contact_methods WHERE "
-                        + "contact_methods._id = primary_email) "
+                + "(CASE WHEN primary_organization is NOT NULL THEN "
+                    + "(SELECT company FROM organizations WHERE "
+                        + "organizations._id = primary_organization) "
                 + "ELSE "
-                    + "null "
+                    + "(CASE WHEN primary_phone IS NOT NULL THEN "
+                        +"(SELECT number FROM phones WHERE phones._id = primary_phone) "
+                    + "ELSE "
+                        + "(CASE WHEN primary_email IS NOT NULL THEN "
+                            + "(SELECT data FROM contact_methods WHERE "
+                                + "contact_methods._id = primary_email) "
+                        + "ELSE "
+                            + "null "
+                        + "END) "
+                    + "END) "
                 + "END) "
-            + "END) "
-        + "END ";
+            + "END) ";
     
     private static final String[] sPhonesKeyColumns;
     private static final String[] sContactMethodsKeyColumns;
