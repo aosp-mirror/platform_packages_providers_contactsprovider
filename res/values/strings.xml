@@ -15,6 +15,10 @@
 -->
 
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+
+    <!-- This is the label for the application that stores contacts data -->
+    <string name="app_label">Contacts Storage</string>
+
     <!-- Strings for search suggestions -->
     <string name="dialNumber">Dial number</string>
     <string name="createNewContact">New contact</string>
