@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import android.app.SearchManager;
+import android.content.AbstractSyncableContentProvider;
 import android.content.AbstractTableMerger;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -24,9 +25,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.SyncableContentProvider;
 import android.content.UriMatcher;
-import android.content.AbstractSyncableContentProvider;
 import android.database.Cursor;
 import android.database.CursorJoiner;
 import android.database.DatabaseUtils;
@@ -43,7 +42,19 @@ import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.provider.Contacts;
-import android.provider.Contacts.*;
+import android.provider.Contacts.ContactMethods;
+import android.provider.Contacts.Extensions;
+import android.provider.Contacts.GroupMembership;
+import android.provider.Contacts.Groups;
+import android.provider.Contacts.GroupsColumns;
+import android.provider.Contacts.Intents;
+import android.provider.Contacts.Organizations;
+import android.provider.Contacts.People;
+import android.provider.Contacts.PeopleColumns;
+import android.provider.Contacts.Phones;
+import android.provider.Contacts.Photos;
+import android.provider.Contacts.Presence;
+import android.provider.Contacts.PresenceColumns;
 import android.provider.LiveFolders;
 import android.provider.SyncConstValue;
 import android.telephony.PhoneNumberUtils;
@@ -55,7 +66,11 @@ import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 
 import java.io.FileNotFoundException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String STREQUENT_ORDER_BY = "times_contacted DESC, display_name ASC";
@@ -959,6 +974,18 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 qb.appendWhere(" AND phones._id=");
                 qb.appendWhere(url.getPathSegments().get(3));
                 break;
+
+            case PEOPLE_PHONES_WITH_PRESENCE:
+                qb.appendWhere("people._id=?");
+                selectionArgs = appendSelectionArg(selectionArgs, url.getPathSegments().get(1));
+                // Fall through.
+
+            case PHONES_WITH_PRESENCE:
+                qb.setTables("phones JOIN people ON (phones.person = people._id)"
+                        + " LEFT OUTER JOIN presence ON (presence.person = people._id)");
+                qb.setProjectionMap(sPhonesWithPresenceProjectionMap);
+                break;
+
             case PEOPLE_CONTACTMETHODS:
                 qb.setTables("contact_methods, people");
                 qb.setProjectionMap(sContactMethodsProjectionMap);
@@ -3662,6 +3689,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int PEOPLE_CONTACTMETHODS_WITH_PRESENCE = PEOPLE_BASE + 18;
     private static final int PEOPLE_OWNER = PEOPLE_BASE + 19;
     private static final int PEOPLE_UPDATE_CONTACT_TIME = PEOPLE_BASE + 20;
+    private static final int PEOPLE_PHONES_WITH_PRESENCE = PEOPLE_BASE + 21;
 
     private static final int DELETED_BASE = 1000;
     private static final int DELETED_PEOPLE = DELETED_BASE;
@@ -3673,6 +3701,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int PHONES_FILTER = PHONES_BASE + 2;
     private static final int PHONES_FILTER_NAME = PHONES_BASE + 3;
     private static final int PHONES_MOBILE_FILTER_NAME = PHONES_BASE + 4;
+    private static final int PHONES_WITH_PRESENCE = PHONES_BASE + 5;
 
     private static final int CONTACTMETHODS_BASE = 3000;
     private static final int CONTACTMETHODS = CONTACTMETHODS_BASE;
@@ -3734,6 +3763,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final HashMap<String, String> sPeopleWithMaxTimesContactedProjectionMap;
     private static final HashMap<String, String> sCallsProjectionMap;
     private static final HashMap<String, String> sPhonesProjectionMap;
+    private static final HashMap<String, String> sPhonesWithPresenceProjectionMap;
     private static final HashMap<String, String> sContactMethodsProjectionMap;
     private static final HashMap<String, String> sContactMethodsWithPresenceProjectionMap;
     private static final HashMap<String, String> sPresenceProjectionMap;
@@ -3818,6 +3848,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/extensions", PEOPLE_EXTENSIONS);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/extensions/#", PEOPLE_EXTENSIONS_ID);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones", PEOPLE_PHONES);
+        matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones_with_presence",
+                PEOPLE_PHONES_WITH_PRESENCE);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/photo", PEOPLE_PHOTO);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones/#", PEOPLE_PHONES_ID);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/contact_methods", PEOPLE_CONTACTMETHODS);
@@ -3835,6 +3867,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, "deleted_people", DELETED_PEOPLE);
         matcher.addURI(CONTACTS_AUTHORITY, "deleted_groups", DELETED_GROUPS);
         matcher.addURI(CONTACTS_AUTHORITY, "phones", PHONES);
+        matcher.addURI(CONTACTS_AUTHORITY, "phones_with_presence", PHONES_WITH_PRESENCE);
         matcher.addURI(CONTACTS_AUTHORITY, "phones/filter/*", PHONES_FILTER);
         matcher.addURI(CONTACTS_AUTHORITY, "phones/filter_name/*", PHONES_FILTER_NAME);
         matcher.addURI(CONTACTS_AUTHORITY, "phones/mobile_filter_name/*",
@@ -3970,10 +4003,15 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map = new HashMap<String, String>();
         map.put(Phones._ID, "phones._id AS " + Phones._ID);
         map.putAll(phonesColumns);
-        map.put(Phones.PERSON_ID, Phones.PERSON_ID);
+        map.put(Phones.PERSON_ID, "phones.person AS " + Phones.PERSON_ID);
         map.put(Phones.ISPRIMARY, Phones.ISPRIMARY);
         map.putAll(peopleColumns);
         sPhonesProjectionMap = map;
+
+        // Phones with presence projection map
+        map = new HashMap<String, String>(sPhonesProjectionMap);
+        map.putAll(presenceColumns);
+        sPhonesWithPresenceProjectionMap = map;
 
         // Organizations projection map
         map = new HashMap<String, String>();
