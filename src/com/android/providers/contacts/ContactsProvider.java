@@ -81,6 +81,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             "people LEFT OUTER JOIN phones ON people.primary_phone=phones._id "
             + "LEFT OUTER JOIN presence ON (presence." + Presence.PERSON_ID + "=people._id)";
 
+    private static final String PEOPLE_PHONES_PHOTOS_JOIN =
+            "people LEFT OUTER JOIN phones ON people.primary_phone=phones._id "
+            + "LEFT OUTER JOIN presence ON (presence." + Presence.PERSON_ID + "=people._id) "
+            + "LEFT OUTER JOIN photos ON (photos." + Photos.PERSON_ID + "=people._id)";
+
     private static final String GTALK_PROTOCOL_STRING =
             ContactMethods.encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
 
@@ -895,22 +900,24 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             }
             case PEOPLE_STREQUENT: {
                 // Build the first query for starred
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleWithMaxTimesContactedProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sStrequentStarredProjectionMap);
                 final String starredQuery = qb.buildQuery(projectionIn, "starred = 1",
                         null, null, null, null,
                         null /* limit */);
 
+                // Build the second query for frequent
                 qb = new SQLiteQueryBuilder();
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sPeopleWithPhotoProjectionMap);
                 final String frequentQuery = qb.buildQuery(projectionIn,
                         "times_contacted > 0 AND starred = 0", null, null, null, null, null);
 
+                // Put them together
                 final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
                         STREQUENT_ORDER_BY, STREQUENT_LIMIT);
                 final SQLiteDatabase db = getDatabase();
-                Cursor c = db.rawQueryWithFactory(null, query, null, "people");
+                Cursor c = db.rawQueryWithFactory(null, query, null, sPeopleTable);
                 if ((c != null) && !isTemporary()) {
                     c.setNotificationUri(getContext().getContentResolver(), url);
                 }
@@ -918,25 +925,26 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             }
             case PEOPLE_STREQUENT_FILTER: {
                 // Build the first query for starred
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleWithMaxTimesContactedProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sStrequentStarredProjectionMap);
                 if (url.getPathSegments().size() > 3) {
                     qb.appendWhere(buildPeopleLookupWhereClause(url.getLastPathSegment()));
                 }
-                qb.appendWhere(" AND starred = 1");
-                final String starredQuery = qb.buildQuery(projectionIn, null, null, null, null,
-                        null, null);
+                final String starredQuery = qb.buildQuery(projectionIn, "starred = 1",
+                        null, null, null, null,
+                        null /* limit */);
 
+                // Build the second query for frequent
                 qb = new SQLiteQueryBuilder();
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sPeopleWithPhotoProjectionMap);
                 if (url.getPathSegments().size() > 3) {
                     qb.appendWhere(buildPeopleLookupWhereClause(url.getLastPathSegment()));
                 }
-                qb.appendWhere(" AND times_contacted > 0 AND starred = 0");
-                final String frequentQuery = qb.buildQuery(projectionIn, null, null, null, null,
-                        null, null);
+                final String frequentQuery = qb.buildQuery(projectionIn,
+                        "times_contacted > 0 AND starred = 0", null, null, null, null, null);
 
+                // Put them together
                 final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
                         STREQUENT_ORDER_BY, null);
                 final SQLiteDatabase db = getDatabase();
@@ -3759,8 +3767,9 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
     private static final HashMap<String, String> sGroupsProjectionMap;
     private static final HashMap<String, String> sPeopleProjectionMap;
+    private static final HashMap<String, String> sPeopleWithPhotoProjectionMap;
     /** Used to force items to the top of a times_contacted list */
-    private static final HashMap<String, String> sPeopleWithMaxTimesContactedProjectionMap;
+    private static final HashMap<String, String> sStrequentStarredProjectionMap;
     private static final HashMap<String, String> sCallsProjectionMap;
     private static final HashMap<String, String> sPhonesProjectionMap;
     private static final HashMap<String, String> sPhonesWithPresenceProjectionMap;
@@ -3964,6 +3973,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map.putAll(presenceColumns);
         sPeopleProjectionMap = map;
 
+        // People with photo projection map
+        map = new HashMap<String, String>(sPeopleProjectionMap);
+        map.put("photo_data", "photos.data AS photo_data");
+        sPeopleWithPhotoProjectionMap = map;
+        
         // Groups projection map
         map = new HashMap<String, String>();
         map.put(Groups._ID, Groups._ID);
@@ -3984,7 +3998,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         // Use this when you need to force items to the top of a times_contacted list
         map = new HashMap<String, String>(sPeopleProjectionMap);
         map.put(People.TIMES_CONTACTED, Long.MAX_VALUE + " AS " + People.TIMES_CONTACTED);
-        sPeopleWithMaxTimesContactedProjectionMap = map;
+        map.put("photo_data", "photos.data AS photo_data");
+        sStrequentStarredProjectionMap = map;
 
         // Calls projection map
         map = new HashMap<String, String>();
