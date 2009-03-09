@@ -23,4 +23,18 @@
     <string name="dialNumber">Dial number</string>
     <string name="createNewContact">New contact</string>
     <string name="usingNumber">Using <xliff:g id="number">%s</xliff:g></string>    
+
+    <!-- The first line of "Dial number using NNN",
+         which appears if you type a number into contacts search. -->
+    <string name="dial_number">Dial number</string>
+    <!-- The second line of "Dial number using NNN",
+         which appears if you type a number into contacts search. -->
+    <string name="dial_number_using">using <xliff:g id="number" example="555">%s</xliff:g></string>
+
+    <!-- The first line of "Create contact using NNN",
+         which appears if you type a number into contacts search. -->
+    <string name="create_contact">Create contact</string>
+    <!-- The second line of "Create contact using NNN",
+         which appears if you type a number into contacts search. -->
+    <string name="create_contact_using">using <xliff:g id="number" example="555">%s</xliff:g></string>
 </resources>

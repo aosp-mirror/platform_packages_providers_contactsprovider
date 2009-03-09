@@ -4055,7 +4055,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map.put(ContactMethods.LABEL, ContactMethods.LABEL);
         map.put(ContactMethods.DATA, ContactMethods.DATA);
         map.put(ContactMethods.AUX_DATA, ContactMethods.AUX_DATA);
-        map.put(ContactMethods.PERSON_ID, ContactMethods.PERSON_ID);
+        map.put(ContactMethods.PERSON_ID, "contact_methods.person AS " + ContactMethods.PERSON_ID);
         map.put(ContactMethods.ISPRIMARY, ContactMethods.ISPRIMARY);
         map.putAll(peopleColumns);
         sContactMethodsProjectionMap = map;
