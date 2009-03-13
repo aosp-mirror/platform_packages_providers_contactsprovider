@@ -61,6 +61,7 @@ import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Config;
 import android.util.Log;
+
 import com.android.internal.database.ArrayListCursor;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
@@ -3810,6 +3811,28 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 + "END) "
             + "END) ";
     
+    private static final String PHONETICALLY_SORTABLE_STRING_SQL =
+        "GET_PHONETICALLY_SORTABLE_STRING("
+            + "CASE WHEN (phonetic_name IS NOT NULL AND phonetic_name != '') "
+                + "THEN phonetic_name "
+            + "ELSE "
+                + "(CASE WHEN (name is NOT NULL AND name != '')"
+                    + "THEN name "
+                + "ELSE "
+                    + "(CASE WHEN primary_email IS NOT NULL THEN "
+                        + "(SELECT data FROM contact_methods WHERE "
+                            + "contact_methods._id = primary_email) "
+                    + "ELSE "
+                        + "(CASE WHEN primary_phone IS NOT NULL THEN "
+                            + "(SELECT number FROM phones WHERE phones._id = primary_phone) "
+                        + "ELSE "
+                            + "null "
+                        + "END) "
+                    + "END) "
+                + "END) "
+            + "END"
+        + ")";
+    
     private static final String[] sPhonesKeyColumns;
     private static final String[] sContactMethodsKeyColumns;
     private static final String[] sOrganizationsKeyColumns;
@@ -3928,7 +3951,9 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         peopleColumns.put(PeopleColumns.PHONETIC_NAME, People.PHONETIC_NAME);
         peopleColumns.put(PeopleColumns.DISPLAY_NAME,
                 DISPLAY_NAME_SQL + " AS " + People.DISPLAY_NAME);
-
+        peopleColumns.put(PeopleColumns.SORT_STRING,
+                PHONETICALLY_SORTABLE_STRING_SQL + " AS " + People.SORT_STRING);
+        
         // Create the common groups columns
         HashMap<String, String> groupsColumns = new HashMap<String, String>();
         groupsColumns.put(GroupsColumns.NAME, Groups.NAME);
