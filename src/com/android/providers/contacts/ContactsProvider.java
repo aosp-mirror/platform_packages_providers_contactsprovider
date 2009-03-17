@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import android.app.SearchManager;
+import android.content.AbstractSyncableContentProvider;
 import android.content.AbstractTableMerger;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -24,9 +25,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.SyncableContentProvider;
 import android.content.UriMatcher;
-import android.content.AbstractSyncableContentProvider;
 import android.database.Cursor;
 import android.database.CursorJoiner;
 import android.database.DatabaseUtils;
@@ -43,19 +42,36 @@ import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.provider.Contacts;
-import android.provider.Contacts.*;
+import android.provider.Contacts.ContactMethods;
+import android.provider.Contacts.Extensions;
+import android.provider.Contacts.GroupMembership;
+import android.provider.Contacts.Groups;
+import android.provider.Contacts.GroupsColumns;
+import android.provider.Contacts.Intents;
+import android.provider.Contacts.Organizations;
+import android.provider.Contacts.People;
+import android.provider.Contacts.PeopleColumns;
+import android.provider.Contacts.Phones;
+import android.provider.Contacts.Photos;
+import android.provider.Contacts.Presence;
+import android.provider.Contacts.PresenceColumns;
 import android.provider.LiveFolders;
 import android.provider.SyncConstValue;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Config;
 import android.util.Log;
+
 import com.android.internal.database.ArrayListCursor;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 
 import java.io.FileNotFoundException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String STREQUENT_ORDER_BY = "times_contacted DESC, display_name ASC";
@@ -65,6 +81,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String PEOPLE_PHONES_JOIN =
             "people LEFT OUTER JOIN phones ON people.primary_phone=phones._id "
             + "LEFT OUTER JOIN presence ON (presence." + Presence.PERSON_ID + "=people._id)";
+
+    private static final String PEOPLE_PHONES_PHOTOS_JOIN =
+            "people LEFT OUTER JOIN phones ON people.primary_phone=phones._id "
+            + "LEFT OUTER JOIN presence ON (presence." + Presence.PERSON_ID + "=people._id) "
+            + "LEFT OUTER JOIN photos ON (photos." + Photos.PERSON_ID + "=people._id)";
 
     private static final String GTALK_PROTOCOL_STRING =
             ContactMethods.encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
@@ -880,22 +901,24 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             }
             case PEOPLE_STREQUENT: {
                 // Build the first query for starred
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleWithMaxTimesContactedProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sStrequentStarredProjectionMap);
                 final String starredQuery = qb.buildQuery(projectionIn, "starred = 1",
                         null, null, null, null,
                         null /* limit */);
 
+                // Build the second query for frequent
                 qb = new SQLiteQueryBuilder();
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sPeopleWithPhotoProjectionMap);
                 final String frequentQuery = qb.buildQuery(projectionIn,
                         "times_contacted > 0 AND starred = 0", null, null, null, null, null);
 
+                // Put them together
                 final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
                         STREQUENT_ORDER_BY, STREQUENT_LIMIT);
                 final SQLiteDatabase db = getDatabase();
-                Cursor c = db.rawQueryWithFactory(null, query, null, "people");
+                Cursor c = db.rawQueryWithFactory(null, query, null, sPeopleTable);
                 if ((c != null) && !isTemporary()) {
                     c.setNotificationUri(getContext().getContentResolver(), url);
                 }
@@ -903,25 +926,26 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             }
             case PEOPLE_STREQUENT_FILTER: {
                 // Build the first query for starred
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleWithMaxTimesContactedProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sStrequentStarredProjectionMap);
                 if (url.getPathSegments().size() > 3) {
                     qb.appendWhere(buildPeopleLookupWhereClause(url.getLastPathSegment()));
                 }
-                qb.appendWhere(" AND starred = 1");
-                final String starredQuery = qb.buildQuery(projectionIn, null, null, null, null,
-                        null, null);
+                final String starredQuery = qb.buildQuery(projectionIn, "starred = 1",
+                        null, null, null, null,
+                        null /* limit */);
 
+                // Build the second query for frequent
                 qb = new SQLiteQueryBuilder();
-                qb.setTables(PEOPLE_PHONES_JOIN);
-                qb.setProjectionMap(sPeopleProjectionMap);
+                qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
+                qb.setProjectionMap(sPeopleWithPhotoProjectionMap);
                 if (url.getPathSegments().size() > 3) {
                     qb.appendWhere(buildPeopleLookupWhereClause(url.getLastPathSegment()));
                 }
-                qb.appendWhere(" AND times_contacted > 0 AND starred = 0");
-                final String frequentQuery = qb.buildQuery(projectionIn, null, null, null, null,
-                        null, null);
+                final String frequentQuery = qb.buildQuery(projectionIn,
+                        "times_contacted > 0 AND starred = 0", null, null, null, null, null);
 
+                // Put them together
                 final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
                         STREQUENT_ORDER_BY, null);
                 final SQLiteDatabase db = getDatabase();
@@ -959,6 +983,18 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 qb.appendWhere(" AND phones._id=");
                 qb.appendWhere(url.getPathSegments().get(3));
                 break;
+
+            case PEOPLE_PHONES_WITH_PRESENCE:
+                qb.appendWhere("people._id=?");
+                selectionArgs = appendSelectionArg(selectionArgs, url.getPathSegments().get(1));
+                // Fall through.
+
+            case PHONES_WITH_PRESENCE:
+                qb.setTables("phones JOIN people ON (phones.person = people._id)"
+                        + " LEFT OUTER JOIN presence ON (presence.person = people._id)");
+                qb.setProjectionMap(sPhonesWithPresenceProjectionMap);
+                break;
+
             case PEOPLE_CONTACTMETHODS:
                 qb.setTables("contact_methods, people");
                 qb.setProjectionMap(sContactMethodsProjectionMap);
@@ -3662,6 +3698,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int PEOPLE_CONTACTMETHODS_WITH_PRESENCE = PEOPLE_BASE + 18;
     private static final int PEOPLE_OWNER = PEOPLE_BASE + 19;
     private static final int PEOPLE_UPDATE_CONTACT_TIME = PEOPLE_BASE + 20;
+    private static final int PEOPLE_PHONES_WITH_PRESENCE = PEOPLE_BASE + 21;
 
     private static final int DELETED_BASE = 1000;
     private static final int DELETED_PEOPLE = DELETED_BASE;
@@ -3673,6 +3710,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int PHONES_FILTER = PHONES_BASE + 2;
     private static final int PHONES_FILTER_NAME = PHONES_BASE + 3;
     private static final int PHONES_MOBILE_FILTER_NAME = PHONES_BASE + 4;
+    private static final int PHONES_WITH_PRESENCE = PHONES_BASE + 5;
 
     private static final int CONTACTMETHODS_BASE = 3000;
     private static final int CONTACTMETHODS = CONTACTMETHODS_BASE;
@@ -3730,10 +3768,12 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
     private static final HashMap<String, String> sGroupsProjectionMap;
     private static final HashMap<String, String> sPeopleProjectionMap;
+    private static final HashMap<String, String> sPeopleWithPhotoProjectionMap;
     /** Used to force items to the top of a times_contacted list */
-    private static final HashMap<String, String> sPeopleWithMaxTimesContactedProjectionMap;
+    private static final HashMap<String, String> sStrequentStarredProjectionMap;
     private static final HashMap<String, String> sCallsProjectionMap;
     private static final HashMap<String, String> sPhonesProjectionMap;
+    private static final HashMap<String, String> sPhonesWithPresenceProjectionMap;
     private static final HashMap<String, String> sContactMethodsProjectionMap;
     private static final HashMap<String, String> sContactMethodsWithPresenceProjectionMap;
     private static final HashMap<String, String> sPresenceProjectionMap;
@@ -3750,20 +3790,48 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String sOrganizationsKeyOrderBy;
     private static final String sGroupmembershipKeyOrderBy;
 
-    private static final String DISPLAY_NAME_SQL = "CASE WHEN (name IS NOT NULL AND name != '') "
-        + "THEN name "
-        + "ELSE "
-            + "(CASE WHEN primary_phone IS NOT NULL THEN "
-                +"(SELECT number FROM phones WHERE phones._id = primary_phone) "
+    private static final String DISPLAY_NAME_SQL
+            = "(CASE WHEN (name IS NOT NULL AND name != '') "
+                + "THEN name "
             + "ELSE "
-                + "(CASE WHEN primary_email IS NOT NULL THEN "
-                    + "(SELECT data FROM contact_methods WHERE "
-                        + "contact_methods._id = primary_email) "
+                + "(CASE WHEN primary_organization is NOT NULL THEN "
+                    + "(SELECT company FROM organizations WHERE "
+                        + "organizations._id = primary_organization) "
                 + "ELSE "
-                    + "null "
+                    + "(CASE WHEN primary_phone IS NOT NULL THEN "
+                        +"(SELECT number FROM phones WHERE phones._id = primary_phone) "
+                    + "ELSE "
+                        + "(CASE WHEN primary_email IS NOT NULL THEN "
+                            + "(SELECT data FROM contact_methods WHERE "
+                                + "contact_methods._id = primary_email) "
+                        + "ELSE "
+                            + "null "
+                        + "END) "
+                    + "END) "
                 + "END) "
-            + "END) "
-        + "END ";
+            + "END) ";
+    
+    private static final String PHONETICALLY_SORTABLE_STRING_SQL =
+        "GET_PHONETICALLY_SORTABLE_STRING("
+            + "CASE WHEN (phonetic_name IS NOT NULL AND phonetic_name != '') "
+                + "THEN phonetic_name "
+            + "ELSE "
+                + "(CASE WHEN (name is NOT NULL AND name != '')"
+                    + "THEN name "
+                + "ELSE "
+                    + "(CASE WHEN primary_email IS NOT NULL THEN "
+                        + "(SELECT data FROM contact_methods WHERE "
+                            + "contact_methods._id = primary_email) "
+                    + "ELSE "
+                        + "(CASE WHEN primary_phone IS NOT NULL THEN "
+                            + "(SELECT number FROM phones WHERE phones._id = primary_phone) "
+                        + "ELSE "
+                            + "null "
+                        + "END) "
+                    + "END) "
+                + "END) "
+            + "END"
+        + ")";
     
     private static final String[] sPhonesKeyColumns;
     private static final String[] sContactMethodsKeyColumns;
@@ -3812,6 +3880,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/extensions", PEOPLE_EXTENSIONS);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/extensions/#", PEOPLE_EXTENSIONS_ID);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones", PEOPLE_PHONES);
+        matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones_with_presence",
+                PEOPLE_PHONES_WITH_PRESENCE);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/photo", PEOPLE_PHOTO);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones/#", PEOPLE_PHONES_ID);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/contact_methods", PEOPLE_CONTACTMETHODS);
@@ -3829,6 +3899,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, "deleted_people", DELETED_PEOPLE);
         matcher.addURI(CONTACTS_AUTHORITY, "deleted_groups", DELETED_GROUPS);
         matcher.addURI(CONTACTS_AUTHORITY, "phones", PHONES);
+        matcher.addURI(CONTACTS_AUTHORITY, "phones_with_presence", PHONES_WITH_PRESENCE);
         matcher.addURI(CONTACTS_AUTHORITY, "phones/filter/*", PHONES_FILTER);
         matcher.addURI(CONTACTS_AUTHORITY, "phones/filter_name/*", PHONES_FILTER_NAME);
         matcher.addURI(CONTACTS_AUTHORITY, "phones/mobile_filter_name/*",
@@ -3880,7 +3951,9 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         peopleColumns.put(PeopleColumns.PHONETIC_NAME, People.PHONETIC_NAME);
         peopleColumns.put(PeopleColumns.DISPLAY_NAME,
                 DISPLAY_NAME_SQL + " AS " + People.DISPLAY_NAME);
-
+        peopleColumns.put(PeopleColumns.SORT_STRING,
+                PHONETICALLY_SORTABLE_STRING_SQL + " AS " + People.SORT_STRING);
+        
         // Create the common groups columns
         HashMap<String, String> groupsColumns = new HashMap<String, String>();
         groupsColumns.put(GroupsColumns.NAME, Groups.NAME);
@@ -3925,6 +3998,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map.putAll(presenceColumns);
         sPeopleProjectionMap = map;
 
+        // People with photo projection map
+        map = new HashMap<String, String>(sPeopleProjectionMap);
+        map.put("photo_data", "photos.data AS photo_data");
+        sPeopleWithPhotoProjectionMap = map;
+        
         // Groups projection map
         map = new HashMap<String, String>();
         map.put(Groups._ID, Groups._ID);
@@ -3945,7 +4023,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         // Use this when you need to force items to the top of a times_contacted list
         map = new HashMap<String, String>(sPeopleProjectionMap);
         map.put(People.TIMES_CONTACTED, Long.MAX_VALUE + " AS " + People.TIMES_CONTACTED);
-        sPeopleWithMaxTimesContactedProjectionMap = map;
+        map.put("photo_data", "photos.data AS photo_data");
+        sStrequentStarredProjectionMap = map;
 
         // Calls projection map
         map = new HashMap<String, String>();
@@ -3964,10 +4043,15 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map = new HashMap<String, String>();
         map.put(Phones._ID, "phones._id AS " + Phones._ID);
         map.putAll(phonesColumns);
-        map.put(Phones.PERSON_ID, Phones.PERSON_ID);
+        map.put(Phones.PERSON_ID, "phones.person AS " + Phones.PERSON_ID);
         map.put(Phones.ISPRIMARY, Phones.ISPRIMARY);
         map.putAll(peopleColumns);
         sPhonesProjectionMap = map;
+
+        // Phones with presence projection map
+        map = new HashMap<String, String>(sPhonesProjectionMap);
+        map.putAll(presenceColumns);
+        sPhonesWithPresenceProjectionMap = map;
 
         // Organizations projection map
         map = new HashMap<String, String>();
@@ -3996,7 +4080,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map.put(ContactMethods.LABEL, ContactMethods.LABEL);
         map.put(ContactMethods.DATA, ContactMethods.DATA);
         map.put(ContactMethods.AUX_DATA, ContactMethods.AUX_DATA);
-        map.put(ContactMethods.PERSON_ID, ContactMethods.PERSON_ID);
+        map.put(ContactMethods.PERSON_ID, "contact_methods.person AS " + ContactMethods.PERSON_ID);
         map.put(ContactMethods.ISPRIMARY, ContactMethods.ISPRIMARY);
         map.putAll(peopleColumns);
         sContactMethodsProjectionMap = map;
