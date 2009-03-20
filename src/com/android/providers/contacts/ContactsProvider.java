@@ -26,6 +26,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.CursorJoiner;
 import android.database.DatabaseUtils;
@@ -920,7 +921,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 final SQLiteDatabase db = getDatabase();
                 Cursor c = db.rawQueryWithFactory(null, query, null, sPeopleTable);
                 if ((c != null) && !isTemporary()) {
-                    c.setNotificationUri(getContext().getContentResolver(), url);
+                    c.setNotificationUri(getContext().getContentResolver(), notificationUri);
                 }
                 return c;
             }
@@ -951,7 +952,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 final SQLiteDatabase db = getDatabase();
                 Cursor c = db.rawQueryWithFactory(null, query, null, sPeopleTable);
                 if ((c != null) && !isTemporary()) {
-                    c.setNotificationUri(getContext().getContentResolver(), url);
+                    c.setNotificationUri(getContext().getContentResolver(), notificationUri);
                 }
                 return c;
             }
@@ -1297,18 +1298,33 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                         SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
                 };
 
-/*
- *  TODO: figure out how to localize things so myFaves can read the constants when sub classing
- */
+                Resources r = getContext().getResources();
+                String s;
+                int i;
+
                 ArrayList dialNumber = new ArrayList();
-                dialNumber.add("Dial number");
-                dialNumber.add("Using " + searchClause);
+                s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
+                i = s.indexOf('\n');
+                if (i < 0) {
+                    dialNumber.add(s);
+                    dialNumber.add("");
+                } else {
+                    dialNumber.add(s.substring(0, i));
+                    dialNumber.add(s.substring(i + 1));
+                }
                 dialNumber.add("tel:" + searchClause);
-                dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
+                dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);  
 
                 ArrayList createContact = new ArrayList();
-                createContact.add("Create contact");
-                createContact.add("Using " + searchClause);
+                s = r.getString(com.android.internal.R.string.create_contact_using, searchClause);
+                i = s.indexOf('\n');
+                if (i < 0) {
+                    createContact.add(s);
+                    createContact.add("");
+                } else {
+                    createContact.add(s.substring(0, i));
+                    createContact.add(s.substring(i + 1));
+                }
                 createContact.add("tel:" + searchClause);
                 createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
 

@@ -15,7 +15,12 @@
 -->
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="app_label">"Información de los contactos"</string>
+    <!-- no translation found for app_label (3389954322874982620) -->
+    <skip />
+    <!-- no translation found for createNewContact (3647121853378288573) -->
+    <skip />
+    <!-- no translation found for usingNumber (6703644134009250885) -->
+    <skip />
     <!-- no translation found for dial_number_using (6620964003493356963) -->
     <skip />
     <!-- no translation found for create_contact_using (5278375606850817161) -->
