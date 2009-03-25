@@ -26,6 +26,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.CursorJoiner;
 import android.database.DatabaseUtils;
@@ -1297,18 +1298,20 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                         SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
                 };
 
-/*
- *  TODO: figure out how to localize things so myFaves can read the constants when sub classing
- */
+                Resources r = getContext().getResources();
+
                 ArrayList dialNumber = new ArrayList();
-                dialNumber.add("Dial number");
-                dialNumber.add("Using " + searchClause);
+                dialNumber.add(r.getString(com.android.internal.R.string.dialNumber));
+                dialNumber.add(r.getString(com.android.internal.R.string.usingNumber, 
+                        searchClause));
                 dialNumber.add("tel:" + searchClause);
                 dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
 
                 ArrayList createContact = new ArrayList();
-                createContact.add("Create contact");
-                createContact.add("Using " + searchClause);
+                createContact.add(r.getString(
+                        com.android.internal.R.string.createNewContact));
+                createContact.add(r.getString(com.android.internal.R.string.usingNumber, 
+                        searchClause));
                 createContact.add("tel:" + searchClause);
                 createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
 
