@@ -4149,7 +4149,9 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map = new HashMap<String, String>();
         map.put(LiveFolders._ID, "people._id AS " + LiveFolders._ID);
         map.put(LiveFolders.NAME, DISPLAY_NAME_SQL + " AS " + LiveFolders.NAME);
-        map.put(LiveFolders.ICON_BITMAP, Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
+        // TODO: Put contact photo back when we have a way to display a default icon
+        // for contacts without a photo
+        // map.put(LiveFolders.ICON_BITMAP, Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
         sLiveFoldersProjectionMap = map;
         
         // Order by statements
