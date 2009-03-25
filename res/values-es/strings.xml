@@ -16,9 +16,6 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_label">"Información de los contactos"</string>
-    <string name="dialNumber">"Marcar número"</string>
-    <string name="createNewContact">"Contacto nuevo"</string>
-    <string name="usingNumber">"Usar <xliff:g id="NUMBER">%s</xliff:g>"</string>
     <!-- no translation found for dial_number_using (6620964003493356963) -->
     <skip />
     <!-- no translation found for create_contact_using (5278375606850817161) -->
