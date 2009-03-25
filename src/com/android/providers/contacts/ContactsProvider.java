@@ -921,7 +921,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 final SQLiteDatabase db = getDatabase();
                 Cursor c = db.rawQueryWithFactory(null, query, null, sPeopleTable);
                 if ((c != null) && !isTemporary()) {
-                    c.setNotificationUri(getContext().getContentResolver(), url);
+                    c.setNotificationUri(getContext().getContentResolver(), notificationUri);
                 }
                 return c;
             }
@@ -952,7 +952,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 final SQLiteDatabase db = getDatabase();
                 Cursor c = db.rawQueryWithFactory(null, query, null, sPeopleTable);
                 if ((c != null) && !isTemporary()) {
-                    c.setNotificationUri(getContext().getContentResolver(), url);
+                    c.setNotificationUri(getContext().getContentResolver(), notificationUri);
                 }
                 return c;
             }
