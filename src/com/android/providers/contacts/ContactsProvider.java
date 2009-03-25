@@ -1299,19 +1299,32 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 };
 
                 Resources r = getContext().getResources();
+                String s;
+                int i;
 
                 ArrayList dialNumber = new ArrayList();
-                dialNumber.add(r.getString(com.android.internal.R.string.dialNumber));
-                dialNumber.add(r.getString(com.android.internal.R.string.usingNumber, 
-                        searchClause));
+                s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
+                i = s.indexOf('\n');
+                if (i < 0) {
+                    dialNumber.add(s);
+                    dialNumber.add("");
+                } else {
+                    dialNumber.add(s.substring(0, i));
+                    dialNumber.add(s.substring(i + 1));
+                }
                 dialNumber.add("tel:" + searchClause);
-                dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
+                dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);  
 
                 ArrayList createContact = new ArrayList();
-                createContact.add(r.getString(
-                        com.android.internal.R.string.createNewContact));
-                createContact.add(r.getString(com.android.internal.R.string.usingNumber, 
-                        searchClause));
+                s = r.getString(com.android.internal.R.string.create_contact_using, searchClause);
+                i = s.indexOf('\n');
+                if (i < 0) {
+                    createContact.add(s);
+                    createContact.add("");
+                } else {
+                    createContact.add(s.substring(0, i));
+                    createContact.add(s.substring(i + 1));
+                }
                 createContact.add("tel:" + searchClause);
                 createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
 
