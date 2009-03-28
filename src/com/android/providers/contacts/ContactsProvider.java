@@ -755,6 +755,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         Uri notificationUri = Contacts.CONTENT_URI;
+        StringBuilder whereClause;
+        String groupBy = null;
 
         // Generate the body of the query
         int match = sURIMatcher.match(url);
@@ -870,6 +872,28 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 break;
             }
 
+            case PEOPLE_WITH_EMAIL_OR_IM_FILTER:
+                String email = url.getPathSegments().get(2);
+                whereClause = new StringBuilder();
+                
+                // Match any E-mail or IM contact methods where data exactly
+                // matches the provided string.
+                whereClause.append(ContactMethods.DATA);
+                whereClause.append("=");
+                DatabaseUtils.appendEscapedSQLString(whereClause, email);
+                whereClause.append(" AND (kind = " + Contacts.KIND_EMAIL +
+                        " OR kind = " + Contacts.KIND_IM + ")");
+                qb.appendWhere(whereClause.toString());
+                
+                qb.setTables("people INNER JOIN contact_methods on (people._id = contact_methods.person)");
+                qb.setProjectionMap(sPeopleWithEmailOrImProjectionMap);
+                
+                // Prevent returning the same person for multiple matches
+                groupBy = "contact_methods.person";
+
+                qb.setDistinct(true);
+                break;
+                
             case PHOTOS_ID:
                 qb.appendWhere("_id="+url.getPathSegments().get(1));
                 // Fall through.
@@ -1092,7 +1116,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 break;
             case CONTACTMETHODS_EMAIL_FILTER:
                 String pattern = url.getPathSegments().get(2);
-                StringBuilder whereClause = new StringBuilder();
+                whereClause = new StringBuilder();
 
                 // TODO This is going to be REALLY slow.  Come up with
                 // something faster.
@@ -1233,7 +1257,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         // run the query
         final SQLiteDatabase db = getDatabase();
         Cursor c = qb.query(db, projectionIn, selection, selectionArgs,
-                null, null, sort);
+                groupBy, null, sort);
         if ((c != null) && !isTemporary()) {
             c.setNotificationUri(getContext().getContentResolver(), notificationUri);
         }
@@ -3715,6 +3739,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int PEOPLE_OWNER = PEOPLE_BASE + 19;
     private static final int PEOPLE_UPDATE_CONTACT_TIME = PEOPLE_BASE + 20;
     private static final int PEOPLE_PHONES_WITH_PRESENCE = PEOPLE_BASE + 21;
+    private static final int PEOPLE_WITH_EMAIL_OR_IM_FILTER = PEOPLE_BASE + 22;
 
     private static final int DELETED_BASE = 1000;
     private static final int DELETED_PEOPLE = DELETED_BASE;
@@ -3785,6 +3810,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final HashMap<String, String> sGroupsProjectionMap;
     private static final HashMap<String, String> sPeopleProjectionMap;
     private static final HashMap<String, String> sPeopleWithPhotoProjectionMap;
+    private static final HashMap<String, String> sPeopleWithEmailOrImProjectionMap;
     /** Used to force items to the top of a times_contacted list */
     private static final HashMap<String, String> sStrequentStarredProjectionMap;
     private static final HashMap<String, String> sCallsProjectionMap;
@@ -3892,6 +3918,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, "people/filter/*", PEOPLE_FILTER);
         matcher.addURI(CONTACTS_AUTHORITY, "people/with_phones_filter/*",
                 PEOPLE_WITH_PHONES_FILTER);
+        matcher.addURI(CONTACTS_AUTHORITY, "people/with_email_or_im_filter/*",
+                PEOPLE_WITH_EMAIL_OR_IM_FILTER);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#", PEOPLE_ID);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/extensions", PEOPLE_EXTENSIONS);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/extensions/#", PEOPLE_EXTENSIONS_ID);
@@ -4018,6 +4046,14 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map = new HashMap<String, String>(sPeopleProjectionMap);
         map.put("photo_data", "photos.data AS photo_data");
         sPeopleWithPhotoProjectionMap = map;
+        
+        // People with E-mail or IM projection map
+        map = new HashMap<String, String>();
+        map.put(People._ID, "people._id AS " + People._ID);
+        map.put(ContactMethods.DATA, "contact_methods." + ContactMethods.DATA + " AS " + ContactMethods.DATA);
+        map.put(ContactMethods.KIND, "contact_methods." + ContactMethods.KIND + " AS " + ContactMethods.KIND);
+        map.putAll(peopleColumns);
+        sPeopleWithEmailOrImProjectionMap = map;
         
         // Groups projection map
         map = new HashMap<String, String>();
