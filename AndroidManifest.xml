@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.android.providers.contacts2"
+    android:sharedUserId="android.uid.shared"
+>
+
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+
+    <application
+        android:process="android.process.acore"
+        android:label="ContactsProvider2"
+    >
+        <provider android:name="ContactsProvider2"
+            android:authorities="com.android.contacts"
+            android:syncable="false"
+            android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS"
+        />
+    </application>
+</manifest>
