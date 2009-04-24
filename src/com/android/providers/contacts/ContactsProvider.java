@@ -88,6 +88,12 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             + "LEFT OUTER JOIN presence ON (presence." + Presence.PERSON_ID + "=people._id) "
             + "LEFT OUTER JOIN photos ON (photos." + Photos.PERSON_ID + "=people._id)";
 
+    private static final String PEOPLE_PHONES_PHOTOS_ORGANIZATIONS_JOIN =
+            "people LEFT OUTER JOIN phones ON people.primary_phone=phones._id "
+            + "LEFT OUTER JOIN presence ON (presence." + Presence.PERSON_ID + "=people._id) "
+            + "LEFT OUTER JOIN photos ON (photos." + Photos.PERSON_ID + "=people._id) "
+            + "LEFT OUTER JOIN organizations ON (organizations._id=people.primary_organization)";
+
     private static final String GTALK_PROTOCOL_STRING =
             ContactMethods.encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
 
@@ -821,12 +827,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             case GROUP_NAME_MEMBERS:
                 qb.setTables(PEOPLE_PHONES_JOIN);
                 qb.setProjectionMap(sPeopleProjectionMap);
-                qb.appendWhere("people._id IN (SELECT person FROM groupmembership JOIN groups " +
-                        "ON (group_id=groups._id OR " +
-                        "(group_sync_id = groups._sync_id AND " +
-                            "group_sync_account = groups._sync_account)) "+
-                        "WHERE " + Groups.NAME + "="
-                        + DatabaseUtils.sqlEscapeString(url.getPathSegments().get(2)) + ")");
+                qb.appendWhere(buildGroupNameMatchWhereClause(url.getPathSegments().get(2)));
                 break;
                 
             case GROUP_SYSTEM_ID_MEMBERS_FILTER:
@@ -838,12 +839,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             case GROUP_SYSTEM_ID_MEMBERS:
                 qb.setTables(PEOPLE_PHONES_JOIN);
                 qb.setProjectionMap(sPeopleProjectionMap);
-                qb.appendWhere("people._id IN (SELECT person FROM groupmembership JOIN groups " +
-                        "ON (group_id=groups._id OR " +
-                        "(group_sync_id = groups._sync_id AND " +
-                            "group_sync_account = groups._sync_account)) "+
-                        "WHERE " + Groups.SYSTEM_ID + "="
-                        + DatabaseUtils.sqlEscapeString(url.getPathSegments().get(2)) + ")");
+                qb.appendWhere(buildGroupSystemIdMatchWhereClause(url.getPathSegments().get(2)));
                 break;
 
             case PEOPLE:
@@ -1242,12 +1238,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             case LIVE_FOLDERS_PEOPLE_GROUP_NAME:
                 qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
-                qb.appendWhere("people._id IN (SELECT person FROM groupmembership JOIN groups " +
-                        "ON (group_id=groups._id OR " +
-                        "(group_sync_id = groups._sync_id AND " +
-                            "group_sync_account = groups._sync_account)) "+
-                        "WHERE " + Groups.NAME + "="
-                        + DatabaseUtils.sqlEscapeString(url.getLastPathSegment()) + ")");
+                qb.appendWhere(buildGroupNameMatchWhereClause(url.getLastPathSegment()));
                 break;
 
             default:
@@ -1262,6 +1253,40 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             c.setNotificationUri(getContext().getContentResolver(), notificationUri);
         }
         return c;
+    }
+
+
+    /**
+     * Build a WHERE clause that restricts the query to match people that are a member of
+     * a particular system group.  The projection map of the query must include {@link People#_ID}.
+     *
+     * @param groupSystemId The system group id (e.g {@link Groups#GROUP_MY_CONTACTS})
+     * @return The where clause.
+     */
+    private CharSequence buildGroupSystemIdMatchWhereClause(String groupSystemId) {
+        return "people._id IN (SELECT person FROM groupmembership JOIN groups " +
+                "ON (group_id=groups._id OR " +
+                "(group_sync_id = groups._sync_id AND " +
+                    "group_sync_account = groups._sync_account)) "+
+                "WHERE " + Groups.SYSTEM_ID + "="
+                + DatabaseUtils.sqlEscapeString(groupSystemId) + ")";
+    }
+
+    /**
+     * Build a WHERE clause that restricts the query to match people that are a member of
+     * a group with a particular name. The projection map of the query must include
+     * {@link People#_ID}.
+     *
+     * @param groupName The name of the group
+     * @return The where clause.
+     */
+    private CharSequence buildGroupNameMatchWhereClause(String groupName) {
+        return "people._id IN (SELECT person FROM groupmembership JOIN groups " +
+                "ON (group_id=groups._id OR " +
+                "(group_sync_id = groups._sync_id AND " +
+                    "group_sync_account = groups._sync_account)) "+
+                "WHERE " + Groups.NAME + "="
+                + DatabaseUtils.sqlEscapeString(groupName) + ")";
     }
 
     private Cursor queryOwner(String[] projection) {
@@ -1307,10 +1332,19 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
      * @return null with qb configured for a query, a cursor with the results already in it.
      */
     private Cursor handleSearchSuggestionsQuery(Uri url, SQLiteQueryBuilder qb) {
-        qb.setTables("people");
+        qb.setTables(PEOPLE_PHONES_PHOTOS_ORGANIZATIONS_JOIN);
         qb.setProjectionMap(sSearchSuggestionsProjectionMap);
         if (url.getPathSegments().size() > 1) {
             // A search term was entered, use it to filter
+
+            // only match within 'my contacts'
+            // TODO: match the 'display group' instead of hard coding 'my contacts'
+            // once that information is factored out of the shared prefs of the contacts
+            // app into this content provider.
+            qb.appendWhere(buildGroupSystemIdMatchWhereClause(Groups.GROUP_MY_CONTACTS));
+            qb.appendWhere(" AND ");            
+
+            // match the query
             final String searchClause = url.getLastPathSegment();
             if (!TextUtils.isDigitsOnly(searchClause)) {
                 qb.appendWhere(buildPeopleLookupWhereClause(searchClause));
@@ -1393,6 +1427,12 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             case PHONES_FILTER_NAME:
             case PHONES_MOBILE_FILTER_NAME:
                 return "vnd.android.cursor.dir/phone";
+            case PHOTOS_ID:
+                return "vnd.android.cursor.item/photo";
+            case PHOTOS:
+                return "vnd.android.cursor.dir/photo";
+            case PEOPLE_PHOTO:
+                return "vnd.android.cursor.item/photo";
             case CONTACTMETHODS:
                 return "vnd.android.cursor.dir/contact-methods";
             case CONTACTMETHODS_ID:
@@ -4161,8 +4201,13 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map.put(SearchManager.SUGGEST_COLUMN_TEXT_1,
                 DISPLAY_NAME_SQL + " AS " + SearchManager.SUGGEST_COLUMN_TEXT_1);
         map.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
-                People._ID + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
-        map.put(People._ID, People._ID);
+                "people._id AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
+        map.put(People._ID, "people._id AS " + People._ID);
+        map.put(Phones.NUMBER, Phones.NUMBER);
+        map.put(Phones.TYPE, "phones.type AS " + Phones.TYPE);
+        map.put(Organizations.COMPANY, Organizations.COMPANY);
+        map.put(Photos.DATA, Photos.DATA);
+        map.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
         sSearchSuggestionsProjectionMap = map;
 
         // Photos projection map
