@@ -26,7 +26,9 @@ import android.provider.BaseColumns;
  * TODO: move to android.provider
  */
 public final class ContactsContract {
+    /** The authority for the contacts provider */
     public static final String AUTHORITY = "com.android.contacts";
+    /** A content:// style uri to the authority for the contacts provider */
     public static final Uri AUTHORITY_URI = Uri.parse("content://" + AUTHORITY);
 
     private interface ContactsColumns {
@@ -52,7 +54,7 @@ public final class ContactsContract {
          * The phonetic version of the family name for the contact.
          * <P>Type: TEXT</P>
          */
-        public static final String PHONETIC_FAMILY_NAME = "phonetic_given_name";
+        public static final String PHONETIC_FAMILY_NAME = "phonetic_family_name";
 
         /**
          * The display name for the contact.
@@ -117,6 +119,22 @@ public final class ContactsContract {
          * person.
          */
         public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/person";
+
+        /**
+         * A sub-directory of a single contact that contains all of their {@link Data} rows.
+         * To access this directory append
+         */
+        public static final class Data implements BaseColumns, DataColumns {
+            /**
+             * no public constructor since this is a utility class
+             */
+            private Data() {}
+
+            /**
+             * The directory twig for this sub-table
+             */
+            public static final String CONTENT_DIRECTORY = "data";
+        }
     }
 
     private interface DataColumns {
@@ -173,7 +191,28 @@ public final class ContactsContract {
          * The content:// style URI for this table
          */
         public static final Uri CONTENT_URI = Uri.withAppendedPath(AUTHORITY_URI, "data");
+    }
 
+    /**
+     * A table that represents the result of looking up a phone number, for example for caller ID.
+     * The table joins that data row for the phone number with the contact that owns the number.
+     * To perform a lookup you must append the number you want to find to {@link #CONTENT_URI}.
+     */
+    public static final class PhoneLookup implements BaseColumns, DataColumns, ContactsColumns {
+        /**
+         * This utility class cannot be instantiated
+         */
+        private PhoneLookup() {}
+
+        /**
+         * The content:// style URI for this table. Append the phone number you want to lookup
+         * to this URI and query it to perform a lookup. For example:
+         *
+         * {@code
+         * Uri lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_URI, phoneNumber);
+         * }
+         */
+        public static final Uri CONTENT_URI = Uri.withAppendedPath(AUTHORITY_URI, "phone_lookup");
     }
 
     /**
@@ -182,6 +221,26 @@ public final class ContactsContract {
     public static final class CommonDataKinds {
         /** The {@link Data#PACKAGE} value for the common data kinds */
         public static final String PACKAGE_COMMON = "common";
+
+        /**
+         * Columns common across the specific types.
+         */
+        private interface BaseCommonColumns {
+            /**
+             * The package name that defines this type of data.
+             */
+            public static final String PACKAGE = "package";
+
+            /**
+             * The kind of the data, scoped within the package stored in {@link #PACKAGE}.
+             */
+            public static final String KIND = "kind";
+
+            /**
+             * A reference to the {@link Contacts#_ID} that this data belongs to.
+             */
+            public static final String CONTACT_ID = "contact_id";
+        }
 
         /**
          * Columns common across the specific types.
@@ -215,11 +274,11 @@ public final class ContactsContract {
         /**
          * Common data definition for telephone numbers.
          */
-        public static final class Phone {
+        public static final class Phone implements BaseCommonColumns {
             private Phone() {}
 
             /** Signifies a phone number row that is stored in the data table */
-            public static final int KIND = 5;
+            public static final int KIND_PHONE = 5;
 
             /**
              * The type of data, for example Home or Work.
@@ -249,22 +308,16 @@ public final class ContactsContract {
             public static final String NUMBER = "data3";
 
             /**
-             * The normalized phone number
-             * <P>Type: TEXT</P>
-             */
-            public static final String NUMBER_KEY = "data4";
-
-            /**
              * Whether this is the primary phone number
              * <P>Type: INTEGER (if set, non-0 means true)</P>
              */
-            public static final String ISPRIMARY = "data5";
+            public static final String ISPRIMARY = "data4";
         }
 
         /**
          * Common data definition for email addresses.
          */
-        public static final class Email implements CommonColumns {
+        public static final class Email implements BaseCommonColumns, CommonColumns {
             private Email() {}
 
             /** Signifies an email address row that is stored in the data table */
@@ -279,7 +332,7 @@ public final class ContactsContract {
         /**
          * Common data definition for postal addresses.
          */
-        public static final class Postal implements CommonColumns {
+        public static final class Postal implements BaseCommonColumns{
             private Postal() {}
 
             /** Signifies a postal address row that is stored in the data table */
@@ -294,7 +347,7 @@ public final class ContactsContract {
        /**
         * Common data definition for IM addresses.
         */
-        public static final class Im implements CommonColumns {
+        public static final class Im implements BaseCommonColumns {
             private Im() {}
 
             /** Signifies an IM address row that is stored in the data table */
@@ -309,7 +362,7 @@ public final class ContactsContract {
         /**
          * Common data definition for organizations.
          */
-        public static final class Organization {
+        public static final class Organization implements BaseCommonColumns {
             private Organization() {}
 
             /** Signifies an organization row that is stored in the data table */
@@ -348,7 +401,7 @@ public final class ContactsContract {
         /**
          * Notes about the contact.
          */
-        public static final class Note {
+        public static final class Note implements BaseCommonColumns {
             private Note() {}
 
             /** Signifies a free-form note row that is stored in the data table */

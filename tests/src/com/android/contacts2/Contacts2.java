@@ -16,12 +16,27 @@
 
 package com.android.contacts2;
 
+import com.android.providers.contacts2.ContactsContract.CommonDataKinds;
 import com.android.providers.contacts2.ContactsContract.Contacts;
+import com.android.providers.contacts2.ContactsContract.PhoneLookup;
+import com.android.providers.contacts2.ContactsContract.CommonDataKinds.Phone;
+import com.android.providers.contacts2.ContactsContract.Contacts.Data;
 
 import android.app.ListActivity;
+import android.content.ContentResolver;
+import android.content.ContentUris;
+import android.content.ContentValues;
+import android.content.Intent;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
 
 public class Contacts2 extends ListActivity {
@@ -72,5 +87,53 @@ public class Contacts2 extends ListActivity {
         super.onResume();
 
         new QueryTask().execute((Void[]) null);
+    }
+
+    @Override
+    protected void onListItemClick(ListView l, View v, int position, long id) {
+        final Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, id);
+        final Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        intent.setClass(this, ContactDetails2.class);
+        startActivity(intent);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(0, 42, 0, "Add data");
+        menu.add(0, 43, 0, "Phone lookup");
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case 42: {
+                final ContentResolver resolver = getContentResolver();
+                final ContentValues values = new ContentValues();
+                values.put(Contacts.GIVEN_NAME, "Bob");
+                values.put(Contacts.FAMILY_NAME, "Smith");
+                final Uri contactUri = resolver.insert(Contacts.CONTENT_URI, values);
+
+                final Uri dataUri = Uri.withAppendedPath(contactUri, Data.CONTENT_DIRECTORY);
+                values.clear();
+                values.put(Phone.PACKAGE, CommonDataKinds.PACKAGE_COMMON);
+                values.put(Phone.KIND, Phone.KIND_PHONE);
+                values.put(Phone.NUMBER, "512-555-1212");
+                values.put(Phone.TYPE, Phone.TYPE_MOBILE);
+                resolver.insert(dataUri, values);
+
+                return true;
+            }
+
+            case 43: {
+                final ContentResolver resolver = getContentResolver();
+                final Uri uri = Uri.withAppendedPath(PhoneLookup.CONTENT_URI, "555-1212");
+                final Cursor c = resolver.query(uri, null, null, null, null);
+                final StringBuilder sb = new StringBuilder();
+                DatabaseUtils.dumpCursor(c, sb);
+                Log.i("!!!!!!!!", sb.toString());
+            }
+        }
+        return false;
     }
 }
