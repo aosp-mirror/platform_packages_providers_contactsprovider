@@ -144,34 +144,34 @@ public final class ContactsContract {
         public static final String PACKAGE = "package";
 
         /**
-         * The kind of the data, scoped within the package stored in {@link #PACKAGE}.
+         * The mime-type of the item represented by this row.
          */
-        public static final String KIND = "kind";
+        public static final String MIMETYPE = "mimetype";
 
         /**
          * A reference to the {@link Contacts#_ID} that this data belongs to.
          */
         public static final String CONTACT_ID = "contact_id";
 
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA1 = "data1";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA2 = "data2";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA3 = "data3";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA4 = "data4";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA5 = "data5";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA6 = "data6";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA7 = "data7";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA8 = "data8";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA9 = "data9";
-        /** Generic data column, the meaning is {@link #KIND} specific */
+        /** Generic data column, the meaning is {@link #MIMETYPE} specific */
         public static final String DATA10 = "data10";
     }
 
@@ -191,6 +191,11 @@ public final class ContactsContract {
          * The content:// style URI for this table
          */
         public static final Uri CONTENT_URI = Uri.withAppendedPath(AUTHORITY_URI, "data");
+
+        /**
+         * The MIME type of {@link #CONTENT_URI} providing a directory of data.
+         */
+        public static final String CONTENT_TYPE = "vnd.android.cursor.dir/data";
     }
 
     /**
@@ -219,7 +224,10 @@ public final class ContactsContract {
      * Container for definitions of common data types stored in the {@link Data} table.
      */
     public static final class CommonDataKinds {
-        /** The {@link Data#PACKAGE} value for the common data kinds */
+        /**
+         * The {@link Data#PACKAGE} value for common data that should be shown
+         * using a default style.
+         */
         public static final String PACKAGE_COMMON = "common";
 
         /**
@@ -232,9 +240,9 @@ public final class ContactsContract {
             public static final String PACKAGE = "package";
 
             /**
-             * The kind of the data, scoped within the package stored in {@link #PACKAGE}.
+             * The mime-type of the item represented by this row.
              */
-            public static final String KIND = "kind";
+            public static final String MIMETYPE = "mimetype";
 
             /**
              * A reference to the {@link Contacts#_ID} that this data belongs to.
@@ -277,8 +285,8 @@ public final class ContactsContract {
         public static final class Phone implements BaseCommonColumns {
             private Phone() {}
 
-            /** Signifies a phone number row that is stored in the data table */
-            public static final int KIND_PHONE = 5;
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/phone";
 
             /**
              * The type of data, for example Home or Work.
@@ -320,8 +328,8 @@ public final class ContactsContract {
         public static final class Email implements BaseCommonColumns, CommonColumns {
             private Email() {}
 
-            /** Signifies an email address row that is stored in the data table */
-            public static final int KIND = 1;
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/email";
 
             public static final int TYPE_CUSTOM = 0;
             public static final int TYPE_HOME = 1;
@@ -332,11 +340,11 @@ public final class ContactsContract {
         /**
          * Common data definition for postal addresses.
          */
-        public static final class Postal implements BaseCommonColumns{
+        public static final class Postal implements BaseCommonColumns, CommonColumns {
             private Postal() {}
 
-            /** Signifies a postal address row that is stored in the data table */
-            public static final int KIND = 2;
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/postal-address";
 
             public static final int TYPE_CUSTOM = 0;
             public static final int TYPE_HOME = 1;
@@ -347,11 +355,11 @@ public final class ContactsContract {
        /**
         * Common data definition for IM addresses.
         */
-        public static final class Im implements BaseCommonColumns {
+        public static final class Im implements BaseCommonColumns, CommonColumns {
             private Im() {}
 
-            /** Signifies an IM address row that is stored in the data table */
-            public static final int KIND = 3;
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/im";
 
             public static final int TYPE_CUSTOM = 0;
             public static final int TYPE_HOME = 1;
@@ -365,8 +373,14 @@ public final class ContactsContract {
         public static final class Organization implements BaseCommonColumns {
             private Organization() {}
 
-            /** Signifies an organization row that is stored in the data table */
-            public static final int KIND = 4;
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/organization";
+
+            /**
+             * The type of data, for example Home or Work.
+             * <P>Type: INTEGER</P>
+             */
+            public static final String TYPE = "data1";
 
             public static final int TYPE_CUSTOM = 0;
             public static final int TYPE_HOME = 1;
@@ -377,25 +391,25 @@ public final class ContactsContract {
              * The user provided label, only used if TYPE is {@link #TYPE_CUSTOM}.
              * <P>Type: TEXT</P>
              */
-            public static final String LABEL = "label";
+            public static final String LABEL = "data2";
 
             /**
-             * The name of the company for this organization.
+             * The company as the user entered it.
              * <P>Type: TEXT</P>
              */
-            public static final String COMPANY = "company";
+            public static final String COMPANY = "data3";
 
             /**
-             * The title within this organization.
+             * The position title at this company as the user entered it.
              * <P>Type: TEXT</P>
              */
-            public static final String TITLE = "title";
+            public static final String TITLE = "data4";
 
             /**
              * Whether this is the primary organization
              * <P>Type: INTEGER (if set, non-0 means true)</P>
              */
-            public static final String ISPRIMARY = "isprimary";
+            public static final String ISPRIMARY = "data5";
         }
 
         /**
@@ -404,8 +418,8 @@ public final class ContactsContract {
         public static final class Note implements BaseCommonColumns {
             private Note() {}
 
-            /** Signifies a free-form note row that is stored in the data table */
-            public static final int KIND = 6;
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/note";
 
             /**
              * The note text.

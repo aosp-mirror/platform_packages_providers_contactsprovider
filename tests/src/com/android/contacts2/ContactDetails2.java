@@ -36,7 +36,7 @@ public class ContactDetails2 extends ListActivity {
 
     static final String[] PROJECTION = new String[] {
         Data.PACKAGE, // 0
-        Data.KIND, // 1
+        Data.MIMETYPE, // 1
         Data.DATA1, // 2
         Data.DATA2, // 3
         Data.DATA3, // 4
@@ -50,7 +50,7 @@ public class ContactDetails2 extends ListActivity {
         Data._ID,
     };
     static final int COLUMN_INDEX_PACKAGE = 0;
-    static final int COLUMN_INDEX_KIND = 1;
+    static final int COLUMN_INDEX_MIMETYPE = 1;
     static final int COLUMN_INDEX_DATA1 = 2;
     static final int COLUMN_INDEX_DATA2 = 3;
     static final int COLUMN_INDEX_DATA3 = 4;
@@ -105,8 +105,8 @@ public class ContactDetails2 extends ListActivity {
 
             text.append("Package: ");
             text.append(cursor.getString(COLUMN_INDEX_PACKAGE));
-            text.append("\nKind: ");
-            text.append(cursor.getLong(COLUMN_INDEX_KIND));
+            text.append("\nMime-type: ");
+            text.append(cursor.getLong(COLUMN_INDEX_MIMETYPE));
             text.append("\nData1: ");
             text.append(cursor.getString(COLUMN_INDEX_DATA1));
             text.append("\nData2: ");

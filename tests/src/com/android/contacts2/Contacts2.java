@@ -116,8 +116,7 @@ public class Contacts2 extends ListActivity {
 
                 final Uri dataUri = Uri.withAppendedPath(contactUri, Data.CONTENT_DIRECTORY);
                 values.clear();
-                values.put(Phone.PACKAGE, CommonDataKinds.PACKAGE_COMMON);
-                values.put(Phone.KIND, Phone.KIND_PHONE);
+                values.put(Phone.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
                 values.put(Phone.NUMBER, "512-555-1212");
                 values.put(Phone.TYPE, Phone.TYPE_MOBILE);
                 resolver.insert(dataUri, values);
