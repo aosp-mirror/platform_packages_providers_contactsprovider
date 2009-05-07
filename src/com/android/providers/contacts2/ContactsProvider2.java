@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts2;
 
+import com.android.providers.contacts2.ContactsContract.Aggregates;
 import com.android.providers.contacts2.ContactsContract.CommonDataKinds;
 import com.android.providers.contacts2.ContactsContract.Contacts;
 import com.android.providers.contacts2.ContactsContract.Data;
@@ -47,20 +48,26 @@ import java.util.HashMap;
 public class ContactsProvider2 extends ContentProvider {
     private static final String TAG = "~~~~~~~~~~~~~"; // TODO: set to class name
 
-    private static final int DATABASE_VERSION = 11;
+    private static final int DATABASE_VERSION = 12;
     private static final String DATABASE_NAME = "contacts2.db";
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
-    private static final int CONTACTS = 1000;
-    private static final int CONTACTS_ID = 1001;
-    private static final int CONTACTS_DATA = 1002;
+    private static final int AGGREGATES = 1000;
+    private static final int AGGREGATES_ID = 1001;
+    private static final int AGGREGATES_DATA = 1002;
 
-    private static final int DATA = 2000;
-    private static final int DATA_ID = 2001;
+    private static final int CONTACTS = 2002;
+    private static final int CONTACTS_ID = 2003;
+    private static final int CONTACTS_DATA = 2004;
 
-    private static final int PHONE_LOOKUP = 3000;
+    private static final int DATA = 3000;
+    private static final int DATA_ID = 3001;
 
+    private static final int PHONE_LOOKUP = 4000;
+
+    /** Contains just the contacts columns */
+    private static final HashMap<String, String> sAggregatesProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
     /** Contains just the data columns */
@@ -73,6 +80,7 @@ public class ContactsProvider2 extends ContentProvider {
     /** In-memory cache of previously found package name mappings */
     private static HashMap<String, Long> sPackageCache;
 
+    private static final String TABLE_AGGREGATES = "aggregates";
     private static final String TABLE_CONTACTS = "contacts";
     private static final String TABLE_PACKAGE = "package";
     private static final String TABLE_MIMETYPE = "mimetype";
@@ -85,6 +93,15 @@ public class ContactsProvider2 extends ContentProvider {
     private static final String TABLE_DATA_JOIN_PACKAGE_MIMETYPE = "data "
             + "LEFT OUTER JOIN package ON (data.package_id = package._id)"
             + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
+
+    private static final String TABLE_DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "data "
+            + "LEFT OUTER JOIN package ON (data.package_id = package._id)"
+            + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)"
+            + "LEFT JOIN contacts ON (data.contact_id = contacts._id) "
+            + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+
+    private static final String FIELD_AGGREGATION_NEEDED = "aggregation_needed";
+
 
     private interface PackageColumns {
         public static final String _ID = BaseColumns._ID;
@@ -111,6 +128,9 @@ public class ContactsProvider2 extends ContentProvider {
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates", AGGREGATES);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#", AGGREGATES_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/data", AGGREGATES_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
@@ -120,17 +140,19 @@ public class ContactsProvider2 extends ContentProvider {
 
         HashMap<String, String> columns;
 
+        // Aggregates projection map
+        columns = new HashMap<String, String>();
+        columns.put(Aggregates.DISPLAY_NAME, Aggregates.DISPLAY_NAME);
+        columns.put(Aggregates.LAST_TIME_CONTACTED, Aggregates.LAST_TIME_CONTACTED);
+        columns.put(Aggregates.STARRED, Aggregates.STARRED);
+        sAggregatesProjectionMap = columns;
+
         // Contacts projection map
         columns = new HashMap<String, String>();
         columns.put(Contacts._ID, "contacts._id AS _id");
-        columns.put(Contacts.GIVEN_NAME, Contacts.GIVEN_NAME);
-        columns.put(Contacts.PHONETIC_GIVEN_NAME, Contacts.PHONETIC_GIVEN_NAME);
-        columns.put(Contacts.FAMILY_NAME, Contacts.FAMILY_NAME);
-        columns.put(Contacts.PHONETIC_FAMILY_NAME, Contacts.PHONETIC_FAMILY_NAME);
-        columns.put(Contacts.DISPLAY_NAME,
-                Contacts.GIVEN_NAME + " || ' ' || " + Contacts.FAMILY_NAME +
-                " AS " + Contacts.DISPLAY_NAME);
-        columns.put(Contacts.LAST_TIME_CONTACTED, Contacts.LAST_TIME_CONTACTED);
+        columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
+        columns.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
+        columns.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sContactsProjectionMap = columns;
 
         // Data projection map
@@ -196,18 +218,22 @@ public class ContactsProvider2 extends ContentProvider {
         public void onCreate(SQLiteDatabase db) {
             Log.i(TAG, "Bootstrapping database");
 
-            // Public contacts table
+            // One row per group of contacts corresponding to the same person
+            db.execSQL("CREATE TABLE " + TABLE_AGGREGATES + " (" +
+                    BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    Aggregates.DISPLAY_NAME + " TEXT," +
+                    Aggregates.TIMES_CONTACTED + " INTEGER," +
+                    Aggregates.LAST_TIME_CONTACTED + " INTEGER," +
+                    Aggregates.STARRED + " INTEGER" +
+            ");");
+
+            // Contacts table
             db.execSQL("CREATE TABLE " + TABLE_CONTACTS + " (" +
                     Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    Contacts.GIVEN_NAME + " TEXT," +
-                    Contacts.PHONETIC_GIVEN_NAME + " TEXT," +
-                    Contacts.FAMILY_NAME + " TEXT," +
-                    Contacts.PHONETIC_FAMILY_NAME + " TEXT," +
-                    Contacts.TIMES_CONTACTED + " INTEGER," +
-                    Contacts.LAST_TIME_CONTACTED + " INTEGER," +
+                    Contacts.AGGREGATE_ID + " INTEGER, " +
+                    FIELD_AGGREGATION_NEEDED + " INTEGER," +
                     Contacts.CUSTOM_RINGTONE + " TEXT," +
-                    Contacts.SEND_TO_VOICEMAIL + " INTEGER," +
-                    Contacts.STARRED + " INTEGER" +
+                    Contacts.SEND_TO_VOICEMAIL + " INTEGER" +
             ");");
 
             // Package name mapping table
@@ -260,6 +286,7 @@ public class ContactsProvider2 extends ContentProvider {
             Log.i(TAG, "Upgraing from version " + oldVersion + " to " + newVersion
                     + ", data will be lost!");
 
+            db.execSQL("DROP TABLE IF EXISTS " + TABLE_AGGREGATES + ";");
             db.execSQL("DROP TABLE IF EXISTS " + TABLE_CONTACTS + ";");
             db.execSQL("DROP TABLE IF EXISTS " + TABLE_PACKAGE + ";");
             db.execSQL("DROP TABLE IF EXISTS " + TABLE_MIMETYPE + ";");
@@ -299,6 +326,11 @@ public class ContactsProvider2 extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         long id = 0;
         switch (match) {
+            case AGGREGATES: {
+                id = insertAggregate(values);
+                break;
+            }
+
             case CONTACTS: {
                 id = insertContact(values);
                 break;
@@ -325,14 +357,34 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /**
+     * Inserts an item in the aggregates table
+     *
+     * @param values the values for the new row
+     * @return the row ID of the newly created row
+     */
+    private long insertAggregate(ContentValues values) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        return db.insert(TABLE_AGGREGATES, Aggregates.DISPLAY_NAME, values);
+    }
+
+    /**
      * Inserts an item in the contacts table
      *
      * @param values the values for the new row
      * @return the row ID of the newly created row
      */
     private long insertContact(ContentValues values) {
+
+        /*
+         * The contact record is inserted in the contacts table, but it needs to
+         * be processed by the aggregator before it will be returned by the
+         * "aggregates" queries.
+         */
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        return db.insert(TABLE_CONTACTS, Contacts.GIVEN_NAME, values);
+
+        ContentValues augmentedValues = new ContentValues(values);
+        augmentedValues.put(FIELD_AGGREGATION_NEEDED, true);
+        return db.insert(TABLE_CONTACTS, Contacts.AGGREGATE_ID, augmentedValues);
     }
 
     /**
@@ -465,6 +517,17 @@ public class ContactsProvider2 extends ContentProvider {
 
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case AGGREGATES_ID: {
+                long aggregateId = ContentUris.parseId(uri);
+
+                // Remove references to the aggregate first
+                ContentValues values = new ContentValues();
+                values.putNull(Contacts.AGGREGATE_ID);
+                db.update(TABLE_CONTACTS, values, Contacts.AGGREGATE_ID + "=" + aggregateId, null);
+
+                return db.delete(TABLE_AGGREGATES, BaseColumns._ID + "=" + aggregateId, null);
+            }
+
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
                 int contactsDeleted = db.delete(TABLE_CONTACTS, Contacts._ID + "=" + contactId, null);
@@ -474,7 +537,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                return db.delete(TABLE_DATA, Data._ID + "=" + dataId, null);
+                return db.delete("data", Data._ID + "=" + dataId, null);
             }
 
             default:
@@ -495,6 +558,26 @@ public class ContactsProvider2 extends ContentProvider {
 
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case AGGREGATES: {
+                qb.setTables(TABLE_AGGREGATES);
+                qb.setProjectionMap(sAggregatesProjectionMap);
+                break;
+            }
+
+            case AGGREGATES_ID: {
+                qb.setTables(TABLE_AGGREGATES);
+                qb.setProjectionMap(sAggregatesProjectionMap);
+                qb.appendWhere(BaseColumns._ID + " = " + uri.getLastPathSegment());
+                break;
+            }
+
+            case AGGREGATES_DATA: {
+                qb.setTables(TABLE_DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sDataProjectionMap);
+                qb.appendWhere(Contacts.AGGREGATE_ID + " = " + uri.getPathSegments().get(1));
+                break;
+            }
+
             case CONTACTS: {
                 qb.setTables(TABLE_CONTACTS);
                 qb.setProjectionMap(sContactsProjectionMap);
@@ -561,11 +644,12 @@ public class ContactsProvider2 extends ContentProvider {
     public String getType(Uri uri) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case AGGREGATES: return Aggregates.CONTENT_TYPE;
+            case AGGREGATES_ID: return Aggregates.CONTENT_ITEM_TYPE;
             case CONTACTS: return Contacts.CONTENT_TYPE;
             case CONTACTS_ID: return Contacts.CONTENT_ITEM_TYPE;
-            case CONTACTS_DATA: return Data.CONTENT_TYPE;
-            case DATA: return Data.CONTENT_TYPE;
             case DATA_ID:
+                final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
                 long dataId = ContentUris.parseId(uri);
                 return getDataMimeType(dataId);
         }

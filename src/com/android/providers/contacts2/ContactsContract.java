@@ -31,31 +31,7 @@ public final class ContactsContract {
     /** A content:// style uri to the authority for the contacts provider */
     public static final Uri AUTHORITY_URI = Uri.parse("content://" + AUTHORITY);
 
-    private interface ContactsColumns {
-        /**
-         * The given name for the contact.
-         * <P>Type: TEXT</P>
-         */
-        public static final String GIVEN_NAME = "given_name";
-
-        /**
-         * The phonetic version of the given name for the contact.
-         * <P>Type: TEXT</P>
-         */
-        public static final String PHONETIC_GIVEN_NAME = "phonetic_given_name";
-
-        /**
-         * The family name for the contact.
-         * <P>Type: TEXT</P>
-         */
-        public static final String FAMILY_NAME = "family_name";
-
-        /**
-         * The phonetic version of the family name for the contact.
-         * <P>Type: TEXT</P>
-         */
-        public static final String PHONETIC_FAMILY_NAME = "phonetic_family_name";
-
+    public interface AggregatesColumns {
         /**
          * The display name for the contact.
          * <P>Type: TEXT</P>
@@ -75,6 +51,72 @@ public final class ContactsContract {
         public static final String LAST_TIME_CONTACTED = "last_time_contacted";
 
         /**
+         * Is the contact starred?
+         * <P>Type: INTEGER (boolean)</P>
+         */
+        public static final String STARRED = "starred";
+    }
+
+    /**
+     * Constants for the aggregates table, which contains a record per group
+     * of contact representing the same person.
+     */
+    public static final class Aggregates implements BaseColumns, AggregatesColumns {
+        /**
+         * This utility class cannot be instantiated
+         */
+        private Aggregates()  {}
+
+        /**
+         * The content:// style URI for this table
+         */
+        public static final Uri CONTENT_URI = Uri.withAppendedPath(AUTHORITY_URI, "aggregates");
+
+        /**
+         * The MIME type of {@link #CONTENT_URI} providing a directory of
+         * people.
+         */
+        public static final String CONTENT_TYPE = "vnd.android.cursor.dir/person_aggregate";
+
+        /**
+         * The MIME type of a {@link #CONTENT_URI} subdirectory of a single
+         * person.
+         */
+        public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/person_aggregate";
+
+        /**
+         * A sub-directory of a single contact aggregate that contains all of their
+         * {@link Data} rows.
+         */
+        public static final class Data implements BaseColumns, DataColumns {
+            /**
+             * no public constructor since this is a utility class
+             */
+            private Data() {}
+
+            /**
+             * The directory twig for this sub-table
+             */
+            public static final String CONTENT_DIRECTORY = "data";
+        }
+    }
+
+
+    /**
+     * Constants for the contacts table, which contains the base contact information.
+     */
+    public static final class Contacts implements BaseColumns {
+        /**
+         * This utility class cannot be instantiated
+         */
+        private Contacts()  {}
+
+        /**
+         * A reference to the {@link Aggregates#_ID} that this data belongs to.
+         */
+        public static final String AGGREGATE_ID = "aggregate_id";
+
+        /**
          * A custom ringtone associated with a person. Not always present.
          * <P>Type: TEXT (URI to the ringtone)</P>
          */
@@ -86,22 +128,6 @@ public final class ContactsContract {
          * <P>Type: INTEGER (0 for false, 1 for true)</P>
          */
         public static final String SEND_TO_VOICEMAIL = "send_to_voicemail";
-
-        /**
-         * Is the contact starred?
-         * <P>Type: INTEGER (boolean)</P>
-         */
-        public static final String STARRED = "starred";
-    }
-
-    /**
-     * Constants for the contacts table, which contains the base contact information.
-     */
-    public static final class Contacts implements BaseColumns, ContactsColumns {
-        /**
-         * This utility class cannot be instantiated
-         */
-        private Contacts()  {}
 
         /**
          * The content:// style URI for this table
@@ -203,7 +229,7 @@ public final class ContactsContract {
      * The table joins that data row for the phone number with the contact that owns the number.
      * To perform a lookup you must append the number you want to find to {@link #CONTENT_URI}.
      */
-    public static final class PhoneLookup implements BaseColumns, DataColumns, ContactsColumns {
+    public static final class PhoneLookup implements BaseColumns, DataColumns, AggregatesColumns {
         /**
          * This utility class cannot be instantiated
          */
@@ -277,6 +303,102 @@ public final class ContactsContract {
              * <P>Type: INTEGER (if set, non-0 means true)</P>
              */
             public static final String ISPRIMARY = "data4";
+        }
+
+        /**
+         * Parts of the name.
+         */
+        public static final class StructuredName {
+            private StructuredName() {}
+
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/name";
+
+            /**
+             * The contact's honorific prefix, e.g. "Sir"
+             */
+            public static final String PREFIX = "data1";
+
+            /**
+             * The given name for the contact.
+             * <P>Type: TEXT</P>
+             */
+            public static final String GIVEN_NAME = "data2";
+
+            /**
+             * The contact's middle name
+             * <P>Type: TEXT</P>
+             */
+            public static final String MIDDLE_NAME = "data3";
+
+            /**
+             * The family name for the contact.
+             * <P>Type: TEXT</P>
+             */
+            public static final String FAMILY_NAME = "data4";
+
+            /**
+             * The contact's honorific suffix, e.g. "Jr"
+             */
+            public static final String SUFFIX = "data5";
+
+            /**
+             * The phonetic version of the given name for the contact.
+             * <P>Type: TEXT</P>
+             */
+            public static final String PHONETIC_GIVEN_NAME = "data6";
+
+            /**
+             * The phonetic version of the additional name for the contact.
+             * <P>Type: TEXT</P>
+             */
+            public static final String PHONETIC_MIDDLE_NAME = "data7";
+
+            /**
+             * The phonetic version of the family name for the contact.
+             * <P>Type: TEXT</P>
+             */
+            public static final String PHONETIC_FAMILY_NAME = "data8";
+
+            /**
+             * The name that should be used to display the contact.
+             * <P>Type: TEXT</P>
+             */
+            public static final String DISPLAY_NAME = "data9";
+        }
+
+        /**
+         * A nickname.
+         */
+        public static final class Nickname {
+            private Nickname() {}
+
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/nickname";
+
+            /**
+             * The type of data, for example Home or Work.
+             * <P>Type: INTEGER</P>
+             */
+            public static final String TYPE = "data1";
+
+            public static final int TYPE_CUSTOM = 1;
+            public static final int TYPE_DEFAULT = 2;
+            public static final int TYPE_OTHER_NAME = 3;
+            public static final int TYPE_MAINDEN_NAME = 4;
+            public static final int TYPE_SHORT_NAME = 5;
+            public static final int TYPE_INITIALS = 6;
+
+            /**
+             * The user provided label, only used if TYPE is {@link #TYPE_CUSTOM}.
+             * <P>Type: TEXT</P>
+             */
+            public static final String LABEL = "data2";
+
+            /**
+             * The name itself
+             */
+            public static final String NAME = "data3";
         }
 
         /**

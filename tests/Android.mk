@@ -1,13 +1,17 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_MODULE_TAGS := user
+# We only want this apk build for tests.
+LOCAL_MODULE_TAGS := tests
 
 # Only compile source java files in this apk.
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 
-LOCAL_SRC_FILES += ../src/com/android/providers/contacts2/ContactsContract.java
+LOCAL_PACKAGE_NAME := ContactsProvider2Tests
 
-LOCAL_PACKAGE_NAME := Contacts2
+LOCAL_JAVA_LIBRARIES := android.test.runner
+
+LOCAL_INSTRUMENTATION_FOR := ContactsProvider2
+LOCAL_CERTIFICATE := shared
 
 include $(BUILD_PACKAGE)
