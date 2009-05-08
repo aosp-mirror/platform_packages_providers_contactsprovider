@@ -998,6 +998,13 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 }
                 break;
             }
+            case SEARCH_SHORTCUT: {
+                qb.setTables(PEOPLE_PHONES_PHOTOS_ORGANIZATIONS_JOIN);
+                qb.setProjectionMap(sSearchSuggestionsProjectionMap);
+                qb.appendWhere(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID + "=");
+                qb.appendWhere(url.getPathSegments().get(1));
+                break;
+            }
             case PEOPLE_STREQUENT: {
                 // Build the first query for starred
                 qb.setTables(PEOPLE_PHONES_PHOTOS_JOIN);
@@ -3998,6 +4005,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
     private static final int VOICE_DIALER_TIMESTAMP = 7000;
     private static final int SEARCH_SUGGESTIONS = 7001;
+    private static final int SEARCH_SHORTCUT = 7002;
 
     private static final int GROUPS_BASE = 8000;
     private static final int GROUPS = GROUPS_BASE;
@@ -4189,6 +4197,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 SEARCH_SUGGESTIONS);
         matcher.addURI(CONTACTS_AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
                 SEARCH_SUGGESTIONS);
+        matcher.addURI(CONTACTS_AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
+                SEARCH_SHORTCUT);
         matcher.addURI(CONTACTS_AUTHORITY, "settings", SETTINGS);
 
         matcher.addURI(CONTACTS_AUTHORITY, "live_folders/people", LIVE_FOLDERS_PEOPLE);
@@ -4389,6 +4399,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 DISPLAY_NAME_SQL + " AS " + SearchManager.SUGGEST_COLUMN_TEXT_1);
         map.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
                 "people._id AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
+        map.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
+                "people._id AS " + SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
         map.put(People._ID, "people._id AS " + People._ID);
         map.put(Phones.NUMBER, Phones.NUMBER);
         map.put(Phones.TYPE, "phones.type AS " + Phones.TYPE);
