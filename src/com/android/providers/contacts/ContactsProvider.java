@@ -1536,6 +1536,10 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 return "vnd.android.cursor.item/organization";
             case CALLS_FILTER:
                 return "vnd.android.cursor.dir/calls";
+            case SEARCH_SUGGESTIONS:
+                return SearchManager.SUGGEST_MIME_TYPE;
+            case SEARCH_SHORTCUT:
+                return SearchManager.SHORTCUT_MIME_TYPE;
             default:
                 throw new IllegalArgumentException("Unknown URL");
         }
