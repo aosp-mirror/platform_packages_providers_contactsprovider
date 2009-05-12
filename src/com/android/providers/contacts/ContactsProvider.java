@@ -1436,8 +1436,10 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 qb.appendWhere(buildPeopleLookupWhereClause(searchClause));
             } else {
                 final String[] columnNames = new String[] {
+                        "_id",
                         SearchManager.SUGGEST_COLUMN_TEXT_1,
                         SearchManager.SUGGEST_COLUMN_TEXT_2,
+                        SearchManager.SUGGEST_COLUMN_ICON_1,
                         SearchManager.SUGGEST_COLUMN_INTENT_DATA,
                         SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
                 };
@@ -1446,7 +1448,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 String s;
                 int i;
 
-                ArrayList dialNumber = new ArrayList();
+                ArrayList<Object> dialNumber = new ArrayList<Object>();
+                dialNumber.add(0);  // _id
                 s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
                 i = s.indexOf('\n');
                 if (i < 0) {
@@ -1456,10 +1459,12 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                     dialNumber.add(s.substring(0, i));
                     dialNumber.add(s.substring(i + 1));
                 }
+                dialNumber.add(String.valueOf(android.R.drawable.sym_action_call));
                 dialNumber.add("tel:" + searchClause);
                 dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);  
 
-                ArrayList createContact = new ArrayList();
+                ArrayList<Object> createContact = new ArrayList<Object>();
+                createContact.add(1);  // _id
                 s = r.getString(com.android.internal.R.string.create_contact_using, searchClause);
                 i = s.indexOf('\n');
                 if (i < 0) {
@@ -1469,6 +1474,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                     createContact.add(s.substring(0, i));
                     createContact.add(s.substring(i + 1));
                 }
+                // TODO: add a "create contact" icon
+                createContact.add(String.valueOf(android.R.drawable.ic_menu_add));
                 createContact.add("tel:" + searchClause);
                 createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
 
@@ -4110,6 +4117,59 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             + "END"
         + ")";
     
+    private static final String PRIMARY_ORGANIZATION_WHEN_SQL
+            = " WHEN primary_organization is NOT NULL THEN "
+            + "(SELECT company FROM organizations WHERE organizations._id = primary_organization)";
+
+    private static final String PRIMARY_PHONE_WHEN_SQL
+            = " WHEN primary_phone IS NOT NULL THEN "
+            + "(SELECT number FROM phones WHERE phones._id = primary_phone)";
+
+    private static final String PRIMARY_EMAIL_WHEN_SQL
+            = " WHEN primary_email IS NOT NULL THEN "
+            + "(SELECT data FROM contact_methods WHERE contact_methods._id = primary_email)";
+
+    // The outer CASE is for figuring out what info DISPLAY_NAME_SQL returned.
+    // We then pick the next piece of info, to avoid the two lines in the search 
+    // suggestion being identical.
+    private static final String SUGGEST_DESCRIPTION_SQL
+            = "(CASE"
+                // DISPLAY_NAME_SQL returns name, try org, phone, email
+                + " WHEN (name IS NOT NULL AND name != '') THEN "
+                    + "(CASE"
+                        + PRIMARY_ORGANIZATION_WHEN_SQL
+                        + PRIMARY_PHONE_WHEN_SQL
+                        + PRIMARY_EMAIL_WHEN_SQL
+                        + " ELSE null END)"
+                // DISPLAY_NAME_SQL returns org, try phone, email
+                + " WHEN primary_organization is NOT NULL THEN "
+                    + "(CASE"
+                        + PRIMARY_PHONE_WHEN_SQL
+                        + PRIMARY_EMAIL_WHEN_SQL
+                        + " ELSE null END)"
+                // DISPLAY_NAME_SQL returns phone, try email
+                + " WHEN primary_phone IS NOT NULL THEN "
+                    + "(CASE"
+                        + PRIMARY_EMAIL_WHEN_SQL
+                        + " ELSE null END)"
+                // DISPLAY_NAME_SQL returns email or NULL, return NULL
+                + " ELSE null END)";
+
+    private static final String PRESENCE_ICON_SQL
+            = "(CASE"
+                + buildPresenceStatusWhen(People.OFFLINE)
+                + buildPresenceStatusWhen(People.INVISIBLE)
+                + buildPresenceStatusWhen(People.AWAY)
+                + buildPresenceStatusWhen(People.IDLE)
+                + buildPresenceStatusWhen(People.DO_NOT_DISTURB)
+                + buildPresenceStatusWhen(People.AVAILABLE)
+                + " ELSE null END)";
+
+    private static String buildPresenceStatusWhen(int status) {
+        return " WHEN " + Presence.PRESENCE_STATUS + " = " + status
+            + " THEN " + Presence.getPresenceIconResourceId(status);
+    }
+
     private static final String[] sPhonesKeyColumns;
     private static final String[] sContactMethodsKeyColumns;
     private static final String[] sOrganizationsKeyColumns;
@@ -4401,16 +4461,20 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map = new HashMap<String, String>();
         map.put(SearchManager.SUGGEST_COLUMN_TEXT_1,
                 DISPLAY_NAME_SQL + " AS " + SearchManager.SUGGEST_COLUMN_TEXT_1);
+        map.put(SearchManager.SUGGEST_COLUMN_TEXT_2,
+                SUGGEST_DESCRIPTION_SQL + " AS " + SearchManager.SUGGEST_COLUMN_TEXT_2);
+        map.put(SearchManager.SUGGEST_COLUMN_ICON_1,
+                com.android.internal.R.drawable.ic_contact_picture
+                + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1);
+        map.put(SearchManager.SUGGEST_COLUMN_ICON_1_BITMAP,
+                Photos.DATA + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1_BITMAP);
+        map.put(SearchManager.SUGGEST_COLUMN_ICON_2,
+                PRESENCE_ICON_SQL + " AS " + SearchManager.SUGGEST_COLUMN_ICON_2);
         map.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
                 "people._id AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
         map.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
                 "people._id AS " + SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
         map.put(People._ID, "people._id AS " + People._ID);
-        map.put(Phones.NUMBER, Phones.NUMBER);
-        map.put(Phones.TYPE, "phones.type AS " + Phones.TYPE);
-        map.put(Organizations.COMPANY, Organizations.COMPANY);
-        map.put(Photos.DATA, Photos.DATA);
-        map.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
         sSearchSuggestionsProjectionMap = map;
 
         // Photos projection map
