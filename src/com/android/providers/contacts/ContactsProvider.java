@@ -345,6 +345,20 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             oldVersion = 80;
         }
 
+        if (oldVersion == 80) {
+            Log.i(TAG, "Upgrading contacts database from version " + oldVersion + " to " +
+                    newVersion + ", which will preserve existing data");
+            // 81 adds the token_index column
+            db.execSQL("DELETE FROM peopleLookup");
+            db.execSQL("ALTER TABLE peopleLookup ADD token_index INTEGER;");
+            String[] tokenize = {"_TOKENIZE('peopleLookup', _id, name, ' ', 1)"};
+            Cursor cursor = db.query("people", tokenize, null, null, null, null, null);
+            int rows = cursor.getCount();
+            cursor.close();
+            Log.i(TAG, "Processed " + rows + " contacts.");
+            oldVersion = 81;
+        }
+
         return upgradeWasLossless;
     }
 
@@ -436,7 +450,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
         db.execSQL("CREATE TABLE peopleLookup (" +
                     "token TEXT," +
-                    "source INTEGER REFERENCES people(_id)" +
+                    "source INTEGER REFERENCES people(_id)," +
+                    "token_index INTEGER"+
                     ");");
         db.execSQL("CREATE INDEX peopleLookupIndex ON peopleLookup (" +
                     "token," +
@@ -599,11 +614,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         db.execSQL("CREATE TRIGGER peopleLookup_update UPDATE OF name ON people " +
                     "BEGIN " +
                         "DELETE FROM peopleLookup WHERE source = new._id;" +
-                        "SELECT _TOKENIZE('peopleLookup', new._id, new.name, ' ');" +
+                        "SELECT _TOKENIZE('peopleLookup', new._id, new.name, ' ', 1);" +
                     "END");
         db.execSQL("CREATE TRIGGER peopleLookup_insert AFTER INSERT ON people " +
                     "BEGIN " +
-                        "SELECT _TOKENIZE('peopleLookup', new._id, new.name, ' ');" +
+                        "SELECT _TOKENIZE('peopleLookup', new._id, new.name, ' ', 1);" +
                     "END");
 
         // Triggers to set the _sync_dirty flag when a phone is changed,
@@ -3769,7 +3784,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String TAG = "ContactsProvider";
 
     /* package private */ static final String DATABASE_NAME = "contacts.db";
-    /* package private */ static final int DATABASE_VERSION = 80;
+    /* package private */ static final int DATABASE_VERSION = 81;
 
     protected static final String CONTACTS_AUTHORITY = "contacts";
     protected static final String CALL_LOG_AUTHORITY = "call_log";
