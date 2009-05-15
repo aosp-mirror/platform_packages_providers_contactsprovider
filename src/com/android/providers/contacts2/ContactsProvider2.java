@@ -21,23 +21,23 @@ import com.android.providers.contacts2.ContactsContract.CommonDataKinds;
 import com.android.providers.contacts2.ContactsContract.Contacts;
 import com.android.providers.contacts2.ContactsContract.Data;
 import com.android.providers.contacts2.ContactsContract.CommonDataKinds.Phone;
+import com.android.providers.contacts2.OpenHelper.ContactsColumns;
+import com.android.providers.contacts2.OpenHelper.DataColumns;
+import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
+import com.android.providers.contacts2.OpenHelper.Tables;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.UriMatcher;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteDoneException;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
-import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
-import android.util.Log;
 
 import java.util.HashMap;
 
@@ -46,10 +46,8 @@ import java.util.HashMap;
  * is defined in {@link ContactsContract}.
  */
 public class ContactsProvider2 extends ContentProvider {
-    private static final String TAG = "~~~~~~~~~~~~~"; // TODO: set to class name
-
-    private static final int DATABASE_VERSION = 12;
-    private static final String DATABASE_NAME = "contacts2.db";
+    // TODO: clean up debug tag and rename this class
+    private static final String TAG = "ContactsProvider ~~~~";
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -74,56 +72,6 @@ public class ContactsProvider2 extends ContentProvider {
     private static final HashMap<String, String> sDataProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
     private static final HashMap<String, String> sDataContactsProjectionMap;
-
-    /** In-memory cache of previously found mimetype mappings */
-    private static HashMap<String, Long> sMimetypeCache;
-    /** In-memory cache of previously found package name mappings */
-    private static HashMap<String, Long> sPackageCache;
-
-    private static final String TABLE_AGGREGATES = "aggregates";
-    private static final String TABLE_CONTACTS = "contacts";
-    private static final String TABLE_PACKAGE = "package";
-    private static final String TABLE_MIMETYPE = "mimetype";
-    private static final String TABLE_DATA = "data";
-    private static final String TABLE_PHONE_LOOKUP = "phone_lookup";
-
-    private static final String TABLE_DATA_JOIN_MIMETYPE = "data "
-            + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
-
-    private static final String TABLE_DATA_JOIN_PACKAGE_MIMETYPE = "data "
-            + "LEFT OUTER JOIN package ON (data.package_id = package._id)"
-            + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
-
-    private static final String TABLE_DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "data "
-            + "LEFT OUTER JOIN package ON (data.package_id = package._id)"
-            + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)"
-            + "LEFT JOIN contacts ON (data.contact_id = contacts._id) "
-            + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
-
-    private static final String FIELD_AGGREGATION_NEEDED = "aggregation_needed";
-
-
-    private interface PackageColumns {
-        public static final String _ID = BaseColumns._ID;
-        public static final String PACKAGE = "package";
-    }
-
-    private interface MimetypeColumns {
-        public static final String _ID = BaseColumns._ID;
-        public static final String MIMETYPE = "mimetype";
-    }
-
-    private interface DataColumns {
-        public static final String PACKAGE_ID = "package_id";
-        public static final String MIMETYPE_ID = "mimetype_id";
-    }
-
-    private interface PhoneLookupColumns {
-        public static final String _ID = BaseColumns._ID;
-        public static final String DATA_ID = "data_id";
-        public static final String CONTACT_ID = "contact_id";
-        public static final String NORMALIZED_NUMBER = "normalized_number";
-    }
 
     static {
         // Contacts URI matching table
@@ -178,128 +126,14 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sContactsProjectionMap);
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
         sDataContactsProjectionMap = columns;
-
-        // Prepare package and mimetype caches
-        sPackageCache = new HashMap<String, Long>();
-        sMimetypeCache = new HashMap<String, Long>();
     }
 
     private OpenHelper mOpenHelper;
 
-    private class OpenHelper extends SQLiteOpenHelper {
-        /** Compiled statements for querying and inserting mappings */
-        SQLiteStatement mimetypeQuery;
-        SQLiteStatement packageQuery;
-        SQLiteStatement mimetypeInsert;
-        SQLiteStatement packageInsert;
-        SQLiteStatement dataMimetypeQuery;
-
-        public OpenHelper() {
-            super(getContext(), DATABASE_NAME, null, DATABASE_VERSION);
-            Log.i(TAG, "Creating OpenHelper");
-        }
-
-        @Override
-        public void onOpen(SQLiteDatabase db) {
-            // Create compiled statements for package and mimetype lookups
-            mimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns._ID + " FROM "
-                    + TABLE_MIMETYPE + " WHERE " + MimetypeColumns.MIMETYPE + "=?");
-            packageQuery = db.compileStatement("SELECT " + PackageColumns._ID + " FROM "
-                    + TABLE_PACKAGE + " WHERE " + PackageColumns.PACKAGE + "=?");
-            mimetypeInsert = db.compileStatement("INSERT INTO " + TABLE_MIMETYPE + "("
-                    + MimetypeColumns.MIMETYPE + ") VALUES (?)");
-            packageInsert = db.compileStatement("INSERT INTO " + TABLE_PACKAGE + "("
-                    + PackageColumns.PACKAGE + ") VALUES (?)");
-            dataMimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns.MIMETYPE + " FROM "
-                    + TABLE_DATA_JOIN_MIMETYPE + " WHERE " + TABLE_DATA + "." + Data._ID + "=?");
-        }
-
-        @Override
-        public void onCreate(SQLiteDatabase db) {
-            Log.i(TAG, "Bootstrapping database");
-
-            // One row per group of contacts corresponding to the same person
-            db.execSQL("CREATE TABLE " + TABLE_AGGREGATES + " (" +
-                    BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    Aggregates.DISPLAY_NAME + " TEXT," +
-                    Aggregates.TIMES_CONTACTED + " INTEGER," +
-                    Aggregates.LAST_TIME_CONTACTED + " INTEGER," +
-                    Aggregates.STARRED + " INTEGER" +
-            ");");
-
-            // Contacts table
-            db.execSQL("CREATE TABLE " + TABLE_CONTACTS + " (" +
-                    Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    Contacts.AGGREGATE_ID + " INTEGER, " +
-                    FIELD_AGGREGATION_NEEDED + " INTEGER," +
-                    Contacts.CUSTOM_RINGTONE + " TEXT," +
-                    Contacts.SEND_TO_VOICEMAIL + " INTEGER" +
-            ");");
-
-            // Package name mapping table
-            db.execSQL("CREATE TABLE " + TABLE_PACKAGE + " (" +
-                    PackageColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    PackageColumns.PACKAGE + " TEXT" +
-            ");");
-
-            // Mime-type mapping table
-            db.execSQL("CREATE TABLE " + TABLE_MIMETYPE + " (" +
-                    MimetypeColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    MimetypeColumns.MIMETYPE + " TEXT" +
-            ");");
-
-            // Public generic data table
-            db.execSQL("CREATE TABLE " + TABLE_DATA + " (" +
-                    Data._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
-                    DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
-                    Data.CONTACT_ID + " INTEGER NOT NULL," +
-                    Data.DATA1 + " NUMERIC," +
-                    Data.DATA2 + " NUMERIC," +
-                    Data.DATA3 + " NUMERIC," +
-                    Data.DATA4 + " NUMERIC," +
-                    Data.DATA5 + " NUMERIC," +
-                    Data.DATA6 + " NUMERIC," +
-                    Data.DATA7 + " NUMERIC," +
-                    Data.DATA8 + " NUMERIC," +
-                    Data.DATA9 + " NUMERIC," +
-                    Data.DATA10 + " NUMERIC" +
-            ");");
-
-            // Private phone numbers table used for lookup
-            db.execSQL("CREATE TABLE " + TABLE_PHONE_LOOKUP + " (" +
-                    PhoneLookupColumns._ID + " INTEGER PRIMARY KEY," +
-                    PhoneLookupColumns.DATA_ID + " INTEGER REFERENCES data(_id) NOT NULL," +
-                    PhoneLookupColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL," +
-                    PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL" +
-            ");");
-
-            db.execSQL("CREATE INDEX phone_lookup_index ON " + TABLE_PHONE_LOOKUP + " (" +
-                    PhoneLookupColumns.NORMALIZED_NUMBER + " ASC, " +
-                    PhoneLookupColumns.CONTACT_ID + ", " +
-                    PhoneLookupColumns.DATA_ID +
-            ");");
-        }
-
-        @Override
-        public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-            Log.i(TAG, "Upgraing from version " + oldVersion + " to " + newVersion
-                    + ", data will be lost!");
-
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_AGGREGATES + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_CONTACTS + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_PACKAGE + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_MIMETYPE + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_DATA + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_PHONE_LOOKUP + ";");
-
-            onCreate(db);
-        }
-    }
-
     @Override
     public boolean onCreate() {
-        mOpenHelper = new OpenHelper();
+        final Context context = getContext();
+        mOpenHelper = OpenHelper.getInstance(context);
 
         // TODO remove this, it's here to force opening the database on boot for testing
         mOpenHelper.getReadableDatabase();
@@ -364,7 +198,7 @@ public class ContactsProvider2 extends ContentProvider {
      */
     private long insertAggregate(ContentValues values) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        return db.insert(TABLE_AGGREGATES, Aggregates.DISPLAY_NAME, values);
+        return db.insert(Tables.AGGREGATES, Aggregates.DISPLAY_NAME, values);
     }
 
     /**
@@ -383,8 +217,8 @@ public class ContactsProvider2 extends ContentProvider {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         ContentValues augmentedValues = new ContentValues(values);
-        augmentedValues.put(FIELD_AGGREGATION_NEEDED, true);
-        return db.insert(TABLE_CONTACTS, Contacts.AGGREGATE_ID, augmentedValues);
+        augmentedValues.put(ContactsColumns.AGGREGATION_NEEDED, true);
+        return db.insert(Tables.CONTACTS, Contacts.AGGREGATE_ID, augmentedValues);
     }
 
     /**
@@ -403,15 +237,15 @@ public class ContactsProvider2 extends ContentProvider {
 
             // Replace package name and mime-type with internal mappings
             final String packageName = values.getAsString(Data.PACKAGE);
-            values.put(DataColumns.PACKAGE_ID, getPackageId(packageName));
+            values.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
             values.remove(Data.PACKAGE);
 
             final String mimeType = values.getAsString(Data.MIMETYPE);
-            values.put(DataColumns.MIMETYPE_ID, getMimeTypeId(mimeType));
+            values.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
             values.remove(Data.MIMETYPE);
 
             // Insert the data row itself
-            id = db.insert(TABLE_DATA, Data.DATA1, values);
+            id = db.insert(Tables.DATA, Data.DATA1, values);
 
             // If it's a phone number add the normalized version to the lookup table
             if (CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
@@ -421,7 +255,7 @@ public class ContactsProvider2 extends ContentProvider {
                         PhoneNumberUtils.getStrippedReversed(number));
                 phoneValues.put(PhoneLookupColumns.DATA_ID, id);
                 phoneValues.put(PhoneLookupColumns.CONTACT_ID, values.getAsLong(Phone.CONTACT_ID));
-                db.insert(TABLE_PHONE_LOOKUP, null, phoneValues);
+                db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
             }
             db.setTransactionSuccessful();
         } finally {
@@ -430,86 +264,6 @@ public class ContactsProvider2 extends ContentProvider {
         return id;
     }
 
-    /**
-     * Perform an internal string-to-integer lookup using the compiled
-     * {@link SQLiteStatement} provided, using the in-memory cache to speed up
-     * lookups. If a mapping isn't found in cache or database, it will be
-     * created. All new, uncached answers are added to the cache automatically.
-     *
-     * @param query Compiled statement used to query for the mapping.
-     * @param insert Compiled statement used to insert a new mapping when no
-     *            existing one is found in cache or from query.
-     * @param value Value to find mapping for.
-     * @param cache In-memory cache of previous answers.
-     * @return An unique integer mapping for the given value.
-     */
-    private synchronized long getCachedId(SQLiteStatement query, SQLiteStatement insert,
-            String value, HashMap<String, Long> cache) {
-        // Try an in-memory cache lookup
-        if (cache.containsKey(value)) {
-            return cache.get(value);
-        }
-
-        long id = -1;
-        try {
-            // Try searching database for mapping
-            DatabaseUtils.bindObjectToProgram(query, 1, value);
-            id = query.simpleQueryForLong();
-        } catch (SQLiteDoneException e) {
-            // Nothing found, so try inserting new mapping
-            DatabaseUtils.bindObjectToProgram(insert, 1, value);
-            id = insert.executeInsert();
-        }
-
-        if (id != -1) {
-            // Cache and return the new answer
-            cache.put(value, id);
-            return id;
-        } else {
-            // Otherwise throw if no mapping found or created
-            throw new IllegalStateException("Couldn't find or create internal "
-                    + "lookup table entry for value " + value);
-        }
-    }
-
-    /**
-     * Convert a package name into an integer, using {@link #TABLE_PACKAGE} for
-     * lookups and possible allocation of new IDs as needed.
-     */
-    private long getPackageId(String packageName) {
-        // Make sure compiled statements are ready by opening database
-        mOpenHelper.getReadableDatabase();
-        return getCachedId(mOpenHelper.packageQuery, mOpenHelper.packageInsert,
-                packageName, sPackageCache);
-    }
-
-    /**
-     * Convert a mime-type into an integer, using {@link #TABLE_MIMETYPE} for
-     * lookups and possible allocation of new IDs as needed.
-     */
-    private long getMimeTypeId(String mimetype) {
-        // Make sure compiled statements are ready by opening database
-        mOpenHelper.getReadableDatabase();
-        return getCachedId(mOpenHelper.mimetypeQuery, mOpenHelper.mimetypeInsert,
-                mimetype, sMimetypeCache);
-    }
-
-    /**
-     * Find the mime-type for the given data ID.
-     */
-    private String getDataMimeType(long dataId) {
-        // Make sure compiled statements are ready by opening database
-        mOpenHelper.getReadableDatabase();
-        try {
-            // Try database query to find mimetype
-            DatabaseUtils.bindObjectToProgram(mOpenHelper.dataMimetypeQuery, 1, dataId);
-            String mimetype = mOpenHelper.dataMimetypeQuery.simpleQueryForString();
-            return mimetype;
-        } catch (SQLiteDoneException e) {
-            // No valid mapping found, so return null
-            return null;
-        }
-    }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -523,15 +277,15 @@ public class ContactsProvider2 extends ContentProvider {
                 // Remove references to the aggregate first
                 ContentValues values = new ContentValues();
                 values.putNull(Contacts.AGGREGATE_ID);
-                db.update(TABLE_CONTACTS, values, Contacts.AGGREGATE_ID + "=" + aggregateId, null);
+                db.update(Tables.CONTACTS, values, Contacts.AGGREGATE_ID + "=" + aggregateId, null);
 
-                return db.delete(TABLE_AGGREGATES, BaseColumns._ID + "=" + aggregateId, null);
+                return db.delete(Tables.AGGREGATES, BaseColumns._ID + "=" + aggregateId, null);
             }
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                int contactsDeleted = db.delete(TABLE_CONTACTS, Contacts._ID + "=" + contactId, null);
-                int dataDeleted = db.delete(TABLE_DATA, Data.CONTACT_ID + "=" + contactId, null);
+                int contactsDeleted = db.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
+                int dataDeleted = db.delete(Tables.DATA, Data.CONTACT_ID + "=" + contactId, null);
                 return contactsDeleted + dataDeleted;
             }
 
@@ -559,40 +313,40 @@ public class ContactsProvider2 extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case AGGREGATES: {
-                qb.setTables(TABLE_AGGREGATES);
+                qb.setTables(Tables.AGGREGATES);
                 qb.setProjectionMap(sAggregatesProjectionMap);
                 break;
             }
 
             case AGGREGATES_ID: {
-                qb.setTables(TABLE_AGGREGATES);
+                qb.setTables(Tables.AGGREGATES);
                 qb.setProjectionMap(sAggregatesProjectionMap);
                 qb.appendWhere(BaseColumns._ID + " = " + uri.getLastPathSegment());
                 break;
             }
 
             case AGGREGATES_DATA: {
-                qb.setTables(TABLE_DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataProjectionMap);
                 qb.appendWhere(Contacts.AGGREGATE_ID + " = " + uri.getPathSegments().get(1));
                 break;
             }
 
             case CONTACTS: {
-                qb.setTables(TABLE_CONTACTS);
+                qb.setTables(Tables.CONTACTS);
                 qb.setProjectionMap(sContactsProjectionMap);
                 break;
             }
 
             case CONTACTS_ID: {
-                qb.setTables(TABLE_CONTACTS);
+                qb.setTables(Tables.CONTACTS);
                 qb.setProjectionMap(sContactsProjectionMap);
                 qb.appendWhere("_id = " + uri.getLastPathSegment());
                 break;
             }
 
             case CONTACTS_DATA: {
-                qb.setTables(TABLE_DATA_JOIN_PACKAGE_MIMETYPE);
+                qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataProjectionMap);
                 qb.appendWhere("contact_id = " + uri.getPathSegments().get(1));
                 break;
@@ -600,7 +354,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             case DATA_ID: {
                 // TODO: enforce that caller has read access to this data
-                qb.setTables(TABLE_DATA_JOIN_PACKAGE_MIMETYPE);
+                qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataProjectionMap);
                 qb.appendWhere("_id = " + uri.getLastPathSegment());
                 break;
@@ -651,7 +405,7 @@ public class ContactsProvider2 extends ContentProvider {
             case DATA_ID:
                 final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
                 long dataId = ContentUris.parseId(uri);
-                return getDataMimeType(dataId);
+                return mOpenHelper.getDataMimeType(dataId);
         }
         throw new UnsupportedOperationException("Unknown uri: " + uri);
     }

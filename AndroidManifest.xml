@@ -6,14 +6,21 @@
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
 
     <application
-        android:label="ContactsProvider2"
-    >
+        android:label="ContactsProvider2">
+
         <provider android:name="ContactsProvider2"
             android:authorities="com.android.contacts"
             android:syncable="false"
             android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
-            android:writePermission="android.permission.WRITE_CONTACTS"
-        />
+            android:writePermission="android.permission.WRITE_CONTACTS" />
+
+        <!-- TODO: create permissions for social data -->
+        <provider android:name="SocialProvider"
+            android:authorities="com.android.social"
+            android:syncable="false"
+            android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS" />
     </application>
 </manifest>

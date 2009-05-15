@@ -550,4 +550,5 @@ public final class ContactsContract {
             public static final String NOTE = "data1";
         }
     }
+
 }
