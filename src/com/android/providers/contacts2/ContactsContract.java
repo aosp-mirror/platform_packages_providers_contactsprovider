@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts2;
 
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.provider.BaseColumns;
 
@@ -133,6 +134,15 @@ public final class ContactsContract {
          * The content:// style URI for this table
          */
         public static final Uri CONTENT_URI = Uri.withAppendedPath(AUTHORITY_URI, "contacts");
+
+        /**
+         * The content:// style URL for filtering people by email address. The
+         * filter argument should be passed as an additional path segment after
+         * this URI.
+         * 
+         * @hide
+         */
+        public static final Uri CONTENT_EMAIL_FILTER_URI = Uri.withAppendedPath(CONTENT_URI, "filter");
 
         /**
          * The MIME type of {@link #CONTENT_URI} providing a directory of
@@ -532,6 +542,24 @@ public final class ContactsContract {
              * <P>Type: INTEGER (if set, non-0 means true)</P>
              */
             public static final String ISPRIMARY = "data5";
+        }
+
+        /**
+         * Photo of the contact.
+         */
+        public static final class Photo implements BaseCommonColumns {
+            private Photo() {}
+
+            /** Mime-type used when storing this in data table. */
+            public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/photo";
+
+            /**
+             * Thumbnail photo of the contact. This is the raw bytes of an image
+             * that could be inflated using {@link BitmapFactory}.
+             * <p>
+             * Type: BLOB
+             */
+            public static final String PHOTO = "data1";
         }
 
         /**

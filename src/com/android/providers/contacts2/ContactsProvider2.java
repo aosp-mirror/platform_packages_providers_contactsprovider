@@ -58,6 +58,7 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int CONTACTS = 2002;
     private static final int CONTACTS_ID = 2003;
     private static final int CONTACTS_DATA = 2004;
+    private static final int CONTACTS_FILTER = 2005;
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
@@ -82,6 +83,7 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
@@ -125,6 +127,7 @@ public class ContactsProvider2 extends ContentProvider {
         columns = new HashMap<String, String>();
         columns.putAll(sContactsProjectionMap);
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
+        columns.put(Data.CONTACT_ID, "data.contact_id");
         sDataContactsProjectionMap = columns;
     }
 
@@ -352,6 +355,23 @@ public class ContactsProvider2 extends ContentProvider {
                 break;
             }
 
+            case CONTACTS_FILTER: {
+                qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sDataContactsProjectionMap);
+                qb.appendWhere(Data.MIMETYPE + "=");
+                qb.appendWhereEscapeString(CommonDataKinds.Email.CONTENT_ITEM_TYPE);
+                qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
+                qb.appendWhereEscapeString(uri.getPathSegments().get(2));
+                break;
+            }
+
+            case DATA: {
+                // TODO: enforce that caller has read access to this data
+                qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sDataProjectionMap);
+                break;
+            }
+
             case DATA_ID: {
                 // TODO: enforce that caller has read access to this data
                 qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
@@ -364,7 +384,7 @@ public class ContactsProvider2 extends ContentProvider {
                 if (TextUtils.isEmpty(sortOrder)) {
                     // Default the sort order to something reasonable so we get consistent
                     // results when callers don't request an ordering
-                    sortOrder = Contacts._ID;
+                    sortOrder = Data.CONTACT_ID;
                 }
 
                 final String number = uri.getLastPathSegment();
@@ -372,7 +392,7 @@ public class ContactsProvider2 extends ContentProvider {
                 final StringBuilder tables = new StringBuilder();
                 tables.append("contacts, (SELECT data_id FROM phone_lookup WHERE (phone_lookup.normalized_number GLOB '");
                 tables.append(normalizedNumber);
-                tables.append("*')) AS lookup, data");
+                tables.append("*')) AS lookup, " + Tables.DATA_JOIN_PACKAGE_MIMETYPE);
                 qb.setTables(tables.toString());
                 qb.appendWhere("lookup.data_id=data._id AND data.contact_id=contacts._id AND ");
                 qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");

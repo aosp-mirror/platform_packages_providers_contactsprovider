@@ -57,12 +57,12 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
 
         public static final String DATA_JOIN_PACKAGE_MIMETYPE = "data "
-                + "LEFT OUTER JOIN package ON (data.package_id = package._id)"
+                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
 
         public static final String DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "data "
-                + "LEFT OUTER JOIN package ON (data.package_id = package._id)"
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)"
+                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
+                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
                 + "LEFT JOIN contacts ON (data.contact_id = contacts._id) "
                 + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
@@ -72,8 +72,14 @@ import java.util.HashMap;
             + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
 
         public static final String ACTIVITIES_JOIN_PACKAGE_MIMETYPE = "activities "
-            + "LEFT OUTER JOIN package ON (activities.package_id = package._id)"
+            + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
             + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
+
+        public static final String ACTIVITIES_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "activities "
+            + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
+            + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id) "
+            + "LEFT JOIN contacts ON (activities.author_contact_id = contacts._id) "
+            + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
     }
 
 

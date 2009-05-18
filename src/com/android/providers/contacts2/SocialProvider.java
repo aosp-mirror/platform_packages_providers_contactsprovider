@@ -17,6 +17,9 @@
 package com.android.providers.contacts2;
 
 import com.android.providers.contacts2.SocialContract.Activities;
+import com.android.providers.contacts2.ContactsContract.Aggregates;
+import com.android.providers.contacts2.ContactsContract.Contacts;
+import com.android.providers.contacts2.ContactsContract.Data;
 import com.android.providers.contacts2.OpenHelper.ActivitiesColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
 
@@ -29,6 +32,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
+import android.util.Log;
 
 import java.util.HashMap;
 
@@ -46,8 +50,16 @@ public class SocialProvider extends ContentProvider {
     private static final int ACTIVITIES_ID = 1001;
     private static final int ACTIVITIES_AUTHORED_BY = 1002;
 
+    private static final String DEFAULT_SORT_ORDER = Activities.PUBLISHED + " desc";
+
+    /** Contains just the contacts columns */
+    private static final HashMap<String, String> sAggregatesProjectionMap;
+    /** Contains just the contacts columns */
+    private static final HashMap<String, String> sContactsProjectionMap;
     /** Contains just the activities columns */
     private static final HashMap<String, String> sActivitiesProjectionMap;
+    /** Contains the activities, contacts, and aggregates columns, for joined tables */
+    private static final HashMap<String, String> sActivitiesAggregatesProjectionMap;
 
     static {
         // Contacts URI matching table
@@ -58,6 +70,17 @@ public class SocialProvider extends ContentProvider {
         matcher.addURI(SocialContract.AUTHORITY, "activities/authored_by/#", ACTIVITIES_AUTHORED_BY);
 
         HashMap<String, String> columns;
+
+        // Aggregates projection map
+        columns = new HashMap<String, String>();
+        columns.put(Aggregates.DISPLAY_NAME, Aggregates.DISPLAY_NAME);
+        sAggregatesProjectionMap = columns;
+
+        // Contacts projection map
+        columns = new HashMap<String, String>();
+        columns.put(Contacts._ID, "contacts._id AS _id");
+        columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
+        sContactsProjectionMap = columns;
 
         // Activities projection map
         columns = new HashMap<String, String>();
@@ -73,6 +96,14 @@ public class SocialProvider extends ContentProvider {
         columns.put(Activities.SUMMARY, Activities.SUMMARY);
         columns.put(Activities.THUMBNAIL, Activities.THUMBNAIL);
         sActivitiesProjectionMap = columns;
+
+        // Activities, contacts, and aggregates projection map for joins
+        columns = new HashMap<String, String>();
+        columns.putAll(sAggregatesProjectionMap);
+        columns.putAll(sContactsProjectionMap);
+        columns.putAll(sActivitiesProjectionMap); // _id will be replaced with the one from aggregates
+        sActivitiesAggregatesProjectionMap = columns;
+
     }
 
     private OpenHelper mOpenHelper;
@@ -194,28 +225,33 @@ public class SocialProvider extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case ACTIVITIES: {
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGE_MIMETYPE);
-                qb.setProjectionMap(sActivitiesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 break;
             }
 
             case ACTIVITIES_ID: {
                 // TODO: enforce that caller has read access to this data
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGE_MIMETYPE);
-                qb.setProjectionMap(sActivitiesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities._ID + "=" + uri.getLastPathSegment());
                 break;
             }
 
             case ACTIVITIES_AUTHORED_BY: {
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGE_MIMETYPE);
-                qb.setProjectionMap(sActivitiesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + "=" + uri.getLastPathSegment());
                 break;
             }
 
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
+        }
+
+        // Default to reverse-chronological sort if nothing requested
+        if (sortOrder == null) {
+            sortOrder = DEFAULT_SORT_ORDER;
         }
 
         // Perform the query and set the notification uri
