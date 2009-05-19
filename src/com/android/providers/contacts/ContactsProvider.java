@@ -1378,6 +1378,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                         SearchManager.SUGGEST_COLUMN_ICON_1,
                         SearchManager.SUGGEST_COLUMN_INTENT_DATA,
                         SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
+                        SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
                 };
 
                 Resources r = getContext().getResources();
@@ -1398,6 +1399,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 dialNumber.add(String.valueOf(android.R.drawable.sym_action_call));
                 dialNumber.add("tel:" + searchClause);
                 dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);  
+                dialNumber.add(null);
 
                 ArrayList<Object> createContact = new ArrayList<Object>();
                 createContact.add(1);  // _id
@@ -1414,6 +1416,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 createContact.add(String.valueOf(android.R.drawable.ic_menu_add));
                 createContact.add("tel:" + searchClause);
                 createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
+                createContact.add(SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
 
                 ArrayList<ArrayList> rows = new ArrayList<ArrayList>();
                 rows.add(dialNumber);
