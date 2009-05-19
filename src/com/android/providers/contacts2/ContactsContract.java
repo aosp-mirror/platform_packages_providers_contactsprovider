@@ -142,7 +142,7 @@ public final class ContactsContract {
          * 
          * @hide
          */
-        public static final Uri CONTENT_EMAIL_FILTER_URI = Uri.withAppendedPath(CONTENT_URI, "filter");
+        public static final Uri CONTENT_FILTER_EMAIL_URI = Uri.withAppendedPath(CONTENT_URI, "filter_email");
 
         /**
          * The MIME type of {@link #CONTENT_URI} providing a directory of

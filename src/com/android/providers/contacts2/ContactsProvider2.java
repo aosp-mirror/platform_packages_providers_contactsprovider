@@ -58,7 +58,7 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int CONTACTS = 2002;
     private static final int CONTACTS_ID = 2003;
     private static final int CONTACTS_DATA = 2004;
-    private static final int CONTACTS_FILTER = 2005;
+    private static final int CONTACTS_FILTER_EMAIL = 2005;
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
@@ -83,7 +83,7 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_email/*", CONTACTS_FILTER_EMAIL);
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
@@ -355,11 +355,10 @@ public class ContactsProvider2 extends ContentProvider {
                 break;
             }
 
-            case CONTACTS_FILTER: {
+            case CONTACTS_FILTER_EMAIL: {
                 qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataContactsProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + "=");
-                qb.appendWhereEscapeString(CommonDataKinds.Email.CONTENT_ITEM_TYPE);
+                qb.appendWhere(Data.MIMETYPE + "=" + CommonDataKinds.Email.CONTENT_ITEM_TYPE);
                 qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
                 qb.appendWhereEscapeString(uri.getPathSegments().get(2));
                 break;

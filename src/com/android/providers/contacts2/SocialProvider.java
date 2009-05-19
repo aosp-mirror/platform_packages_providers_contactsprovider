@@ -50,7 +50,7 @@ public class SocialProvider extends ContentProvider {
     private static final int ACTIVITIES_ID = 1001;
     private static final int ACTIVITIES_AUTHORED_BY = 1002;
 
-    private static final String DEFAULT_SORT_ORDER = Activities.PUBLISHED + " desc";
+    private static final String DEFAULT_SORT_ORDER = Activities.PUBLISHED + " DESC";
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
