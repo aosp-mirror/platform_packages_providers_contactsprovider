@@ -97,11 +97,13 @@ public class SocialContract {
         public static final String PUBLISHED = "published";
 
         /**
-         * Timestamp when the original message in a thread was published.  For activities with null
-         * {@link Activities#IN_REPLY_TO} this field contains the same value as the same as
-         * {@link Activities#PUBLISHED}. For activities with none null
-         * {@link Activities#IN_REPLY_TO}, it contains the value of
-         * {@link Activities#PUBLISHED} of the original message in the thread.
+         * Timestamp when the original social activity in a thread was
+         * published. For activities that have an in-reply-to field specified, the
+         * content provider will automatically populate this field with the
+         * timestamp of the original activity.
+         * <p>
+         * This field is useful for sorting order of activities that keeps together all
+         * messages in each thread.
          * <p>
          * Type: INTEGER
          */
