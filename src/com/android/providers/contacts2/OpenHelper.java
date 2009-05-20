@@ -41,7 +41,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 14;
+    private static final int DATABASE_VERSION = 15;
     private static final String DATABASE_NAME = "contacts2.db";
 
     public interface Tables {
@@ -69,17 +69,17 @@ import java.util.HashMap;
         public static final String ACTIVITIES = "activities";
 
         public static final String ACTIVITIES_JOIN_MIMETYPE = "activities "
-            + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
+                + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
 
         public static final String ACTIVITIES_JOIN_PACKAGE_MIMETYPE = "activities "
-            + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
-            + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
+                + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
+                + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
 
         public static final String ACTIVITIES_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "activities "
-            + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
-            + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id) "
-            + "LEFT JOIN contacts ON (activities.author_contact_id = contacts._id) "
-            + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
+                + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id) "
+                + "LEFT JOIN contacts ON (activities.author_contact_id = contacts._id) "
+                + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
     }
 
 
@@ -238,10 +238,11 @@ import java.util.HashMap;
                 ActivitiesColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
                 ActivitiesColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Activities.RAW_ID + " TEXT," +
-                Activities.IN_REPLY_TO + " INTEGER REFERENCES activities(_id)," +
+                Activities.IN_REPLY_TO + " TEXT," +
                 Activities.AUTHOR_CONTACT_ID +  " INTEGER REFERENCES contacts(_id)," +
                 Activities.TARGET_CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 Activities.PUBLISHED + " INTEGER NOT NULL," +
+                Activities.THREAD_PUBLISHED + " INTEGER NOT NULL," +
                 Activities.TITLE + " TEXT NOT NULL," +
                 Activities.SUMMARY + " TEXT," +
                 Activities.THUMBNAIL + " BLOB" +

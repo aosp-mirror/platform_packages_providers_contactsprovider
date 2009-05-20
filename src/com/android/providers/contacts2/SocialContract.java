@@ -59,11 +59,11 @@ public class SocialContract {
         public static final String RAW_ID = "raw_id";
 
         /**
-         * Reference to another {@link Activities#_ID} that this social activity
+         * Reference to another {@link Activities#RAW_ID} that this social activity
          * is replying to. This field is analogous to the
          * <code>thr:in-reply-to</code> element defined in RFC 4685.
          * <p>
-         * Type: INTEGER
+         * Type: TEXT
          */
         public static final String IN_REPLY_TO = "in_reply_to";
 
@@ -95,6 +95,17 @@ public class SocialContract {
          * Type: INTEGER
          */
         public static final String PUBLISHED = "published";
+
+        /**
+         * Timestamp when the original message in a thread was published.  For activities with null
+         * {@link Activities#IN_REPLY_TO} this field contains the same value as the same as
+         * {@link Activities#PUBLISHED}. For activities with none null
+         * {@link Activities#IN_REPLY_TO}, it contains the value of
+         * {@link Activities#PUBLISHED} of the original message in the thread.
+         * <p>
+         * Type: INTEGER
+         */
+        public static final String THREAD_PUBLISHED = "thread_published";
 
         /**
          * Title of this social activity. This field is analogous to the

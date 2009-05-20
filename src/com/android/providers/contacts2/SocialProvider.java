@@ -16,12 +16,11 @@
 
 package com.android.providers.contacts2;
 
-import com.android.providers.contacts2.SocialContract.Activities;
 import com.android.providers.contacts2.ContactsContract.Aggregates;
 import com.android.providers.contacts2.ContactsContract.Contacts;
-import com.android.providers.contacts2.ContactsContract.Data;
 import com.android.providers.contacts2.OpenHelper.ActivitiesColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
+import com.android.providers.contacts2.SocialContract.Activities;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -32,8 +31,8 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
-import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
@@ -50,7 +49,7 @@ public class SocialProvider extends ContentProvider {
     private static final int ACTIVITIES_ID = 1001;
     private static final int ACTIVITIES_AUTHORED_BY = 1002;
 
-    private static final String DEFAULT_SORT_ORDER = Activities.PUBLISHED + " DESC";
+    private static final String DEFAULT_SORT_ORDER = Activities.THREAD_PUBLISHED + " DESC";
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
@@ -92,6 +91,7 @@ public class SocialProvider extends ContentProvider {
         columns.put(Activities.AUTHOR_CONTACT_ID, Activities.AUTHOR_CONTACT_ID);
         columns.put(Activities.TARGET_CONTACT_ID, Activities.TARGET_CONTACT_ID);
         columns.put(Activities.PUBLISHED, Activities.PUBLISHED);
+        columns.put(Activities.THREAD_PUBLISHED, Activities.THREAD_PUBLISHED);
         columns.put(Activities.TITLE, Activities.TITLE);
         columns.put(Activities.SUMMARY, Activities.SUMMARY);
         columns.put(Activities.THUMBNAIL, Activities.THUMBNAIL);
@@ -122,7 +122,7 @@ public class SocialProvider extends ContentProvider {
 
     /**
      * Called when a change has been made.
-     * 
+     *
      * @param uri the uri that the change was made to
      */
     private void onChange(Uri uri) {
@@ -157,11 +157,14 @@ public class SocialProvider extends ContentProvider {
 
     /**
      * Inserts an item into the {@link Tables#ACTIVITIES} table.
-     * 
+     *
      * @param values the values for the new row
      * @return the row ID of the newly created row
      */
     private long insertActivity(ContentValues values) {
+
+        // TODO verify that IN_REPLY_TO != RAW_ID
+
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         long id = 0;
         db.beginTransaction();
@@ -178,13 +181,99 @@ public class SocialProvider extends ContentProvider {
             values.put(ActivitiesColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
             values.remove(Activities.MIMETYPE);
 
+            long published = values.getAsLong(Activities.PUBLISHED);
+            long threadPublished = published;
+
+            if (values.containsKey(Activities.IN_REPLY_TO)) {
+                String inReplyTo = values.getAsString(Activities.IN_REPLY_TO);
+                threadPublished = getThreadPublished(db, inReplyTo, published);
+            }
+
+            values.put(Activities.THREAD_PUBLISHED, threadPublished);
+
             // Insert the data row itself
             id = db.insert(Tables.ACTIVITIES, Activities.RAW_ID, values);
+
+            // Adjust thread timestamps on replies that have already been inserted
+            if (values.containsKey(Activities.RAW_ID)) {
+                adjustReplyTimestamps(db, values.getAsString(Activities.RAW_ID), published);
+            }
+
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
         }
         return id;
+    }
+
+    /**
+     * Finds the timestamp of the original message in the thread. If not found, returns
+     * {@code defaultValue}.
+     */
+    private long getThreadPublished(SQLiteDatabase db, String rawId, long defaultValue) {
+        String inReplyTo = null;
+        long threadPublished = defaultValue;
+
+        final Cursor c = db.query(Tables.ACTIVITIES,
+                new String[]{Activities.IN_REPLY_TO, Activities.PUBLISHED},
+                Activities.RAW_ID + " = ?", new String[]{rawId}, null, null, null);
+        try {
+            if (c.moveToFirst()) {
+                inReplyTo = c.getString(0);
+                threadPublished = c.getLong(1);
+            }
+        } finally {
+            c.close();
+        }
+
+        if (inReplyTo != null) {
+
+            // Call recursively to obtain the original timestamp of the entire thread
+            return getThreadPublished(db, inReplyTo, threadPublished);
+        }
+
+        return threadPublished;
+    }
+
+    /**
+     * In case the original message of a thread arrives after its reply messages, we need
+     * to check if there are any replies in the database and if so adjust their thread_published.
+     */
+    private void adjustReplyTimestamps(SQLiteDatabase db, String inReplyTo, long threadPublished) {
+
+        ContentValues values = new ContentValues();
+        values.put(Activities.THREAD_PUBLISHED, threadPublished);
+
+        /*
+         * Issuing an exploratory update. If it updates nothing, we are done.  Otherwise,
+         * we will run a query to find the updated records again and repeat recursively.
+         */
+        int replies = db.update(Tables.ACTIVITIES, values,
+                Activities.IN_REPLY_TO + "= ?", new String[] {inReplyTo});
+
+        if (replies == 0) {
+            return;
+        }
+
+        /*
+         * Presumably this code will be executed very infrequently since messages tend to arrive
+         * in the order they get sent.
+         */
+        ArrayList<String> rawIds = new ArrayList<String>(replies);
+        final Cursor c = db.query(Tables.ACTIVITIES,
+                new String[]{Activities.RAW_ID},
+                Activities.IN_REPLY_TO + " = ?", new String[] {inReplyTo}, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                rawIds.add(c.getString(0));
+            }
+        } finally {
+            c.close();
+        }
+
+        for (String rawId : rawIds) {
+            adjustReplyTimestamps(db, rawId, threadPublished);
+        }
     }
 
     /** {@inheritDoc} */
