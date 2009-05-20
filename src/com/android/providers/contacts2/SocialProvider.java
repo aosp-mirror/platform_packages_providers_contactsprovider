@@ -49,7 +49,8 @@ public class SocialProvider extends ContentProvider {
     private static final int ACTIVITIES_ID = 1001;
     private static final int ACTIVITIES_AUTHORED_BY = 1002;
 
-    private static final String DEFAULT_SORT_ORDER = Activities.THREAD_PUBLISHED + " DESC";
+    private static final String DEFAULT_SORT_ORDER = Activities.THREAD_PUBLISHED + " DESC, "
+            + Activities.PUBLISHED + " ASC";
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
@@ -184,8 +185,8 @@ public class SocialProvider extends ContentProvider {
             long published = values.getAsLong(Activities.PUBLISHED);
             long threadPublished = published;
 
-            if (values.containsKey(Activities.IN_REPLY_TO)) {
-                String inReplyTo = values.getAsString(Activities.IN_REPLY_TO);
+            String inReplyTo = values.getAsString(Activities.IN_REPLY_TO);
+            if (inReplyTo != null) {
                 threadPublished = getThreadPublished(db, inReplyTo, published);
             }
 
