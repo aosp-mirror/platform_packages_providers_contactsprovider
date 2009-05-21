@@ -358,7 +358,7 @@ public class ContactsProvider2 extends ContentProvider {
             case CONTACTS_FILTER_EMAIL: {
                 qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataContactsProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + "=" + CommonDataKinds.Email.CONTENT_ITEM_TYPE);
+                qb.appendWhere(Data.MIMETYPE + "='" + CommonDataKinds.Email.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
                 qb.appendWhereEscapeString(uri.getPathSegments().get(2));
                 break;
