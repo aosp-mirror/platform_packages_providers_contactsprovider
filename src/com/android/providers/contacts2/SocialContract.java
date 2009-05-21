@@ -126,6 +126,14 @@ public class SocialContract {
         public static final String SUMMARY = "summary";
 
         /**
+         * A URI associated this social activity. This field is analogous to the
+         * <code>atom:link rel="alternate"</code> element defined in RFC 4287.
+         * <p>
+         * Type: TEXT
+         */
+        public static final String LINK = "link";
+
+        /**
          * Optional thumbnail specific to this social activity. This is the raw
          * bytes of an image that could be inflated using {@link BitmapFactory}.
          * <p>

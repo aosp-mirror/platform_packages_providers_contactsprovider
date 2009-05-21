@@ -41,7 +41,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 15;
+    private static final int DATABASE_VERSION = 16;
     private static final String DATABASE_NAME = "contacts2.db";
 
     public interface Tables {
@@ -245,6 +245,7 @@ import java.util.HashMap;
                 Activities.THREAD_PUBLISHED + " INTEGER NOT NULL," +
                 Activities.TITLE + " TEXT NOT NULL," +
                 Activities.SUMMARY + " TEXT," +
+                Activities.LINK + " TEXT, " +
                 Activities.THUMBNAIL + " BLOB" +
         ");");
 
