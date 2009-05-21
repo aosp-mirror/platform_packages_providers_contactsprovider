@@ -94,7 +94,7 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
 
-        HashMap<String, String> column
+        HashMap<String, String> columns;
 
         // Aggregates projection map
         columns = new HashMap<String, String>();
