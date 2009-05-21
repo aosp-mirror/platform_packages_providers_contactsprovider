@@ -95,6 +95,7 @@ public class SocialProvider extends ContentProvider {
         columns.put(Activities.THREAD_PUBLISHED, Activities.THREAD_PUBLISHED);
         columns.put(Activities.TITLE, Activities.TITLE);
         columns.put(Activities.SUMMARY, Activities.SUMMARY);
+        columns.put(Activities.LINK, Activities.LINK);
         columns.put(Activities.THUMBNAIL, Activities.THUMBNAIL);
         sActivitiesProjectionMap = columns;
 
