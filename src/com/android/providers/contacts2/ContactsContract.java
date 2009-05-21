@@ -56,6 +56,18 @@ public final class ContactsContract {
          * <P>Type: INTEGER (boolean)</P>
          */
         public static final String STARRED = "starred";
+
+        /**
+         * Reference to the row in the data table holding the primary phone number.
+         * <P>Type: INTEGER REFERENCES data(_id)</P>
+         */
+        public static final String PRIMARY_PHONE_ID = "primary_phone_id";
+        
+        /**
+         * Reference to the row in the data table holding the primary email address.
+         * <P>Type: INTEGER REFERENCES data(_id)</P>
+         */
+        public static final String PRIMARY_EMAIL_ID = "primary_email_id";
     }
 
     /**

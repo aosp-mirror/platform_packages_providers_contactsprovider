@@ -41,7 +41,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 16;
+    private static final int DATABASE_VERSION = 17;
     private static final String DATABASE_NAME = "contacts2.db";
 
     public interface Tables {
@@ -52,6 +52,11 @@ import java.util.HashMap;
         public static final String PHONE_LOOKUP = "phone_lookup";
 
         public static final String DATA = "data";
+
+        public static final String AGGREGATES_JOIN_PRIMARY_PHONE_PACKAGE_MIMETYPE = "aggregates "
+                + "LEFT OUTER JOIN data ON (aggregates.primary_phone_id = data._id) "
+                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
+                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) ";
 
         public static final String DATA_JOIN_MIMETYPE = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
@@ -176,7 +181,9 @@ import java.util.HashMap;
                 Aggregates.DISPLAY_NAME + " TEXT," +
                 Aggregates.TIMES_CONTACTED + " INTEGER," +
                 Aggregates.LAST_TIME_CONTACTED + " INTEGER," +
-                Aggregates.STARRED + " INTEGER" +
+                Aggregates.STARRED + " INTEGER," +
+                Aggregates.PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
+                Aggregates.PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)" +
         ");");
 
         // Contacts table

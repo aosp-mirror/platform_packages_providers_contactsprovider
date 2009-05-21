@@ -38,6 +38,7 @@ import android.net.Uri;
 import android.provider.BaseColumns;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
+import android.util.Log;
 
 import java.util.HashMap;
 
@@ -54,6 +55,7 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int AGGREGATES = 1000;
     private static final int AGGREGATES_ID = 1001;
     private static final int AGGREGATES_DATA = 1002;
+    private static final int AGGREGATES_PRIMARY_PHONE = 1003;
 
     private static final int CONTACTS = 2002;
     private static final int CONTACTS_ID = 2003;
@@ -67,6 +69,8 @@ public class ContactsProvider2 extends ContentProvider {
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
+    /** Contains the aggregate columns along with primary phone */
+    private static final HashMap<String, String> sAggregatesPrimaryPhoneProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
     /** Contains just the data columns */
@@ -80,6 +84,8 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates", AGGREGATES);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#", AGGREGATES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/data", AGGREGATES_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_primary_phone/*", 
+                AGGREGATES_PRIMARY_PHONE);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
@@ -88,14 +94,22 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
 
-        HashMap<String, String> columns;
+        HashMap<String, String> column
 
         // Aggregates projection map
         columns = new HashMap<String, String>();
+        columns.put(Aggregates._ID, "aggregates._id AS _id");
         columns.put(Aggregates.DISPLAY_NAME, Aggregates.DISPLAY_NAME);
         columns.put(Aggregates.LAST_TIME_CONTACTED, Aggregates.LAST_TIME_CONTACTED);
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
         sAggregatesProjectionMap = columns;
+
+        // Aggregates primaries projection map
+        columns = new HashMap<String, String>(sAggregatesProjectionMap);
+        columns.put(CommonDataKinds.Phone.TYPE, CommonDataKinds.Phone.TYPE);
+        columns.put(CommonDataKinds.Phone.LABEL, CommonDataKinds.Phone.LABEL);
+        columns.put(CommonDataKinds.Phone.NUMBER, CommonDataKinds.Phone.NUMBER);
+        sAggregatesPrimaryPhoneProjectionMap = columns;
 
         // Contacts projection map
         columns = new HashMap<String, String>();
@@ -304,7 +318,29 @@ public class ContactsProvider2 extends ContentProvider {
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        throw new UnsupportedOperationException();
+        int count = 0;
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+
+        final int match = sUriMatcher.match(uri);
+        switch(match) {
+            case AGGREGATES: {
+                count = db.update(Tables.AGGREGATES, values, selection, selectionArgs);
+                break;
+            }
+
+            case AGGREGATES_ID: {
+                String selectionWithId = (Aggregates._ID + " = " + uri.getLastPathSegment() + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.AGGREGATES, values, selectionWithId, selectionArgs);
+                Log.i(TAG, "Selection is: " + selectionWithId);
+                break;
+            }
+        }
+
+        if (count > 0) {
+            getContext().getContentResolver().notifyChange(uri, null);
+        }
+        return count;
     }
 
     @Override
@@ -332,6 +368,12 @@ public class ContactsProvider2 extends ContentProvider {
                 qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataProjectionMap);
                 qb.appendWhere(Contacts.AGGREGATE_ID + " = " + uri.getPathSegments().get(1));
+                break;
+            }
+
+            case AGGREGATES_PRIMARY_PHONE: {
+                qb.setTables(Tables.AGGREGATES_JOIN_PRIMARY_PHONE_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sAggregatesPrimaryPhoneProjectionMap);
                 break;
             }
 
