@@ -16,11 +16,6 @@
 
 package com.android.providers.contacts2;
 
-import com.android.providers.contacts2.ContactsContract.Aggregates;
-import com.android.providers.contacts2.ContactsContract.CommonDataKinds;
-import com.android.providers.contacts2.ContactsContract.Contacts;
-import com.android.providers.contacts2.ContactsContract.Data;
-import com.android.providers.contacts2.ContactsContract.CommonDataKinds.Phone;
 import com.android.providers.contacts2.OpenHelper.ContactsColumns;
 import com.android.providers.contacts2.OpenHelper.DataColumns;
 import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
@@ -36,6 +31,12 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.provider.BaseColumns;
+import android.provider.ContactsContract;
+import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.CommonDataKinds;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -71,6 +72,8 @@ public class ContactsProvider2 extends ContentProvider {
     private static final HashMap<String, String> sAggregatesProjectionMap;
     /** Contains the aggregate columns along with primary phone */
     private static final HashMap<String, String> sAggregatesPrimaryPhoneProjectionMap;
+    /** Contains the data, contacts, and aggregate columns, for joined tables. */
+    private static final HashMap<String, String> sDataContactsAggregateProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
     /** Contains just the data columns */
@@ -102,6 +105,7 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Aggregates.DISPLAY_NAME, Aggregates.DISPLAY_NAME);
         columns.put(Aggregates.LAST_TIME_CONTACTED, Aggregates.LAST_TIME_CONTACTED);
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
+        columns.put(Aggregates.PRIMARY_PHONE_ID, Aggregates.PRIMARY_PHONE_ID);
         sAggregatesProjectionMap = columns;
 
         // Aggregates primaries projection map
@@ -115,8 +119,6 @@ public class ContactsProvider2 extends ContentProvider {
         columns = new HashMap<String, String>();
         columns.put(Contacts._ID, "contacts._id AS _id");
         columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
-        columns.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
-        columns.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sContactsProjectionMap = columns;
 
         // Data projection map
@@ -143,6 +145,14 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.CONTACT_ID, "data.contact_id");
         sDataContactsProjectionMap = columns;
+        
+        // Data and contacts projection map for joins. _id comes from the data table
+        columns = new HashMap<String, String>();
+        columns.putAll(sAggregatesProjectionMap);
+        columns.putAll(sContactsProjectionMap); // 
+        columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
+        columns.put(Data.CONTACT_ID, "data.contact_id");
+        sDataContactsAggregateProjectionMap = columns;
     }
 
     private OpenHelper mOpenHelper;
@@ -366,7 +376,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             case AGGREGATES_DATA: {
                 qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
-                qb.setProjectionMap(sDataProjectionMap);
+                qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Contacts.AGGREGATE_ID + " = " + uri.getPathSegments().get(1));
                 break;
             }
@@ -417,7 +427,7 @@ public class ContactsProvider2 extends ContentProvider {
                 // TODO: enforce that caller has read access to this data
                 qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere("_id = " + uri.getLastPathSegment());
+                qb.appendWhere("data._id = " + uri.getLastPathSegment());
                 break;
             }
 

@@ -16,11 +16,8 @@
 
 package com.android.providers.contacts2;
 
-import com.android.providers.contacts2.ContactsContract.Aggregates;
-import com.android.providers.contacts2.ContactsContract.Contacts;
 import com.android.providers.contacts2.OpenHelper.ActivitiesColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
-import com.android.providers.contacts2.SocialContract.Activities;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -30,6 +27,12 @@ import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
+import android.provider.ContactsContract;
+import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
+import android.provider.SocialContract;
+import android.provider.SocialContract.Activities;
+
 import android.net.Uri;
 
 import java.util.ArrayList;

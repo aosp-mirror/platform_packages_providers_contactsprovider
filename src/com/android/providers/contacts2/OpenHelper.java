@@ -16,11 +16,6 @@
 
 package com.android.providers.contacts2;
 
-import com.android.providers.contacts2.SocialContract.Activities;
-import com.android.providers.contacts2.ContactsContract.Aggregates;
-import com.android.providers.contacts2.ContactsContract.Contacts;
-import com.android.providers.contacts2.ContactsContract.Data;
-
 import android.content.Context;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
@@ -28,6 +23,11 @@ import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.provider.BaseColumns;
+import android.provider.SocialContract.Activities;
+import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+
 import android.util.Log;
 
 import java.util.HashMap;
@@ -183,16 +183,16 @@ import java.util.HashMap;
                 Aggregates.LAST_TIME_CONTACTED + " INTEGER," +
                 Aggregates.STARRED + " INTEGER," +
                 Aggregates.PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
-                Aggregates.PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)" +
+                Aggregates.PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
+                Aggregates.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
+                Aggregates.CUSTOM_RINGTONE_ID + " INTEGER REFERENCES data(_id)" +
         ");");
 
         // Contacts table
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
                 Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 Contacts.AGGREGATE_ID + " INTEGER, " +
-                ContactsColumns.AGGREGATION_NEEDED + " INTEGER," +
-                Contacts.CUSTOM_RINGTONE + " TEXT," +
-                Contacts.SEND_TO_VOICEMAIL + " INTEGER" +
+                ContactsColumns.AGGREGATION_NEEDED + " INTEGER" +
         ");");
 
         // Package name mapping table

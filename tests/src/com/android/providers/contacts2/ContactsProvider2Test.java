@@ -19,11 +19,11 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.net.Uri;
+import android.provider.ContactsContract;
+import android.provider.ContactsContract.Aggregates;
 import android.test.ProviderTestCase2;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
-
-import com.android.providers.contacts2.ContactsContract.Aggregates;
 
 /**
  * Unit tests for ContactsProvider2
