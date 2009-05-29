@@ -854,6 +854,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         Uri notificationUri = Contacts.CONTENT_URI;
+        String limit = getLimit(url);
         StringBuilder whereClause;
         String groupBy = null;
 
@@ -1348,13 +1349,37 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         // run the query
         final SQLiteDatabase db = getDatabase();
         Cursor c = qb.query(db, projectionIn, selection, selectionArgs,
-                groupBy, null, sort);
+                groupBy, null, sort, limit);
         if ((c != null) && !isTemporary()) {
             c.setNotificationUri(getContext().getContentResolver(), notificationUri);
         }
         return c;
     }
 
+    /**
+     * Gets the value of the "limit" URI query parameter.
+     *
+     * @return A string containing a non-negative integer, or <code>null</code> if
+     *         the parameter is not set, or is set to an invalid value.
+     */
+    private String getLimit(Uri url) {
+        String limit = url.getQueryParameter("limit");
+        if (limit == null) {
+            return null;
+        }
+        // make sure that the limit is a non-negative integer
+        try {
+            int l = Integer.parseInt(limit);
+            if (l < 0) {
+                Log.w(TAG, "Invalid limit parameter: " + limit);
+                return null;
+            }
+            return String.valueOf(l);
+        } catch (NumberFormatException ex) {
+            Log.w(TAG, "Invalid limit parameter: " + limit);
+            return null;
+        }
+    }
 
     /**
      * Build a WHERE clause that restricts the query to match people that are a member of
