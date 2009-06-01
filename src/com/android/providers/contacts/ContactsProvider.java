@@ -26,11 +26,13 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
+import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.CursorJoiner;
 import android.database.DatabaseUtils;
 import android.database.SQLException;
+import android.database.sqlite.SQLiteContentHelper;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
@@ -39,6 +41,7 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.MemoryFile;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
 import android.provider.Contacts;
@@ -69,6 +72,7 @@ import com.google.android.collect.Sets;
 import com.android.internal.database.ArrayListCursor;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -186,10 +190,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         mSearchSuggestionsProjectionMap = new HashMap<String, String>();
         updateSuggestColumnTexts();
         mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                com.android.internal.R.drawable.ic_contact_picture
-                + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1);
-        mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_ICON_1_BITMAP,
-                Photos.DATA + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1_BITMAP);
+                "(CASE WHEN " + Photos.DATA + " IS NOT NULL"
+                + " THEN '" + People.CONTENT_URI + "/' || people._id ||"
+                        + " '/" + Photos.CONTENT_DIRECTORY + "/data'"
+                + " ELSE " + com.android.internal.R.drawable.ic_contact_picture
+                + " END) AS " + SearchManager.SUGGEST_COLUMN_ICON_1);
         mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_ICON_2,
                 PRESENCE_ICON_SQL + " AS " + SearchManager.SUGGEST_COLUMN_ICON_2);
         mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
@@ -1637,6 +1642,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 return "vnd.android.cursor.dir/photo";
             case PEOPLE_PHOTO:
                 return "vnd.android.cursor.item/photo";
+            case PEOPLE_PHOTO_DATA:
+                return "image/png";  // TODO: what image format is it?
             case CONTACTMETHODS:
                 return "vnd.android.cursor.dir/contact-methods";
             case CONTACTMETHODS_ID:
@@ -2280,6 +2287,25 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         }
 
         return count;
+    }
+
+    @Override
+    public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
+        int match = sURIMatcher.match(uri);
+        switch (match) {
+            case PEOPLE_PHOTO_DATA:
+                if (!"r".equals(mode)) {
+                    throw new FileNotFoundException("Mode " + mode + " not supported.");
+                }
+                String person = uri.getPathSegments().get(1);
+                String sql = "SELECT " + Photos.DATA + " FROM " + sPhotosTable
+                        + " WHERE " + Photos.PERSON_ID + "=?";
+                String[] selectionArgs = { person };
+                return SQLiteContentHelper.getBlobColumnAsAssetFile(getDatabase(), sql,
+                        selectionArgs);
+            default:
+                throw new FileNotFoundException("No file at: " + uri);
+        }
     }
 
     @Override
@@ -3988,6 +4014,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int PEOPLE_UPDATE_CONTACT_TIME = PEOPLE_BASE + 20;
     private static final int PEOPLE_PHONES_WITH_PRESENCE = PEOPLE_BASE + 21;
     private static final int PEOPLE_WITH_EMAIL_OR_IM_FILTER = PEOPLE_BASE + 22;
+    private static final int PEOPLE_PHOTO_DATA = PEOPLE_BASE + 23;
 
     private static final int DELETED_BASE = 1000;
     private static final int DELETED_PEOPLE = DELETED_BASE;
@@ -4339,6 +4366,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones_with_presence",
                 PEOPLE_PHONES_WITH_PRESENCE);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/photo", PEOPLE_PHOTO);
+        matcher.addURI(CONTACTS_AUTHORITY, "people/#/photo/data", PEOPLE_PHOTO_DATA);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/phones/#", PEOPLE_PHONES_ID);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/contact_methods", PEOPLE_CONTACTMETHODS);
         matcher.addURI(CONTACTS_AUTHORITY, "people/#/contact_methods_with_presence",
