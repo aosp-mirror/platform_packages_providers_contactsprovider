@@ -42,7 +42,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 22;
+    private static final int DATABASE_VERSION = 23;
     private static final String DATABASE_NAME = "contacts2.db";
 
     public interface Tables {
@@ -145,7 +145,7 @@ import java.util.HashMap;
         public static final String PACKAGE = "package";
     }
 
-    public interface MimetypeColumns {
+    /* package */ interface MimetypeColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String MIMETYPE = "mimetype";
     }
@@ -259,6 +259,8 @@ import java.util.HashMap;
                 DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Data.CONTACT_ID + " INTEGER NOT NULL," +
+                Data.IS_PRIMARY + " INTEGER," +
+                Data.IS_SUPER_PRIMARY + " INTEGER," +
                 Data.DATA1 + " NUMERIC," +
                 Data.DATA2 + " NUMERIC," +
                 Data.DATA3 + " NUMERIC," +

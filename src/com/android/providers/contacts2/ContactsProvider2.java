@@ -36,10 +36,12 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteCursor;
+import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Accounts;
+import android.provider.Contacts.ContactMethods;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -107,6 +109,24 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final HashMap<Account, Long> sAccountsToIdMap = new HashMap<Account, Long>();
     private static final HashMap<Long, Account> sIdToAccountsMap = new HashMap<Long, Account>();
 
+    /** Sql select statement that returns the contact id associated with a data record. */
+    private static final String sNestedContactIdSelect;
+    /** Sql select statement that returns the mimetype id associated with a data record. */
+    private static final String sNestedMimetypeSelect;
+    /** Sql select statement that returns the aggregate id associated with a contact record. */
+    private static final String sNestedAggregateIdSelect;
+    /** Sql select statement that returns a list of contact ids associated with an aggregate record. */
+    private static final String sNestedContactIdListSelect;
+    /** Sql where statement used to match all the data records that need to be updated when a new
+     * "primary" is selected.*/
+    private static final String sSetPrimaryWhere;
+    /** Sql where statement used to match all the data records that need to be updated when a new
+     * "super primary" is selected.*/
+    private static final String sSetSuperPrimaryWhere;
+    /** Precompiled sql statement for setting a data record to the primary. */
+    private SQLiteStatement mSetPrimaryStatement;
+    /** Precomipled sql statement for setting a data record to the super primary. */
+    private SQLiteStatement mSetSuperPrimaryStatement;
 
     static {
         // Contacts URI matching table
@@ -147,6 +167,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Aggregates.LAST_TIME_CONTACTED, Aggregates.LAST_TIME_CONTACTED);
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
         columns.put(Aggregates.PRIMARY_PHONE_ID, Aggregates.PRIMARY_PHONE_ID);
+        columns.put(Aggregates.PRIMARY_EMAIL_ID, Aggregates.PRIMARY_EMAIL_ID);
         sAggregatesProjectionMap = columns;
 
         // Aggregates primaries projection map
@@ -172,6 +193,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Data.CONTACT_ID, Data.CONTACT_ID);
         columns.put(Data.PACKAGE, Data.PACKAGE);
         columns.put(Data.MIMETYPE, Data.MIMETYPE);
+        columns.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
+        columns.put(Data.IS_SUPER_PRIMARY, Data.IS_SUPER_PRIMARY);
         columns.put(Data.DATA1, "data.data1 as data1");
         columns.put(Data.DATA2, "data.data2 as data2");
         columns.put(Data.DATA3, "data.data3 as data3");
@@ -204,6 +227,19 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.CONTACT_ID, "data.contact_id");
         sDataContactsAggregateProjectionMap = columns;
+
+        sNestedContactIdSelect = "SELECT " + Data.CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
+                + Data._ID + "=?";
+        sNestedMimetypeSelect = "SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA
+                + " WHERE " + Data._ID + "=?";
+        sNestedAggregateIdSelect = "SELECT " + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS
+                + " WHERE " + Contacts._ID + "=(" + sNestedContactIdSelect + ")";
+        sNestedContactIdListSelect = "SELECT " + Contacts._ID + " FROM " + Tables.CONTACTS
+                + " WHERE " + Contacts.AGGREGATE_ID + "=(" + sNestedAggregateIdSelect + ")";
+        sSetPrimaryWhere = Data.CONTACT_ID + "=(" + sNestedContactIdSelect + ") AND "
+                + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
+        sSetSuperPrimaryWhere  = Data.CONTACT_ID + " IN (" + sNestedContactIdListSelect + ") AND "
+                + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
     }
 
     private final boolean mAsynchronous;
@@ -232,7 +268,14 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         mContactAggregator = new ContactAggregator(context, mAsynchronous);
 
         // TODO remove this, it's here to force opening the database on boot for testing
-        mOpenHelper.getReadableDatabase();
+        SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+
+        mSetPrimaryStatement = db.compileStatement(
+                "UPDATE " + Tables.DATA + " SET " + Data.IS_PRIMARY
+                + "=(_id=?) WHERE " + sSetPrimaryWhere);
+        mSetSuperPrimaryStatement = db.compileStatement(
+                "UPDATE " + Tables.DATA + " SET " + Data.IS_SUPER_PRIMARY
+                + "=(_id=?) WHERE " + sSetSuperPrimaryWhere);
 
         return true;
     }
@@ -718,6 +761,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
+            // TODO(emillar): We will want to disallow editing the aggregates table at some point.
             case AGGREGATES: {
                 count = db.update(Tables.AGGREGATES, values, selection, selectionArgs);
                 break;
@@ -727,7 +771,48 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 String selectionWithId = (Aggregates._ID + " = " + ContentUris.parseId(uri) + " ")
                         + (selection == null ? "" : " AND " + selection);
                 count = db.update(Tables.AGGREGATES, values, selectionWithId, selectionArgs);
-                Log.i(TAG, "Selection is: " + selectionWithId);
+                break;
+            }
+
+            case DATA_ID: {
+                boolean containsIsSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
+                boolean containsIsPrimary = values.containsKey(Data.IS_PRIMARY);
+                int isSuperPrimary = values.getAsInteger(Data.IS_SUPER_PRIMARY);
+                int isPrimary = values.getAsInteger(Data.IS_PRIMARY);
+                final long id = ContentUris.parseId(uri);
+
+                // Remove primary or super primary values being set to 0. This is disallowed by the
+                // content provider.
+                if (containsIsSuperPrimary && isSuperPrimary == 0) {
+                    containsIsSuperPrimary = false;
+                    values.remove(Data.IS_SUPER_PRIMARY);
+                }
+                if (containsIsPrimary && isPrimary == 0) {
+                    containsIsPrimary = false;
+                    values.remove(Data.IS_PRIMARY);
+                }
+
+                if (containsIsSuperPrimary) {
+                    setIsSuperPrimary(id);
+                    setIsPrimary(id);
+
+                    // Now that we've taken care of setting these, remove them from "values".
+                    values.remove(Data.IS_SUPER_PRIMARY);
+                    if (containsIsPrimary) {
+                        values.remove(Data.IS_PRIMARY);
+                    }
+                } else if (containsIsPrimary) {
+                    setIsPrimary(id);
+
+                    // Now that we've taken care of setting this, remove it from "values".
+                    values.remove(Data.IS_PRIMARY);
+                }
+
+                if (values.size() > 0) {
+                    String selectionWithId = (Data._ID + " = " + ContentUris.parseId(uri) + " ")
+                    + (selection == null ? "" : " AND " + selection);
+                    count = db.update(Tables.DATA, values, selectionWithId, selectionArgs);
+                }
                 break;
             }
 
@@ -746,14 +831,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case DATA: {
                 count = db.update(Tables.DATA, values, selection, selectionArgs);
-                break;
-            }
-
-            case DATA_ID: {
-                String selectionWithId = (Data._ID + " = " + ContentUris.parseId(uri) + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.DATA, values, selectionWithId, selectionArgs);
-                Log.i(TAG, "Selection is: " + selectionWithId);
                 break;
             }
 
@@ -1094,4 +1171,31 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             db.endTransaction();
         }
     }
+
+    /*
+     * Sets the given dataId record in the "data" table to primary, and resets all data records of
+     * the same mimetype and under the same contact to not be primary.
+     *
+     * @param dataId the id of the data record to be set to primary.
+     */
+    private void setIsPrimary(long dataId) {
+        mSetPrimaryStatement.bindLong(1, dataId);
+        mSetPrimaryStatement.bindLong(2, dataId);
+        mSetPrimaryStatement.bindLong(3, dataId);
+        mSetPrimaryStatement.execute();
+    }
+
+    /*
+     * Sets the given dataId record in the "data" table to "super primary", and resets all data
+     * records of the same mimetype and under the same aggregate to not be "super primary".
+     *
+     * @param dataId the id of the data record to be set to primary.
+     */
+    private void setIsSuperPrimary(long dataId) {
+        mSetSuperPrimaryStatement.bindLong(1, dataId);
+        mSetSuperPrimaryStatement.bindLong(2, dataId);
+        mSetSuperPrimaryStatement.bindLong(3, dataId);
+        mSetSuperPrimaryStatement.execute();
+    }
+
 }
