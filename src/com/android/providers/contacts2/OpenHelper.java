@@ -24,6 +24,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.provider.BaseColumns;
 import android.provider.SocialContract.Activities;
+import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -34,17 +35,18 @@ import java.util.HashMap;
 
 /**
  * Database open helper for contacts and social activity data. Designed as a
- * singleton to make sure that all {@link ContentProvider} users get the same
+ * singleton to make sure that all {@link android.content.ContentProvider} users get the same
  * reference. Provides handy methods for maintaining package and mime-type
  * lookup tables.
  */
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 17;
+    private static final int DATABASE_VERSION = 18;
     private static final String DATABASE_NAME = "contacts2.db";
 
     public interface Tables {
+        public static final String ACCOUNTS = "accounts";
         public static final String AGGREGATES = "aggregates";
         public static final String CONTACTS = "contacts";
         public static final String PACKAGE = "package";
@@ -63,6 +65,11 @@ import java.util.HashMap;
 
         public static final String DATA_JOIN_PACKAGE_MIMETYPE = "data "
                 + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
+                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
+
+        public static final String DATA_JOIN_PACKAGE_MIMETYPE_CONTACTS = "data "
+                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
+                + "LEFT JOIN contacts ON (data.contact_id = contacts._id) "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
 
         public static final String DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "data "
@@ -85,6 +92,9 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id) "
                 + "LEFT JOIN contacts ON (activities.author_contact_id = contacts._id) "
                 + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+
+        public static final String CONTACTS_JOIN_ACCOUNTS = "contacts "
+                + "LEFT OUTER JOIN accounts ON (accounts._id = contacts.accounts_id)";
     }
 
 
@@ -175,6 +185,18 @@ import java.util.HashMap;
     public void onCreate(SQLiteDatabase db) {
         Log.i(TAG, "Bootstrapping database");
 
+        db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
+                BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                Accounts.NAME + " TEXT," +
+                Accounts.TYPE + " TEXT," +
+                Accounts.DATA1 + " TEXT," +
+                Accounts.DATA2 + " TEXT, " +
+                Accounts.DATA3 + " TEXT, " +
+                Accounts.DATA4 + " TEXT, " +
+                Accounts.DATA5 + " TEXT, " +
+                " UNIQUE(" + Accounts.NAME + ", " + Accounts.TYPE + ") " +
+        ");");
+
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.AGGREGATES + " (" +
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -191,6 +213,10 @@ import java.util.HashMap;
         // Contacts table
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
                 Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                Contacts.ACCOUNTS_ID + " INTEGER REFERENCES accounts(_id)," +
+                Contacts.SOURCE_ID + " TEXT," +
+                Contacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
+                Contacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.AGGREGATE_ID + " INTEGER, " +
                 ContactsColumns.AGGREGATION_NEEDED + " INTEGER" +
         ");");
@@ -260,9 +286,10 @@ import java.util.HashMap;
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        Log.i(TAG, "Upgraing from version " + oldVersion + " to " + newVersion
+        Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
                 + ", data will be lost!");
 
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.ACCOUNTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGE + ";");

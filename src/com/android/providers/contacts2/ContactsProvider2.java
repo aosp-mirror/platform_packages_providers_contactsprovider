@@ -26,12 +26,19 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.UriMatcher;
+import android.content.Entity;
+import android.content.EntityIterator;
+import android.content.ContentProviderResult;
+import android.content.ContentProviderOperation;
+import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteCursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -40,14 +47,21 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.accounts.OnAccountsUpdatedListener;
+import android.os.RemoteException;
 
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * Contacts content provider. The contract between this provider and applications
  * is defined in {@link ContactsContract}.
  */
-public class ContactsProvider2 extends ContentProvider {
+public class ContactsProvider2 extends ContentProvider implements OnAccountsUpdatedListener {
     // TODO: clean up debug tag and rename this class
     private static final String TAG = "ContactsProvider ~~~~";
 
@@ -68,6 +82,9 @@ public class ContactsProvider2 extends ContentProvider {
 
     private static final int PHONE_LOOKUP = 4000;
 
+    private static final int ACCOUNTS = 5000;
+    private static final int ACCOUNTS_ID = 5001;
+
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
     /** Contains the aggregate columns along with primary phone */
@@ -80,14 +97,23 @@ public class ContactsProvider2 extends ContentProvider {
     private static final HashMap<String, String> sDataProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
     private static final HashMap<String, String> sDataContactsProjectionMap;
+    /** Contains the data and contacts columns, for joined tables */
+    private static final HashMap<String, String> sDataContactsAccountsProjectionMap;
+    /** Contains just the key and value columns */
+    private static final HashMap<String, String> sAccountsProjectionMap;
+
+    private static final HashMap<Account, Long> sAccountsToIdMap = new HashMap<Account, Long>();
+    private static final HashMap<Long, Account> sIdToAccountsMap = new HashMap<Long, Account>();
 
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
+        matcher.addURI(ContactsContract.AUTHORITY, "accounts", ACCOUNTS);
+        matcher.addURI(ContactsContract.AUTHORITY, "accounts/#", ACCOUNTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates", AGGREGATES);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#", AGGREGATES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/data", AGGREGATES_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_primary_phone/*", 
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_primary_phone/*",
                 AGGREGATES_PRIMARY_PHONE);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
@@ -98,6 +124,18 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
 
         HashMap<String, String> columns;
+
+        // Accounts projection map
+        columns = new HashMap<String, String>();
+        columns.put(Accounts._ID, "accounts._id AS _id");
+        columns.put(Accounts.NAME, Accounts.NAME);
+        columns.put(Accounts.TYPE, Accounts.TYPE);
+        columns.put(Accounts.DATA1, Accounts.DATA1);
+        columns.put(Accounts.DATA2, Accounts.DATA2);
+        columns.put(Accounts.DATA3, Accounts.DATA3);
+        columns.put(Accounts.DATA4, Accounts.DATA4);
+        columns.put(Accounts.DATA5, Accounts.DATA5);
+        sAccountsProjectionMap = columns;
 
         // Aggregates projection map
         columns = new HashMap<String, String>();
@@ -119,6 +157,10 @@ public class ContactsProvider2 extends ContentProvider {
         columns = new HashMap<String, String>();
         columns.put(Contacts._ID, "contacts._id AS _id");
         columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
+        columns.put(Contacts.ACCOUNTS_ID, Contacts.ACCOUNTS_ID);
+        columns.put(Contacts.SOURCE_ID, Contacts.SOURCE_ID);
+        columns.put(Contacts.VERSION, Contacts.VERSION);
+        columns.put(Contacts.DIRTY, Contacts.DIRTY);
         sContactsProjectionMap = columns;
 
         // Data projection map
@@ -127,16 +169,16 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Data.CONTACT_ID, Data.CONTACT_ID);
         columns.put(Data.PACKAGE, Data.PACKAGE);
         columns.put(Data.MIMETYPE, Data.MIMETYPE);
-        columns.put(Data.DATA1, Data.DATA1);
-        columns.put(Data.DATA2, Data.DATA2);
-        columns.put(Data.DATA3, Data.DATA3);
-        columns.put(Data.DATA4, Data.DATA4);
-        columns.put(Data.DATA5, Data.DATA5);
-        columns.put(Data.DATA6, Data.DATA6);
-        columns.put(Data.DATA7, Data.DATA7);
-        columns.put(Data.DATA8, Data.DATA8);
-        columns.put(Data.DATA9, Data.DATA9);
-        columns.put(Data.DATA10, Data.DATA10);
+        columns.put(Data.DATA1, "data.data1 as data1");
+        columns.put(Data.DATA2, "data.data2 as data2");
+        columns.put(Data.DATA3, "data.data3 as data3");
+        columns.put(Data.DATA4, "data.data4 as data4");
+        columns.put(Data.DATA5, "data.data5 as data5");
+        columns.put(Data.DATA6, "data.data6 as data6");
+        columns.put(Data.DATA7, "data.data7 as data7");
+        columns.put(Data.DATA8, "data.data8 as data8");
+        columns.put(Data.DATA9, "data.data9 as data9");
+        columns.put(Data.DATA10, "data.data10 as data10");
         sDataProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
@@ -145,27 +187,141 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.CONTACT_ID, "data.contact_id");
         sDataContactsProjectionMap = columns;
-        
+
+        columns = new HashMap<String, String>();
+        columns.put(Accounts.NAME, Accounts.NAME);
+        columns.put(Accounts.TYPE, Accounts.TYPE);
+        columns.putAll(sDataContactsProjectionMap);
+        sDataContactsAccountsProjectionMap = columns;
+
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
         columns.putAll(sAggregatesProjectionMap);
-        columns.putAll(sContactsProjectionMap); // 
+        columns.putAll(sContactsProjectionMap); //
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.CONTACT_ID, "data.contact_id");
         sDataContactsAggregateProjectionMap = columns;
     }
 
     private OpenHelper mOpenHelper;
+    private static final AccountComparator sAccountComparator = new AccountComparator();
 
     @Override
     public boolean onCreate() {
         final Context context = getContext();
         mOpenHelper = OpenHelper.getInstance(context);
 
-        // TODO remove this, it's here to force opening the database on boot for testing
-        mOpenHelper.getReadableDatabase();
+        loadAccountsMaps();
 
         return true;
+    }
+
+    /**
+     * Read the rows from the accounts table and populate the in-memory accounts maps.
+     */
+    private void loadAccountsMaps() {
+        synchronized (sAccountsToIdMap) {
+            sAccountsToIdMap.clear();
+            sIdToAccountsMap.clear();
+            Cursor c = mOpenHelper.getReadableDatabase().query(Tables.ACCOUNTS,
+                    new String[]{Accounts._ID, Accounts.NAME, Accounts.TYPE},
+                    null, null, null, null, null);
+            try {
+                while (c.moveToNext()) {
+                    addToAccountsMaps(c.getLong(0), new Account(c.getString(1), c.getString(2)));
+                }
+            } finally {
+                c.close();
+            }
+        }
+    }
+
+    /**
+     * Return the Accounts rowId that matches the account that is passed in or null if
+     * no match exists. If refreshIfNotFound is set then if the account cannot be found in the
+     * map then the AccountManager will be queried synchronously for the current set of
+     * accounts.
+     */
+    private Long readAccountByName(Account account, boolean refreshIfNotFound) {
+        synchronized (sAccountsToIdMap) {
+            Long id = sAccountsToIdMap.get(account);
+            if (id == null && refreshIfNotFound) {
+                onAccountsUpdated(AccountManager.get(getContext()).blockingGetAccounts());
+                id = sAccountsToIdMap.get(account);
+            }
+            return id;
+        }
+    }
+
+    /**
+     * Return the Account that has the specified rowId or null if it does not exist.
+     */
+    private Account readAccountById(long id) {
+        synchronized (sAccountsToIdMap) {
+            return sIdToAccountsMap.get(id);
+        }
+    }
+
+    /**
+     * Add the contents from the Accounts row to the accounts maps.
+     */
+    private void addToAccountsMaps(long id, Account account) {
+        synchronized (sAccountsToIdMap) {
+            sAccountsToIdMap.put(account, id);
+            sIdToAccountsMap.put(id, account);
+        }
+    }
+
+    /**
+     * Reads the current set of accounts from the AccountManager and makes the local
+     * Accounts table and the in-memory accounts maps consistent with it.
+     */
+    public void onAccountsUpdated(Account[] accounts) {
+        synchronized (sAccountsToIdMap) {
+            Arrays.sort(accounts);
+
+            // if there is an account in the array that we don't know about yet add it to our
+            // cache and our database copy of accounts
+            final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+            for (Account account : accounts) {
+                if (readAccountByName(account, false /* refreshIfNotFound */) == null) {
+                    // add this account
+                    ContentValues values = new ContentValues();
+                    values.put(Accounts.NAME, account.mName);
+                    values.put(Accounts.TYPE, account.mType);
+                    long id = db.insert(Tables.ACCOUNTS, Accounts.NAME, values);
+                    if (id < 0) {
+                        throw new IllegalStateException("error inserting account in db");
+                    }
+                    addToAccountsMaps(id, account);
+                }
+            }
+
+            ArrayList<Account> accountsToRemove = new ArrayList<Account>();
+            // now check our list of accounts and remove any that are not in the array
+            for (Account account : sAccountsToIdMap.keySet()) {
+                if (Arrays.binarySearch(accounts, account, sAccountComparator) < 0) {
+                    accountsToRemove.add(account);
+                }
+            }
+
+            for (Account account : accountsToRemove) {
+                final Long id = sAccountsToIdMap.remove(account);
+                sIdToAccountsMap.remove(id);
+                db.delete(Tables.ACCOUNTS, Accounts._ID + "=" + id, null);
+            }
+        }
+    }
+
+    private static class AccountComparator implements Comparator<Account> {
+        public int compare(Account object1, Account object2) {
+            if (object1 == object2) return 0;
+            int result = object1.mType.compareTo(object2.mType);
+            if (result != 0) {
+                return result;
+            }
+            return object1.mName.compareTo(object2.mName);
+        }
     }
 
     /**
@@ -187,6 +343,11 @@ public class ContactsProvider2 extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         long id = 0;
         switch (match) {
+            case ACCOUNTS: {
+                id = insertAccountData(values);
+                break;
+            }
+
             case AGGREGATES: {
                 id = insertAggregate(values);
                 break;
@@ -212,9 +373,24 @@ public class ContactsProvider2 extends ContentProvider {
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
 
-        final Uri result = ContentUris.withAppendedId(Contacts.CONTENT_URI, id);
+        if (id < 0) {
+            return null;
+        }
+
+        final Uri result = ContentUris.withAppendedId(uri, id);
         onChange(result);
         return result;
+    }
+
+    /**
+     * Inserts an item in the accounts table
+     *
+     * @param values the values for the new row
+     * @return the row ID of the newly created row
+     */
+    private long insertAccountData(ContentValues values) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        return db.insert(Tables.ACCOUNTS, Accounts.DATA1, values);
     }
 
     /**
@@ -235,7 +411,6 @@ public class ContactsProvider2 extends ContentProvider {
      * @return the row ID of the newly created row
      */
     private long insertContact(ContentValues values) {
-
         /*
          * The contact record is inserted in the contacts table, but it needs to
          * be processed by the aggregator before it will be returned by the
@@ -245,7 +420,39 @@ public class ContactsProvider2 extends ContentProvider {
 
         ContentValues augmentedValues = new ContentValues(values);
         augmentedValues.put(ContactsColumns.AGGREGATION_NEEDED, true);
+        if (!resolveAccount(augmentedValues)) {
+            return -1;
+        }
+
         return db.insert(Tables.CONTACTS, Contacts.AGGREGATE_ID, augmentedValues);
+    }
+
+    /**
+     * If an account name or type is specified in values then create an Account from it
+     * and look up the Accounts rowId that corresponds to the Account. Then insert
+     * the Accounts rowId into the values with key {@link Contacts#ACCOUNTS_ID}. Remove any
+     * value for {@link Accounts#NAME} or {@link Accounts#TYPE} from the values.
+     * @param values the ContentValues to read from and update
+     * @return false if an account was present in the values that is not in the Accounts table
+     */
+    private boolean resolveAccount(ContentValues values) {
+        // If an account name and type is specified then resolve it into an accounts_id.
+        // If either is specified then both must be specified.
+        final String accountName = values.getAsString(Accounts.NAME);
+        final String accountType = values.getAsString(Accounts.TYPE);
+        if (!TextUtils.isEmpty(accountName) || !TextUtils.isEmpty(accountType)) {
+            final Account account = new Account(accountName, accountType);
+            final Long accountId = readAccountByName(account, true /* refreshIfNotFound */);
+            if (accountId == null) {
+                // an invalid account was passed in or the account was deleted after this
+                // request was made. fail this request.
+                return false;
+            }
+            values.put(Contacts.ACCOUNTS_ID, accountId);
+        }
+        values.remove(Accounts.NAME);
+        values.remove(Accounts.TYPE);
+        return true;
     }
 
     /**
@@ -309,6 +516,12 @@ public class ContactsProvider2 extends ContentProvider {
                 return db.delete(Tables.AGGREGATES, BaseColumns._ID + "=" + aggregateId, null);
             }
 
+            case ACCOUNTS_ID: {
+                long accountId = ContentUris.parseId(uri);
+
+                return db.delete(Tables.ACCOUNTS, BaseColumns._ID + "=" + accountId, null);
+            }
+
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
                 int contactsDeleted = db.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
@@ -333,18 +546,72 @@ public class ContactsProvider2 extends ContentProvider {
 
         final int match = sUriMatcher.match(uri);
         switch(match) {
+            case ACCOUNTS: {
+                final String accountName = uri.getQueryParameter(Accounts.NAME);
+                final String accountType = uri.getQueryParameter(Accounts.TYPE);
+                if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+                    return 0;
+                }
+                final Long accountId = readAccountByName(
+                        new Account(accountName, accountType), true /* refreshIfNotFound */);
+                if (accountId == null) {
+                    return 0;
+                }
+                String selectionWithId = (Accounts._ID + " = " + accountId + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.ACCOUNTS, values, selectionWithId, selectionArgs);
+                break;
+            }
+
+            case ACCOUNTS_ID: {
+                String selectionWithId = (Accounts._ID + " = " + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.ACCOUNTS, values, selectionWithId, selectionArgs);
+                Log.i(TAG, "Selection is: " + selectionWithId);
+                break;
+            }
+
             case AGGREGATES: {
                 count = db.update(Tables.AGGREGATES, values, selection, selectionArgs);
                 break;
             }
 
             case AGGREGATES_ID: {
-                String selectionWithId = (Aggregates._ID + " = " + uri.getLastPathSegment() + " ")
+                String selectionWithId = (Aggregates._ID + " = " + ContentUris.parseId(uri) + " ")
                         + (selection == null ? "" : " AND " + selection);
                 count = db.update(Tables.AGGREGATES, values, selectionWithId, selectionArgs);
                 Log.i(TAG, "Selection is: " + selectionWithId);
                 break;
             }
+
+            case CONTACTS: {
+                count = db.update(Tables.CONTACTS, values, selection, selectionArgs);
+                break;
+            }
+
+            case CONTACTS_ID: {
+                String selectionWithId = (Contacts._ID + " = " + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.CONTACTS, values, selectionWithId, selectionArgs);
+                Log.i(TAG, "Selection is: " + selectionWithId);
+                break;
+            }
+
+            case DATA: {
+                count = db.update(Tables.DATA, values, selection, selectionArgs);
+                break;
+            }
+
+            case DATA_ID: {
+                String selectionWithId = (Data._ID + " = " + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.DATA, values, selectionWithId, selectionArgs);
+                Log.i(TAG, "Selection is: " + selectionWithId);
+                break;
+            }
+
+            default:
+                throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
 
         if (count > 0) {
@@ -361,6 +628,19 @@ public class ContactsProvider2 extends ContentProvider {
 
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case ACCOUNTS: {
+                qb.setTables(Tables.ACCOUNTS);
+                qb.setProjectionMap(sAccountsProjectionMap);
+                break;
+            }
+
+            case ACCOUNTS_ID: {
+                qb.setTables(Tables.ACCOUNTS);
+                qb.setProjectionMap(sAccountsProjectionMap);
+                qb.appendWhere(BaseColumns._ID + " = " + ContentUris.parseId(uri));
+                break;
+            }
+
             case AGGREGATES: {
                 qb.setTables(Tables.AGGREGATES);
                 qb.setProjectionMap(sAggregatesProjectionMap);
@@ -370,7 +650,7 @@ public class ContactsProvider2 extends ContentProvider {
             case AGGREGATES_ID: {
                 qb.setTables(Tables.AGGREGATES);
                 qb.setProjectionMap(sAggregatesProjectionMap);
-                qb.appendWhere(BaseColumns._ID + " = " + uri.getLastPathSegment());
+                qb.appendWhere(BaseColumns._ID + " = " + ContentUris.parseId(uri));
                 break;
             }
 
@@ -388,7 +668,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case CONTACTS: {
-                qb.setTables(Tables.CONTACTS);
+                qb.setTables(Tables.CONTACTS_JOIN_ACCOUNTS);
                 qb.setProjectionMap(sContactsProjectionMap);
                 break;
             }
@@ -396,13 +676,13 @@ public class ContactsProvider2 extends ContentProvider {
             case CONTACTS_ID: {
                 qb.setTables(Tables.CONTACTS);
                 qb.setProjectionMap(sContactsProjectionMap);
-                qb.appendWhere("_id = " + uri.getLastPathSegment());
+                qb.appendWhere("_id = " + ContentUris.parseId(uri));
                 break;
             }
 
             case CONTACTS_DATA: {
                 qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
-                qb.setProjectionMap(sDataProjectionMap);
+                qb.setProjectionMap(sDataContactsProjectionMap);
                 qb.appendWhere("contact_id = " + uri.getPathSegments().get(1));
                 break;
             }
@@ -427,7 +707,7 @@ public class ContactsProvider2 extends ContentProvider {
                 // TODO: enforce that caller has read access to this data
                 qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere("data._id = " + uri.getLastPathSegment());
+                qb.appendWhere("data._id = " + ContentUris.parseId(uri));
                 break;
             }
 
@@ -465,10 +745,182 @@ public class ContactsProvider2 extends ContentProvider {
         return c;
     }
 
+    /**
+     * An implementation of EntityIterator that joins the contacts and data tables
+     * and consumes all the data rows for a contact in order to build the Entity for a contact.
+     */
+    private static class ContactsEntityIterator implements EntityIterator {
+        private final Cursor mEntityCursor;
+        private volatile boolean mIsClosed;
+        private final Account mAccount;
+
+        private static final String[] DATA_KEYS = new String[]{
+                "data1",
+                "data2",
+                "data3",
+                "data4",
+                "data5",
+                "data6",
+                "data7",
+                "data8",
+                "data9",
+                "data10"};
+
+        private static final String[] PROJECTION = new String[]{
+            Contacts.ACCOUNTS_ID,
+            Contacts.SOURCE_ID,
+            Contacts.VERSION,
+            Contacts.DIRTY,
+            Contacts.Data._ID,
+            Contacts.Data.PACKAGE,
+            Contacts.Data.MIMETYPE,
+            Contacts.Data.DATA1,
+            Contacts.Data.DATA2,
+            Contacts.Data.DATA4,
+            Contacts.Data.DATA5,
+            Contacts.Data.DATA6,
+            Contacts.Data.DATA7,
+            Contacts.Data.DATA8,
+            Contacts.Data.DATA9,
+            Contacts.Data.DATA10,
+            Contacts.Data.CONTACT_ID};
+
+        private static final int COLUMN_SOURCE_ID = 1;
+        private static final int COLUMN_DIRTY = 3;
+        private static final int COLUMN_DATA_ID = 4;
+        private static final int COLUMN_PACKAGE = 5;
+        private static final int COLUMN_MIMETYPE = 6;
+        private static final int COLUMN_DATA1 = 7;
+        private static final int COLUMN_CONTACT_ID = 16;
+
+
+        public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
+                String selection, String[] selectionArgs, String sortOrder) {
+            mIsClosed = false;
+
+            final String accountName = uri.getQueryParameter(Accounts.NAME);
+            final String accountType = uri.getQueryParameter(Accounts.TYPE);
+            if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+                throw new IllegalArgumentException("the account name and type must be "
+                        + "specified in the query params of the uri");
+            }
+            mAccount = new Account(accountName, accountType);
+            final Long accountId = provider.readAccountByName(mAccount,
+                    true /* refreshIfNotFound */);
+            if (accountId == null) {
+                throw new IllegalArgumentException("the specified account does not exist");
+            }
+
+            final String updatedSortOrder = (sortOrder == null)
+                    ? Contacts.Data.CONTACT_ID
+                    : (Contacts.Data.CONTACT_ID + "," + sortOrder);
+
+            final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
+            final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+            qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE_CONTACTS);
+            qb.setProjectionMap(sDataContactsAccountsProjectionMap);
+            if (contactsIdString != null) {
+                qb.appendWhere(Data.CONTACT_ID + "=" + contactsIdString);
+            }
+            qb.appendWhere(Contacts.ACCOUNTS_ID + "=" + accountId);
+            mEntityCursor = qb.query(db, PROJECTION, selection, selectionArgs,
+                    null, null, updatedSortOrder);
+            mEntityCursor.moveToFirst();
+        }
+
+        public void close() {
+            if (mIsClosed) {
+                throw new IllegalStateException("closing when already closed");
+            }
+            mIsClosed = true;
+            mEntityCursor.close();
+        }
+
+        public boolean hasNext() throws RemoteException {
+            if (mIsClosed) {
+                throw new IllegalStateException("calling hasNext() when the iterator is closed");
+            }
+
+            return !mEntityCursor.isAfterLast();
+        }
+
+        public Entity next() throws RemoteException {
+            if (mIsClosed) {
+                throw new IllegalStateException("calling next() when the iterator is closed");
+            }
+            if (!hasNext()) {
+                throw new IllegalStateException("you may only call next() if hasNext() is true");
+            }
+
+            final SQLiteCursor c = (SQLiteCursor) mEntityCursor;
+
+            final long contactId = c.getLong(COLUMN_CONTACT_ID);
+
+            // we expect the cursor is already at the row we need to read from
+            ContentValues contactValues = new ContentValues();
+            contactValues.put(Accounts.NAME, mAccount.mName);
+            contactValues.put(Accounts.TYPE, mAccount.mType);
+            contactValues.put(Contacts._ID, contactId);
+            contactValues.put(Contacts.DIRTY, c.getLong(COLUMN_DIRTY));
+            contactValues.put(Contacts.SOURCE_ID, c.getString(COLUMN_SOURCE_ID));
+            Entity contact = new Entity(contactValues);
+
+            // read data rows until the contact id changes
+            do {
+                if (contactId != c.getLong(COLUMN_CONTACT_ID)) {
+                    break;
+                }
+                // add the data to to the contact
+                ContentValues dataValues = new ContentValues();
+                dataValues.put(Contacts.Data._ID, c.getString(COLUMN_DATA_ID));
+                dataValues.put(Contacts.Data.PACKAGE, c.getString(COLUMN_PACKAGE));
+                dataValues.put(Contacts.Data.MIMETYPE, c.getLong(COLUMN_MIMETYPE));
+                for (int i = 0; i < 10; i++) {
+                    final int columnIndex = i + COLUMN_DATA1;
+                    String key = DATA_KEYS[i];
+                    if (c.isNull(columnIndex)) {
+                        // don't put anything
+                    } else if (c.isLong(columnIndex)) {
+                        dataValues.put(key, c.getLong(columnIndex));
+                    } else if (c.isFloat(columnIndex)) {
+                        dataValues.put(key, c.getFloat(columnIndex));
+                    } else if (c.isString(columnIndex)) {
+                        dataValues.put(key, c.getString(columnIndex));
+                    } else if (c.isBlob(columnIndex)) {
+                        dataValues.put(key, c.getBlob(columnIndex));
+                    }
+                }
+                contact.addSubValue(Data.CONTENT_URI, dataValues);
+            } while (mEntityCursor.moveToNext());
+
+            return contact;
+        }
+    }
+
+    public EntityIterator queryEntities(Uri uri, String selection, String[] selectionArgs,
+            String sortOrder) {
+        final int match = sUriMatcher.match(uri);
+        switch (match) {
+            case CONTACTS:
+            case CONTACTS_ID:
+                String contactsIdString = null;
+                if (match == CONTACTS_ID) {
+                    contactsIdString = uri.getPathSegments().get(1);
+                }
+
+                return new ContactsEntityIterator(this, contactsIdString,
+                        uri, selection, selectionArgs, sortOrder);
+            default:
+                throw new UnsupportedOperationException("Unknown uri: " + uri);
+        }
+    }
+
     @Override
     public String getType(Uri uri) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case ACCOUNTS: return Accounts.CONTENT_TYPE;
+            case ACCOUNTS_ID: return Accounts.CONTENT_ITEM_TYPE;
             case AGGREGATES: return Aggregates.CONTENT_TYPE;
             case AGGREGATES_ID: return Aggregates.CONTENT_ITEM_TYPE;
             case CONTACTS: return Contacts.CONTENT_TYPE;
@@ -479,5 +931,19 @@ public class ContactsProvider2 extends ContentProvider {
                 return mOpenHelper.getDataMimeType(dataId);
         }
         throw new UnsupportedOperationException("Unknown uri: " + uri);
+    }
+
+    public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
+            throws OperationApplicationException {
+
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            ContentProviderResult[] results = super.applyBatch(operations);
+            db.setTransactionSuccessful();
+            return results;
+        } finally {
+            db.endTransaction();
+        }
     }
 }
