@@ -42,7 +42,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 18;
+    private static final int DATABASE_VERSION = 22;
     private static final String DATABASE_NAME = "contacts2.db";
 
     public interface Tables {
@@ -52,6 +52,7 @@ import java.util.HashMap;
         public static final String PACKAGE = "package";
         public static final String MIMETYPE = "mimetype";
         public static final String PHONE_LOOKUP = "phone_lookup";
+        public static final String NAME_LOOKUP = "name_lookup";
 
         public static final String DATA = "data";
 
@@ -95,11 +96,9 @@ import java.util.HashMap;
 
         public static final String CONTACTS_JOIN_ACCOUNTS = "contacts "
                 + "LEFT OUTER JOIN accounts ON (accounts._id = contacts.accounts_id)";
-    }
 
-
-    public interface ContactsColumns {
-        public static final String AGGREGATION_NEEDED = "aggregation_needed";
+        public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
+                + "LEFT JOIN contacts ON (name_lookup.contact_id = contacts._id)";
     }
 
     public interface DataColumns {
@@ -119,12 +118,34 @@ import java.util.HashMap;
         public static final String NORMALIZED_NUMBER = "normalized_number";
     }
 
-    private interface PackageColumns {
+    public interface NameLookupColumns {
+        public static final String _ID = BaseColumns._ID;
+        public static final String DATA_ID = "data_id";
+        public static final String CONTACT_ID = "contact_id";
+        public static final String NORMALIZED_NAME = "normalized_name";
+        public static final String NAME_TYPE = "name_type";
+    }
+
+    public interface NameLookupType {
+        public static final int FULL_NAME = 0;
+        public static final int FULL_NAME_CONCATENATED = 1;
+        public static final int FULL_NAME_REVERSE = 2;
+        public static final int FULL_NAME_REVERSE_CONCATENATED = 3;
+        public static final int GIVEN_NAME_ONLY = 4;
+        public static final int FAMILY_NAME_ONLY = 5;
+        public static final int NICKNAME = 6;
+        public static final int INITIALS = 7;
+
+        // This is the highest name lookup type code
+        public static final int TYPE_COUNT = 7;
+    }
+
+    public interface PackageColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String PACKAGE = "package";
     }
 
-    private interface MimetypeColumns {
+    public interface MimetypeColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String MIMETYPE = "mimetype";
     }
@@ -217,8 +238,7 @@ import java.util.HashMap;
                 Contacts.SOURCE_ID + " TEXT," +
                 Contacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
-                Contacts.AGGREGATE_ID + " INTEGER, " +
-                ContactsColumns.AGGREGATION_NEEDED + " INTEGER" +
+                Contacts.AGGREGATE_ID + " INTEGER " +
         ");");
 
         // Package name mapping table
@@ -265,6 +285,22 @@ import java.util.HashMap;
                 PhoneLookupColumns.DATA_ID +
         ");");
 
+        // Private name/nickname table used for lookup
+        db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
+                NameLookupColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                NameLookupColumns.DATA_ID + " INTEGER REFERENCES data(_id) NOT NULL," +
+                NameLookupColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL," +
+                NameLookupColumns.NORMALIZED_NAME + " TEXT NOT NULL," +
+                NameLookupColumns.NAME_TYPE + " INTEGER" +
+        ");");
+
+        db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
+                NameLookupColumns.NORMALIZED_NAME + " ASC, " +
+                NameLookupColumns.NAME_TYPE + " ASC, " +
+                NameLookupColumns.CONTACT_ID + ", " +
+                NameLookupColumns.DATA_ID +
+        ");");
+
         // Activities table
         db.execSQL("CREATE TABLE " + Tables.ACTIVITIES + " (" +
                 Activities._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -296,11 +332,25 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPE + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
         onCreate(db);
     }
 
+    /**
+     * Wipes all data except mime type and package lookup tables.
+     */
+    public void wipeData() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL("DELETE FROM " + Tables.AGGREGATES + ";");
+        db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
+        db.execSQL("DELETE FROM " + Tables.DATA + ";");
+        db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
+        db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
+        db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
+        db.execSQL("VACUUM;");
+    }
 
     /**
      * Perform an internal string-to-integer lookup using the compiled

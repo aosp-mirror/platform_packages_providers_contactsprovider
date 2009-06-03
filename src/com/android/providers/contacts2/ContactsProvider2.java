@@ -16,8 +16,9 @@
 
 package com.android.providers.contacts2;
 
-import com.android.providers.contacts2.OpenHelper.ContactsColumns;
 import com.android.providers.contacts2.OpenHelper.DataColumns;
+import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
+import com.android.providers.contacts2.OpenHelper.NameLookupType;
 import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
 
@@ -44,6 +45,7 @@ import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -104,6 +106,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static final HashMap<Account, Long> sAccountsToIdMap = new HashMap<Account, Long>();
     private static final HashMap<Long, Account> sIdToAccountsMap = new HashMap<Long, Account>();
+
 
     static {
         // Contacts URI matching table
@@ -203,8 +206,21 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         sDataContactsAggregateProjectionMap = columns;
     }
 
+    private final boolean mAsynchronous;
     private OpenHelper mOpenHelper;
     private static final AccountComparator sAccountComparator = new AccountComparator();
+    private ContactAggregator mContactAggregator;
+
+    public ContactsProvider2() {
+        this(true);
+    }
+
+    /**
+     * Constructor for testing.
+     */
+    /* package */ ContactsProvider2(boolean asynchronous) {
+        mAsynchronous = asynchronous;
+    }
 
     @Override
     public boolean onCreate() {
@@ -213,7 +229,28 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         loadAccountsMaps();
 
+        mContactAggregator = new ContactAggregator(context, mAsynchronous);
+
+        // TODO remove this, it's here to force opening the database on boot for testing
+        mOpenHelper.getReadableDatabase();
+
         return true;
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        if (mContactAggregator != null) {
+            mContactAggregator.quit();
+        }
+
+        super.finalize();
+    }
+
+    /**
+     * Wipes all data from the contacts database.
+     */
+    /* package */ void wipeData() {
+        mOpenHelper.wipeData();
     }
 
     /**
@@ -315,7 +352,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static class AccountComparator implements Comparator<Account> {
         public int compare(Account object1, Account object2) {
-            if (object1 == object2) return 0;
+            if (object1 == object2) {
+                return 0;
+            }
             int result = object1.mType.compareTo(object2.mType);
             if (result != 0) {
                 return result;
@@ -400,8 +439,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
      * @return the row ID of the newly created row
      */
     private long insertAggregate(ContentValues values) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        return db.insert(Tables.AGGREGATES, Aggregates.DISPLAY_NAME, values);
+        throw new UnsupportedOperationException("Aggregates are created automatically");
     }
 
     /**
@@ -418,13 +456,17 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
          */
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
-        ContentValues augmentedValues = new ContentValues(values);
-        augmentedValues.put(ContactsColumns.AGGREGATION_NEEDED, true);
-        if (!resolveAccount(augmentedValues)) {
+        ContentValues overriddenValues = new ContentValues(values);
+        overriddenValues.putNull(Contacts.AGGREGATE_ID);
+        if (!resolveAccount(overriddenValues)) {
             return -1;
         }
 
-        return db.insert(Tables.CONTACTS, Contacts.AGGREGATE_ID, augmentedValues);
+        long rowId = db.insert(Tables.CONTACTS, Contacts.AGGREGATE_ID, overriddenValues);
+
+        mContactAggregator.schedule();
+
+        return rowId;
     }
 
     /**
@@ -462,12 +504,16 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
      * @return the row ID of the newly created row
      */
     private long insertData(ContentValues values) {
+        boolean success = false;
+
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         long id = 0;
         db.beginTransaction();
         try {
             // TODO: Consider enforcing Binder.getCallingUid() for package name
             // requested by this insert.
+
+            long contactId = values.getAsLong(Data.CONTACT_ID);
 
             // Replace package name and mime-type with internal mappings
             final String packageName = values.getAsString(Data.PACKAGE);
@@ -488,16 +534,117 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER,
                         PhoneNumberUtils.getStrippedReversed(number));
                 phoneValues.put(PhoneLookupColumns.DATA_ID, id);
-                phoneValues.put(PhoneLookupColumns.CONTACT_ID, values.getAsLong(Phone.CONTACT_ID));
+                phoneValues.put(PhoneLookupColumns.CONTACT_ID, contactId);
                 db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
             }
+
+            if (CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
+                insertStructuredNameLookup(db, id, contactId, values);
+            }
+
+            markContactForAggregation(db, contactId);
+
             db.setTransactionSuccessful();
+            success = true;
         } finally {
             db.endTransaction();
         }
+
+        if (success) {
+            mContactAggregator.schedule();
+        }
+
         return id;
     }
 
+    /**
+     * Marks the specified contact for (re)aggregation.
+     *
+     * @param db a writable database with an open transaction
+     * @param contactId contact ID that needs to be (re)aggregated
+     */
+    private void markContactForAggregation(final SQLiteDatabase db, long contactId) {
+        ContentValues values = new ContentValues(1);
+        values.putNull(Contacts.AGGREGATE_ID);
+        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+    }
+
+    /**
+     * Inserts various permutations of the contact name into a helper table (name_lookup) to
+     * facilitate aggregation of contacts with slightly different names (e.g. first name and last
+     * name swapped or concatenated.)
+     */
+    private void insertStructuredNameLookup(SQLiteDatabase db, long id, long contactId,
+            ContentValues values) {
+
+        String givenName = values.getAsString(StructuredName.GIVEN_NAME);
+        String familyName = values.getAsString(StructuredName.FAMILY_NAME);
+
+        if (TextUtils.isEmpty(givenName)) {
+            if (TextUtils.isEmpty(familyName)) {
+
+                // Nothing specified - nothing to insert in the lookup table
+                return;
+            }
+
+            insertFamilyNameLookup(db, id, contactId, familyName);
+        } else if (TextUtils.isEmpty(familyName)) {
+            insertGivenNameLookup(db, id, contactId, givenName);
+        } else {
+            insertFullNameLookup(db, id, contactId, givenName, familyName);
+        }
+    }
+
+    /**
+     * Populates the name_lookup table when only the first name is specified.
+     */
+    private void insertGivenNameLookup(SQLiteDatabase db, long id, Long contactId,
+            String givenName) {
+        final String givenNameLc = givenName.toLowerCase();
+        insertNameLookup(db, id, contactId, givenNameLc,
+                NameLookupType.GIVEN_NAME_ONLY);
+    }
+
+    /**
+     * Populates the name_lookup table when only the last name is specified.
+     */
+    private void insertFamilyNameLookup(SQLiteDatabase db, long id, Long contactId,
+            String familyName) {
+        final String familyNameLc = familyName.toLowerCase();
+        insertNameLookup(db, id, contactId, familyNameLc,
+                NameLookupType.FAMILY_NAME_ONLY);
+    }
+
+    /**
+     * Populates the name_lookup table when both the first and last names are specified.
+     */
+    private void insertFullNameLookup(SQLiteDatabase db, long id, Long contactId, String givenName,
+            String familyName) {
+        final String givenNameLc = givenName.toLowerCase();
+        final String familyNameLc = familyName.toLowerCase();
+
+        insertNameLookup(db, id, contactId, givenNameLc + "." + familyNameLc,
+                NameLookupType.FULL_NAME);
+        insertNameLookup(db, id, contactId, familyNameLc + "." + givenNameLc,
+                NameLookupType.FULL_NAME_REVERSE);
+        insertNameLookup(db, id, contactId, givenNameLc + familyNameLc,
+                NameLookupType.FULL_NAME_CONCATENATED);
+        insertNameLookup(db, id, contactId, familyNameLc + givenNameLc,
+                NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
+    }
+
+    /**
+     * Inserts a single name permutation into the name_lookup table.
+     */
+    private void insertNameLookup(SQLiteDatabase db, long id, Long contactId, String name,
+            int nameType) {
+        ContentValues values = new ContentValues(4);
+        values.put(NameLookupColumns.DATA_ID, id);
+        values.put(NameLookupColumns.CONTACT_ID, contactId);
+        values.put(NameLookupColumns.NORMALIZED_NAME, name);
+        values.put(NameLookupColumns.NAME_TYPE, nameType);
+        db.insert(Tables.NAME_LOOKUP, NameLookupColumns._ID, values);
+    }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -897,6 +1044,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         }
     }
 
+    @Override
     public EntityIterator queryEntities(Uri uri, String selection, String[] selectionArgs,
             String sortOrder) {
         final int match = sUriMatcher.match(uri);
