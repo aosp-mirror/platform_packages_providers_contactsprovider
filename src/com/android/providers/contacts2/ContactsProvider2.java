@@ -16,34 +16,38 @@
 
 package com.android.providers.contacts2;
 
+import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.DataColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
 import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
 
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.accounts.OnAccountsUpdatedListener;
 import android.content.ContentProvider;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.UriMatcher;
 import android.content.Entity;
 import android.content.EntityIterator;
-import android.content.ContentProviderResult;
-import android.content.ContentProviderOperation;
 import android.content.OperationApplicationException;
+import android.content.UriMatcher;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
-import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Accounts;
-import android.provider.Contacts.ContactMethods;
 import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -52,15 +56,11 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
-import android.accounts.Account;
-import android.accounts.AccountManager;
-import android.accounts.OnAccountsUpdatedListener;
-import android.os.RemoteException;
 
-import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 
 /**
  * Contacts content provider. The contract between this provider and applications
@@ -90,6 +90,14 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final int ACCOUNTS = 5000;
     private static final int ACCOUNTS_ID = 5001;
 
+    private static final int AGGREGATION_EXCEPTIONS = 6000;
+    private static final int AGGREGATION_EXCEPTION_ID = 6001;
+
+    private static final String[] AGGREGATION_EXCEPTION_PROJECTION =
+        new String[]{AggregationExceptions.CONTACT_ID1, AggregationExceptions.CONTACT_ID2};
+    private static final int AGGREGATION_EXCEPTION_COL_CONTACT_ID1 = 0;
+    private static final int AGGREGATION_EXCEPTION_COL_CONTACT_ID2 = 1;
+
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
     /** Contains the aggregate columns along with primary phone */
@@ -106,6 +114,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final HashMap<String, String> sDataContactsAccountsProjectionMap;
     /** Contains just the key and value columns */
     private static final HashMap<String, String> sAccountsProjectionMap;
+    /** Contains the just the agg_exceptions columns */
+    private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
 
     private static final HashMap<Account, Long> sAccountsToIdMap = new HashMap<Account, Long>();
     private static final HashMap<Long, Account> sIdToAccountsMap = new HashMap<Long, Account>();
@@ -142,10 +152,16 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_email/*", CONTACTS_FILTER_EMAIL);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_email/*",
+                CONTACTS_FILTER_EMAIL);
+
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
+                AGGREGATION_EXCEPTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions/*",
+                AGGREGATION_EXCEPTION_ID);
 
         HashMap<String, String> columns;
 
@@ -228,6 +244,14 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.CONTACT_ID, "data.contact_id");
         sDataContactsAggregateProjectionMap = columns;
+
+        // Aggregate exception projection map
+        columns = new HashMap<String, String>();
+        columns.put(AggregationExceptionColumns._ID, Tables.AGGREGATION_EXCEPTIONS + "._id AS _id");
+        columns.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE);
+        columns.put(AggregationExceptions.CONTACT_ID1, AggregationExceptions.CONTACT_ID1);
+        columns.put(AggregationExceptions.CONTACT_ID2, AggregationExceptions.CONTACT_ID2);
+        sAggregationExceptionsProjectionMap = columns;
 
         sNestedContactIdSelect = "SELECT " + Data.CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
                 + Data._ID + "=?";
@@ -452,6 +476,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
+            case AGGREGATION_EXCEPTIONS: {
+                id = insertAggregationException(values);
+                break;
+            }
+
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -602,18 +631,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * Marks the specified contact for (re)aggregation.
-     *
-     * @param db a writable database with an open transaction
-     * @param contactId contact ID that needs to be (re)aggregated
-     */
-    private void markContactForAggregation(final SQLiteDatabase db, long contactId) {
-        ContentValues values = new ContentValues(1);
-        values.putNull(Contacts.AGGREGATE_ID);
-        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
-    }
-
-    /**
      * Inserts various permutations of the contact name into a helper table (name_lookup) to
      * facilitate aggregation of contacts with slightly different names (e.g. first name and last
      * name swapped or concatenated.)
@@ -690,6 +707,22 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         db.insert(Tables.NAME_LOOKUP, NameLookupColumns._ID, values);
     }
 
+    /**
+     * Inserts an item in the agg_exceptions table
+     *
+     * @param values the values for the new row
+     * @return the row ID of the newly created row
+     */
+    private long insertAggregationException(ContentValues values) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final long exceptionId = db.insert(Tables.AGGREGATION_EXCEPTIONS,
+                AggregationExceptionColumns._ID, values);
+        markContactForAggregation(db, values.getAsLong(AggregationExceptions.CONTACT_ID1));
+        markContactForAggregation(db, values.getAsLong(AggregationExceptions.CONTACT_ID2));
+        mContactAggregator.schedule();
+        return exceptionId;
+    }
+
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
@@ -723,6 +756,15 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
                 return db.delete("data", Data._ID + "=" + dataId, null);
+            }
+
+            case AGGREGATION_EXCEPTION_ID: {
+                long exceptionId = ContentUris.parseId(uri);
+                final int count = db.delete(Tables.AGGREGATION_EXCEPTIONS,
+                        AggregationExceptionColumns._ID + "=" + exceptionId, null);
+                markExceptionContactsForAggregation(db, uri);
+                mContactAggregator.schedule();
+                return count;
             }
 
             default:
@@ -835,6 +877,17 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
+            case AGGREGATION_EXCEPTION_ID: {
+                String selectionWithId = (AggregationExceptionColumns._ID + " = "
+                        + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.AGGREGATION_EXCEPTIONS, values, selectionWithId,
+                        selectionArgs);
+                markExceptionContactsForAggregation(db, uri);
+                mContactAggregator.schedule();
+                break;
+            }
+
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -843,6 +896,34 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             getContext().getContentResolver().notifyChange(uri, null);
         }
         return count;
+    }
+
+    /**
+     * Marks the specified contact for (re)aggregation.
+     *
+     * @param db a writable database with an open transaction
+     * @param contactId contact ID that needs to be (re)aggregated
+     */
+    private void markContactForAggregation(final SQLiteDatabase db, long contactId) {
+        db.execSQL("UPDATE " + Tables.CONTACTS + " SET " + Contacts.AGGREGATE_ID + " = NULL WHERE "
+                + Contacts._ID + "=" + contactId + ";");
+    }
+
+    /**
+     * Marks both contacts linked by an aggregation exception for (re)aggregation.
+     * @param db a writable database with an open transaction
+     * @param uri a uri for an existing aggregation exception
+     */
+    private void markExceptionContactsForAggregation(final SQLiteDatabase db, Uri uri) {
+        Cursor c = query(uri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
+        try {
+            if (c.moveToFirst()) {
+                markContactForAggregation(db, c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID1));
+                markContactForAggregation(db, c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID2));
+            }
+        } finally {
+            c.close();
+        }
     }
 
     @Override
@@ -971,6 +1052,19 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 qb.appendWhereEscapeString(number);
                 qb.appendWhere(")");
                 qb.setProjectionMap(sDataContactsProjectionMap);
+                break;
+            }
+
+            case AGGREGATION_EXCEPTIONS: {
+                qb.setTables(Tables.AGGREGATION_EXCEPTIONS);
+                qb.setProjectionMap(sAggregationExceptionsProjectionMap);
+                break;
+            }
+
+            case AGGREGATION_EXCEPTION_ID: {
+                qb.setTables(Tables.AGGREGATION_EXCEPTIONS);
+                qb.setProjectionMap(sAggregationExceptionsProjectionMap);
+                qb.appendWhere("_id = " + ContentUris.parseId(uri));
                 break;
             }
 
@@ -1175,6 +1269,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         throw new UnsupportedOperationException("Unknown uri: " + uri);
     }
 
+    @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
 

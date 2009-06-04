@@ -26,6 +26,7 @@ import android.provider.BaseColumns;
 import android.provider.SocialContract.Activities;
 import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 
@@ -53,6 +54,7 @@ import java.util.HashMap;
         public static final String MIMETYPE = "mimetype";
         public static final String PHONE_LOOKUP = "phone_lookup";
         public static final String NAME_LOOKUP = "name_lookup";
+        public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
 
         public static final String DATA = "data";
 
@@ -99,6 +101,10 @@ import java.util.HashMap;
 
         public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
                 + "LEFT JOIN contacts ON (name_lookup.contact_id = contacts._id)";
+
+        public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE = "agg_exceptions "
+                + "LEFT JOIN contacts contacts1 ON (agg_exceptions.contact_id1 = contacts1._id) "
+                + "LEFT JOIN contacts contacts2 ON (agg_exceptions.contact_id2 = contacts2._id) ";
     }
 
     public interface DataColumns {
@@ -150,7 +156,9 @@ import java.util.HashMap;
         public static final String MIMETYPE = "mimetype";
     }
 
-
+    public interface AggregationExceptionColumns {
+        public static final String _ID = BaseColumns._ID;
+    }
 
     /** In-memory cache of previously found mimetype mappings */
     private HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
@@ -303,6 +311,25 @@ import java.util.HashMap;
                 NameLookupColumns.DATA_ID +
         ");");
 
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
+                AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
+                AggregationExceptions.CONTACT_ID1 + " INTEGER REFERENCES contacts(_id), " +
+                AggregationExceptions.CONTACT_ID2 + " INTEGER REFERENCES contacts(_id)" +
+		");");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index1 ON " +
+                Tables.AGGREGATION_EXCEPTIONS + " (" +
+                AggregationExceptions.CONTACT_ID1 + ", " +
+                AggregationExceptions.CONTACT_ID2 +
+        ");");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index2 ON " +
+                Tables.AGGREGATION_EXCEPTIONS + " (" +
+                AggregationExceptions.CONTACT_ID2 + ", " +
+                AggregationExceptions.CONTACT_ID1 +
+        ");");
+
         // Activities table
         db.execSQL("CREATE TABLE " + Tables.ACTIVITIES + " (" +
                 Activities._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -337,6 +364,9 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
+        // Note: we are not dropping agg_exceptions. In case that table's schema changes,
+        // we want to try and preserve the data, because it was entered by the user.
+
         onCreate(db);
     }
 
@@ -350,6 +380,7 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
+        db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("VACUUM;");
     }

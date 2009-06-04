@@ -1,8 +1,23 @@
-// Copyright 2009 Google Inc. All Rights Reserved.
+/*
+ * Copyright (C) 2009 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
+ */
 
 package com.android.providers.contacts2;
 
 import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -60,12 +75,37 @@ public class ContactAggregator {
             MimetypeColumns.MIMETYPE, Data.DATA1, Data.DATA2
     };
 
+    private static final int COL_MIMETYPE = 0;
+    private static final int COL_DATA1 = 1;
+    private static final int COL_DATA2 = 2;
+
     private static final String[] NAME_LOOKUP_COLUMNS = new String[] {
             Contacts.AGGREGATE_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
     };
 
+    private static final int COL_AGGREGATE_ID = 0;
+    private static final int COL_NORMALIZED_NAME = 1;
+    private static final int COL_NAME_TYPE = 2;
+
+    private static final String[] AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS = new String[]{
+            AggregationExceptions.TYPE,
+            AggregationExceptions.CONTACT_ID1,
+            AggregationExceptions.CONTACT_ID2,
+            "contacts1." + Contacts.AGGREGATE_ID,
+            "contacts2." + Contacts.AGGREGATE_ID
+    };
+
+    private static final int COL_TYPE = 0;
+    private static final int COL_CONTACT_ID1 = 1;
+    private static final int COL_CONTACT_ID2 = 2;
+    private static final int COL_AGGREGATE_ID1 = 3;
+    private static final int COL_AGGREGATE_ID2 = 4;
+
     // Aggregate contacts if their match score is equal or greater than this threshold
     private static final int SCORE_THRESHOLD_AGGREGATE = 70;
+
+    private static final int SCORE_NEVER_MATCH = -1;
+    private static final int SCORE_ALWAYS_MATCH = 100;
 
     private final boolean mAsynchronous;
     private final OpenHelper mOpenHelper;
@@ -98,14 +138,14 @@ public class ContactAggregator {
      */
     static {
         setNameMatchScore(NameLookupType.FULL_NAME,
-                NameLookupType.FULL_NAME, 100);
+                NameLookupType.FULL_NAME, SCORE_ALWAYS_MATCH);
         setNameMatchScore(NameLookupType.FULL_NAME,
                 NameLookupType.FULL_NAME_REVERSE, 90);
 
         setNameMatchScore(NameLookupType.FULL_NAME_REVERSE,
                 NameLookupType.FULL_NAME, 90);
         setNameMatchScore(NameLookupType.FULL_NAME_REVERSE,
-                NameLookupType.FULL_NAME_REVERSE, 100);
+                NameLookupType.FULL_NAME_REVERSE, SCORE_ALWAYS_MATCH);
 
         setNameMatchScore(NameLookupType.FULL_NAME_CONCATENATED,
                 NameLookupType.FULL_NAME_CONCATENATED, 80);
@@ -158,9 +198,14 @@ public class ContactAggregator {
         int matchCount;
 
         public void updateScore(int score) {
-            if (score > this.score) {
+            if (this.score == SCORE_NEVER_MATCH) {
+                return;
+            }
+
+            if ((score == SCORE_NEVER_MATCH) || (score > this.score)) {
                 this.score = score;
             }
+
             matchCount++;
         }
 
@@ -284,11 +329,65 @@ public class ContactAggregator {
      * Given a specific contact, finds all matching aggregates and chooses the aggregate
      * with the highest match score.  If no such aggregate is found, creates a new aggregate.
      */
-    /* package */void aggregateContact(SQLiteDatabase db, int contactId) {
-
+    /* package */ void aggregateContact(SQLiteDatabase db, int contactId) {
         mScores.clear();
         mMatchRequestCount = 0;
 
+        updateMatchScoresBasedOnExceptions(db, contactId);
+        updateMatchScoresBasedOnDataMatches(db, contactId);
+
+        long aggregateId = pickBestMatchingAggregate(SCORE_THRESHOLD_AGGREGATE);
+        if (aggregateId == -1) {
+            ContentValues aggregateValues = new ContentValues();
+            aggregateValues.put(Aggregates.DISPLAY_NAME, "");
+            aggregateId = db.insert(Tables.AGGREGATES, Aggregates.DISPLAY_NAME, aggregateValues);
+        }
+
+        ContentValues contactValues = new ContentValues(1);
+        contactValues.put(Contacts.AGGREGATE_ID, aggregateId);
+        db.update(Tables.CONTACTS, contactValues, Contacts._ID + "=" + contactId, null);
+
+        updateDisplayName(db, aggregateId);
+    }
+
+    /**
+     * Computes match scores based on exceptions entered by the user: always match and never match.
+     */
+    private void updateMatchScoresBasedOnExceptions(SQLiteDatabase db, int contactId) {
+         final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
+                AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
+                AggregationExceptions.CONTACT_ID1 + "=" + contactId
+                        + " OR " + AggregationExceptions.CONTACT_ID2 + "=" + contactId,
+                null, null, null, null);
+
+        try {
+            while (c.moveToNext()) {
+                int type = c.getInt(COL_TYPE);
+                int score = (type == AggregationExceptions.TYPE_ALWAYS_MATCH
+                        ? SCORE_ALWAYS_MATCH : SCORE_NEVER_MATCH);
+                long contactId1 = c.getLong(COL_CONTACT_ID1);
+                long contactId2 = c.getLong(COL_CONTACT_ID2);
+                if (contactId == contactId1) {
+                    if (!c.isNull(COL_AGGREGATE_ID2)) {
+                        long aggregateId = c.getLong(COL_AGGREGATE_ID2);
+                        updateMatchScore(aggregateId, score);
+                    }
+                } else {
+                    if (!c.isNull(COL_AGGREGATE_ID1)) {
+                        long aggregateId = c.getLong(COL_AGGREGATE_ID1);
+                        updateMatchScore(aggregateId, score);
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Computes scores for aggregates that have matching data rows.
+     */
+    private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, int contactId) {
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
                 DATA_JOIN_MIMETYPE_AGGREGATION_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
@@ -297,9 +396,9 @@ public class ContactAggregator {
 
         try {
             while (c.moveToNext()) {
-                String mimeType = c.getString(0);
-                String data1 = c.getString(1);
-                String data2 = c.getString(2);
+                String mimeType = c.getString(COL_MIMETYPE);
+                String data1 = c.getString(COL_DATA1);
+                String data2 = c.getString(COL_DATA2);
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
                     lookupByStructuredName(db, data1, data2, false);
                 }
@@ -307,19 +406,6 @@ public class ContactAggregator {
         } finally {
             c.close();
         }
-
-        long aggregateId = pickBestMatchingAggregate(SCORE_THRESHOLD_AGGREGATE);
-        if (aggregateId == -1) {
-            mContentValues.clear();
-            mContentValues.put(Aggregates.DISPLAY_NAME, "");
-            aggregateId = db.insert(Tables.AGGREGATES, Aggregates.DISPLAY_NAME, mContentValues);
-        }
-
-        mContentValues.clear();
-        mContentValues.put(Contacts.AGGREGATE_ID, aggregateId);
-        db.update(Tables.CONTACTS, mContentValues, Contacts._ID + "=" + contactId, null);
-
-        updateDisplayName(db, aggregateId);
     }
 
     /**
@@ -387,9 +473,9 @@ public class ContactAggregator {
 
         try {
             while (c.moveToNext()) {
-                Long aggregateId = c.getLong(0);
-                String name = c.getString(1);
-                int nameType = c.getInt(2);
+                Long aggregateId = c.getLong(COL_AGGREGATE_ID);
+                String name = c.getString(COL_NORMALIZED_NAME);
+                int nameType = c.getInt(COL_NAME_TYPE);
 
                 // Determine which request produced this match
                 for (int i = 0; i < mMatchRequestCount; i++) {
@@ -409,12 +495,16 @@ public class ContactAggregator {
      * match. The new score is determined by the prior score, by the type of
      * name we were looking for and the type of name we found.
      */
-    private void updateNameMatchScore(Long aggregateId, int nameLookupType, int nameType) {
+    private void updateNameMatchScore(long aggregateId, int nameLookupType, int nameType) {
         int score = getNameMatchScore(nameLookupType, nameType);
         if (score == 0) {
             return;
         }
 
+        updateMatchScore(aggregateId, score);
+    }
+
+    private void updateMatchScore(long aggregateId, int score) {
         MatchScore matchingScore = mScores.get(aggregateId);
         if (matchingScore == null) {
             matchingScore = new MatchScore();

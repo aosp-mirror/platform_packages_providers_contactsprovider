@@ -21,6 +21,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -45,6 +46,12 @@ public class ContactsProvider2Test
 
     // Indicator allowing us to wipe data only once for the entire test suite
     private static Boolean sDataWiped = false;
+
+    private static final String[] aggregationExceptionProjection = new String[] {
+            AggregationExceptions.TYPE,
+            AggregationExceptions.CONTACT_ID1,
+            AggregationExceptions.CONTACT_ID2
+    };
 
     /**
      * A version of the {@link ContactsProvider2Test} class that performs aggregation
@@ -77,6 +84,46 @@ public class ContactsProvider2Test
         super.setUp();
 
         mResolver = getMockContentResolver();
+    }
+
+    public void testCrudAggregationExceptions() throws Exception {
+        long contactId1 = createContact();
+        long contactId2 = createContact();
+
+        Uri resultUri = insertAggregationException(AggregationExceptions.TYPE_ALWAYS_MATCH,
+                contactId1, contactId2);
+
+        // Parse the URI and confirm that it contains an ID
+        assertTrue(ContentUris.parseId(resultUri) != 0);
+
+        // Refetch the row we have just inserted
+        Cursor c = mResolver.query(resultUri, aggregationExceptionProjection, null, null, null);
+
+        assertTrue(c.moveToFirst());
+        assertEquals(AggregationExceptions.TYPE_ALWAYS_MATCH, c.getInt(0));
+        assertEquals(contactId1, c.getLong(1));
+        assertEquals(contactId2, c.getLong(2));
+        assertFalse(c.moveToNext());
+        c.close();
+
+        // Query with a selection
+        c = mResolver.query(resultUri, aggregationExceptionProjection, AggregationExceptions.CONTACT_ID1 + "="
+                + contactId1, null, null);
+
+        assertTrue(c.moveToFirst());
+        assertEquals(AggregationExceptions.TYPE_ALWAYS_MATCH, c.getInt(0));
+        assertEquals(contactId1, c.getLong(1));
+        assertEquals(contactId2, c.getLong(2));
+        assertFalse(c.moveToNext());
+        c.close();
+
+        // Delete the same row
+        mResolver.delete(resultUri, null, null);
+
+        // Verify that the row is gone
+        c = mResolver.query(resultUri, aggregationExceptionProjection, null, null, null);
+        assertFalse(c.moveToFirst());
+        c.close();
     }
 
     public void testAggregationCreatesNewAggregate() {
@@ -155,6 +202,30 @@ public class ContactsProvider2Test
         assertAggregated(contactId1, contactId2, "Johng Smithg");
     }
 
+    public void testAggregationExceptionNeverMatch() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Johnh", "Smithh");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Johnh", "Smithh");
+
+        insertAggregationException(AggregationExceptions.TYPE_NEVER_MATCH, contactId1, contactId2);
+
+        assertNotAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationExceptionAlwaysMatch() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Johnj", "Smithj");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Johnjx", "Smithjx");
+
+        insertAggregationException(AggregationExceptions.TYPE_ALWAYS_MATCH, contactId1, contactId2);
+
+        assertAggregated(contactId1, contactId2, "Johnjx Smithjx");
+    }
+
     private long createContact() {
         ContentValues values = new ContentValues();
         Uri contactUri = mResolver.insert(Contacts.CONTENT_URI, values);
@@ -163,12 +234,12 @@ public class ContactsProvider2Test
 
     private Uri insertStructuredName(long contactId, String givenName, String familyName) {
         ContentValues values = new ContentValues();
-        values.clear();
         values.put(Data.CONTACT_ID, contactId);
         values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
-            sb.append(givenName).append(" ");
+            sb.append(givenName).append(" ");        // TODO Auto-generated method stub
+
         }
         if (familyName != null) {
             sb.append(familyName);
@@ -179,6 +250,14 @@ public class ContactsProvider2Test
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
+    }
+
+    private Uri insertAggregationException(int type, long contactId1, long contactId2) {
+        ContentValues values = new ContentValues();
+        values.put(AggregationExceptions.TYPE, type);
+        values.put(AggregationExceptions.CONTACT_ID1, contactId1);
+        values.put(AggregationExceptions.CONTACT_ID2, contactId2);
+        return mResolver.insert(AggregationExceptions.CONTENT_URI, values);
     }
 
     private Cursor queryContact(long contactId) {
