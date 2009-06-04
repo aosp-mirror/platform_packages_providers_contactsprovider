@@ -185,23 +185,6 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
 
     public ContactsProvider() {
         super(DATABASE_NAME, DATABASE_VERSION, Contacts.CONTENT_URI);
-        mSearchSuggestionLanguage = Locale.getDefault().getLanguage();
-        // Search suggestions projection map
-        mSearchSuggestionsProjectionMap = new HashMap<String, String>();
-        updateSuggestColumnTexts();
-        mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                "(CASE WHEN " + Photos.DATA + " IS NOT NULL"
-                + " THEN '" + People.CONTENT_URI + "/' || people._id ||"
-                        + " '/" + Photos.CONTENT_DIRECTORY + "/data'"
-                + " ELSE " + com.android.internal.R.drawable.ic_contact_picture
-                + " END) AS " + SearchManager.SUGGEST_COLUMN_ICON_1);
-        mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_ICON_2,
-                PRESENCE_ICON_SQL + " AS " + SearchManager.SUGGEST_COLUMN_ICON_2);
-        mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
-                "people._id AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
-        mSearchSuggestionsProjectionMap.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-                "people._id AS " + SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
-        mSearchSuggestionsProjectionMap.put(People._ID, "people._id AS " + People._ID);
     }
 
     @Override
@@ -4551,10 +4534,11 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map.put(SearchManager.SUGGEST_COLUMN_TEXT_2,
                 SUGGEST_DESCRIPTION_SQL + " AS " + SearchManager.SUGGEST_COLUMN_TEXT_2);
         map.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                com.android.internal.R.drawable.ic_contact_picture
-                + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1);
-        map.put(SearchManager.SUGGEST_COLUMN_ICON_1_BITMAP,
-                Photos.DATA + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1_BITMAP);
+                "(CASE WHEN " + Photos.DATA + " IS NOT NULL"
+                + " THEN '" + People.CONTENT_URI + "/' || people._id ||"
+                        + " '/" + Photos.CONTENT_DIRECTORY + "/data'"
+                + " ELSE " + com.android.internal.R.drawable.ic_contact_picture
+                + " END) AS " + SearchManager.SUGGEST_COLUMN_ICON_1);
         map.put(SearchManager.SUGGEST_COLUMN_ICON_2,
                 PRESENCE_ICON_SQL + " AS " + SearchManager.SUGGEST_COLUMN_ICON_2);
         map.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
