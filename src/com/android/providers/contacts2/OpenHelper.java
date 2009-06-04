@@ -23,12 +23,18 @@ import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.provider.BaseColumns;
+import android.provider.ContactsContract;
 import android.provider.SocialContract.Activities;
 import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.Im.PresenceColumns;
 
 import android.util.Log;
 
@@ -45,6 +51,7 @@ import java.util.HashMap;
 
     private static final int DATABASE_VERSION = 23;
     private static final String DATABASE_NAME = "contacts2.db";
+    private static final String DATABASE_PRESENCE = "presence_db";
 
     public interface Tables {
         public static final String ACCOUNTS = "accounts";
@@ -57,11 +64,11 @@ import java.util.HashMap;
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
 
         public static final String DATA = "data";
+        public static final String PRESENCE = "presence";
 
-        public static final String AGGREGATES_JOIN_PRIMARY_PHONE_PACKAGE_MIMETYPE = "aggregates "
-                + "LEFT OUTER JOIN data ON (aggregates.primary_phone_id = data._id) "
-                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) ";
+        public static final String AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE = "aggregates "
+                + "LEFT OUTER JOIN presence ON (aggregate._id = presence.aggregate_id) "
+                + "LEFT OUTER JOIN data ON (aggregates.primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPE = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
@@ -96,6 +103,7 @@ import java.util.HashMap;
                 + "LEFT JOIN contacts ON (activities.author_contact_id = contacts._id) "
                 + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
+
         public static final String CONTACTS_JOIN_ACCOUNTS = "contacts "
                 + "LEFT OUTER JOIN accounts ON (accounts._id = contacts.accounts_id)";
 
@@ -105,6 +113,14 @@ import java.util.HashMap;
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE = "agg_exceptions "
                 + "LEFT JOIN contacts contacts1 ON (agg_exceptions.contact_id1 = contacts1._id) "
                 + "LEFT JOIN contacts contacts2 ON (agg_exceptions.contact_id2 = contacts2._id) ";
+    }
+
+    public interface Clauses {
+        public static final String WHERE_IM_MATCHES = MimetypeColumns.MIMETYPE + "=" + Im.MIMETYPE
+                + " AND " + Im.PROTOCOL + "=? AND " + Im.DATA + "=?";
+
+        public static final String WHERE_EMAIL_MATCHES = MimetypeColumns.MIMETYPE + "="
+                + Email.MIMETYPE + " AND " + Email.DATA + "=?";
     }
 
     public interface DataColumns {
@@ -177,6 +193,10 @@ import java.util.HashMap;
 
     private static OpenHelper sSingleton = null;
 
+    /**
+     * Obtain a singleton instance of {@link OpenHelper}, using the provided
+     * {@link Context} to construct one when needed.
+     */
     public static synchronized OpenHelper getInstance(Context context) {
         if (sSingleton == null) {
             sSingleton = new OpenHelper(context);
@@ -184,12 +204,14 @@ import java.util.HashMap;
         return sSingleton;
     }
 
+    /**
+     * Private constructor, callers should obtain an instance through
+     * {@link #getInstance(Context)} instead.
+     */
     private OpenHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         Log.i(TAG, "Creating OpenHelper");
     }
-
-
 
     @Override
     public void onOpen(SQLiteDatabase db) {
@@ -208,6 +230,26 @@ import java.util.HashMap;
         mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns.MIMETYPE
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPE + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
+
+        // Make sure we have an in-memory presence table
+        final String tableName = DATABASE_PRESENCE + "." + Tables.PRESENCE;
+        final String indexName = DATABASE_PRESENCE + ".presenceIndex";
+
+        db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + tableName + " ("+
+                BaseColumns._ID + " INTEGER PRIMARY KEY," +
+                Presence.AGGREGATE_ID + " INTEGER REFERENCES aggregates(_id)," +
+                Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
+                Presence.IM_PROTOCOL + " TEXT," +
+                Presence.IM_HANDLE + " TEXT," +
+                Presence.IM_ACCOUNT + " TEXT," +
+                Presence.PRESENCE_STATUS + " INTEGER," +
+                Presence.PRESENCE_CUSTOM_STATUS + " TEXT," +
+                "UNIQUE(" + Presence.IM_PROTOCOL + ", " + Presence.IM_HANDLE + ", " + Presence.IM_ACCOUNT + ")" +
+        ");");
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + tableName + " ("
+                + Presence.AGGREGATE_ID + ");");
     }
 
     @Override
