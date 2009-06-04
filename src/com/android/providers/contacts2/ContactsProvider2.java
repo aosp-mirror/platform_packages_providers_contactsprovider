@@ -33,6 +33,7 @@ import android.content.ContentProviderResult;
 import android.content.ContentProviderOperation;
 import android.content.OperationApplicationException;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteCursor;
@@ -922,7 +923,23 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case DATA: {
                 // TODO: enforce that caller has read access to this data
-                qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
+                // if the caller only has READ_{account type} permission then they must specify the
+                // account type of the account they are interested in here and we will be sure to
+                // limit the rows that are returned to that account type.
+                final String accountName = uri.getQueryParameter(Accounts.NAME);
+                final String accountType = uri.getQueryParameter(Accounts.TYPE);
+                if (!TextUtils.isEmpty(accountName)) {
+                    Account account = new Account(accountName, accountType);
+                    Long accountId = readAccountByName(account, true /* refreshIfNotFound */);
+                    if (accountId == null) {
+                        // use -1 as the account to ensure that no rows are returned
+                        accountId = (long) -1;
+                    }
+                    qb.appendWhere(Contacts.ACCOUNTS_ID + "=" + accountId);
+                    qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE_CONTACTS);
+                } else {
+                    qb.setTables(Tables.DATA_JOIN_PACKAGE_MIMETYPE);
+                }
                 qb.setProjectionMap(sDataProjectionMap);
                 break;
             }
