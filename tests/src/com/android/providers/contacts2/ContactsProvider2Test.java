@@ -107,8 +107,8 @@ public class ContactsProvider2Test
         c.close();
 
         // Query with a selection
-        c = mResolver.query(resultUri, aggregationExceptionProjection, AggregationExceptions.CONTACT_ID1 + "="
-                + contactId1, null, null);
+        c = mResolver.query(resultUri, aggregationExceptionProjection,
+                AggregationExceptions.CONTACT_ID1 + "=" + contactId1, null, null);
 
         assertTrue(c.moveToFirst());
         assertEquals(AggregationExceptions.TYPE_ALWAYS_MATCH, c.getInt(0));
@@ -221,9 +221,24 @@ public class ContactsProvider2Test
         long contactId2 = createContact();
         insertStructuredName(contactId2, "Johnjx", "Smithjx");
 
+        long aggregateId1 = queryAggregateId(contactId1);
+        long aggregateId2 = queryAggregateId(contactId2);
+
         insertAggregationException(AggregationExceptions.TYPE_ALWAYS_MATCH, contactId1, contactId2);
 
         assertAggregated(contactId1, contactId2, "Johnjx Smithjx");
+
+        // Assert that the empty aggregate got removed
+        long newAggregateId1 = queryAggregateId(contactId1);
+        if (aggregateId1 != newAggregateId1) {
+            Cursor cursor = queryAggregate(aggregateId1);
+            assertFalse(cursor.moveToFirst());
+            cursor.close();
+        } else {
+            Cursor cursor = queryAggregate(aggregateId2);
+            assertFalse(cursor.moveToFirst());
+            cursor.close();
+        }
     }
 
     private long createContact() {

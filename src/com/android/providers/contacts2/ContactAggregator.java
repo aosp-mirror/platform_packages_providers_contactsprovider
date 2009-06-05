@@ -315,6 +315,9 @@ public class ContactAggregator {
                             db.yieldIfContendedSafely();
                         }
                     } while (c.moveToNext());
+
+                    removeEmptyAggregates(db);
+
                     db.setTransactionSuccessful();
                 } finally {
                     db.endTransaction();
@@ -326,10 +329,26 @@ public class ContactAggregator {
     }
 
     /**
+     * Synchronously aggregate the specified contact.
+     */
+    public void aggregateContact(long contactId) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        aggregateContact(db, contactId);
+    }
+
+    /**
+     * Removes all aggregates that don't have any constituent contacts.
+     */
+    public void removeEmptyAggregates(SQLiteDatabase db) {
+        db.execSQL("DELETE FROM " + Tables.AGGREGATES + " WHERE " + Aggregates._ID
+                + " NOT IN (SELECT " + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + ");");
+    }
+
+    /**
      * Given a specific contact, finds all matching aggregates and chooses the aggregate
      * with the highest match score.  If no such aggregate is found, creates a new aggregate.
      */
-    /* package */ void aggregateContact(SQLiteDatabase db, int contactId) {
+    /* package */ synchronized void aggregateContact(SQLiteDatabase db, long contactId) {
         mScores.clear();
         mMatchRequestCount = 0;
 
@@ -353,7 +372,7 @@ public class ContactAggregator {
     /**
      * Computes match scores based on exceptions entered by the user: always match and never match.
      */
-    private void updateMatchScoresBasedOnExceptions(SQLiteDatabase db, int contactId) {
+    private void updateMatchScoresBasedOnExceptions(SQLiteDatabase db, long contactId) {
          final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
                 AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
                 AggregationExceptions.CONTACT_ID1 + "=" + contactId
@@ -387,7 +406,7 @@ public class ContactAggregator {
     /**
      * Computes scores for aggregates that have matching data rows.
      */
-    private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, int contactId) {
+    private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long contactId) {
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
                 DATA_JOIN_MIMETYPE_AGGREGATION_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,

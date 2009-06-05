@@ -93,10 +93,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final int AGGREGATION_EXCEPTIONS = 6000;
     private static final int AGGREGATION_EXCEPTION_ID = 6001;
 
-    private static final String[] AGGREGATION_EXCEPTION_PROJECTION =
-        new String[]{AggregationExceptions.CONTACT_ID1, AggregationExceptions.CONTACT_ID2};
+    private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
+            AggregationExceptions.CONTACT_ID1
+    };
+
     private static final int AGGREGATION_EXCEPTION_COL_CONTACT_ID1 = 0;
-    private static final int AGGREGATION_EXCEPTION_COL_CONTACT_ID2 = 1;
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
@@ -717,9 +718,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final long exceptionId = db.insert(Tables.AGGREGATION_EXCEPTIONS,
                 AggregationExceptionColumns._ID, values);
-        markContactForAggregation(db, values.getAsLong(AggregationExceptions.CONTACT_ID1));
-        markContactForAggregation(db, values.getAsLong(AggregationExceptions.CONTACT_ID2));
-        mContactAggregator.schedule();
+        Uri uri = ContentUris.withAppendedId(AggregationExceptions.CONTENT_URI, exceptionId);
+        applyAggregationException(db, uri);
         return exceptionId;
     }
 
@@ -762,8 +762,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 long exceptionId = ContentUris.parseId(uri);
                 final int count = db.delete(Tables.AGGREGATION_EXCEPTIONS,
                         AggregationExceptionColumns._ID + "=" + exceptionId, null);
-                markExceptionContactsForAggregation(db, uri);
-                mContactAggregator.schedule();
+                applyAggregationException(db, uri);
                 return count;
             }
 
@@ -878,13 +877,15 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case AGGREGATION_EXCEPTION_ID: {
+
+                // TODO deal with the case where contact IDs change on the aggregation exception.
+                // In that case we need to redo aggregation for up to four affected contacts.
                 String selectionWithId = (AggregationExceptionColumns._ID + " = "
                         + ContentUris.parseId(uri) + " ")
                         + (selection == null ? "" : " AND " + selection);
                 count = db.update(Tables.AGGREGATION_EXCEPTIONS, values, selectionWithId,
                         selectionArgs);
-                markExceptionContactsForAggregation(db, uri);
-                mContactAggregator.schedule();
+                applyAggregationException(db, uri);
                 break;
             }
 
@@ -910,16 +911,22 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * Marks both contacts linked by an aggregation exception for (re)aggregation.
+     * Applies an aggregation exception by either combining or splitting the contacts
+     * referenced by the exception depending on the exception type.
+     *
      * @param db a writable database with an open transaction
      * @param uri a uri for an existing aggregation exception
      */
-    private void markExceptionContactsForAggregation(final SQLiteDatabase db, Uri uri) {
+    private void applyAggregationException(final SQLiteDatabase db, Uri uri) {
         Cursor c = query(uri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
         try {
             if (c.moveToFirst()) {
-                markContactForAggregation(db, c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID1));
-                markContactForAggregation(db, c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID2));
+
+                // Note that we only need to re-aggregate one of the two affected contacts
+                long contactId = c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID1);
+
+                markContactForAggregation(db, contactId);
+                mContactAggregator.aggregateContact(contactId);
             }
         } finally {
             c.close();
