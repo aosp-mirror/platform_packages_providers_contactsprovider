@@ -819,17 +819,15 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             case DATA_ID: {
                 boolean containsIsSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
                 boolean containsIsPrimary = values.containsKey(Data.IS_PRIMARY);
-                int isSuperPrimary = values.getAsInteger(Data.IS_SUPER_PRIMARY);
-                int isPrimary = values.getAsInteger(Data.IS_PRIMARY);
                 final long id = ContentUris.parseId(uri);
 
                 // Remove primary or super primary values being set to 0. This is disallowed by the
                 // content provider.
-                if (containsIsSuperPrimary && isSuperPrimary == 0) {
+                if (containsIsSuperPrimary && values.getAsInteger(Data.IS_SUPER_PRIMARY) == 0) {
                     containsIsSuperPrimary = false;
                     values.remove(Data.IS_SUPER_PRIMARY);
                 }
-                if (containsIsPrimary && isPrimary == 0) {
+                if (containsIsPrimary && values.getAsInteger(Data.IS_PRIMARY) == 0) {
                     containsIsPrimary = false;
                     values.remove(Data.IS_PRIMARY);
                 }
