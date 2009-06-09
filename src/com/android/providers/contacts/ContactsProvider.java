@@ -1643,7 +1643,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             case PEOPLE_PHOTO:
                 return "vnd.android.cursor.item/photo";
             case PEOPLE_PHOTO_DATA:
-                return "image/png";  // TODO: what image format is it?
+                return "image/png";
             case CONTACTMETHODS:
                 return "vnd.android.cursor.dir/contact-methods";
             case CONTACTMETHODS_ID:
