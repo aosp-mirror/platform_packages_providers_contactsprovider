@@ -45,7 +45,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 24;
+    private static final int DATABASE_VERSION = 26;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -286,13 +286,13 @@ import java.util.HashMap;
         // Package name mapping table
         db.execSQL("CREATE TABLE " + Tables.PACKAGE + " (" +
                 PackageColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                PackageColumns.PACKAGE + " TEXT" +
+                PackageColumns.PACKAGE + " TEXT NOT NULL" +
         ");");
 
         // Mime-type mapping table
         db.execSQL("CREATE TABLE " + Tables.MIMETYPE + " (" +
                 MimetypeColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                MimetypeColumns.MIMETYPE + " TEXT" +
+                MimetypeColumns.MIMETYPE + " TEXT NOT NULL" +
         ");");
 
         // Public generic data table
@@ -301,19 +301,68 @@ import java.util.HashMap;
                 DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Data.CONTACT_ID + " INTEGER NOT NULL," +
-                Data.IS_PRIMARY + " INTEGER," +
-                Data.IS_SUPER_PRIMARY + " INTEGER," +
-                Data.DATA1 + " NUMERIC," +
-                Data.DATA2 + " NUMERIC," +
-                Data.DATA3 + " NUMERIC," +
-                Data.DATA4 + " NUMERIC," +
-                Data.DATA5 + " NUMERIC," +
-                Data.DATA6 + " NUMERIC," +
-                Data.DATA7 + " NUMERIC," +
-                Data.DATA8 + " NUMERIC," +
-                Data.DATA9 + " NUMERIC," +
-                Data.DATA10 + " NUMERIC" +
+                Data.IS_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
+                Data.IS_SUPER_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
+                Data.DATA_VERSION + " INTEGER NOT NULL DEFAULT 0," +
+                Data.DATA1 + " TEXT," +
+                Data.DATA2 + " TEXT," +
+                Data.DATA3 + " TEXT," +
+                Data.DATA4 + " TEXT," +
+                Data.DATA5 + " TEXT," +
+                Data.DATA6 + " TEXT," +
+                Data.DATA7 + " TEXT," +
+                Data.DATA8 + " TEXT," +
+                Data.DATA9 + " TEXT," +
+                Data.DATA10 + " TEXT" +
         ");");
+
+        /**
+         * set contact.dirty whenever the contact is updated and the new version does not explicity
+         * clear the dirty flag
+         *
+         * Want to have a data row that has the server version of the contact. Then when I save
+         * an entry from the server into the provider I will set the server version of the data
+         * while also clearing the dirty flag of the contact.
+         *
+         * increment the contact.version whenever the contact is updated
+         */
+        db.execSQL("CREATE TRIGGER " + Tables.CONTACTS + "_updated1 "
+                + "   BEFORE UPDATE ON " + Tables.CONTACTS
+                + " BEGIN "
+                + "   UPDATE " + Tables.CONTACTS
+                + "     SET "
+                +         Contacts.VERSION + "=OLD." + Contacts.VERSION + "+1, "
+                +         Contacts.DIRTY + "=1"
+                + "     WHERE " + Contacts._ID + "=OLD." + Contacts._ID + ";"
+                + " END");
+
+        db.execSQL("CREATE TRIGGER " + Tables.CONTACTS + "_deleted "
+                + "   BEFORE DELETE ON " + Tables.CONTACTS
+                + " BEGIN "
+                + "   DELETE FROM " + Tables.DATA
+                + "     WHERE " + Data.CONTACT_ID + "=OLD." + Contacts._ID + ";"
+                + "   DELETE FROM " + Tables.PHONE_LOOKUP
+                + "     WHERE " + PhoneLookupColumns.CONTACT_ID + "=OLD." + Contacts._ID + ";"
+                + " END");
+
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated AFTER UPDATE ON " + Tables.DATA
+                + " BEGIN "
+                + "   UPDATE " + Tables.DATA
+                + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
+                + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
+                + "   UPDATE " + Tables.CONTACTS
+                + "     SET " + Contacts.DIRTY + "=1"
+                + "     WHERE " + Contacts._ID + "=OLD." + Contacts._ID + ";"
+                + " END");
+
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
+                + " BEGIN "
+                + "   UPDATE " + Tables.CONTACTS
+                + "     SET " + Contacts.DIRTY + "=1"
+                + "     WHERE " + Contacts._ID + "=OLD." + Contacts._ID + ";"
+                + "   DELETE FROM " + Tables.PHONE_LOOKUP
+                + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
+                + " END");
 
         // Private phone numbers table used for lookup
         db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +

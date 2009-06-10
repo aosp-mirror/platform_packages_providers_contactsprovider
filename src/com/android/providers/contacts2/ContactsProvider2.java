@@ -248,6 +248,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Data.MIMETYPE, Data.MIMETYPE);
         columns.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
         columns.put(Data.IS_SUPER_PRIMARY, Data.IS_SUPER_PRIMARY);
+        columns.put(Data.DATA_VERSION, Data.DATA_VERSION);
         columns.put(Data.DATA1, "data.data1 as data1");
         columns.put(Data.DATA2, "data.data2 as data2");
         columns.put(Data.DATA3, "data.data3 as data3");
@@ -501,18 +502,21 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case CONTACTS: {
-                id = insertContact(values);
+                final Account account = readAccountFromQueryParams(uri);
+                id = insertContact(values, account);
                 break;
             }
 
             case CONTACTS_DATA: {
+                final Account account = readAccountFromQueryParams(uri);
                 values.put(Data.CONTACT_ID, uri.getPathSegments().get(1));
-                id = insertData(values);
+                id = insertData(values, account);
                 break;
             }
 
             case DATA: {
-                id = insertData(values);
+                final Account account = readAccountFromQueryParams(uri);
+                id = insertData(values, account);
                 break;
             }
 
@@ -564,9 +568,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
      * Inserts an item in the contacts table
      *
      * @param values the values for the new row
+     * @param account the account this contact should be associated with. may be null.
      * @return the row ID of the newly created row
      */
-    private long insertContact(ContentValues values) {
+    private long insertContact(ContentValues values, Account account) {
         /*
          * The contact record is inserted in the contacts table, but it needs to
          * be processed by the aggregator before it will be returned by the
@@ -576,7 +581,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         ContentValues overriddenValues = new ContentValues(values);
         overriddenValues.putNull(Contacts.AGGREGATE_ID);
-        if (!resolveAccount(overriddenValues)) {
+        if (!resolveAccount(overriddenValues, account)) {
             return -1;
         }
 
@@ -588,20 +593,29 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * If an account name or type is specified in values then create an Account from it
-     * and look up the Accounts rowId that corresponds to the Account. Then insert
+     * If an account name or type is specified in values then create an Account from it or
+     * use the account that is passed in, if account is non-null, then look up the Accounts
+     * rowId that corresponds to the Account. Then insert
      * the Accounts rowId into the values with key {@link Contacts#ACCOUNTS_ID}. Remove any
      * value for {@link Accounts#NAME} or {@link Accounts#TYPE} from the values.
      * @param values the ContentValues to read from and update
+     * @param account the Account to resolve. may be null.
      * @return false if an account was present in the values that is not in the Accounts table
      */
-    private boolean resolveAccount(ContentValues values) {
+    private boolean resolveAccount(ContentValues values, Account account) {
         // If an account name and type is specified then resolve it into an accounts_id.
         // If either is specified then both must be specified.
         final String accountName = values.getAsString(Accounts.NAME);
         final String accountType = values.getAsString(Accounts.TYPE);
         if (!TextUtils.isEmpty(accountName) || !TextUtils.isEmpty(accountType)) {
-            final Account account = new Account(accountName, accountType);
+            final Account valuesAccount = new Account(accountName, accountType);
+            if (account != null && !valuesAccount.equals(account)) {
+                throw new IllegalArgumentException("account in params doesn't match account in "
+                        + "values: " + account + "!=" + valuesAccount);
+            }
+            account = valuesAccount;
+        }
+        if (account != null) {
             final Long accountId = readAccountByName(account, true /* refreshIfNotFound */);
             if (accountId == null) {
                 // an invalid account was passed in or the account was deleted after this
@@ -619,9 +633,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
      * Inserts an item in the data table
      *
      * @param values the values for the new row
+     * @param account the account this data row should be associated with. may be null.
      * @return the row ID of the newly created row
      */
-    private long insertData(ContentValues values) {
+    private long insertData(ContentValues values, Account account) {
         boolean success = false;
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
@@ -632,6 +647,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             // requested by this insert.
 
             long contactId = values.getAsLong(Data.CONTACT_ID);
+
+            // TODO: reject this request if the contact is not associated with the
+            // provided account. Also check that the caller has permission to touch
+            // rows with this account type.
 
             // Replace package name and mime-type with internal mappings
             final String packageName = values.getAsString(Data.PACKAGE);
@@ -870,6 +889,15 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         }
     }
 
+    private static Account readAccountFromQueryParams(Uri uri) {
+        final String name = uri.getQueryParameter(Accounts.NAME);
+        final String type = uri.getQueryParameter(Accounts.TYPE);
+        if (TextUtils.isEmpty(name) || TextUtils.isEmpty(type)) {
+            return null;
+        }
+        return new Account(name, type);
+    }
+
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         int count = 0;
@@ -949,7 +977,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
                 if (values.size() > 0) {
                     String selectionWithId = (Data._ID + " = " + ContentUris.parseId(uri) + " ")
-                    + (selection == null ? "" : " AND " + selection);
+                            + (selection == null ? "" : " AND " + selection);
                     count = db.update(Tables.DATA, values, selectionWithId, selectionArgs);
                 }
                 break;
@@ -1249,6 +1277,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             Contacts.Data.MIMETYPE,
             Contacts.Data.DATA1,
             Contacts.Data.DATA2,
+            Contacts.Data.DATA3,
             Contacts.Data.DATA4,
             Contacts.Data.DATA5,
             Contacts.Data.DATA6,
@@ -1256,16 +1285,20 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             Contacts.Data.DATA8,
             Contacts.Data.DATA9,
             Contacts.Data.DATA10,
-            Contacts.Data.CONTACT_ID};
+            Contacts.Data.CONTACT_ID,
+            Contacts.Data.IS_PRIMARY,
+            Contacts.Data.DATA_VERSION};
 
         private static final int COLUMN_SOURCE_ID = 1;
+        private static final int COLUMN_VERSION = 2;
         private static final int COLUMN_DIRTY = 3;
         private static final int COLUMN_DATA_ID = 4;
         private static final int COLUMN_PACKAGE = 5;
         private static final int COLUMN_MIMETYPE = 6;
         private static final int COLUMN_DATA1 = 7;
-        private static final int COLUMN_CONTACT_ID = 16;
-
+        private static final int COLUMN_CONTACT_ID = 17;
+        private static final int COLUMN_IS_PRIMARY = 18;
+        private static final int COLUMN_DATA_VERSION = 19;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -1335,6 +1368,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             contactValues.put(Accounts.TYPE, mAccount.mType);
             contactValues.put(Contacts._ID, contactId);
             contactValues.put(Contacts.DIRTY, c.getLong(COLUMN_DIRTY));
+            contactValues.put(Contacts.VERSION, c.getLong(COLUMN_VERSION));
             contactValues.put(Contacts.SOURCE_ID, c.getString(COLUMN_SOURCE_ID));
             Entity contact = new Entity(contactValues);
 
@@ -1347,7 +1381,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 ContentValues dataValues = new ContentValues();
                 dataValues.put(Contacts.Data._ID, c.getString(COLUMN_DATA_ID));
                 dataValues.put(Contacts.Data.PACKAGE, c.getString(COLUMN_PACKAGE));
-                dataValues.put(Contacts.Data.MIMETYPE, c.getLong(COLUMN_MIMETYPE));
+                dataValues.put(Contacts.Data.MIMETYPE, c.getString(COLUMN_MIMETYPE));
+                dataValues.put(Contacts.Data.IS_PRIMARY, c.getString(COLUMN_IS_PRIMARY));
+                dataValues.put(Contacts.Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
                 for (int i = 0; i < 10; i++) {
                     final int columnIndex = i + COLUMN_DATA1;
                     String key = DATA_KEYS[i];
