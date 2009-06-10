@@ -23,19 +23,15 @@ import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.provider.BaseColumns;
-import android.provider.ContactsContract;
-import android.provider.SocialContract.Activities;
 import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.Im.PresenceColumns;
-
+import android.provider.SocialContract.Activities;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -49,7 +45,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 23;
+    private static final int DATABASE_VERSION = 24;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -193,10 +189,6 @@ import java.util.HashMap;
 
     private static OpenHelper sSingleton = null;
 
-    /**
-     * Obtain a singleton instance of {@link OpenHelper}, using the provided
-     * {@link Context} to construct one when needed.
-     */
     public static synchronized OpenHelper getInstance(Context context) {
         if (sSingleton == null) {
             sSingleton = new OpenHelper(context);
@@ -205,10 +197,10 @@ import java.util.HashMap;
     }
 
     /**
-     * Private constructor, callers should obtain an instance through
+     * Private constructor, callers except unit tests should obtain an instance through
      * {@link #getInstance(Context)} instead.
      */
-    private OpenHelper(Context context) {
+    /* package */ OpenHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         Log.i(TAG, "Creating OpenHelper");
     }

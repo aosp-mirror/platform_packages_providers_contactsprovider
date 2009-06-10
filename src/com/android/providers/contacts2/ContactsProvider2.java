@@ -50,6 +50,7 @@ import android.provider.ContactsContract.Accounts;
 import android.provider.Contacts.ContactMethods;
 import android.provider.SocialContract;
 import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -102,6 +103,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final int PRESENCE = 7000;
     private static final int PRESENCE_ID = 7001;
 
+    private static final int AGGREGATION_SUGGESTIONS = 8000;
+
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.CONTACT_ID1
     };
@@ -115,6 +118,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static final int COL_DATA_ID = 0;
     private static final int COL_AGGREGATE_ID = 2;
+
+    /** Default for the maximum number of returned aggregation suggestions. */
+    private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
@@ -170,7 +176,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/data", AGGREGATES_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary", AGGREGATES_SUMMARY);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/#", AGGREGATES_SUMMARY_ID);
-
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/suggestions",
+                AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
@@ -299,6 +306,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private final boolean mAsynchronous;
     private OpenHelper mOpenHelper;
     private static final AccountComparator sAccountComparator = new AccountComparator();
+
     private ContactAggregator mContactAggregator;
 
     public ContactsProvider2() {
@@ -315,12 +323,12 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     @Override
     public boolean onCreate() {
         final Context context = getContext();
-        mOpenHelper = OpenHelper.getInstance(context);
+        mOpenHelper = getOpenHelper(context);
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
         loadAccountsMaps();
 
-        mContactAggregator = new ContactAggregator(context, mAsynchronous);
+        mContactAggregator = new ContactAggregator(context, mAsynchronous, mOpenHelper);
 
         mSetPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA + " SET " + Data.IS_PRIMARY
@@ -330,6 +338,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 + "=(_id=?) WHERE " + sSetSuperPrimaryWhere);
 
         return (db != null);
+    }
+
+    /* Visible for testing */
+    protected OpenHelper getOpenHelper(final Context context) {
+        return OpenHelper.getInstance(context);
     }
 
     @Override
@@ -792,7 +805,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 return -1;
             }
         } finally {
-            if (cursor != null) cursor.close();
+            if (cursor != null) {
+                cursor.close();
+            }
         }
 
         values.put(Presence.DATA_ID, dataId);
@@ -1013,6 +1028,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         } finally {
             c.close();
         }
+
+        mContactAggregator.removeEmptyAggregates(db);
     }
 
     @Override
@@ -1146,7 +1163,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 final String number = uri.getLastPathSegment();
                 final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
                 final StringBuilder tables = new StringBuilder();
-                tables.append("contacts, (SELECT data_id FROM phone_lookup WHERE (phone_lookup.normalized_number GLOB '");
+                tables.append("contacts, (SELECT data_id FROM phone_lookup "
+                        + "WHERE (phone_lookup.normalized_number GLOB '");
                 tables.append(normalizedNumber);
                 tables.append("*')) AS lookup, " + Tables.DATA_JOIN_PACKAGE_MIMETYPE);
                 qb.setTables(tables.toString());
@@ -1169,6 +1187,22 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 qb.setProjectionMap(sAggregationExceptionsProjectionMap);
                 qb.appendWhere("_id = " + ContentUris.parseId(uri));
                 break;
+            }
+
+            case AGGREGATION_SUGGESTIONS: {
+                long aggregateId = Long.parseLong(uri.getPathSegments().get(1));
+                final String maxSuggestionsParam =
+                        uri.getQueryParameter(AggregationSuggestions.MAX_SUGGESTIONS);
+
+                final int maxSuggestions;
+                if (maxSuggestionsParam != null) {
+                    maxSuggestions = Integer.parseInt(maxSuggestionsParam);
+                } else {
+                    maxSuggestions = DEFAULT_MAX_SUGGESTIONS;
+                }
+
+                return mContactAggregator.queryAggregationSuggestions(aggregateId, projection,
+                        sAggregatesProjectionMap, maxSuggestions);
             }
 
             default:
@@ -1369,6 +1403,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
                 long dataId = ContentUris.parseId(uri);
                 return mOpenHelper.getDataMimeType(dataId);
+            case AGGREGATION_EXCEPTIONS: return AggregationExceptions.CONTENT_TYPE;
+            case AGGREGATION_EXCEPTION_ID: return AggregationExceptions.CONTENT_ITEM_TYPE;
+            case AGGREGATION_SUGGESTIONS: return Aggregates.CONTENT_TYPE;
         }
         throw new UnsupportedOperationException("Unknown uri: " + uri);
     }
@@ -1413,5 +1450,4 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         mSetSuperPrimaryStatement.bindLong(3, dataId);
         mSetSuperPrimaryStatement.execute();
     }
-
 }

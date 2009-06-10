@@ -16,15 +16,6 @@
 
 package com.android.providers.contacts2;
 
-import android.provider.ContactsContract.Aggregates;
-import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
@@ -35,15 +26,26 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteQueryBuilder;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Process;
+import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -101,6 +103,8 @@ public class ContactAggregator {
     private static final int COL_AGGREGATE_ID1 = 3;
     private static final int COL_AGGREGATE_ID2 = 4;
 
+    private static final String[] CONTACT_ID_COLUMN = new String[] { Contacts._ID };
+
     // Aggregate contacts if their match score is equal or greater than this threshold
     private static final int SCORE_THRESHOLD_AGGREGATE = 70;
 
@@ -118,7 +122,7 @@ public class ContactAggregator {
     private ContentValues mContentValues = new ContentValues();
 
     // If true, the aggregator is currently in the process of aggregation
-    private boolean mAggregating;
+    private volatile boolean mAggregating;
 
     /**
      * Name matching scores: a matrix by name type vs. lookup type. For example, if
@@ -193,25 +197,43 @@ public class ContactAggregator {
      * Captures the max score and match count for a specific aggregate.  Used in an
      * aggregateId - MatchScore map.
      */
-    private static class MatchScore {
-        int score;
-        int matchCount;
+    private static class MatchScore implements Comparable<MatchScore> {
+        long mAggregateId;
+        int mScore;
+        int mMatchCount;
+
+        public MatchScore(long aggregateId) {
+            this.mAggregateId = aggregateId;
+        }
 
         public void updateScore(int score) {
-            if (this.score == SCORE_NEVER_MATCH) {
+            if (mScore == SCORE_NEVER_MATCH) {
                 return;
             }
 
-            if ((score == SCORE_NEVER_MATCH) || (score > this.score)) {
-                this.score = score;
+            if ((score == SCORE_NEVER_MATCH) || (score > mScore)) {
+                mScore = score;
             }
 
-            matchCount++;
+            mMatchCount++;
+        }
+
+        /**
+         * Descending order of match score.
+         */
+        @Override
+        public int compareTo(MatchScore another) {
+            if (mScore == another.mScore) {
+                return another.mMatchCount - mMatchCount;
+            }
+
+            return another.mScore - mScore;
         }
 
         @Override
         public String toString() {
-            return String.valueOf(score) + "(" + matchCount + ")";
+            return String.valueOf(mAggregateId) + ": "
+                    + String.valueOf(mScore) + "(" + mMatchCount + ")";
         }
     }
 
@@ -221,12 +243,12 @@ public class ContactAggregator {
      * potential matches and then executes the search in bulk.
      */
     private static class NameMatchRequest {
-        String name;
-        int nameLookupType;
+        String mName;
+        int mNameLookupType;
 
         public NameMatchRequest(String name, int nameLookupType) {
-            this.name = name;
-            this.nameLookupType = nameLookupType;
+            mName = name;
+            mNameLookupType = nameLookupType;
         }
     }
 
@@ -235,10 +257,9 @@ public class ContactAggregator {
      * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
      * a delay of {@link #AGGREGATION_DELAY} milliseconds.
      */
-    public ContactAggregator(Context context, boolean asynchronous) {
+    public ContactAggregator(Context context, boolean asynchronous, OpenHelper openHelper) {
         mAsynchronous = asynchronous;
-
-        mOpenHelper = OpenHelper.getInstance(context);
+        mOpenHelper = openHelper;
         if (asynchronous) {
             mHandlerThread = new HandlerThread("ContactAggregator", Process.THREAD_PRIORITY_BACKGROUND);
             mHandlerThread.start();
@@ -263,7 +284,7 @@ public class ContactAggregator {
      * Schedules aggregation pass after a short delay.  This method should be called every time
      * the {@link Contacts#AGGREGATE_ID} field is reset on any record.
      */
-    public synchronized void schedule() {
+    public void schedule() {
         if (mAsynchronous) {
 
             // If we are currently in the process of aggregating - cancel that
@@ -271,6 +292,9 @@ public class ContactAggregator {
 
             // If aggregation has already been requested, cancel the previous request
             mMessageHandler.removeMessages(START_AGGREGATION_MESSAGE_ID);
+
+            // TODO: we need to bound this delay.  If aggregation is delayed by a trickle of
+            // requests, we should run it periodically anyway.
 
             // Schedule aggregation for AGGREGATION_DELAY milliseconds from now
             mMessageHandler.sendEmptyMessageDelayed(START_AGGREGATION_MESSAGE_ID, AGGREGATION_DELAY);
@@ -307,13 +331,11 @@ public class ContactAggregator {
                 db.beginTransaction();
                 try {
                     do {
-                        synchronized (this) {
-                            if (!mAggregating) {
-                                break;
-                            }
-                            aggregateContact(db, c.getInt(0));
-                            db.yieldIfContendedSafely();
+                        if (!mAggregating) {
+                            break;
                         }
+                        aggregateContact(db, c.getInt(0));
+                        db.yieldIfContendedSafely();
                     } while (c.moveToNext());
 
                     removeEmptyAggregates(db);
@@ -333,7 +355,13 @@ public class ContactAggregator {
      */
     public void aggregateContact(long contactId) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        aggregateContact(db, contactId);
+        db.beginTransaction();
+        try {
+            aggregateContact(db, contactId);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     /**
@@ -477,7 +505,7 @@ public class ContactAggregator {
         selection.append(NameLookupColumns.NORMALIZED_NAME);
         selection.append(" IN (");
         for (int i = 0; i < mMatchRequestCount; i++) {
-            DatabaseUtils.appendEscapedSQLString(selection, mMatchRequests.get(i).name);
+            DatabaseUtils.appendEscapedSQLString(selection, mMatchRequests.get(i).mName);
             selection.append(",");
         }
 
@@ -499,8 +527,8 @@ public class ContactAggregator {
                 // Determine which request produced this match
                 for (int i = 0; i < mMatchRequestCount; i++) {
                     NameMatchRequest matchRequest = mMatchRequests.get(i);
-                    if (matchRequest.name.equals(name)) {
-                        updateNameMatchScore(aggregateId, matchRequest.nameLookupType, nameType);
+                    if (matchRequest.mName.equals(name)) {
+                        updateNameMatchScore(aggregateId, matchRequest.mNameLookupType, nameType);
                     }
                 }
             }
@@ -526,7 +554,7 @@ public class ContactAggregator {
     private void updateMatchScore(long aggregateId, int score) {
         MatchScore matchingScore = mScores.get(aggregateId);
         if (matchingScore == null) {
-            matchingScore = new MatchScore();
+            matchingScore = new MatchScore(aggregateId);
             mScores.put(aggregateId, matchingScore);
         }
 
@@ -543,12 +571,12 @@ public class ContactAggregator {
         int maxMatchCount = 0;
         for (Map.Entry<Long, MatchScore> entry : mScores.entrySet()) {
             MatchScore score = entry.getValue();
-            if (score.score >= threshold
-                    && (score.score > maxScore
-                            || (score.score == maxScore && score.matchCount > maxMatchCount))) {
+            if (score.mScore >= threshold
+                    && (score.mScore > maxScore
+                            || (score.mScore == maxScore && score.mMatchCount > maxMatchCount))) {
                 contactId = entry.getKey();
-                maxScore = score.score;
-                maxMatchCount = score.matchCount;
+                maxScore = score.mScore;
+                maxMatchCount = score.mMatchCount;
             }
         }
         return contactId;
@@ -559,8 +587,8 @@ public class ContactAggregator {
             mMatchRequests.add(new NameMatchRequest(name, nameLookupType));
         } else {
             NameMatchRequest request = mMatchRequests.get(mMatchRequestCount);
-            request.name = name;
-            request.nameLookupType = nameLookupType;
+            request.mName = name;
+            request.mNameLookupType = nameLookupType;
         }
         mMatchRequestCount++;
     }
@@ -641,5 +669,104 @@ public class ContactAggregator {
         }
 
         return 0;
+    }
+
+    /**
+     * Finds matching aggregates and returns a cursor on those.
+     */
+    public Cursor queryAggregationSuggestions(long aggregateId, String[] projection,
+            HashMap<String, String> projectionMap, int maxSuggestions) {
+        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+
+        Cursor c;
+
+        // If this method is called in the middle of aggregation pass, we want to pause the
+        // aggregation, but not kill it.
+        db.beginTransaction();
+        try {
+            ArrayList<MatchScore> scores = findMatchingAggregates(db, aggregateId, maxSuggestions);
+            c = queryMatchingAggregates(db, aggregateId, projection, projectionMap, scores);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return c;
+    }
+
+    /**
+     * Loads aggregates with specified IDs and returns them in the order of IDs in the
+     * supplied list.
+     */
+    private Cursor queryMatchingAggregates(final SQLiteDatabase db, long aggregateId, String[] projection,
+            HashMap<String, String> projectionMap, ArrayList<MatchScore> scores) {
+
+        StringBuilder selection = new StringBuilder();
+        selection.append(Aggregates._ID);
+        selection.append(" IN (");
+        for (MatchScore matchScore : scores) {
+            selection.append(matchScore.mAggregateId);
+            selection.append(",");
+        }
+
+        if (!scores.isEmpty()) {
+            // Yank the last comma
+            selection.setLength(selection.length() - 1);
+        }
+        selection.append(")");
+
+        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        qb.setTables(Tables.AGGREGATES);
+        qb.setProjectionMap(projectionMap);
+
+        final Cursor cursor = qb.query(db, projection, selection.toString(), null, null, null,
+                Aggregates._ID);
+
+        ArrayList<Long> sortedAggregateIds = new ArrayList<Long>(scores.size());
+        for (MatchScore matchScore : scores) {
+            sortedAggregateIds.add(matchScore.mAggregateId);
+        }
+
+        Collections.sort(sortedAggregateIds);
+
+        int[] positionMap = new int[scores.size()];
+        for (int i = 0; i < positionMap.length; i++) {
+            long id = scores.get(i).mAggregateId;
+            positionMap[i] = sortedAggregateIds.indexOf(id);
+        }
+
+        return new ReorderingCursorWrapper(cursor, positionMap);
+    }
+
+    /**
+     * Finds aggregates with data matches and returns a list of {@link MatchScore}'s in the
+     * descending order of match score.
+     */
+    private ArrayList<MatchScore> findMatchingAggregates(final SQLiteDatabase db,
+            long aggregateId, int maxSuggestions) {
+
+        mScores.clear();
+        mMatchRequestCount = 0;
+
+        final Cursor c = db.query(Tables.CONTACTS, CONTACT_ID_COLUMN,
+                Contacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long contactId = c.getLong(0);
+                updateMatchScoresBasedOnDataMatches(db, contactId);
+            }
+        } finally {
+            c.close();
+        }
+
+        // We don't want to aggregate an aggregate with itself
+        mScores.remove(aggregateId);
+
+        ArrayList<MatchScore> matches = new ArrayList<MatchScore>(mScores.values());
+        Collections.sort(matches);
+        if (matches.size() > maxSuggestions) {
+            matches = (ArrayList<MatchScore>)matches.subList(0, maxSuggestions);
+        }
+        Log.i(TAG, "SCORES: " + matches);
+        return matches;
     }
 }

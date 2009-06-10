@@ -17,6 +17,7 @@ package com.android.providers.contacts2;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
@@ -28,6 +29,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.ProviderTestCase2;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
+
 
 /**
  * Unit tests for {@link ContactsProvider2} and {@link ContactAggregator}.
@@ -47,7 +49,7 @@ public class ContactsProvider2Test
     // Indicator allowing us to wipe data only once for the entire test suite
     private static Boolean sDataWiped = false;
 
-    private static final String[] aggregationExceptionProjection = new String[] {
+    private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
             AggregationExceptions.CONTACT_ID1,
             AggregationExceptions.CONTACT_ID2
@@ -59,9 +61,20 @@ public class ContactsProvider2Test
      */
     public static class SynchrounousContactsProvider extends ContactsProvider2 {
 
+        private OpenHelper mOpenHelper;
+
         public SynchrounousContactsProvider() {
             super(false);
         }
+
+        @Override
+        protected OpenHelper getOpenHelper(final Context context) {
+            if (mOpenHelper == null) {
+                mOpenHelper = new OpenHelper(context);
+            }
+            return mOpenHelper;
+        }
+
         @Override
         public boolean onCreate() {
             boolean created = super.onCreate();
@@ -97,7 +110,7 @@ public class ContactsProvider2Test
         assertTrue(ContentUris.parseId(resultUri) != 0);
 
         // Refetch the row we have just inserted
-        Cursor c = mResolver.query(resultUri, aggregationExceptionProjection, null, null, null);
+        Cursor c = mResolver.query(resultUri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
 
         assertTrue(c.moveToFirst());
         assertEquals(AggregationExceptions.TYPE_ALWAYS_MATCH, c.getInt(0));
@@ -107,7 +120,7 @@ public class ContactsProvider2Test
         c.close();
 
         // Query with a selection
-        c = mResolver.query(resultUri, aggregationExceptionProjection,
+        c = mResolver.query(resultUri, AGGREGATION_EXCEPTION_PROJECTION,
                 AggregationExceptions.CONTACT_ID1 + "=" + contactId1, null, null);
 
         assertTrue(c.moveToFirst());
@@ -121,7 +134,7 @@ public class ContactsProvider2Test
         mResolver.delete(resultUri, null, null);
 
         // Verify that the row is gone
-        c = mResolver.query(resultUri, aggregationExceptionProjection, null, null, null);
+        c = mResolver.query(resultUri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
         assertFalse(c.moveToFirst());
         c.close();
     }
@@ -239,6 +252,30 @@ public class ContactsProvider2Test
             assertFalse(cursor.moveToFirst());
             cursor.close();
         }
+    }
+
+    public void testAggregationSuggestions() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Johnk", "Smithk");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Johnk", "Smithk");
+
+        insertAggregationException(AggregationExceptions.TYPE_NEVER_MATCH, contactId1, contactId2);
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        long aggregateId2 = queryAggregateId(contactId2);
+
+        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
+        Uri uri = Uri.withAppendedPath(aggregateUri,
+                Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
+        final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
+                null, null, null);
+
+        assertTrue(cursor.moveToNext());
+        long suggestedAggregateId = cursor.getLong(0);
+        assertEquals(aggregateId2, suggestedAggregateId);
+        cursor.close();
     }
 
     private long createContact() {
