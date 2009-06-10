@@ -67,7 +67,7 @@ import java.util.HashMap;
         public static final String PRESENCE = "presence";
 
         public static final String AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE = "aggregates "
-                + "LEFT OUTER JOIN presence ON (aggregate._id = presence.aggregate_id) "
+                + "LEFT OUTER JOIN presence ON (aggregates._id = presence.aggregate_id) "
                 + "LEFT OUTER JOIN data ON (aggregates.primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPE = "data "
@@ -248,7 +248,7 @@ import java.util.HashMap;
                 "UNIQUE(" + Presence.IM_PROTOCOL + ", " + Presence.IM_HANDLE + ", " + Presence.IM_ACCOUNT + ")" +
         ");");
 
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + tableName + " ("
+        db.execSQL("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + Tables.PRESENCE + " ("
                 + Presence.AGGREGATE_ID + ");");
     }
 
