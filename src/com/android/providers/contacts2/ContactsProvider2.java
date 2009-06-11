@@ -19,8 +19,6 @@ package com.android.providers.contacts2;
 import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.Clauses;
 import com.android.providers.contacts2.OpenHelper.DataColumns;
-import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
-import com.android.providers.contacts2.OpenHelper.NameLookupType;
 import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
 
@@ -46,19 +44,17 @@ import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Accounts;
-import android.provider.Contacts.ContactMethods;
 import android.provider.SocialContract;
+import android.provider.Contacts.ContactMethods;
+import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
-import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
-import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -675,11 +671,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
             }
 
-            if (CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                insertStructuredNameLookup(db, id, contactId, values);
-            }
-
-            markContactForAggregation(db, contactId);
+            mContactAggregator.markContactForAggregation(contactId);
 
             db.setTransactionSuccessful();
             success = true;
@@ -692,83 +684,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         }
 
         return id;
-    }
-
-    /**
-     * Inserts various permutations of the contact name into a helper table (name_lookup) to
-     * facilitate aggregation of contacts with slightly different names (e.g. first name and last
-     * name swapped or concatenated.)
-     */
-    private void insertStructuredNameLookup(SQLiteDatabase db, long id, long contactId,
-            ContentValues values) {
-
-        String givenName = values.getAsString(StructuredName.GIVEN_NAME);
-        String familyName = values.getAsString(StructuredName.FAMILY_NAME);
-
-        if (TextUtils.isEmpty(givenName)) {
-            if (TextUtils.isEmpty(familyName)) {
-
-                // Nothing specified - nothing to insert in the lookup table
-                return;
-            }
-
-            insertFamilyNameLookup(db, id, contactId, familyName);
-        } else if (TextUtils.isEmpty(familyName)) {
-            insertGivenNameLookup(db, id, contactId, givenName);
-        } else {
-            insertFullNameLookup(db, id, contactId, givenName, familyName);
-        }
-    }
-
-    /**
-     * Populates the name_lookup table when only the first name is specified.
-     */
-    private void insertGivenNameLookup(SQLiteDatabase db, long id, Long contactId,
-            String givenName) {
-        final String givenNameLc = givenName.toLowerCase();
-        insertNameLookup(db, id, contactId, givenNameLc,
-                NameLookupType.GIVEN_NAME_ONLY);
-    }
-
-    /**
-     * Populates the name_lookup table when only the last name is specified.
-     */
-    private void insertFamilyNameLookup(SQLiteDatabase db, long id, Long contactId,
-            String familyName) {
-        final String familyNameLc = familyName.toLowerCase();
-        insertNameLookup(db, id, contactId, familyNameLc,
-                NameLookupType.FAMILY_NAME_ONLY);
-    }
-
-    /**
-     * Populates the name_lookup table when both the first and last names are specified.
-     */
-    private void insertFullNameLookup(SQLiteDatabase db, long id, Long contactId, String givenName,
-            String familyName) {
-        final String givenNameLc = givenName.toLowerCase();
-        final String familyNameLc = familyName.toLowerCase();
-
-        insertNameLookup(db, id, contactId, givenNameLc + "." + familyNameLc,
-                NameLookupType.FULL_NAME);
-        insertNameLookup(db, id, contactId, familyNameLc + "." + givenNameLc,
-                NameLookupType.FULL_NAME_REVERSE);
-        insertNameLookup(db, id, contactId, givenNameLc + familyNameLc,
-                NameLookupType.FULL_NAME_CONCATENATED);
-        insertNameLookup(db, id, contactId, familyNameLc + givenNameLc,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
-    }
-
-    /**
-     * Inserts a single name permutation into the name_lookup table.
-     */
-    private void insertNameLookup(SQLiteDatabase db, long id, Long contactId, String name,
-            int nameType) {
-        ContentValues values = new ContentValues(4);
-        values.put(NameLookupColumns.DATA_ID, id);
-        values.put(NameLookupColumns.CONTACT_ID, contactId);
-        values.put(NameLookupColumns.NORMALIZED_NAME, name);
-        values.put(NameLookupColumns.NAME_TYPE, nameType);
-        db.insert(Tables.NAME_LOOKUP, NameLookupColumns._ID, values);
     }
 
     /**
@@ -1025,17 +940,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * Marks the specified contact for (re)aggregation.
-     *
-     * @param db a writable database with an open transaction
-     * @param contactId contact ID that needs to be (re)aggregated
-     */
-    private void markContactForAggregation(final SQLiteDatabase db, long contactId) {
-        db.execSQL("UPDATE " + Tables.CONTACTS + " SET " + Contacts.AGGREGATE_ID + " = NULL WHERE "
-                + Contacts._ID + "=" + contactId + ";");
-    }
-
-    /**
      * Applies an aggregation exception by either combining or splitting the contacts
      * referenced by the exception depending on the exception type.
      *
@@ -1050,14 +954,12 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 // Note that we only need to re-aggregate one of the two affected contacts
                 long contactId = c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID1);
 
-                markContactForAggregation(db, contactId);
+                mContactAggregator.markContactForAggregation(contactId);
                 mContactAggregator.aggregateContact(contactId);
             }
         } finally {
             c.close();
         }
-
-        mContactAggregator.removeEmptyAggregates(db);
     }
 
     @Override

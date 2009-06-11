@@ -181,6 +181,7 @@ import java.util.HashMap;
     /** Compiled statements for querying and inserting mappings */
     private SQLiteStatement mMimetypeQuery;
     private SQLiteStatement mPackageQuery;
+    private SQLiteStatement mAggregateIdQuery;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
 
@@ -212,6 +213,8 @@ import java.util.HashMap;
                 + Tables.MIMETYPE + " WHERE " + MimetypeColumns.MIMETYPE + "=?");
         mPackageQuery = db.compileStatement("SELECT " + PackageColumns._ID + " FROM "
                 + Tables.PACKAGE + " WHERE " + PackageColumns.PACKAGE + "=?");
+        mAggregateIdQuery = db.compileStatement("SELECT " + Contacts.AGGREGATE_ID + " FROM "
+                + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPE + "("
                 + MimetypeColumns.MIMETYPE + ") VALUES (?)");
         mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGE + "("
@@ -561,6 +564,20 @@ import java.util.HashMap;
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return null
             return null;
+        }
+    }
+
+    /**
+     * Returns aggregate ID for the given contact or zero if it is NULL.
+     */
+    public long getAggregateId(long contactId) {
+        getReadableDatabase();
+        try {
+            DatabaseUtils.bindObjectToProgram(mAggregateIdQuery, 1, contactId);
+            return mAggregateIdQuery.simpleQueryForLong();
+        } catch (SQLiteDoneException e) {
+            // No valid mapping found, so return -1
+            return 0;
         }
     }
 }

@@ -73,13 +73,17 @@ public class ContactAggregator {
             + Phone.CONTENT_ITEM_TYPE + "','"
             + StructuredName.CONTENT_ITEM_TYPE + "')";
 
-    private static final String[] DATA_JOIN_MIMETYPE_AGGREGATION_COLUMNS = new String[] {
-            MimetypeColumns.MIMETYPE, Data.DATA1, Data.DATA2
+    private static final String[] DATA_JOIN_MIMETYPE_COLUMNS = new String[] {
+            MimetypeColumns.MIMETYPE,
+            Tables.DATA + "." + Data._ID + " AS data_id",
+            Data.DATA1,
+            Data.DATA2
     };
 
     private static final int COL_MIMETYPE = 0;
-    private static final int COL_DATA1 = 1;
-    private static final int COL_DATA2 = 2;
+    private static final int COL_DATA_ID = 1;
+    private static final int COL_DATA1 = 2;
+    private static final int COL_DATA2 = 3;
 
     private static final String[] NAME_LOOKUP_COLUMNS = new String[] {
             Contacts.AGGREGATE_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
@@ -338,8 +342,6 @@ public class ContactAggregator {
                         db.yieldIfContendedSafely();
                     } while (c.moveToNext());
 
-                    removeEmptyAggregates(db);
-
                     db.setTransactionSuccessful();
                 } finally {
                     db.endTransaction();
@@ -365,11 +367,29 @@ public class ContactAggregator {
     }
 
     /**
-     * Removes all aggregates that don't have any constituent contacts.
+     * Marks the specified contact for (re)aggregation.
+     *
+     * @param contactId contact ID that needs to be (re)aggregated
      */
-    public void removeEmptyAggregates(SQLiteDatabase db) {
-        db.execSQL("DELETE FROM " + Tables.AGGREGATES + " WHERE " + Aggregates._ID
-                + " NOT IN (SELECT " + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + ");");
+    public void markContactForAggregation(long contactId) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+
+        long aggregateId = mOpenHelper.getAggregateId(contactId);
+        if (aggregateId != 0) {
+
+            // Clear out the aggregate ID field on the contact
+            db.execSQL("UPDATE " + Tables.CONTACTS + " SET " + Contacts.AGGREGATE_ID
+                    + " = NULL WHERE " + Contacts._ID + "=" + contactId + ";");
+
+            // Clear out data used for aggregation - we will recreate it during aggregation
+            db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+                    + NameLookupColumns.CONTACT_ID + "=" + contactId);
+
+            // Delete the aggregate itself if it no longer has consituent contacts
+            db.execSQL("DELETE FROM " + Tables.AGGREGATES + " WHERE " + Aggregates._ID + "="
+                    + aggregateId + " AND " + Aggregates._ID + " NOT IN (SELECT "
+                    + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + ");");
+        }
     }
 
     /**
@@ -389,6 +409,8 @@ public class ContactAggregator {
             aggregateValues.put(Aggregates.DISPLAY_NAME, "");
             aggregateId = db.insert(Tables.AGGREGATES, Aggregates.DISPLAY_NAME, aggregateValues);
         }
+
+        updateContactAggregationData(db, contactId);
 
         ContentValues contactValues = new ContentValues(1);
         contactValues.put(Contacts.AGGREGATE_ID, aggregateId);
@@ -436,7 +458,7 @@ public class ContactAggregator {
      */
     private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long contactId) {
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
-                DATA_JOIN_MIMETYPE_AGGREGATION_COLUMNS,
+                DATA_JOIN_MIMETYPE_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
                         MIMETYPE_SELECTION_IN_CLAUSE),
                 null, null, null, null);
@@ -591,6 +613,105 @@ public class ContactAggregator {
             request.mNameLookupType = nameLookupType;
         }
         mMatchRequestCount++;
+    }
+
+    /**
+     * Prepares the supplied contact for aggregation with other contacts by (re)computing
+     * match lookup keys.
+     */
+    private void updateContactAggregationData(SQLiteDatabase db, long contactId) {
+        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
+                DATA_JOIN_MIMETYPE_COLUMNS,
+                DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
+                        MIMETYPE_SELECTION_IN_CLAUSE),
+                null, null, null, null);
+
+        try {
+            while (c.moveToNext()) {
+                String mimeType = c.getString(COL_MIMETYPE);
+                long dataId = c.getLong(COL_DATA_ID);
+                String data1 = c.getString(COL_DATA1);
+                String data2 = c.getString(COL_DATA2);
+                if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
+                    insertStructuredNameLookup(db, dataId, contactId, data1, data2);
+                }
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Inserts various permutations of the contact name into a helper table (name_lookup) to
+     * facilitate aggregation of contacts with slightly different names (e.g. first name and last
+     * name swapped or concatenated.)
+     */
+    private void insertStructuredNameLookup(SQLiteDatabase db, long id, long contactId,
+            String givenName, String familyName) {
+        if (TextUtils.isEmpty(givenName)) {
+            if (TextUtils.isEmpty(familyName)) {
+
+                // Nothing specified - nothing to insert in the lookup table
+                return;
+            }
+
+            insertFamilyNameLookup(db, id, contactId, familyName);
+        } else if (TextUtils.isEmpty(familyName)) {
+            insertGivenNameLookup(db, id, contactId, givenName);
+        } else {
+            insertFullNameLookup(db, id, contactId, givenName, familyName);
+        }
+    }
+
+    /**
+     * Populates the name_lookup table when only the first name is specified.
+     */
+    private void insertGivenNameLookup(SQLiteDatabase db, long id, Long contactId,
+            String givenName) {
+        final String givenNameLc = givenName.toLowerCase();
+        insertNameLookup(db, id, contactId, givenNameLc,
+                NameLookupType.GIVEN_NAME_ONLY);
+    }
+
+    /**
+     * Populates the name_lookup table when only the last name is specified.
+     */
+    private void insertFamilyNameLookup(SQLiteDatabase db, long id, Long contactId,
+            String familyName) {
+        final String familyNameLc = familyName.toLowerCase();
+        insertNameLookup(db, id, contactId, familyNameLc,
+                NameLookupType.FAMILY_NAME_ONLY);
+    }
+
+    /**
+     * Populates the name_lookup table when both the first and last names are specified.
+     */
+    private void insertFullNameLookup(SQLiteDatabase db, long id, Long contactId, String givenName,
+            String familyName) {
+        final String givenNameLc = givenName.toLowerCase();
+        final String familyNameLc = familyName.toLowerCase();
+
+        insertNameLookup(db, id, contactId, givenNameLc + "." + familyNameLc,
+                NameLookupType.FULL_NAME);
+        insertNameLookup(db, id, contactId, familyNameLc + "." + givenNameLc,
+                NameLookupType.FULL_NAME_REVERSE);
+        insertNameLookup(db, id, contactId, givenNameLc + familyNameLc,
+                NameLookupType.FULL_NAME_CONCATENATED);
+        insertNameLookup(db, id, contactId, familyNameLc + givenNameLc,
+                NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
+    }
+
+    /**
+     * Inserts a single name permutation into the name_lookup table.
+     */
+    private void insertNameLookup(SQLiteDatabase db, long id, Long contactId, String name,
+            int nameType) {
+        ContentValues values = new ContentValues(4);
+        values.put(NameLookupColumns.DATA_ID, id);
+        values.put(NameLookupColumns.CONTACT_ID, contactId);
+        values.put(NameLookupColumns.NORMALIZED_NAME, name);
+        values.put(NameLookupColumns.NAME_TYPE, nameType);
+        db.insert(Tables.NAME_LOOKUP, NameLookupColumns._ID, values);
     }
 
     /**
