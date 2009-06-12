@@ -1,0 +1,119 @@
+/*
+ * Copyright (C) 2009 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
+ */
+package com.android.providers.contacts2;
+
+import com.ibm.icu4jni.text.CollationAttribute;
+import com.ibm.icu4jni.text.Collator;
+import com.ibm.icu4jni.text.RuleBasedCollator;
+
+/**
+ * Converts a name to a normalized form by removing all non-letter characters and normalizing
+ * UNICODE according to http://unicode.org/unicode/reports/tr15
+ */
+public class NameNormalizer {
+
+    private static final RuleBasedCollator sCompressingCollator;
+    static {
+        sCompressingCollator = (RuleBasedCollator)Collator.getInstance(null);
+        sCompressingCollator.setStrength(Collator.PRIMARY);
+        sCompressingCollator.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
+    }
+
+    private static final RuleBasedCollator sComplexityCollator;
+    static {
+        sComplexityCollator = (RuleBasedCollator)Collator.getInstance(null);
+        sComplexityCollator.setStrength(Collator.TERTIARY);
+        sComplexityCollator.setAttribute(CollationAttribute.CASE_FIRST,
+                CollationAttribute.VALUE_LOWER_FIRST);
+    }
+
+    private static final char[] HEX_DIGITS = new char[]{
+            '0', '1', '2', '3', '4', '5', '6', '7',
+            '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+    };
+
+    private static final char[] FIRST_CHAR = new char[256];
+    private static final char[] SECOND_CHAR = new char[256];
+    static {
+        for (int i = 0; i < 256; i++) {
+            FIRST_CHAR[i] = HEX_DIGITS[(i >> 4) & 0xF];
+            SECOND_CHAR[i] = HEX_DIGITS[i & 0xF];
+        }
+    }
+
+    /**
+     * Converts the supplied name to a string that can be used to perform approximate matching
+     * of names.  It ignores non-letter characters and removes accents.
+     */
+    public static String normalize(String name) {
+        return toHexString(sCompressingCollator.getSortKey(lettersOnly(name)));
+    }
+
+    /**
+     * Compares "complexity" of two names, which is determined by the presence
+     * of mixed case characters, accents and, if all else is equal, length.
+     */
+    public static int compareComplexity(String name1, String name2) {
+        int diff = sComplexityCollator.compare(lettersOnly(name1), lettersOnly(name2));
+        if (diff != 0) {
+            return diff;
+        }
+
+        return name1.length() - name2.length();
+    }
+
+    /**
+     * Returns a string containing just the letters from the original string.
+     */
+    private static String lettersOnly(String name) {
+        char[] letters = name.toCharArray();
+        int length = 0;
+        for (int i = 0; i < letters.length; i++) {
+            final char c = letters[i];
+            if (Character.isLetter(c)) {
+                letters[length++] = c;
+            }
+        }
+
+        if (length != letters.length) {
+            return new String(letters, 0, length);
+        }
+
+        return name;
+    }
+
+    /**
+     * Quickly converts a byte array to a hexadecimal string representation.
+     *
+     * @param array byte array, possibly zero-terminated.
+     */
+    private static String toHexString(byte[] array) {
+        char[] cArray = new char[array.length * 2];
+
+        int j = 0;
+        for (int i = 0; i < array.length; i++) {
+            int index = array[i] & 0xFF;
+            if (index == 0) {
+                break;
+            }
+
+            cArray[j++] = FIRST_CHAR[index];
+            cArray[j++] = SECOND_CHAR[index];
+        }
+
+        return new String(cArray, 0, j);
+    }
+}

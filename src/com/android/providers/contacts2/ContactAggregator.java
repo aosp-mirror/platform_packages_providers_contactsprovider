@@ -134,7 +134,7 @@ public class ContactAggregator {
      * score may be 100. If we are looking for a "nickname" but find
      * "first name", the score may be 50 (see specific scores defined below.)
      */
-    private static int[] scores = new int[NameLookupType.TYPE_COUNT * NameLookupType.TYPE_COUNT];
+    private static int[] sScores = new int[NameLookupType.TYPE_COUNT * NameLookupType.TYPE_COUNT];
 
     /*
      * Note: the reverse names ({@link NameLookupType#FULL_NAME_REVERSE},
@@ -186,7 +186,7 @@ public class ContactAggregator {
      */
     private static void setNameMatchScore(int lookupType, int nameType, int score) {
         int index = nameType * NameLookupType.TYPE_COUNT + lookupType;
-        scores[index] = score;
+        sScores[index] = score;
     }
 
     /**
@@ -194,7 +194,7 @@ public class ContactAggregator {
      */
     private static int getNameMatchScore(int lookupType, int nameType) {
         int index = nameType * NameLookupType.TYPE_COUNT + lookupType;
-        return scores[index];
+        return sScores[index];
     }
 
     /**
@@ -262,6 +262,7 @@ public class ContactAggregator {
     public ContactAggregator(Context context, boolean asynchronous, OpenHelper openHelper) {
         mAsynchronous = asynchronous;
         mOpenHelper = openHelper;
+
         if (asynchronous) {
             mHandlerThread = new HandlerThread("ContactAggregator", Process.THREAD_PRIORITY_BACKGROUND);
             mHandlerThread.start();
@@ -498,22 +499,23 @@ public class ContactAggregator {
     }
 
     private void addMatchRequestsGivenNameOnly(String givenName) {
-        addMatchRequest(givenName.toLowerCase(), NameLookupType.GIVEN_NAME_ONLY);
+        addMatchRequest(NameNormalizer.normalize(givenName), NameLookupType.GIVEN_NAME_ONLY);
     }
 
     private void addMatchRequestsFamilyNameOnly(String familyName) {
-        addMatchRequest(familyName.toLowerCase(), NameLookupType.FAMILY_NAME_ONLY);
+        addMatchRequest(NameNormalizer.normalize(familyName), NameLookupType.FAMILY_NAME_ONLY);
     }
 
     private void addMatchRequestsFullName(String givenName, String familyName) {
-        final String givenNameLc = givenName.toLowerCase();
-        final String familyNameLc = familyName.toLowerCase();
-        addMatchRequest(givenNameLc + "." + familyNameLc, NameLookupType.FULL_NAME);
-        addMatchRequest(familyNameLc + "." + givenNameLc, NameLookupType.FULL_NAME_REVERSE);
-        addMatchRequest(givenNameLc + familyNameLc, NameLookupType.FULL_NAME_CONCATENATED);
-        addMatchRequest(familyNameLc + givenNameLc, NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
-        addMatchRequest(givenNameLc, NameLookupType.GIVEN_NAME_ONLY);
-        addMatchRequest(familyNameLc, NameLookupType.FAMILY_NAME_ONLY);
+
+        final String givenNameN = NameNormalizer.normalize(givenName);
+        final String familyNameN = NameNormalizer.normalize(familyName);
+        addMatchRequest(givenNameN + "." + familyNameN, NameLookupType.FULL_NAME);
+        addMatchRequest(familyNameN + "." + givenNameN, NameLookupType.FULL_NAME_REVERSE);
+        addMatchRequest(givenNameN + familyNameN, NameLookupType.FULL_NAME_CONCATENATED);
+        addMatchRequest(familyNameN + givenNameN, NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
+        addMatchRequest(givenNameN, NameLookupType.GIVEN_NAME_ONLY);
+        addMatchRequest(familyNameN, NameLookupType.FAMILY_NAME_ONLY);
     }
 
     /**
@@ -666,8 +668,8 @@ public class ContactAggregator {
      */
     private void insertGivenNameLookup(SQLiteDatabase db, long id, Long contactId,
             String givenName) {
-        final String givenNameLc = givenName.toLowerCase();
-        insertNameLookup(db, id, contactId, givenNameLc,
+        final String givenNameNorm = NameNormalizer.normalize(givenName);
+        insertNameLookup(db, id, contactId, givenNameNorm,
                 NameLookupType.GIVEN_NAME_ONLY);
     }
 
@@ -676,8 +678,8 @@ public class ContactAggregator {
      */
     private void insertFamilyNameLookup(SQLiteDatabase db, long id, Long contactId,
             String familyName) {
-        final String familyNameLc = familyName.toLowerCase();
-        insertNameLookup(db, id, contactId, familyNameLc,
+        final String familyNameNorm = NameNormalizer.normalize(familyName);
+        insertNameLookup(db, id, contactId, familyNameNorm,
                 NameLookupType.FAMILY_NAME_ONLY);
     }
 
@@ -686,16 +688,16 @@ public class ContactAggregator {
      */
     private void insertFullNameLookup(SQLiteDatabase db, long id, Long contactId, String givenName,
             String familyName) {
-        final String givenNameLc = givenName.toLowerCase();
-        final String familyNameLc = familyName.toLowerCase();
+        final String givenNameNorm = NameNormalizer.normalize(givenName);
+        final String familyNameNorm = NameNormalizer.normalize(familyName);
 
-        insertNameLookup(db, id, contactId, givenNameLc + "." + familyNameLc,
+        insertNameLookup(db, id, contactId, givenNameNorm + "." + familyNameNorm,
                 NameLookupType.FULL_NAME);
-        insertNameLookup(db, id, contactId, familyNameLc + "." + givenNameLc,
+        insertNameLookup(db, id, contactId, familyNameNorm + "." + givenNameNorm,
                 NameLookupType.FULL_NAME_REVERSE);
-        insertNameLookup(db, id, contactId, givenNameLc + familyNameLc,
+        insertNameLookup(db, id, contactId, givenNameNorm + familyNameNorm,
                 NameLookupType.FULL_NAME_CONCATENATED);
-        insertNameLookup(db, id, contactId, familyNameLc + givenNameLc,
+        insertNameLookup(db, id, contactId, familyNameNorm + givenNameNorm,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
     }
 
@@ -749,14 +751,8 @@ public class ContactAggregator {
                 if (bestDisplayName == null) {
                     bestDisplayName = displayName;
                 } else {
-                    int bestLength = bestDisplayName.length();
-                    int length = displayName.length();
-                    if (bestLength < length
-                            || (bestLength == length
-                                    && capitalizationScore(bestDisplayName) <
-                                            capitalizationScore(displayName))) {
+                    if (NameNormalizer.compareComplexity(displayName, bestDisplayName) > 0) {
                         bestDisplayName = displayName;
-                        bestLength = length;
                     }
                 }
             }
@@ -764,30 +760,6 @@ public class ContactAggregator {
             c.close();
         }
         return bestDisplayName;
-    }
-
-    /**
-     * Computes the capitalization score for a given name giving preference to mixed case
-     * display name, e.g. "John Doe" over "john doe" or "JOHN DOE".
-     */
-    private int capitalizationScore(String displayName) {
-        int length = displayName.length();
-        int lc = 0;
-        int uc = 0;
-        for (int i = 0; i < length; i++) {
-            char c = displayName.charAt(i);
-            if (Character.isLowerCase(c)) {
-                lc++;
-            } else if (Character.isUpperCase(c)) {
-                uc++;
-            }
-        }
-
-        if (lc != 0 && uc != 0) {
-            return 1;
-        }
-
-        return 0;
     }
 
     /**

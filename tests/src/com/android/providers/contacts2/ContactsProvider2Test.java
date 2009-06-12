@@ -30,7 +30,6 @@ import android.test.ProviderTestCase2;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
 
-
 /**
  * Unit tests for {@link ContactsProvider2} and {@link ContactAggregator}.
  *
@@ -43,6 +42,8 @@ import android.test.suitebuilder.annotation.LargeTest;
 @LargeTest
 public class ContactsProvider2Test
         extends ProviderTestCase2<ContactsProvider2Test.SynchrounousContactsProvider> {
+
+    private static final String PACKAGE = "ContactsProvider2Test";
 
     private MockContentResolver mResolver;
 
@@ -215,6 +216,16 @@ public class ContactsProvider2Test
         assertAggregated(contactId1, contactId2, "Johng Smithg");
     }
 
+    public void testAggregationOfNormalizedFullNameMatch() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "helene bjorn", null);
+
+        assertAggregated(contactId1, contactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
+    }
+
     public void testAggregationExceptionNeverMatch() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Johnh", "Smithh");
@@ -287,11 +298,14 @@ public class ContactsProvider2Test
     private Uri insertStructuredName(long contactId, String givenName, String familyName) {
         ContentValues values = new ContentValues();
         values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.PACKAGE, PACKAGE);
         values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
-            sb.append(givenName).append(" ");        // TODO Auto-generated method stub
-
+            sb.append(givenName);
+        }
+        if (givenName != null && familyName != null) {
+            sb.append(" ");
         }
         if (familyName != null) {
             sb.append(familyName);
