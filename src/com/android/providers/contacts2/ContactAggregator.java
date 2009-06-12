@@ -225,7 +225,6 @@ public class ContactAggregator {
         /**
          * Descending order of match score.
          */
-        @Override
         public int compareTo(MatchScore another) {
             if (mScore == another.mScore) {
                 return another.mMatchCount - mMatchCount;
@@ -234,7 +233,6 @@ public class ContactAggregator {
             return another.mScore - mScore;
         }
 
-        @Override
         public String toString() {
             return String.valueOf(mAggregateId) + ": "
                     + String.valueOf(mScore) + "(" + mMatchCount + ")";
