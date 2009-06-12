@@ -45,7 +45,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 26;
+    private static final int DATABASE_VERSION = 27;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -138,7 +138,6 @@ import java.util.HashMap;
 
     public interface NameLookupColumns {
         public static final String _ID = BaseColumns._ID;
-        public static final String DATA_ID = "data_id";
         public static final String CONTACT_ID = "contact_id";
         public static final String NORMALIZED_NAME = "normalized_name";
         public static final String NAME_TYPE = "name_type";
@@ -182,8 +181,10 @@ import java.util.HashMap;
     private SQLiteStatement mMimetypeQuery;
     private SQLiteStatement mPackageQuery;
     private SQLiteStatement mAggregateIdQuery;
+    private SQLiteStatement mAggregateIdUpdate;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
+    private SQLiteStatement mNameLookupInsert;
 
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
@@ -215,6 +216,8 @@ import java.util.HashMap;
                 + Tables.PACKAGE + " WHERE " + PackageColumns.PACKAGE + "=?");
         mAggregateIdQuery = db.compileStatement("SELECT " + Contacts.AGGREGATE_ID + " FROM "
                 + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
+        mAggregateIdUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + Contacts.AGGREGATE_ID + "=?" + " WHERE " + Contacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPE + "("
                 + MimetypeColumns.MIMETYPE + ") VALUES (?)");
         mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGE + "("
@@ -225,6 +228,9 @@ import java.util.HashMap;
         mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns.MIMETYPE
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPE + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
+        mNameLookupInsert = db.compileStatement("INSERT INTO " + Tables.NAME_LOOKUP + "("
+                + NameLookupColumns.CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
+                + NameLookupColumns.NORMALIZED_NAME + ") VALUES (?,?,?)");
 
         // Make sure we have an in-memory presence table
         final String tableName = DATABASE_PRESENCE + "." + Tables.PRESENCE;
@@ -384,7 +390,6 @@ import java.util.HashMap;
         // Private name/nickname table used for lookup
         db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                NameLookupColumns.DATA_ID + " INTEGER REFERENCES data(_id) NOT NULL," +
                 NameLookupColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL," +
                 NameLookupColumns.NORMALIZED_NAME + " TEXT NOT NULL," +
                 NameLookupColumns.NAME_TYPE + " INTEGER" +
@@ -393,8 +398,7 @@ import java.util.HashMap;
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.NORMALIZED_NAME + " ASC, " +
                 NameLookupColumns.NAME_TYPE + " ASC, " +
-                NameLookupColumns.CONTACT_ID + ", " +
-                NameLookupColumns.DATA_ID +
+                NameLookupColumns.CONTACT_ID +
         ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
@@ -568,6 +572,16 @@ import java.util.HashMap;
     }
 
     /**
+     * Updates the aggregate ID for the specified contact.
+     */
+    public void setAggregateId(long contactId, long aggregateId) {
+        getWritableDatabase();
+        DatabaseUtils.bindObjectToProgram(mAggregateIdUpdate, 1, aggregateId);
+        DatabaseUtils.bindObjectToProgram(mAggregateIdUpdate, 2, contactId);
+        mAggregateIdUpdate.execute();
+    }
+
+    /**
      * Returns aggregate ID for the given contact or zero if it is NULL.
      */
     public long getAggregateId(long contactId) {
@@ -579,5 +593,16 @@ import java.util.HashMap;
             // No valid mapping found, so return -1
             return 0;
         }
+    }
+
+    /**
+     * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
+     */
+    public void insertNameLookup(long contactId, int lookupType, String name) {
+        getWritableDatabase();
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 1, contactId);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 2, lookupType);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, name);
+        mNameLookupInsert.executeInsert();
     }
 }
