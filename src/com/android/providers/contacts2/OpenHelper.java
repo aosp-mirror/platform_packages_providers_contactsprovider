@@ -16,25 +16,34 @@
 
 package com.android.providers.contacts2;
 
+import android.content.ContentValues;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
+import android.os.Binder;
 import android.provider.BaseColumns;
+import android.provider.SocialContract.Activities;
 import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.RestrictionExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.SocialContract.Activities;
+
 import android.util.Log;
 
 import java.util.HashMap;
+import java.util.LinkedList;
 
 /**
  * Database open helper for contacts and social activity data. Designed as a
@@ -45,7 +54,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 28;
+    private static final int DATABASE_VERSION = 30;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -58,63 +67,55 @@ import java.util.HashMap;
         public static final String PHONE_LOOKUP = "phone_lookup";
         public static final String NAME_LOOKUP = "name_lookup";
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
+        public static final String RESTRICTION_EXCEPTIONS = "rest_exceptions";
 
         public static final String DATA = "data";
         public static final String PRESENCE = "presence";
 
         public static final String AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE = "aggregates "
                 + "LEFT OUTER JOIN presence ON (aggregates._id = presence.aggregate_id) "
-                + "LEFT OUTER JOIN data ON (aggregates.primary_phone_id = data._id)";
+                + "LEFT OUTER JOIN data ON (primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPE = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
 
-        public static final String DATA_JOIN_PACKAGE_MIMETYPE = "data "
-                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
-
-        public static final String DATA_JOIN_PACKAGE_MIMETYPE_CONTACTS = "data "
-                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
-                + "LEFT JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
-
-        public static final String DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "data "
-                + "LEFT OUTER JOIN package ON (data.package_id = package._id) "
+        public static final String DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
-                + "LEFT JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id)";
+
+        public static final String DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES = "data "
+                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
+                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
         public static final String ACTIVITIES = "activities";
 
         public static final String ACTIVITIES_JOIN_MIMETYPE = "activities "
                 + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
 
-        public static final String ACTIVITIES_JOIN_PACKAGE_MIMETYPE = "activities "
-                + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
-                + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
-
-        public static final String ACTIVITIES_JOIN_AGGREGATES_PACKAGE_MIMETYPE = "activities "
-                + "LEFT OUTER JOIN package ON (activities.package_id = package._id) "
+        public static final String ACTIVITIES_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES = "activities "
                 + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id) "
-                + "LEFT JOIN contacts ON (activities.author_contact_id = contacts._id) "
-                + "LEFT JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN contacts ON (activities.author_contact_id = contacts._id) "
+                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
+                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
 
-        public static final String CONTACTS_JOIN_ACCOUNTS = "contacts "
-                + "LEFT OUTER JOIN accounts ON (accounts._id = contacts.accounts_id)";
+        public static final String CONTACTS_JOIN_PACKAGE_ACCOUNTS = "contacts "
+                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
+                + "LEFT OUTER JOIN accounts ON (contacts.accounts_id = accounts._id)";
 
         public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
-                + "LEFT JOIN contacts ON (name_lookup.contact_id = contacts._id)";
+                + "LEFT OUTER JOIN contacts ON (name_lookup.contact_id = contacts._id)";
 
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS = "agg_exceptions "
                 + "INNER JOIN contacts contacts1 "
                 + "ON (agg_exceptions.contact_id1 = contacts1._id) ";
 
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE = "agg_exceptions "
-                + "INNER JOIN contacts contacts1 "
-                + "ON (agg_exceptions.contact_id1 = contacts1._id) "
-                + "INNER JOIN contacts contacts2 "
-                + "ON (agg_exceptions.contact_id2 = contacts2._id) ";
+                + "LEFT OUTER JOIN contacts contacts1 ON (agg_exceptions.contact_id1 = contacts1._id) "
+                + "LEFT OUTER JOIN contacts contacts2 ON (agg_exceptions.contact_id2 = contacts2._id) ";
     }
 
     public interface Clauses {
@@ -125,8 +126,23 @@ import java.util.HashMap;
                 + Email.MIMETYPE + " AND " + Email.DATA + "=?";
     }
 
-    public interface DataColumns {
+    public interface AggregatesColumns {
+        public static final String OPTIMAL_PRIMARY_PHONE_ID = "optimal_phone_id";
+        public static final String OPTIMAL_PRIMARY_PHONE_PACKAGE_ID = "optimal_phone_package_id";
+        public static final String FALLBACK_PRIMARY_PHONE_ID = "fallback_phone_id";
+
+        public static final String OPTIMAL_PRIMARY_EMAIL_ID = "optimal_email_id";
+        public static final String OPTIMAL_PRIMARY_EMAIL_PACKAGE_ID = "optimal_email_package_id";
+        public static final String FALLBACK_PRIMARY_EMAIL_ID = "fallback_email_id";
+
+        public static final String SINGLE_RESTRICTED_PACKAGE_ID = "single_restricted_package_id";
+    }
+
+    public interface ContactsColumns {
         public static final String PACKAGE_ID = "package_id";
+    }
+
+    public interface DataColumns {
         public static final String MIMETYPE_ID = "mimetype_id";
     }
 
@@ -179,6 +195,11 @@ import java.util.HashMap;
         public static final String CONTACT_ID2 = "contact_id2";
     }
 
+    public interface RestrictionExceptionsColumns {
+        public static final String PACKAGE_PROVIDER_ID = "package_provider_id";
+        public static final String PACKAGE_CLIENT_ID = "package_client_id";
+    }
+
     /** In-memory cache of previously found mimetype mappings */
     private HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
@@ -197,6 +218,8 @@ import java.util.HashMap;
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
 
+    private final RestrictionExceptionsCache mCache;
+
     private static OpenHelper sSingleton = null;
 
     public static synchronized OpenHelper getInstance(Context context) {
@@ -213,6 +236,10 @@ import java.util.HashMap;
     /* package */ OpenHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         Log.i(TAG, "Creating OpenHelper");
+
+        mCache = new RestrictionExceptionsCache();
+        mCache.loadFromDatabase(context, getReadableDatabase());
+
     }
 
     @Override
@@ -284,8 +311,13 @@ import java.util.HashMap;
                 Aggregates.TIMES_CONTACTED + " INTEGER," +
                 Aggregates.LAST_TIME_CONTACTED + " INTEGER," +
                 Aggregates.STARRED + " INTEGER," +
-                Aggregates.PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
-                Aggregates.PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
+                AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
+                AggregatesColumns.OPTIMAL_PRIMARY_PHONE_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
+                AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
+                AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
+                AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
+                AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
+                AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 Aggregates.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
                 Aggregates.CUSTOM_RINGTONE_ID + " INTEGER REFERENCES data(_id)" +
         ");");
@@ -293,6 +325,8 @@ import java.util.HashMap;
         // Contacts table
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
                 Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                ContactsColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
+                Contacts.IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.ACCOUNTS_ID + " INTEGER REFERENCES accounts(_id)," +
                 Contacts.SOURCE_ID + " TEXT," +
                 Contacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
@@ -315,7 +349,6 @@ import java.util.HashMap;
         // Public generic data table
         db.execSQL("CREATE TABLE " + Tables.DATA + " (" +
                 Data._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Data.CONTACT_ID + " INTEGER NOT NULL," +
                 Data.IS_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
@@ -399,7 +432,7 @@ import java.util.HashMap;
         db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 NameLookupColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL," +
-                NameLookupColumns.NORMALIZED_NAME + " TEXT NOT NULL," +
+                NameLookupColumns.NORMALIZED_NAME + " TEXT," +
                 NameLookupColumns.NAME_TYPE + " INTEGER" +
         ");");
 
@@ -426,6 +459,15 @@ import java.util.HashMap;
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns.CONTACT_ID2 + ", " +
                 AggregationExceptionColumns.CONTACT_ID1 +
+        ");");
+
+        // Restriction exceptions table
+        db.execSQL("CREATE TABLE " + Tables.RESTRICTION_EXCEPTIONS + " (" +
+                BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                RestrictionExceptions.PACKAGE_PROVIDER + " TEXT NOT NULL, " +
+                RestrictionExceptions.PACKAGE_CLIENT + " TEXT NOT NULL, " +
+                RestrictionExceptionsColumns.PACKAGE_PROVIDER_ID + " INTEGER NOT NULL, " +
+                RestrictionExceptionsColumns.PACKAGE_CLIENT_ID + " INTEGER NOT NULL" +
         ");");
 
         // Activities table
@@ -460,6 +502,7 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
         // Note: we are not dropping agg_exceptions. In case that table's schema changes,
@@ -479,8 +522,21 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
+        db.execSQL("DELETE FROM " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("VACUUM;");
+    }
+
+    /**
+     * Return the {@link ApplicationInfo#uid} for the given package name.
+     */
+    public static int getUidForPackageName(PackageManager pm, String packageName) {
+        try {
+            ApplicationInfo clientInfo = pm.getApplicationInfo(packageName, 0 /* no flags */);
+            return clientInfo.uid;
+        } catch (NameNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -613,4 +669,223 @@ import java.util.HashMap;
         DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, name);
         mNameLookupInsert.executeInsert();
     }
+
+    /**
+     * Add a {@link RestrictionExceptions} record. This will update the
+     * in-memory lookup table, and write to the database when needed. Any
+     * callers should enforce that the {@link Binder#getCallingUid()} has the
+     * authority to grant exceptions.
+     */
+    public void addRestrictionException(Context context, ContentValues values) {
+        final PackageManager pm = context.getPackageManager();
+        final SQLiteDatabase db = this.getWritableDatabase();
+
+        // Read incoming package values and find lookup values
+        final String packageProvider = values.getAsString(RestrictionExceptions.PACKAGE_PROVIDER);
+        final String packageClient = values.getAsString(RestrictionExceptions.PACKAGE_CLIENT);
+        final long packageProviderId = getPackageId(packageProvider);
+        final long packageClientId = getPackageId(packageClient);
+
+        // Find the client UID to update our internal lookup table and write the
+        // exception to our database if we changed the in-memory cache.
+        final int clientUid = getUidForPackageName(pm, packageClient);
+        boolean cacheChanged = mCache.addException(packageProviderId, clientUid);
+        if (cacheChanged) {
+            values.put(RestrictionExceptionsColumns.PACKAGE_PROVIDER_ID, packageProviderId);
+            values.put(RestrictionExceptionsColumns.PACKAGE_CLIENT_ID, packageClientId);
+            values.remove(RestrictionExceptions.ALLOW_ACCESS);
+            db.insert(Tables.RESTRICTION_EXCEPTIONS, null, values);
+        }
+
+    }
+
+    /**
+     * Remove a {@link RestrictionExceptions} record. This will update the
+     * in-memory lookup table, and write to the database when needed. Any
+     * callers should enforce that the {@link Binder#getCallingUid()} has the
+     * authority to revoke exceptions.
+     */
+    public void removeRestrictionException(Context context, ContentValues values) {
+        final PackageManager pm = context.getPackageManager();
+        final SQLiteDatabase db = this.getWritableDatabase();
+
+        // Read incoming package values and find lookup values
+        final String packageProvider = values.getAsString(RestrictionExceptions.PACKAGE_PROVIDER);
+        final String packageClient = values.getAsString(RestrictionExceptions.PACKAGE_CLIENT);
+        final long packageProviderId = getPackageId(packageProvider);
+        final long packageClientId = getPackageId(packageClient);
+
+        // Find the client UID to update our internal lookup table and remove
+        // the exception from our database if we changed the in-memory cache.
+        final int clientUid = getUidForPackageName(pm, packageClient);
+        final boolean cacheChanged = mCache.removeException(packageProviderId, clientUid);
+        if (cacheChanged) {
+            db.delete(Tables.RESTRICTION_EXCEPTIONS,
+                    RestrictionExceptionsColumns.PACKAGE_PROVIDER_ID + "=" + packageProviderId
+                            + " AND " + RestrictionExceptionsColumns.PACKAGE_CLIENT_ID + "="
+                            + packageClientId, null);
+        }
+
+    }
+
+    /**
+     * Return the exception clause that should be used when running {@link Data}
+     * queries that may be impacted by {@link Contacts#IS_RESTRICTED}. Will
+     * return a clause of all of the provider packages that have granted
+     * exceptions to the requested client UID.
+     */
+    public String getRestrictionExceptionClause(int clientUid, String column) {
+        return mCache.getExceptionQueryClause(clientUid, column);
+    }
+
+    /**
+     * Utility class to build a selection query clause that matches a specific
+     * column against any one of the contained values. You must provide any
+     * escaping of the field values yourself.
+     */
+    private static class MatchesClause<T> extends LinkedList<T> {
+        private HashMap<String, String> mCache = new HashMap<String, String>();
+
+        private static final String JOIN_OR = " OR ";
+
+        public synchronized boolean addMatch(T object) {
+            mCache.clear();
+            return super.add(object);
+        }
+
+        public synchronized void removeMatch(T object) {
+            mCache.clear();
+            super.remove(object);
+        }
+
+        /**
+         * Return the query clause that would match the given column string to
+         * any values added through {@link #addMatch(Object)}.
+         */
+        public synchronized String getQueryClause(String column, StringBuilder recycle) {
+            // We maintain an internal cache for each requested column, and only
+            // build the actual value when needed.
+            String queryClause = mCache.get(column);
+            final int size = this.size();
+            if (queryClause == null && size > 0) {
+                recycle.setLength(0);
+                for (int i = 0; i < size; i++) {
+                    recycle.append(column);
+                    recycle.append("=");
+                    recycle.append(this.get(i));
+                    recycle.append(JOIN_OR);
+                }
+
+                // Trim off the last "OR" clause and store cached value.
+                final int length = recycle.length();
+                recycle.delete(length - JOIN_OR.length(), length);
+                queryClause = recycle.toString();
+                mCache.put(column, queryClause);
+            }
+            return queryClause;
+        }
+    }
+
+    /**
+     * Optimized in-memory cache for storing {@link RestrictionExceptions} that
+     * have been read up from database. Helper methods indicate when an
+     * exception change require writing to disk, and build query clauses for a
+     * specific {@link RestrictionExceptions#PACKAGE_CLIENT}.
+     */
+    private static class RestrictionExceptionsCache extends HashMap<Integer, MatchesClause<Long>> {
+        private StringBuilder mBuilder = new StringBuilder();
+
+        private static final String[] PROJ_RESTRICTION_EXCEPTIONS = new String[] {
+                RestrictionExceptionsColumns.PACKAGE_PROVIDER_ID,
+                RestrictionExceptions.PACKAGE_CLIENT,
+        };
+
+        private static final int COL_PACKAGE_PROVIDER_ID = 0;
+        private static final int COL_PACKAGE_CLIENT = 1;
+
+        public void loadFromDatabase(Context context, SQLiteDatabase db) {
+            final PackageManager pm = context.getPackageManager();
+
+            // Load all existing exceptions from our database.
+            Cursor cursor = null;
+            try {
+                cursor = db.query(Tables.RESTRICTION_EXCEPTIONS, PROJ_RESTRICTION_EXCEPTIONS, null,
+                        null, null, null, null);
+                while (cursor.moveToNext()) {
+                    // Read provider and client package details from database
+                    final long packageProviderId = cursor.getLong(COL_PACKAGE_PROVIDER_ID);
+                    final String clientPackage = cursor.getString(COL_PACKAGE_CLIENT);
+
+                    try {
+                        // Create exception entry for this client
+                        final int clientUid = getUidForPackageName(pm, clientPackage);
+                        addException(packageProviderId, clientUid);
+                    } catch (RuntimeException e) {
+                        Log.w(TAG, "Failed to grant restriction exception to " + clientPackage);
+                        continue;
+                    }
+
+                }
+            } finally {
+                if (cursor != null) {
+                    cursor.close();
+                }
+            }
+        }
+
+        /**
+         * Lazily fetch a {@link MatchesClause} instance, creating a new one if
+         * both needed and requested.
+         */
+        private MatchesClause<Long> getLazy(int clientUid, boolean create) {
+            MatchesClause<Long> matchesClause = get(clientUid);
+            if (matchesClause == null && create) {
+                matchesClause = new MatchesClause<Long>();
+                put(clientUid, matchesClause);
+            }
+            return matchesClause;
+        }
+
+        /**
+         * Build a query clause that will allow the restriction exceptions
+         * granted to a specific {@link Binder#getCallingUid()}.
+         */
+        public String getExceptionQueryClause(int clientUid, String column) {
+            MatchesClause<Long> matchesClause = getLazy(clientUid, false);
+            if (matchesClause != null) {
+                return matchesClause.getQueryClause(column, mBuilder);
+            } else {
+                return null;
+            }
+        }
+
+        /**
+         * Add a {@link RestrictionExceptions} into the cache. Returns true if
+         * this action resulted in the cache being changed.
+         */
+        public boolean addException(long packageProviderId, int clientUid) {
+            MatchesClause<Long> matchesClause = getLazy(clientUid, true);
+            if (matchesClause.contains(packageProviderId)) {
+                return false;
+            } else {
+                matchesClause.addMatch(packageProviderId);
+                return true;
+            }
+        }
+
+        /**
+         * Remove a {@link RestrictionExceptions} from the cache. Returns true if
+         * this action resulted in the cache being changed.
+         */
+        public boolean removeException(long packageProviderId, int clientUid) {
+            MatchesClause<Long> matchesClause = getLazy(clientUid, false);
+            if (matchesClause == null || !matchesClause.contains(packageProviderId)) {
+                return false;
+            } else {
+                matchesClause.removeMatch(packageProviderId);
+                return true;
+            }
+        }
+    }
+
 }

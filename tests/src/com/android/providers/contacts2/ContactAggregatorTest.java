@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts2;
 
+import static com.android.providers.contacts2.ContactsActor.PACKAGE_GREY;
+
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -26,6 +28,7 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.test.AndroidTestCase;
 import android.test.ProviderTestCase2;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -40,11 +43,9 @@ import android.test.suitebuilder.annotation.LargeTest;
  * </code>
  */
 @LargeTest
-public class ContactAggregatorTest
-        extends ProviderTestCase2<ContactAggregatorTest.SynchrounousContactsProvider> {
+public class ContactAggregatorTest extends AndroidTestCase {
 
-    private static final String PACKAGE = "ContactsProvider2Test";
-
+    private ContactsActor mActor;
     private MockContentResolver mResolver;
 
     // Indicator allowing us to wipe data only once for the entire test suite
@@ -56,48 +57,15 @@ public class ContactAggregatorTest
             AggregationExceptions.CONTACT_ID
     };
 
-    /**
-     * A version of the {@link ContactAggregatorTest} class that performs aggregation
-     * synchronously and wipes all data at construction time.
-     */
-    public static class SynchrounousContactsProvider extends ContactsProvider2 {
-
-        private OpenHelper mOpenHelper;
-
-        public SynchrounousContactsProvider() {
-            super(false);
-        }
-
-        @Override
-        protected OpenHelper getOpenHelper(final Context context) {
-            if (mOpenHelper == null) {
-                mOpenHelper = new OpenHelper(context);
-            }
-            return mOpenHelper;
-        }
-
-        @Override
-        public boolean onCreate() {
-            boolean created = super.onCreate();
-            synchronized (sDataWiped) {
-                if (!sDataWiped) {
-                    sDataWiped = true;
-                    wipeData();
-                }
-            }
-            return created;
-        }
-    }
-
     public ContactAggregatorTest() {
-        super(SynchrounousContactsProvider.class, ContactsContract.AUTHORITY);
     }
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
-        mResolver = getMockContentResolver();
+        mActor = new ContactsActor(getContext(), PACKAGE_GREY);
+        mResolver = mActor.resolver;
     }
 
     public void testCrudAggregationExceptions() throws Exception {
@@ -335,6 +303,7 @@ public class ContactAggregatorTest
 
     private long createContact() {
         ContentValues values = new ContentValues();
+        values.put(Contacts.PACKAGE, mActor.packageName);
         Uri contactUri = mResolver.insert(Contacts.CONTENT_URI, values);
         return ContentUris.parseId(contactUri);
     }
@@ -342,7 +311,6 @@ public class ContactAggregatorTest
     private Uri insertStructuredName(long contactId, String givenName, String familyName) {
         ContentValues values = new ContentValues();
         values.put(Data.CONTACT_ID, contactId);
-        values.put(Data.PACKAGE, PACKAGE);
         values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
