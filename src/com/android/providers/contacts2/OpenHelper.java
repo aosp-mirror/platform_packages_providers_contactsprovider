@@ -107,13 +107,13 @@ import java.util.HashMap;
                 + "LEFT JOIN contacts ON (name_lookup.contact_id = contacts._id)";
 
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS = "agg_exceptions "
-                + "LEFT INNER JOIN contacts contacts1 "
+                + "INNER JOIN contacts contacts1 "
                 + "ON (agg_exceptions.contact_id1 = contacts1._id) ";
 
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE = "agg_exceptions "
-                + "LEFT INNER JOIN contacts contacts1 "
+                + "INNER JOIN contacts contacts1 "
                 + "ON (agg_exceptions.contact_id1 = contacts1._id) "
-                + "LEFT INNER JOIN contacts contacts2 "
+                + "INNER JOIN contacts contacts2 "
                 + "ON (agg_exceptions.contact_id2 = contacts2._id) ";
     }
 
