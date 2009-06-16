@@ -111,11 +111,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static final int AGGREGATION_SUGGESTIONS = 8000;
 
-    private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
-            AggregationExceptions.CONTACT_ID1
+    private static final String[] CONTACT_PROJECTION = new String[] {
+            Contacts._ID
     };
 
-    private static final int AGGREGATION_EXCEPTION_COL_CONTACT_ID1 = 0;
+    private static final int CONTACT_COLUMN_CONTACT_ID = 0;
 
     private static final String[] PROJ_PRESENCE = new String[] {
             BaseColumns._ID,
@@ -297,8 +297,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns = new HashMap<String, String>();
         columns.put(AggregationExceptionColumns._ID, Tables.AGGREGATION_EXCEPTIONS + "._id AS _id");
         columns.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE);
-        columns.put(AggregationExceptions.CONTACT_ID1, AggregationExceptions.CONTACT_ID1);
-        columns.put(AggregationExceptions.CONTACT_ID2, AggregationExceptions.CONTACT_ID2);
+        columns.put(AggregationExceptions.AGGREGATE_ID,
+                "contacts1." + Contacts.AGGREGATE_ID + " AS " + AggregationExceptions.AGGREGATE_ID);
+        columns.put(AggregationExceptions.CONTACT_ID, AggregationExceptionColumns.CONTACT_ID2);
         sAggregationExceptionsProjectionMap = columns;
 
         sNestedContactIdSelect = "SELECT " + Data.CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
@@ -531,11 +532,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
-            case AGGREGATION_EXCEPTIONS: {
-                id = insertAggregationException(values);
-                break;
-            }
-
             case PRESENCE: {
                 id = insertPresence(values);
                 break;
@@ -702,21 +698,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * Inserts an item in the agg_exceptions table
-     *
-     * @param values the values for the new row
-     * @return the row ID of the newly created row
-     */
-    private long insertAggregationException(ContentValues values) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        final long exceptionId = db.insert(Tables.AGGREGATION_EXCEPTIONS,
-                AggregationExceptionColumns._ID, values);
-        Uri uri = ContentUris.withAppendedId(AggregationExceptions.CONTENT_URI, exceptionId);
-        applyAggregationException(db, uri);
-        return exceptionId;
-    }
-
-    /**
      * Inserts a presence update.
      */
     private long insertPresence(ContentValues values) {
@@ -800,14 +781,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
                 return db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
-            }
-
-            case AGGREGATION_EXCEPTION_ID: {
-                long exceptionId = ContentUris.parseId(uri);
-                final int count = db.delete(Tables.AGGREGATION_EXCEPTIONS,
-                        AggregationExceptionColumns._ID + "=" + exceptionId, null);
-                applyAggregationException(db, uri);
-                return count;
             }
 
             case PRESENCE: {
@@ -931,16 +904,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
-            case AGGREGATION_EXCEPTION_ID: {
-
-                // TODO deal with the case where contact IDs change on the aggregation exception.
-                // In that case we need to redo aggregation for up to four affected contacts.
-                String selectionWithId = (AggregationExceptionColumns._ID + " = "
-                        + ContentUris.parseId(uri) + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.AGGREGATION_EXCEPTIONS, values, selectionWithId,
-                        selectionArgs);
-                applyAggregationException(db, uri);
+            case AGGREGATION_EXCEPTIONS: {
+                count = updateAggregationException(db, values);
                 break;
             }
 
@@ -954,27 +919,67 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         return count;
     }
 
-    /**
-     * Applies an aggregation exception by either combining or splitting the contacts
-     * referenced by the exception depending on the exception type.
-     *
-     * @param db a writable database with an open transaction
-     * @param uri a uri for an existing aggregation exception
-     */
-    private void applyAggregationException(final SQLiteDatabase db, Uri uri) {
-        Cursor c = query(uri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
+    private static class ContactPair {
+        final long contactId1;
+        final long contactId2;
+
+        /**
+         * Constructor that ensures that this.contactId1 &lt; this.contactId2
+         */
+        public ContactPair(long contactId1, long contactId2) {
+            if (contactId1 < contactId2) {
+                this.contactId1 = contactId1;
+                this.contactId2 = contactId2;
+            } else {
+                this.contactId2 = contactId1;
+                this.contactId1 = contactId2;
+            }
+        }
+    }
+
+    private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
+        int exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
+        long aggregateId = values.getAsInteger(AggregationExceptions.AGGREGATE_ID);
+        long contactId = values.getAsInteger(AggregationExceptions.CONTACT_ID);
+
+        // First, we build a list of contactID-contactID pairs for the given aggregate and contact.
+        ArrayList<ContactPair> pairs = new ArrayList<ContactPair>();
+        Cursor c = db.query(Tables.CONTACTS, CONTACT_PROJECTION,
+                Contacts.AGGREGATE_ID + "=" + aggregateId,
+                null, null, null, null);
         try {
-            if (c.moveToFirst()) {
-
-                // Note that we only need to re-aggregate one of the two affected contacts
-                long contactId = c.getLong(AGGREGATION_EXCEPTION_COL_CONTACT_ID1);
-
-                mContactAggregator.markContactForAggregation(contactId);
-                mContactAggregator.aggregateContact(contactId);
+            while (c.moveToNext()) {
+                long aggregatedContactId = c.getLong(CONTACT_COLUMN_CONTACT_ID);
+                pairs.add(new ContactPair(aggregatedContactId, contactId));
             }
         } finally {
             c.close();
         }
+
+        // Now we iterate through all contact pairs to see if we need to insert/delete/update
+        // the corresponding exception
+        ContentValues exceptionValues = new ContentValues(3);
+        exceptionValues.put(AggregationExceptions.TYPE, exceptionType);
+        for (ContactPair pair : pairs) {
+            final String whereClause =
+                    AggregationExceptionColumns.CONTACT_ID1 + "=" + pair.contactId1 + " AND "
+                    + AggregationExceptionColumns.CONTACT_ID2 + "=" + pair.contactId2;
+            if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC) {
+                db.delete(Tables.AGGREGATION_EXCEPTIONS, whereClause, null);
+            } else {
+                exceptionValues.put(AggregationExceptionColumns.CONTACT_ID1, pair.contactId1);
+                exceptionValues.put(AggregationExceptionColumns.CONTACT_ID2, pair.contactId2);
+                db.replace(Tables.AGGREGATION_EXCEPTIONS, AggregationExceptions._ID,
+                        exceptionValues);
+            }
+        }
+
+        mContactAggregator.markContactForAggregation(contactId);
+        mContactAggregator.aggregateContact(contactId);
+
+        // The return value is fake - we just confirm that we made a change, not count actual
+        // rows changed.
+        return 1;
     }
 
     @Override
@@ -1155,15 +1160,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                qb.setTables(Tables.AGGREGATION_EXCEPTIONS);
+                qb.setTables(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS);
                 qb.setProjectionMap(sAggregationExceptionsProjectionMap);
-                break;
-            }
-
-            case AGGREGATION_EXCEPTION_ID: {
-                qb.setTables(Tables.AGGREGATION_EXCEPTIONS);
-                qb.setProjectionMap(sAggregationExceptionsProjectionMap);
-                qb.appendWhere("_id = " + ContentUris.parseId(uri));
                 break;
             }
 

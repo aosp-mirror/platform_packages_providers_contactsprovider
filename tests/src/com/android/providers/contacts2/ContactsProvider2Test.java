@@ -52,8 +52,8 @@ public class ContactsProvider2Test
 
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
-            AggregationExceptions.CONTACT_ID1,
-            AggregationExceptions.CONTACT_ID2
+            AggregationExceptions.AGGREGATE_ID,
+            AggregationExceptions.CONTACT_ID
     };
 
     /**
@@ -102,40 +102,44 @@ public class ContactsProvider2Test
 
     public void testCrudAggregationExceptions() throws Exception {
         long contactId1 = createContact();
+        long aggregateId = queryAggregateId(contactId1);
         long contactId2 = createContact();
 
-        Uri resultUri = insertAggregationException(AggregationExceptions.TYPE_ALWAYS_MATCH,
-                contactId1, contactId2);
-
-        // Parse the URI and confirm that it contains an ID
-        assertTrue(ContentUris.parseId(resultUri) != 0);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId, contactId2);
 
         // Refetch the row we have just inserted
-        Cursor c = mResolver.query(resultUri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
+        Cursor c = mResolver.query(AggregationExceptions.CONTENT_URI,
+                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.AGGREGATE_ID + "="
+                        + aggregateId, null, null);
 
         assertTrue(c.moveToFirst());
-        assertEquals(AggregationExceptions.TYPE_ALWAYS_MATCH, c.getInt(0));
-        assertEquals(contactId1, c.getLong(1));
+        assertEquals(AggregationExceptions.TYPE_KEEP_IN, c.getInt(0));
+        assertEquals(aggregateId, c.getLong(1));
         assertEquals(contactId2, c.getLong(2));
         assertFalse(c.moveToNext());
         c.close();
 
-        // Query with a selection
-        c = mResolver.query(resultUri, AGGREGATION_EXCEPTION_PROJECTION,
-                AggregationExceptions.CONTACT_ID1 + "=" + contactId1, null, null);
+        // Change from TYPE_KEEP_IN to TYPE_KEEP_OUT
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId, contactId2);
+
+        c = mResolver.query(AggregationExceptions.CONTENT_URI,
+                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.AGGREGATE_ID + "="
+                        + aggregateId, null, null);
 
         assertTrue(c.moveToFirst());
-        assertEquals(AggregationExceptions.TYPE_ALWAYS_MATCH, c.getInt(0));
-        assertEquals(contactId1, c.getLong(1));
+        assertEquals(AggregationExceptions.TYPE_KEEP_OUT, c.getInt(0));
+        assertEquals(aggregateId, c.getLong(1));
         assertEquals(contactId2, c.getLong(2));
         assertFalse(c.moveToNext());
         c.close();
 
-        // Delete the same row
-        mResolver.delete(resultUri, null, null);
+        // Delete the rule
+        setAggregationException(AggregationExceptions.TYPE_AUTOMATIC, aggregateId, contactId2);
 
         // Verify that the row is gone
-        c = mResolver.query(resultUri, AGGREGATION_EXCEPTION_PROJECTION, null, null, null);
+        c = mResolver.query(AggregationExceptions.CONTENT_URI,
+                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.AGGREGATE_ID + "="
+                        + aggregateId, null, null);
         assertFalse(c.moveToFirst());
         c.close();
     }
@@ -233,7 +237,8 @@ public class ContactsProvider2Test
         long contactId2 = createContact();
         insertStructuredName(contactId2, "Johnh", "Smithh");
 
-        insertAggregationException(AggregationExceptions.TYPE_NEVER_MATCH, contactId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
+                queryAggregateId(contactId1), contactId2);
 
         assertNotAggregated(contactId1, contactId2);
     }
@@ -248,7 +253,8 @@ public class ContactsProvider2Test
         long aggregateId1 = queryAggregateId(contactId1);
         long aggregateId2 = queryAggregateId(contactId2);
 
-        insertAggregationException(AggregationExceptions.TYPE_ALWAYS_MATCH, contactId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
+                queryAggregateId(contactId1), contactId2);
 
         assertAggregated(contactId1, contactId2, "Johnjx Smithjx");
 
@@ -272,7 +278,8 @@ public class ContactsProvider2Test
         long contactId2 = createContact();
         insertStructuredName(contactId2, "Johnk", "Smithk");
 
-        insertAggregationException(AggregationExceptions.TYPE_NEVER_MATCH, contactId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
+                queryAggregateId(contactId1), contactId2);
 
         long aggregateId1 = queryAggregateId(contactId1);
         long aggregateId2 = queryAggregateId(contactId2);
@@ -318,12 +325,12 @@ public class ContactsProvider2Test
         return resultUri;
     }
 
-    private Uri insertAggregationException(int type, long contactId1, long contactId2) {
+    private void setAggregationException(int type, long aggregateId, long contactId) {
         ContentValues values = new ContentValues();
+        values.put(AggregationExceptions.AGGREGATE_ID, aggregateId);
+        values.put(AggregationExceptions.CONTACT_ID, contactId);
         values.put(AggregationExceptions.TYPE, type);
-        values.put(AggregationExceptions.CONTACT_ID1, contactId1);
-        values.put(AggregationExceptions.CONTACT_ID2, contactId2);
-        return mResolver.insert(AggregationExceptions.CONTENT_URI, values);
+        mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
     }
 
     private Cursor queryContact(long contactId) {

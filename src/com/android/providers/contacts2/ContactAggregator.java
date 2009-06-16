@@ -17,6 +17,7 @@
 package com.android.providers.contacts2;
 
 import com.android.providers.contacts2.ContactMatchScores.MatchScore;
+import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
@@ -96,8 +97,8 @@ public class ContactAggregator {
 
     private static final String[] AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS = new String[]{
             AggregationExceptions.TYPE,
-            AggregationExceptions.CONTACT_ID1,
-            AggregationExceptions.CONTACT_ID2,
+            AggregationExceptionColumns.CONTACT_ID1,
+            AggregationExceptionColumns.CONTACT_ID2,
             "contacts1." + Contacts.AGGREGATE_ID,
             "contacts2." + Contacts.AGGREGATE_ID
     };
@@ -344,14 +345,14 @@ public class ContactAggregator {
             ContactMatchScores scores) {
          final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
                 AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
-                AggregationExceptions.CONTACT_ID1 + "=" + contactId
-                        + " OR " + AggregationExceptions.CONTACT_ID2 + "=" + contactId,
+                AggregationExceptionColumns.CONTACT_ID1 + "=" + contactId
+                        + " OR " + AggregationExceptionColumns.CONTACT_ID2 + "=" + contactId,
                 null, null, null, null);
 
         try {
             while (c.moveToNext()) {
                 int type = c.getInt(COL_TYPE);
-                int score = (type == AggregationExceptions.TYPE_ALWAYS_MATCH
+                int score = (type == AggregationExceptions.TYPE_KEEP_IN
                         ? ContactMatchScores.ALWAYS_MATCH
                         : ContactMatchScores.NEVER_MATCH);
                 long contactId1 = c.getLong(COL_CONTACT_ID1);
