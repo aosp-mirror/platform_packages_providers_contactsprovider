@@ -36,6 +36,7 @@ import android.content.EntityIterator;
 import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -47,6 +48,9 @@ import android.provider.ContactsContract;
 import android.provider.SocialContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.ContactsContract.Accounts;
+import android.provider.Contacts.ContactMethods;
+import android.provider.Contacts.Phones;
+import android.provider.SocialContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -55,6 +59,8 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Postal;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -79,6 +85,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final int AGGREGATES_DATA = 1002;
     private static final int AGGREGATES_SUMMARY = 1003;
     private static final int AGGREGATES_SUMMARY_ID = 1004;
+    private static final int AGGREGATES_SUMMARY_FILTER = 1005;
 
     private static final int CONTACTS = 2002;
     private static final int CONTACTS_ID = 2003;
@@ -87,6 +94,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
+    private static final int PHONES = 3002;
+    private static final int PHONES_FILTER = 3003;
+    private static final int POSTALS = 3004;
 
     private static final int PHONE_LOOKUP = 4000;
 
@@ -172,6 +182,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/data", AGGREGATES_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary", AGGREGATES_SUMMARY);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/#", AGGREGATES_SUMMARY_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/filter/*",
+                AGGREGATES_SUMMARY_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
@@ -182,6 +194,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones", PHONES);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
 
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
@@ -1009,6 +1024,15 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
+            case AGGREGATES_SUMMARY_FILTER: {
+                qb.setTables(Tables.AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE);
+                qb.setProjectionMap(sAggregatesSummaryProjectionMap);
+                if (uri.getPathSegments().size() > 2) {
+                    qb.appendWhere(buildAggregateLookupWhereClause(uri.getLastPathSegment()));
+                }
+                break;
+            }
+
             case AGGREGATES_ID: {
                 qb.setTables(Tables.AGGREGATES);
                 qb.setProjectionMap(sAggregatesProjectionMap);
@@ -1020,6 +1044,30 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Contacts.AGGREGATE_ID + " = " + uri.getPathSegments().get(1));
+                break;
+            }
+
+            case PHONES_FILTER: {
+                qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sDataContactsAggregateProjectionMap);
+                qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                if (uri.getPathSegments().size() > 2) {
+                    qb.appendWhere(" AND " + buildAggregateLookupWhereClause(
+                            uri.getLastPathSegment()));
+                }
+                break;
+            }
+            case PHONES: {
+                qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sDataContactsAggregateProjectionMap);
+                qb.appendWhere(Data.MIMETYPE + " = \"" + Phone.CONTENT_ITEM_TYPE + "\"");
+                break;
+            }
+
+            case POSTALS: {
+                qb.setTables(Tables.DATA_JOIN_AGGREGATES_PACKAGE_MIMETYPE);
+                qb.setProjectionMap(sDataContactsAggregateProjectionMap);
+                qb.appendWhere(Data.MIMETYPE + " = \"" + Postal.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
 
@@ -1388,4 +1436,26 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         mSetSuperPrimaryStatement.bindLong(3, dataId);
         mSetSuperPrimaryStatement.execute();
     }
+
+    private String buildAggregateLookupWhereClause(String filterParam) {
+        StringBuilder filter = new StringBuilder();
+        filter.append(Tables.AGGREGATES);
+        filter.append(".");
+        filter.append(Aggregates._ID);
+        filter.append(" IN (SELECT ");
+        filter.append(Contacts.AGGREGATE_ID);
+        filter.append(" FROM ");
+        filter.append(Tables.CONTACTS);
+        filter.append(" WHERE ");
+        filter.append(Contacts._ID);
+        filter.append(" IN (SELECT  contact_id FROM name_lookup WHERE normalized_name GLOB ");
+        // NOTE: Query parameters won't work here since the SQL compiler
+        // needs to parse the actual string to know that it can use the
+        // index to do a prefix scan.
+        DatabaseUtils.appendEscapedSQLString(filter,
+                filterParam + "*");
+        filter.append("))");
+        return filter.toString();
+    }
+
 }
