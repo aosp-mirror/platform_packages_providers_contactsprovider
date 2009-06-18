@@ -1573,7 +1573,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                     dialNumber.add(s.substring(0, i));
                     dialNumber.add(s.substring(i + 1));
                 }
-                dialNumber.add(String.valueOf(android.R.drawable.sym_action_call));
+                dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
                 dialNumber.add("tel:" + searchClause);
                 dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);  
                 dialNumber.add(null);
@@ -1589,8 +1589,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                     createContact.add(s.substring(0, i));
                     createContact.add(s.substring(i + 1));
                 }
-                // TODO: add a "create contact" icon
-                createContact.add(String.valueOf(android.R.drawable.ic_menu_add));
+                createContact.add(String.valueOf(com.android.internal.R.drawable.create_contact));
                 createContact.add("tel:" + searchClause);
                 createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
                 createContact.add(SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
