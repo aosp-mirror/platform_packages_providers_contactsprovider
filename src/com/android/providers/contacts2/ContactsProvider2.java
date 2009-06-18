@@ -48,9 +48,6 @@ import android.provider.ContactsContract;
 import android.provider.SocialContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.ContactsContract.Accounts;
-import android.provider.Contacts.ContactMethods;
-import android.provider.Contacts.Phones;
-import android.provider.SocialContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -60,7 +57,6 @@ import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Postal;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -950,7 +946,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         try {
             while (c.moveToNext()) {
                 long aggregatedContactId = c.getLong(CONTACT_COLUMN_CONTACT_ID);
-                pairs.add(new ContactPair(aggregatedContactId, contactId));
+                if (aggregatedContactId != contactId) {
+                    pairs.add(new ContactPair(aggregatedContactId, contactId));
+                }
             }
         } finally {
             c.close();

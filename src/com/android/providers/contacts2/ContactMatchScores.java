@@ -17,6 +17,8 @@ package com.android.providers.contacts2;
 
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
 
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,14 +51,14 @@ public class ContactMatchScores {
      */
     static {
         setNameMatchScore(NameLookupType.FULL_NAME,
-                NameLookupType.FULL_NAME, ALWAYS_MATCH);
+                NameLookupType.FULL_NAME, 99);
         setNameMatchScore(NameLookupType.FULL_NAME,
                 NameLookupType.FULL_NAME_REVERSE, 90);
 
         setNameMatchScore(NameLookupType.FULL_NAME_REVERSE,
                 NameLookupType.FULL_NAME, 90);
         setNameMatchScore(NameLookupType.FULL_NAME_REVERSE,
-                NameLookupType.FULL_NAME_REVERSE, ALWAYS_MATCH);
+                NameLookupType.FULL_NAME_REVERSE, 99);
 
         setNameMatchScore(NameLookupType.FULL_NAME_CONCATENATED,
                 NameLookupType.FULL_NAME_CONCATENATED, 80);
@@ -186,7 +188,7 @@ public class ContactMatchScores {
      * if no such aggregate is found.
      */
     public long pickBestMatch(int threshold) {
-        long contactId = -1;
+        long aggregateId = -1;
         int maxScore = 0;
         int maxMatchCount = 0;
         for (Map.Entry<Long, MatchScore> entry : mScores.entrySet()) {
@@ -194,12 +196,12 @@ public class ContactMatchScores {
             if (score.mScore >= threshold
                     && (score.mScore > maxScore
                             || (score.mScore == maxScore && score.mMatchCount > maxMatchCount))) {
-                contactId = entry.getKey();
+                aggregateId = score.mAggregateId;
                 maxScore = score.mScore;
                 maxMatchCount = score.mMatchCount;
             }
         }
-        return contactId;
+        return aggregateId;
     }
 
     /**
@@ -212,5 +214,10 @@ public class ContactMatchScores {
             matches = (ArrayList<MatchScore>)matches.subList(0, maxSuggestions);
         }
         return matches;
+    }
+
+    @Override
+    public String toString() {
+        return pickBestMatches(10).toString();
     }
 }
