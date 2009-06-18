@@ -76,12 +76,21 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
+    private static final String STREQUENT_ORDER_BY = Aggregates.STARRED + " DESC, "
+            + Aggregates.TIMES_CONTACTED + " DESC, "
+            + Aggregates.DISPLAY_NAME + " ASC";
+    private static final String STREQUENT_LIMIT =
+            "(SELECT COUNT(1) FROM " + Tables.AGGREGATES + " WHERE "
+            + Aggregates.STARRED + "=1) + 25";
+
     private static final int AGGREGATES = 1000;
     private static final int AGGREGATES_ID = 1001;
     private static final int AGGREGATES_DATA = 1002;
     private static final int AGGREGATES_SUMMARY = 1003;
     private static final int AGGREGATES_SUMMARY_ID = 1004;
     private static final int AGGREGATES_SUMMARY_FILTER = 1005;
+    private static final int AGGREGATES_SUMMARY_STREQUENT = 1006;
+    private static final int AGGREGATES_SUMMARY_STREQUENT_FILTER = 1007;
 
     private static final int CONTACTS = 2002;
     private static final int CONTACTS_ID = 2003;
@@ -180,6 +189,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/#", AGGREGATES_SUMMARY_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/filter/*",
                 AGGREGATES_SUMMARY_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/strequent/",
+                AGGREGATES_SUMMARY_STREQUENT);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/strequent/filter/*",
+                AGGREGATES_SUMMARY_STREQUENT_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
@@ -222,6 +235,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Aggregates._ID, "aggregates._id AS _id");
         columns.put(Aggregates.DISPLAY_NAME, Aggregates.DISPLAY_NAME);
         columns.put(Aggregates.LAST_TIME_CONTACTED, Aggregates.LAST_TIME_CONTACTED);
+        columns.put(Aggregates.TIMES_CONTACTED, Aggregates.TIMES_CONTACTED);
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
         columns.put(Aggregates.PRIMARY_PHONE_ID, Aggregates.PRIMARY_PHONE_ID);
         columns.put(Aggregates.PRIMARY_EMAIL_ID, Aggregates.PRIMARY_EMAIL_ID);
@@ -234,7 +248,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(CommonDataKinds.Phone.TYPE, CommonDataKinds.Phone.TYPE);
         columns.put(CommonDataKinds.Phone.LABEL, CommonDataKinds.Phone.LABEL);
         columns.put(CommonDataKinds.Phone.NUMBER, CommonDataKinds.Phone.NUMBER);
-        columns.put(Presence.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
+        // TODO figure out how to make the MAX behavior work, probably involving a "group by" clause.
+        //columns.put(Presence.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
+        columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
+
         sAggregatesSummaryProjectionMap = columns;
 
         // Contacts projection map
@@ -266,6 +283,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Data.DATA8, "data.data8 as data8");
         columns.put(Data.DATA9, "data.data9 as data9");
         columns.put(Data.DATA10, "data.data10 as data10");
+        // Mappings used for backwards compatibility.
+        columns.put("number", Phone.NUMBER);
         sDataProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
@@ -984,7 +1003,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
-        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
         String limit = null;
 
@@ -1034,6 +1053,45 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                     qb.appendWhere(buildAggregateLookupWhereClause(uri.getLastPathSegment()));
                 }
                 break;
+            }
+
+            case AGGREGATES_SUMMARY_STREQUENT_FILTER:
+            case AGGREGATES_SUMMARY_STREQUENT: {
+                // Build the first query for starred
+                qb.setTables(Tables.AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE);
+                qb.setProjectionMap(sAggregatesSummaryProjectionMap);
+                if (match == AGGREGATES_SUMMARY_STREQUENT_FILTER
+                        && uri.getPathSegments().size() > 3) {
+                    qb.appendWhere(buildAggregateLookupWhereClause(uri.getLastPathSegment()));
+                }
+                final String starredQuery = qb.buildQuery(projection, Aggregates.STARRED + "=1",
+                        null, null, null, null,
+                        null /* limit */);
+
+                // Build the second query for frequent
+                qb = new SQLiteQueryBuilder();
+                qb.setTables(Tables.AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE);
+                qb.setProjectionMap(sAggregatesSummaryProjectionMap);
+                if (match == AGGREGATES_SUMMARY_STREQUENT_FILTER
+                        && uri.getPathSegments().size() > 3) {
+                    qb.appendWhere(buildAggregateLookupWhereClause(uri.getLastPathSegment()));
+                }
+                final String frequentQuery = qb.buildQuery(projection,
+                        Aggregates.TIMES_CONTACTED + " > 0 AND (" + Aggregates.STARRED
+                        + " = 0 OR " + Aggregates.STARRED + " IS NULL)",
+                        null, null, null, null, null);
+
+                // Put them together
+                final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
+                        STREQUENT_ORDER_BY, STREQUENT_LIMIT);
+                Cursor c = db.rawQueryWithFactory(null, query, null,
+                        Tables.AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE);
+
+                if ((c != null) && !isTemporary()) {
+                    c.setNotificationUri(getContext().getContentResolver(),
+                            ContactsContract.AUTHORITY_URI);
+                }
+                return c;
             }
 
             case AGGREGATES_ID: {
@@ -1444,13 +1502,12 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         filter.append(Tables.CONTACTS);
         filter.append(" WHERE ");
         filter.append(Contacts._ID);
-        filter.append(" IN (SELECT  contact_id FROM name_lookup WHERE normalized_name GLOB ");
+        filter.append(" IN (SELECT  contact_id FROM name_lookup WHERE normalized_name GLOB '");
         // NOTE: Query parameters won't work here since the SQL compiler
         // needs to parse the actual string to know that it can use the
         // index to do a prefix scan.
-        DatabaseUtils.appendEscapedSQLString(filter,
-                filterParam + "*");
-        filter.append("))");
+        filter.append(NameNormalizer.normalize(filterParam) + "*");
+        filter.append("'))");
         return filter.toString();
     }
 
