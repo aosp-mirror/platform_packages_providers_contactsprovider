@@ -40,26 +40,12 @@ public class NameNormalizer {
                 CollationAttribute.VALUE_LOWER_FIRST);
     }
 
-    private static final char[] HEX_DIGITS = new char[]{
-            '0', '1', '2', '3', '4', '5', '6', '7',
-            '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-    };
-
-    private static final char[] FIRST_CHAR = new char[256];
-    private static final char[] SECOND_CHAR = new char[256];
-    static {
-        for (int i = 0; i < 256; i++) {
-            FIRST_CHAR[i] = HEX_DIGITS[(i >> 4) & 0xF];
-            SECOND_CHAR[i] = HEX_DIGITS[i & 0xF];
-        }
-    }
-
     /**
      * Converts the supplied name to a string that can be used to perform approximate matching
      * of names.  It ignores non-letter characters and removes accents.
      */
     public static String normalize(String name) {
-        return toHexString(sCompressingCollator.getSortKey(lettersOnly(name)));
+        return Hex.encodeHex(sCompressingCollator.getSortKey(lettersOnly(name)), true);
     }
 
     /**
@@ -93,27 +79,5 @@ public class NameNormalizer {
         }
 
         return name;
-    }
-
-    /**
-     * Quickly converts a byte array to a hexadecimal string representation.
-     *
-     * @param array byte array, possibly zero-terminated.
-     */
-    private static String toHexString(byte[] array) {
-        char[] cArray = new char[array.length * 2];
-
-        int j = 0;
-        for (int i = 0; i < array.length; i++) {
-            int index = array[i] & 0xFF;
-            if (index == 0) {
-                break;
-            }
-
-            cArray[j++] = FIRST_CHAR[index];
-            cArray[j++] = SECOND_CHAR[index];
-        }
-
-        return new String(cArray, 0, j);
     }
 }

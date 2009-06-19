@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts2;
 
-import com.android.providers.contacts2.ContactMatchScores.MatchScore;
+import com.android.providers.contacts2.ContactMatcher.MatchScore;
 import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
@@ -49,6 +49,8 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 
 
 /**
@@ -111,8 +113,11 @@ public class ContactAggregator {
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { Contacts._ID };
 
-    // Aggregate contacts if their match score is equal or greater than this threshold
+    // Automatically aggregate contacts if their match score is equal or greater than this threshold
     private static final int SCORE_THRESHOLD_AGGREGATE = 70;
+
+    // Suggest to aggregate contacts if their match score is equal or greater than this threshold
+    private static final int SCORE_THRESHOLD_SUGGEST = 50;
 
     private static final int MODE_INSERT_LOOKUP_DATA = 0;
     private static final int MODE_AGGREGATION = 1;
@@ -241,7 +246,7 @@ public class ContactAggregator {
         mAggregating = true;
 
         MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatchScores scores = new ContactMatchScores();
+        ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
@@ -255,7 +260,7 @@ public class ContactAggregator {
                         if (!mAggregating) {
                             break;
                         }
-                        aggregateContact(db, c.getInt(0), candidates, scores, values);
+                        aggregateContact(db, c.getInt(0), candidates, matcher, values);
                         db.yieldIfContendedSafely();
                     } while (c.moveToNext());
 
@@ -274,13 +279,13 @@ public class ContactAggregator {
      */
     public void aggregateContact(long contactId) {
         MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatchScores scores = new ContactMatchScores();
+        ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         db.beginTransaction();
         try {
-            aggregateContact(db, contactId, candidates, scores, values);
+            aggregateContact(db, contactId, candidates, matcher, values);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -318,14 +323,14 @@ public class ContactAggregator {
      * with the highest match score.  If no such aggregate is found, creates a new aggregate.
      */
     /* package */ synchronized void aggregateContact(SQLiteDatabase db, long contactId,
-                MatchCandidateList candidates, ContactMatchScores scores, ContentValues values) {
+                MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
         candidates.clear();
-        scores.clear();
+        matcher.clear();
 
-        updateMatchScoresBasedOnExceptions(db, contactId, scores);
-        updateMatchScoresBasedOnDataMatches(db, contactId, MODE_AGGREGATION, candidates, scores);
+        updateMatchScoresBasedOnExceptions(db, contactId, matcher);
+        updateMatchScoresBasedOnDataMatches(db, contactId, MODE_AGGREGATION, candidates, matcher);
 
-        long aggregateId = scores.pickBestMatch(SCORE_THRESHOLD_AGGREGATE);
+        long aggregateId = matcher.pickBestMatch(SCORE_THRESHOLD_AGGREGATE);
         if (aggregateId == -1) {
             ContentValues aggregateValues = new ContentValues();
             aggregateValues.put(Aggregates.DISPLAY_NAME, "");
@@ -342,7 +347,7 @@ public class ContactAggregator {
      * Computes match scores based on exceptions entered by the user: always match and never match.
      */
     private void updateMatchScoresBasedOnExceptions(SQLiteDatabase db, long contactId,
-            ContactMatchScores scores) {
+            ContactMatcher matcher) {
          final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
                 AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
                 AggregationExceptionColumns.CONTACT_ID1 + "=" + contactId
@@ -353,19 +358,19 @@ public class ContactAggregator {
             while (c.moveToNext()) {
                 int type = c.getInt(COL_TYPE);
                 int score = (type == AggregationExceptions.TYPE_KEEP_IN
-                        ? ContactMatchScores.ALWAYS_MATCH
-                        : ContactMatchScores.NEVER_MATCH);
+                        ? ContactMatcher.ALWAYS_MATCH
+                        : ContactMatcher.NEVER_MATCH);
                 long contactId1 = c.getLong(COL_CONTACT_ID1);
                 long contactId2 = c.getLong(COL_CONTACT_ID2);
                 if (contactId == contactId1) {
                     if (!c.isNull(COL_AGGREGATE_ID2)) {
                         long aggregateId = c.getLong(COL_AGGREGATE_ID2);
-                        scores.updateScore(aggregateId, score);
+                        matcher.updateScore(aggregateId, score);
                     }
                 } else {
                     if (!c.isNull(COL_AGGREGATE_ID1)) {
                         long aggregateId = c.getLong(COL_AGGREGATE_ID1);
-                        scores.updateScore(aggregateId, score);
+                        matcher.updateScore(aggregateId, score);
                     }
                 }
             }
@@ -378,7 +383,7 @@ public class ContactAggregator {
      * Computes scores for aggregates that have matching data rows.
      */
     private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long contactId, int mode,
-            MatchCandidateList candidates, ContactMatchScores scores) {
+            MatchCandidateList candidates, ContactMatcher matcher) {
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
                 DATA_JOIN_MIMETYPE_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
@@ -393,12 +398,16 @@ public class ContactAggregator {
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
                     candidates.clear();
                     addMatchCandidatesStructuredName(data1, data2, mode, candidates);
-                    lookupNameMatches(db, candidates, scores);
+                    lookupNameMatches(db, candidates, matcher);
+                    if (mode == MODE_SUGGESTIONS) {
+                        lookupApproximateNameMatches(db, candidates, matcher);
+                    }
                 }
             }
         } finally {
             c.close();
         }
+
     }
 
     /**
@@ -451,7 +460,7 @@ public class ContactAggregator {
      * Given a list of {@link NameMatchCandidate}'s, finds all matches and computes their scores.
      */
     private void lookupNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
-            ContactMatchScores scores) {
+            ContactMatcher matcher) {
 
         StringBuilder selection = new StringBuilder();
         selection.append(NameLookupColumns.NORMALIZED_NAME);
@@ -467,8 +476,38 @@ public class ContactAggregator {
         selection.append(Contacts.AGGREGATE_ID);
         selection.append(" NOT NULL");
 
+        matchAllCandidates(db, selection.toString(), candidates, matcher, false);
+    }
+
+    /**
+     * Loads name lookup rows for approximate name matching and updates match scores based on that
+     * data.
+     */
+    private void lookupApproximateNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
+            ContactMatcher matcher) {
+        HashSet<String> firstLetters = new HashSet<String>();
+        for (int i = 0; i < candidates.mCount; i++) {
+            final NameMatchCandidate candidate = candidates.mList.get(i);
+            if (candidate.mName.length() >= 2) {
+                String firstLetter = candidate.mName.substring(0, 2);
+                if (!firstLetters.contains(firstLetter)) {
+                    firstLetters.add(firstLetter);
+                    final String selection = "(" + NameLookupColumns.NORMALIZED_NAME + " GLOB '"
+                            + firstLetter + "*') AND " + Contacts.AGGREGATE_ID + " NOT NULL";
+                    matchAllCandidates(db, selection, candidates, matcher, true);
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads all candidate rows from the name lookup table and updates match scores based
+     * on that data.
+     */
+    private void matchAllCandidates(SQLiteDatabase db, String selection,
+            MatchCandidateList candidates, ContactMatcher matcher, boolean approximate) {
         final Cursor c = db.query(Tables.NAME_LOOKUP_JOIN_CONTACTS, NAME_LOOKUP_COLUMNS,
-                selection.toString(), null, null, null, null);
+                selection, null, null, null, null);
 
         try {
             while (c.moveToNext()) {
@@ -479,9 +518,8 @@ public class ContactAggregator {
                 // Determine which candidate produced this match
                 for (int i = 0; i < candidates.mCount; i++) {
                     NameMatchCandidate candidate = candidates.mList.get(i);
-                    if (candidate.mName.equals(name)) {
-                        scores.updateScore(aggregateId, candidate.mLookupType, nameType);
-                    }
+                    matcher.match(aggregateId, candidate.mLookupType, candidate.mName,
+                            nameType, name, approximate);
                 }
             }
         } finally {
@@ -585,8 +623,7 @@ public class ContactAggregator {
         // aggregation, but not kill it.
         db.beginTransaction();
         try {
-            ArrayList<MatchScore> bestMatches =
-                    findMatchingAggregates(db, aggregateId, maxSuggestions);
+            List<MatchScore> bestMatches = findMatchingAggregates(db, aggregateId, maxSuggestions);
             c = queryMatchingAggregates(db, aggregateId, projection, projectionMap, bestMatches);
             db.setTransactionSuccessful();
         } finally {
@@ -601,7 +638,7 @@ public class ContactAggregator {
      */
     private Cursor queryMatchingAggregates(final SQLiteDatabase db, long aggregateId,
             String[] projection, HashMap<String, String> projectionMap,
-            ArrayList<MatchScore> bestMatches) {
+            List<MatchScore> bestMatches) {
 
         StringBuilder selection = new StringBuilder();
         selection.append(Aggregates._ID);
@@ -644,11 +681,11 @@ public class ContactAggregator {
      * Finds aggregates with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
      */
-    private ArrayList<MatchScore> findMatchingAggregates(final SQLiteDatabase db,
+    private List<MatchScore> findMatchingAggregates(final SQLiteDatabase db,
             long aggregateId, int maxSuggestions) {
 
         MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatchScores scores = new ContactMatchScores();
+        ContactMatcher matcher = new ContactMatcher();
 
         final Cursor c = db.query(Tables.CONTACTS, CONTACT_ID_COLUMN,
                 Contacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
@@ -656,17 +693,20 @@ public class ContactAggregator {
             while (c.moveToNext()) {
                 long contactId = c.getLong(0);
                 updateMatchScoresBasedOnDataMatches(db, contactId, MODE_SUGGESTIONS, candidates,
-                        scores);
+                        matcher);
             }
         } finally {
             c.close();
         }
 
         // We don't want to aggregate an aggregate with itself
-        scores.remove(aggregateId);
+        matcher.remove(aggregateId);
 
-        ArrayList<MatchScore> matches = scores.pickBestMatches(maxSuggestions);
-        Log.i(TAG, "SCORES: " + matches);
+        List<MatchScore> matches = matcher.pickBestMatches(maxSuggestions,
+                SCORE_THRESHOLD_SUGGEST);
+
+        // TODO: remove the debug logging
+        Log.i(TAG, "MATCHES: " + matches);
         return matches;
     }
 }

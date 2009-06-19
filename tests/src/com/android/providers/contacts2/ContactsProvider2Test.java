@@ -273,16 +273,30 @@ public class ContactsProvider2Test
 
     public void testAggregationSuggestions() {
         long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnk", "Smithk");
+        insertStructuredName(contactId1, "Duane", null);
 
+        // Exact name match
         long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnk", "Smithk");
-
+        insertStructuredName(contactId2, "Duane", null);
         setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
                 queryAggregateId(contactId1), contactId2);
 
+        // Edit distance == 0.84
+        long contactId3 = createContact();
+        insertStructuredName(contactId3, "Dwayne", null);
+
+        // Edit distance == 0.6
+        long contactId4 = createContact();
+        insertStructuredName(contactId4, "Donny", null);
+
+        // Edit distance == 0.467
+        long contactId5 = createContact();
+        insertStructuredName(contactId5, "Johny", null);
+
         long aggregateId1 = queryAggregateId(contactId1);
         long aggregateId2 = queryAggregateId(contactId2);
+        long aggregateId3 = queryAggregateId(contactId3);
+        long aggregateId4 = queryAggregateId(contactId4);
 
         final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
         Uri uri = Uri.withAppendedPath(aggregateUri,
@@ -290,9 +304,15 @@ public class ContactsProvider2Test
         final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
                 null, null, null);
 
-        assertTrue(cursor.moveToNext());
-        long suggestedAggregateId = cursor.getLong(0);
-        assertEquals(aggregateId2, suggestedAggregateId);
+        assertEquals(3, cursor.getCount());
+
+        cursor.moveToNext();
+        assertEquals(aggregateId2, cursor.getLong(0));
+        cursor.moveToNext();
+        assertEquals(aggregateId3, cursor.getLong(0));
+        cursor.moveToNext();
+        assertEquals(aggregateId4, cursor.getLong(0));
+
         cursor.close();
     }
 
