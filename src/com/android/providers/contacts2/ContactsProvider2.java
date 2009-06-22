@@ -993,6 +993,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         mContactAggregator.markContactForAggregation(contactId);
         mContactAggregator.aggregateContact(contactId);
+        if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
+                || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
+            mContactAggregator.updateAggregateData(aggregateId);
+        }
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.

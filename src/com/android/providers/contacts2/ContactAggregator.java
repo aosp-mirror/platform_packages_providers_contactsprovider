@@ -318,6 +318,12 @@ public class ContactAggregator {
         }
     }
 
+    public void updateAggregateData(long aggregateId) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final ContentValues values = new ContentValues();
+        updateDisplayName(db, aggregateId, values);
+    }
+
     /**
      * Given a specific contact, finds all matching aggregates and chooses the aggregate
      * with the highest match score.  If no such aggregate is found, creates a new aggregate.

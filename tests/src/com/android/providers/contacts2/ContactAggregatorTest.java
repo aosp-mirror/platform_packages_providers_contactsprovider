@@ -31,7 +31,7 @@ import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
- * Unit tests for {@link ContactsProvider2} and {@link ContactAggregator}.
+ * Unit tests for {@link ContactAggregator}.
  *
  * Run the test like this:
  * <code>
@@ -40,8 +40,8 @@ import android.test.suitebuilder.annotation.LargeTest;
  * </code>
  */
 @LargeTest
-public class ContactsProvider2Test
-        extends ProviderTestCase2<ContactsProvider2Test.SynchrounousContactsProvider> {
+public class ContactAggregatorTest
+        extends ProviderTestCase2<ContactAggregatorTest.SynchrounousContactsProvider> {
 
     private static final String PACKAGE = "ContactsProvider2Test";
 
@@ -57,7 +57,7 @@ public class ContactsProvider2Test
     };
 
     /**
-     * A version of the {@link ContactsProvider2Test} class that performs aggregation
+     * A version of the {@link ContactAggregatorTest} class that performs aggregation
      * synchronously and wipes all data at construction time.
      */
     public static class SynchrounousContactsProvider extends ContactsProvider2 {
@@ -89,7 +89,7 @@ public class ContactsProvider2Test
         }
     }
 
-    public ContactsProvider2Test() {
+    public ContactAggregatorTest() {
         super(SynchrounousContactsProvider.class, ContactsContract.AUTHORITY);
     }
 
@@ -230,20 +230,7 @@ public class ContactsProvider2Test
         assertAggregated(contactId1, contactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
     }
 
-    public void testAggregationExceptionNeverMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnh", "Smithh");
-
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnh", "Smithh");
-
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryAggregateId(contactId1), contactId2);
-
-        assertNotAggregated(contactId1, contactId2);
-    }
-
-    public void testAggregationExceptionAlwaysMatch() {
+    public void testAggregationExceptionKeepIn() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Johnj", "Smithj");
 
@@ -271,6 +258,43 @@ public class ContactsProvider2Test
         }
     }
 
+    public void testAggregationExceptionKeepOut() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Johnh", "Smithh");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Johnh", "Smithh");
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
+                queryAggregateId(contactId1), contactId2);
+
+        assertNotAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationExceptionKeepOutCheckUpdatesDisplayName() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Johni", "Smithi");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Johnj", "Smithj");
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
+                queryAggregateId(contactId1), contactId2);
+
+        assertAggregated(contactId1, contactId2, "Johnj Smithj");
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
+                queryAggregateId(contactId1), contactId2);
+
+        assertNotAggregated(contactId1, contactId2);
+
+        String displayName1 = queryDisplayName(queryAggregateId(contactId1));
+        assertEquals("Johni Smithi", displayName1);
+
+        String displayName2 = queryDisplayName(queryAggregateId(contactId2));
+        assertEquals("Johnj Smithj", displayName2);
+    }
+
     public void testAggregationSuggestions() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Duane", null);
@@ -289,14 +313,9 @@ public class ContactsProvider2Test
         long contactId4 = createContact();
         insertStructuredName(contactId4, "Donny", null);
 
-        // Edit distance == 0.467
-        long contactId5 = createContact();
-        insertStructuredName(contactId5, "Johny", null);
-
         long aggregateId1 = queryAggregateId(contactId1);
         long aggregateId2 = queryAggregateId(contactId2);
         long aggregateId3 = queryAggregateId(contactId3);
-        long aggregateId4 = queryAggregateId(contactId4);
 
         final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
         Uri uri = Uri.withAppendedPath(aggregateUri,
@@ -304,14 +323,12 @@ public class ContactsProvider2Test
         final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
                 null, null, null);
 
-        assertEquals(3, cursor.getCount());
+        assertEquals(2, cursor.getCount());
 
         cursor.moveToNext();
         assertEquals(aggregateId2, cursor.getLong(0));
         cursor.moveToNext();
         assertEquals(aggregateId3, cursor.getLong(0));
-        cursor.moveToNext();
-        assertEquals(aggregateId4, cursor.getLong(0));
 
         cursor.close();
     }
