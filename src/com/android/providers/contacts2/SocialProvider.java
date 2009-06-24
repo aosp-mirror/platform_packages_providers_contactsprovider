@@ -326,7 +326,7 @@ public class SocialProvider extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case ACTIVITIES: {
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 break;
             }
@@ -334,7 +334,7 @@ public class SocialProvider extends ContentProvider {
             case ACTIVITIES_ID: {
                 // TODO: enforce that caller has read access to this data
                 long activityId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities._ID + "=" + activityId);
                 break;
@@ -342,7 +342,7 @@ public class SocialProvider extends ContentProvider {
 
             case ACTIVITIES_AUTHORED_BY: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + "=" + contactId);
                 break;
@@ -350,7 +350,7 @@ public class SocialProvider extends ContentProvider {
 
             case AGGREGATE_STATUS_ID: {
                 long aggId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
 
                 // Latest status of an aggregate is any top-level status

@@ -22,6 +22,8 @@ import com.android.providers.contacts2.OpenHelper.Clauses;
 import com.android.providers.contacts2.OpenHelper.ContactsColumns;
 import com.android.providers.contacts2.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts2.OpenHelper.DataColumns;
+import com.android.providers.contacts2.OpenHelper.GroupsColumns;
+import com.android.providers.contacts2.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
 
@@ -40,6 +42,7 @@ import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -57,9 +60,12 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RestrictionExceptions;
 import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Postal;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -128,25 +134,53 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private static final int RESTRICTION_EXCEPTIONS = 9000;
 
-    private static final String[] CONTACT_PROJECTION = new String[] {
-            Contacts._ID
-    };
+    private static final int GROUPS = 10000;
+    private static final int GROUPS_ID = 10001;
+    private static final int GROUPS_SUMMARY = 10003;
 
-    private static final int CONTACT_COLUMN_CONTACT_ID = 0;
+    private interface Projections {
+        public static final String[] PROJ_CONTACTS = new String[] {
+            ContactsColumns.CONCRETE_ID,
+        };
 
-    private static final String[] PROJ_DATA_CONTACTS = new String[] {
-            Tables.DATA + "." + Data._ID,
-            Contacts.AGGREGATE_ID,
-            ContactsColumns.PACKAGE_ID,
-            Contacts.IS_RESTRICTED,
-            Data.MIMETYPE,
-    };
+        public static final String[] PROJ_DATA_CONTACTS = new String[] {
+                ContactsColumns.CONCRETE_ID,
+                DataColumns.CONCRETE_ID,
+                Contacts.AGGREGATE_ID,
+                ContactsColumns.PACKAGE_ID,
+                Contacts.IS_RESTRICTED,
+                Data.MIMETYPE,
+        };
 
-    private static final int COL_DATA_ID = 0;
-    private static final int COL_AGGREGATE_ID = 1;
-    private static final int COL_PACKAGE_ID = 2;
-    private static final int COL_IS_RESTRICTED = 3;
-    private static final int COL_MIMETYPE = 4;
+        public static final int COL_CONTACT_ID = 0;
+        public static final int COL_DATA_ID = 1;
+        public static final int COL_AGGREGATE_ID = 2;
+        public static final int COL_PACKAGE_ID = 3;
+        public static final int COL_IS_RESTRICTED = 4;
+        public static final int COL_MIMETYPE = 5;
+
+        public static final String[] PROJ_DATA_AGGREGATES = new String[] {
+            ContactsColumns.CONCRETE_ID,
+                DataColumns.CONCRETE_ID,
+                AggregatesColumns.CONCRETE_ID,
+                MimetypesColumns.CONCRETE_ID,
+                Phone.NUMBER,
+                Email.DATA,
+                AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID,
+                AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID,
+                AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID,
+                AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID,
+        };
+
+        public static final int COL_MIMETYPE_ID = 3;
+        public static final int COL_PHONE_NUMBER = 4;
+        public static final int COL_EMAIL_DATA = 5;
+        public static final int COL_OPTIMAL_PHONE_ID = 6;
+        public static final int COL_FALLBACK_PHONE_ID = 7;
+        public static final int COL_OPTIMAL_EMAIL_ID = 8;
+        public static final int COL_FALLBACK_EMAIL_ID = 9;
+
+    }
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
@@ -167,6 +201,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final HashMap<String, String> sDataContactsAccountsProjectionMap;
     /** Contains just the key and value columns */
     private static final HashMap<String, String> sAccountsProjectionMap;
+    /** Contains the just the {@link Groups} columns */
+    private static final HashMap<String, String> sGroupsProjectionMap;
+    /** Contains {@link Groups} columns along with summary details */
+    private static final HashMap<String, String> sGroupsSummaryProjectionMap;
     /** Contains the just the agg_exceptions columns */
     private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
     /** Contains the just the {@link RestrictionExceptions} columns */
@@ -227,6 +265,10 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
 
+        matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
+        matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "groups_summary", GROUPS_SUMMARY);
+
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
                 AGGREGATION_EXCEPTIONS);
@@ -259,6 +301,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Aggregates.LAST_TIME_CONTACTED, Aggregates.LAST_TIME_CONTACTED);
         columns.put(Aggregates.TIMES_CONTACTED, Aggregates.TIMES_CONTACTED);
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
+        columns.put(Aggregates.IN_VISIBLE_GROUP, Aggregates.IN_VISIBLE_GROUP);
         columns.put(Aggregates.PRIMARY_PHONE_ID, Aggregates.PRIMARY_PHONE_ID);
         columns.put(Aggregates.PRIMARY_EMAIL_ID, Aggregates.PRIMARY_EMAIL_ID);
         columns.put(Aggregates.CUSTOM_RINGTONE, Aggregates.CUSTOM_RINGTONE);
@@ -317,7 +360,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns = new HashMap<String, String>();
         columns.putAll(sContactsProjectionMap);
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
-        columns.put(Data.CONTACT_ID, "data.contact_id");
+        columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
         sDataContactsProjectionMap = columns;
 
         columns = new HashMap<String, String>();
@@ -331,8 +374,35 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.putAll(sAggregatesProjectionMap);
         columns.putAll(sContactsProjectionMap); //
         columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
-        columns.put(Data.CONTACT_ID, "data.contact_id");
+        columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
         sDataContactsAggregateProjectionMap = columns;
+
+        // Groups projection map
+        columns = new HashMap<String, String>();
+        columns.put(Groups._ID, "groups._id AS _id");
+        columns.put(Groups.PACKAGE, Groups.PACKAGE);
+        columns.put(Groups.PACKAGE_ID, GroupsColumns.CONCRETE_PACKAGE_ID);
+        columns.put(Groups.TITLE, Groups.TITLE);
+        columns.put(Groups.TITLE_RESOURCE, Groups.TITLE_RESOURCE);
+        columns.put(Groups.GROUP_VISIBLE, Groups.GROUP_VISIBLE);
+        sGroupsProjectionMap = columns;
+
+        // Contacts and groups projection map
+        columns = new HashMap<String, String>();
+        columns.putAll(sGroupsProjectionMap);
+
+        columns.put(Groups.SUMMARY_COUNT, "(SELECT COUNT(DISTINCT " + AggregatesColumns.CONCRETE_ID
+                + ") FROM " + Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES + " WHERE "
+                + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
+                + ") AS " + Groups.SUMMARY_COUNT);
+
+        columns.put(Groups.SUMMARY_WITH_PHONES, "(SELECT COUNT(DISTINCT "
+                + AggregatesColumns.CONCRETE_ID + ") FROM "
+                + Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES + " WHERE "
+                + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
+                + " AND " + Clauses.HAS_PRIMARY_PHONE + ") AS " + Groups.SUMMARY_WITH_PHONES);
+
+        sGroupsSummaryProjectionMap = columns;
 
         // Aggregate exception projection map
         columns = new HashMap<String, String>();
@@ -586,6 +656,12 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
+            case GROUPS: {
+                final Account account = readAccountFromQueryParams(uri);
+                id = insertGroup(values, account);
+                break;
+            }
+
             case PRESENCE: {
                 id = insertPresence(values);
                 break;
@@ -750,6 +826,153 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
+     * Delete the given {@link Data} row, fixing up any {@link Aggregates}
+     * primaries that reference it.
+     */
+    private int deleteData(long dataId) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+
+        final long mimePhone = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+        final long mimeEmail = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+
+        // Check to see if the data about to be deleted was a super-primary on
+        // the parent aggregate, and set flags to fix-up once deleted.
+        long aggId = -1;
+        long mimeId = -1;
+        String dataRaw = null;
+        boolean fixOptimal = false;
+        boolean fixFallback = false;
+
+        Cursor cursor = null;
+        try {
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES,
+                    Projections.PROJ_DATA_AGGREGATES, DataColumns.CONCRETE_ID + "=" + dataId, null,
+                    null, null, null);
+            if (cursor.moveToFirst()) {
+                aggId = cursor.getLong(Projections.COL_AGGREGATE_ID);
+                mimeId = cursor.getLong(Projections.COL_MIMETYPE_ID);
+                if (mimeId == mimePhone) {
+                    dataRaw = cursor.getString(Projections.COL_PHONE_NUMBER);
+                    fixOptimal = (cursor.getLong(Projections.COL_OPTIMAL_PHONE_ID) == dataId);
+                    fixFallback = (cursor.getLong(Projections.COL_FALLBACK_PHONE_ID) == dataId);
+                } else if (mimeId == mimeEmail) {
+                    dataRaw = cursor.getString(Projections.COL_EMAIL_DATA);
+                    fixOptimal = (cursor.getLong(Projections.COL_OPTIMAL_EMAIL_ID) == dataId);
+                    fixFallback = (cursor.getLong(Projections.COL_FALLBACK_EMAIL_ID) == dataId);
+                }
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+                cursor = null;
+            }
+        }
+
+        // Delete the requested data item.
+        int dataDeleted = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
+
+        // Fix-up any super-primary values that are now invalid.
+        if (fixOptimal || fixFallback) {
+            final ContentValues values = new ContentValues();
+            final StringBuilder scoreClause = new StringBuilder();
+
+            final String SCORE = "score";
+
+            // Build scoring clause that will first pick data items under the
+            // same aggregate that have identical values, otherwise fall back to
+            // normal primary scoring from the member contacts.
+            scoreClause.append("(CASE WHEN ");
+            if (mimeId == mimePhone) {
+                scoreClause.append(Phone.NUMBER);
+            } else if (mimeId == mimeEmail) {
+                scoreClause.append(Email.DATA);
+            }
+            scoreClause.append("=");
+            DatabaseUtils.appendEscapedSQLString(scoreClause, dataRaw);
+            scoreClause.append(" THEN 2 ELSE " + Data.IS_PRIMARY + " END) AS " + SCORE);
+
+            final String[] PROJ_PRIMARY = new String[] {
+                    DataColumns.CONCRETE_ID,
+                    Contacts.IS_RESTRICTED,
+                    ContactsColumns.PACKAGE_ID,
+                    scoreClause.toString(),
+            };
+
+            final int COL_DATA_ID = 0;
+            final int COL_IS_RESTRICTED = 1;
+            final int COL_PACKAGE_ID = 2;
+            final int COL_SCORE = 3;
+
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES, PROJ_PRIMARY,
+                    AggregatesColumns.CONCRETE_ID + "=" + aggId + " AND " + DataColumns.MIMETYPE_ID
+                            + "=" + mimeId, null, null, null, SCORE);
+
+            if (fixOptimal) {
+                String colId = null;
+                String colPackageId = null;
+                if (mimeId == mimePhone) {
+                    colId = AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID;
+                    colPackageId = AggregatesColumns.OPTIMAL_PRIMARY_PHONE_PACKAGE_ID;
+                } else if (mimeId == mimeEmail) {
+                    colId = AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID;
+                    colPackageId = AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_PACKAGE_ID;
+                }
+
+                // Start by replacing with null, since fixOptimal told us that
+                // the previous aggregate values are bad.
+                values.putNull(colId);
+                values.putNull(colPackageId);
+
+                // When finding a new optimal primary, we only care about the
+                // highest scoring value, regardless of source.
+                if (cursor.moveToFirst()) {
+                    final long newOptimal = cursor.getLong(COL_DATA_ID);
+                    final long newOptimalPackage = cursor.getLong(COL_PACKAGE_ID);
+
+                    if (newOptimal != 0) {
+                        values.put(colId, newOptimal);
+                    }
+                    if (newOptimalPackage != 0) {
+                        values.put(colPackageId, newOptimalPackage);
+                    }
+                }
+            }
+
+            if (fixFallback) {
+                String colId = null;
+                if (mimeId == mimePhone) {
+                    colId = AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID;
+                } else if (mimeId == mimeEmail) {
+                    colId = AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID;
+                }
+
+                // Start by replacing with null, since fixFallback told us that
+                // the previous aggregate values are bad.
+                values.putNull(colId);
+
+                // The best fallback value is the highest scoring data item that
+                // hasn't been restricted.
+                cursor.moveToPosition(-1);
+                while (cursor.moveToNext()) {
+                    final boolean isRestricted = (cursor.getInt(COL_IS_RESTRICTED) == 1);
+                    if (!isRestricted) {
+                        values.put(colId, cursor.getLong(COL_DATA_ID));
+                        break;
+                    }
+                }
+            }
+
+            // Push through any aggregate updates we have
+            if (values.size() > 0) {
+                db.update(Tables.AGGREGATES, values, AggregatesColumns.CONCRETE_ID + "=" + aggId,
+                        null);
+            }
+        }
+
+        return dataDeleted;
+    }
+
+    /**
      * Parse the supplied display name, but only if the incoming values do not already contain
      * structured name parts.
      */
@@ -772,6 +995,25 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         values.put(StructuredName.MIDDLE_NAME, name.getMiddleName());
         values.put(StructuredName.FAMILY_NAME, name.getFamilyName());
         values.put(StructuredName.SUFFIX, name.getSuffix());
+    }
+
+    /**
+     * Inserts an item in the groups table
+     */
+    private long insertGroup(ContentValues values, Account account) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+
+        ContentValues overriddenValues = new ContentValues(values);
+        if (!resolveAccount(overriddenValues, account)) {
+            return -1;
+        }
+
+        // Replace package with internal mapping
+        final String packageName = overriddenValues.getAsString(Groups.PACKAGE);
+        overriddenValues.put(Groups.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
+        overriddenValues.remove(Groups.PACKAGE);
+
+        return db.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
     }
 
     /**
@@ -802,11 +1044,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         long aggId = -1;
         Cursor cursor = null;
         try {
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES,
-                    PROJ_DATA_CONTACTS, selection, selectionArgs, null, null, null);
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES,
+                    Projections.PROJ_DATA_CONTACTS, selection, selectionArgs, null, null, null);
             if (cursor.moveToFirst()) {
-                dataId = cursor.getLong(COL_DATA_ID);
-                aggId = cursor.getLong(COL_AGGREGATE_ID);
+                dataId = cursor.getLong(Projections.COL_DATA_ID);
+                aggId = cursor.getLong(Projections.COL_AGGREGATE_ID);
             } else {
                 // No contact found, return a null URI
                 return -1;
@@ -857,7 +1099,19 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                return db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
+                return deleteData(dataId);
+            }
+
+            case GROUPS_ID: {
+                long groupId = ContentUris.parseId(uri);
+                final long groupMembershipMimetypeId = mOpenHelper
+                        .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+                int groupsDeleted = db.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
+                int dataDeleted = db.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
+                        + groupMembershipMimetypeId + " AND " + GroupMembership.GROUP_ROW_ID + "="
+                        + groupId, null);
+                mOpenHelper.updateAllVisible();
+                return groupsDeleted + dataDeleted;
             }
 
             case PRESENCE: {
@@ -877,6 +1131,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         }
         return new Account(name, type);
     }
+
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
@@ -979,6 +1234,26 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 break;
             }
 
+            case GROUPS: {
+                count = db.update(Tables.GROUPS, values, selection, selectionArgs);
+                mOpenHelper.updateAllVisible();
+                break;
+            }
+
+            case GROUPS_ID: {
+                long groupId = ContentUris.parseId(uri);
+                String selectionWithId = (Groups._ID + "=" + groupId + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = db.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
+
+                // If changing visibility, then update aggregates
+                if (values.containsKey(Groups.GROUP_VISIBLE)) {
+                    mOpenHelper.updateAllVisible();
+                }
+
+                break;
+            }
+
             case AGGREGATION_EXCEPTIONS: {
                 count = updateAggregationException(db, values);
                 break;
@@ -1050,11 +1325,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             return 0;
         }
 
-        Cursor c = db.query(Tables.CONTACTS, CONTACT_PROJECTION, Contacts.AGGREGATE_ID + "="
+        Cursor c = db.query(Tables.CONTACTS, Projections.PROJ_CONTACTS, Contacts.AGGREGATE_ID + "="
                 + aggregateId, null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long contactId = c.getLong(CONTACT_COLUMN_CONTACT_ID);
+                long contactId = c.getLong(Projections.COL_CONTACT_ID);
 
                 optionValues.put(ContactOptionsColumns._ID, contactId);
                 db.replace(Tables.CONTACT_OPTIONS, null, optionValues);
@@ -1103,12 +1378,12 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         // First, we build a list of contactID-contactID pairs for the given aggregate and contact.
         ArrayList<ContactPair> pairs = new ArrayList<ContactPair>();
-        Cursor c = db.query(Tables.CONTACTS, CONTACT_PROJECTION,
+        Cursor c = db.query(Tables.CONTACTS, Projections.PROJ_CONTACTS,
                 Contacts.AGGREGATE_ID + "=" + aggregateId,
                 null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long aggregatedContactId = c.getLong(CONTACT_COLUMN_CONTACT_ID);
+                long aggregatedContactId = c.getLong(Projections.COL_CONTACT_ID);
                 if (aggregatedContactId != contactId) {
                     pairs.add(new ContactPair(aggregatedContactId, contactId));
                 }
@@ -1214,7 +1489,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             case AGGREGATES_ID: {
                 long aggId = ContentUris.parseId(uri);
                 qb.setTables(Tables.AGGREGATES);
-                qb.appendWhere(Tables.AGGREGATES + "." + Aggregates._ID + "=" + aggId + " AND ");
+                qb.appendWhere(AggregatesColumns.CONCRETE_ID + "=" + aggId + " AND ");
                 applyAggregateRestrictionExceptions(qb);
                 applyAggregatePrimaryRestrictionExceptions(sAggregatesProjectionMap);
                 qb.setProjectionMap(sAggregatesProjectionMap);
@@ -1236,7 +1511,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 // TODO: join into social status tables
                 long aggId = ContentUris.parseId(uri);
                 qb.setTables(Tables.AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE);
-                qb.appendWhere(Tables.AGGREGATES + "." + Aggregates._ID + "=" + aggId + " AND ");
+                qb.appendWhere(AggregatesColumns.CONCRETE_ID + "=" + aggId + " AND ");
                 applyAggregateRestrictionExceptions(qb);
                 applyAggregatePrimaryRestrictionExceptions(sAggregatesSummaryProjectionMap);
                 projection = assertContained(projection, Aggregates.PRIMARY_PHONE_ID);
@@ -1297,7 +1572,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case AGGREGATES_DATA: {
                 long aggId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Contacts.AGGREGATE_ID + "=" + aggId + " AND ");
                 applyDataRestrictionExceptions(qb);
@@ -1305,7 +1580,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case PHONES_FILTER: {
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
@@ -1314,22 +1589,23 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 }
                 break;
             }
+
             case PHONES: {
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = \"" + Phone.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
 
             case POSTALS: {
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = \"" + Postal.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
 
             case CONTACTS: {
-                qb.setTables(Tables.CONTACTS_JOIN_PACKAGE_ACCOUNTS);
+                qb.setTables(Tables.CONTACTS_JOIN_PACKAGES_ACCOUNTS);
                 qb.setProjectionMap(sContactsProjectionMap);
                 applyContactsRestrictionExceptions(qb);
                 break;
@@ -1337,16 +1613,16 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.CONTACTS_JOIN_PACKAGE_ACCOUNTS);
+                qb.setTables(Tables.CONTACTS_JOIN_PACKAGES_ACCOUNTS);
                 qb.setProjectionMap(sContactsProjectionMap);
-                qb.appendWhere(Tables.CONTACTS + "." + BaseColumns._ID + "=" + contactId + " AND ");
+                qb.appendWhere(ContactsColumns.CONCRETE_ID + "=" + contactId + " AND ");
                 applyContactsRestrictionExceptions(qb);
                 break;
             }
 
             case CONTACTS_DATA: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
                 qb.setProjectionMap(sDataContactsProjectionMap);
                 qb.appendWhere(Data.CONTACT_ID + "=" + contactId + " AND ");
                 applyDataRestrictionExceptions(qb);
@@ -1355,7 +1631,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case CONTACTS_FILTER_EMAIL: {
                 // TODO: filter query based on callingUid
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
                 qb.setProjectionMap(sDataContactsProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + "='" + CommonDataKinds.Email.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
@@ -1375,16 +1651,16 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                     }
                     qb.appendWhere(Contacts.ACCOUNTS_ID + "=" + accountId + " AND ");
                 }
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
                 qb.setProjectionMap(sDataProjectionMap);
                 applyDataRestrictionExceptions(qb);
                 break;
             }
 
             case DATA_ID: {
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere("data._id = " + ContentUris.parseId(uri) + " AND ");
+                qb.appendWhere(DataColumns.CONCRETE_ID + "=" + ContentUris.parseId(uri) + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
             }
@@ -1400,6 +1676,27 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 final String number = uri.getLastPathSegment();
                 OpenHelper.buildPhoneLookupQuery(qb, number);
                 qb.setProjectionMap(sDataContactsProjectionMap);
+                break;
+            }
+
+            case GROUPS: {
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setProjectionMap(sGroupsProjectionMap);
+                break;
+            }
+
+            case GROUPS_ID: {
+                long groupId = ContentUris.parseId(uri);
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setProjectionMap(sGroupsProjectionMap);
+                qb.appendWhere(GroupsColumns.CONCRETE_ID + "=" + groupId);
+                break;
+            }
+
+            case GROUPS_SUMMARY: {
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES_DATA_CONTACTS_AGGREGATES);
+                qb.setProjectionMap(sGroupsSummaryProjectionMap);
+                groupBy = GroupsColumns.CONCRETE_ID;
                 break;
             }
 
@@ -1593,7 +1890,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE);
+            qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
             qb.setProjectionMap(sDataContactsAccountsProjectionMap);
             if (contactsIdString != null) {
                 qb.appendWhere(Data.CONTACT_ID + "=" + contactsIdString);
@@ -1765,13 +2062,14 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         Cursor cursor = null;
         try {
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE, PROJ_DATA_CONTACTS,
-                    Tables.DATA + "." + Data._ID + "=" + dataId, null, null, null, null);
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES,
+                    Projections.PROJ_DATA_CONTACTS, DataColumns.CONCRETE_ID + "=" + dataId, null,
+                    null, null, null);
             if (cursor.moveToFirst()) {
-                aggId = cursor.getLong(COL_AGGREGATE_ID);
-                packageId = cursor.getLong(COL_PACKAGE_ID);
-                isRestricted = (cursor.getInt(COL_IS_RESTRICTED) == 1);
-                mimeType = cursor.getString(COL_MIMETYPE);
+                aggId = cursor.getLong(Projections.COL_AGGREGATE_ID);
+                packageId = cursor.getLong(Projections.COL_PACKAGE_ID);
+                isRestricted = (cursor.getInt(Projections.COL_IS_RESTRICTED) == 1);
+                mimeType = cursor.getString(Projections.COL_MIMETYPE);
             }
         } finally {
             if (cursor != null) {

@@ -22,7 +22,7 @@ import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.Clauses;
 import com.android.providers.contacts2.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts2.OpenHelper.ContactsColumns;
-import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
+import com.android.providers.contacts2.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
 import com.android.providers.contacts2.OpenHelper.Tables;
@@ -33,6 +33,7 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteStatement;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -66,14 +67,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final String TAG = "ContactAggregator";
 
     // Data mime types used in the contact matching algorithm
-    private static final String MIMETYPE_SELECTION_IN_CLAUSE = MimetypeColumns.MIMETYPE + " IN ('"
+    private static final String MIMETYPE_SELECTION_IN_CLAUSE = MimetypesColumns.MIMETYPE + " IN ('"
             + Email.CONTENT_ITEM_TYPE + "','"
             + Nickname.CONTENT_ITEM_TYPE + "','"
             + Phone.CONTENT_ITEM_TYPE + "','"
             + StructuredName.CONTENT_ITEM_TYPE + "')";
 
     private static final String[] DATA_JOIN_MIMETYPE_COLUMNS = new String[] {
-            MimetypeColumns.MIMETYPE,
+            MimetypesColumns.MIMETYPE,
             Data.DATA1,
             Data.DATA2
     };
@@ -131,6 +132,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     // Set if the current aggregation pass should be interrupted
     private volatile boolean mCancel;
+
+    /** Compiled statement for updating {@link Aggregates#IN_VISIBLE_GROUP}. */
+    private SQLiteStatement mUpdateAggregateVisibleStatement;
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -340,6 +344,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         updateAggregateData(db, aggregateId, values);
         updatePrimaries(db, aggregateId, contactId, newAgg);
+        mOpenHelper.updateAggregateVisible(aggregateId);
+
     }
 
     /**
@@ -434,7 +440,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             selection.append(secondaryAggregateIds.get(i));
         }
         selection.append(") AND ")
-                .append(MimetypeColumns.MIMETYPE)
+                .append(MimetypesColumns.MIMETYPE)
                 .append("='")
                 .append(StructuredName.CONTENT_ITEM_TYPE)
                 .append("'");
@@ -485,7 +491,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long contactId,
             int mode, MatchCandidateList candidates, ContactMatcher matcher) {
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
+        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS,
                 DATA_JOIN_MIMETYPE_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
                         MIMETYPE_SELECTION_IN_CLAUSE),
@@ -772,7 +778,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             MatchCandidateList candidates, ContentValues values) {
         candidates.clear();
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
+        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPES,
                 DATA_JOIN_MIMETYPE_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
                         MIMETYPE_SELECTION_IN_CLAUSE),
@@ -867,7 +873,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // Find primary data items from newly-joined contact, returning one
         // candidate for each mimetype.
         try {
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE, Projections.PROJ_DATA,
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES, Projections.PROJ_DATA,
                     Data.CONTACT_ID + "=" + contactId + " AND " + Data.IS_PRIMARY + "=1 AND "
                             + Projections.PRIMARY_MIME_CLAUSE, null, Data.MIMETYPE, null, null);
             while (cursor.moveToNext()) {
@@ -944,7 +950,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private String getBestDisplayName(SQLiteDatabase db, long aggregateId) {
         String bestDisplayName = null;
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES,
+        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES,
                 new String[] {StructuredName.DISPLAY_NAME},
                 DatabaseUtils.concatenateWhere(Contacts.AGGREGATE_ID + "=" + aggregateId,
                         Data.MIMETYPE + "='" + StructuredName.CONTENT_ITEM_TYPE + "'"),

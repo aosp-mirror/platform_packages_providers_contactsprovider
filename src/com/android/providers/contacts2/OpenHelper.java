@@ -35,11 +35,14 @@ import android.provider.SocialContract.Activities;
 import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RestrictionExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 
@@ -60,7 +63,7 @@ import com.android.providers.contacts2.R;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 34;
+    private static final int DATABASE_VERSION = 38;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -68,14 +71,15 @@ import com.android.providers.contacts2.R;
         public static final String ACCOUNTS = "accounts";
         public static final String AGGREGATES = "aggregates";
         public static final String CONTACTS = "contacts";
-        public static final String PACKAGE = "package";
-        public static final String MIMETYPE = "mimetype";
+        public static final String PACKAGES = "packages";
+        public static final String MIMETYPES = "mimetypes";
         public static final String PHONE_LOOKUP = "phone_lookup";
         public static final String NAME_LOOKUP = "name_lookup";
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
         public static final String RESTRICTION_EXCEPTIONS = "rest_exceptions";
         public static final String CONTACT_OPTIONS = "contact_options";
         public static final String DATA = "data";
+        public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
 
@@ -83,37 +87,63 @@ import com.android.providers.contacts2.R;
                 + "LEFT OUTER JOIN presence ON (aggregates._id = presence.aggregate_id) "
                 + "LEFT OUTER JOIN data ON (primary_phone_id = data._id)";
 
-        public static final String DATA_JOIN_MIMETYPE = "data "
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
+        public static final String DATA_JOIN_MIMETYPES = "data "
+                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
 
         public static final String DATA_JOIN_MIMETYPE_CONTACTS = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
                 + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id)";
 
-        public static final String DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE = "data "
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id)";
+        public static final String DATA_JOIN_CONTACTS_GROUPS = "data "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id)"
+                + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
+                + ")";
 
-        public static final String DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES = "data "
-                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
+        public static final String DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES = "data "
+                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id)";
+
+        public static final String DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES = "data "
+                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
+                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+
+        public static final String DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_GROUPS = "data "
+                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
+                + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
+                + ")";
+
+        public static final String GROUPS_JOIN_PACKAGES = "groups "
+                + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id)";
+
+        public static final String DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES = "data "
+                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+
+        public static final String GROUPS_JOIN_PACKAGES_DATA_CONTACTS_AGGREGATES = "groups "
+                + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id) "
+                + "LEFT OUTER JOIN data ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
+                + ") " + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
                 + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
         public static final String ACTIVITIES = "activities";
 
-        public static final String ACTIVITIES_JOIN_MIMETYPE = "activities "
-                + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id)";
+        public static final String ACTIVITIES_JOIN_MIMETYPES = "activities "
+                + "LEFT OUTER JOIN mimetypes ON (activities.mimetype_id = mimetypes._id)";
 
-        public static final String ACTIVITIES_JOIN_MIMETYPE_CONTACTS_PACKAGE_AGGREGATES = "activities "
-                + "LEFT OUTER JOIN mimetype ON (activities.mimetype_id = mimetype._id) "
+        public static final String ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES = "activities "
+                + "LEFT OUTER JOIN mimetypes ON (activities.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN contacts ON (activities.author_contact_id = contacts._id) "
-                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
                 + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
-        public static final String CONTACTS_JOIN_PACKAGE_ACCOUNTS = "contacts "
-                + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
+        public static final String CONTACTS_JOIN_PACKAGES_ACCOUNTS = "contacts "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
                 + "LEFT OUTER JOIN accounts ON (contacts.accounts_id = accounts._id)";
 
         public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
@@ -134,11 +164,27 @@ import com.android.providers.contacts2.R;
     }
 
     public interface Clauses {
-        public static final String WHERE_IM_MATCHES = MimetypeColumns.MIMETYPE + "=" + Im.MIMETYPE
+        public static final String WHERE_IM_MATCHES = MimetypesColumns.MIMETYPE + "=" + Im.MIMETYPE
                 + " AND " + Im.PROTOCOL + "=? AND " + Im.DATA + "=?";
 
-        public static final String WHERE_EMAIL_MATCHES = MimetypeColumns.MIMETYPE + "="
+        public static final String WHERE_EMAIL_MATCHES = MimetypesColumns.MIMETYPE + "="
                 + Email.MIMETYPE + " AND " + Email.DATA + "=?";
+
+        public static final String MIMETYPE_IS_GROUP_MEMBERSHIP = MimetypesColumns.CONCRETE_MIMETYPE
+                + "='" + GroupMembership.CONTENT_ITEM_TYPE + "'";
+
+        public static final String BELONGS_TO_GROUP = DataColumns.CONCRETE_GROUP_ID + "="
+                + GroupsColumns.CONCRETE_ID;
+
+        public static final String HAS_PRIMARY_PHONE = "("
+                + AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID + " IS NOT NULL OR "
+                + AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID + " IS NOT NULL)";
+
+        // TODO: add in check against package_visible
+        public static final String IN_VISIBLE_GROUP = "SELECT MIN(COUNT(" + DataColumns.CONCRETE_ID
+                + "),1) FROM " + Tables.DATA_JOIN_CONTACTS_GROUPS + " WHERE "
+                + DataColumns.MIMETYPE_ID + "=? AND " + Contacts.AGGREGATE_ID + "="
+                + AggregatesColumns.CONCRETE_ID + " AND " + Groups.GROUP_VISIBLE + "=1";
     }
 
     public interface AggregatesColumns {
@@ -151,14 +197,28 @@ import com.android.providers.contacts2.R;
         public static final String FALLBACK_PRIMARY_EMAIL_ID = "fallback_email_id";
 
         public static final String SINGLE_RESTRICTED_PACKAGE_ID = "single_restricted_package_id";
+
+        public static final String CONCRETE_ID = Tables.AGGREGATES + "." + BaseColumns._ID;
     }
 
     public interface ContactsColumns {
         public static final String PACKAGE_ID = "package_id";
+
+        public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
     }
 
     public interface DataColumns {
         public static final String MIMETYPE_ID = "mimetype_id";
+
+        public static final String CONCRETE_ID = Tables.DATA + "." + BaseColumns._ID;
+        public static final String CONCRETE_CONTACT_ID = Tables.DATA + "." + Data.CONTACT_ID;
+        public static final String CONCRETE_GROUP_ID = Tables.DATA + "."
+                + GroupMembership.GROUP_ROW_ID;
+    }
+
+    public interface GroupsColumns {
+        public static final String CONCRETE_ID = Tables.GROUPS + "." + BaseColumns._ID;
+        public static final String CONCRETE_PACKAGE_ID = Tables.GROUPS + "." + Groups.PACKAGE_ID;
     }
 
     public interface ActivitiesColumns {
@@ -203,14 +263,17 @@ import com.android.providers.contacts2.R;
         }
     }
 
-    public interface PackageColumns {
+    public interface PackagesColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String PACKAGE = "package";
     }
 
-    /* package */ interface MimetypeColumns {
+    public interface MimetypesColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String MIMETYPE = "mimetype";
+
+        public static final String CONCRETE_ID = Tables.MIMETYPES + "." + BaseColumns._ID;
+        public static final String CONCRETE_MIMETYPE = Tables.MIMETYPES + "." + MIMETYPE;
     }
 
     public interface AggregationExceptionColumns {
@@ -263,6 +326,10 @@ import com.android.providers.contacts2.R;
     private final RestrictionExceptionsCache mCache;
     private HashMap<String, String[]> mNicknameClusterCache;
 
+    /** Compiled statements for updating {@link Aggregates#IN_VISIBLE_GROUP}. */
+    private SQLiteStatement mVisibleAllUpdate;
+    private SQLiteStatement mVisibleSpecificUpdate;
+
 
     private static OpenHelper sSingleton = null;
 
@@ -289,27 +356,34 @@ import com.android.providers.contacts2.R;
     @Override
     public void onOpen(SQLiteDatabase db) {
         // Create compiled statements for package and mimetype lookups
-        mMimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns._ID + " FROM "
-                + Tables.MIMETYPE + " WHERE " + MimetypeColumns.MIMETYPE + "=?");
-        mPackageQuery = db.compileStatement("SELECT " + PackageColumns._ID + " FROM "
-                + Tables.PACKAGE + " WHERE " + PackageColumns.PACKAGE + "=?");
+        mMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns._ID + " FROM "
+                + Tables.MIMETYPES + " WHERE " + MimetypesColumns.MIMETYPE + "=?");
+        mPackageQuery = db.compileStatement("SELECT " + PackagesColumns._ID + " FROM "
+                + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
         mAggregateIdQuery = db.compileStatement("SELECT " + Contacts.AGGREGATE_ID + " FROM "
                 + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
         mAggregateIdUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
                 + Contacts.AGGREGATE_ID + "=?" + " WHERE " + Contacts._ID + "=?");
-        mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPE + "("
-                + MimetypeColumns.MIMETYPE + ") VALUES (?)");
-        mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGE + "("
-                + PackageColumns.PACKAGE + ") VALUES (?)");
+        mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
+                + MimetypesColumns.MIMETYPE + ") VALUES (?)");
+        mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGES + "("
+                + PackagesColumns.PACKAGE + ") VALUES (?)");
 
-        mDataMimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns.MIMETYPE + " FROM "
-                + Tables.DATA_JOIN_MIMETYPE + " WHERE " + Tables.DATA + "." + Data._ID + "=?");
-        mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypeColumns.MIMETYPE
-                + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPE + " WHERE " + Tables.ACTIVITIES + "."
+        mDataMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns.MIMETYPE + " FROM "
+                + Tables.DATA_JOIN_MIMETYPES + " WHERE " + Tables.DATA + "." + Data._ID + "=?");
+        mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns.MIMETYPE
+                + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
         mNameLookupInsert = db.compileStatement("INSERT INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
                 + NameLookupColumns.NORMALIZED_NAME + ") VALUES (?,?,?)");
+
+        final String visibleUpdate = "UPDATE " + Tables.AGGREGATES + " SET "
+                + Aggregates.IN_VISIBLE_GROUP + "= (" + Clauses.IN_VISIBLE_GROUP + ")";
+
+        mVisibleAllUpdate = db.compileStatement(visibleUpdate);
+        mVisibleSpecificUpdate = db.compileStatement(visibleUpdate + " WHERE "
+                + AggregatesColumns.CONCRETE_ID + "=?");
 
         // Make sure we have an in-memory presence table
         final String tableName = DATABASE_PRESENCE + "." + Tables.PRESENCE;
@@ -387,15 +461,15 @@ import com.android.providers.contacts2.R;
        ");");
 
         // Package name mapping table
-        db.execSQL("CREATE TABLE " + Tables.PACKAGE + " (" +
-                PackageColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                PackageColumns.PACKAGE + " TEXT NOT NULL" +
+        db.execSQL("CREATE TABLE " + Tables.PACKAGES + " (" +
+                PackagesColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                PackagesColumns.PACKAGE + " TEXT NOT NULL" +
         ");");
 
-        // Mime-type mapping table
-        db.execSQL("CREATE TABLE " + Tables.MIMETYPE + " (" +
-                MimetypeColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                MimetypeColumns.MIMETYPE + " TEXT NOT NULL" +
+        // Mimetype mapping table
+        db.execSQL("CREATE TABLE " + Tables.MIMETYPES + " (" +
+                MimetypesColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                MimetypesColumns.MIMETYPE + " TEXT NOT NULL" +
         ");");
 
         // Public generic data table
@@ -504,6 +578,17 @@ import com.android.providers.contacts2.R;
                 NicknameLookupColumns.CLUSTER +
         ");");
 
+        // Groups table
+        db.execSQL("CREATE TABLE " + Tables.GROUPS + " (" +
+                Groups._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                Groups.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
+                Groups.ACCOUNTS_ID + " INTEGER REFERENCES accounts(_id)," +
+                Groups.SOURCE_ID + " TEXT," +
+                Groups.TITLE + " TEXT," +
+                Groups.TITLE_RESOURCE + " INTEGER," +
+                Groups.GROUP_VISIBLE + " INTEGER" +
+        ");");
+
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
@@ -560,12 +645,13 @@ import com.android.providers.contacts2.R;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACCOUNTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGE + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPE + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGES + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
@@ -589,6 +675,7 @@ import com.android.providers.contacts2.R;
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
+        db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
@@ -653,7 +740,7 @@ import com.android.providers.contacts2.R;
     }
 
     /**
-     * Convert a package name into an integer, using {@link Tables#PACKAGE} for
+     * Convert a package name into an integer, using {@link Tables#PACKAGES} for
      * lookups and possible allocation of new IDs as needed.
      */
     public long getPackageId(String packageName) {
@@ -663,7 +750,7 @@ import com.android.providers.contacts2.R;
     }
 
     /**
-     * Convert a mime-type into an integer, using {@link Tables#MIMETYPE} for
+     * Convert a mimetype into an integer, using {@link Tables#MIMETYPES} for
      * lookups and possible allocation of new IDs as needed.
      */
     public long getMimeTypeId(String mimetype) {
@@ -673,7 +760,7 @@ import com.android.providers.contacts2.R;
     }
 
     /**
-     * Find the mime-type for the given {@link Data#_ID}.
+     * Find the mimetype for the given {@link Data#_ID}.
      */
     public String getDataMimeType(long dataId) {
         // Make sure compiled statements are ready by opening database
@@ -704,6 +791,25 @@ import com.android.providers.contacts2.R;
             // No valid mapping found, so return null
             return null;
         }
+    }
+
+    /**
+     * Update {@link Aggregates#IN_VISIBLE_GROUP} for all aggregates.
+     */
+    public void updateAllVisible() {
+        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+        mVisibleAllUpdate.bindLong(1, groupMembershipMimetypeId);
+        mVisibleAllUpdate.execute();
+    }
+
+    /**
+     * Update {@link Aggregates#IN_VISIBLE_GROUP} for a specific aggregate.
+     */
+    public void updateAggregateVisible(long aggId) {
+        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+        mVisibleSpecificUpdate.bindLong(1, groupMembershipMimetypeId);
+        mVisibleSpecificUpdate.bindLong(2, aggId);
+        mVisibleSpecificUpdate.execute();
     }
 
     /**
@@ -747,7 +853,7 @@ import com.android.providers.contacts2.R;
         tables.append("contacts, (SELECT data_id FROM phone_lookup "
                 + "WHERE (phone_lookup.normalized_number GLOB '");
         tables.append(normalizedNumber);
-        tables.append("*')) AS lookup, " + Tables.DATA_JOIN_MIMETYPE);
+        tables.append("*')) AS lookup, " + Tables.DATA_JOIN_MIMETYPES);
         qb.setTables(tables.toString());
         qb.appendWhere("lookup.data_id=data._id AND data.contact_id=contacts._id AND ");
         qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
@@ -1018,7 +1124,9 @@ import com.android.providers.contacts2.R;
             if (matchesClause != null) {
                 return matchesClause.getQueryClause(column, mBuilder);
             } else {
-                return null;
+                // When no matching clause found, return 0 to provide a false
+                // value for the query string.
+                return "0";
             }
         }
 
