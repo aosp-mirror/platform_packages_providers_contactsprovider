@@ -16,15 +16,26 @@
 
 package com.android.providers.contacts2;
 
+import android.content.Context;
+
 /**
  * A version of {@link ContactsProvider2} class that performs aggregation
  * synchronously and wipes all data at construction time.
  */
 public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private static Boolean sDataWiped = false;
+    private static OpenHelper mOpenHelper;
 
     public SynchronousContactsProvider2() {
         super(false);
+    }
+
+    @Override
+    protected OpenHelper getOpenHelper(final Context context) {
+        if (mOpenHelper == null) {
+            mOpenHelper = new OpenHelper(context);
+        }
+        return mOpenHelper;
     }
 
     @Override

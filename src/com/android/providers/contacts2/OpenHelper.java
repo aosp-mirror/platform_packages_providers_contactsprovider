@@ -54,7 +54,7 @@ import java.util.LinkedList;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 30;
+    private static final int DATABASE_VERSION = 31;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -68,7 +68,7 @@ import java.util.LinkedList;
         public static final String NAME_LOOKUP = "name_lookup";
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
         public static final String RESTRICTION_EXCEPTIONS = "rest_exceptions";
-
+        public static final String CONTACT_OPTIONS = "contact_options";
         public static final String DATA = "data";
         public static final String PRESENCE = "presence";
 
@@ -101,7 +101,6 @@ import java.util.LinkedList;
                 + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
                 + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
-
         public static final String CONTACTS_JOIN_PACKAGE_ACCOUNTS = "contacts "
                 + "LEFT OUTER JOIN package ON (contacts.package_id = package._id) "
                 + "LEFT OUTER JOIN accounts ON (contacts.accounts_id = accounts._id)";
@@ -114,8 +113,13 @@ import java.util.LinkedList;
                 + "ON (agg_exceptions.contact_id1 = contacts1._id) ";
 
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE = "agg_exceptions "
-                + "LEFT OUTER JOIN contacts contacts1 ON (agg_exceptions.contact_id1 = contacts1._id) "
-                + "LEFT OUTER JOIN contacts contacts2 ON (agg_exceptions.contact_id2 = contacts2._id) ";
+                + "INNER JOIN contacts contacts1 "
+                + "ON (agg_exceptions.contact_id1 = contacts1._id) "
+                + "INNER JOIN contacts contacts2 "
+                + "ON (agg_exceptions.contact_id2 = contacts2._id) ";
+
+        public static final String CONTACTS_JOIN_CONTACT_OPTIONS = "contacts "
+                + "LEFT OUTER JOIN contact_options ON (contacts._id = contact_options._id)";
     }
 
     public interface Clauses {
@@ -198,6 +202,12 @@ import java.util.LinkedList;
     public interface RestrictionExceptionsColumns {
         public static final String PACKAGE_PROVIDER_ID = "package_provider_id";
         public static final String PACKAGE_CLIENT_ID = "package_client_id";
+    }
+
+    public interface ContactOptionsColumns {
+        public static final String _ID = BaseColumns._ID;
+        public static final String CUSTOM_RINGTONE = "custom_ringtone";
+        public static final String SEND_TO_VOICEMAIL = "send_to_voicemail";
     }
 
     /** In-memory cache of previously found mimetype mappings */
@@ -319,7 +329,8 @@ import java.util.LinkedList;
                 AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
                 AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 Aggregates.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
-                Aggregates.CUSTOM_RINGTONE_ID + " INTEGER REFERENCES data(_id)" +
+                Aggregates.CUSTOM_RINGTONE + " TEXT," +
+                Aggregates.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
         // Contacts table
@@ -333,6 +344,13 @@ import java.util.LinkedList;
                 Contacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.AGGREGATE_ID + " INTEGER " +
         ");");
+
+        // Contact options table. It has the same primary key as the corresponding contact.
+        db.execSQL("CREATE TABLE " + Tables.CONTACT_OPTIONS + " (" +
+                ContactOptionsColumns._ID + " INTEGER PRIMARY KEY," +
+                ContactOptionsColumns.CUSTOM_RINGTONE + " TEXT," +
+                ContactOptionsColumns.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0" +
+       ");");
 
         // Package name mapping table
         db.execSQL("CREATE TABLE " + Tables.PACKAGE + " (" +
@@ -505,8 +523,11 @@ import java.util.LinkedList;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
-        // Note: we are not dropping agg_exceptions. In case that table's schema changes,
-        // we want to try and preserve the data, because it was entered by the user.
+        // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
+        // schema changes, we should try to preserve the data, because it was entered by the user
+        // and has never been synched to the server.
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACT_OPTIONS + ";");
 
         onCreate(db);
     }
@@ -518,6 +539,7 @@ import java.util.LinkedList;
         SQLiteDatabase db = getWritableDatabase();
         db.execSQL("DELETE FROM " + Tables.AGGREGATES + ";");
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
+        db.execSQL("DELETE FROM " + Tables.CONTACT_OPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");

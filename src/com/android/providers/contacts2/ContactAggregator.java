@@ -30,6 +30,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 
 import com.android.providers.contacts2.OpenHelper.AggregatesColumns;
 import com.android.providers.contacts2.OpenHelper.ContactsColumns;
+import com.android.providers.contacts2.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
@@ -124,6 +125,13 @@ public class ContactAggregator {
     private static final int COL_AGGREGATE_ID2 = 4;
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { Contacts._ID };
+    private static final String[] CONTACTS_JOIN_CONTACT_OPTIONS_COLUMNS = new String[] {
+            ContactOptionsColumns.CUSTOM_RINGTONE,
+            ContactOptionsColumns.SEND_TO_VOICEMAIL,
+    };
+
+    private static final int COL_CUSTOM_RINGTONE = 0;
+    private static final int COL_SEND_TO_VOICEMAIL = 1;
 
     // Automatically aggregate contacts if their match score is equal or greater than this threshold
     private static final int SCORE_THRESHOLD_AGGREGATE = 70;
@@ -134,6 +142,7 @@ public class ContactAggregator {
     private static final int MODE_INSERT_LOOKUP_DATA = 0;
     private static final int MODE_AGGREGATION = 1;
     private static final int MODE_SUGGESTIONS = 2;
+
 
     private final boolean mAsynchronous;
     private final OpenHelper mOpenHelper;
@@ -333,7 +342,7 @@ public class ContactAggregator {
     public void updateAggregateData(long aggregateId) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final ContentValues values = new ContentValues();
-        updateDisplayName(db, aggregateId, values);
+        updateAggregateData(db, aggregateId, values);
     }
 
     /**
@@ -361,7 +370,7 @@ public class ContactAggregator {
         updateContactAggregationData(db, contactId, candidates, values);
         mOpenHelper.setAggregateId(contactId, aggregateId);
 
-        updateDisplayName(db, aggregateId, values);
+        updateAggregateData(db, aggregateId, values);
         updatePrimaries(db, aggregateId, contactId, newAgg);
     }
 
@@ -585,6 +594,15 @@ public class ContactAggregator {
     }
 
     /**
+     * Updates aggregate-level data from constituent contacts.
+     */
+    private void updateAggregateData(final SQLiteDatabase db, long aggregateId,
+            final ContentValues values) {
+        updateDisplayName(db, aggregateId, values);
+        updateSendToVoicemailAndRingtone(db, aggregateId);
+    }
+
+    /**
      * Updates the aggregate record's {@link Aggregates#DISPLAY_NAME} field. If none of the
      * constituent contacts has a suitable name, leaves the aggregate record unchanged.
      */
@@ -738,6 +756,45 @@ public class ContactAggregator {
             c.close();
         }
         return bestDisplayName;
+    }
+
+    /**
+     * Updates the aggregate's send-to-voicemail and custom-ringtone options based on
+     * constituent contacts' options.
+     */
+    private void updateSendToVoicemailAndRingtone(SQLiteDatabase db, long aggregateId) {
+        int totalContactCount = 0;
+        int sendToVoiceMailCount = 0;
+        String customRingtone = null;
+
+        final Cursor c = db.query(Tables.CONTACTS_JOIN_CONTACT_OPTIONS,
+                CONTACTS_JOIN_CONTACT_OPTIONS_COLUMNS,
+                Contacts.AGGREGATE_ID + "=" + aggregateId,
+                null, null, null, null);
+
+        try {
+            while (c.moveToNext()) {
+                totalContactCount++;
+                if (!c.isNull(COL_SEND_TO_VOICEMAIL)) {
+                    boolean sendToVoicemail = (c.getInt(COL_SEND_TO_VOICEMAIL) != 0);
+                    if (sendToVoicemail) {
+                        sendToVoiceMailCount++;
+                    }
+                }
+
+                if (customRingtone == null && !c.isNull(COL_CUSTOM_RINGTONE)) {
+                    customRingtone = c.getString(COL_CUSTOM_RINGTONE);
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        ContentValues values = new ContentValues(2);
+        values.put(Aggregates.SEND_TO_VOICEMAIL, totalContactCount == sendToVoiceMailCount);
+        values.put(Aggregates.CUSTOM_RINGTONE, customRingtone);
+
+        db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
     }
 
     /**

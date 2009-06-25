@@ -18,19 +18,10 @@ package com.android.providers.contacts2;
 import static com.android.providers.contacts2.ContactsActor.PACKAGE_GREY;
 
 import android.content.ContentUris;
-import android.content.ContentValues;
-import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-import android.test.AndroidTestCase;
-import android.test.ProviderTestCase2;
-import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -43,22 +34,15 @@ import android.test.suitebuilder.annotation.LargeTest;
  * </code>
  */
 @LargeTest
-public class ContactAggregatorTest extends AndroidTestCase {
+public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     private ContactsActor mActor;
-    private MockContentResolver mResolver;
-
-    // Indicator allowing us to wipe data only once for the entire test suite
-    private static Boolean sDataWiped = false;
 
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
             AggregationExceptions.AGGREGATE_ID,
             AggregationExceptions.CONTACT_ID
     };
-
-    public ContactAggregatorTest() {
-    }
 
     @Override
     protected void setUp() throws Exception {
@@ -299,83 +283,5 @@ public class ContactAggregatorTest extends AndroidTestCase {
         assertEquals(aggregateId3, cursor.getLong(0));
 
         cursor.close();
-    }
-
-    private long createContact() {
-        ContentValues values = new ContentValues();
-        values.put(Contacts.PACKAGE, mActor.packageName);
-        Uri contactUri = mResolver.insert(Contacts.CONTENT_URI, values);
-        return ContentUris.parseId(contactUri);
-    }
-
-    private Uri insertStructuredName(long contactId, String givenName, String familyName) {
-        ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
-        values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
-        StringBuilder sb = new StringBuilder();
-        if (givenName != null) {
-            sb.append(givenName);
-        }
-        if (givenName != null && familyName != null) {
-            sb.append(" ");
-        }
-        if (familyName != null) {
-            sb.append(familyName);
-        }
-        values.put(StructuredName.DISPLAY_NAME, sb.toString());
-        values.put(StructuredName.GIVEN_NAME, givenName);
-        values.put(StructuredName.FAMILY_NAME, familyName);
-
-        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
-        return resultUri;
-    }
-
-    private void setAggregationException(int type, long aggregateId, long contactId) {
-        ContentValues values = new ContentValues();
-        values.put(AggregationExceptions.AGGREGATE_ID, aggregateId);
-        values.put(AggregationExceptions.CONTACT_ID, contactId);
-        values.put(AggregationExceptions.TYPE, type);
-        mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
-    }
-
-    private Cursor queryContact(long contactId) {
-        return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), null,
-                null, null, null);
-    }
-
-    private Cursor queryAggregate(long aggregateId) {
-        return mResolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId),
-                null, null, null, null);
-    }
-
-    private long queryAggregateId(long contactId) {
-        Cursor c = queryContact(contactId);
-        assertTrue(c.moveToFirst());
-        long aggregateId = c.getLong(c.getColumnIndex(Contacts.AGGREGATE_ID));
-        c.close();
-        return aggregateId;
-    }
-
-    private String queryDisplayName(long aggregateId) {
-        Cursor c = queryAggregate(aggregateId);
-        assertTrue(c.moveToFirst());
-        String displayName = c.getString(c.getColumnIndex(Aggregates.DISPLAY_NAME));
-        c.close();
-        return displayName;
-    }
-
-    private void assertAggregated(long contactId1, long contactId2, String expectedDisplayName) {
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 == aggregateId2);
-
-        String displayName = queryDisplayName(aggregateId1);
-        assertEquals(expectedDisplayName, displayName);
-    }
-
-    private void assertNotAggregated(long contactId1, long contactId2) {
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 != aggregateId2);
     }
 }

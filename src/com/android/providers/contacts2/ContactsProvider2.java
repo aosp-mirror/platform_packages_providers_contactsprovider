@@ -20,6 +20,7 @@ import com.android.providers.contacts2.OpenHelper.AggregatesColumns;
 import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.Clauses;
 import com.android.providers.contacts2.OpenHelper.ContactsColumns;
+import com.android.providers.contacts2.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts2.OpenHelper.DataColumns;
 import com.android.providers.contacts2.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts2.OpenHelper.Tables;
@@ -39,7 +40,6 @@ import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -260,6 +260,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
         columns.put(Aggregates.PRIMARY_PHONE_ID, Aggregates.PRIMARY_PHONE_ID);
         columns.put(Aggregates.PRIMARY_EMAIL_ID, Aggregates.PRIMARY_EMAIL_ID);
+        columns.put(Aggregates.CUSTOM_RINGTONE, Aggregates.CUSTOM_RINGTONE);
+        columns.put(Aggregates.SEND_TO_VOICEMAIL, Aggregates.SEND_TO_VOICEMAIL);
         columns.put(AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID,
                 AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID);
         columns.put(AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID,
@@ -882,9 +884,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case AGGREGATES_ID: {
-                String selectionWithId = (Aggregates._ID + " = " + ContentUris.parseId(uri) + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.AGGREGATES, values, selectionWithId, selectionArgs);
+                count = updateAggregateData(db, ContentUris.parseId(uri), values);
                 break;
             }
 
@@ -997,6 +997,52 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             getContext().getContentResolver().notifyChange(uri, null);
         }
         return count;
+    }
+
+    private int updateAggregateData(SQLiteDatabase db, long aggregateId, ContentValues values) {
+
+        // First update all constituent contacts
+        ContentValues optionValues = new ContentValues(3);
+        if (values.containsKey(Aggregates.CUSTOM_RINGTONE)) {
+            optionValues.put(ContactOptionsColumns.CUSTOM_RINGTONE,
+                    values.getAsString(Aggregates.CUSTOM_RINGTONE));
+        }
+        if (values.containsKey(Aggregates.SEND_TO_VOICEMAIL)) {
+            optionValues.put(ContactOptionsColumns.SEND_TO_VOICEMAIL,
+                    values.getAsBoolean(Aggregates.SEND_TO_VOICEMAIL));
+        }
+
+        // Nothing to update - just return
+        if (optionValues.size() == 0) {
+            return 0;
+        }
+
+        Cursor c = db.query(Tables.CONTACTS, CONTACT_PROJECTION, Contacts.AGGREGATE_ID + "="
+                + aggregateId, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long contactId = c.getLong(CONTACT_COLUMN_CONTACT_ID);
+
+                optionValues.put(ContactOptionsColumns._ID, contactId);
+                db.replace(Tables.CONTACT_OPTIONS, null, optionValues);
+            }
+        } finally {
+            c.close();
+        }
+
+        // Now update the aggregate itself.  Ignore all supplied fields except rington and
+        // send_to_voicemail
+        optionValues.clear();
+        if (values.containsKey(Aggregates.CUSTOM_RINGTONE)) {
+            optionValues.put(Aggregates.CUSTOM_RINGTONE,
+                    values.getAsString(Aggregates.CUSTOM_RINGTONE));
+        }
+        if (values.containsKey(Aggregates.SEND_TO_VOICEMAIL)) {
+            optionValues.put(Aggregates.SEND_TO_VOICEMAIL,
+                    values.getAsBoolean(Aggregates.SEND_TO_VOICEMAIL));
+        }
+
+        return db.update(Tables.AGGREGATES, optionValues, Aggregates._ID + "=" + aggregateId, null);
     }
 
     private static class ContactPair {
@@ -1704,7 +1750,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         // Bypass aggregate update if no parent found, or if we don't keep track
         // of super-primary for this mimetype.
-        if (aggId == -1) return;
+        if (aggId == -1) {
+            return;
+        }
 
         boolean isPhone = CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mimeType);
         boolean isEmail = CommonDataKinds.Email.CONTENT_ITEM_TYPE.equals(mimeType);
