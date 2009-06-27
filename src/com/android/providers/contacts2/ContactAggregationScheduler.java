@@ -29,7 +29,7 @@ import android.os.Process;
  */
 public class ContactAggregationScheduler {
 
-    public interface Listener {
+    public interface Aggregator {
 
         /**
          * Performs an aggregation run.
@@ -55,7 +55,7 @@ public class ContactAggregationScheduler {
     public static final int STATUS_SCHEDULED = 1;
     public static final int STATUS_RUNNING = 2;
 
-    private Listener mListener;
+    private Aggregator mAggregator;
 
     // Aggregation status
     private int mStatus = STATUS_STAND_BY;
@@ -69,8 +69,8 @@ public class ContactAggregationScheduler {
     private HandlerThread mHandlerThread;
     private Handler mMessageHandler;
 
-    public void setListener(Listener listener) {
-        mListener = listener;
+    public void setAggregator(Aggregator aggregator) {
+        mAggregator = aggregator;
     }
 
     public void start() {
@@ -93,7 +93,7 @@ public class ContactAggregationScheduler {
     }
 
     public void stop() {
-        mListener.interrupt();
+        mAggregator.interrupt();
         Looper looper = mHandlerThread.getLooper();
         if (looper != null) {
             looper.quit();
@@ -129,7 +129,7 @@ public class ContactAggregationScheduler {
                 // If it has been less than MAX_AGGREGATION_DELAY millis since the initial request,
                 // interrupt the current pass and reschedule the request.
                 if (currentTime() - mInitialRequestTimestamp < MAX_AGGREGATION_DELAY) {
-                    mListener.interrupt();
+                    mAggregator.interrupt();
                 }
 
                 mRescheduleWhenComplete = true;
@@ -147,7 +147,7 @@ public class ContactAggregationScheduler {
             mRescheduleWhenComplete = false;
         }
         try {
-            mListener.run();
+            mAggregator.run();
         } finally {
             synchronized (this) {
                 mStatus = STATUS_STAND_BY;

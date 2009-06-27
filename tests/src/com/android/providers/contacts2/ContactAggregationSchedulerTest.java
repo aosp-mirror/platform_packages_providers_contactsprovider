@@ -54,7 +54,7 @@ public class ContactAggregationSchedulerTest extends TestCase {
     }
 
     public void testScheduleWhileRunning() {
-        mScheduler.setListener(new ContactAggregationScheduler.Listener() {
+        mScheduler.setAggregator(new ContactAggregationScheduler.Aggregator() {
             boolean mInterruptCalled;
 
             public void interrupt() {
@@ -76,7 +76,7 @@ public class ContactAggregationSchedulerTest extends TestCase {
 
         mScheduler.mTime += ContactAggregationScheduler.MAX_AGGREGATION_DELAY + 100;
 
-        mScheduler.setListener(new ContactAggregationScheduler.Listener() {
+        mScheduler.setAggregator(new ContactAggregationScheduler.Aggregator() {
             boolean mInterruptCalled;
 
             public void interrupt() {

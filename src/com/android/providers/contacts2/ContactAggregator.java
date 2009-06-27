@@ -58,7 +58,7 @@ import java.util.List;
  * <p>
  * ContactAggregator runs on a separate thread.
  */
-public class ContactAggregator implements ContactAggregationScheduler.Listener {
+public class ContactAggregator implements ContactAggregationScheduler.Aggregator {
 
     private static final String TAG = "ContactAggregator";
 
@@ -175,10 +175,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Listener {
      * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
      * a delay of {@link #AGGREGATION_DELAY} milliseconds.
      */
-    public ContactAggregator(Context context, OpenHelper openHelper, ContactAggregationScheduler scheduler) {
+    public ContactAggregator(Context context, OpenHelper openHelper,
+            ContactAggregationScheduler scheduler) {
         mOpenHelper = openHelper;
         mScheduler = scheduler;
-        mScheduler.setListener(this);
+        mScheduler.setAggregator(this);
         mScheduler.start();
 
         // Perform an aggregation pass in the beginning, which will most of the time
