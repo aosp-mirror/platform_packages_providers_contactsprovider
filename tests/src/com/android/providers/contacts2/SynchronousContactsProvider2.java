@@ -27,7 +27,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private static OpenHelper mOpenHelper;
 
     public SynchronousContactsProvider2() {
-        super(false);
+        super(new SynchronousAggregationScheduler());
     }
 
     @Override
@@ -48,5 +48,27 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
             }
         }
         return created;
+    }
+
+    private static class SynchronousAggregationScheduler extends ContactAggregationScheduler {
+
+        @Override
+        public void start() {
+        }
+
+        @Override
+        public void stop() {
+        }
+
+        @Override
+        long currentTime() {
+            return 0;
+        }
+
+        @Override
+        void runDelayed() {
+            super.run();
+        }
+
     }
 }

@@ -366,21 +366,21 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
     }
 
-    private final boolean mAsynchronous;
+    private final ContactAggregationScheduler mAggregationScheduler;
     private OpenHelper mOpenHelper;
     private static final AccountComparator sAccountComparator = new AccountComparator();
 
     private ContactAggregator mContactAggregator;
 
     public ContactsProvider2() {
-        this(true);
+        this(new ContactAggregationScheduler());
     }
 
     /**
      * Constructor for testing.
      */
-    /* package */ ContactsProvider2(boolean asynchronous) {
-        mAsynchronous = asynchronous;
+    /* package */ ContactsProvider2(ContactAggregationScheduler scheduler) {
+        mAggregationScheduler = scheduler;
     }
 
     @Override
@@ -391,7 +391,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         loadAccountsMaps();
 
-        mContactAggregator = new ContactAggregator(context, mAsynchronous, mOpenHelper);
+        mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
 
         mSetPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA + " SET " + Data.IS_PRIMARY

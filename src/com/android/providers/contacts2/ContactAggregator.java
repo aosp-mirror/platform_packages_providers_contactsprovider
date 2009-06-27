@@ -17,20 +17,10 @@
 package com.android.providers.contacts2;
 
 import com.android.providers.contacts2.ContactMatcher.MatchScore;
-import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
-import android.provider.ContactsContract.Aggregates;
-import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-
 import com.android.providers.contacts2.OpenHelper.AggregatesColumns;
-import com.android.providers.contacts2.OpenHelper.ContactsColumns;
+import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts2.OpenHelper.ContactOptionsColumns;
+import com.android.providers.contacts2.OpenHelper.ContactsColumns;
 import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
@@ -42,11 +32,6 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Looper;
-import android.os.Message;
-import android.os.Process;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -73,15 +58,9 @@ import java.util.List;
  * <p>
  * ContactAggregator runs on a separate thread.
  */
-public class ContactAggregator {
+public class ContactAggregator implements ContactAggregationScheduler.Listener {
 
     private static final String TAG = "ContactAggregator";
-
-    // Message ID used for communication with the aggregator
-    private static final int START_AGGREGATION_MESSAGE_ID = 1;
-
-    // Aggregation is delayed by this many milliseconds to allow changes to accumulate
-    private static final int AGGREGATION_DELAY = 500;
 
     // Data mime types used in the contact matching algorithm
     private static final String MIMETYPE_SELECTION_IN_CLAUSE = MimetypeColumns.MIMETYPE + " IN ('"
@@ -143,14 +122,11 @@ public class ContactAggregator {
     private static final int MODE_AGGREGATION = 1;
     private static final int MODE_SUGGESTIONS = 2;
 
-
-    private final boolean mAsynchronous;
     private final OpenHelper mOpenHelper;
-    private HandlerThread mHandlerThread;
-    private Handler mMessageHandler;
+    private final ContactAggregationScheduler mScheduler;
 
-    // If true, the aggregator is currently in the process of aggregation
-    private volatile boolean mAggregating;
+    // Set if the current aggregation pass should be interrupted
+    private volatile boolean mCancel;
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -199,28 +175,16 @@ public class ContactAggregator {
      * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
      * a delay of {@link #AGGREGATION_DELAY} milliseconds.
      */
-    public ContactAggregator(Context context, boolean asynchronous, OpenHelper openHelper) {
-        mAsynchronous = asynchronous;
+    public ContactAggregator(Context context, OpenHelper openHelper, ContactAggregationScheduler scheduler) {
         mOpenHelper = openHelper;
+        mScheduler = scheduler;
+        mScheduler.setListener(this);
+        mScheduler.start();
 
-        if (asynchronous) {
-            mHandlerThread = new HandlerThread("ContactAggregator", Process.THREAD_PRIORITY_BACKGROUND);
-            mHandlerThread.start();
-            mMessageHandler = new Handler(mHandlerThread.getLooper()) {
-
-                @Override
-                public void handleMessage(Message msg) {
-                    switch (msg.what) {
-                        case START_AGGREGATION_MESSAGE_ID:
-                            aggregateContacts();
-                            break;
-
-                        default:
-                            throw new IllegalStateException("Unhandled message: " + msg.what);
-                    }
-                }
-            };
-        }
+        // Perform an aggregation pass in the beginning, which will most of the time
+        // do nothing.  It will only be useful if the content provider has been killed
+        // before completing aggregation.
+        mScheduler.schedule();
     }
 
     /**
@@ -228,43 +192,30 @@ public class ContactAggregator {
      * the {@link Contacts#AGGREGATE_ID} field is reset on any record.
      */
     public void schedule() {
-        if (mAsynchronous) {
-
-            // If we are currently in the process of aggregating - cancel that
-            mAggregating = false;
-
-            // If aggregation has already been requested, cancel the previous request
-            mMessageHandler.removeMessages(START_AGGREGATION_MESSAGE_ID);
-
-            // TODO: we need to bound this delay.  If aggregation is delayed by a trickle of
-            // requests, we should run it periodically anyway.
-
-            // Schedule aggregation for AGGREGATION_DELAY milliseconds from now
-            mMessageHandler.sendEmptyMessageDelayed(START_AGGREGATION_MESSAGE_ID, AGGREGATION_DELAY);
-        } else {
-            aggregateContacts();
-        }
+        mScheduler.schedule();
     }
 
     /**
      * Kills the contact aggregation thread.
      */
     public void quit() {
-        if (mAsynchronous) {
-            Looper looper = mHandlerThread.getLooper();
-            if (looper != null) {
-                looper.quit();
-            }
-            mAggregating = false;
-        }
+        mScheduler.stop();
+    }
+
+    /**
+     * Invoked by the scheduler to cancel aggregation.
+     */
+    public void interrupt() {
+        mCancel = true;
     }
 
     /**
      * Find all contacts that require aggregation and pass them through aggregation one by one.
+     * Do not call directly.  It is invoked by the scheduler.
      */
-    /* package */ void aggregateContacts() {
-        Log.i(TAG, "Aggregating contacts");
-        mAggregating = true;
+    public void run() {
+        mCancel = false;
+        Log.i(TAG, "Contact aggregation");
 
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
@@ -273,15 +224,19 @@ public class ContactAggregator {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final Cursor c = db.query(Tables.CONTACTS, new String[]{Contacts._ID},
                 Contacts.AGGREGATE_ID + " IS NULL", null, null, null, null);
+
+        int totalCount = c.getCount();
+        int count = 0;
         try {
             if (c.moveToFirst()) {
                 db.beginTransaction();
                 try {
                     do {
-                        if (!mAggregating) {
+                        if (mCancel) {
                             break;
                         }
                         aggregateContact(db, c.getInt(0), candidates, matcher, values);
+                        count++;
                         db.yieldIfContendedSafely();
                     } while (c.moveToNext());
 
@@ -292,6 +247,13 @@ public class ContactAggregator {
             }
         } finally {
             c.close();
+
+            // Unless the aggregation pass was not interrupted, reset the last request timestamp
+            if (count == totalCount) {
+                Log.i(TAG, "Contact aggregation complete: " + totalCount);
+            } else {
+                Log.i(TAG, "Contact aggregation interrupted: " + count + "/" + totalCount);
+            }
         }
     }
 
@@ -332,7 +294,7 @@ public class ContactAggregator {
             db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
                     + NameLookupColumns.CONTACT_ID + "=" + contactId);
 
-            // Delete the aggregate itself if it no longer has consituent contacts
+            // Delete the aggregate itself if it no longer has constituent contacts
             db.execSQL("DELETE FROM " + Tables.AGGREGATES + " WHERE " + Aggregates._ID + "="
                     + aggregateId + " AND " + Aggregates._ID + " NOT IN (SELECT "
                     + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + ");");
@@ -350,7 +312,7 @@ public class ContactAggregator {
      * with the highest match score.  If no such aggregate is found, creates a new aggregate.
      */
     /* package */ synchronized void aggregateContact(SQLiteDatabase db, long contactId,
-                MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
+            MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
         candidates.clear();
         matcher.clear();
 
@@ -379,7 +341,7 @@ public class ContactAggregator {
      */
     private void updateMatchScoresBasedOnExceptions(SQLiteDatabase db, long contactId,
             ContactMatcher matcher) {
-         final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
+        final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
                 AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
                 AggregationExceptionColumns.CONTACT_ID1 + "=" + contactId
                         + " OR " + AggregationExceptionColumns.CONTACT_ID2 + "=" + contactId,
@@ -392,7 +354,6 @@ public class ContactAggregator {
                         ? ContactMatcher.ALWAYS_MATCH
                         : ContactMatcher.NEVER_MATCH);
                 long contactId1 = c.getLong(COL_CONTACT_ID1);
-                long contactId2 = c.getLong(COL_CONTACT_ID2);
                 if (contactId == contactId1) {
                     if (!c.isNull(COL_AGGREGATE_ID2)) {
                         long aggregateId = c.getLong(COL_AGGREGATE_ID2);

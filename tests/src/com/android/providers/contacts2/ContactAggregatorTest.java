@@ -184,10 +184,10 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testAggregationExceptionKeepIn() {
         long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnj", "Smithj");
+        insertStructuredName(contactId1, "Johnk", "Smithk");
 
         long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnjx", "Smithjx");
+        insertStructuredName(contactId2, "Johnkx", "Smithkx");
 
         long aggregateId1 = queryAggregateId(contactId1);
         long aggregateId2 = queryAggregateId(contactId2);
@@ -195,7 +195,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
                 queryAggregateId(contactId1), contactId2);
 
-        assertAggregated(contactId1, contactId2, "Johnjx Smithjx");
+        assertAggregated(contactId1, contactId2, "Johnkx Smithkx");
 
         // Assert that the empty aggregate got removed
         long newAggregateId1 = queryAggregateId(contactId1);
