@@ -36,21 +36,11 @@ import android.test.suitebuilder.annotation.LargeTest;
 @LargeTest
 public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
-    private ContactsActor mActor;
-
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
             AggregationExceptions.AGGREGATE_ID,
             AggregationExceptions.CONTACT_ID
     };
-
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-
-        mActor = new ContactsActor(getContext(), PACKAGE_GREY);
-        mResolver = mActor.resolver;
-    }
 
     public void testCrudAggregationExceptions() throws Exception {
         long contactId1 = createContact();
@@ -182,6 +172,62 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertAggregated(contactId1, contactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
     }
 
+    public void testAggregationBasedOnPhoneNumberNoNameData() {
+        long contactId1 = createContact();
+        insertPhoneNumber(contactId1, "(888)555-1231");
+
+        long contactId2 = createContact();
+        insertPhoneNumber(contactId2, "1(888)555-1231");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnPhoneNumberWhenTargetAggregateHasNoName() {
+        long contactId1 = createContact();
+        insertPhoneNumber(contactId1, "(888)555-1232");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Johnl", "Smithl");
+        insertPhoneNumber(contactId2, "1(888)555-1232");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnPhoneNumberWhenNewContactHasNoName() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Johnm", "Smithm");
+        insertPhoneNumber(contactId1, "(888)555-1233");
+
+        long contactId2 = createContact();
+        insertPhoneNumber(contactId2, "1(888)555-1233");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnPhoneNumberWithSimilarNames() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Ogre", "Hunter");
+        insertPhoneNumber(contactId1, "(888)555-1234");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Opra", "Humper");
+        insertPhoneNumber(contactId2, "1(888)555-1234");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnPhoneNumberWithDifferentNames() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Baby", "Bear");
+        insertPhoneNumber(contactId1, "(888)555-1235");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Blind", "Mouse");
+        insertPhoneNumber(contactId2, "1(888)555-1235");
+
+        assertNotAggregated(contactId1, contactId2);
+    }
+
     public void testAggregationExceptionKeepIn() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Johnk", "Smithk");
@@ -247,7 +293,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertEquals("Johnj Smithj", displayName2);
     }
 
-    public void testAggregationSuggestions() {
+    public void testAggregationSuggestionsBasedOnName() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Duane", null);
 
@@ -281,6 +327,36 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertEquals(aggregateId2, cursor.getLong(0));
         cursor.moveToNext();
         assertEquals(aggregateId3, cursor.getLong(0));
+
+        cursor.close();
+    }
+
+    public void testAggregationSuggestionsBasedOnPhoneNumber() {
+
+        // Create two contacts that would not be aggregated because of name mismatch
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Lord", "Farquaad");
+        insertPhoneNumber(contactId1, "(888)555-1236");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Talking", "Donkey");
+        insertPhoneNumber(contactId2, "1(888)555-1236");
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        long aggregateId2 = queryAggregateId(contactId2);
+        assertTrue(aggregateId1 != aggregateId2);
+
+        // Because of the phone match, they should be included in suggested matches
+        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
+        Uri uri = Uri.withAppendedPath(aggregateUri,
+                Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
+        final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
+                null, null, null);
+
+        assertEquals(1, cursor.getCount());
+
+        cursor.moveToNext();
+        assertEquals(aggregateId2, cursor.getLong(0));
 
         cursor.close();
     }

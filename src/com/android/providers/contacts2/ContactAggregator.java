@@ -71,15 +71,21 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private static final String[] DATA_JOIN_MIMETYPE_COLUMNS = new String[] {
             MimetypeColumns.MIMETYPE,
-            Tables.DATA + "." + Data._ID + " AS data_id",
             Data.DATA1,
             Data.DATA2
     };
 
     private static final int COL_MIMETYPE = 0;
-    private static final int COL_DATA_ID = 1;
-    private static final int COL_DATA1 = 2;
-    private static final int COL_DATA2 = 3;
+    private static final int COL_DATA1 = 1;
+    private static final int COL_DATA2 = 2;
+
+    private static final String[] DATA_JOIN_MIMETYPE_AND_CONTACT_COLUMNS = new String[] {
+            Data.DATA1, Data.DATA2, Contacts.AGGREGATE_ID
+    };
+
+    private static final int COL_DATA_CONTACT_DATA1 = 0;
+    private static final int COL_DATA_CONTACT_DATA2 = 1;
+    private static final int COL_DATA_CONTACT_AGGREGATE_ID = 2;
 
     private static final String[] NAME_LOOKUP_COLUMNS = new String[] {
             Contacts.AGGREGATE_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
@@ -92,16 +98,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final String[] AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS = new String[]{
             AggregationExceptions.TYPE,
             AggregationExceptionColumns.CONTACT_ID1,
-            AggregationExceptionColumns.CONTACT_ID2,
             "contacts1." + Contacts.AGGREGATE_ID,
             "contacts2." + Contacts.AGGREGATE_ID
     };
 
     private static final int COL_TYPE = 0;
     private static final int COL_CONTACT_ID1 = 1;
-    private static final int COL_CONTACT_ID2 = 2;
-    private static final int COL_AGGREGATE_ID1 = 3;
-    private static final int COL_AGGREGATE_ID2 = 4;
+    private static final int COL_AGGREGATE_ID1 = 2;
+    private static final int COL_AGGREGATE_ID2 = 3;
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { Contacts._ID };
     private static final String[] CONTACTS_JOIN_CONTACT_OPTIONS_COLUMNS = new String[] {
@@ -112,11 +116,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_CUSTOM_RINGTONE = 0;
     private static final int COL_SEND_TO_VOICEMAIL = 1;
 
-    // Automatically aggregate contacts if their match score is equal or greater than this threshold
-    private static final int SCORE_THRESHOLD_AGGREGATE = 70;
-
-    // Suggest to aggregate contacts if their match score is equal or greater than this threshold
-    private static final int SCORE_THRESHOLD_SUGGEST = 50;
+    private static final String[] PHONE_LOOKUP_COLUMNS = new String[]{ Contacts.AGGREGATE_ID };
+    private static final int COL_PHONE_LOOKUP_AGGREGATE_ID = 0;
 
     private static final int MODE_INSERT_LOOKUP_DATA = 0;
     private static final int MODE_AGGREGATION = 1;
@@ -317,10 +318,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         candidates.clear();
         matcher.clear();
 
-        updateMatchScoresBasedOnExceptions(db, contactId, matcher);
-        updateMatchScoresBasedOnDataMatches(db, contactId, MODE_AGGREGATION, candidates, matcher);
+        long aggregateId = pickBestMatchBasedOnExceptions(db, contactId, matcher);
+        if (aggregateId == -1) {
+            aggregateId = pickBestMatchBasedOnData(db, contactId, candidates, matcher);
+        }
 
-        long aggregateId = matcher.pickBestMatch(SCORE_THRESHOLD_AGGREGATE);
         boolean newAgg = false;
 
         if (aggregateId == -1) {
@@ -339,8 +341,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     /**
      * Computes match scores based on exceptions entered by the user: always match and never match.
+     * Returns the aggregate with the always match exception if any.
      */
-    private void updateMatchScoresBasedOnExceptions(SQLiteDatabase db, long contactId,
+    private long pickBestMatchBasedOnExceptions(SQLiteDatabase db, long contactId,
             ContactMatcher matcher) {
         final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE,
                 AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
@@ -351,32 +354,130 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         try {
             while (c.moveToNext()) {
                 int type = c.getInt(COL_TYPE);
-                int score = (type == AggregationExceptions.TYPE_KEEP_IN
-                        ? ContactMatcher.ALWAYS_MATCH
-                        : ContactMatcher.NEVER_MATCH);
                 long contactId1 = c.getLong(COL_CONTACT_ID1);
+                long aggregateId = -1;
                 if (contactId == contactId1) {
                     if (!c.isNull(COL_AGGREGATE_ID2)) {
-                        long aggregateId = c.getLong(COL_AGGREGATE_ID2);
-                        matcher.updateScore(aggregateId, score);
+                        aggregateId = c.getLong(COL_AGGREGATE_ID2);
                     }
                 } else {
                     if (!c.isNull(COL_AGGREGATE_ID1)) {
-                        long aggregateId = c.getLong(COL_AGGREGATE_ID1);
-                        matcher.updateScore(aggregateId, score);
+                        aggregateId = c.getLong(COL_AGGREGATE_ID1);
+                    }
+                }
+                if (aggregateId != -1) {
+                    if (type == AggregationExceptions.TYPE_KEEP_IN) {
+                        return aggregateId;
+                    } else {
+                        matcher.keepOut(aggregateId);
                     }
                 }
             }
         } finally {
             c.close();
         }
+
+        return -1;
+    }
+
+    /**
+     * Picks the best matching aggregate based on matches between data elements.  It considers
+     * name match to be primary and phone, email etc matches to be secondary.  A good primary
+     * match triggers aggregation, while a good secondary match only triggers aggregation in
+     * the absence of a strong primary mismatch.
+     * <p>
+     * Consider these examples:
+     * <p>
+     * John Doe with phone number 111-111-1111 and Jon Doe with phone number 111-111-1111 should
+     * be aggregated (same number, similar names).
+     * <p>
+     * John Doe with phone number 111-111-1111 and Deborah Doe with phone number 111-111-1111 should
+     * not be aggregated (same number, different names).
+     */
+    private long pickBestMatchBasedOnData(SQLiteDatabase db, long contactId,
+            MatchCandidateList candidates, ContactMatcher matcher) {
+
+        updateMatchScoresBasedOnDataMatches(db, contactId, MODE_AGGREGATION, candidates, matcher);
+
+        // See if we have already found a good match based on name matches alone
+        long bestMatch = matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_PRIMARY);
+        if (bestMatch == -1) {
+            // We haven't found a good match on name, see if we have any matches on phone, email etc
+            bestMatch = pickBestMatchBasedOnSecondaryData(db, candidates, matcher);
+        }
+
+        return bestMatch;
+    }
+
+    /**
+     * Picks the best matching aggregate based on secondary data matches.  The method loads
+     * structured names for all candidate aggregates and recomputes match scores using approximate
+     * matching.
+     */
+    private long pickBestMatchBasedOnSecondaryData(SQLiteDatabase db,
+            MatchCandidateList candidates, ContactMatcher matcher) {
+        List<Long> secondaryAggregateIds = matcher.prepareSecondaryMatchCandidates(
+                ContactMatcher.SCORE_THRESHOLD_PRIMARY);
+        if (secondaryAggregateIds == null) {
+            return -1;
+        }
+
+        StringBuilder selection = new StringBuilder();
+        selection.append(Contacts.AGGREGATE_ID).append(" IN (");
+        for (int i = 0; i < secondaryAggregateIds.size(); i++) {
+            if (i != 0) {
+                selection.append(',');
+            }
+            selection.append(secondaryAggregateIds.get(i));
+        }
+        selection.append(") AND ")
+                .append(MimetypeColumns.MIMETYPE)
+                .append("='")
+                .append(StructuredName.CONTENT_ITEM_TYPE)
+                .append("'");
+
+        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS,
+                DATA_JOIN_MIMETYPE_AND_CONTACT_COLUMNS,
+                selection.toString(), null, null, null, null);
+
+        MatchCandidateList nameCandidates = new MatchCandidateList();
+        try {
+            while (c.moveToNext()) {
+                String givenName = c.getString(COL_DATA_CONTACT_DATA1);
+                String familyName = c.getString(COL_DATA_CONTACT_DATA2);
+                long aggregateId = c.getLong(COL_DATA_CONTACT_AGGREGATE_ID);
+
+                nameCandidates.clear();
+                addMatchCandidatesStructuredName(givenName, familyName, MODE_INSERT_LOOKUP_DATA,
+                        nameCandidates);
+
+                // Note the N^2 complexity of the following fragment. This is not a huge concern
+                // since the number of candidates is very small and in general secondary hits
+                // in the absence of primary hits are rare.
+                for (int i = 0; i < candidates.mCount; i++) {
+                    NameMatchCandidate candidate = candidates.mList.get(i);
+
+                    for (int j = 0; j < nameCandidates.mCount; j++) {
+                        NameMatchCandidate nameCandidate = nameCandidates.mList.get(j);
+                        matcher.matchName(aggregateId,
+                                nameCandidate.mLookupType, nameCandidate.mName,
+                                candidate.mLookupType, candidate.mName, true);
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        return matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_SECONDARY);
     }
 
     /**
      * Computes scores for aggregates that have matching data rows.
      */
-    private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long contactId, int mode,
-            MatchCandidateList candidates, ContactMatcher matcher) {
+    private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long contactId,
+            int mode, MatchCandidateList candidates, ContactMatcher matcher) {
+
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE,
                 DATA_JOIN_MIMETYPE_COLUMNS,
                 DatabaseUtils.concatenateWhere(Data.CONTACT_ID + "=" + contactId,
@@ -389,19 +490,22 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 String data1 = c.getString(COL_DATA1);
                 String data2 = c.getString(COL_DATA2);
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
-                    candidates.clear();
                     addMatchCandidatesStructuredName(data1, data2, mode, candidates);
-                    lookupNameMatches(db, candidates, matcher);
-                    if (mode == MODE_SUGGESTIONS) {
-                        lookupApproximateNameMatches(db, candidates, matcher);
-                    }
+                } else if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
+                    lookupPhoneMatches(db, data2, matcher);
                 }
             }
         } finally {
             c.close();
         }
 
+        lookupNameMatches(db, candidates, matcher);
+
+        if (mode == MODE_SUGGESTIONS) {
+            lookupApproximateNameMatches(db, candidates, matcher);
+        }
     }
+
 
     /**
      * Looks for matches based on the full name (first + last).
@@ -454,6 +558,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private void lookupNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
             ContactMatcher matcher) {
+
+        if (candidates.mCount == 0) {
+            return;
+        }
 
         StringBuilder selection = new StringBuilder();
         selection.append(NameLookupColumns.NORMALIZED_NAME);
@@ -511,9 +619,24 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 // Determine which candidate produced this match
                 for (int i = 0; i < candidates.mCount; i++) {
                     NameMatchCandidate candidate = candidates.mList.get(i);
-                    matcher.match(aggregateId, candidate.mLookupType, candidate.mName,
+                    matcher.matchName(aggregateId, candidate.mLookupType, candidate.mName,
                             nameType, name, approximate);
                 }
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
+        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        OpenHelper.buildPhoneLookupQuery(qb, phoneNumber);
+        Cursor c = qb.query(db, PHONE_LOOKUP_COLUMNS,
+                Contacts.AGGREGATE_ID + " NOT NULL", null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long aggregateId = c.getLong(COL_PHONE_LOOKUP_AGGREGATE_ID);
+                matcher.updateScoreWithPhoneNumberMatch(aggregateId);
             }
         } finally {
             c.close();
@@ -537,7 +660,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         try {
             while (c.moveToNext()) {
                 String mimeType = c.getString(COL_MIMETYPE);
-                long dataId = c.getLong(COL_DATA_ID);
                 String data1 = c.getString(COL_DATA1);
                 String data2 = c.getString(COL_DATA2);
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
@@ -792,14 +914,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         StringBuilder selection = new StringBuilder();
         selection.append(Aggregates._ID);
         selection.append(" IN (");
-        for (MatchScore matchScore : bestMatches) {
+        for (int i = 0; i < bestMatches.size(); i++) {
+            MatchScore matchScore = bestMatches.get(i);
+            if (i != 0) {
+                selection.append(",");
+            }
             selection.append(matchScore.getAggregateId());
-            selection.append(",");
-        }
-
-        if (!bestMatches.isEmpty()) {
-            // Yank the last comma
-            selection.setLength(selection.length() - 1);
         }
         selection.append(")");
 
@@ -836,6 +956,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
 
+        // Don't aggregate an aggregate with itself
+        matcher.keepOut(aggregateId);
+
         final Cursor c = db.query(Tables.CONTACTS, CONTACT_ID_COLUMN,
                 Contacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
         try {
@@ -848,11 +971,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
 
-        // We don't want to aggregate an aggregate with itself
-        matcher.remove(aggregateId);
-
         List<MatchScore> matches = matcher.pickBestMatches(maxSuggestions,
-                SCORE_THRESHOLD_SUGGEST);
+                ContactMatcher.SCORE_THRESHOLD_SUGGEST);
 
         // TODO: remove the debug logging
         Log.i(TAG, "MATCHES: " + matches);

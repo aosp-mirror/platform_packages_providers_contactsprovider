@@ -26,6 +26,7 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -78,6 +79,16 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
+    protected Uri insertPhoneNumber(long contactId, String phoneNumber) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values.put(Phone.NUMBER, phoneNumber);
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
     protected void setAggregationException(int type, long aggregateId, long contactId) {
         ContentValues values = new ContentValues();
         values.put(AggregationExceptions.AGGREGATE_ID, aggregateId);
@@ -110,6 +121,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         String displayName = c.getString(c.getColumnIndex(Aggregates.DISPLAY_NAME));
         c.close();
         return displayName;
+    }
+
+    protected void assertAggregated(long contactId1, long contactId2) {
+        long aggregateId1 = queryAggregateId(contactId1);
+        long aggregateId2 = queryAggregateId(contactId2);
+        assertTrue(aggregateId1 == aggregateId2);
     }
 
     protected void assertAggregated(long contactId1, long contactId2, String expectedDisplayName) {

@@ -17,8 +17,6 @@ package com.android.providers.contacts2;
 
 import com.android.providers.contacts2.OpenHelper.NameLookupType;
 
-import android.util.Log;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,15 +27,31 @@ import java.util.List;
  */
 public class ContactMatcher {
 
-    public static final int NEVER_MATCH = -1;
-    public static final int ALWAYS_MATCH = 100;
+    // Best possible match score
+    public static final int MAX_SCORE = 100;
 
+    // Suggest to aggregate contacts if their match score is equal or greater than this threshold
+    public static final int SCORE_THRESHOLD_SUGGEST = 50;
+
+    // Automatically aggregate contacts if their match score is equal or greater than this threshold
+    public static final int SCORE_THRESHOLD_PRIMARY = 70;
+
+    // Automatically aggregate contacts if the match score is equal or greater than this threshold
+    // and there is a secondary match (phone number, email etc).
+    public static final int SCORE_THRESHOLD_SECONDARY = 50;
+
+    // Score for missing data (as opposed to present data but a bad match)
+    private static final int NO_DATA_SCORE = -1;
+
+    // Score for matching phone numbers
+    private static final int PHONE_MATCH_SCORE = 71;
+
+    // Minimum edit distance between two names to be considered an approximate match
     public static final float APPROXIMATE_MATCH_THRESHOLD = 0.7f;
 
-    /**
-     * Maximum number of characters in a name to be considered by the matching algorithm.
-     */
+    // Maximum number of characters in a name to be considered by the matching algorithm.
     private static final int MAX_MATCHED_NAME_LENGTH = 12;
+
 
     /**
      * Name matching scores: a matrix by name type vs. candidate lookup type.
@@ -137,50 +151,103 @@ public class ContactMatcher {
      */
     public static class MatchScore implements Comparable<MatchScore> {
         private long mAggregateId;
-        private int mScore;
+        private boolean mKeepIn;
+        private boolean mKeepOut;
+        private int mPrimaryScore;
+        private int mSecondaryScore;
         private int mMatchCount;
 
         public MatchScore(long aggregateId) {
             this.mAggregateId = aggregateId;
         }
 
+        public void reset(long aggregateId) {
+            this.mAggregateId = aggregateId;
+            mKeepIn = false;
+            mKeepOut = false;
+            mPrimaryScore = 0;
+            mSecondaryScore = 0;
+            mMatchCount = 0;
+        }
+
         public long getAggregateId() {
             return mAggregateId;
         }
 
-        public void updateScore(int score) {
-            if (mScore == NEVER_MATCH) {
-                return;
+        public void updatePrimaryScore(int score) {
+            if (score > mPrimaryScore) {
+                mPrimaryScore = score;
             }
-
-            if ((score == NEVER_MATCH) || (score > mScore)) {
-                mScore = score;
-            }
-
             mMatchCount++;
+        }
+
+        public void updateSecondaryScore(int score) {
+            if (score > mSecondaryScore) {
+                mSecondaryScore = score;
+            }
+            mMatchCount++;
+        }
+
+        public void keepIn() {
+            mKeepIn = true;
+        }
+
+        public void keepOut() {
+            mKeepOut = true;
+        }
+
+        public int getScore() {
+            if (mKeepOut) {
+                return 0;
+            }
+
+            if (mKeepIn) {
+                return MAX_SCORE;
+            }
+
+            int score = (mPrimaryScore > mSecondaryScore ? mPrimaryScore : mSecondaryScore);
+
+            // Ensure that of two aggregates with the same match score the one with more matching
+            // data elements wins.
+            return score * 1000 + mMatchCount;
         }
 
         /**
          * Descending order of match score.
          */
         public int compareTo(MatchScore another) {
-            if (mScore == another.mScore) {
-                return another.mMatchCount - mMatchCount;
-            }
-
-            return another.mScore - mScore;
+            return another.getScore() - getScore();
         }
 
         @Override
         public String toString() {
-            return String.valueOf(mAggregateId) + ": "
-                    + String.valueOf(mScore) + "(" + mMatchCount + ")";
+            return mAggregateId + ": " + mPrimaryScore + "/" + mSecondaryScore + "(" + mMatchCount
+                    + ")";
         }
     }
 
     private final HashMap<Long, MatchScore> mScores = new HashMap<Long, MatchScore>();
+    private final ArrayList<MatchScore> mScoreList = new ArrayList<MatchScore>();
+    private int mScoreCount = 0;
+
     private final JaroWinklerDistance mJaroWinklerDistance =
             new JaroWinklerDistance(MAX_MATCHED_NAME_LENGTH);
+
+    private MatchScore getMatchingScore(long aggregateId) {
+        MatchScore matchingScore = mScores.get(aggregateId);
+        if (matchingScore == null) {
+            if (mScoreList.size() > mScoreCount) {
+                matchingScore = mScoreList.get(mScoreCount);
+                matchingScore.reset(aggregateId);
+            } else {
+                matchingScore = new MatchScore(aggregateId);
+                mScoreList.add(matchingScore);
+            }
+            mScoreCount++;
+            mScores.put(aggregateId, matchingScore);
+        }
+        return matchingScore;
+    }
 
     /**
      * Checks if there is a match and updates the overall score for the
@@ -189,7 +256,7 @@ public class ContactMatcher {
      * of name we found and, if the match is approximate, the distance between the candidate and
      * actual name.
      */
-    public void match(long aggregateId, int candidateNameType, String candidateName,
+    public void matchName(long aggregateId, int candidateNameType, String candidateName,
             int nameType, String name, boolean approximate) {
 
         int maxScore = getMaxScore(candidateNameType, nameType);
@@ -198,7 +265,7 @@ public class ContactMatcher {
         }
 
         if (candidateName.equals(name)) {
-            updateScore(aggregateId, maxScore);
+            updatePrimaryScore(aggregateId, maxScore);
             return;
         }
 
@@ -214,29 +281,69 @@ public class ContactMatcher {
         float distance = mJaroWinklerDistance.getDistance(
                 Hex.decodeHex(candidateName), Hex.decodeHex(name));
 
+        int score;
         if (distance > APPROXIMATE_MATCH_THRESHOLD) {
             float adjustedDistance = (distance - APPROXIMATE_MATCH_THRESHOLD)
                     / (1f - APPROXIMATE_MATCH_THRESHOLD);
-            updateScore(aggregateId, (int)(minScore +  (maxScore - minScore) * adjustedDistance));
+            score = (int)(minScore +  (maxScore - minScore) * adjustedDistance);
+        } else {
+            score = 0;
         }
+
+        updatePrimaryScore(aggregateId, score);
     }
 
-    public void updateScore(long aggregateId, int score) {
-        MatchScore matchingScore = mScores.get(aggregateId);
-        if (matchingScore == null) {
-            matchingScore = new MatchScore(aggregateId);
-            mScores.put(aggregateId, matchingScore);
-        }
+    public void updateScoreWithPhoneNumberMatch(long aggregateId) {
+        updateSecondaryScore(aggregateId, PHONE_MATCH_SCORE);
+    }
 
-        matchingScore.updateScore(score);
+    private void updatePrimaryScore(long aggregateId, int score) {
+        getMatchingScore(aggregateId).updatePrimaryScore(score);
+    }
+
+    private void updateSecondaryScore(long aggregateId, int score) {
+        getMatchingScore(aggregateId).updateSecondaryScore(score);
+    }
+
+    public void keepIn(long aggregateId) {
+        getMatchingScore(aggregateId).keepIn();
+    }
+
+    public void keepOut(long aggregateId) {
+        getMatchingScore(aggregateId).keepOut();
     }
 
     public void clear() {
         mScores.clear();
+        mScoreCount = 0;
     }
 
-    public void remove(long aggregateId) {
-        mScores.remove(aggregateId);
+    /**
+     * Returns a list of IDs for aggregates that are matched on secondary data elements
+     * (phone number, email address, nickname). We still need to obtain the approximate
+     * primary score for those aggregates to determine if any of them should be aggregated.
+     * <p>
+     * May return null.
+     */
+    public List<Long> prepareSecondaryMatchCandidates(int threshold) {
+        ArrayList<Long> aggregateIds = null;
+
+        for (int i = 0; i < mScoreCount; i++) {
+            MatchScore score = mScoreList.get(i);
+            if (score.mKeepOut) {
+                continue;
+            }
+
+            int s = score.mSecondaryScore;
+            if (s >= threshold) {
+                if (aggregateIds == null) {
+                    aggregateIds = new ArrayList<Long>();
+                }
+                aggregateIds.add(score.mAggregateId);
+                score.mPrimaryScore = NO_DATA_SCORE;
+            }
+        }
+        return aggregateIds;
     }
 
     /**
@@ -246,14 +353,24 @@ public class ContactMatcher {
     public long pickBestMatch(int threshold) {
         long aggregateId = -1;
         int maxScore = 0;
-        int maxMatchCount = 0;
-        for (MatchScore score : mScores.values()) {
-            if (score.mScore >= threshold
-                    && (score.mScore > maxScore
-                            || (score.mScore == maxScore && score.mMatchCount > maxMatchCount))) {
+        for (int i = 0; i < mScoreCount; i++) {
+            MatchScore score = mScoreList.get(i);
+            if (score.mKeepIn) {
+                return score.mAggregateId;
+            }
+
+            if (score.mKeepOut) {
+                continue;
+            }
+
+            int s = score.mPrimaryScore;
+            if (s == NO_DATA_SCORE) {
+                s = score.mSecondaryScore;
+            }
+
+            if (s >= threshold && s > maxScore) {
                 aggregateId = score.mAggregateId;
-                maxScore = score.mScore;
-                maxMatchCount = score.mMatchCount;
+                maxScore = s;
             }
         }
         return aggregateId;
@@ -263,11 +380,12 @@ public class ContactMatcher {
      * Returns up to {@code maxSuggestions} best scoring matches.
      */
     public List<MatchScore> pickBestMatches(int maxSuggestions, int threshold) {
-        ArrayList<MatchScore> matches = new ArrayList<MatchScore>(mScores.values());
+        List<MatchScore> matches = mScoreList.subList(0, mScoreCount);
         Collections.sort(matches);
         int count = 0;
-        for (MatchScore matchScore : matches) {
-            if (matchScore.mScore >= threshold) {
+        for (int i = 0; i < mScoreCount; i++) {
+            MatchScore matchScore = matches.get(i);
+            if (matchScore.getScore() >= threshold) {
                 count++;
             } else {
                 break;

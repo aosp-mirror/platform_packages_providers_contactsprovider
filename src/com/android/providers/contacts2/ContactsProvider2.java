@@ -1357,17 +1357,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 }
 
                 final String number = uri.getLastPathSegment();
-                final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
-                final StringBuilder tables = new StringBuilder();
-                tables.append("contacts, (SELECT data_id FROM phone_lookup "
-                        + "WHERE (phone_lookup.normalized_number GLOB '");
-                tables.append(normalizedNumber);
-                tables.append("*')) AS lookup, " + Tables.DATA_JOIN_MIMETYPE);
-                qb.setTables(tables.toString());
-                qb.appendWhere("lookup.data_id=data._id AND data.contact_id=contacts._id AND ");
-                qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
-                qb.appendWhereEscapeString(number);
-                qb.appendWhere(")");
+                OpenHelper.buildPhoneLookupQuery(qb, number);
                 qb.setProjectionMap(sDataContactsProjectionMap);
                 break;
             }

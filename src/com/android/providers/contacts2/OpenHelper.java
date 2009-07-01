@@ -26,6 +26,7 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.os.Binder;
 import android.provider.BaseColumns;
@@ -39,7 +40,9 @@ import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RestrictionExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 
+import android.telephony.PhoneNumberUtils;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -78,6 +81,10 @@ import java.util.LinkedList;
 
         public static final String DATA_JOIN_MIMETYPE = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id)";
+
+        public static final String DATA_JOIN_MIMETYPE_CONTACTS = "data "
+                + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id)";
 
         public static final String DATA_JOIN_MIMETYPE_CONTACTS_PACKAGE = "data "
                 + "LEFT OUTER JOIN mimetype ON (data.mimetype_id = mimetype._id) "
@@ -211,9 +218,9 @@ import java.util.LinkedList;
     }
 
     /** In-memory cache of previously found mimetype mappings */
-    private HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
+    private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
-    private HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
+    private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
 
 
     /** Compiled statements for querying and inserting mappings */
@@ -692,6 +699,21 @@ import java.util.LinkedList;
         mNameLookupInsert.executeInsert();
     }
 
+    public static void buildPhoneLookupQuery(SQLiteQueryBuilder qb, final String number) {
+        final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        final StringBuilder tables = new StringBuilder();
+        tables.append("contacts, (SELECT data_id FROM phone_lookup "
+                + "WHERE (phone_lookup.normalized_number GLOB '");
+        tables.append(normalizedNumber);
+        tables.append("*')) AS lookup, " + Tables.DATA_JOIN_MIMETYPE);
+        qb.setTables(tables.toString());
+        qb.appendWhere("lookup.data_id=data._id AND data.contact_id=contacts._id AND ");
+        qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
+        qb.appendWhereEscapeString(number);
+        qb.appendWhere(")");
+    }
+
+
     /**
      * Add a {@link RestrictionExceptions} record. This will update the
      * in-memory lookup table, and write to the database when needed. Any
@@ -766,7 +788,7 @@ import java.util.LinkedList;
      * escaping of the field values yourself.
      */
     private static class MatchesClause<T> extends LinkedList<T> {
-        private HashMap<String, String> mCache = new HashMap<String, String>();
+        private final HashMap<String, String> mCache = new HashMap<String, String>();
 
         private static final String JOIN_OR = " OR ";
 
@@ -815,7 +837,7 @@ import java.util.LinkedList;
      * specific {@link RestrictionExceptions#PACKAGE_CLIENT}.
      */
     private static class RestrictionExceptionsCache extends HashMap<Integer, MatchesClause<Long>> {
-        private StringBuilder mBuilder = new StringBuilder();
+        private final StringBuilder mBuilder = new StringBuilder();
 
         private static final String[] PROJ_RESTRICTION_EXCEPTIONS = new String[] {
                 RestrictionExceptionsColumns.PACKAGE_PROVIDER_ID,
