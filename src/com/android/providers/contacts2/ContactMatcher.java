@@ -102,6 +102,11 @@ public class ContactMatcher {
         setScoreRange(NameLookupType.FULL_NAME_REVERSE_CONCATENATED,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 40, 80);
 
+        setScoreRange(NameLookupType.FULL_NAME_WITH_NICKNAME,
+                NameLookupType.FULL_NAME_WITH_NICKNAME, 75, 75);
+        setScoreRange(NameLookupType.FULL_NAME_WITH_NICKNAME_REVERSE,
+                NameLookupType.FULL_NAME_WITH_NICKNAME_REVERSE, 73, 73);
+
         setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
                 NameLookupType.FAMILY_NAME_ONLY, 45, 75);
         setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
@@ -109,12 +114,18 @@ public class ContactMatcher {
         setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
 
+        setScoreRange(NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME,
+                NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME, 70, 70);
+
         setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
                 NameLookupType.GIVEN_NAME_ONLY, 40, 70);
         setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
                 NameLookupType.FULL_NAME_CONCATENATED, 32, 72);
         setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
+
+        setScoreRange(NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME,
+                NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME, 73, 73);
     }
 
     /**

@@ -25,6 +25,7 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
@@ -48,6 +49,8 @@ import android.util.Log;
 import java.util.HashMap;
 import java.util.LinkedList;
 
+import com.android.providers.contacts2.R;
+
 /**
  * Database open helper for contacts and social activity data. Designed as a
  * singleton to make sure that all {@link android.content.ContentProvider} users get the same
@@ -57,7 +60,7 @@ import java.util.LinkedList;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 31;
+    private static final int DATABASE_VERSION = 34;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -74,6 +77,7 @@ import java.util.LinkedList;
         public static final String CONTACT_OPTIONS = "contact_options";
         public static final String DATA = "data";
         public static final String PRESENCE = "presence";
+        public static final String NICKNAME_LOOKUP = "nickname_lookup";
 
         public static final String AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE = "aggregates "
                 + "LEFT OUTER JOIN presence ON (aggregates._id = presence.aggregate_id) "
@@ -181,13 +185,16 @@ import java.util.LinkedList;
         public static final int FULL_NAME_CONCATENATED = 1;
         public static final int FULL_NAME_REVERSE = 2;
         public static final int FULL_NAME_REVERSE_CONCATENATED = 3;
-        public static final int GIVEN_NAME_ONLY = 4;
-        public static final int FAMILY_NAME_ONLY = 5;
-        public static final int NICKNAME = 6;
-        public static final int INITIALS = 7;
+        public static final int FULL_NAME_WITH_NICKNAME = 4;
+        public static final int FULL_NAME_WITH_NICKNAME_REVERSE = 5;
+        public static final int GIVEN_NAME_ONLY = 6;
+        public static final int GIVEN_NAME_ONLY_AS_NICKNAME = 7;
+        public static final int FAMILY_NAME_ONLY = 8;
+        public static final int FAMILY_NAME_ONLY_AS_NICKNAME = 9;
+        public static final int NICKNAME = 10;
 
         // This is the highest name lookup type code
-        public static final int TYPE_COUNT = 7;
+        public static final int TYPE_COUNT = 10;
     }
 
     public interface PackageColumns {
@@ -217,6 +224,17 @@ import java.util.LinkedList;
         public static final String SEND_TO_VOICEMAIL = "send_to_voicemail";
     }
 
+    public interface NicknameLookupColumns {
+        public static final String NAME = "name";
+        public static final String CLUSTER = "cluster";
+    }
+
+    private static final String[] NICKNAME_LOOKUP_COLUMNS = new String[] {
+        NicknameLookupColumns.CLUSTER
+    };
+
+    private static final int COL_NICKNAME_LOOKUP_CLUSTER = 0;
+
     /** In-memory cache of previously found mimetype mappings */
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
@@ -235,7 +253,10 @@ import java.util.LinkedList;
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
 
+    private final Context mContext;
     private final RestrictionExceptionsCache mCache;
+    private HashMap<String, String[]> mNicknameClusterCache;
+
 
     private static OpenHelper sSingleton = null;
 
@@ -254,9 +275,9 @@ import java.util.LinkedList;
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         Log.i(TAG, "Creating OpenHelper");
 
+        mContext = context;
         mCache = new RestrictionExceptionsCache();
         mCache.loadFromDatabase(context, getReadableDatabase());
-
     }
 
     @Override
@@ -467,6 +488,16 @@ import java.util.LinkedList;
                 NameLookupColumns.CONTACT_ID +
         ");");
 
+        db.execSQL("CREATE TABLE " + Tables.NICKNAME_LOOKUP + " (" +
+                NicknameLookupColumns.NAME + " TEXT," +
+                NicknameLookupColumns.CLUSTER + " TEXT" +
+        ");");
+
+        db.execSQL("CREATE UNIQUE INDEX nickname_lookup_index ON " + Tables.NICKNAME_LOOKUP + " (" +
+                NicknameLookupColumns.NAME + ", " +
+                NicknameLookupColumns.CLUSTER +
+        ");");
+
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
@@ -512,6 +543,7 @@ import java.util.LinkedList;
                 Activities.THUMBNAIL + " BLOB" +
         ");");
 
+        loadNicknameLookupTable(db);
     }
 
     @Override
@@ -527,6 +559,7 @@ import java.util.LinkedList;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
@@ -553,6 +586,9 @@ import java.util.LinkedList;
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
+
+        // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
+
         db.execSQL("VACUUM;");
     }
 
@@ -713,6 +749,83 @@ import java.util.LinkedList;
         qb.appendWhere(")");
     }
 
+
+    /**
+     * Loads common nickname mappings into the database.
+     */
+    private void loadNicknameLookupTable(SQLiteDatabase db) {
+        String[] strings = mContext.getResources().getStringArray(R.array.common_nicknames);
+        if (strings == null || strings.length == 0) {
+            return;
+        }
+
+        SQLiteStatement nicknameLookupInsert = db.compileStatement("INSERT INTO "
+                + Tables.NICKNAME_LOOKUP + "(" + NicknameLookupColumns.NAME + ","
+                + NicknameLookupColumns.CLUSTER + ") VALUES (?,?)");
+
+        for (int clusterId = 0; clusterId < strings.length; clusterId++) {
+            String[] names = strings[clusterId].split(",");
+            for (int j = 0; j < names.length; j++) {
+                String name = NameNormalizer.normalize(names[j]);
+                try {
+                    DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 1, name);
+                    DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 2,
+                            String.valueOf(clusterId));
+                    nicknameLookupInsert.executeInsert();
+                } catch (SQLiteException e) {
+
+                    // Print the exception and keep going - this is not a fatal error
+                    Log.e(TAG, "Cannot insert nickname: " + names[j], e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns common nickname cluster IDs for a given name. For example, it
+     * will return the same value for "Robert", "Bob" and "Rob". Some names belong to multiple
+     * clusters, e.g. Leo could be Leonard or Leopold.
+     *
+     * May return null.
+     *
+     * @param normalizedName A normalized first name, see {@link NameNormalizer#normalize}.
+     */
+    public String[] getCommonNicknameClusters(String normalizedName) {
+        if (mNicknameClusterCache == null) {
+            mNicknameClusterCache = new HashMap<String, String[]>();
+        }
+
+        synchronized (mNicknameClusterCache) {
+            if (mNicknameClusterCache.containsKey(normalizedName)) {
+                return mNicknameClusterCache.get(normalizedName);
+            }
+        }
+
+        String[] clusters = null;
+        SQLiteDatabase db = getReadableDatabase();
+
+        Cursor cursor = db.query(Tables.NICKNAME_LOOKUP, NICKNAME_LOOKUP_COLUMNS,
+                NicknameLookupColumns.NAME + "=?", new String[] { normalizedName },
+                null, null, null);
+        try {
+            int count = cursor.getCount();
+            if (count > 0) {
+                clusters = new String[count];
+                for (int i = 0; i < count; i++) {
+                    cursor.moveToNext();
+                    clusters[i] = cursor.getString(COL_NICKNAME_LOOKUP_CLUSTER);
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+
+        synchronized (mNicknameClusterCache) {
+            mNicknameClusterCache.put(normalizedName, clusters);
+        }
+
+        return clusters;
+    }
 
     /**
      * Add a {@link RestrictionExceptions} record. This will update the

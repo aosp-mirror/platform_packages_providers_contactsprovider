@@ -19,6 +19,7 @@ package com.android.providers.contacts2;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.os.Binder;
 import android.provider.ContactsContract;
 import android.test.IsolatedContext;
@@ -56,7 +57,7 @@ public class ContactsActor {
      * security infrastructure.
      */
     public ContactsActor(Context overallContext, String packageName) {
-        context = new RestrictionMockContext(packageName);
+        context = new RestrictionMockContext(overallContext, packageName);
         this.packageName = packageName;
         resolver = new MockContentResolver();
 
@@ -80,13 +81,15 @@ public class ContactsActor {
      * to report that no UID contains that package name.
      */
     private static class RestrictionMockContext extends MockContext {
-        private String mReportedPackageName;
-        private RestrictionMockPackageManager mPackageManager;
+        private final Context mOverallContext;
+        private final String mReportedPackageName;
+        private final RestrictionMockPackageManager mPackageManager;
 
         /**
          * Create a {@link Context} under the given package name.
          */
-        public RestrictionMockContext(String reportedPackageName) {
+        public RestrictionMockContext(Context overallContext, String reportedPackageName) {
+            mOverallContext = overallContext;
             mReportedPackageName = reportedPackageName;
             mPackageManager = new RestrictionMockPackageManager();
             mPackageManager.addPackage(1000, PACKAGE_GREY);
@@ -104,6 +107,11 @@ public class ContactsActor {
         public PackageManager getPackageManager() {
             return mPackageManager;
         }
+
+        @Override
+        public Resources getResources() {
+            return mOverallContext.getResources();
+        }
     }
 
     /**
@@ -113,8 +121,8 @@ public class ContactsActor {
      * {@link Context#getPackageName()}.
      */
     private static class RestrictionMockPackageManager extends MockPackageManager {
-        private HashMap<Integer, String> mForward = new HashMap<Integer, String>();
-        private HashMap<String, Integer> mReverse = new HashMap<String, Integer>();
+        private final HashMap<Integer, String> mForward = new HashMap<Integer, String>();
+        private final HashMap<String, Integer> mReverse = new HashMap<String, Integer>();
 
         /**
          * Add a UID-to-package mapping, which is then stored internally.

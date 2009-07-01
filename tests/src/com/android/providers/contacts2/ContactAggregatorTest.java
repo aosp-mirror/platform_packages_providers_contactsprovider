@@ -228,6 +228,26 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(contactId1, contactId2);
     }
 
+    public void testAggregationByNicknameWithLastName() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Bill", "Gore");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "William", "Gore");
+
+        assertAggregated(contactId1, contactId2, "William Gore");
+    }
+
+    public void testAggregationByNicknameOnly() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Bill", null);
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "William", null);
+
+        assertAggregated(contactId1, contactId2, "William");
+    }
+
     public void testAggregationExceptionKeepIn() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Johnk", "Smithk");
@@ -347,6 +367,31 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertTrue(aggregateId1 != aggregateId2);
 
         // Because of the phone match, they should be included in suggested matches
+        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
+        Uri uri = Uri.withAppendedPath(aggregateUri,
+                Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
+        final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
+                null, null, null);
+
+        assertEquals(1, cursor.getCount());
+
+        cursor.moveToNext();
+        assertEquals(aggregateId2, cursor.getLong(0));
+
+        cursor.close();
+    }
+
+    public void testAggregationSuggestionsBasedOnNickname() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Dick", "Cherry");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Richard", "Cherry");
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+
+        long aggregateId2 = queryAggregateId(contactId2);
         final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
         Uri uri = Uri.withAppendedPath(aggregateUri,
                 Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
