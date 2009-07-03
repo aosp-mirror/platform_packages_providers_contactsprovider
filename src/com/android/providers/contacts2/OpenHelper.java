@@ -117,7 +117,7 @@ import com.android.providers.contacts2.R;
                 + "LEFT OUTER JOIN accounts ON (contacts.accounts_id = accounts._id)";
 
         public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
-                + "LEFT OUTER JOIN contacts ON (name_lookup.contact_id = contacts._id)";
+                + "INNER JOIN contacts ON (name_lookup.contact_id = contacts._id)";
 
         public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS = "agg_exceptions "
                 + "INNER JOIN contacts contacts1 "
@@ -180,7 +180,7 @@ import com.android.providers.contacts2.R;
         public static final String NAME_TYPE = "name_type";
     }
 
-    public interface NameLookupType {
+    public final static class NameLookupType {
         public static final int FULL_NAME = 0;
         public static final int FULL_NAME_CONCATENATED = 1;
         public static final int FULL_NAME_REVERSE = 2;
@@ -192,9 +192,15 @@ import com.android.providers.contacts2.R;
         public static final int FAMILY_NAME_ONLY = 8;
         public static final int FAMILY_NAME_ONLY_AS_NICKNAME = 9;
         public static final int NICKNAME = 10;
+        public static final int EMAIL_BASED_NICKNAME = 11;
 
-        // This is the highest name lookup type code
-        public static final int TYPE_COUNT = 10;
+        // This is the highest name lookup type code plus one
+        public static final int TYPE_COUNT = 12;
+
+        public static boolean isBasedOnStructuredName(int nameLookupType) {
+            return nameLookupType != NameLookupType.EMAIL_BASED_NICKNAME
+                    && nameLookupType != NameLookupType.NICKNAME;
+        }
     }
 
     public interface PackageColumns {

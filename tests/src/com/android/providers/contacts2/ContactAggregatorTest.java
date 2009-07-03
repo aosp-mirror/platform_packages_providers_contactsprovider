@@ -15,8 +15,6 @@
  */
 package com.android.providers.contacts2;
 
-import static com.android.providers.contacts2.ContactsActor.PACKAGE_GREY;
-
 import android.content.ContentUris;
 import android.database.Cursor;
 import android.net.Uri;
@@ -228,7 +226,63 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(contactId1, contactId2);
     }
 
-    public void testAggregationByNicknameWithLastName() {
+    public void testAggregationBasedOnEmailNoNameData() {
+        long contactId1 = createContact();
+        insertEmail(contactId1, "lightning@android.com");
+
+        long contactId2 = createContact();
+        insertEmail(contactId2, "lightning@android.com");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnEmailWhenTargetAggregateHasNoName() {
+        long contactId1 = createContact();
+        insertEmail(contactId1, "mcqueen@android.com");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Lightning", "McQueen");
+        insertEmail(contactId2, "mcqueen@android.com");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnEmailWhenNewContactHasNoName() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Doc", "Hudson");
+        insertEmail(contactId1, "doc@android.com");
+
+        long contactId2 = createContact();
+        insertEmail(contactId2, "doc@android.com");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnEmailWithSimilarNames() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Sally", "Carrera");
+        insertEmail(contactId1, "sally@android.com");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Sallie", "Carerra");
+        insertEmail(contactId2, "sally@android.com");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationBasedOnEmailWithDifferentNames() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Chick", "Hicks");
+        insertEmail(contactId1, "hicky@android.com");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Luigi", "Guido");
+        insertEmail(contactId2, "hicky@android.com");
+
+        assertNotAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationByCommonNicknameWithLastName() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Bill", "Gore");
 
@@ -238,14 +292,48 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertAggregated(contactId1, contactId2, "William Gore");
     }
 
-    public void testAggregationByNicknameOnly() {
+    public void testAggregationByCommonNicknameOnly() {
         long contactId1 = createContact();
-        insertStructuredName(contactId1, "Bill", null);
+        insertStructuredName(contactId1, "Lawrence", null);
 
         long contactId2 = createContact();
-        insertStructuredName(contactId2, "William", null);
+        insertStructuredName(contactId2, "Larry", null);
 
-        assertAggregated(contactId1, contactId2, "William");
+        assertAggregated(contactId1, contactId2, "Lawrence");
+    }
+
+    public void testAggregationByNicknameNoStructuredName() {
+        long contactId1 = createContact();
+        insertNickname(contactId1, "Frozone");
+
+        long contactId2 = createContact();
+        insertNickname(contactId2, "Frozone");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationByNicknameWithSimilarNames() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Buddy", "Pine");
+        insertNickname(contactId1, "Syndrome");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Body", "Pane");
+        insertNickname(contactId2, "Syndrome");
+
+        assertAggregated(contactId1, contactId2);
+    }
+
+    public void testAggregationByNicknameWithDifferentNames() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Helen", "Parr");
+        insertNickname(contactId1, "Elastigirl");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Shawn", "Johnson");
+        insertNickname(contactId2, "Elastigirl");
+
+        assertNotAggregated(contactId1, contactId2);
     }
 
     public void testAggregationExceptionKeepIn() {
@@ -335,20 +423,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long aggregateId2 = queryAggregateId(contactId2);
         long aggregateId3 = queryAggregateId(contactId3);
 
-        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
-        Uri uri = Uri.withAppendedPath(aggregateUri,
-                Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
-        final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
-                null, null, null);
-
-        assertEquals(2, cursor.getCount());
-
-        cursor.moveToNext();
-        assertEquals(aggregateId2, cursor.getLong(0));
-        cursor.moveToNext();
-        assertEquals(aggregateId3, cursor.getLong(0));
-
-        cursor.close();
+        assertSuggestions(aggregateId1, aggregateId2, aggregateId3);
     }
 
     public void testAggregationSuggestionsBasedOnPhoneNumber() {
@@ -366,22 +441,77 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long aggregateId2 = queryAggregateId(contactId2);
         assertTrue(aggregateId1 != aggregateId2);
 
-        // Because of the phone match, they should be included in suggested matches
-        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
-        Uri uri = Uri.withAppendedPath(aggregateUri,
-                Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
-        final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
-                null, null, null);
+        assertSuggestions(aggregateId1, aggregateId2);
+    }
 
-        assertEquals(1, cursor.getCount());
+    public void testAggregationSuggestionsBasedOnEmailAddress() {
 
-        cursor.moveToNext();
-        assertEquals(aggregateId2, cursor.getLong(0));
+        // Create two contacts that would not be aggregated because of name mismatch
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Carl", "Fredricksen");
+        insertEmail(contactId1, "up@android.com");
 
-        cursor.close();
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Charles", "Muntz");
+        insertEmail(contactId2, "up@android.com");
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        long aggregateId2 = queryAggregateId(contactId2);
+        assertTrue(aggregateId1 != aggregateId2);
+
+        assertSuggestions(aggregateId1, aggregateId2);
+    }
+
+    public void testAggregationSuggestionsBasedOnEmailAddressApproximateMatch() {
+
+        // Create two contacts that would not be aggregated because of name mismatch
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Bob", null);
+        insertEmail(contactId1, "incredible2004@android.com");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Lucius", "Best");
+        insertEmail(contactId2, "incrediball@androidd.com");
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        long aggregateId2 = queryAggregateId(contactId2);
+        assertTrue(aggregateId1 != aggregateId2);
+
+        assertSuggestions(aggregateId1, aggregateId2);
     }
 
     public void testAggregationSuggestionsBasedOnNickname() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Peter", "Parker");
+        insertNickname(contactId1, "Spider-Man");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Manny", "Spider");
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+
+        long aggregateId2 = queryAggregateId(contactId2);
+        assertSuggestions(aggregateId1, aggregateId2);
+    }
+
+    public void testAggregationSuggestionsBasedOnNicknameMatchingName() {
+        long contactId1 = createContact();
+        insertStructuredName(contactId1, "Clark", "Kent");
+        insertNickname(contactId1, "Superman");
+
+        long contactId2 = createContact();
+        insertStructuredName(contactId2, "Roy", "Williams");
+        insertNickname(contactId2, "superman");
+
+        long aggregateId1 = queryAggregateId(contactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+
+        long aggregateId2 = queryAggregateId(contactId2);
+        assertSuggestions(aggregateId1, aggregateId2);
+    }
+
+    public void testAggregationSuggestionsBasedOnCommonNickname() {
         long contactId1 = createContact();
         insertStructuredName(contactId1, "Dick", "Cherry");
 
@@ -392,16 +522,22 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
 
         long aggregateId2 = queryAggregateId(contactId2);
-        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId1);
+        assertSuggestions(aggregateId1, aggregateId2);
+    }
+
+    private void assertSuggestions(long aggregateId, long... suggestions) {
+        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId);
         Uri uri = Uri.withAppendedPath(aggregateUri,
                 Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
         final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
                 null, null, null);
 
-        assertEquals(1, cursor.getCount());
+        assertEquals(suggestions.length, cursor.getCount());
 
-        cursor.moveToNext();
-        assertEquals(aggregateId2, cursor.getLong(0));
+        for (int i = 0; i < suggestions.length; i++) {
+            cursor.moveToNext();
+            assertEquals(suggestions[i], cursor.getLong(0));
+        }
 
         cursor.close();
     }

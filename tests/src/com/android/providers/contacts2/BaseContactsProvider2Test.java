@@ -26,6 +26,8 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
@@ -84,6 +86,26 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.CONTACT_ID, contactId);
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
         values.put(Phone.NUMBER, phoneNumber);
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertEmail(long contactId, String email) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        values.put(Email.DATA, email);
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertNickname(long contactId, String nickname) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
+        values.put(Nickname.NAME, nickname);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;

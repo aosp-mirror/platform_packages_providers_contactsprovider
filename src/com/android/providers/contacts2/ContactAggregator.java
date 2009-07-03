@@ -19,6 +19,7 @@ package com.android.providers.contacts2;
 import com.android.providers.contacts2.ContactMatcher.MatchScore;
 import com.android.providers.contacts2.OpenHelper.AggregatesColumns;
 import com.android.providers.contacts2.OpenHelper.AggregationExceptionColumns;
+import com.android.providers.contacts2.OpenHelper.Clauses;
 import com.android.providers.contacts2.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts2.OpenHelper.ContactsColumns;
 import com.android.providers.contacts2.OpenHelper.MimetypeColumns;
@@ -42,6 +43,8 @@ import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
+import android.text.util.Rfc822Token;
+import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -91,7 +94,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             Contacts.AGGREGATE_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
     };
 
-    private static final int COL_AGGREGATE_ID = 0;
+    private static final int COL_NAME_LOOKUP_AGGREGATE_ID = 0;
     private static final int COL_NORMALIZED_NAME = 1;
     private static final int COL_NAME_TYPE = 2;
 
@@ -116,8 +119,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_CUSTOM_RINGTONE = 0;
     private static final int COL_SEND_TO_VOICEMAIL = 1;
 
-    private static final String[] PHONE_LOOKUP_COLUMNS = new String[]{ Contacts.AGGREGATE_ID };
-    private static final int COL_PHONE_LOOKUP_AGGREGATE_ID = 0;
+    private static final String[] AGGREGATE_ID_COLUMNS = new String[]{ Contacts.AGGREGATE_ID };
+    private static final int COL_AGGREGATE_ID = 0;
 
     private static final int MODE_INSERT_LOOKUP_DATA = 0;
     private static final int MODE_AGGREGATION = 1;
@@ -457,11 +460,15 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 for (int i = 0; i < candidates.mCount; i++) {
                     NameMatchCandidate candidate = candidates.mList.get(i);
 
-                    for (int j = 0; j < nameCandidates.mCount; j++) {
-                        NameMatchCandidate nameCandidate = nameCandidates.mList.get(j);
-                        matcher.matchName(aggregateId,
-                                nameCandidate.mLookupType, nameCandidate.mName,
-                                candidate.mLookupType, candidate.mName, true);
+                    // We only want to compare structured names to structured names
+                    // at this stage, we need to ignore all other sources of name lookup data.
+                    if (NameLookupType.isBasedOnStructuredName(candidate.mLookupType)) {
+                        for (int j = 0; j < nameCandidates.mCount; j++) {
+                            NameMatchCandidate nameCandidate = nameCandidates.mList.get(j);
+                            matcher.matchName(aggregateId,
+                                    nameCandidate.mLookupType, nameCandidate.mName,
+                                    candidate.mLookupType, candidate.mName, true);
+                        }
                     }
                 }
             }
@@ -491,8 +498,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 String data2 = c.getString(COL_DATA2);
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
                     addMatchCandidatesStructuredName(data1, data2, mode, candidates);
+                } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
+                    addMatchCandidatesEmail(data2, mode, candidates);
+                    lookupEmailMatches(db, data2, matcher);
                 } else if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
                     lookupPhoneMatches(db, data2, matcher);
+                } else if (mimeType.equals(CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
+                    addMatchCandidatesNickname(data2, mode, candidates);
+                    lookupNicknameMatches(db, data2, matcher);
                 }
             }
         } finally {
@@ -505,7 +518,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             lookupApproximateNameMatches(db, candidates, matcher);
         }
     }
-
 
     /**
      * Looks for matches based on the full name (first + last).
@@ -598,6 +610,34 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
+     * Extracts the user name portion from an email address and normalizes it so that it
+     * can be matched against names and nicknames.
+     */
+    private void addMatchCandidatesEmail(String email, int mode, MatchCandidateList candidates) {
+        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
+        if (tokens.length == 0) {
+            return;
+        }
+
+        String address = tokens[0].getAddress();
+        int at = address.indexOf('@');
+        if (at != -1) {
+            address = address.substring(0, at);
+        }
+
+        candidates.add(NameNormalizer.normalize(address), NameLookupType.EMAIL_BASED_NICKNAME);
+    }
+
+
+    /**
+     * Normalizes the nickname and adds it to the list of candidates.
+     */
+    private void addMatchCandidatesNickname(String nickname, int mode,
+            MatchCandidateList candidates) {
+        candidates.add(NameNormalizer.normalize(nickname), NameLookupType.NICKNAME);
+    }
+
+    /**
      * Given a list of {@link NameMatchCandidate}'s, finds all matches and computes their scores.
      */
     private void lookupNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
@@ -656,7 +696,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         try {
             while (c.moveToNext()) {
-                Long aggregateId = c.getLong(COL_AGGREGATE_ID);
+                Long aggregateId = c.getLong(COL_NAME_LOOKUP_AGGREGATE_ID);
                 String name = c.getString(COL_NORMALIZED_NAME);
                 int nameType = c.getInt(COL_NAME_TYPE);
 
@@ -675,12 +715,49 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         OpenHelper.buildPhoneLookupQuery(qb, phoneNumber);
-        Cursor c = qb.query(db, PHONE_LOOKUP_COLUMNS,
+        Cursor c = qb.query(db, AGGREGATE_ID_COLUMNS,
                 Contacts.AGGREGATE_ID + " NOT NULL", null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long aggregateId = c.getLong(COL_PHONE_LOOKUP_AGGREGATE_ID);
+                long aggregateId = c.getLong(COL_AGGREGATE_ID);
                 matcher.updateScoreWithPhoneNumberMatch(aggregateId);
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Finds exact email matches and updates their match scores.
+     */
+    private void lookupEmailMatches(SQLiteDatabase db, String address, ContactMatcher matcher) {
+        Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_CONTACTS, AGGREGATE_ID_COLUMNS,
+                Clauses.WHERE_EMAIL_MATCHES + " AND " + Contacts.AGGREGATE_ID + " NOT NULL",
+                new String[]{address}, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long aggregateId = c.getLong(COL_AGGREGATE_ID);
+                matcher.updateScoreWithEmailMatch(aggregateId);
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Finds exact nickname matches in the name lookup table and updates their match scores.
+     */
+    private void lookupNicknameMatches(SQLiteDatabase db, String nickname, ContactMatcher matcher) {
+        String normalized = NameNormalizer.normalize(nickname);
+        Cursor c = db.query(true, Tables.NAME_LOOKUP_JOIN_CONTACTS, AGGREGATE_ID_COLUMNS,
+                NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + " AND "
+                        + NameLookupColumns.NORMALIZED_NAME + "='" + normalized + "' AND "
+                        + Contacts.AGGREGATE_ID + " NOT NULL",
+                null, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long aggregateId = c.getLong(COL_AGGREGATE_ID);
+                matcher.updateScoreWithNicknameMatch(aggregateId);
             }
         } finally {
             c.close();
@@ -709,6 +786,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
                     addMatchCandidatesStructuredName(data1, data2, MODE_INSERT_LOOKUP_DATA,
                             candidates);
+                } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
+                    addMatchCandidatesEmail(data2, MODE_INSERT_LOOKUP_DATA, candidates);
+                } else if (mimeType.equals(CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
+                    addMatchCandidatesNickname(data2, MODE_INSERT_LOOKUP_DATA, candidates);
                 }
             }
         } finally {

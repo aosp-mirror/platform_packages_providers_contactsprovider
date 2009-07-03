@@ -46,11 +46,20 @@ public class ContactMatcher {
     // Score for matching phone numbers
     private static final int PHONE_MATCH_SCORE = 71;
 
+    // Score for matching email addresses
+    private static final int EMAIL_MATCH_SCORE = 71;
+
+    // Score for matching nickname
+    private static final int NICKNAME_MATCH_SCORE = 71;
+
     // Minimum edit distance between two names to be considered an approximate match
     public static final float APPROXIMATE_MATCH_THRESHOLD = 0.7f;
 
     // Maximum number of characters in a name to be considered by the matching algorithm.
     private static final int MAX_MATCHED_NAME_LENGTH = 12;
+
+    // Scores a multiplied by this number to allow room for "fractional" scores
+    private static final int SCORE_SCALE = 1000;
 
 
     /**
@@ -96,6 +105,10 @@ public class ContactMatcher {
                 NameLookupType.FULL_NAME_CONCATENATED, 40, 80);
         setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
+        setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
+                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
+        setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
+                NameLookupType.NICKNAME, 30, 60);
 
         setScoreRange(NameLookupType.FULL_NAME_REVERSE_CONCATENATED,
                 NameLookupType.FULL_NAME_CONCATENATED, 30, 70);
@@ -113,9 +126,15 @@ public class ContactMatcher {
                 NameLookupType.FULL_NAME_CONCATENATED, 32, 72);
         setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
+        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
+                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
+        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
+                NameLookupType.NICKNAME, 30, 60);
 
         setScoreRange(NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME,
-                NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME, 70, 70);
+                NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME, 71, 71);
+        setScoreRange(NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME,
+                NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME, 70, 70);
 
         setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
                 NameLookupType.GIVEN_NAME_ONLY, 40, 70);
@@ -123,9 +142,41 @@ public class ContactMatcher {
                 NameLookupType.FULL_NAME_CONCATENATED, 32, 72);
         setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
                 NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
+        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
+                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
+        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
+                NameLookupType.NICKNAME, 30, 60);
 
         setScoreRange(NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME,
                 NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME, 73, 73);
+        setScoreRange(NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME,
+                NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME, 70, 70);
+
+        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
+                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
+        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
+                NameLookupType.GIVEN_NAME_ONLY, 30, 60);
+        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
+                NameLookupType.FAMILY_NAME_ONLY, 30, 60);
+        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
+                NameLookupType.FULL_NAME_CONCATENATED, 30, 60);
+        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
+                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 60);
+        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
+                NameLookupType.NICKNAME, 30, 60);
+
+        setScoreRange(NameLookupType.NICKNAME,
+                NameLookupType.NICKNAME, 30, 60);
+        setScoreRange(NameLookupType.NICKNAME,
+                NameLookupType.GIVEN_NAME_ONLY, 30, 60);
+        setScoreRange(NameLookupType.NICKNAME,
+                NameLookupType.FAMILY_NAME_ONLY, 30, 60);
+        setScoreRange(NameLookupType.NICKNAME,
+                NameLookupType.FULL_NAME_CONCATENATED, 30, 60);
+        setScoreRange(NameLookupType.NICKNAME,
+                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 60);
+        setScoreRange(NameLookupType.NICKNAME,
+                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
     }
 
     /**
@@ -220,7 +271,7 @@ public class ContactMatcher {
 
             // Ensure that of two aggregates with the same match score the one with more matching
             // data elements wins.
-            return score * 1000 + mMatchCount;
+            return score * SCORE_SCALE + mMatchCount;
         }
 
         /**
@@ -269,7 +320,6 @@ public class ContactMatcher {
      */
     public void matchName(long aggregateId, int candidateNameType, String candidateName,
             int nameType, String name, boolean approximate) {
-
         int maxScore = getMaxScore(candidateNameType, nameType);
         if (maxScore == 0) {
             return;
@@ -306,6 +356,14 @@ public class ContactMatcher {
 
     public void updateScoreWithPhoneNumberMatch(long aggregateId) {
         updateSecondaryScore(aggregateId, PHONE_MATCH_SCORE);
+    }
+
+    public void updateScoreWithEmailMatch(long aggregateId) {
+        updateSecondaryScore(aggregateId, EMAIL_MATCH_SCORE);
+    }
+
+    public void updateScoreWithNicknameMatch(long aggregateId) {
+        updateSecondaryScore(aggregateId, NICKNAME_MATCH_SCORE);
     }
 
     private void updatePrimaryScore(long aggregateId, int score) {
@@ -391,12 +449,13 @@ public class ContactMatcher {
      * Returns up to {@code maxSuggestions} best scoring matches.
      */
     public List<MatchScore> pickBestMatches(int maxSuggestions, int threshold) {
+        int scaledThreshold = threshold * SCORE_SCALE;
         List<MatchScore> matches = mScoreList.subList(0, mScoreCount);
         Collections.sort(matches);
         int count = 0;
         for (int i = 0; i < mScoreCount; i++) {
             MatchScore matchScore = matches.get(i);
-            if (matchScore.getScore() >= threshold) {
+            if (matchScore.getScore() >= scaledThreshold) {
                 count++;
             } else {
                 break;
