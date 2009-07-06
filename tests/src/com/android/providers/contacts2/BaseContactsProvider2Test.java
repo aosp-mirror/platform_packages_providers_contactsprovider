@@ -61,8 +61,6 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected Uri insertStructuredName(long contactId, String givenName, String familyName) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
-        values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
             sb.append(givenName);
@@ -77,6 +75,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(StructuredName.GIVEN_NAME, givenName);
         values.put(StructuredName.FAMILY_NAME, familyName);
 
+        return insertStructuredName(contactId, values);
+    }
+
+    protected Uri insertStructuredName(long contactId, ContentValues values) {
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }
@@ -164,5 +168,27 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         long aggregateId1 = queryAggregateId(contactId1);
         long aggregateId2 = queryAggregateId(contactId2);
         assertTrue(aggregateId1 != aggregateId2);
+    }
+
+    protected void assertStructuredName(long contactId, String prefix, String givenName,
+            String middleName, String familyName, String suffix) {
+        Uri uri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.Data.CONTENT_DIRECTORY);
+
+        final String[] projection = new String[] {
+                StructuredName.PREFIX, StructuredName.GIVEN_NAME, StructuredName.MIDDLE_NAME,
+                StructuredName.FAMILY_NAME, StructuredName.SUFFIX
+        };
+
+        Cursor c = mResolver.query(uri, projection, Data.MIMETYPE + "='"
+                + StructuredName.CONTENT_ITEM_TYPE + "'", null, null);
+
+        assertTrue(c.moveToFirst());
+        assertEquals(prefix, c.getString(0));
+        assertEquals(givenName, c.getString(1));
+        assertEquals(middleName, c.getString(2));
+        assertEquals(familyName, c.getString(3));
+        assertEquals(suffix, c.getString(4));
+        c.close();
     }
 }

@@ -23,6 +23,9 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.Data;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -36,6 +39,25 @@ import android.test.suitebuilder.annotation.LargeTest;
  */
 @LargeTest
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
+
+    public void testDisplayNameParsingWhenPartsUnspecified() {
+        long contactId = createContact();
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
+        insertStructuredName(contactId, values);
+
+        assertStructuredName(contactId, "Mr", "John", "Kevin", "von Smith", "Jr");
+    }
+
+    public void testDisplayNameParsingWhenPartsSpecified() {
+        long contactId = createContact();
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
+        values.put(StructuredName.FAMILY_NAME, "Johnson");
+        insertStructuredName(contactId, values);
+
+        assertStructuredName(contactId, null, null, null, "Johnson", null);
+    }
 
     public void testSendToVoicemailDefault() {
         long contactId = createContact();

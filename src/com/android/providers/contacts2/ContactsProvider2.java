@@ -62,6 +62,7 @@ import android.provider.ContactsContract.RestrictionExceptions;
 import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Postal;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -371,6 +372,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final AccountComparator sAccountComparator = new AccountComparator();
 
     private ContactAggregator mContactAggregator;
+    private NameSplitter mNameSplitter;
 
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
@@ -399,6 +401,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         mSetSuperPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA + " SET " + Data.IS_SUPER_PRIMARY
                 + "=(_id=?) WHERE " + sSetSuperPrimaryWhere);
+
+        mNameSplitter = new NameSplitter(context.getString(R.string.common_name_prefixes),
+                context.getString(R.string.common_last_name_prefixes),
+                context.getString(R.string.common_name_suffixes),
+                context.getString(R.string.common_name_conjunctions));
 
         return (db != null);
     }
@@ -712,11 +719,15 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             values.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
             values.remove(Data.MIMETYPE);
 
+            if (StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
+                parseStructuredName(values);
+            }
+
             // Insert the data row itself
             id = db.insert(Tables.DATA, Data.DATA1, values);
 
             // If it's a phone number add the normalized version to the lookup table
-            if (CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
+            if (Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
                 final ContentValues phoneValues = new ContentValues();
                 final String number = values.getAsString(Phone.NUMBER);
                 phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER,
@@ -739,6 +750,31 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         }
 
         return id;
+    }
+
+    /**
+     * Parse the supplied display name, but only if the incoming values do not already contain
+     * structured name parts.
+     */
+    private void parseStructuredName(ContentValues values) {
+        final String fullName = values.getAsString(StructuredName.DISPLAY_NAME);
+        if (TextUtils.isEmpty(fullName)
+                || !TextUtils.isEmpty(values.getAsString(StructuredName.PREFIX))
+                || !TextUtils.isEmpty(values.getAsString(StructuredName.GIVEN_NAME))
+                || !TextUtils.isEmpty(values.getAsString(StructuredName.MIDDLE_NAME))
+                || !TextUtils.isEmpty(values.getAsString(StructuredName.FAMILY_NAME))
+                || !TextUtils.isEmpty(values.getAsString(StructuredName.SUFFIX))) {
+            return;
+        }
+
+        NameSplitter.Name name = new NameSplitter.Name();
+        mNameSplitter.split(name, fullName);
+
+        values.put(StructuredName.PREFIX, name.getPrefix());
+        values.put(StructuredName.GIVEN_NAME, name.getGivenNames());
+        values.put(StructuredName.MIDDLE_NAME, name.getMiddleName());
+        values.put(StructuredName.FAMILY_NAME, name.getFamilyName());
+        values.put(StructuredName.SUFFIX, name.getSuffix());
     }
 
     /**

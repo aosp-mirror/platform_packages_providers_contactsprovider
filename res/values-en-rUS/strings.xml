@@ -96,6 +96,7 @@
       <item>Maureen, Mo</item>
       <item>Maurice, Mo</item>
       <item>Megan, Meg</item>
+      <item>Michael, Mickey, Mick, Mike, Mikey</item>
       <item>Morris, Mo</item>
       <item>Nancy, Nan</item>
       <item>Nathan, Nat, Nate</item>
@@ -138,4 +139,19 @@
       <item>Yvonna, Vonna</item>
       <item>Zachary, Zach, Zack, Zac</item>
    </string-array>
+   <string name="common_name_prefixes">
+      1LT, 1ST, 2LT, 2ND, 3RD, ADMIRAL, CAPT, CAPTAIN, COL, CPT, DR,
+      GEN, GENERAL, LCDR, LT, LTC, LTG, LTJG, MAJ, MAJOR, MG, MR,
+      MRS, MS, PASTOR, PROF, REP, REVEREND, REV, SEN, ST
+   </string>
+   <string name="common_name_suffixes">
+      B.A., BA, D.D.S., DDS, I, II, III, IV, IX, JR, M.A., M.D, MA,
+      MD, MS, PH.D., PHD, SR, V, VI, VII, VIII, X
+   </string>
+   <string name="common_last_name_prefixes">
+      D', DE, DEL, DI, LA, LE, MC, SAN, ST, TER, VAN, VON
+   </string>
+   <string name="common_name_conjunctions">
+      &amp;, AND, OR
+   </string>
 </resources>
