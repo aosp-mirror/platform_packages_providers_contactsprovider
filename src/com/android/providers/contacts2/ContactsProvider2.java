@@ -233,8 +233,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions/*",
                 AGGREGATION_EXCEPTION_ID);
 
-        matcher.addURI(SocialContract.AUTHORITY, "presence", PRESENCE);
-        matcher.addURI(SocialContract.AUTHORITY, "presence/#", PRESENCE_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "presence", PRESENCE);
+        matcher.addURI(ContactsContract.AUTHORITY, "presence/#", PRESENCE_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "restriction_exceptions", RESTRICTION_EXCEPTIONS);
 
@@ -276,10 +276,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(CommonDataKinds.Phone.TYPE, CommonDataKinds.Phone.TYPE);
         columns.put(CommonDataKinds.Phone.LABEL, CommonDataKinds.Phone.LABEL);
         columns.put(CommonDataKinds.Phone.NUMBER, CommonDataKinds.Phone.NUMBER);
-        // TODO figure out how to make the MAX behavior work, probably involving a "group by" clause.
-        //columns.put(Presence.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
-        columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
-
+        columns.put(Presence.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
         sAggregatesSummaryProjectionMap = columns;
 
         // Contacts projection map
@@ -1154,9 +1151,11 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
      * Test if a {@link String} value appears in the given list.
      */
     private boolean isContained(String[] array, String value) {
-        for (String test : array) {
-            if (value.equals(test)) {
-                return true;
+        if (array != null) {
+            for (String test : array) {
+                if (value.equals(test)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -1167,7 +1166,9 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
      * array if the value doesn't already appear.
      */
     private String[] assertContained(String[] array, String value) {
-        if (!isContained(array, value)) {
+        if (array == null) {
+            array = new String[] {value};
+        } else if (!isContained(array, value)) {
             String[] newArray = new String[array.length + 1];
             System.arraycopy(array, 0, newArray, 0, array.length);
             newArray[array.length] = value;
@@ -1183,6 +1184,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
         String limit = null;
+        String aggregateIdColName = Tables.AGGREGATES + "." + Aggregates._ID;
 
         // TODO: Consider writing a test case for RestrictionExceptions when you
         // write a new query() block to make sure it protects restricted data.
@@ -1226,6 +1228,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 applyAggregatePrimaryRestrictionExceptions(sAggregatesSummaryProjectionMap);
                 projection = assertContained(projection, Aggregates.PRIMARY_PHONE_ID);
                 qb.setProjectionMap(sAggregatesSummaryProjectionMap);
+                groupBy = aggregateIdColName;
                 break;
             }
 
@@ -1238,6 +1241,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 applyAggregatePrimaryRestrictionExceptions(sAggregatesSummaryProjectionMap);
                 projection = assertContained(projection, Aggregates.PRIMARY_PHONE_ID);
                 qb.setProjectionMap(sAggregatesSummaryProjectionMap);
+                groupBy = aggregateIdColName;
                 break;
             }
 
@@ -1248,6 +1252,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(buildAggregateLookupWhereClause(uri.getLastPathSegment()));
                 }
+                groupBy = aggregateIdColName;
                 break;
             }
 
@@ -1261,7 +1266,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                     qb.appendWhere(buildAggregateLookupWhereClause(uri.getLastPathSegment()));
                 }
                 final String starredQuery = qb.buildQuery(projection, Aggregates.STARRED + "=1",
-                        null, null, null, null,
+                        null, aggregateIdColName, null, null,
                         null /* limit */);
 
                 // Build the second query for frequent
@@ -1275,7 +1280,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 final String frequentQuery = qb.buildQuery(projection,
                         Aggregates.TIMES_CONTACTED + " > 0 AND (" + Aggregates.STARRED
                         + " = 0 OR " + Aggregates.STARRED + " IS NULL)",
-                        null, null, null, null, null);
+                        null, aggregateIdColName, null, null, null);
 
                 // Put them together
                 final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
@@ -1432,7 +1437,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         // Perform the query and set the notification uri
         final Cursor c = qb.query(db, projection, selection, selectionArgs,
-                null, null, sortOrder, limit);
+                groupBy, null, sortOrder, limit);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }

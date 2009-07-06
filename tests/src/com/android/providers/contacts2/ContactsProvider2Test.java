@@ -16,6 +16,7 @@
 package com.android.providers.contacts2;
 
 import com.android.internal.util.ArrayUtils;
+import com.android.providers.contacts2.BaseContactsProvider2Test;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -24,9 +25,11 @@ import android.net.Uri;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-import android.provider.ContactsContract.Data;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.util.Log;
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -127,6 +130,26 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertSendToVoicemailAndRingtone(aggregateId1, true, "foo");
         assertSendToVoicemailAndRingtone(queryAggregateId(contactId2), false, "bar");
+    }
+
+    public void testSinglePresenceRowPerAggregate() {
+        int protocol1 = Im.PROTOCOL_GOOGLE_TALK;
+        String handle1 = "test@gmail.com";
+
+        long contactId1 = createContact();
+        insertImHandle(contactId1, protocol1, handle1);
+
+        insertPresence(protocol1, handle1, Presence.AVAILABLE);
+        insertPresence(protocol1, handle1, Presence.AWAY);
+        insertPresence(protocol1, handle1, Presence.INVISIBLE);
+
+        Cursor c = queryAggregateSummary(queryAggregateId(contactId1),
+                new String[] {Presence.PRESENCE_STATUS});
+        assertEquals(c.getCount(), 1);
+
+        c.moveToFirst();
+        assertEquals(c.getInt(0), Presence.AVAILABLE);
+
     }
 
     private void updateSendToVoicemailAndRingtone(long aggregateId, boolean sendToVoicemail,

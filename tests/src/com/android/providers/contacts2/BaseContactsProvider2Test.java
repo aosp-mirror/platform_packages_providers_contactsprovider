@@ -17,6 +17,8 @@ package com.android.providers.contacts2;
 
 import static com.android.providers.contacts2.ContactsActor.PACKAGE_GREY;
 
+import com.android.providers.contacts2.ContactsActor;
+
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -25,6 +27,8 @@ import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
@@ -115,6 +119,27 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
+    protected Uri insertPresence(int protocol, String handle, int presence) {
+        ContentValues values = new ContentValues();
+        values.put(Presence.IM_PROTOCOL, protocol);
+        values.put(Presence.IM_HANDLE, handle);
+        values.put(Presence.PRESENCE_STATUS, presence);
+
+        Uri resultUri = mResolver.insert(Presence.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertImHandle(long contactId, int protocol, String handle) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Im.CONTENT_ITEM_TYPE);
+        values.put(Im.PROTOCOL, protocol);
+        values.put(Im.DATA, handle);
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
     protected void setAggregationException(int type, long aggregateId, long contactId) {
         ContentValues values = new ContentValues();
         values.put(AggregationExceptions.AGGREGATE_ID, aggregateId);
@@ -131,6 +156,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected Cursor queryAggregate(long aggregateId) {
         return mResolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId),
                 null, null, null, null);
+    }
+
+    protected Cursor queryAggregateSummary(long aggregateId, String[] projection) {
+        return mResolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_SUMMARY_URI,
+                aggregateId), projection, null, null, null);
+    }
+
+    protected Cursor queryAggregateSummary() {
+        return mResolver.query(Aggregates.CONTENT_SUMMARY_URI, null, null, null, null);
     }
 
     protected long queryAggregateId(long contactId) {
