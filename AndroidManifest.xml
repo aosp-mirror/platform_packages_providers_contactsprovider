@@ -18,6 +18,9 @@
         <provider android:name="ContactsProvider" android:authorities="contacts;call_log"
                 android:syncable="false" android:multiprocess="false"
                 android:readPermission="android.permission.READ_CONTACTS"
-                android:writePermission="android.permission.WRITE_CONTACTS" />
+                android:writePermission="android.permission.WRITE_CONTACTS">
+            <path-permission android:path="/people/search_suggest_query"
+                    android:readPermission="android.permission.GLOBAL_SEARCH" />
+        </provider>
     </application>
 </manifest>
