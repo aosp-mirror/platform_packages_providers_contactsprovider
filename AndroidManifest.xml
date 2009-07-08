@@ -13,11 +13,28 @@
     <uses-permission android:name="android.permission.SUBSCRIBED_FEEDS_WRITE" />
 
     <application android:process="android.process.acore"
-                 android:label="@string/app_label"
-                 android:icon="@drawable/app_icon">
-        <provider android:name="ContactsProvider" android:authorities="contacts;call_log"
-                android:syncable="false" android:multiprocess="false"
-                android:readPermission="android.permission.READ_CONTACTS"
-                android:writePermission="android.permission.WRITE_CONTACTS" />
+        android:label="@string/app_label"
+        android:icon="@drawable/app_icon">
+
+        <provider android:name="ContactsProvider" 
+            android:authorities="contacts;call_log"
+            android:syncable="false" android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS" />
+
+        <provider android:name="ContactsProvider2"
+            android:authorities="com.android.contacts"
+            android:syncable="false"
+            android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS" />
+
+        <!-- TODO: create permissions for social data -->
+        <provider android:name="SocialProvider"
+            android:authorities="com.android.social"
+            android:syncable="false"
+            android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS" />
     </application>
 </manifest>
