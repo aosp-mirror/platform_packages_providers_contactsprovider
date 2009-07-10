@@ -26,19 +26,20 @@ import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.internal.content.SyncStateContentProviderHelper;
 
 import android.accounts.Account;
-import android.content.ContentProvider;
-import android.content.ContentProviderOperation;
-import android.content.ContentProviderResult;
-import android.content.ContentUris;
-import android.content.ContentValues;
-import android.content.Context;
-import android.content.Entity;
-import android.content.EntityIterator;
-import android.content.OperationApplicationException;
-import android.content.UriMatcher;
 import android.content.pm.PackageManager;
+import android.content.ContentProvider;
+import android.content.UriMatcher;
+import android.content.Context;
+import android.content.ContentValues;
+import android.content.ContentUris;
+import android.content.EntityIterator;
+import android.content.Entity;
+import android.content.ContentProviderResult;
+import android.content.OperationApplicationException;
+import android.content.ContentProviderOperation;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
@@ -128,6 +129,8 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int GROUPS = 10000;
     private static final int GROUPS_ID = 10001;
     private static final int GROUPS_SUMMARY = 10003;
+
+    private static final int SYNCSTATE = 11000;
 
     private interface Projections {
         public static final String[] PROJ_CONTACTS = new String[] {
@@ -250,6 +253,8 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
         matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "groups_summary", GROUPS_SUMMARY);
+
+        matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH, SYNCSTATE);
 
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
@@ -420,6 +425,7 @@ public class ContactsProvider2 extends ContentProvider {
     @Override
     public boolean onCreate() {
         final Context context = getContext();
+
         mOpenHelper = getOpenHelper(context);
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
@@ -480,7 +486,12 @@ public class ContactsProvider2 extends ContentProvider {
     public Uri insert(Uri uri, ContentValues values) {
         final int match = sUriMatcher.match(uri);
         long id = 0;
+
         switch (match) {
+            case SYNCSTATE:
+                id = mOpenHelper.getSyncState().insert(mOpenHelper.getWritableDatabase(), values);
+                break;
+
             case AGGREGATES: {
                 id = insertAggregate(values);
                 break;
@@ -893,9 +904,11 @@ public class ContactsProvider2 extends ContentProvider {
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case SYNCSTATE:
+                return mOpenHelper.getSyncState().delete(db, selection, selectionArgs);
+
             case AGGREGATES_ID: {
                 long aggregateId = ContentUris.parseId(uri);
 
@@ -952,11 +965,14 @@ public class ContactsProvider2 extends ContentProvider {
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        int count = 0;
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        int count = 0;
 
         final int match = sUriMatcher.match(uri);
         switch(match) {
+            case SYNCSTATE:
+                return mOpenHelper.getSyncState().update(db, values, selection, selectionArgs);
+
             // TODO(emillar): We will want to disallow editing the aggregates table at some point.
             case AGGREGATES: {
                 count = db.update(Tables.AGGREGATES, values, selection, selectionArgs);
@@ -1248,6 +1264,7 @@ public class ContactsProvider2 extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
         String limit = null;
@@ -1257,6 +1274,10 @@ public class ContactsProvider2 extends ContentProvider {
         // write a new query() block to make sure it protects restricted data.
         final int match = sUriMatcher.match(uri);
         switch (match) {
+            case SYNCSTATE:
+                return mOpenHelper.getSyncState().query(db, projection, selection,  selectionArgs,
+                        sortOrder);
+
             case AGGREGATES: {
                 qb.setTables(Tables.AGGREGATES);
                 applyAggregateRestrictionExceptions(qb);

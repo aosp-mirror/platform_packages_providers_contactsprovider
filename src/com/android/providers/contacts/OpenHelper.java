@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.content.ContentValues;
 import android.content.Context;
+import com.android.internal.content.SyncStateContentProviderHelper;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -34,7 +35,6 @@ import android.provider.BaseColumns;
 import android.provider.SocialContract.Activities;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
@@ -319,6 +319,7 @@ import java.util.LinkedList;
     private SQLiteStatement mActivitiesMimetypeQuery;
 
     private final Context mContext;
+    private final SyncStateContentProviderHelper mSyncState;
     private final RestrictionExceptionsCache mCache;
     private HashMap<String, String[]> mNicknameClusterCache;
 
@@ -338,7 +339,7 @@ import java.util.LinkedList;
 
     /**
      * Private constructor, callers except unit tests should obtain an instance through
-     * {@link #getInstance(Context)} instead.
+     * {@link #getInstance(android.content.Context)} instead.
      */
     /* package */ OpenHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -347,10 +348,14 @@ import java.util.LinkedList;
         mContext = context;
         mCache = new RestrictionExceptionsCache();
         mCache.loadFromDatabase(context, getReadableDatabase());
+        mSyncState = new SyncStateContentProviderHelper();
+
     }
 
     @Override
     public void onOpen(SQLiteDatabase db) {
+        mSyncState.onDatabaseOpened(db);
+
         // Create compiled statements for package and mimetype lookups
         mMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns._ID + " FROM "
                 + Tables.MIMETYPES + " WHERE " + MimetypesColumns.MIMETYPE + "=?");
@@ -405,6 +410,8 @@ import java.util.LinkedList;
     @Override
     public void onCreate(SQLiteDatabase db) {
         Log.i(TAG, "Bootstrapping database");
+
+        mSyncState.createDatabase(db);
 
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.AGGREGATES + " (" +
@@ -649,6 +656,13 @@ import java.util.LinkedList;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACT_OPTIONS + ";");
 
         onCreate(db);
+
+        // TODO: eventually when this supports upgrades we should do something like the following: 
+//        if (!upgradeDatabase(db, oldVersion, newVersion)) {
+//            mSyncState.discardSyncData(db, null /* all accounts */);
+//            ContentResolver.requestSync(null /* all accounts */,
+//                    mContentUri.getAuthority(), new Bundle());
+//        }
     }
 
     /**
@@ -1147,4 +1161,7 @@ import java.util.LinkedList;
         }
     }
 
+    public SyncStateContentProviderHelper getSyncState() {
+        return mSyncState;
+    }
 }
