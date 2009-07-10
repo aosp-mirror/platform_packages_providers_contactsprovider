@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -59,7 +60,7 @@ public class ContactsActor {
     public Context context;
     public String packageName;
     public MockContentResolver resolver;
-    public SynchronousContactsProvider2 provider;
+    public ContentProvider provider;
 
     /**
      * Create an "actor" using the given parent {@link Context} and the specific
@@ -67,18 +68,19 @@ public class ContactsActor {
      * a new instance of {@link RestrictionMockContext}, which stubs out the
      * security infrastructure.
      */
-    public ContactsActor(Context overallContext, String packageName) {
+    public ContactsActor(Context overallContext, String packageName,
+            Class<? extends ContentProvider> providerClass, String authority) throws Exception {
         context = new RestrictionMockContext(overallContext, packageName);
         this.packageName = packageName;
         resolver = new MockContentResolver();
 
-        RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(
-                context, overallContext, FILENAME_PREFIX);
+        RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
+                overallContext, FILENAME_PREFIX);
         Context providerContext = new IsolatedContext(resolver, targetContextWrapper);
 
-        provider = new SynchronousContactsProvider2();
+        provider = providerClass.newInstance();
         provider.attachInfo(providerContext, null);
-        resolver.addProvider(ContactsContract.AUTHORITY, provider);
+        resolver.addProvider(authority, provider);
     }
 
     /**

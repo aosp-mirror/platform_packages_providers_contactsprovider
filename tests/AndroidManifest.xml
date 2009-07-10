@@ -34,7 +34,7 @@
     -->
     <instrumentation android:name="android.test.InstrumentationTestRunner"
         android:targetPackage="com.android.providers.contacts"
-        android:label="Contacts2 provider tests">
+        android:label="Contacts Provider Tests">
     </instrumentation>
 
 </manifest>
