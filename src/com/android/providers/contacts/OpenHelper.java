@@ -32,7 +32,6 @@ import android.database.sqlite.SQLiteStatement;
 import android.os.Binder;
 import android.provider.BaseColumns;
 import android.provider.SocialContract.Activities;
-import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -61,7 +60,7 @@ import java.util.LinkedList;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 38;
+    private static final int DATABASE_VERSION = 39;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -140,9 +139,8 @@ import java.util.LinkedList;
                 + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
                 + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
-        public static final String CONTACTS_JOIN_PACKAGES_ACCOUNTS = "contacts "
-                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
-                + "LEFT OUTER JOIN accounts ON (contacts.accounts_id = accounts._id)";
+        public static final String CONTACTS_JOIN_PACKAGES = "contacts "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) ";
 
         public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
                 + "INNER JOIN contacts ON (name_lookup.contact_id = contacts._id)";
@@ -408,18 +406,6 @@ import java.util.LinkedList;
     public void onCreate(SQLiteDatabase db) {
         Log.i(TAG, "Bootstrapping database");
 
-        db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
-                BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                Accounts.NAME + " TEXT," +
-                Accounts.TYPE + " TEXT," +
-                Accounts.DATA1 + " TEXT," +
-                Accounts.DATA2 + " TEXT, " +
-                Accounts.DATA3 + " TEXT, " +
-                Accounts.DATA4 + " TEXT, " +
-                Accounts.DATA5 + " TEXT, " +
-                " UNIQUE(" + Accounts.NAME + ", " + Accounts.TYPE + ") " +
-        ");");
-
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.AGGREGATES + " (" +
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -445,7 +431,8 @@ import java.util.LinkedList;
                 Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 ContactsColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
                 Contacts.IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.ACCOUNTS_ID + " INTEGER REFERENCES accounts(_id)," +
+                Contacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
+                Contacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 Contacts.SOURCE_ID + " TEXT," +
                 Contacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
@@ -581,7 +568,8 @@ import java.util.LinkedList;
         db.execSQL("CREATE TABLE " + Tables.GROUPS + " (" +
                 Groups._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 Groups.PACKAGE_ID + " INTEGER REFERENCES package(_id) NOT NULL," +
-                Groups.ACCOUNTS_ID + " INTEGER REFERENCES accounts(_id)," +
+                Groups.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
+                Groups.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 Groups.SOURCE_ID + " TEXT," +
                 Groups.TITLE + " TEXT," +
                 Groups.TITLE_RESOURCE + " INTEGER," +

@@ -28,8 +28,6 @@ import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.accounts.Account;
-import android.accounts.AccountManager;
-import android.accounts.OnAccountsUpdatedListener;
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -52,9 +50,7 @@ import android.os.Binder;
 import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.SocialContract;
 import android.provider.Contacts.ContactMethods;
-import android.provider.ContactsContract.Accounts;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -74,15 +70,13 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 
 /**
  * Contacts content provider. The contract between this provider and applications
  * is defined in {@link ContactsContract}.
  */
-public class ContactsProvider2 extends ContentProvider implements OnAccountsUpdatedListener {
+public class ContactsProvider2 extends ContentProvider {
     // TODO: clean up debug tag and rename this class
     private static final String TAG = "ContactsProvider ~~~~";
 
@@ -120,9 +114,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final int POSTALS = 3004;
 
     private static final int PHONE_LOOKUP = 4000;
-
-    private static final int ACCOUNTS = 5000;
-    private static final int ACCOUNTS_ID = 5001;
 
     private static final int AGGREGATION_EXCEPTIONS = 6000;
     private static final int AGGREGATION_EXCEPTION_ID = 6001;
@@ -197,10 +188,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final HashMap<String, String> sDataProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
     private static final HashMap<String, String> sDataContactsProjectionMap;
-    /** Contains the data and contacts columns, for joined tables */
-    private static final HashMap<String, String> sDataContactsAccountsProjectionMap;
-    /** Contains just the key and value columns */
-    private static final HashMap<String, String> sAccountsProjectionMap;
     /** Contains the just the {@link Groups} columns */
     private static final HashMap<String, String> sGroupsProjectionMap;
     /** Contains {@link Groups} columns along with summary details */
@@ -209,9 +196,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
     /** Contains the just the {@link RestrictionExceptions} columns */
     private static final HashMap<String, String> sRestrictionExceptionsProjectionMap;
-
-    private static final HashMap<Account, Long> sAccountsToIdMap = new HashMap<Account, Long>();
-    private static final HashMap<Long, Account> sIdToAccountsMap = new HashMap<Long, Account>();
 
     /** Sql select statement that returns the contact id associated with a data record. */
     private static final String sNestedContactIdSelect;
@@ -238,8 +222,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
-        matcher.addURI(ContactsContract.AUTHORITY, "accounts", ACCOUNTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "accounts/#", ACCOUNTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates", AGGREGATES);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#", AGGREGATES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/data", AGGREGATES_DATA);
@@ -282,18 +264,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         HashMap<String, String> columns;
 
-        // Accounts projection map
-        columns = new HashMap<String, String>();
-        columns.put(Accounts._ID, "accounts._id AS _id");
-        columns.put(Accounts.NAME, Accounts.NAME);
-        columns.put(Accounts.TYPE, Accounts.TYPE);
-        columns.put(Accounts.DATA1, Accounts.DATA1);
-        columns.put(Accounts.DATA2, Accounts.DATA2);
-        columns.put(Accounts.DATA3, Accounts.DATA3);
-        columns.put(Accounts.DATA4, Accounts.DATA4);
-        columns.put(Accounts.DATA5, Accounts.DATA5);
-        sAccountsProjectionMap = columns;
-
         // Aggregates projection map
         columns = new HashMap<String, String>();
         columns.put(Aggregates._ID, "aggregates._id AS _id");
@@ -327,8 +297,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Contacts._ID, "contacts._id AS _id");
         columns.put(Contacts.PACKAGE, Contacts.PACKAGE);
         columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
-        columns.put(Accounts.NAME, Accounts.NAME);
-        columns.put(Accounts.TYPE, Accounts.TYPE);
+        columns.put(Contacts.ACCOUNT_NAME, Contacts.ACCOUNT_NAME);
+        columns.put(Contacts.ACCOUNT_TYPE, Contacts.ACCOUNT_TYPE);
         columns.put(Contacts.SOURCE_ID, Contacts.SOURCE_ID);
         columns.put(Contacts.VERSION, Contacts.VERSION);
         columns.put(Contacts.DIRTY, Contacts.DIRTY);
@@ -363,12 +333,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
         sDataContactsProjectionMap = columns;
 
-        columns = new HashMap<String, String>();
-        columns.put(Accounts.NAME, Accounts.NAME);
-        columns.put(Accounts.TYPE, Accounts.TYPE);
-        columns.putAll(sDataContactsProjectionMap);
-        sDataContactsAccountsProjectionMap = columns;
-
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
         columns.putAll(sAggregatesProjectionMap);
@@ -380,6 +344,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         // Groups projection map
         columns = new HashMap<String, String>();
         columns.put(Groups._ID, "groups._id AS _id");
+        columns.put(Groups.ACCOUNT_NAME, Groups.ACCOUNT_NAME);
+        columns.put(Groups.ACCOUNT_TYPE, Groups.ACCOUNT_TYPE);
         columns.put(Groups.PACKAGE, Groups.PACKAGE);
         columns.put(Groups.PACKAGE_ID, GroupsColumns.CONCRETE_PACKAGE_ID);
         columns.put(Groups.TITLE, Groups.TITLE);
@@ -436,7 +402,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
     private final ContactAggregationScheduler mAggregationScheduler;
     private OpenHelper mOpenHelper;
-    private static final AccountComparator sAccountComparator = new AccountComparator();
 
     private ContactAggregator mContactAggregator;
     private NameSplitter mNameSplitter;
@@ -457,8 +422,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         final Context context = getContext();
         mOpenHelper = getOpenHelper(context);
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
-
-        loadAccountsMaps();
 
         mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
 
@@ -500,116 +463,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * Read the rows from the accounts table and populate the in-memory accounts maps.
-     */
-    private void loadAccountsMaps() {
-        synchronized (sAccountsToIdMap) {
-            sAccountsToIdMap.clear();
-            sIdToAccountsMap.clear();
-            Cursor c = mOpenHelper.getReadableDatabase().query(Tables.ACCOUNTS,
-                    new String[]{Accounts._ID, Accounts.NAME, Accounts.TYPE},
-                    null, null, null, null, null);
-            try {
-                while (c.moveToNext()) {
-                    addToAccountsMaps(c.getLong(0), new Account(c.getString(1), c.getString(2)));
-                }
-            } finally {
-                c.close();
-            }
-        }
-    }
-
-    /**
-     * Return the Accounts rowId that matches the account that is passed in or null if
-     * no match exists. If refreshIfNotFound is set then if the account cannot be found in the
-     * map then the AccountManager will be queried synchronously for the current set of
-     * accounts.
-     */
-    private Long readAccountByName(Account account, boolean refreshIfNotFound) {
-        synchronized (sAccountsToIdMap) {
-            Long id = sAccountsToIdMap.get(account);
-            if (id == null && refreshIfNotFound) {
-                onAccountsUpdated(AccountManager.get(getContext()).blockingGetAccounts());
-                id = sAccountsToIdMap.get(account);
-            }
-            return id;
-        }
-    }
-
-    /**
-     * Return the Account that has the specified rowId or null if it does not exist.
-     */
-    private Account readAccountById(long id) {
-        synchronized (sAccountsToIdMap) {
-            return sIdToAccountsMap.get(id);
-        }
-    }
-
-    /**
-     * Add the contents from the Accounts row to the accounts maps.
-     */
-    private void addToAccountsMaps(long id, Account account) {
-        synchronized (sAccountsToIdMap) {
-            sAccountsToIdMap.put(account, id);
-            sIdToAccountsMap.put(id, account);
-        }
-    }
-
-    /**
-     * Reads the current set of accounts from the AccountManager and makes the local
-     * Accounts table and the in-memory accounts maps consistent with it.
-     */
-    public void onAccountsUpdated(Account[] accounts) {
-        synchronized (sAccountsToIdMap) {
-            Arrays.sort(accounts);
-
-            // if there is an account in the array that we don't know about yet add it to our
-            // cache and our database copy of accounts
-            final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-            for (Account account : accounts) {
-                if (readAccountByName(account, false /* refreshIfNotFound */) == null) {
-                    // add this account
-                    ContentValues values = new ContentValues();
-                    values.put(Accounts.NAME, account.mName);
-                    values.put(Accounts.TYPE, account.mType);
-                    long id = db.insert(Tables.ACCOUNTS, Accounts.NAME, values);
-                    if (id < 0) {
-                        throw new IllegalStateException("error inserting account in db");
-                    }
-                    addToAccountsMaps(id, account);
-                }
-            }
-
-            ArrayList<Account> accountsToRemove = new ArrayList<Account>();
-            // now check our list of accounts and remove any that are not in the array
-            for (Account account : sAccountsToIdMap.keySet()) {
-                if (Arrays.binarySearch(accounts, account, sAccountComparator) < 0) {
-                    accountsToRemove.add(account);
-                }
-            }
-
-            for (Account account : accountsToRemove) {
-                final Long id = sAccountsToIdMap.remove(account);
-                sIdToAccountsMap.remove(id);
-                db.delete(Tables.ACCOUNTS, Accounts._ID + "=" + id, null);
-            }
-        }
-    }
-
-    private static class AccountComparator implements Comparator<Account> {
-        public int compare(Account object1, Account object2) {
-            if (object1 == object2) {
-                return 0;
-            }
-            int result = object1.mType.compareTo(object2.mType);
-            if (result != 0) {
-                return result;
-            }
-            return object1.mName.compareTo(object2.mName);
-        }
-    }
-
-    /**
      * Called when a change has been made.
      *
      * @param uri the uri that the change was made to
@@ -628,11 +481,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         final int match = sUriMatcher.match(uri);
         long id = 0;
         switch (match) {
-            case ACCOUNTS: {
-                id = insertAccountData(values);
-                break;
-            }
-
             case AGGREGATES: {
                 id = insertAggregate(values);
                 break;
@@ -645,15 +493,13 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case CONTACTS_DATA: {
-                final Account account = readAccountFromQueryParams(uri);
                 values.put(Data.CONTACT_ID, uri.getPathSegments().get(1));
-                id = insertData(values, account);
+                id = insertData(values);
                 break;
             }
 
             case DATA: {
-                final Account account = readAccountFromQueryParams(uri);
-                id = insertData(values, account);
+                id = insertData(values);
                 break;
             }
 
@@ -682,14 +528,28 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * Inserts an item in the accounts table
-     *
-     * @param values the values for the new row
-     * @return the row ID of the newly created row
+     * If account is non-null then store it in the values. If the account is already
+     * specified in the values then it must be consistent with the account, if it is non-null.
+     * @param values the ContentValues to read from and update
+     * @param account the explicitly provided Account
+     * @return false if the accounts are inconsistent
      */
-    private long insertAccountData(ContentValues values) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        return db.insert(Tables.ACCOUNTS, Accounts.DATA1, values);
+    private boolean resolveAccount(ContentValues values, Account account) {
+        // If either is specified then both must be specified.
+        final String accountName = values.getAsString(Contacts.ACCOUNT_NAME);
+        final String accountType = values.getAsString(Contacts.ACCOUNT_TYPE);
+        if (!TextUtils.isEmpty(accountName) || !TextUtils.isEmpty(accountType)) {
+            final Account valuesAccount = new Account(accountName, accountType);
+            if (account != null && !valuesAccount.equals(account)) {
+                return false;
+            }
+            account = valuesAccount;
+        }
+        if (account != null) {
+            values.put(Contacts.ACCOUNT_NAME, account.mName);
+            values.put(Contacts.ACCOUNT_TYPE, account.mType);
+        }
+        return true;
     }
 
     /**
@@ -736,50 +596,12 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     /**
-     * If an account name or type is specified in values then create an Account from it or
-     * use the account that is passed in, if account is non-null, then look up the Accounts
-     * rowId that corresponds to the Account. Then insert
-     * the Accounts rowId into the values with key {@link Contacts#ACCOUNTS_ID}. Remove any
-     * value for {@link Accounts#NAME} or {@link Accounts#TYPE} from the values.
-     * @param values the ContentValues to read from and update
-     * @param account the Account to resolve. may be null.
-     * @return false if an account was present in the values that is not in the Accounts table
-     */
-    private boolean resolveAccount(ContentValues values, Account account) {
-        // If an account name and type is specified then resolve it into an accounts_id.
-        // If either is specified then both must be specified.
-        final String accountName = values.getAsString(Accounts.NAME);
-        final String accountType = values.getAsString(Accounts.TYPE);
-        if (!TextUtils.isEmpty(accountName) || !TextUtils.isEmpty(accountType)) {
-            final Account valuesAccount = new Account(accountName, accountType);
-            if (account != null && !valuesAccount.equals(account)) {
-                throw new IllegalArgumentException("account in params doesn't match account in "
-                        + "values: " + account + "!=" + valuesAccount);
-            }
-            account = valuesAccount;
-        }
-        if (account != null) {
-            final Long accountId = readAccountByName(account, true /* refreshIfNotFound */);
-            if (accountId == null) {
-                // an invalid account was passed in or the account was deleted after this
-                // request was made. fail this request.
-                return false;
-            }
-            values.put(Contacts.ACCOUNTS_ID, accountId);
-        }
-        values.remove(Accounts.NAME);
-        values.remove(Accounts.TYPE);
-        return true;
-    }
-
-    /**
      * Inserts an item in the data table
      *
      * @param values the values for the new row
-     * @param account the account this data row should be associated with. may be null.
      * @return the row ID of the newly created row
      */
-    private long insertData(ContentValues values, Account account) {
+    private long insertData(ContentValues values) {
         boolean success = false;
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
@@ -1085,12 +907,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 return db.delete(Tables.AGGREGATES, BaseColumns._ID + "=" + aggregateId, null);
             }
 
-            case ACCOUNTS_ID: {
-                long accountId = ContentUris.parseId(uri);
-
-                return db.delete(Tables.ACCOUNTS, BaseColumns._ID + "=" + accountId, null);
-            }
-
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
                 int contactsDeleted = db.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
@@ -1125,8 +941,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     }
 
     private static Account readAccountFromQueryParams(Uri uri) {
-        final String name = uri.getQueryParameter(Accounts.NAME);
-        final String type = uri.getQueryParameter(Accounts.TYPE);
+        final String name = uri.getQueryParameter(Contacts.ACCOUNT_NAME);
+        final String type = uri.getQueryParameter(Contacts.ACCOUNT_TYPE);
         if (TextUtils.isEmpty(name) || TextUtils.isEmpty(type)) {
             return null;
         }
@@ -1141,31 +957,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
         final int match = sUriMatcher.match(uri);
         switch(match) {
-            case ACCOUNTS: {
-                final String accountName = uri.getQueryParameter(Accounts.NAME);
-                final String accountType = uri.getQueryParameter(Accounts.TYPE);
-                if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
-                    return 0;
-                }
-                final Long accountId = readAccountByName(
-                        new Account(accountName, accountType), true /* refreshIfNotFound */);
-                if (accountId == null) {
-                    return 0;
-                }
-                String selectionWithId = (Accounts._ID + " = " + accountId + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.ACCOUNTS, values, selectionWithId, selectionArgs);
-                break;
-            }
-
-            case ACCOUNTS_ID: {
-                String selectionWithId = (Accounts._ID + " = " + ContentUris.parseId(uri) + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.ACCOUNTS, values, selectionWithId, selectionArgs);
-                Log.i(TAG, "Selection is: " + selectionWithId);
-                break;
-            }
-
             // TODO(emillar): We will want to disallow editing the aggregates table at some point.
             case AGGREGATES: {
                 count = db.update(Tables.AGGREGATES, values, selection, selectionArgs);
@@ -1466,19 +1257,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
         // write a new query() block to make sure it protects restricted data.
         final int match = sUriMatcher.match(uri);
         switch (match) {
-            case ACCOUNTS: {
-                qb.setTables(Tables.ACCOUNTS);
-                qb.setProjectionMap(sAccountsProjectionMap);
-                break;
-            }
-
-            case ACCOUNTS_ID: {
-                qb.setTables(Tables.ACCOUNTS);
-                qb.setProjectionMap(sAccountsProjectionMap);
-                qb.appendWhere(BaseColumns._ID + " = " + ContentUris.parseId(uri));
-                break;
-            }
-
             case AGGREGATES: {
                 qb.setTables(Tables.AGGREGATES);
                 applyAggregateRestrictionExceptions(qb);
@@ -1606,7 +1384,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case CONTACTS: {
-                qb.setTables(Tables.CONTACTS_JOIN_PACKAGES_ACCOUNTS);
+                qb.setTables(Tables.CONTACTS_JOIN_PACKAGES);
                 qb.setProjectionMap(sContactsProjectionMap);
                 applyContactsRestrictionExceptions(qb);
                 break;
@@ -1614,7 +1392,7 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.CONTACTS_JOIN_PACKAGES_ACCOUNTS);
+                qb.setTables(Tables.CONTACTS_JOIN_PACKAGES);
                 qb.setProjectionMap(sContactsProjectionMap);
                 qb.appendWhere(ContactsColumns.CONCRETE_ID + "=" + contactId + " AND ");
                 applyContactsRestrictionExceptions(qb);
@@ -1641,16 +1419,13 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             }
 
             case DATA: {
-                final String accountName = uri.getQueryParameter(Accounts.NAME);
-                final String accountType = uri.getQueryParameter(Accounts.TYPE);
+                final String accountName = uri.getQueryParameter(Contacts.ACCOUNT_NAME);
+                final String accountType = uri.getQueryParameter(Contacts.ACCOUNT_TYPE);
                 if (!TextUtils.isEmpty(accountName)) {
-                    Account account = new Account(accountName, accountType);
-                    Long accountId = readAccountByName(account, true /* refreshIfNotFound */);
-                    if (accountId == null) {
-                        // use -1 as the account to ensure that no rows are returned
-                        accountId = (long) -1;
-                    }
-                    qb.appendWhere(Contacts.ACCOUNTS_ID + "=" + accountId + " AND ");
+                    qb.appendWhere(Contacts.ACCOUNT_NAME + "="
+                            + DatabaseUtils.sqlEscapeString(accountName) + " AND "
+                            + Contacts.ACCOUNT_TYPE + "="
+                            + DatabaseUtils.sqlEscapeString(accountType) + " AND ");
                 }
                 qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
                 qb.setProjectionMap(sDataProjectionMap);
@@ -1823,7 +1598,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     private static class ContactsEntityIterator implements EntityIterator {
         private final Cursor mEntityCursor;
         private volatile boolean mIsClosed;
-        private final Account mAccount;
 
         private static final String[] DATA_KEYS = new String[]{
                 "data1",
@@ -1838,52 +1612,42 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
                 "data10"};
 
         private static final String[] PROJECTION = new String[]{
-            Contacts.ACCOUNTS_ID,
-            Contacts.SOURCE_ID,
-            Contacts.VERSION,
-            Contacts.DIRTY,
-            Contacts.Data._ID,
-            Contacts.Data.MIMETYPE,
-            Contacts.Data.DATA1,
-            Contacts.Data.DATA2,
-            Contacts.Data.DATA3,
-            Contacts.Data.DATA4,
-            Contacts.Data.DATA5,
-            Contacts.Data.DATA6,
-            Contacts.Data.DATA7,
-            Contacts.Data.DATA8,
-            Contacts.Data.DATA9,
-            Contacts.Data.DATA10,
-            Contacts.Data.CONTACT_ID,
-            Contacts.Data.IS_PRIMARY,
-            Contacts.Data.DATA_VERSION};
+                Contacts.ACCOUNT_NAME,
+                Contacts.ACCOUNT_TYPE,
+                Contacts.SOURCE_ID,
+                Contacts.VERSION,
+                Contacts.DIRTY,
+                Contacts.Data._ID,
+                Contacts.Data.MIMETYPE,
+                Contacts.Data.DATA1,
+                Contacts.Data.DATA2,
+                Contacts.Data.DATA3,
+                Contacts.Data.DATA4,
+                Contacts.Data.DATA5,
+                Contacts.Data.DATA6,
+                Contacts.Data.DATA7,
+                Contacts.Data.DATA8,
+                Contacts.Data.DATA9,
+                Contacts.Data.DATA10,
+                Contacts.Data.CONTACT_ID,
+                Contacts.Data.IS_PRIMARY,
+                Contacts.Data.DATA_VERSION};
 
-        private static final int COLUMN_SOURCE_ID = 1;
-        private static final int COLUMN_VERSION = 2;
-        private static final int COLUMN_DIRTY = 3;
-        private static final int COLUMN_DATA_ID = 4;
-        private static final int COLUMN_MIMETYPE = 5;
-        private static final int COLUMN_DATA1 = 6;
-        private static final int COLUMN_CONTACT_ID = 16;
-        private static final int COLUMN_IS_PRIMARY = 17;
-        private static final int COLUMN_DATA_VERSION = 18;
+        private static final int COLUMN_ACCOUNT_NAME = 0;
+        private static final int COLUMN_ACCOUNT_TYPE = 1;
+        private static final int COLUMN_SOURCE_ID = 2;
+        private static final int COLUMN_VERSION = 3;
+        private static final int COLUMN_DIRTY = 4;
+        private static final int COLUMN_DATA_ID = 5;
+        private static final int COLUMN_MIMETYPE = 6;
+        private static final int COLUMN_DATA1 = 7;
+        private static final int COLUMN_CONTACT_ID = 17;
+        private static final int COLUMN_IS_PRIMARY = 18;
+        private static final int COLUMN_DATA_VERSION = 19;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
             mIsClosed = false;
-
-            final String accountName = uri.getQueryParameter(Accounts.NAME);
-            final String accountType = uri.getQueryParameter(Accounts.TYPE);
-            if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
-                throw new IllegalArgumentException("the account name and type must be "
-                        + "specified in the query params of the uri");
-            }
-            mAccount = new Account(accountName, accountType);
-            final Long accountId = provider.readAccountByName(mAccount,
-                    true /* refreshIfNotFound */);
-            if (accountId == null) {
-                throw new IllegalArgumentException("the specified account does not exist");
-            }
 
             final String updatedSortOrder = (sortOrder == null)
                     ? Contacts.Data.CONTACT_ID
@@ -1892,11 +1656,18 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
             qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
-            qb.setProjectionMap(sDataContactsAccountsProjectionMap);
+            qb.setProjectionMap(sDataContactsProjectionMap);
             if (contactsIdString != null) {
                 qb.appendWhere(Data.CONTACT_ID + "=" + contactsIdString);
             }
-            qb.appendWhere(Contacts.ACCOUNTS_ID + "=" + accountId);
+            final String accountName = uri.getQueryParameter(Contacts.ACCOUNT_NAME);
+            final String accountType = uri.getQueryParameter(Contacts.ACCOUNT_TYPE);
+            if (!TextUtils.isEmpty(accountName)) {
+                qb.appendWhere(Contacts.ACCOUNT_NAME + "="
+                        + DatabaseUtils.sqlEscapeString(accountName) + " AND "
+                        + Contacts.ACCOUNT_TYPE + "="
+                        + DatabaseUtils.sqlEscapeString(accountType));
+            }
             mEntityCursor = qb.query(db, PROJECTION, selection, selectionArgs,
                     null, null, updatedSortOrder);
             mEntityCursor.moveToFirst();
@@ -1932,8 +1703,8 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
 
             // we expect the cursor is already at the row we need to read from
             ContentValues contactValues = new ContentValues();
-            contactValues.put(Accounts.NAME, mAccount.mName);
-            contactValues.put(Accounts.TYPE, mAccount.mType);
+            contactValues.put(Contacts.ACCOUNT_NAME, c.getString(COLUMN_ACCOUNT_NAME));
+            contactValues.put(Contacts.ACCOUNT_TYPE, c.getString(COLUMN_ACCOUNT_TYPE));
             contactValues.put(Contacts._ID, contactId);
             contactValues.put(Contacts.DIRTY, c.getLong(COLUMN_DIRTY));
             contactValues.put(Contacts.VERSION, c.getLong(COLUMN_VERSION));
@@ -1996,8 +1767,6 @@ public class ContactsProvider2 extends ContentProvider implements OnAccountsUpda
     public String getType(Uri uri) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
-            case ACCOUNTS: return Accounts.CONTENT_TYPE;
-            case ACCOUNTS_ID: return Accounts.CONTENT_ITEM_TYPE;
             case AGGREGATES: return Aggregates.CONTENT_TYPE;
             case AGGREGATES_ID: return Aggregates.CONTENT_ITEM_TYPE;
             case CONTACTS: return Contacts.CONTENT_TYPE;
