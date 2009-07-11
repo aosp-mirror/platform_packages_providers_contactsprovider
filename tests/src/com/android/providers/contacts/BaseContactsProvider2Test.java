@@ -19,10 +19,12 @@ import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 import com.android.providers.contacts.ContactsActor;
 
+import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
@@ -36,6 +38,9 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.util.Log;
+
+import java.util.Locale;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -45,14 +50,22 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected static final String PACKAGE = "ContactsProvider2Test";
 
-    private ContactsActor mActor;
+    protected ContactsActor mActor;
     protected MockContentResolver mResolver;
+
+    protected Class<? extends ContentProvider> getProviderClass() {
+        return SynchronousContactsProvider2.class;
+    }
+
+    protected String getAuthority() {
+        return ContactsContract.AUTHORITY;
+    }
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
-        mActor = new ContactsActor(getContext(), PACKAGE_GREY);
+        mActor = new ContactsActor(getContext(), PACKAGE_GREY, getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
     }
 

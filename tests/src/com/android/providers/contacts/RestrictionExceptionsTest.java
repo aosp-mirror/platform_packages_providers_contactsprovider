@@ -26,6 +26,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -68,10 +69,17 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         final Context overallContext = this.getContext();
 
         // Build each of our specific actors in their own Contexts
-        mGrey = new ContactsActor(overallContext, PACKAGE_GREY);
-        mRed = new ContactsActor(overallContext, PACKAGE_RED);
-        mGreen = new ContactsActor(overallContext, PACKAGE_GREEN);
-        mBlue = new ContactsActor(overallContext, PACKAGE_BLUE);
+        mGrey = new ContactsActor(overallContext, PACKAGE_GREY,
+                SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
+        mRed = new ContactsActor(overallContext, PACKAGE_RED,
+                SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
+        mGreen = new ContactsActor(overallContext, PACKAGE_GREEN,
+                SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
+        mBlue = new ContactsActor(overallContext, PACKAGE_BLUE,
+                SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
+
+        // TODO make the provider wipe data automatically
+        ((SynchronousContactsProvider2)mGrey.provider).wipeData();
     }
 
     /**
@@ -80,9 +88,6 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
      * {@link RestrictionExceptions} are being applied correctly.
      */
     public void testDataRestriction() {
-
-        // Clear all previous data before starting this test
-        mGrey.provider.wipeData();
 
         // Grey creates an unprotected contact
         long greyContact = mGrey.createContact(false);
@@ -150,9 +155,6 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
      * details don't expose {@link Contacts#IS_RESTRICTED} data.
      */
     public void testAggregateSummary() {
-
-        // Clear all previous data before starting this test
-        mGrey.provider.wipeData();
 
         // Red grants exceptions to itself and Grey
         mRed.updateException(PACKAGE_RED, PACKAGE_RED, true);
@@ -236,9 +238,6 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
      */
     public void testRestrictionSilence() {
         Cursor cursor;
-
-        // Clear all previous data before starting this test
-        mGrey.provider.wipeData();
 
         // Green grants exception to itself
         mGreen.updateException(PACKAGE_GREEN, PACKAGE_GREEN, true);

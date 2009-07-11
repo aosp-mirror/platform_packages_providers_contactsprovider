@@ -7,7 +7,7 @@ LOCAL_MODULE_TAGS := tests
 # Only compile source java files in this apk.
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 
-LOCAL_PACKAGE_NAME := ContactsProvider2Tests
+LOCAL_PACKAGE_NAME := ContactsProviderTests
 
 LOCAL_JAVA_LIBRARIES := android.test.runner
 

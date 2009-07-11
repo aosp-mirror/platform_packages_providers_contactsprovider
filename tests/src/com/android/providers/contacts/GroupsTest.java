@@ -35,21 +35,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  * </code>
  */
 @LargeTest
-public class GroupsTest extends AndroidTestCase {
-
-    private ContactsActor mActor;
-    private MockContentResolver mResolver;
-
-    public GroupsTest() {
-    }
-
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-
-        mActor = new ContactsActor(getContext(), PACKAGE_GREY);
-        mResolver = mActor.resolver;
-    }
+public class GroupsTest extends BaseContactsProvider2Test {
 
     private static final String GROUP_GREY = "Grey";
     private static final String GROUP_RED = "Red";
@@ -70,7 +56,8 @@ public class GroupsTest extends AndroidTestCase {
     public void testGroupSummary() {
 
         // Clear any existing data before starting
-        mActor.provider.wipeData();
+        // TODO make the provider wipe data automatically
+        ((SynchronousContactsProvider2)mActor.provider).wipeData();
 
         // Create a handful of groups
         long groupGrey = mActor.createGroup(GROUP_GREY);
