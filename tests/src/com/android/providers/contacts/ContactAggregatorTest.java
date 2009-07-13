@@ -525,6 +525,25 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertSuggestions(aggregateId1, aggregateId2);
     }
 
+    public void testChoosePhoto() {
+        long contactId1 = createContact();
+        setContactAccountName(contactId1, "donut");
+        long donutId = ContentUris.parseId(insertPhoto(contactId1));
+        long aggregateId = queryAggregateId(contactId1);
+
+        long contactId2 = createContact();
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId, contactId2);
+        setContactAccountName(contactId2, "cupcake");
+        long cupcakeId = ContentUris.parseId(insertPhoto(contactId2));
+
+        long contactId3 = createContact();
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId, contactId3);
+        setContactAccountName(contactId3, "flan");
+        long flanId = ContentUris.parseId(insertPhoto(contactId3));
+
+        assertEquals(cupcakeId, queryPhotoId(queryAggregateId(contactId2)));
+    }
+
     private void assertSuggestions(long aggregateId, long... suggestions) {
         final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId);
         Uri uri = Uri.withAppendedPath(aggregateUri,

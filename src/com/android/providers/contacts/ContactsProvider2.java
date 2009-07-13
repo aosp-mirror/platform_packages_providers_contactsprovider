@@ -277,6 +277,7 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Aggregates.TIMES_CONTACTED, Aggregates.TIMES_CONTACTED);
         columns.put(Aggregates.STARRED, Aggregates.STARRED);
         columns.put(Aggregates.IN_VISIBLE_GROUP, Aggregates.IN_VISIBLE_GROUP);
+        columns.put(Aggregates.PHOTO_ID, Aggregates.PHOTO_ID);
         columns.put(Aggregates.PRIMARY_PHONE_ID, Aggregates.PRIMARY_PHONE_ID);
         columns.put(Aggregates.PRIMARY_EMAIL_ID, Aggregates.PRIMARY_EMAIL_ID);
         columns.put(Aggregates.CUSTOM_RINGTONE, Aggregates.CUSTOM_RINGTONE);

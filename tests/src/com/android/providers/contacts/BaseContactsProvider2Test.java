@@ -35,6 +35,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -132,6 +133,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
+    protected Uri insertPhoto(long contactId) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
     protected Uri insertPresence(int protocol, String handle, int presence) {
         ContentValues values = new ContentValues();
         values.put(Presence.IM_PROTOCOL, protocol);
@@ -151,6 +161,14 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
+    }
+
+    protected void setContactAccountName(long contactId, String accountName) {
+        ContentValues values = new ContentValues();
+        values.put(Contacts.ACCOUNT_NAME, accountName);
+
+        mResolver.update(ContentUris.withAppendedId(
+                Contacts.CONTENT_URI, contactId), values, null, null);
     }
 
     protected void setAggregationException(int type, long aggregateId, long contactId) {
@@ -186,6 +204,14 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         long aggregateId = c.getLong(c.getColumnIndex(Contacts.AGGREGATE_ID));
         c.close();
         return aggregateId;
+    }
+
+    protected long queryPhotoId(long aggregateId) {
+        Cursor c = queryAggregate(aggregateId);
+        assertTrue(c.moveToFirst());
+        long photoId = c.getInt(c.getColumnIndex(Aggregates.PHOTO_ID));
+        c.close();
+        return photoId;
     }
 
     protected String queryDisplayName(long aggregateId) {

@@ -42,6 +42,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
@@ -815,6 +816,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             final ContentValues values) {
         updateDisplayName(db, aggregateId, values);
         updateSendToVoicemailAndRingtone(db, aggregateId);
+        updatePhotoId(db, aggregateId, values);
     }
 
     /**
@@ -832,6 +834,18 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         values.clear();
         values.put(Aggregates.DISPLAY_NAME, displayName);
+        db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
+    }
+
+    private void updatePhotoId(SQLiteDatabase db, long aggregateId, ContentValues values) {
+        int photoId = choosePhotoId(db, aggregateId);
+
+        if (photoId == -1) {
+            return;
+        }
+
+        values.clear();
+        values.put(Aggregates.PHOTO_ID, photoId);
         db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
     }
 
@@ -971,6 +985,41 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
         return bestDisplayName;
+    }
+
+    /**
+     * Iterates over the photos associated with aggregate defined by aggregateId, and chooses one
+     * to be associated with the aggregate. Initially this just chooses the first photo in a list
+     * sorted by account name.
+     */
+    private int choosePhotoId(SQLiteDatabase db, long aggregateId) {
+        int chosenPhotoId = -1;
+        String chosenAccount = null;
+
+        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES,
+                new String[] {"data._id AS _id", Contacts.ACCOUNT_NAME},
+                DatabaseUtils.concatenateWhere(Contacts.AGGREGATE_ID + "=" + aggregateId,
+                        Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'"),
+                null, null, null, null);
+
+        try {
+            while (c.moveToNext()) {
+                int photoId = c.getInt(0);
+                String account = c.getString(1);
+                if (chosenAccount == null) {
+                    chosenAccount = account;
+                    chosenPhotoId = photoId;
+                } else {
+                    if (account.compareToIgnoreCase(chosenAccount) < 0 ) {
+                        chosenAccount = account;
+                        chosenPhotoId = photoId;
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+        return chosenPhotoId;
     }
 
     /**
