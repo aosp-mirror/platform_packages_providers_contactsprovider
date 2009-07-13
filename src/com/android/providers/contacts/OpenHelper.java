@@ -346,10 +346,9 @@ import java.util.LinkedList;
         Log.i(TAG, "Creating OpenHelper");
 
         mContext = context;
+        mSyncState = new SyncStateContentProviderHelper();
         mCache = new RestrictionExceptionsCache();
         mCache.loadFromDatabase(context, getReadableDatabase());
-        mSyncState = new SyncStateContentProviderHelper();
-
     }
 
     @Override
