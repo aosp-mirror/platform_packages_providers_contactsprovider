@@ -134,6 +134,13 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int SYNCSTATE = 11000;
 
     private interface Projections {
+        public static final String[] CONTACTS_ACCOUNT_AND_PACKAGE =
+                new String[]{Contacts.ACCOUNT_NAME, Contacts.ACCOUNT_TYPE,
+                        ContactsColumns.PACKAGE_ID};
+        public static final int CONTACTS_ACCOUNT_AND_PACKAGE_COL_ACCOUNT_NAME = 0;
+        public static final int CONTACTS_ACCOUNT_AND_PACKAGE_COL_ACCOUNT_TYPE = 1;
+        public static final int CONTACTS_ACCOUNT_AND_PACKAGE_COL_PACKAGE_ID = 2;
+
         public static final String[] PROJ_CONTACTS = new String[] {
             ContactsColumns.CONCRETE_ID,
         };
@@ -186,10 +193,14 @@ public class ContactsProvider2 extends ContentProvider {
     private static final HashMap<String, String> sAggregatesSummaryProjectionMap;
     /** Contains the data, contacts, and aggregate columns, for joined tables. */
     private static final HashMap<String, String> sDataContactsAggregateProjectionMap;
+    /** Contains the data, contacts, group sourceid and aggregate columns, for joined tables. */
+    private static final HashMap<String, String> sDataContactsGroupsAggregateProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
     /** Contains just the data columns */
-    private static final HashMap<String, String> sDataProjectionMap;
+    private static final HashMap<String, String> sDataGroupsProjectionMap;
+    /** Contains the data and contacts columns, for joined tables */
+    private static final HashMap<String, String> sDataContactsGroupsProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
     private static final HashMap<String, String> sDataContactsProjectionMap;
     /** Contains the just the {@link Groups} columns */
@@ -310,11 +321,16 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Contacts._ID, "contacts._id AS _id");
         columns.put(Contacts.PACKAGE, Contacts.PACKAGE);
         columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
-        columns.put(Contacts.ACCOUNT_NAME, Contacts.ACCOUNT_NAME);
-        columns.put(Contacts.ACCOUNT_TYPE, Contacts.ACCOUNT_TYPE);
-        columns.put(Contacts.SOURCE_ID, Contacts.SOURCE_ID);
-        columns.put(Contacts.VERSION, Contacts.VERSION);
-        columns.put(Contacts.DIRTY, Contacts.DIRTY);
+        columns.put(Contacts.ACCOUNT_NAME,
+                OpenHelper.ContactsColumns.CONCRETE_ACCOUNT_NAME + " as " + Contacts.ACCOUNT_NAME);
+        columns.put(Contacts.ACCOUNT_TYPE,
+                OpenHelper.ContactsColumns.CONCRETE_ACCOUNT_TYPE + " as " + Contacts.ACCOUNT_TYPE);
+        columns.put(Contacts.SOURCE_ID,
+                OpenHelper.ContactsColumns.CONCRETE_SOURCE_ID + " as " + Contacts.SOURCE_ID);
+        columns.put(Contacts.VERSION,
+                OpenHelper.ContactsColumns.CONCRETE_VERSION + " as " + Contacts.VERSION);
+        columns.put(Contacts.DIRTY,
+                OpenHelper.ContactsColumns.CONCRETE_DIRTY + " as " + Contacts.DIRTY);
         sContactsProjectionMap = columns;
 
         // Data projection map
@@ -335,23 +351,36 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Data.DATA8, "data.data8 as data8");
         columns.put(Data.DATA9, "data.data9 as data9");
         columns.put(Data.DATA10, "data.data10 as data10");
+        columns.put(GroupMembership.GROUP_SOURCE_ID, "groups.sourceid as " + GroupMembership.GROUP_SOURCE_ID);
         // Mappings used for backwards compatibility.
         columns.put("number", Phone.NUMBER);
-        sDataProjectionMap = columns;
+        sDataGroupsProjectionMap = columns;
+
+        // Data, groups and contacts projection map for joins. _id comes from the data table
+        columns = new HashMap<String, String>();
+        columns.putAll(sContactsProjectionMap);
+        columns.putAll(sDataGroupsProjectionMap); // _id will be replaced with the one from data
+        columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
+        sDataContactsGroupsProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
-        columns.putAll(sContactsProjectionMap);
-        columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
-        columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
+        columns.putAll(sDataContactsGroupsProjectionMap);
+        columns.remove(GroupMembership.GROUP_SOURCE_ID);
         sDataContactsProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
         columns.putAll(sAggregatesProjectionMap);
         columns.putAll(sContactsProjectionMap); //
-        columns.putAll(sDataProjectionMap); // _id will be replaced with the one from data
+        columns.putAll(sDataGroupsProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
+        sDataContactsGroupsAggregateProjectionMap = columns;
+
+        // Data and contacts projection map for joins. _id comes from the data table
+        columns = new HashMap<String, String>();
+        columns.putAll(sDataContactsGroupsAggregateProjectionMap);
+        columns.remove(GroupMembership.GROUP_SOURCE_ID);
         sDataContactsAggregateProjectionMap = columns;
 
         // Groups projection map
@@ -359,6 +388,9 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Groups._ID, "groups._id AS _id");
         columns.put(Groups.ACCOUNT_NAME, Groups.ACCOUNT_NAME);
         columns.put(Groups.ACCOUNT_TYPE, Groups.ACCOUNT_TYPE);
+        columns.put(Groups.SOURCE_ID, Groups.SOURCE_ID);
+        columns.put(Groups.DIRTY, Groups.DIRTY);
+        columns.put(Groups.VERSION, Groups.VERSION);
         columns.put(Groups.PACKAGE, Groups.PACKAGE);
         columns.put(Groups.PACKAGE_ID, GroupsColumns.CONCRETE_PACKAGE_ID);
         columns.put(Groups.TITLE, Groups.TITLE);
@@ -653,6 +685,27 @@ public class ContactsProvider2 extends ContentProvider {
 
             if (StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
                 parseStructuredName(values);
+            } else if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
+                boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
+                boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
+                if (containsGroupSourceId && containsGroupId) {
+                    throw new IllegalArgumentException(
+                            "you are not allowed to set both the GroupMembership.GROUP_SOURCE_ID "
+                                    + "and GroupMembership.GROUP_ROW_ID");
+                }
+
+                if (!containsGroupSourceId && !containsGroupId) {
+                    throw new IllegalArgumentException(
+                            "you must set exactly one of GroupMembership.GROUP_SOURCE_ID "
+                                    + "and GroupMembership.GROUP_ROW_ID");
+                }
+
+                if (containsGroupSourceId) {
+                    final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
+                    final long groupId = getOrMakeGroup(db, contactId, sourceId);
+                    values.remove(GroupMembership.GROUP_SOURCE_ID);
+                    values.put(GroupMembership.GROUP_ROW_ID, groupId);
+                }
             }
 
             // Insert the data row itself
@@ -693,6 +746,68 @@ public class ContactsProvider2 extends ContentProvider {
             case Contacts.AGGREGATION_MODE_DISABLED:
                 // Do nothing
                 break;
+        }
+    }
+
+    /**
+     * Returns the group id of the group with sourceId and the same account as contactId.
+     * If the group doesn't already exist then it is first created,
+     * @param db SQLiteDatabase to use for this operation
+     * @param contactId the contact this group is associated with
+     * @param sourceId the sourceIf of the group to query or create
+     * @return the group id of the existing or created group
+     * @throws IllegalArgumentException if the contact is not associated with an account
+     * @throws IllegalStateException if a group needs to be created but the creation failed
+     */
+    private long getOrMakeGroup(SQLiteDatabase db, long contactId, String sourceId) {
+        Account account = null;
+        long contactPackage = -1;
+        Cursor c = db.query(Tables.CONTACTS,
+                Projections.CONTACTS_ACCOUNT_AND_PACKAGE,
+                Contacts._ID + "=" + contactId, null, null, null, null);
+        try {
+            if (c.moveToNext()) {
+                final String accountName =
+                        c.getString(Projections.CONTACTS_ACCOUNT_AND_PACKAGE_COL_ACCOUNT_NAME);
+                final String accountType =
+                        c.getString(Projections.CONTACTS_ACCOUNT_AND_PACKAGE_COL_ACCOUNT_TYPE);
+                if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
+                    account = new Account(accountName, accountType);
+                }
+                contactPackage = c.getLong(Projections.CONTACTS_ACCOUNT_AND_PACKAGE_COL_PACKAGE_ID);
+            }
+        } finally {
+            c.close();
+        }
+        if (account == null) {
+            throw new IllegalArgumentException("if the groupmembership only "
+                    + "has a sourceid the the contact must be associate with "
+                    + "an account");
+        }
+
+        // look up the group that contains this sourceId and has the same account name and type
+        // as the contact refered to by contactId
+        c = db.query(Tables.GROUPS, new String[]{Contacts._ID},
+                Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
+                new String[]{sourceId, account.mName, account.mType}, null, null, null);
+        try {
+            if (c.moveToNext()) {
+                return c.getLong(0);
+            } else {
+                ContentValues groupValues = new ContentValues();
+                groupValues.put(Groups.PACKAGE_ID, contactPackage);
+                groupValues.put(Groups.ACCOUNT_NAME, account.mName);
+                groupValues.put(Groups.ACCOUNT_TYPE, account.mType);
+                groupValues.put(Groups.SOURCE_ID, sourceId);
+                long groupId = db.insert(Tables.GROUPS, Groups.ACCOUNT_NAME, groupValues);
+                if (groupId < 0) {
+                    throw new IllegalStateException("unable to create a new group with "
+                            + "this sourceid: " + groupValues);
+                }
+                return groupId;
+            }
+        } finally {
+            c.close();
         }
     }
 
@@ -1409,8 +1524,8 @@ public class ContactsProvider2 extends ContentProvider {
 
             case AGGREGATES_DATA: {
                 long aggId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
-                qb.setProjectionMap(sDataContactsAggregateProjectionMap);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES_GROUPS);
+                qb.setProjectionMap(sDataContactsGroupsAggregateProjectionMap);
                 qb.appendWhere(Contacts.AGGREGATE_ID + "=" + aggId + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
@@ -1459,8 +1574,8 @@ public class ContactsProvider2 extends ContentProvider {
 
             case CONTACTS_DATA: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
-                qb.setProjectionMap(sDataContactsProjectionMap);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_GROUPS);
+                qb.setProjectionMap(sDataContactsGroupsProjectionMap);
                 qb.appendWhere(Data.CONTACT_ID + "=" + contactId + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
@@ -1485,15 +1600,15 @@ public class ContactsProvider2 extends ContentProvider {
                             + Contacts.ACCOUNT_TYPE + "="
                             + DatabaseUtils.sqlEscapeString(accountType) + " AND ");
                 }
-                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
-                qb.setProjectionMap(sDataProjectionMap);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_GROUPS);
+                qb.setProjectionMap(sDataGroupsProjectionMap);
                 applyDataRestrictionExceptions(qb);
                 break;
             }
 
             case DATA_ID: {
-                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
-                qb.setProjectionMap(sDataProjectionMap);
+                qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_GROUPS);
+                qb.setProjectionMap(sDataGroupsProjectionMap);
                 qb.appendWhere(DataColumns.CONCRETE_ID + "=" + ContentUris.parseId(uri) + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
@@ -1634,7 +1749,7 @@ public class ContactsProvider2 extends ContentProvider {
 
         qb.appendWhere("(" + Contacts.IS_RESTRICTED + "=0");
         final String exceptionClause = mOpenHelper.getRestrictionExceptionClause(clientUid,
-                ContactsColumns.PACKAGE_ID);
+                OpenHelper.ContactsColumns.CONCRETE_PACKAGE_ID);
         if (exceptionClause != null) {
             qb.appendWhere(" OR (" + exceptionClause + ")");
         }
@@ -1690,7 +1805,8 @@ public class ContactsProvider2 extends ContentProvider {
                 Contacts.Data.DATA10,
                 Contacts.Data.CONTACT_ID,
                 Contacts.Data.IS_PRIMARY,
-                Contacts.Data.DATA_VERSION};
+                Contacts.Data.DATA_VERSION,
+                GroupMembership.GROUP_SOURCE_ID};
 
         private static final int COLUMN_ACCOUNT_NAME = 0;
         private static final int COLUMN_ACCOUNT_TYPE = 1;
@@ -1703,6 +1819,7 @@ public class ContactsProvider2 extends ContentProvider {
         private static final int COLUMN_CONTACT_ID = 17;
         private static final int COLUMN_IS_PRIMARY = 18;
         private static final int COLUMN_DATA_VERSION = 19;
+        private static final int COLUMN_GROUP_SOURCE_ID = 20;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -1714,8 +1831,8 @@ public class ContactsProvider2 extends ContentProvider {
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES);
-            qb.setProjectionMap(sDataContactsProjectionMap);
+            qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_GROUPS);
+            qb.setProjectionMap(sDataContactsGroupsProjectionMap);
             if (contactsIdString != null) {
                 qb.appendWhere(Data.CONTACT_ID + "=" + contactsIdString);
             }
@@ -1780,6 +1897,11 @@ public class ContactsProvider2 extends ContentProvider {
                 dataValues.put(Contacts.Data._ID, c.getString(COLUMN_DATA_ID));
                 dataValues.put(Contacts.Data.MIMETYPE, c.getString(COLUMN_MIMETYPE));
                 dataValues.put(Contacts.Data.IS_PRIMARY, c.getString(COLUMN_IS_PRIMARY));
+                dataValues.put(Contacts.Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
+                if (!c.isNull(COLUMN_GROUP_SOURCE_ID)) {
+                    dataValues.put(GroupMembership.GROUP_SOURCE_ID,
+                            c.getString(COLUMN_GROUP_SOURCE_ID));
+                }
                 dataValues.put(Contacts.Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
                 for (int i = 0; i < 10; i++) {
                     final int columnIndex = i + COLUMN_DATA1;

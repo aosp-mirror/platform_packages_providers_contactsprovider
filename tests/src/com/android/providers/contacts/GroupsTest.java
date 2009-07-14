@@ -24,6 +24,9 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.net.Uri;
+import android.content.ContentUris;
+import android.content.ContentValues;
 
 /**
  * Unit tests for {@link Groups} and {@link GroupMembership}.
@@ -136,6 +139,24 @@ public class GroupsTest extends BaseContactsProvider2Test {
 
     }
 
+    public void testGroupDirtySetOnChange() {
+        Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
+                createGroup(mAccount, "gsid1", "title1"));
+        assertDirty(uri, true);
+        clearDirty(uri);
+        assertDirty(uri, false);
+    }
+
+    public void testGroupVersionUpdates() {
+        Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
+                createGroup(mAccount, "gsid1", "title1"));
+        long version = getVersion(uri);
+        ContentValues values = new ContentValues();
+        values.put(Groups.TITLE, "title2");
+        mResolver.update(uri, values, null, null);
+        assertEquals(version + 1, getVersion(uri));
+    }
+    
     private interface Projections {
         public static final String[] PROJ_SUMMARY = new String[] {
             Groups._ID,

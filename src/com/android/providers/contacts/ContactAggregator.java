@@ -914,7 +914,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // Find primary data items from newly-joined contact, returning one
         // candidate for each mimetype.
         try {
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES, Projections.PROJ_DATA,
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES,
+                    Projections.PROJ_DATA,
                     Data.CONTACT_ID + "=" + contactId + " AND " + Data.IS_PRIMARY + "=1 AND "
                             + Projections.PRIMARY_MIME_CLAUSE, null, Data.MIMETYPE, null, null);
             while (cursor.moveToNext()) {

@@ -22,6 +22,7 @@ import com.android.providers.contacts.ContactsActor;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Entity;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
@@ -29,19 +30,23 @@ import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.util.Log;
+import android.accounts.Account;
 
-import java.util.Locale;
+import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -53,6 +58,11 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected ContactsActor mActor;
     protected MockContentResolver mResolver;
+    protected Account mAccount = new Account("account1", "account type1");
+
+    protected final static Long NO_LONG = new Long(0);
+    protected final static String NO_STRING = new String("");
+    protected final static Account NO_ACCOUNT = new Account("a", "b");
 
     protected Class<? extends ContentProvider> getProviderClass() {
         return SynchronousContactsProvider2.class;
@@ -68,6 +78,17 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
         mActor = new ContactsActor(getContext(), PACKAGE_GREY, getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
+        ((SynchronousContactsProvider2) mActor.provider).getOpenHelper(mActor.context).wipeData();
+    }
+
+    protected Uri maybeAddAccountQueryParameters(Uri uri, Account account) {
+        if (account == null) {
+            return uri;
+        }
+        return uri.buildUpon()
+                .appendQueryParameter(Contacts.ACCOUNT_NAME, account.mName)
+                .appendQueryParameter(Contacts.ACCOUNT_TYPE, account.mType)
+                .build();
     }
 
     protected long createContact() {
@@ -75,6 +96,23 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Contacts.PACKAGE, mActor.packageName);
         Uri contactUri = mResolver.insert(Contacts.CONTENT_URI, values);
         return ContentUris.parseId(contactUri);
+    }
+
+    protected long createContact(Account account) {
+        ContentValues values = new ContentValues();
+        values.put(Contacts.PACKAGE, mActor.packageName);
+        final Uri uri = maybeAddAccountQueryParameters(Contacts.CONTENT_URI, account);
+        Uri contactUri = mResolver.insert(uri, values);
+        return ContentUris.parseId(contactUri);
+    }
+
+    protected long createGroup(Account account, String sourceId, String title) {
+        ContentValues values = new ContentValues();
+        values.put(Groups.PACKAGE, mActor.packageName);
+        values.put(Groups.SOURCE_ID, sourceId);
+        values.put(Groups.TITLE, title);
+        final Uri uri = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account);
+        return ContentUris.parseId(mResolver.insert(uri, values));
     }
 
     protected Uri insertStructuredName(long contactId, String givenName, String familyName) {
@@ -140,6 +178,22 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
+    }
+
+    protected Uri insertGroupMembership(long contactId, String sourceId) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
+        values.put(GroupMembership.GROUP_SOURCE_ID, sourceId);
+        return mResolver.insert(Data.CONTENT_URI, values);
+    }
+
+    protected Uri insertGroupMembership(long contactId, Long groupId) {
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
+        values.put(GroupMembership.GROUP_ROW_ID, groupId);
+        return mResolver.insert(Data.CONTENT_URI, values);
     }
 
     protected Uri insertPresence(int protocol, String handle, int presence) {
@@ -263,5 +317,140 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         assertEquals(familyName, c.getString(3));
         assertEquals(suffix, c.getString(4));
         c.close();
+    }
+
+    protected long assertSingleGroup(Long rowId, Account account, String sourceId, String title) {
+        Cursor c = mResolver.query(Groups.CONTENT_URI, null, null, null, null);
+        try {
+            assertTrue(c.moveToNext());
+            long actualRowId = assertGroup(c, rowId, account, sourceId, title);
+            assertFalse(c.moveToNext());
+            return actualRowId;
+        } finally {
+            c.close();
+        }
+    }
+
+    protected long assertSingleGroupMembership(Long rowId, Long contactId, Long groupRowId,
+            String sourceId) {
+        Cursor c = mResolver.query(ContactsContract.Data.CONTENT_URI, null, null, null, null);
+        try {
+            assertTrue(c.moveToNext());
+            long actualRowId = assertGroupMembership(c, rowId, contactId, groupRowId, sourceId);
+            assertFalse(c.moveToNext());
+            return actualRowId;
+        } finally {
+            c.close();
+        }
+    }
+
+    protected long assertGroupMembership(Cursor c, Long rowId, Long contactId, Long groupRowId,
+            String sourceId) {
+        assertNullOrEquals(c, rowId, Data._ID);
+        assertNullOrEquals(c, contactId, GroupMembership.CONTACT_ID);
+        assertNullOrEquals(c, groupRowId, GroupMembership.GROUP_ROW_ID);
+        assertNullOrEquals(c, sourceId, GroupMembership.GROUP_SOURCE_ID);
+        return c.getLong(c.getColumnIndexOrThrow("_id"));
+    }
+
+    protected long assertGroup(Cursor c, Long rowId, Account account, String sourceId, String title) {
+        assertNullOrEquals(c, rowId, Groups._ID);
+        assertNullOrEquals(c, account);
+        assertNullOrEquals(c, sourceId, Groups.SOURCE_ID);
+        assertNullOrEquals(c, title, Groups.TITLE);
+        return c.getLong(c.getColumnIndexOrThrow("_id"));
+    }
+
+    private void assertNullOrEquals(Cursor c, Account account) {
+        if (account == NO_ACCOUNT) {
+            return;
+        }
+        if (account == null) {
+            assertTrue(c.isNull(c.getColumnIndexOrThrow(Groups.ACCOUNT_NAME)));
+            assertTrue(c.isNull(c.getColumnIndexOrThrow(Groups.ACCOUNT_TYPE)));
+        } else {
+            assertEquals(account.mName, c.getString(c.getColumnIndexOrThrow(Groups.ACCOUNT_NAME)));
+            assertEquals(account.mType, c.getString(c.getColumnIndexOrThrow(Groups.ACCOUNT_TYPE)));
+        }
+    }
+
+    private void assertNullOrEquals(Cursor c, Long value, String columnName) {
+        if (value != NO_LONG) {
+            if (value == null) assertTrue(c.isNull(c.getColumnIndexOrThrow(columnName)));
+            else assertEquals((long) value, c.getLong(c.getColumnIndexOrThrow(columnName)));
+        }
+    }
+
+    private void assertNullOrEquals(Cursor c, String value, String columnName) {
+        if (value != NO_STRING) {
+            if (value == null) assertTrue(c.isNull(c.getColumnIndexOrThrow(columnName)));
+            else assertEquals(value, c.getString(c.getColumnIndexOrThrow(columnName)));
+        }
+    }
+
+    protected void assertDataRow(ContentValues actual, String expectedMimetype,
+            Object... expectedArguments) {
+        assertEquals(actual.toString(), expectedMimetype, actual.getAsString(Data.MIMETYPE));
+        for (int i = 0; i < expectedArguments.length; i += 2) {
+            String columnName = (String) expectedArguments[i];
+            Object expectedValue = expectedArguments[i + 1];
+            if (expectedValue instanceof Uri) {
+                expectedValue = ContentUris.parseId((Uri) expectedValue);
+            }
+            if (expectedValue == null) {
+                assertNull(actual.toString(), actual.get(columnName));
+            }
+            if (expectedValue instanceof Long) {
+                assertEquals(actual.toString(), expectedValue, actual.getAsLong(columnName));
+            } else if (expectedValue instanceof Integer) {
+                assertEquals(actual.toString(), expectedValue, actual.getAsInteger(columnName));
+            } else if (expectedValue instanceof String) {
+                assertEquals(actual.toString(), expectedValue, actual.getAsString(columnName));
+            } else {
+                assertEquals(actual.toString(), expectedValue, actual.get(columnName));
+            }
+        }
+    }
+
+    protected static class IdComparator implements Comparator<ContentValues> {
+        public int compare(ContentValues o1, ContentValues o2) {
+            long id1 = o1.getAsLong(ContactsContract.Data._ID);
+            long id2 = o2.getAsLong(ContactsContract.Data._ID);
+            if (id1 == id2) return 0;
+            return (id1 < id2) ? -1 : 1;
+        }
+    }
+
+    protected ContentValues[] asSortedContentValuesArray(
+            ArrayList<Entity.NamedContentValues> subValues) {
+        ContentValues[] result = new ContentValues[subValues.size()];
+        int i = 0;
+        for (Entity.NamedContentValues subValue : subValues) {
+            result[i] = subValue.values;
+            i++;
+        }
+        Arrays.sort(result, new IdComparator());
+        return result;
+    }
+
+    protected void assertDirty(Uri uri, boolean state) {
+        Cursor c = mResolver.query(uri, new String[]{"dirty"}, null, null, null);
+        assertTrue(c.moveToNext());
+        assertEquals(state, c.getLong(0) != 0);
+        assertFalse(c.moveToNext());
+    }
+
+    protected long getVersion(Uri uri) {
+        Cursor c = mResolver.query(uri, new String[]{"version"}, null, null, null);
+        assertTrue(c.moveToNext());
+        long version = c.getLong(0);
+        assertFalse(c.moveToNext());
+        return version;
+    }
+
+    protected void clearDirty(Uri uri) {
+        ContentValues values = new ContentValues();
+        values.put("dirty", 0);
+        mResolver.update(uri, values, null, null);
     }
 }

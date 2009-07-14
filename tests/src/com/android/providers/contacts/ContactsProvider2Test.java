@@ -20,16 +20,22 @@ import com.android.providers.contacts.BaseContactsProvider2Test;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.EntityIterator;
+import android.content.Entity;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.util.Log;
+import android.os.RemoteException;
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -178,6 +184,126 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             assertTrue(ArrayUtils.contains(expectedRingtone.split(","), ringtone));
         }
         c.close();
+    }
+
+    public void testGroupCreationAfterMembershipInsert() {
+        long contactId1 = createContact(mAccount);
+        Uri groupMembershipUri = insertGroupMembership(contactId1, "gsid1");
+
+        long groupId = assertSingleGroup(NO_LONG, mAccount, "gsid1", null);
+        assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
+                contactId1, groupId, "gsid1");
+    }
+
+    public void testGroupReuseAfterMembershipInsert() {
+        long contactId1 = createContact(mAccount);
+        long groupId1 = createGroup(mAccount, "gsid1", "title1");
+        Uri groupMembershipUri = insertGroupMembership(contactId1, "gsid1");
+
+        assertSingleGroup(groupId1, mAccount, "gsid1", "title1");
+        assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
+                contactId1, groupId1, "gsid1");
+    }
+
+    public void testGroupInsertFailureOnGroupIdConflict() {
+        long contactId1 = createContact(mAccount);
+        long groupId1 = createGroup(mAccount, "gsid1", "title1");
+
+        ContentValues values = new ContentValues();
+        values.put(GroupMembership.CONTACT_ID, contactId1);
+        values.put(GroupMembership.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
+        values.put(GroupMembership.GROUP_SOURCE_ID, "gsid1");
+        values.put(GroupMembership.GROUP_ROW_ID, groupId1);
+        try {
+            mResolver.insert(Data.CONTENT_URI, values);
+            fail("the insert was expected to fail, but it succeeded");
+        } catch (IllegalArgumentException e) {
+            // this was expected
+        }
+    }
+
+    public void testContentEntityIterator() throws RemoteException {
+        // create multiple contacts and check that the selected ones are returned
+        long id;
+
+        long groupId1 = createGroup(mAccount, "gsid1", "title1");
+        long groupId2 = createGroup(mAccount, "gsid2", "title2");
+
+        long c0 = id = createContact(mAccount);
+        Uri id_0_0 = insertGroupMembership(id, "gsid1");
+        Uri id_0_1 = insertEmail(id, "c0@email.com");
+        Uri id_0_2 = insertPhoneNumber(id, "5551212c0");
+
+        long c1 = id = createContact(mAccount);
+        Uri id_1_0 = insertGroupMembership(id, "gsid1");
+        Uri id_1_1 = insertGroupMembership(id, "gsid2");
+        Uri id_1_2 = insertEmail(id, "c1@email.com");
+        Uri id_1_3 = insertPhoneNumber(id, "5551212c1");
+
+        long c2 = id = createContact(mAccount);
+        Uri id_2_0 = insertGroupMembership(id, "gsid1");
+        Uri id_2_1 = insertEmail(id, "c2@email.com");
+        Uri id_2_2 = insertPhoneNumber(id, "5551212c2");
+
+        long c3 = id = createContact(mAccount);
+        Uri id_3_0 = insertGroupMembership(id, groupId2);
+        Uri id_3_1 = insertEmail(id, "c3@email.com");
+        Uri id_3_2 = insertPhoneNumber(id, "5551212c3");
+
+        EntityIterator iterator = mResolver.queryEntities(Contacts.CONTENT_URI,
+                "contact_id in (" + c1 + "," + c2 + "," + c3 + ")", null, null);
+        Entity entity;
+        ContentValues[] subValues;
+        entity = iterator.next();
+        assertEquals(c1, (long) entity.getEntityValues().getAsLong(Contacts._ID));
+        subValues = asSortedContentValuesArray(entity.getSubValues());
+        assertEquals(4, subValues.length);
+        assertDataRow(subValues[0], GroupMembership.CONTENT_ITEM_TYPE,
+                Data._ID, id_1_0,
+                GroupMembership.GROUP_ROW_ID, groupId1,
+                GroupMembership.GROUP_SOURCE_ID, "gsid1");
+        assertDataRow(subValues[1], GroupMembership.CONTENT_ITEM_TYPE,
+                Data._ID, id_1_1,
+                GroupMembership.GROUP_ROW_ID, groupId2,
+                GroupMembership.GROUP_SOURCE_ID, "gsid2");
+        assertDataRow(subValues[2], Email.CONTENT_ITEM_TYPE,
+                Data._ID, id_1_2,
+                Email.DATA, "c1@email.com");
+        assertDataRow(subValues[3], Phone.CONTENT_ITEM_TYPE,
+                Data._ID, id_1_3,
+                Email.DATA, "5551212c1");
+
+        entity = iterator.next();
+        assertEquals(c2, (long) entity.getEntityValues().getAsLong(Contacts._ID));
+        subValues = asSortedContentValuesArray(entity.getSubValues());
+        assertEquals(3, subValues.length);
+        assertDataRow(subValues[0], GroupMembership.CONTENT_ITEM_TYPE,
+                Data._ID, id_2_0,
+                GroupMembership.GROUP_ROW_ID, groupId1,
+                GroupMembership.GROUP_SOURCE_ID, "gsid1");
+        assertDataRow(subValues[1], Email.CONTENT_ITEM_TYPE,
+                Data._ID, id_2_1,
+                Email.DATA, "c2@email.com");
+        assertDataRow(subValues[2], Phone.CONTENT_ITEM_TYPE,
+                Data._ID, id_2_2,
+                Email.DATA, "5551212c2");
+
+        entity = iterator.next();
+        assertEquals(c3, (long) entity.getEntityValues().getAsLong(Contacts._ID));
+        subValues = asSortedContentValuesArray(entity.getSubValues());
+        assertEquals(3, subValues.length);
+        assertDataRow(subValues[0], GroupMembership.CONTENT_ITEM_TYPE,
+                Data._ID, id_3_0,
+                GroupMembership.GROUP_ROW_ID, groupId2,
+                GroupMembership.GROUP_SOURCE_ID, "gsid2");
+        assertDataRow(subValues[1], Email.CONTENT_ITEM_TYPE,
+                Data._ID, id_3_1,
+                Email.DATA, "c3@email.com");
+        assertDataRow(subValues[2], Phone.CONTENT_ITEM_TYPE,
+                Data._ID, id_3_2,
+                Email.DATA, "5551212c3");
+
+        assertFalse(iterator.hasNext());
     }
 }
 

@@ -107,12 +107,22 @@ import java.util.LinkedList;
                 + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
                 + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
+        public static final String DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES_GROUPS = "data "
+                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
+                + "LEFT OUTER JOIN groups "
+                + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
+                + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
+                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+
         public static final String DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_GROUPS = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
                 + "LEFT OUTER JOIN packages ON (contacts.package_id = packages._id) "
-                + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
-                + ")";
+                + "LEFT OUTER JOIN groups "
+                + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
+                + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") ";
 
         public static final String GROUPS_JOIN_PACKAGES = "groups "
                 + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id)";
@@ -124,8 +134,9 @@ import java.util.LinkedList;
 
         public static final String GROUPS_JOIN_PACKAGES_DATA_CONTACTS_AGGREGATES = "groups "
                 + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id) "
-                + "LEFT OUTER JOIN data ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
-                + ") " + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN data "
+                + "  ON (groups._id = data." + GroupMembership.GROUP_ROW_ID + ") "
+                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
                 + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
 
         public static final String ACTIVITIES = "activities";
@@ -178,6 +189,12 @@ import java.util.LinkedList;
                 + "),1) FROM " + Tables.DATA_JOIN_CONTACTS_GROUPS + " WHERE "
                 + DataColumns.MIMETYPE_ID + "=? AND " + Contacts.AGGREGATE_ID + "="
                 + AggregatesColumns.CONCRETE_ID + " AND " + Groups.GROUP_VISIBLE + "=1";
+
+        public static final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID =
+                Groups.SOURCE_ID + "=? AND "
+                        + Groups.ACCOUNT_NAME + "=? AND "
+                        + Groups.ACCOUNT_TYPE + "=?";
+
     }
 
     public interface AggregatesColumns {
@@ -198,6 +215,14 @@ import java.util.LinkedList;
         public static final String PACKAGE_ID = "package_id";
 
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
+        public static final String CONCRETE_PACKAGE_ID = Tables.CONTACTS + "." + PACKAGE_ID;
+        public static final String CONCRETE_ACCOUNT_NAME =
+                Tables.CONTACTS + "." + Contacts.ACCOUNT_NAME;
+        public static final String CONCRETE_ACCOUNT_TYPE =
+                Tables.CONTACTS + "." + Contacts.ACCOUNT_TYPE;
+        public static final String CONCRETE_SOURCE_ID = Tables.CONTACTS + "." + Contacts.SOURCE_ID;
+        public static final String CONCRETE_VERSION = Tables.CONTACTS + "." + Contacts.VERSION;
+        public static final String CONCRETE_DIRTY = Tables.CONTACTS + "." + Contacts.DIRTY;
     }
 
     public interface DataColumns {
@@ -571,10 +596,22 @@ import java.util.LinkedList;
                 Groups.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 Groups.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 Groups.SOURCE_ID + " TEXT," +
+                Groups.VERSION + " INTEGER NOT NULL DEFAULT 1," +
+                Groups.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.TITLE + " TEXT," +
                 Groups.TITLE_RESOURCE + " INTEGER," +
                 Groups.GROUP_VISIBLE + " INTEGER" +
         ");");
+
+        db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_updated1 "
+                + "   BEFORE UPDATE ON " + Tables.GROUPS
+                + " BEGIN "
+                + "   UPDATE " + Tables.GROUPS
+                + "     SET "
+                +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1, "
+                +         Groups.DIRTY + "=1"
+                + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
+                + " END");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
