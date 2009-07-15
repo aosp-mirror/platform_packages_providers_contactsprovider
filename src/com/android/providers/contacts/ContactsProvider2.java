@@ -102,6 +102,7 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int AGGREGATES_SUMMARY_FILTER = 1005;
     private static final int AGGREGATES_SUMMARY_STREQUENT = 1006;
     private static final int AGGREGATES_SUMMARY_STREQUENT_FILTER = 1007;
+    private static final int AGGREGATES_SUMMARY_GROUP = 1008;
 
     private static final int CONTACTS = 2002;
     private static final int CONTACTS_ID = 2003;
@@ -214,6 +215,8 @@ public class ContactsProvider2 extends ContentProvider {
     /** Sql where statement used to match all the data records that need to be updated when a new
      * "super primary" is selected.*/
     private static final String sSetSuperPrimaryWhere;
+    /** Sql where statement for filtering on groups. */
+    private static final String sAggregatesInGroupSelect;
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
     /** Precomipled sql statement for setting a data record to the super primary. */
@@ -236,6 +239,8 @@ public class ContactsProvider2 extends ContentProvider {
                 AGGREGATES_SUMMARY_STREQUENT);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/strequent/filter/*",
                 AGGREGATES_SUMMARY_STREQUENT_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "aggregates_summary/group/*",
+                AGGREGATES_SUMMARY_GROUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
@@ -402,8 +407,15 @@ public class ContactsProvider2 extends ContentProvider {
                 + " WHERE " + Contacts.AGGREGATE_ID + "=(" + sNestedAggregateIdSelect + ")";
         sSetPrimaryWhere = Data.CONTACT_ID + "=(" + sNestedContactIdSelect + ") AND "
                 + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
-        sSetSuperPrimaryWhere  = Data.CONTACT_ID + " IN (" + sNestedContactIdListSelect + ") AND "
+        sSetSuperPrimaryWhere = Data.CONTACT_ID + " IN (" + sNestedContactIdListSelect + ") AND "
                 + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
+        sAggregatesInGroupSelect = AggregatesColumns.CONCRETE_ID + " IN (SELECT "
+                + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + " WHERE ("
+                + ContactsColumns.CONCRETE_ID + " IN (SELECT " + Tables.DATA + "."
+                + Data.CONTACT_ID + " FROM " + Tables.DATA_JOIN_MIMETYPES + " WHERE ("
+                + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE + "' AND "
+                + GroupMembership.GROUP_ROW_ID + "=(SELECT " + Tables.GROUPS + "."
+                + Groups._ID + " FROM " + Tables.GROUPS + " WHERE " + Groups.TITLE + "=?)))))";
     }
 
     private final ContactAggregationScheduler mAggregationScheduler;
@@ -1371,6 +1383,20 @@ public class ContactsProvider2 extends ContentProvider {
                 return c;
             }
 
+            case AGGREGATES_SUMMARY_GROUP: {
+                qb.setTables(Tables.AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE);
+                applyAggregateRestrictionExceptions(qb);
+                applyAggregatePrimaryRestrictionExceptions(sAggregatesSummaryProjectionMap);
+                projection = assertContained(projection, Aggregates.PRIMARY_PHONE_ID);
+                qb.setProjectionMap(sAggregatesSummaryProjectionMap);
+                if (uri.getPathSegments().size() > 2) {
+                    qb.appendWhere(" AND " + sAggregatesInGroupSelect);
+                    selectionArgs = appendGroupArg(selectionArgs, uri.getLastPathSegment());
+                }
+                groupBy = aggregateIdColName;
+                break;
+            }
+
             case AGGREGATES_DATA: {
                 long aggId = Long.parseLong(uri.getPathSegments().get(1));
                 qb.setTables(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
@@ -1922,4 +1948,15 @@ public class ContactsProvider2 extends ContentProvider {
         return filter.toString();
     }
 
+    private String[] appendGroupArg(String[] selectionArgs, String arg) {
+        if (selectionArgs == null) {
+            return new String[] {arg};
+        } else {
+            int newLength = selectionArgs.length + 1;
+            String[] newSelectionArgs = new String[newLength];
+            System.arraycopy(selectionArgs, 0, newSelectionArgs, 0, selectionArgs.length);
+            newSelectionArgs[newLength - 1] = arg;
+            return newSelectionArgs;
+        }
+    }
 }
