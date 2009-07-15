@@ -20,16 +20,15 @@ import com.android.providers.contacts.OpenHelper.AggregatesColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
-import com.android.providers.contacts.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 import com.android.internal.content.SyncStateContentProviderHelper;
-
 import android.accounts.Account;
 import android.content.pm.PackageManager;
+import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.UriMatcher;
 import android.content.Context;
@@ -52,6 +51,7 @@ import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
+import android.provider.Contacts.People;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -221,6 +221,8 @@ public class ContactsProvider2 extends ContentProvider {
     private SQLiteStatement mSetPrimaryStatement;
     /** Precomipled sql statement for setting a data record to the super primary. */
     private SQLiteStatement mSetSuperPrimaryStatement;
+    /** Precomipled sql statement for incrementing times contacted for an aggregate */
+    private SQLiteStatement mLastTimeContactedUpdate;
 
     private static final String GTALK_PROTOCOL_STRING = ContactMethods
             .encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
@@ -423,6 +425,7 @@ public class ContactsProvider2 extends ContentProvider {
 
     private ContactAggregator mContactAggregator;
     private NameSplitter mNameSplitter;
+    private LegacyApiSupport mLegacyApiSupport;
 
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
@@ -450,6 +453,9 @@ public class ContactsProvider2 extends ContentProvider {
         mSetSuperPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA + " SET " + Data.IS_SUPER_PRIMARY
                 + "=(_id=?) WHERE " + sSetSuperPrimaryWhere);
+        mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + Contacts.TIMES_CONTACTED + "=" + Contacts.TIMES_CONTACTED + "+1,"
+                + Contacts.LAST_TIME_CONTACTED + "=? WHERE " + Contacts.AGGREGATE_ID + "=?");
 
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
@@ -457,6 +463,7 @@ public class ContactsProvider2 extends ContentProvider {
                 context.getString(com.android.internal.R.string.common_name_suffixes),
                 context.getString(com.android.internal.R.string.common_name_conjunctions));
 
+        mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this);
         return (db != null);
     }
 
@@ -506,7 +513,7 @@ public class ContactsProvider2 extends ContentProvider {
                 break;
 
             case AGGREGATES: {
-                id = insertAggregate(values);
+                insertAggregate(values);
                 break;
             }
 
@@ -539,7 +546,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                return mLegacyApiSupport.insert(uri, values);
         }
 
         if (id < 0) {
@@ -612,11 +619,16 @@ public class ContactsProvider2 extends ContentProvider {
         overriddenValues.put(ContactsColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
         overriddenValues.remove(Contacts.PACKAGE);
 
-        long rowId = db.insert(Tables.CONTACTS, Contacts.AGGREGATE_ID, overriddenValues);
+        long contactId = db.insert(Tables.CONTACTS, Contacts.AGGREGATE_ID, overriddenValues);
 
-        mContactAggregator.schedule();
+        int aggregationMode = Contacts.AGGREGATION_MODE_DEFAULT;
+        if (values.containsKey(Contacts.AGGREGATION_MODE)) {
+            aggregationMode = values.getAsInteger(Contacts.AGGREGATION_MODE);
+        }
 
-        return rowId;
+        triggerAggregation(contactId, aggregationMode);
+
+        return contactId;
     }
 
     /**
@@ -626,7 +638,7 @@ public class ContactsProvider2 extends ContentProvider {
      * @return the row ID of the newly created row
      */
     private long insertData(ContentValues values) {
-        boolean success = false;
+        int aggregationMode = Contacts.AGGREGATION_MODE_DISABLED;
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         long id = 0;
@@ -657,19 +669,31 @@ public class ContactsProvider2 extends ContentProvider {
                 db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
             }
 
-            mContactAggregator.markContactForAggregation(contactId);
+            aggregationMode = mContactAggregator.markContactForAggregation(contactId);
 
             db.setTransactionSuccessful();
-            success = true;
         } finally {
             db.endTransaction();
         }
 
-        if (success) {
-            mContactAggregator.schedule();
-        }
-
+        triggerAggregation(id, aggregationMode);
         return id;
+    }
+
+    private void triggerAggregation(long contactId, int aggregationMode) {
+        switch (aggregationMode) {
+            case Contacts.AGGREGATION_MODE_DEFAULT:
+                mContactAggregator.schedule();
+                break;
+
+            case Contacts.AGGREGATION_MODE_IMMEDITATE:
+                mContactAggregator.aggregateContact(contactId);
+                break;
+
+            case Contacts.AGGREGATION_MODE_DISABLED:
+                // Do nothing
+                break;
+        }
     }
 
     /**
@@ -1119,7 +1143,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                return mLegacyApiSupport.update(uri, values, selection, selectionArgs);
         }
 
         if (count > 0) {
@@ -1131,47 +1155,31 @@ public class ContactsProvider2 extends ContentProvider {
     private int updateAggregateData(SQLiteDatabase db, long aggregateId, ContentValues values) {
 
         // First update all constituent contacts
-        ContentValues optionValues = new ContentValues(3);
-        if (values.containsKey(Aggregates.CUSTOM_RINGTONE)) {
-            optionValues.put(ContactOptionsColumns.CUSTOM_RINGTONE,
-                    values.getAsString(Aggregates.CUSTOM_RINGTONE));
-        }
-        if (values.containsKey(Aggregates.SEND_TO_VOICEMAIL)) {
-            optionValues.put(ContactOptionsColumns.SEND_TO_VOICEMAIL,
-                    values.getAsBoolean(Aggregates.SEND_TO_VOICEMAIL));
-        }
+        ContentValues optionValues = new ContentValues(5);
+        OpenHelper.copyStringValue(optionValues, Contacts.CUSTOM_RINGTONE,
+                values, Aggregates.CUSTOM_RINGTONE);
+        OpenHelper.copyLongValue(optionValues, Contacts.SEND_TO_VOICEMAIL,
+                values, Aggregates.SEND_TO_VOICEMAIL);
+        OpenHelper.copyLongValue(optionValues, Contacts.LAST_TIME_CONTACTED,
+                values, Aggregates.LAST_TIME_CONTACTED);
+        OpenHelper.copyLongValue(optionValues, Contacts.TIMES_CONTACTED,
+                values, Aggregates.TIMES_CONTACTED);
+        OpenHelper.copyLongValue(optionValues, Contacts.STARRED,
+                values, Aggregates.STARRED);
 
         // Nothing to update - just return
         if (optionValues.size() == 0) {
             return 0;
         }
 
-        Cursor c = db.query(Tables.CONTACTS, Projections.PROJ_CONTACTS, Contacts.AGGREGATE_ID + "="
-                + aggregateId, null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                long contactId = c.getLong(Projections.COL_CONTACT_ID);
+        db.update(Tables.CONTACTS, optionValues, Contacts.AGGREGATE_ID + "=" + aggregateId, null);
+        return db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
+    }
 
-                optionValues.put(ContactOptionsColumns._ID, contactId);
-                db.replace(Tables.CONTACT_OPTIONS, null, optionValues);
-            }
-        } finally {
-            c.close();
-        }
-
-        // Now update the aggregate itself.  Ignore all supplied fields except rington and
-        // send_to_voicemail
-        optionValues.clear();
-        if (values.containsKey(Aggregates.CUSTOM_RINGTONE)) {
-            optionValues.put(Aggregates.CUSTOM_RINGTONE,
-                    values.getAsString(Aggregates.CUSTOM_RINGTONE));
-        }
-        if (values.containsKey(Aggregates.SEND_TO_VOICEMAIL)) {
-            optionValues.put(Aggregates.SEND_TO_VOICEMAIL,
-                    values.getAsBoolean(Aggregates.SEND_TO_VOICEMAIL));
-        }
-
-        return db.update(Tables.AGGREGATES, optionValues, Aggregates._ID + "=" + aggregateId, null);
+    public void updateContactTime(long aggregateId, long lastTimeContacted) {
+        mLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
+        mLastTimeContactedUpdate.bindLong(2, aggregateId);
+        mLastTimeContactedUpdate.execute();
     }
 
     private static class ContactPair {
@@ -1231,11 +1239,13 @@ public class ContactsProvider2 extends ContentProvider {
             }
         }
 
-        mContactAggregator.markContactForAggregation(contactId);
-        mContactAggregator.aggregateContact(contactId);
-        if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
-                || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
-            mContactAggregator.updateAggregateData(aggregateId);
+        int aggregationMode = mContactAggregator.markContactForAggregation(contactId);
+        if (aggregationMode != Contacts.AGGREGATION_MODE_DISABLED) {
+            mContactAggregator.aggregateContact(db, contactId);
+            if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
+                    || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
+                mContactAggregator.updateAggregateData(aggregateId);
+            }
         }
 
         // The return value is fake - we just confirm that we made a change, not count actual
@@ -1553,7 +1563,8 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                return mLegacyApiSupport.query(uri, projection, selection, selectionArgs,
+                        sortOrder);
         }
 
         // Perform the query and set the notification uri

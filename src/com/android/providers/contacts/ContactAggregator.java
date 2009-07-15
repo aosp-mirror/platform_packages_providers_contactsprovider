@@ -20,7 +20,6 @@ import com.android.providers.contacts.ContactMatcher.MatchScore;
 import com.android.providers.contacts.OpenHelper.AggregatesColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
-import com.android.providers.contacts.OpenHelper.ContactOptionsColumns;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
@@ -113,13 +112,20 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_AGGREGATE_ID2 = 3;
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { Contacts._ID };
-    private static final String[] CONTACTS_JOIN_CONTACT_OPTIONS_COLUMNS = new String[] {
-            ContactOptionsColumns.CUSTOM_RINGTONE,
-            ContactOptionsColumns.SEND_TO_VOICEMAIL,
+
+    private static final String[] CONTACT_OPTIONS_COLUMNS = new String[] {
+            Contacts.CUSTOM_RINGTONE,
+            Contacts.SEND_TO_VOICEMAIL,
+            Contacts.LAST_TIME_CONTACTED,
+            Contacts.TIMES_CONTACTED,
+            Contacts.STARRED,
     };
 
     private static final int COL_CUSTOM_RINGTONE = 0;
     private static final int COL_SEND_TO_VOICEMAIL = 1;
+    private static final int COL_LAST_TIME_CONTACTED = 2;
+    private static final int COL_TIMES_CONTACTED = 3;
+    private static final int COL_STARRED = 4;
 
     private static final String[] AGGREGATE_ID_COLUMNS = new String[]{ Contacts.AGGREGATE_ID };
     private static final int COL_AGGREGATE_ID = 0;
@@ -135,6 +141,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private volatile boolean mCancel;
 
     /** Compiled statement for updating {@link Aggregates#IN_VISIBLE_GROUP}. */
+    // TODO either use or remove this
     private SQLiteStatement mUpdateAggregateVisibleStatement;
 
     /**
@@ -233,7 +240,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final Cursor c = db.query(Tables.CONTACTS, new String[]{Contacts._ID},
-                Contacts.AGGREGATE_ID + " IS NULL", null, null, null, null);
+                Contacts.AGGREGATE_ID + " IS NULL AND "
+                        + Contacts.AGGREGATION_MODE + "=" + Contacts.AGGREGATION_MODE_DEFAULT,
+                null, null, null, null);
 
         int totalCount = c.getCount();
         int count = 0;
@@ -271,14 +280,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Synchronously aggregate the specified contact.
      */
     public void aggregateContact(long contactId) {
-        MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatcher matcher = new ContactMatcher();
-        ContentValues values = new ContentValues();
-
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         db.beginTransaction();
         try {
-            aggregateContact(db, contactId, candidates, matcher, values);
+            aggregateContact(db, contactId);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -286,19 +291,39 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
+     * Synchronously aggregate the specified contact assuming an open transaction.
+     */
+    public void aggregateContact(SQLiteDatabase db, long contactId) {
+        MatchCandidateList candidates = new MatchCandidateList();
+        ContactMatcher matcher = new ContactMatcher();
+        ContentValues values = new ContentValues();
+        aggregateContact(db, contactId, candidates, matcher, values);
+    }
+
+    /**
      * Marks the specified contact for (re)aggregation.
      *
      * @param contactId contact ID that needs to be (re)aggregated
+     * @return The contact aggregation mode:
+     *         {@link Contacts#AGGREGATION_MODE_DEFAULT},
+     *         {@link Contacts#AGGREGATION_MODE_IMMEDIATE} or
+     *         {@link Contacts#AGGREGATION_MODE_DISABLED}.
      */
-    public void markContactForAggregation(long contactId) {
+    public int markContactForAggregation(long contactId) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         long aggregateId = mOpenHelper.getAggregateId(contactId);
         if (aggregateId != 0) {
 
             // Clear out the aggregate ID field on the contact
-            db.execSQL("UPDATE " + Tables.CONTACTS + " SET " + Contacts.AGGREGATE_ID
-                    + " = NULL WHERE " + Contacts._ID + "=" + contactId + ";");
+            ContentValues values = new ContentValues();
+            values.putNull(Contacts.AGGREGATE_ID);
+            int updated = db.update(Tables.CONTACTS, values,
+                    Contacts._ID + "=" + contactId + " AND " + Contacts.AGGREGATION_MODE + "="
+                            + Contacts.AGGREGATION_MODE_DEFAULT, null);
+            if (updated == 0) {
+                return mOpenHelper.getAggregationMode(contactId);
+            }
 
             // Clear out data used for aggregation - we will recreate it during aggregation
             db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
@@ -308,7 +333,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             db.execSQL("DELETE FROM " + Tables.AGGREGATES + " WHERE " + Aggregates._ID + "="
                     + aggregateId + " AND " + Aggregates._ID + " NOT IN (SELECT "
                     + Contacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + ");");
+            return Contacts.AGGREGATION_MODE_DEFAULT;
         }
+        return Contacts.AGGREGATION_MODE_DISABLED;
     }
 
     public void updateAggregateData(long aggregateId) {
@@ -1028,13 +1055,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private void updateSendToVoicemailAndRingtone(SQLiteDatabase db, long aggregateId) {
         int totalContactCount = 0;
-        int sendToVoiceMailCount = 0;
-        String customRingtone = null;
+        int aggregateSendToVoicemail = 0;
+        String aggregateCustomRingtone = null;
+        long aggregateLastTimeContacted = 0;
+        int aggregateTimesContacted = 0;
+        boolean aggregateStarred = false;
 
-        final Cursor c = db.query(Tables.CONTACTS_JOIN_CONTACT_OPTIONS,
-                CONTACTS_JOIN_CONTACT_OPTIONS_COLUMNS,
-                Contacts.AGGREGATE_ID + "=" + aggregateId,
-                null, null, null, null);
+        final Cursor c = db.query(Tables.CONTACTS, CONTACT_OPTIONS_COLUMNS,
+                Contacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
 
         try {
             while (c.moveToNext()) {
@@ -1042,21 +1070,36 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (!c.isNull(COL_SEND_TO_VOICEMAIL)) {
                     boolean sendToVoicemail = (c.getInt(COL_SEND_TO_VOICEMAIL) != 0);
                     if (sendToVoicemail) {
-                        sendToVoiceMailCount++;
+                        aggregateSendToVoicemail++;
                     }
                 }
 
-                if (customRingtone == null && !c.isNull(COL_CUSTOM_RINGTONE)) {
-                    customRingtone = c.getString(COL_CUSTOM_RINGTONE);
+                if (aggregateCustomRingtone == null && !c.isNull(COL_CUSTOM_RINGTONE)) {
+                    aggregateCustomRingtone = c.getString(COL_CUSTOM_RINGTONE);
                 }
+
+                long lastTimeContacted = c.getLong(COL_LAST_TIME_CONTACTED);
+                if (lastTimeContacted > aggregateLastTimeContacted) {
+                    aggregateLastTimeContacted = lastTimeContacted;
+                }
+
+                int timesContacted = c.getInt(COL_TIMES_CONTACTED);
+                if (timesContacted > aggregateTimesContacted) {
+                    aggregateTimesContacted = timesContacted;
+                }
+
+                aggregateStarred |= (c.getInt(COL_STARRED) != 0);
             }
         } finally {
             c.close();
         }
 
         ContentValues values = new ContentValues(2);
-        values.put(Aggregates.SEND_TO_VOICEMAIL, totalContactCount == sendToVoiceMailCount);
-        values.put(Aggregates.CUSTOM_RINGTONE, customRingtone);
+        values.put(Aggregates.SEND_TO_VOICEMAIL, totalContactCount == aggregateSendToVoicemail);
+        values.put(Aggregates.CUSTOM_RINGTONE, aggregateCustomRingtone);
+        values.put(Aggregates.LAST_TIME_CONTACTED, aggregateLastTimeContacted);
+        values.put(Aggregates.TIMES_CONTACTED, aggregateTimesContacted);
+        values.put(Aggregates.STARRED, aggregateStarred);
 
         db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
     }

@@ -46,6 +46,7 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 
 import android.telephony.PhoneNumberUtils;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -60,7 +61,7 @@ import java.util.LinkedList;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 40;
+    private static final int DATABASE_VERSION = 41;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -74,7 +75,6 @@ import java.util.LinkedList;
         public static final String NAME_LOOKUP = "name_lookup";
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
         public static final String RESTRICTION_EXCEPTIONS = "rest_exceptions";
-        public static final String CONTACT_OPTIONS = "contact_options";
         public static final String DATA = "data";
         public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
@@ -154,9 +154,6 @@ import java.util.LinkedList;
                 + "ON (agg_exceptions.contact_id1 = contacts1._id) "
                 + "INNER JOIN contacts contacts2 "
                 + "ON (agg_exceptions.contact_id2 = contacts2._id) ";
-
-        public static final String CONTACTS_JOIN_CONTACT_OPTIONS = "contacts "
-                + "LEFT OUTER JOIN contact_options ON (contacts._id = contact_options._id)";
     }
 
     public interface Clauses {
@@ -283,12 +280,6 @@ import java.util.LinkedList;
         public static final String PACKAGE_CLIENT_ID = "package_client_id";
     }
 
-    public interface ContactOptionsColumns {
-        public static final String _ID = BaseColumns._ID;
-        public static final String CUSTOM_RINGTONE = "custom_ringtone";
-        public static final String SEND_TO_VOICEMAIL = "send_to_voicemail";
-    }
-
     public interface NicknameLookupColumns {
         public static final String NAME = "name";
         public static final String CLUSTER = "cluster";
@@ -310,6 +301,7 @@ import java.util.LinkedList;
     private SQLiteStatement mMimetypeQuery;
     private SQLiteStatement mPackageQuery;
     private SQLiteStatement mAggregateIdQuery;
+    private SQLiteStatement mAggregationModeQuery;
     private SQLiteStatement mAggregateIdUpdate;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
@@ -364,6 +356,8 @@ import java.util.LinkedList;
                 + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
         mAggregateIdUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
                 + Contacts.AGGREGATE_ID + "=?" + " WHERE " + Contacts._ID + "=?");
+        mAggregationModeQuery = db.compileStatement("SELECT " + Contacts.AGGREGATION_MODE + " FROM "
+                + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
                 + MimetypesColumns.MIMETYPE + ") VALUES (?)");
         mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGES + "("
@@ -416,20 +410,20 @@ import java.util.LinkedList;
         db.execSQL("CREATE TABLE " + Tables.AGGREGATES + " (" +
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 Aggregates.DISPLAY_NAME + " TEXT," +
-                Aggregates.TIMES_CONTACTED + " INTEGER," +
+                Aggregates.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
+                Aggregates.CUSTOM_RINGTONE + " TEXT," +
+                Aggregates.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
+                Aggregates.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 Aggregates.LAST_TIME_CONTACTED + " INTEGER," +
-                Aggregates.STARRED + " INTEGER," +
+                Aggregates.STARRED + " INTEGER NOT NULL DEFAULT 0," +
+                Aggregates.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1," +
                 AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
                 AggregatesColumns.OPTIMAL_PRIMARY_PHONE_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
                 AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
                 AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
-                AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
-                Aggregates.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
-                Aggregates.CUSTOM_RINGTONE + " TEXT," +
-                Aggregates.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
-                Aggregates.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1" +
+                AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID + " INTEGER REFERENCES package(_id)" +
         ");");
 
         // Contacts table
@@ -442,15 +436,15 @@ import java.util.LinkedList;
                 Contacts.SOURCE_ID + " TEXT," +
                 Contacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
-                Contacts.AGGREGATE_ID + " INTEGER " +
+                Contacts.AGGREGATE_ID + " INTEGER," +
+                Contacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
+                        Contacts.AGGREGATION_MODE_DEFAULT + "," +
+                Contacts.CUSTOM_RINGTONE + " TEXT," +
+                Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.LAST_TIME_CONTACTED + " INTEGER," +
+                Contacts.STARRED + " INTEGER INTEGER NOT NULL DEFAULT 0" +
         ");");
-
-        // Contact options table. It has the same primary key as the corresponding contact.
-        db.execSQL("CREATE TABLE " + Tables.CONTACT_OPTIONS + " (" +
-                ContactOptionsColumns._ID + " INTEGER PRIMARY KEY," +
-                ContactOptionsColumns.CUSTOM_RINGTONE + " TEXT," +
-                ContactOptionsColumns.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0" +
-       ");");
 
         // Package name mapping table
         db.execSQL("CREATE TABLE " + Tables.PACKAGES + " (" +
@@ -652,11 +646,10 @@ import java.util.LinkedList;
         // schema changes, we should try to preserve the data, because it was entered by the user
         // and has never been synched to the server.
         db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACT_OPTIONS + ";");
 
         onCreate(db);
 
-        // TODO: eventually when this supports upgrades we should do something like the following: 
+        // TODO: eventually when this supports upgrades we should do something like the following:
 //        if (!upgradeDatabase(db, oldVersion, newVersion)) {
 //            mSyncState.discardSyncData(db, null /* all accounts */);
 //            ContentResolver.requestSync(null /* all accounts */,
@@ -671,7 +664,6 @@ import java.util.LinkedList;
         SQLiteDatabase db = getWritableDatabase();
         db.execSQL("DELETE FROM " + Tables.AGGREGATES + ";");
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
-        db.execSQL("DELETE FROM " + Tables.CONTACT_OPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
@@ -833,6 +825,17 @@ import java.util.LinkedList;
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return -1
             return 0;
+        }
+    }
+
+    public int getAggregationMode(long contactId) {
+        getReadableDatabase();
+        try {
+            DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, contactId);
+            return (int)mAggregationModeQuery.simpleQueryForLong();
+        } catch (SQLiteDoneException e) {
+            // No valid mapping found, so return "disabled"
+            return Contacts.AGGREGATION_MODE_DISABLED;
         }
     }
 
@@ -1008,6 +1011,32 @@ import java.util.LinkedList;
         return mCache.getExceptionQueryClause(clientUid, column);
     }
 
+
+    public static void copyStringValue(ContentValues toValues, String toKey,
+            ContentValues fromValues, String fromKey) {
+        if (fromValues.containsKey(fromKey)) {
+            toValues.put(toKey, fromValues.getAsString(fromKey));
+        }
+    }
+
+    public static void copyLongValue(ContentValues toValues, String toKey,
+            ContentValues fromValues, String fromKey) {
+        if (fromValues.containsKey(fromKey)) {
+            long longValue;
+            Object value = fromValues.get(fromKey);
+            if (value instanceof Boolean) {
+                if ((Boolean)value) {
+                    longValue = 1;
+                } else {
+                    longValue = 0;
+                }
+            } else {
+                longValue = ((Number) value).longValue();
+            }
+            toValues.put(toKey, longValue);
+        }
+    }
+
     /**
      * Utility class to build a selection query clause that matches a specific
      * column against any one of the contained values. You must provide any
@@ -1159,7 +1188,6 @@ import java.util.LinkedList;
             }
         }
     }
-
     public SyncStateContentProviderHelper getSyncState() {
         return mSyncState;
     }
