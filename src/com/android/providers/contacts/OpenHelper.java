@@ -61,7 +61,7 @@ import java.util.LinkedList;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 41;
+    private static final int DATABASE_VERSION = 43;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -223,6 +223,7 @@ import java.util.LinkedList;
         public static final String CONCRETE_SOURCE_ID = Tables.CONTACTS + "." + Contacts.SOURCE_ID;
         public static final String CONCRETE_VERSION = Tables.CONTACTS + "." + Contacts.VERSION;
         public static final String CONCRETE_DIRTY = Tables.CONTACTS + "." + Contacts.DIRTY;
+        public static final String DISPLAY_NAME = "display_name";
     }
 
     public interface DataColumns {
@@ -468,7 +469,8 @@ import java.util.LinkedList;
                 Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LAST_TIME_CONTACTED + " INTEGER," +
-                Contacts.STARRED + " INTEGER INTEGER NOT NULL DEFAULT 0" +
+                Contacts.STARRED + " INTEGER INTEGER NOT NULL DEFAULT 0," +
+                ContactsColumns.DISPLAY_NAME + " TEXT" +
         ");");
 
         // Package name mapping table

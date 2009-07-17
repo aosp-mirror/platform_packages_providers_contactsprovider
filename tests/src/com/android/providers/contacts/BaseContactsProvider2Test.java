@@ -146,6 +146,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.CONTACT_ID, contactId);
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
         values.put(Phone.NUMBER, phoneNumber);
+        values.put(Phone.TYPE, Phone.TYPE_HOME);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
@@ -156,6 +157,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.CONTACT_ID, contactId);
         values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
         values.put(Email.DATA, email);
+        values.put(Email.TYPE, Email.TYPE_HOME);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
@@ -166,6 +168,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.CONTACT_ID, contactId);
         values.put(Data.MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
         values.put(Nickname.NAME, nickname);
+        values.put(Nickname.TYPE, Nickname.TYPE_OTHER_NAME);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
@@ -212,6 +215,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.MIMETYPE, Im.CONTENT_ITEM_TYPE);
         values.put(Im.PROTOCOL, protocol);
         values.put(Im.DATA, handle);
+        values.put(Im.TYPE, Im.TYPE_HOME);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;

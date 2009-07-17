@@ -112,8 +112,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personUri, People.DISPLAY_NAME, "John Doe");
     }
 
-    // TODO fix and reenable the test
-    public void __testPrimaryOrganization() {
+    public void testPrimaryOrganization() {
         ContentValues values = new ContentValues();
         final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -263,8 +262,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertEquals(timesContactedAfter, timesContactedBefore + 1);
     }
 
-    // TODO fix and reenable the test
-    public void __testOrganizationsInsert() {
+    public void testOrganizationsInsert() {
         ContentValues values = new ContentValues();
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -601,7 +599,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(labelColumn, "Foo");
         try {
             mResolver.insert(uri, values);
-            fail("Inserted row with both type and lable");
+            fail("Inserted row with both type and label");
         } catch (Exception e) {
             // Exception expected
         }

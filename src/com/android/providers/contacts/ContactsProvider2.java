@@ -28,7 +28,6 @@ import com.android.providers.contacts.OpenHelper.Tables;
 import com.android.internal.content.SyncStateContentProviderHelper;
 import android.accounts.Account;
 import android.content.pm.PackageManager;
-import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.UriMatcher;
 import android.content.Context;
@@ -51,7 +50,6 @@ import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
-import android.provider.Contacts.People;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -61,8 +59,12 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RestrictionExceptions;
 import android.provider.ContactsContract.Aggregates.AggregationSuggestions;
+import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Postal;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -84,6 +86,9 @@ public class ContactsProvider2 extends ContentProvider {
     // TODO: define broadcastreceiver to catch app uninstalls that should clear exceptions
     // TODO: carefully prevent all incoming nested queries; they can be gaping security holes
     // TODO: check for restricted flag during insert(), update(), and delete() calls
+
+    /** Default for the maximum number of returned aggregation suggestions. */
+    private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -146,12 +151,12 @@ public class ContactsProvider2 extends ContentProvider {
         };
 
         public static final String[] PROJ_DATA_CONTACTS = new String[] {
-                ContactsColumns.CONCRETE_ID,
-                DataColumns.CONCRETE_ID,
-                Contacts.AGGREGATE_ID,
-                ContactsColumns.PACKAGE_ID,
-                Contacts.IS_RESTRICTED,
-                Data.MIMETYPE,
+            ContactsColumns.CONCRETE_ID,
+            DataColumns.CONCRETE_ID,
+            Contacts.AGGREGATE_ID,
+            ContactsColumns.PACKAGE_ID,
+            Contacts.IS_RESTRICTED,
+            Data.MIMETYPE,
         };
 
         public static final int COL_CONTACT_ID = 0;
@@ -163,15 +168,15 @@ public class ContactsProvider2 extends ContentProvider {
 
         public static final String[] PROJ_DATA_AGGREGATES = new String[] {
             ContactsColumns.CONCRETE_ID,
-                DataColumns.CONCRETE_ID,
-                AggregatesColumns.CONCRETE_ID,
-                MimetypesColumns.CONCRETE_ID,
-                Phone.NUMBER,
-                Email.DATA,
-                AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID,
-                AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID,
-                AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID,
-                AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID,
+            DataColumns.CONCRETE_ID,
+            AggregatesColumns.CONCRETE_ID,
+            MimetypesColumns.CONCRETE_ID,
+            Phone.NUMBER,
+            Email.DATA,
+            AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID,
+            AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID,
+            AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID,
+            AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID,
         };
 
         public static final int COL_MIMETYPE_ID = 3;
@@ -184,8 +189,76 @@ public class ContactsProvider2 extends ContentProvider {
 
     }
 
-    /** Default for the maximum number of returned aggregation suggestions. */
-    private static final int DEFAULT_MAX_SUGGESTIONS = 5;
+    private interface DisplayNameQuery {
+        public static final String TABLES = Tables.DATA_JOIN_MIMETYPES;
+
+        public static final String[] COLUMNS = new String[] {
+            MimetypesColumns.MIMETYPE,
+            Data.IS_PRIMARY,
+            Data.DATA2,
+            StructuredName.DISPLAY_NAME,
+        };
+
+        public static final int MIMETYPE = 0;
+        public static final int IS_PRIMARY = 1;
+        public static final int DATA2 = 2;
+        public static final int DISPLAY_NAME = 3;
+    }
+
+    private interface DataQuery {
+        public static final String TABLES = Tables.DATA_JOIN_MIMETYPES;
+
+        public static final String[] COLUMNS = new String[] {
+            DataColumns.CONCRETE_ID,
+            MimetypesColumns.MIMETYPE,
+            Data.CONTACT_ID,
+            Data.IS_PRIMARY,
+            Data.DATA1,
+            Data.DATA2,
+            Data.DATA3,
+            Data.DATA4,
+            Data.DATA5,
+            Data.DATA6,
+            Data.DATA7,
+            Data.DATA8,
+            Data.DATA9,
+            Data.DATA10,
+        };
+
+        public static final int ID = 0;
+        public static final int MIMETYPE = 1;
+        public static final int CONTACT_ID = 2;
+        public static final int IS_PRIMARY = 3;
+        public static final int DATA1 = 4;
+        public static final int DATA2 = 5;
+        public static final int DATA3 = 6;
+        public static final int DATA4 = 7;
+        public static final int DATA5 = 8;
+        public static final int DATA6 = 9;
+        public static final int DATA7 = 10;
+        public static final int DATA8 = 11;
+        public static final int DATA9 = 12;
+        public static final int DATA10 = 13;
+    }
+
+    // Higher number represents higher priority in choosing what data to use for the display name
+    private static final int DISPLAY_NAME_PRIORITY_EMAIL = 1;
+    private static final int DISPLAY_NAME_PRIORITY_PHONE = 2;
+    private static final int DISPLAY_NAME_PRIORITY_ORGANIZATION = 3;
+    private static final int DISPLAY_NAME_PRIORITY_STRUCTURED_NAME = 4;
+
+    private static final HashMap<String, Integer> sDisplayNamePriorities;
+    static {
+        sDisplayNamePriorities = new HashMap<String, Integer>();
+        sDisplayNamePriorities.put(StructuredName.CONTENT_ITEM_TYPE,
+                DISPLAY_NAME_PRIORITY_STRUCTURED_NAME);
+        sDisplayNamePriorities.put(Organization.CONTENT_ITEM_TYPE,
+                DISPLAY_NAME_PRIORITY_ORGANIZATION);
+        sDisplayNamePriorities.put(Phone.CONTENT_ITEM_TYPE,
+                DISPLAY_NAME_PRIORITY_PHONE);
+        sDisplayNamePriorities.put(Email.CONTENT_ITEM_TYPE,
+                DISPLAY_NAME_PRIORITY_EMAIL);
+    }
 
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sAggregatesProjectionMap;
@@ -230,10 +303,12 @@ public class ContactsProvider2 extends ContentProvider {
     private static final String sAggregatesInGroupSelect;
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
-    /** Precomipled sql statement for setting a data record to the super primary. */
+    /** Precompiled sql statement for setting a data record to the super primary. */
     private SQLiteStatement mSetSuperPrimaryStatement;
-    /** Precomipled sql statement for incrementing times contacted for an aggregate */
+    /** Precompiled sql statement for incrementing times contacted for an aggregate */
     private SQLiteStatement mLastTimeContactedUpdate;
+    /** Precompiled sql statement for updating a contact display name */
+    private SQLiteStatement mContactDisplayNameUpdate;
 
     private static final String GTALK_PROTOCOL_STRING = ContactMethods
             .encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
@@ -452,6 +527,322 @@ public class ContactsProvider2 extends ContentProvider {
                 + Groups._ID + " FROM " + Tables.GROUPS + " WHERE " + Groups.TITLE + "=?)))))";
     }
 
+    /**
+     * Handles inserts and update for a specific Data type.
+     */
+    private abstract class DataRowHandler {
+
+        protected final String mMimetype;
+
+        public DataRowHandler(String mimetype) {
+            mMimetype = mimetype;
+        }
+
+        /**
+         * Inserts a row into the {@link Data} table.
+         */
+        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            return db.insert(Tables.DATA, null, values);
+        }
+
+        /**
+         * Validates data and updates a {@link Data} row using the cursor, which contains
+         * the current data.
+         */
+        public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
+            throw new UnsupportedOperationException();
+        }
+
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long dataId = c.getLong(DataQuery.ID);
+            long contactId = c.getLong(DataQuery.CONTACT_ID);
+            boolean primary = c.getInt(DataQuery.IS_PRIMARY) != 0;
+            int count = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
+            if (count != 0 && primary) {
+                fixPrimary(db, contactId);
+            }
+            return count;
+        }
+
+        private void fixPrimary(SQLiteDatabase db, long contactId) {
+            long newPrimaryId = findNewPrimaryDataId(db, contactId);
+            if (newPrimaryId != -1) {
+                ContactsProvider2.this.setIsPrimary(newPrimaryId);
+            }
+            fixContactDisplayName(db, contactId);
+        }
+
+        protected long findNewPrimaryDataId(SQLiteDatabase db, long contactId) {
+            Cursor c = queryData(db, contactId);
+            try {
+                if (!c.moveToFirst()) {
+                    return -1;
+                }
+                return c.getLong(DataQuery.ID);
+            } finally {
+                c.close();
+            }
+        }
+
+        protected Cursor queryData(SQLiteDatabase db, long contactId) {
+            // TODO Lookup integer mimetype IDs' instead of joining for speed
+            return db.query(DataQuery.TABLES, DataQuery.COLUMNS, Data.CONTACT_ID + "="
+                    + contactId + " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
+                    null, null, null, null);
+        }
+
+        protected void fixContactDisplayName(SQLiteDatabase db, long contactId) {
+            String bestDisplayName = null;
+            Cursor c = db.query(DisplayNameQuery.TABLES, DisplayNameQuery.COLUMNS,
+                    Data.CONTACT_ID + "=" + contactId, null, null, null, null);
+            try {
+                int maxPriority = -1;
+                while (c.moveToNext()) {
+                    String mimeType = c.getString(DisplayNameQuery.MIMETYPE);
+                    boolean primary;
+                    String name;
+
+                    if (StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
+                        name = c.getString(DisplayNameQuery.DISPLAY_NAME);
+                        primary = true;
+                    } else {
+                        name = c.getString(DisplayNameQuery.DATA2);
+                        primary = (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
+                    }
+
+                    if (primary && name != null) {
+                        Integer priority = sDisplayNamePriorities.get(mimeType);
+                        if (priority != null && priority > maxPriority) {
+                            maxPriority = priority;
+                            bestDisplayName = name;
+                        }
+                    }
+                }
+
+            } finally {
+                c.close();
+            }
+
+            ContactsProvider2.this.setDisplayName(contactId, bestDisplayName);
+        }
+    }
+
+    public class CustomDataRowHandler extends DataRowHandler {
+
+        public CustomDataRowHandler(String mimetype) {
+            super(mimetype);
+        }
+    }
+
+    public class StructuredNameRowHandler extends DataRowHandler {
+
+        private final NameSplitter mNameSplitter;
+
+        public StructuredNameRowHandler(NameSplitter nameSplitter) {
+            super(StructuredName.CONTENT_ITEM_TYPE);
+            mNameSplitter = nameSplitter;
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            fixStructuredNameComponents(values);
+            long id = super.insert(db, contactId, values);
+            fixContactDisplayName(db, contactId);
+            return id;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
+            // TODO Parse the full name if it has changed and replace pre-existing piece parts.
+        }
+
+        /**
+         * Parses the supplied display name, but only if the incoming values do not already contain
+         * structured name parts.  Also, if the display name is not provided, generate one by
+         * concatenating first name and last name
+         *
+         * TODO see if the order of first and last names needs to be conditionally reversed for
+         * some locales, e.g. China.
+         */
+        private void fixStructuredNameComponents(ContentValues values) {
+            String fullName = values.getAsString(StructuredName.DISPLAY_NAME);
+            if (!TextUtils.isEmpty(fullName)
+                    && TextUtils.isEmpty(values.getAsString(StructuredName.PREFIX))
+                    && TextUtils.isEmpty(values.getAsString(StructuredName.GIVEN_NAME))
+                    && TextUtils.isEmpty(values.getAsString(StructuredName.MIDDLE_NAME))
+                    && TextUtils.isEmpty(values.getAsString(StructuredName.FAMILY_NAME))
+                    && TextUtils.isEmpty(values.getAsString(StructuredName.SUFFIX))) {
+                NameSplitter.Name name = new NameSplitter.Name();
+                mNameSplitter.split(name, fullName);
+
+                values.put(StructuredName.PREFIX, name.getPrefix());
+                values.put(StructuredName.GIVEN_NAME, name.getGivenNames());
+                values.put(StructuredName.MIDDLE_NAME, name.getMiddleName());
+                values.put(StructuredName.FAMILY_NAME, name.getFamilyName());
+                values.put(StructuredName.SUFFIX, name.getSuffix());
+            }
+
+            if (TextUtils.isEmpty(fullName)) {
+                String givenName = values.getAsString(StructuredName.GIVEN_NAME);
+                String familyName = values.getAsString(StructuredName.FAMILY_NAME);
+                if (TextUtils.isEmpty(givenName)) {
+                    fullName = familyName;
+                } else if (TextUtils.isEmpty(familyName)) {
+                    fullName = givenName;
+                } else {
+                    fullName = givenName + " " + familyName;
+                }
+
+                if (!TextUtils.isEmpty(fullName)) {
+                    values.put(StructuredName.DISPLAY_NAME, fullName);
+                }
+            }
+        }
+    }
+
+    public class CommonDataRowHandler extends DataRowHandler {
+
+        private final String mTypeColumn;
+        private final String mLabelColumn;
+
+        public CommonDataRowHandler(String mimetype, String typeColumn, String labelColumn) {
+            super(mimetype);
+            mTypeColumn = typeColumn;
+            mLabelColumn = labelColumn;
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            int type;
+            String label;
+            if (values.containsKey(mTypeColumn)) {
+                type = values.getAsInteger(mTypeColumn);
+            } else {
+                type = BaseTypes.TYPE_CUSTOM;
+            }
+            if (values.containsKey(mLabelColumn)) {
+                label = values.getAsString(mLabelColumn);
+            } else {
+                label = null;
+            }
+
+            if (type != BaseTypes.TYPE_CUSTOM && label != null) {
+                throw new RuntimeException(mLabelColumn + " value can only be specified with "
+                        + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
+            }
+
+            if (type == BaseTypes.TYPE_CUSTOM && label == null) {
+                throw new RuntimeException(mLabelColumn + " value must be specified when "
+                        + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
+            }
+
+            long dataId = super.insert(db, contactId, values);
+
+            Integer primary = values.getAsInteger(Data.IS_PRIMARY);
+            if (primary != null && primary != 0) {
+                setIsPrimary(dataId);
+            }
+
+            return dataId;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
+            // TODO read the data and check the constraint
+        }
+
+        @Override
+        protected long findNewPrimaryDataId(SQLiteDatabase db, long contactId) {
+            long primaryId = -1;
+            int primaryType = -1;
+            Cursor c = queryData(db, contactId);
+            try {
+                while (c.moveToNext()) {
+                    long dataId = c.getLong(DataQuery.ID);
+                    int type = c.getInt(DataQuery.DATA2);
+                    if (type == -1 || getTypeRank(type) < getTypeRank(primaryType)) {
+                        primaryId = dataId;
+                        primaryType = type;
+                    }
+                }
+            } finally {
+                c.close();
+            }
+            return primaryId;
+        }
+
+        /**
+         * Returns the rank of a specific record type to be used in determining the primary
+         * row. Lower number represents higher priority.
+         */
+        // TODO make abstract
+        protected int getTypeRank(int type) {
+            return 0;
+        }
+    }
+
+    public class OrganizationDataRowHandler extends CommonDataRowHandler {
+
+        public OrganizationDataRowHandler() {
+            super(Organization.CONTENT_ITEM_TYPE, Organization.TYPE, Organization.LABEL);
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            long id = super.insert(db, contactId, values);
+            fixContactDisplayName(db, contactId);
+            return id;
+        }
+
+        @Override
+        protected int getTypeRank(int type) {
+            switch (type) {
+                case Organization.TYPE_WORK: return 0;
+                case Organization.TYPE_CUSTOM: return 1;
+                case Organization.TYPE_OTHER: return 2;
+                default: return 1000;
+            }
+        }
+    }
+
+    public class PhoneDataRowHandler extends CommonDataRowHandler {
+
+        public PhoneDataRowHandler() {
+            super(Phone.CONTENT_ITEM_TYPE, Phone.TYPE, Phone.LABEL);
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            long id = super.insert(db, contactId, values);
+
+            final ContentValues phoneValues = new ContentValues();
+            final String number = values.getAsString(Phone.NUMBER);
+            phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER,
+                    PhoneNumberUtils.getStrippedReversed(number));
+            phoneValues.put(PhoneLookupColumns.DATA_ID, id);
+            phoneValues.put(PhoneLookupColumns.CONTACT_ID, contactId);
+            db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+
+            return id;
+        }
+
+        @Override
+        protected int getTypeRank(int type) {
+            switch (type) {
+                case Phone.TYPE_MOBILE: return 0;
+                case Phone.TYPE_WORK: return 1;
+                case Phone.TYPE_HOME: return 2;
+                case Phone.TYPE_PAGER: return 3;
+                case Phone.TYPE_CUSTOM: return 4;
+                case Phone.TYPE_OTHER: return 5;
+                case Phone.TYPE_FAX_WORK: return 6;
+                case Phone.TYPE_FAX_HOME: return 7;
+                default: return 1000;
+            }
+        }
+    }
+
+    private HashMap<String, DataRowHandler> mDataRowHandlers;
     private final ContactAggregationScheduler mAggregationScheduler;
     private OpenHelper mOpenHelper;
 
@@ -489,6 +880,9 @@ public class ContactsProvider2 extends ContentProvider {
                 + Contacts.TIMES_CONTACTED + "=" + Contacts.TIMES_CONTACTED + "+1,"
                 + Contacts.LAST_TIME_CONTACTED + "=? WHERE " + Contacts.AGGREGATE_ID + "=?");
 
+        mContactDisplayNameUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + ContactsColumns.DISPLAY_NAME + "=? WHERE " + Contacts._ID + "=?");
+
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
                 context.getString(com.android.internal.R.string.common_last_name_prefixes),
@@ -496,6 +890,22 @@ public class ContactsProvider2 extends ContentProvider {
                 context.getString(com.android.internal.R.string.common_name_conjunctions));
 
         mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this);
+
+        mDataRowHandlers = new HashMap<String, DataRowHandler>();
+
+        mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
+                new CommonDataRowHandler(Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL));
+        mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
+                new CommonDataRowHandler(Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
+        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
+                new CommonDataRowHandler(Postal.CONTENT_ITEM_TYPE, Postal.TYPE, Postal.LABEL));
+        mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE, new OrganizationDataRowHandler());
+        mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE, new PhoneDataRowHandler());
+        mDataRowHandlers.put(Postal.CONTENT_ITEM_TYPE,
+                new CommonDataRowHandler(Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL));
+        mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
+                new StructuredNameRowHandler(mNameSplitter));
+
         return (db != null);
     }
 
@@ -532,6 +942,15 @@ public class ContactsProvider2 extends ContentProvider {
     @Override
     public boolean isTemporary() {
         return false;
+    }
+
+    private DataRowHandler getDataRowHandler(final String mimeType) {
+        DataRowHandler handler = mDataRowHandlers.get(mimeType);
+        if (handler == null) {
+            handler = new CustomDataRowHandler(mimeType);
+            mDataRowHandlers.put(mimeType, handler);
+        }
+        return handler;
     }
 
     @Override
@@ -683,9 +1102,7 @@ public class ContactsProvider2 extends ContentProvider {
             values.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
             values.remove(Data.MIMETYPE);
 
-            if (StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                parseStructuredName(values);
-            } else if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
+            if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
                 boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
                 boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
                 if (containsGroupSourceId && containsGroupId) {
@@ -708,19 +1125,7 @@ public class ContactsProvider2 extends ContentProvider {
                 }
             }
 
-            // Insert the data row itself
-            id = db.insert(Tables.DATA, Data.DATA1, values);
-
-            // If it's a phone number add the normalized version to the lookup table
-            if (Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                final ContentValues phoneValues = new ContentValues();
-                final String number = values.getAsString(Phone.NUMBER);
-                phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER,
-                        PhoneNumberUtils.getStrippedReversed(number));
-                phoneValues.put(PhoneLookupColumns.DATA_ID, id);
-                phoneValues.put(PhoneLookupColumns.CONTACT_ID, contactId);
-                db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
-            }
+            id = getDataRowHandler(mimeType).insert(db, contactId, values);
 
             aggregationMode = mContactAggregator.markContactForAggregation(contactId);
 
@@ -746,6 +1151,29 @@ public class ContactsProvider2 extends ContentProvider {
             case Contacts.AGGREGATION_MODE_DISABLED:
                 // Do nothing
                 break;
+        }
+    }
+
+    public int deleteData(long dataId, String mimeType) {
+        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        Cursor c = db.query(DataQuery.TABLES, DataQuery.COLUMNS,
+                DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
+        try {
+            if (!c.moveToFirst()) {
+                return 0;
+            }
+
+            if (mimeType != null) {
+                String dataMimeType = c.getString(DataQuery.MIMETYPE);
+                if (!TextUtils.equals(dataMimeType, mimeType)) {
+                    throw new RuntimeException("Data type mismatch: expected " + mimeType);
+                }
+                mimeType = dataMimeType;
+            }
+
+            return getDataRowHandler(mimeType).delete(db, c);
+        } finally {
+            c.close();
         }
     }
 
@@ -959,31 +1387,6 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /**
-     * Parse the supplied display name, but only if the incoming values do not already contain
-     * structured name parts.
-     */
-    private void parseStructuredName(ContentValues values) {
-        final String fullName = values.getAsString(StructuredName.DISPLAY_NAME);
-        if (TextUtils.isEmpty(fullName)
-                || !TextUtils.isEmpty(values.getAsString(StructuredName.PREFIX))
-                || !TextUtils.isEmpty(values.getAsString(StructuredName.GIVEN_NAME))
-                || !TextUtils.isEmpty(values.getAsString(StructuredName.MIDDLE_NAME))
-                || !TextUtils.isEmpty(values.getAsString(StructuredName.FAMILY_NAME))
-                || !TextUtils.isEmpty(values.getAsString(StructuredName.SUFFIX))) {
-            return;
-        }
-
-        NameSplitter.Name name = new NameSplitter.Name();
-        mNameSplitter.split(name, fullName);
-
-        values.put(StructuredName.PREFIX, name.getPrefix());
-        values.put(StructuredName.GIVEN_NAME, name.getGivenNames());
-        values.put(StructuredName.MIDDLE_NAME, name.getMiddleName());
-        values.put(StructuredName.FAMILY_NAME, name.getFamilyName());
-        values.put(StructuredName.SUFFIX, name.getSuffix());
-    }
-
-    /**
      * Inserts an item in the groups table
      */
     private long insertGroup(ContentValues values, Account account) {
@@ -1101,7 +1504,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                return mLegacyApiSupport.delete(uri, selection, selectionArgs);
         }
     }
 
@@ -1976,6 +2379,16 @@ public class ContactsProvider2 extends ContentProvider {
         } finally {
             db.endTransaction();
         }
+    }
+
+    private void setDisplayName(long contactId, String displayName) {
+        if (displayName != null) {
+            mContactDisplayNameUpdate.bindString(1, displayName);
+        } else {
+            mContactDisplayNameUpdate.bindNull(1);
+        }
+        mContactDisplayNameUpdate.bindLong(2, contactId);
+        mContactDisplayNameUpdate.execute();
     }
 
     /*

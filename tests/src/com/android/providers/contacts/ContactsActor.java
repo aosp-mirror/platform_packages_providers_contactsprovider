@@ -195,6 +195,8 @@ public class ContactsActor {
         values.put(Data.IS_PRIMARY, 1);
         values.put(Data.IS_SUPER_PRIMARY, 1);
         values.put(Data.MIMETYPE, Phones.CONTENT_ITEM_TYPE);
+        values.put(ContactsContract.CommonDataKinds.Phone.TYPE,
+                ContactsContract.CommonDataKinds.Phone.TYPE_HOME);
         values.put(ContactsContract.CommonDataKinds.Phone.NUMBER, phoneNumber);
         Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 contactId), Contacts.Data.CONTENT_DIRECTORY);

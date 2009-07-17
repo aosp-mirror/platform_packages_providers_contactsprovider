@@ -992,20 +992,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private String getBestDisplayName(SQLiteDatabase db, long aggregateId) {
         String bestDisplayName = null;
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES,
-                new String[] {StructuredName.DISPLAY_NAME},
-                DatabaseUtils.concatenateWhere(Contacts.AGGREGATE_ID + "=" + aggregateId,
-                        Data.MIMETYPE + "='" + StructuredName.CONTENT_ITEM_TYPE + "'"),
-                null, null, null, null);
+        final Cursor c = db.query(Tables.CONTACTS, new String[] {ContactsColumns.DISPLAY_NAME},
+                Contacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
 
         try {
             while (c.moveToNext()) {
                 String displayName = c.getString(0);
-                if (bestDisplayName == null) {
-                    bestDisplayName = displayName;
-                } else {
-                    if (NameNormalizer.compareComplexity(displayName, bestDisplayName) > 0) {
+                if (!TextUtils.isEmpty(displayName)) {
+                    if (bestDisplayName == null) {
                         bestDisplayName = displayName;
+                    } else {
+                        if (NameNormalizer.compareComplexity(displayName, bestDisplayName) > 0) {
+                            bestDisplayName = displayName;
+                        }
                     }
                 }
             }

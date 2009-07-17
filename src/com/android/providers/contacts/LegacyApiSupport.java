@@ -15,6 +15,7 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.content.ContentUris;
@@ -26,11 +27,13 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
-import android.provider.Contacts;
 import android.provider.ContactsContract;
 import android.provider.Contacts.People;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.CommonDataKinds.Note;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.Data;
 
 import java.util.HashMap;
 
@@ -41,21 +44,24 @@ public class LegacyApiSupport {
     private static final int PEOPLE = 1;
     private static final int PEOPLE_ID = 2;
     private static final int PEOPLE_UPDATE_CONTACT_TIME = 3;
+    private static final int ORGANIZATIONS = 4;
+    private static final int ORGANIZATIONS_ID = 5;
 
     public interface LegacyTables {
         public static final String PEOPLE = "contacts"
                 + " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
                 + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = name.mimetype_id)"
                         + "='" + StructuredName.CONTENT_ITEM_TYPE + "')"
+                + " LEFT OUTER JOIN data organization ON (contacts._id = organization.contact_id"
+                + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = organization.mimetype_id)"
+                        + "='" + Organization.CONTENT_ITEM_TYPE + "' AND organization.is_primary)"
                 + " LEFT OUTER JOIN data note ON (contacts._id = note.contact_id"
                 + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = note.mimetype_id)"
                         + "='" + Note.CONTENT_ITEM_TYPE + "')";
     }
 
-    /** Precomipled sql statement for incrementing times contacted for an aggregate */
-    private final SQLiteStatement mLastTimeContactedUpdate;
-
     private static final HashMap<String, String> sPeopleProjectionMap;
+    private static final HashMap<String, String> sOrganizationProjectionMap;
 
     static {
 
@@ -124,8 +130,8 @@ public class LegacyApiSupport {
 //                CONTACTMETHODS_WITH_PRESENCE);
 //        matcher.addURI(authority, "presence", PRESENCE);
 //        matcher.addURI(authority, "presence/#", PRESENCE_ID);
-//        matcher.addURI(authority, "organizations", ORGANIZATIONS);
-//        matcher.addURI(authority, "organizations/#", ORGANIZATIONS_ID);
+        matcher.addURI(authority, "organizations", ORGANIZATIONS);
+        matcher.addURI(authority, "organizations/#", ORGANIZATIONS_ID);
 //        matcher.addURI(authority, "voice_dialer_timestamp", VOICE_DIALER_TIMESTAMP);
 //        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY,
 //                SEARCH_SUGGESTIONS);
@@ -153,7 +159,7 @@ public class LegacyApiSupport {
         sPeopleProjectionMap.put(People.NAME,
                 "name." + StructuredName.DISPLAY_NAME + " AS " + People.NAME);
         sPeopleProjectionMap.put(People.DISPLAY_NAME,
-                "name." + StructuredName.DISPLAY_NAME + " AS " + People.DISPLAY_NAME);
+                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME + " AS " + People.DISPLAY_NAME);
         sPeopleProjectionMap.put(People.PHONETIC_NAME, "trim(trim("
                 + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
                 + "ifnull(name." + StructuredName.PHONETIC_MIDDLE_NAME + ",' '))||' '||"
@@ -162,26 +168,48 @@ public class LegacyApiSupport {
         sPeopleProjectionMap.put(People.NOTES,
                 "note." + Note.NOTE + " AS " + People.NOTES);
         sPeopleProjectionMap.put(People.TIMES_CONTACTED,
-                Tables.CONTACTS + "." + ContactsContract.Contacts.TIMES_CONTACTED
+                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
                 + " AS " + People.TIMES_CONTACTED);
         sPeopleProjectionMap.put(People.LAST_TIME_CONTACTED,
-                Tables.CONTACTS + "." + ContactsContract.Contacts.LAST_TIME_CONTACTED
+                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
                 + " AS " + People.LAST_TIME_CONTACTED);
         sPeopleProjectionMap.put(People.CUSTOM_RINGTONE,
-                Tables.CONTACTS + "." + ContactsContract.Contacts.CUSTOM_RINGTONE
+                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
                 + " AS " + People.CUSTOM_RINGTONE);
         sPeopleProjectionMap.put(People.SEND_TO_VOICEMAIL,
-                Tables.CONTACTS + "." + ContactsContract.Contacts.SEND_TO_VOICEMAIL
+                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
                 + " AS " + People.SEND_TO_VOICEMAIL);
         sPeopleProjectionMap.put(People.STARRED,
-                Tables.CONTACTS + "." + ContactsContract.Contacts.STARRED
+                Tables.CONTACTS + "." + Contacts.STARRED
                 + " AS " + People.STARRED);
+        sPeopleProjectionMap.put(People.PRIMARY_ORGANIZATION_ID,
+                "organization." + Data._ID
+                + " AS " + People.PRIMARY_ORGANIZATION_ID);
+
+        sOrganizationProjectionMap = new HashMap<String, String>();
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.PERSON_ID,
+                Data.CONTACT_ID + " AS " + android.provider.Contacts.Organizations.PERSON_ID);
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.ISPRIMARY,
+                Data.IS_PRIMARY + " AS " + android.provider.Contacts.Organizations.ISPRIMARY);
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.COMPANY,
+                Organization.COMPANY + " AS " + android.provider.Contacts.Organizations.COMPANY);
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.TYPE,
+                Organization.TYPE + " AS " + android.provider.Contacts.Organizations.TYPE);
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.LABEL,
+                Organization.LABEL + " AS " + android.provider.Contacts.Organizations.LABEL);
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.TITLE,
+                Organization.TITLE + " AS " + android.provider.Contacts.Organizations.TITLE);
     }
 
     private final Context mContext;
     private final OpenHelper mOpenHelper;
     private final ContactsProvider2 mContactsProvider;
     private final NameSplitter mPhoneticNameSplitter;
+
+    /** Precomipled sql statement for incrementing times contacted for an aggregate */
+    private final SQLiteStatement mLastTimeContactedUpdate;
+
+    private final ContentValues mValues = new ContentValues();
 
     public LegacyApiSupport(Context context, OpenHelper openHelper,
             ContactsProvider2 contactsProvider) {
@@ -194,10 +222,10 @@ public class LegacyApiSupport {
 
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
         mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
-                + ContactsContract.Contacts.TIMES_CONTACTED + "="
-                + ContactsContract.Contacts.TIMES_CONTACTED + "+1,"
-                + ContactsContract.Contacts.LAST_TIME_CONTACTED + "=? WHERE "
-                + ContactsContract.Contacts._ID + "=?");
+                + Contacts.TIMES_CONTACTED + "="
+                + Contacts.TIMES_CONTACTED + "+1,"
+                + Contacts.LAST_TIME_CONTACTED + "=? WHERE "
+                + Contacts._ID + "=?");
     }
 
     public Uri insert(Uri uri, ContentValues values) {
@@ -205,7 +233,11 @@ public class LegacyApiSupport {
         long id = 0;
         switch (match) {
             case PEOPLE:
-                id = insertLegacyPeople(values);
+                id = insertPeople(values);
+                break;
+
+            case ORGANIZATIONS:
+                id = insertOrganization(values);
                 break;
 
             default:
@@ -221,58 +253,81 @@ public class LegacyApiSupport {
         return result;
     }
 
-    private long insertLegacyPeople(ContentValues values) {
-
-        // Two steps: first insert a contact, then data
-        ContentValues contentValues = new ContentValues();
+    private long insertPeople(ContentValues values) {
+        mValues.clear();
 
         // TODO: remove this once not required
-        contentValues.put(ContactsContract.Contacts.PACKAGE, "DefaultPackage");
+        mValues.put(ContactsContract.Contacts.PACKAGE, "DefaultPackage");
 
-        OpenHelper.copyStringValue(contentValues, ContactsContract.Contacts.CUSTOM_RINGTONE,
+        OpenHelper.copyStringValue(mValues, Contacts.CUSTOM_RINGTONE,
                 values, People.CUSTOM_RINGTONE);
-        OpenHelper.copyLongValue(contentValues, ContactsContract.Contacts.SEND_TO_VOICEMAIL,
+        OpenHelper.copyLongValue(mValues, Contacts.SEND_TO_VOICEMAIL,
                 values, People.SEND_TO_VOICEMAIL);
-        OpenHelper.copyLongValue(contentValues, ContactsContract.Contacts.LAST_TIME_CONTACTED,
+        OpenHelper.copyLongValue(mValues, Contacts.LAST_TIME_CONTACTED,
                 values, People.LAST_TIME_CONTACTED);
-        OpenHelper.copyLongValue(contentValues, ContactsContract.Contacts.TIMES_CONTACTED,
+        OpenHelper.copyLongValue(mValues, Contacts.TIMES_CONTACTED,
                 values, People.TIMES_CONTACTED);
-        OpenHelper.copyLongValue(contentValues, ContactsContract.Contacts.STARRED,
+        OpenHelper.copyLongValue(mValues, Contacts.STARRED,
                 values, People.STARRED);
-        Uri contactUri = mContactsProvider.insert(ContactsContract.Contacts.CONTENT_URI,
-                contentValues);
+        Uri contactUri = mContactsProvider.insert(Contacts.CONTENT_URI, mValues);
         long contactId = ContentUris.parseId(contactUri);
 
         if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
-            contentValues.clear();
-            contentValues.put(ContactsContract.Data.CONTACT_ID, contactId);
-            contentValues.put(ContactsContract.Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(contentValues, StructuredName.DISPLAY_NAME,
+            mValues.clear();
+            mValues.put(ContactsContract.Data.CONTACT_ID, contactId);
+            mValues.put(ContactsContract.Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
+            OpenHelper.copyStringValue(mValues, StructuredName.DISPLAY_NAME,
                     values, People.NAME);
             if (values.containsKey(People.PHONETIC_NAME)) {
                 String phoneticName = values.getAsString(People.PHONETIC_NAME);
                 NameSplitter.Name parsedName = new NameSplitter.Name();
                 mPhoneticNameSplitter.split(parsedName, phoneticName);
-                contentValues.put(StructuredName.PHONETIC_GIVEN_NAME, parsedName.getGivenNames());
-                contentValues.put(StructuredName.PHONETIC_MIDDLE_NAME, parsedName.getMiddleName());
-                contentValues.put(StructuredName.PHONETIC_FAMILY_NAME, parsedName.getFamilyName());
+                mValues.put(StructuredName.PHONETIC_GIVEN_NAME, parsedName.getGivenNames());
+                mValues.put(StructuredName.PHONETIC_MIDDLE_NAME, parsedName.getMiddleName());
+                mValues.put(StructuredName.PHONETIC_FAMILY_NAME, parsedName.getFamilyName());
             }
 
-            mContactsProvider.insert(ContactsContract.Data.CONTENT_URI, contentValues);
+            mContactsProvider.insert(ContactsContract.Data.CONTENT_URI, mValues);
         }
 
         if (values.containsKey(People.NOTES)) {
-            contentValues.clear();
-            contentValues.put(ContactsContract.Data.CONTACT_ID, contactId);
-            contentValues.put(ContactsContract.Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(contentValues, Note.NOTE, values, People.NOTES);
-            mContactsProvider.insert(ContactsContract.Data.CONTENT_URI, contentValues);
+            mValues.clear();
+            mValues.put(Data.CONTACT_ID, contactId);
+            mValues.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
+            OpenHelper.copyStringValue(mValues, Note.NOTE, values, People.NOTES);
+            mContactsProvider.insert(Data.CONTENT_URI, mValues);
         }
 
         // TODO instant aggregation
         return contactId;
     }
 
+    private long insertOrganization(ContentValues values) {
+        mValues.clear();
+
+        OpenHelper.copyLongValue(mValues, Data.CONTACT_ID,
+                values, android.provider.Contacts.Organizations.PERSON_ID);
+        mValues.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
+
+        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
+                values, android.provider.Contacts.Organizations.ISPRIMARY);
+
+        OpenHelper.copyStringValue(mValues, Organization.COMPANY,
+                values, android.provider.Contacts.Organizations.COMPANY);
+
+        // TYPE values happen to remain the same between V1 and V2 - can just copy the value
+        OpenHelper.copyLongValue(mValues, Organization.TYPE,
+                values, android.provider.Contacts.Organizations.TYPE);
+
+        OpenHelper.copyStringValue(mValues, Organization.LABEL,
+                values, android.provider.Contacts.Organizations.LABEL);
+        OpenHelper.copyStringValue(mValues, Organization.TITLE,
+                values, android.provider.Contacts.Organizations.TITLE);
+
+        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+
+        return ContentUris.parseId(uri);
+    }
 
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         final int match = sUriMatcher.match(uri);
@@ -314,6 +369,26 @@ public class LegacyApiSupport {
         return 1;
     }
 
+    public int delete(Uri uri, String selection, String[] selectionArgs) {
+        final int match = sUriMatcher.match(uri);
+        int count = 0;
+        switch (match) {
+            case ORGANIZATIONS_ID:
+                deleteOrganization(ContentUris.parseId(uri));
+                break;
+
+            default:
+                throw new UnsupportedOperationException("Unknown uri: " + uri);
+        }
+
+        return count;
+    }
+
+
+    private void deleteOrganization(long dataId) {
+        mContactsProvider.deleteData(dataId, Organization.CONTENT_ITEM_TYPE);
+    }
+
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
@@ -330,10 +405,20 @@ public class LegacyApiSupport {
             }
 
             case PEOPLE_ID:
-                qb.setDistinct(true);
                 qb.setTables(LegacyTables.PEOPLE);
                 qb.setProjectionMap(sPeopleProjectionMap);
                 qb.appendWhere("contacts._id=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case ORGANIZATIONS:
+                // TODO
+                break;
+
+            case ORGANIZATIONS_ID:
+                qb.setTables(Tables.DATA);
+                qb.setProjectionMap(sOrganizationProjectionMap);
+                qb.appendWhere("data._id=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
