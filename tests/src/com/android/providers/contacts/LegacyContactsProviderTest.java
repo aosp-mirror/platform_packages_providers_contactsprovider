@@ -154,8 +154,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personUri, values);
     }
 
-    // TODO fix and reenable the test
-    public void __testPrimaryPhone() {
+    public void testPrimaryPhone() {
         ContentValues values = new ContentValues();
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -197,8 +196,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personUri, values);
     }
 
-    // TODO fix and reenable the test
-    public void __testPrimaryEmail() {
+    public void testPrimaryEmail() {
         ContentValues values = new ContentValues();
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -286,8 +284,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 Organizations.LABEL);
     }
 
-    // TODO fix and reenable the test
-    public void __testPhonesInsert() {
+    public void testPhonesInsert() {
         ContentValues values = new ContentValues();
         putContactValues(values);
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -327,8 +324,23 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 Phones.TYPE_CUSTOM, Phones.TYPE_OTHER, Phones.LABEL);
     }
 
-    // TODO fix and reenable the test
-    public void __testContactMethodsInsert() {
+    public void testEmailInsert() {
+        assertContactMethodInsert(Contacts.KIND_EMAIL, ContactMethods.TYPE_CUSTOM,
+                "Some other way", "foo@acme.com", null, true);
+    }
+
+    public void testImInsert() {
+        assertContactMethodInsert(Contacts.KIND_IM, ContactMethods.TYPE_CUSTOM, "Some other way",
+                "Foo", "Bar", true);
+    }
+
+    public void testPostalInsert() {
+        assertContactMethodInsert(Contacts.KIND_POSTAL, ContactMethods.TYPE_CUSTOM,
+                "Some other way", "Foo", "Bar", true);
+    }
+
+    private void assertContactMethodInsert(int kind, int type, String label, String data,
+            String auxData, boolean primary) {
         ContentValues values = new ContentValues();
         putContactValues(values);
         final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -336,12 +348,12 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(ContactMethods.PERSON_ID, personId);
-        values.put(ContactMethods.KIND, Contacts.KIND_POSTAL);
-        values.put(ContactMethods.TYPE, ContactMethods.TYPE_CUSTOM);
-        values.put(ContactMethods.LABEL, "Some other way");
-        values.put(ContactMethods.DATA, "Foo");
-        values.put(ContactMethods.AUX_DATA, "Bar");
-        values.put(ContactMethods.ISPRIMARY, 1);
+        values.put(ContactMethods.KIND, kind);
+        values.put(ContactMethods.TYPE, type);
+        values.put(ContactMethods.LABEL, label);
+        values.put(ContactMethods.DATA, data);
+        values.put(ContactMethods.AUX_DATA, auxData);
+        values.put(ContactMethods.ISPRIMARY, primary ? 1 : 0);
 
         Uri uri = mResolver.insert(ContactMethods.CONTENT_URI, values);
 
@@ -349,7 +361,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         putContactValues(values);
         assertStoredValues(uri, values);
 
-        // Access the email through People
+        // Access the contact method through People
         Uri twigUri = Uri.withAppendedPath(personUri, People.ContactMethods.CONTENT_DIRECTORY);
         assertStoredValues(twigUri, values);
 

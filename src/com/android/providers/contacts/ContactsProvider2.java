@@ -23,9 +23,12 @@ import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
+import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 import com.android.internal.content.SyncStateContentProviderHelper;
+import com.google.android.collect.Lists;
+
 import android.accounts.Account;
 import android.content.pm.PackageManager;
 import android.content.ContentProvider;
@@ -542,7 +545,15 @@ public class ContactsProvider2 extends ContentProvider {
          * Inserts a row into the {@link Data} table.
          */
         public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
-            return db.insert(Tables.DATA, null, values);
+            final long dataId = db.insert(Tables.DATA, null, values);
+
+            Integer primary = values.getAsInteger(Data.IS_PRIMARY);
+            if (primary != null && primary != 0) {
+                setIsPrimary(dataId);
+            }
+
+            fixContactDisplayName(db, contactId);
+            return dataId;
         }
 
         /**
@@ -560,6 +571,7 @@ public class ContactsProvider2 extends ContentProvider {
             int count = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
             if (count != 0 && primary) {
                 fixPrimary(db, contactId);
+                fixContactDisplayName(db, contactId);
             }
             return count;
         }
@@ -569,19 +581,33 @@ public class ContactsProvider2 extends ContentProvider {
             if (newPrimaryId != -1) {
                 ContactsProvider2.this.setIsPrimary(newPrimaryId);
             }
-            fixContactDisplayName(db, contactId);
         }
 
         protected long findNewPrimaryDataId(SQLiteDatabase db, long contactId) {
+            long primaryId = -1;
+            int primaryType = -1;
             Cursor c = queryData(db, contactId);
             try {
-                if (!c.moveToFirst()) {
-                    return -1;
+                while (c.moveToNext()) {
+                    long dataId = c.getLong(DataQuery.ID);
+                    int type = c.getInt(DataQuery.DATA2);
+                    if (primaryType == -1 || getTypeRank(type) < getTypeRank(primaryType)) {
+                        primaryId = dataId;
+                        primaryType = type;
+                    }
                 }
-                return c.getLong(DataQuery.ID);
             } finally {
                 c.close();
             }
+            return primaryId;
+        }
+
+        /**
+         * Returns the rank of a specific record type to be used in determining the primary
+         * row. Lower number represents higher priority.
+         */
+        protected int getTypeRank(int type) {
+            return 0;
         }
 
         protected Cursor queryData(SQLiteDatabase db, long contactId) {
@@ -592,6 +618,10 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         protected void fixContactDisplayName(SQLiteDatabase db, long contactId) {
+            if (!sDisplayNamePriorities.containsKey(mMimetype)) {
+                return;
+            }
+
             String bestDisplayName = null;
             Cursor c = db.query(DisplayNameQuery.TABLES, DisplayNameQuery.COLUMNS,
                     Data.CONTACT_ID + "=" + contactId, null, null, null, null);
@@ -646,9 +676,7 @@ public class ContactsProvider2 extends ContentProvider {
         @Override
         public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
             fixStructuredNameComponents(values);
-            long id = super.insert(db, contactId, values);
-            fixContactDisplayName(db, contactId);
-            return id;
+            return super.insert(db, contactId, values);
         }
 
         @Override
@@ -736,48 +764,12 @@ public class ContactsProvider2 extends ContentProvider {
                         + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
             }
 
-            long dataId = super.insert(db, contactId, values);
-
-            Integer primary = values.getAsInteger(Data.IS_PRIMARY);
-            if (primary != null && primary != 0) {
-                setIsPrimary(dataId);
-            }
-
-            return dataId;
+            return super.insert(db, contactId, values);
         }
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
             // TODO read the data and check the constraint
-        }
-
-        @Override
-        protected long findNewPrimaryDataId(SQLiteDatabase db, long contactId) {
-            long primaryId = -1;
-            int primaryType = -1;
-            Cursor c = queryData(db, contactId);
-            try {
-                while (c.moveToNext()) {
-                    long dataId = c.getLong(DataQuery.ID);
-                    int type = c.getInt(DataQuery.DATA2);
-                    if (type == -1 || getTypeRank(type) < getTypeRank(primaryType)) {
-                        primaryId = dataId;
-                        primaryType = type;
-                    }
-                }
-            } finally {
-                c.close();
-            }
-            return primaryId;
-        }
-
-        /**
-         * Returns the rank of a specific record type to be used in determining the primary
-         * row. Lower number represents higher priority.
-         */
-        // TODO make abstract
-        protected int getTypeRank(int type) {
-            return 0;
         }
     }
 
@@ -805,6 +797,31 @@ public class ContactsProvider2 extends ContentProvider {
         }
     }
 
+    public class EmailDataRowHandler extends CommonDataRowHandler {
+
+        public EmailDataRowHandler() {
+            super(Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            long id = super.insert(db, contactId, values);
+            fixContactDisplayName(db, contactId);
+            return id;
+        }
+
+        @Override
+        protected int getTypeRank(int type) {
+            switch (type) {
+                case Email.TYPE_HOME: return 0;
+                case Email.TYPE_WORK: return 1;
+                case Email.TYPE_CUSTOM: return 2;
+                case Email.TYPE_OTHER: return 3;
+                default: return 1000;
+            }
+        }
+    }
+
     public class PhoneDataRowHandler extends CommonDataRowHandler {
 
         public PhoneDataRowHandler() {
@@ -813,15 +830,22 @@ public class ContactsProvider2 extends ContentProvider {
 
         @Override
         public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+            ContentValues phoneValues = new ContentValues();
+            String number = values.getAsString(Phone.NUMBER);
+            String normalizedNumber = null;
+            if (number != null) {
+                normalizedNumber = PhoneNumberUtils.getStrippedReversed(number);
+                values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
+            }
+
             long id = super.insert(db, contactId, values);
 
-            final ContentValues phoneValues = new ContentValues();
-            final String number = values.getAsString(Phone.NUMBER);
-            phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER,
-                    PhoneNumberUtils.getStrippedReversed(number));
-            phoneValues.put(PhoneLookupColumns.DATA_ID, id);
-            phoneValues.put(PhoneLookupColumns.CONTACT_ID, contactId);
-            db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+            if (number != null) {
+                phoneValues.put(PhoneLookupColumns.CONTACT_ID, contactId);
+                phoneValues.put(PhoneLookupColumns.DATA_ID, id);
+                phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
+                db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+            }
 
             return id;
         }
@@ -893,8 +917,7 @@ public class ContactsProvider2 extends ContentProvider {
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
-        mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
-                new CommonDataRowHandler(Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL));
+        mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE, new EmailDataRowHandler());
         mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
                 new CommonDataRowHandler(Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
         mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
@@ -1154,21 +1177,28 @@ public class ContactsProvider2 extends ContentProvider {
         }
     }
 
-    public int deleteData(long dataId, String mimeType) {
+    public int deleteData(long dataId, String[] allowedMimeTypes) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         Cursor c = db.query(DataQuery.TABLES, DataQuery.COLUMNS,
                 DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
+        // TODO apply restrictions
         try {
             if (!c.moveToFirst()) {
                 return 0;
             }
 
-            if (mimeType != null) {
-                String dataMimeType = c.getString(DataQuery.MIMETYPE);
-                if (!TextUtils.equals(dataMimeType, mimeType)) {
-                    throw new RuntimeException("Data type mismatch: expected " + mimeType);
+            String mimeType = c.getString(DataQuery.MIMETYPE);
+            boolean valid = false;
+            for (int i = 0; i < allowedMimeTypes.length; i++) {
+                if (TextUtils.equals(mimeType, allowedMimeTypes[i])) {
+                    valid = true;
+                    break;
                 }
-                mimeType = dataMimeType;
+            }
+
+            if (!valid) {
+                throw new RuntimeException("Data type mismatch: expected "
+                        + Lists.newArrayList(allowedMimeTypes));
             }
 
             return getDataRowHandler(mimeType).delete(db, c);
@@ -2164,7 +2194,7 @@ public class ContactsProvider2 extends ContentProvider {
      * {@link Binder#getCallingUid()}, and add a limiting clause to the given
      * {@link SQLiteQueryBuilder} to hide restricted data.
      */
-    private void applyDataRestrictionExceptions(SQLiteQueryBuilder qb) {
+    void applyDataRestrictionExceptions(SQLiteQueryBuilder qb) {
         applyContactsRestrictionExceptions(qb);
     }
 

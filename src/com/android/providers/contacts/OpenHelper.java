@@ -233,6 +233,23 @@ import java.util.LinkedList;
         public static final String CONCRETE_CONTACT_ID = Tables.DATA + "." + Data.CONTACT_ID;
         public static final String CONCRETE_GROUP_ID = Tables.DATA + "."
                 + GroupMembership.GROUP_ROW_ID;
+
+        public static final String CONCRETE_DATA1 = Tables.DATA + "." + Data.DATA1;
+        public static final String CONCRETE_DATA2 = Tables.DATA + "." + Data.DATA2;
+        public static final String CONCRETE_DATA3 = Tables.DATA + "." + Data.DATA3;
+        public static final String CONCRETE_DATA4 = Tables.DATA + "." + Data.DATA4;
+        public static final String CONCRETE_DATA5 = Tables.DATA + "." + Data.DATA5;
+        public static final String CONCRETE_DATA6 = Tables.DATA + "." + Data.DATA6;
+        public static final String CONCRETE_DATA7 = Tables.DATA + "." + Data.DATA7;
+        public static final String CONCRETE_DATA8 = Tables.DATA + "." + Data.DATA8;
+        public static final String CONCRETE_DATA9 = Tables.DATA + "." + Data.DATA9;
+        public static final String CONCRETE_DATA10 = Tables.DATA + "." + Data.DATA10;
+        public static final String CONCRETE_IS_PRIMARY = Tables.DATA + "." + Data.IS_PRIMARY;
+    }
+
+    public interface PhoneColumns {
+        public static final String NORMALIZED_NUMBER = Data.DATA4;
+        public static final String CONCRETE_NORMALIZED_NUMBER = DataColumns.CONCRETE_DATA4;
     }
 
     public interface GroupsColumns {
