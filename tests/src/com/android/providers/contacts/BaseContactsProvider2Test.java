@@ -93,14 +93,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected long createContact() {
         ContentValues values = new ContentValues();
-        values.put(Contacts.PACKAGE, mActor.packageName);
         Uri contactUri = mResolver.insert(Contacts.CONTENT_URI, values);
         return ContentUris.parseId(contactUri);
     }
 
     protected long createContact(Account account) {
         ContentValues values = new ContentValues();
-        values.put(Contacts.PACKAGE, mActor.packageName);
         final Uri uri = maybeAddAccountQueryParameters(Contacts.CONTENT_URI, account);
         Uri contactUri = mResolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
@@ -108,7 +106,6 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected long createGroup(Account account, String sourceId, String title) {
         ContentValues values = new ContentValues();
-        values.put(Groups.PACKAGE, mActor.packageName);
         values.put(Groups.SOURCE_ID, sourceId);
         values.put(Groups.TITLE, title);
         final Uri uri = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account);

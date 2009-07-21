@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.OpenHelper.ActivitiesColumns;
+import com.android.providers.contacts.OpenHelper.PackagesColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.content.ContentProvider;
@@ -94,7 +95,8 @@ public class SocialProvider extends ContentProvider {
         // Activities projection map
         columns = new HashMap<String, String>();
         columns.put(Activities._ID, "activities._id AS _id");
-        columns.put(Activities.PACKAGE, Activities.PACKAGE);
+        columns.put(Activities.RES_PACKAGE, PackagesColumns.PACKAGE + " AS "
+                + Activities.RES_PACKAGE);
         columns.put(Activities.MIMETYPE, Activities.MIMETYPE);
         columns.put(Activities.RAW_ID, Activities.RAW_ID);
         columns.put(Activities.IN_REPLY_TO, Activities.IN_REPLY_TO);
@@ -184,9 +186,11 @@ public class SocialProvider extends ContentProvider {
             // requested by this insert.
 
             // Replace package name and mime-type with internal mappings
-            final String packageName = values.getAsString(Activities.PACKAGE);
-            values.put(ActivitiesColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
-            values.remove(Activities.PACKAGE);
+            final String packageName = values.getAsString(Activities.RES_PACKAGE);
+            if (packageName != null) {
+                values.put(ActivitiesColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
+            }
+            values.remove(Activities.RES_PACKAGE);
 
             final String mimeType = values.getAsString(Activities.MIMETYPE);
             values.put(ActivitiesColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
@@ -326,7 +330,7 @@ public class SocialProvider extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case ACTIVITIES: {
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 break;
             }
@@ -334,7 +338,7 @@ public class SocialProvider extends ContentProvider {
             case ACTIVITIES_ID: {
                 // TODO: enforce that caller has read access to this data
                 long activityId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities._ID + "=" + activityId);
                 break;
@@ -342,7 +346,7 @@ public class SocialProvider extends ContentProvider {
 
             case ACTIVITIES_AUTHORED_BY: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + "=" + contactId);
                 break;
@@ -350,7 +354,7 @@ public class SocialProvider extends ContentProvider {
 
             case AGGREGATE_STATUS_ID: {
                 long aggId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
 
                 // Latest status of an aggregate is any top-level status

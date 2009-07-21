@@ -33,7 +33,6 @@ import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.RestrictionExceptions;
 import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
@@ -167,7 +166,6 @@ public class ContactsActor {
 
     public long createContact(boolean isRestricted) {
         final ContentValues values = new ContentValues();
-        values.put(Contacts.PACKAGE, packageName);
         if (isRestricted) {
             values.put(Contacts.IS_RESTRICTED, 1);
         }
@@ -205,11 +203,7 @@ public class ContactsActor {
     }
 
     public void updateException(String packageProvider, String packageClient, boolean allowAccess) {
-        final ContentValues values = new ContentValues();
-        values.put(RestrictionExceptions.PACKAGE_PROVIDER, packageProvider);
-        values.put(RestrictionExceptions.PACKAGE_CLIENT, packageClient);
-        values.put(RestrictionExceptions.ALLOW_ACCESS, allowAccess ? 1 : 0);
-        resolver.update(RestrictionExceptions.CONTENT_URI, values, null, null);
+        throw new UnsupportedOperationException("RestrictionExceptions are hard-coded");
     }
 
     public long getAggregateForContact(long contactId) {
@@ -257,7 +251,7 @@ public class ContactsActor {
 
     public long createGroup(String groupName) {
         final ContentValues values = new ContentValues();
-        values.put(ContactsContract.Groups.PACKAGE, packageName);
+        values.put(ContactsContract.Groups.RES_PACKAGE, packageName);
         values.put(ContactsContract.Groups.TITLE, groupName);
         Uri groupUri = resolver.insert(ContactsContract.Groups.CONTENT_URI, values);
         return ContentUris.parseId(groupUri);

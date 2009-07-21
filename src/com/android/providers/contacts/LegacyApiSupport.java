@@ -34,6 +34,7 @@ import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.People;
+import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -41,8 +42,8 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Postal;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 
 import java.util.HashMap;
 
@@ -93,7 +94,7 @@ public class LegacyApiSupport {
                     + " (CASE WHEN mimetype='" + Im.CONTENT_ITEM_TYPE +"'"
                         + " THEN " + android.provider.Contacts.KIND_IM
                         + " ELSE"
-                        + " (CASE WHEN mimetype='" + Postal.CONTENT_ITEM_TYPE + "'"
+                        + " (CASE WHEN mimetype='" + StructuredPostal.CONTENT_ITEM_TYPE + "'"
                             + " THEN "  + android.provider.Contacts.KIND_POSTAL
                             + " ELSE"
                                 + " NULL"
@@ -117,7 +118,7 @@ public class LegacyApiSupport {
     private static final String[] CONTACT_METHOD_MIME_TYPES = new String[] {
         Email.CONTENT_ITEM_TYPE,
         Im.CONTENT_ITEM_TYPE,
-        Postal.CONTENT_ITEM_TYPE,
+        StructuredPostal.CONTENT_ITEM_TYPE,
     };
 
     private static final String[] PHONE_MIME_TYPES = new String[] {
@@ -388,9 +389,6 @@ public class LegacyApiSupport {
     private long insertPeople(ContentValues values) {
         mValues.clear();
 
-        // TODO: remove this once not required
-        mValues.put(ContactsContract.Contacts.PACKAGE, "DefaultPackage");
-
         OpenHelper.copyStringValue(mValues, Contacts.CUSTOM_RINGTONE,
                 values, People.CUSTOM_RINGTONE);
         OpenHelper.copyLongValue(mValues, Contacts.SEND_TO_VOICEMAIL,
@@ -509,8 +507,8 @@ public class LegacyApiSupport {
                 break;
 
             case android.provider.Contacts.KIND_POSTAL:
-                copyCommonFields(values, Postal.CONTENT_ITEM_TYPE, Postal.TYPE, Postal.LABEL,
-                        Postal.DATA, Data.DATA4);
+                copyCommonFields(values, StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
+                        StructuredPostal.LABEL, StructuredPostal.FORMATTED_ADDRESS, Data.DATA14);
                 break;
         }
 

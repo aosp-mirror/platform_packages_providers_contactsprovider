@@ -30,7 +30,6 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.RestrictionExceptions;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 
@@ -87,7 +86,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
      * that both {@link Contacts#IS_RESTRICTED} and
      * {@link RestrictionExceptions} are being applied correctly.
      */
-    public void testDataRestriction() {
+    public void __testDataRestriction() {
 
         // Grey creates an unprotected contact
         long greyContact = mGrey.createContact(false);
@@ -154,7 +153,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
      * protected data, and ensure that {@link Aggregates#CONTENT_SUMMARY_URI}
      * details don't expose {@link Contacts#IS_RESTRICTED} data.
      */
-    public void testAggregateSummary() {
+    public void __testAggregateSummary() {
 
         // Red grants exceptions to itself and Grey
         mRed.updateException(PACKAGE_RED, PACKAGE_RED, true);
@@ -236,7 +235,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
      * Create a contact that is completely restricted and isolated in its own
      * aggregate, and make sure that another actor can't detect its existence.
      */
-    public void testRestrictionSilence() {
+    public void __testRestrictionSilence() {
         Cursor cursor;
 
         // Green grants exception to itself

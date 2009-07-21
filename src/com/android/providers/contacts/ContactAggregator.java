@@ -908,13 +908,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         long candidatePhone = 0;
         long candidateEmail = 0;
-        long candidatePackageId = 0;
         boolean candidateIsRestricted = false;
 
         // Find primary data items from newly-joined contact, returning one
         // candidate for each mimetype.
         try {
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES,
+            cursor = db.query(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS,
                     Projections.PROJ_DATA,
                     Data.CONTACT_ID + "=" + contactId + " AND " + Data.IS_PRIMARY + "=1 AND "
                             + Projections.PRIMARY_MIME_CLAUSE, null, Data.MIMETYPE, null, null);
@@ -922,7 +921,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 final long dataId = cursor.getLong(Projections.COL_DATA_ID);
                 final String mimeType = cursor.getString(Projections.COL_DATA_MIMETYPE);
 
-                candidatePackageId = cursor.getLong(Projections.COL_PACKAGE_ID);
                 candidateIsRestricted = (cursor.getInt(Projections.COL_IS_RESTRICTED) == 1);
 
                 if (CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
@@ -943,18 +941,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // If a new aggregate, and single child is restricted, then mark
         // aggregate as being protected by package. Otherwise set as null if
         // multiple under aggregate or not restricted.
-        if (newAgg && candidateIsRestricted) {
-            values.put(AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID, candidatePackageId);
-        } else {
-            values.putNull(AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID);
-        }
+        values.put(AggregatesColumns.SINGLE_IS_RESTRICTED, (newAgg && candidateIsRestricted) ? 1
+                : 0);
 
         // If newly joined contact has a primary phone number, consider
         // promoting it up into aggregate as super-primary.
         if (candidatePhone != 0) {
             if (!hasOptimalPhone) {
                 values.put(AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID, candidatePhone);
-                values.put(AggregatesColumns.OPTIMAL_PRIMARY_PHONE_PACKAGE_ID, candidatePackageId);
+                values.put(AggregatesColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED,
+                        candidateIsRestricted ? 1 : 0);
             }
 
             // Also promote to unrestricted value, if none provided yet.
@@ -968,7 +964,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         if (candidateEmail != 0) {
             if (!hasOptimalEmail) {
                 values.put(AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID, candidateEmail);
-                values.put(AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_PACKAGE_ID, candidatePackageId);
+                values.put(AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED,
+                        candidateIsRestricted ? 1 : 0);
             }
 
             // Also promote to unrestricted value, if none provided yet.
@@ -1023,7 +1020,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         int chosenPhotoId = -1;
         String chosenAccount = null;
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_PACKAGES_AGGREGATES,
+        final Cursor c = db.query(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES,
                 new String[] {"data._id AS _id", Contacts.ACCOUNT_NAME},
                 DatabaseUtils.concatenateWhere(Contacts.AGGREGATE_ID + "=" + aggregateId,
                         Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'"),
@@ -1211,26 +1208,24 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID,
                 AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID,
                 AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID,
-                AggregatesColumns.SINGLE_RESTRICTED_PACKAGE_ID,
+                AggregatesColumns.SINGLE_IS_RESTRICTED,
         };
 
         static final int COL_OPTIMAL_PRIMARY_PHONE_ID = 0;
         static final int COL_FALLBACK_PRIMARY_PHONE_ID = 1;
         static final int COL_OPTIMAL_PRIMARY_EMAIL_ID = 2;
         static final int COL_FALLBACK_PRIMARY_EMAIL_ID = 3;
-        static final int COL_SINGLE_RESTRICTED_PACKAGE_ID = 4;
+        static final int COL_SINGLE_IS_RESTRICTED = 4;
 
         static final String[] PROJ_DATA = new String[] {
                 Tables.DATA + "." + Data._ID,
                 Data.MIMETYPE,
                 Contacts.IS_RESTRICTED,
-                ContactsColumns.PACKAGE_ID,
         };
 
         static final int COL_DATA_ID = 0;
         static final int COL_DATA_MIMETYPE = 1;
         static final int COL_IS_RESTRICTED = 2;
-        static final int COL_PACKAGE_ID = 3;
 
         static final String PRIMARY_MIME_CLAUSE = "(" + Data.MIMETYPE + "=\""
                 + CommonDataKinds.Phone.CONTENT_ITEM_TYPE + "\" OR " + Data.MIMETYPE + "=\""
