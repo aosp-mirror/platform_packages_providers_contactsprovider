@@ -17,6 +17,9 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
+import com.android.providers.contacts.OpenHelper.ExtensionsColumns;
+import com.android.providers.contacts.OpenHelper.GroupsColumns;
+import com.android.providers.contacts.OpenHelper.GroupMembershipColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
@@ -37,7 +40,9 @@ import android.provider.Contacts.People;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
@@ -64,6 +69,17 @@ public class LegacyApiSupport {
     private static final int PEOPLE_PHONES_ID = 11;
     private static final int PHONES = 12;
     private static final int PHONES_ID = 13;
+    private static final int EXTENSIONS = 14;
+    private static final int EXTENSIONS_ID = 15;
+    private static final int PEOPLE_EXTENSIONS = 16;
+    private static final int PEOPLE_EXTENSIONS_ID = 17;
+    private static final int GROUPS = 18;
+    private static final int GROUPS_ID = 19;
+    private static final int GROUPMEMBERSHIP = 20;
+    private static final int GROUPMEMBERSHIP_ID = 21;
+    private static final int PEOPLE_GROUPMEMBERSHIP = 22;
+    private static final int PEOPLE_GROUPMEMBERSHIP_ID = 23;
+
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
@@ -129,6 +145,9 @@ public class LegacyApiSupport {
     private static final HashMap<String, String> sOrganizationProjectionMap;
     private static final HashMap<String, String> sContactMethodProjectionMap;
     private static final HashMap<String, String> sPhoneProjectionMap;
+    private static final HashMap<String, String> sExtensionProjectionMap;
+    private static final HashMap<String, String> sGroupProjectionMap;
+    private static final HashMap<String, String> sGroupMembershipProjectionMap;
 
     static {
 
@@ -136,18 +155,18 @@ public class LegacyApiSupport {
         UriMatcher matcher = sUriMatcher;
 
         String authority = android.provider.Contacts.AUTHORITY;
-//        matcher.addURI(authority, "extensions", EXTENSIONS);
-//        matcher.addURI(authority, "extensions/#", EXTENSIONS_ID);
-//        matcher.addURI(authority, "groups", GROUPS);
-//        matcher.addURI(authority, "groups/#", GROUPS_ID);
+        matcher.addURI(authority, "extensions", EXTENSIONS);
+        matcher.addURI(authority, "extensions/#", EXTENSIONS_ID);
+        matcher.addURI(authority, "groups", GROUPS);
+        matcher.addURI(authority, "groups/#", GROUPS_ID);
 //        matcher.addURI(authority, "groups/name/*/members", GROUP_NAME_MEMBERS);
 //        matcher.addURI(authority, "groups/name/*/members/filter/*",
 //                GROUP_NAME_MEMBERS_FILTER);
 //        matcher.addURI(authority, "groups/system_id/*/members", GROUP_SYSTEM_ID_MEMBERS);
 //        matcher.addURI(authority, "groups/system_id/*/members/filter/*",
 //                GROUP_SYSTEM_ID_MEMBERS_FILTER);
-//        matcher.addURI(authority, "groupmembership", GROUPMEMBERSHIP);
-//        matcher.addURI(authority, "groupmembership/#", GROUPMEMBERSHIP_ID);
+        matcher.addURI(authority, "groupmembership", GROUPMEMBERSHIP);
+        matcher.addURI(authority, "groupmembership/#", GROUPMEMBERSHIP_ID);
 //        matcher.addURI(authority, "groupmembershipraw", GROUPMEMBERSHIP_RAW);
         matcher.addURI(authority, "people", PEOPLE);
 //        matcher.addURI(authority, "people/strequent", PEOPLE_STREQUENT);
@@ -158,8 +177,8 @@ public class LegacyApiSupport {
 //        matcher.addURI(authority, "people/with_email_or_im_filter/*",
 //                PEOPLE_WITH_EMAIL_OR_IM_FILTER);
         matcher.addURI(authority, "people/#", PEOPLE_ID);
-//        matcher.addURI(authority, "people/#/extensions", PEOPLE_EXTENSIONS);
-//        matcher.addURI(authority, "people/#/extensions/#", PEOPLE_EXTENSIONS_ID);
+        matcher.addURI(authority, "people/#/extensions", PEOPLE_EXTENSIONS);
+        matcher.addURI(authority, "people/#/extensions/#", PEOPLE_EXTENSIONS_ID);
         matcher.addURI(authority, "people/#/phones", PEOPLE_PHONES);
         matcher.addURI(authority, "people/#/phones/#", PEOPLE_PHONES_ID);
 //        matcher.addURI(authority, "people/#/phones_with_presence",
@@ -172,8 +191,8 @@ public class LegacyApiSupport {
         matcher.addURI(authority, "people/#/contact_methods/#", PEOPLE_CONTACTMETHODS_ID);
 //        matcher.addURI(authority, "people/#/organizations", PEOPLE_ORGANIZATIONS);
 //        matcher.addURI(authority, "people/#/organizations/#", PEOPLE_ORGANIZATIONS_ID);
-//        matcher.addURI(authority, "people/#/groupmembership", PEOPLE_GROUPMEMBERSHIP);
-//        matcher.addURI(authority, "people/#/groupmembership/#", PEOPLE_GROUPMEMBERSHIP_ID);
+        matcher.addURI(authority, "people/#/groupmembership", PEOPLE_GROUPMEMBERSHIP);
+        matcher.addURI(authority, "people/#/groupmembership/#", PEOPLE_GROUPMEMBERSHIP_ID);
 //        matcher.addURI(authority, "people/raw", PEOPLE_RAW);
 //        matcher.addURI(authority, "people/owner", PEOPLE_OWNER);
         matcher.addURI(authority, "people/#/update_contact_time",
@@ -290,7 +309,7 @@ public class LegacyApiSupport {
         sContactMethodProjectionMap.put(ContactMethods.LABEL,
                 DataColumns.CONCRETE_DATA3 + " AS " + ContactMethods.LABEL);
         sContactMethodProjectionMap.put(ContactMethods.AUX_DATA,
-                DataColumns.CONCRETE_DATA4 + " AS " + ContactMethods.AUX_DATA);
+                DataColumns.CONCRETE_DATA14 + " AS " + ContactMethods.AUX_DATA);
 
         sPhoneProjectionMap = new HashMap<String, String>(peopleProjectionMap);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.PERSON_ID,
@@ -311,6 +330,35 @@ public class LegacyApiSupport {
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.NUMBER_KEY,
                 PhoneColumns.CONCRETE_NORMALIZED_NUMBER
                         + " AS " + android.provider.Contacts.Phones.NUMBER_KEY);
+
+        sExtensionProjectionMap = new HashMap<String, String>();
+        sExtensionProjectionMap.put(android.provider.Contacts.Extensions.PERSON_ID,
+                DataColumns.CONCRETE_CONTACT_ID
+                        + " AS " + android.provider.Contacts.Extensions.PERSON_ID);
+        sExtensionProjectionMap.put(android.provider.Contacts.Extensions.NAME,
+                ExtensionsColumns.NAME
+                        + " AS " + android.provider.Contacts.Extensions.NAME);
+        sExtensionProjectionMap.put(android.provider.Contacts.Extensions.VALUE,
+                ExtensionsColumns.VALUE
+                        + " AS " + android.provider.Contacts.Extensions.VALUE);
+
+        sGroupProjectionMap = new HashMap<String, String>();
+        sGroupProjectionMap.put(android.provider.Contacts.Groups._ID,
+                GroupsColumns.CONCRETE_ID + " AS " + android.provider.Contacts.Groups._ID);
+        sGroupProjectionMap.put(android.provider.Contacts.Groups.NAME,
+                Groups.TITLE + " AS " + android.provider.Contacts.Groups.NAME);
+        sGroupProjectionMap.put(android.provider.Contacts.Groups.NOTES,
+                Groups.NOTES + " AS " + android.provider.Contacts.Groups.NOTES);
+        sGroupProjectionMap.put(android.provider.Contacts.Groups.SYSTEM_ID,
+                Groups.SYSTEM_ID + " AS " + android.provider.Contacts.Groups.SYSTEM_ID);
+
+        sGroupMembershipProjectionMap = new HashMap<String, String>();
+        sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.PERSON_ID,
+                 GroupMembershipColumns.CONTACT_ID
+                         + " AS " + android.provider.Contacts.GroupMembership.PERSON_ID);
+        sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.GROUP_ID,
+                GroupMembershipColumns.GROUP_ROW_ID
+                        + " AS " + android.provider.Contacts.GroupMembership.GROUP_ID);
     }
 
     private final Context mContext;
@@ -352,18 +400,44 @@ public class LegacyApiSupport {
                 id = insertOrganization(values);
                 break;
 
-            case PEOPLE_CONTACTMETHODS:
+            case PEOPLE_CONTACTMETHODS: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
                 id = insertContactMethod(contactId, values);
                 break;
+            }
 
-            case CONTACTMETHODS:
-                id = insertContactMethod(getRequiredContactIdValue(values), values);
+            case CONTACTMETHODS: {
+                long contactId = getRequiredValue(values, ContactMethods.PERSON_ID);
+                id = insertContactMethod(contactId, values);
+                break;
+            }
+
+            case PHONES: {
+                long contactId = getRequiredValue(values,
+                        android.provider.Contacts.Phones.PERSON_ID);
+                id = insertPhone(contactId, values);
+                break;
+            }
+
+            case EXTENSIONS: {
+                long contactId = getRequiredValue(values,
+                        android.provider.Contacts.Extensions.PERSON_ID);
+                id = insertExtension(contactId, values);
+                break;
+            }
+
+            case GROUPS:
+                id = insertGroup(values);
                 break;
 
-            case PHONES:
-                id = insertPhone(getRequiredContactIdValue(values), values);
+            case GROUPMEMBERSHIP: {
+                long contactId = getRequiredValue(values,
+                        android.provider.Contacts.GroupMembership.PERSON_ID);
+                long groupId = getRequiredValue(values,
+                        android.provider.Contacts.GroupMembership.GROUP_ID);
+                id = insertGroupMembership(contactId, groupId);
                 break;
+            }
 
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
@@ -378,12 +452,12 @@ public class LegacyApiSupport {
         return result;
     }
 
-    private long getRequiredContactIdValue(ContentValues values) {
-        if (!values.containsKey(ContactMethods.PERSON_ID)) {
-            throw new RuntimeException("Required value: " + ContactMethods.PERSON_ID);
+    private long getRequiredValue(ContentValues values, String column) {
+        if (!values.containsKey(column)) {
+            throw new RuntimeException("Required value: " + column);
         }
 
-        return values.getAsLong(ContactMethods.PERSON_ID);
+        return values.getAsLong(column);
     }
 
     private long insertPeople(ContentValues values) {
@@ -459,11 +533,10 @@ public class LegacyApiSupport {
         return ContentUris.parseId(uri);
     }
 
-    private long insertPhone(long requiredContactIdValue, ContentValues values) {
+    private long insertPhone(long contactId, ContentValues values) {
         mValues.clear();
 
-        OpenHelper.copyLongValue(mValues, Data.CONTACT_ID,
-                values, android.provider.Contacts.Phones.PERSON_ID);
+        mValues.put(Data.CONTACT_ID, contactId);
         mValues.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
 
         OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
@@ -498,12 +571,12 @@ public class LegacyApiSupport {
         switch (kind) {
             case android.provider.Contacts.KIND_EMAIL:
                 copyCommonFields(values, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL,
-                        Email.DATA, Data.DATA4);
+                        Email.DATA, Data.DATA14);
                 break;
 
             case android.provider.Contacts.KIND_IM:
                 copyCommonFields(values, Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL,
-                        Email.DATA, Data.DATA4);
+                        Email.DATA, Data.DATA14);
                 break;
 
             case android.provider.Contacts.KIND_POSTAL:
@@ -523,6 +596,46 @@ public class LegacyApiSupport {
         OpenHelper.copyStringValue(mValues, labelColumn, values, ContactMethods.LABEL);
         OpenHelper.copyStringValue(mValues, dataColumn, values, ContactMethods.DATA);
         OpenHelper.copyStringValue(mValues, auxDataColumn, values, ContactMethods.AUX_DATA);
+    }
+
+    private long insertExtension(long contactId, ContentValues values) {
+        mValues.clear();
+
+        mValues.put(Data.CONTACT_ID, contactId);
+        mValues.put(Data.MIMETYPE, android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE);
+
+        OpenHelper.copyStringValue(mValues, ExtensionsColumns.NAME,
+                values, android.provider.Contacts.People.Extensions.NAME);
+        OpenHelper.copyStringValue(mValues, ExtensionsColumns.VALUE,
+                values, android.provider.Contacts.People.Extensions.VALUE);
+
+        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        return ContentUris.parseId(uri);
+    }
+
+    private long insertGroup(ContentValues values) {
+        mValues.clear();
+
+        OpenHelper.copyStringValue(mValues, Groups.TITLE,
+                values, android.provider.Contacts.Groups.NAME);
+        OpenHelper.copyStringValue(mValues, Groups.NOTES,
+                values, android.provider.Contacts.Groups.NOTES);
+        OpenHelper.copyStringValue(mValues, Groups.SYSTEM_ID,
+                values, android.provider.Contacts.Groups.SYSTEM_ID);
+
+        Uri uri = mContactsProvider.insert(Groups.CONTENT_URI, mValues);
+        return ContentUris.parseId(uri);
+    }
+
+    private long insertGroupMembership(long contactId, long groupId) {
+        mValues.clear();
+
+        mValues.put(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
+        mValues.put(GroupMembership.CONTACT_ID, contactId);
+        mValues.put(GroupMembership.GROUP_ROW_ID, groupId);
+
+        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        return ContentUris.parseId(uri);
     }
 
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
@@ -693,6 +806,94 @@ public class LegacyApiSupport {
                 qb.appendWhere(uri.getPathSegments().get(3));
                 qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Phone.CONTENT_ITEM_TYPE + "'");
+                break;
+
+            case EXTENSIONS:
+                // TODO
+                break;
+
+            case EXTENSIONS_ID:
+                // TODO exclude mimetype from this join
+                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setProjectionMap(sExtensionProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case PEOPLE_EXTENSIONS:
+                // TODO exclude mimetype from this join
+                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setProjectionMap(sExtensionProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'");
+                break;
+
+            case PEOPLE_EXTENSIONS_ID:
+                // TODO exclude mimetype from this join
+                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setProjectionMap(sExtensionProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(3));
+                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'");
+                break;
+
+            case GROUPS:
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setProjectionMap(sGroupProjectionMap);
+                break;
+
+            case GROUPS_ID:
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setProjectionMap(sGroupProjectionMap);
+                qb.appendWhere(GroupsColumns.CONCRETE_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case GROUPMEMBERSHIP:
+                // TODO
+                break;
+
+            case GROUPMEMBERSHIP_ID:
+                // TODO exclude mimetype from this join
+                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setProjectionMap(sGroupMembershipProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + GroupMembership.CONTENT_ITEM_TYPE + "'");
+                break;
+
+            case PEOPLE_GROUPMEMBERSHIP:
+                // TODO exclude mimetype from this join
+                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setProjectionMap(sGroupMembershipProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + GroupMembership.CONTENT_ITEM_TYPE + "'");
+                break;
+
+            case PEOPLE_GROUPMEMBERSHIP_ID:
+                // TODO exclude mimetype from this join
+                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setProjectionMap(sGroupMembershipProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(3));
+                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + GroupMembership.CONTENT_ITEM_TYPE + "'");
                 break;
 
             default:

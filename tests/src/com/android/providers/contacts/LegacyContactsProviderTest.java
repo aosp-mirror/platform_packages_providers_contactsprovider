@@ -104,8 +104,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertFilteredContacts("der");
     }
 
-    // TODO fix and reenable the test
-    public void __testDefaultDisplayName() {
+    public void testDefaultDisplayName() {
         ContentValues values = new ContentValues();
         values.put(People.NAME, "John Doe");
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -373,8 +372,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 ContactMethods.TYPE_OTHER, ContactMethods.LABEL);
     }
 
-    // TODO fix and reenable the test
-    public void __testExtensionsInsert() {
+    public void testExtensionsInsert() {
         ContentValues values = new ContentValues();
         final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -392,18 +390,17 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(twigUri, values);
     }
 
-    // TODO fix and reenable the test
-    public void __testGroupsInsert() {
+    public void testGroupsInsert() {
         ContentValues values = new ContentValues();
         values.put(Groups.NAME, "Galois");
         values.put(Groups.NOTES, "Abel");
+        values.put(Groups.SYSTEM_ID, "12345");
 
         Uri groupUri = mResolver.insert(Groups.CONTENT_URI, values);
         assertStoredValues(groupUri, values);
     }
 
-    // TODO fix and reenable the test
-    public void __testGroupMembershipsInsert() {
+    public void testGroupMembershipsInsert() {
         ContentValues values = new ContentValues();
         values.put(Groups.NAME, "Galois");
         values.put(Groups.NOTES, "Abel");
@@ -446,7 +443,10 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personsGroupsUri, values);
     }
 
-    // TODO fix and reenable the test
+    /**
+     * We will not support presence compatibility mode.  Leaving the test for now in case we change
+     * our mind.
+     */
     public void __testPresenceInsertMatchOnHandle() {
         ContentValues values = new ContentValues();
         putContactValues(values);
@@ -478,7 +478,10 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(presenceUri, values);
     }
 
-    // TODO fix and reenable the test
+    /**
+     * We will not support presence compatibility mode.  Leaving the test for now in case we change
+     * our mind.
+     */
     public void __testPresenceInsertMatchOnEmail() {
         ContentValues values = new ContentValues();
         putContactValues(values);

@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 47;
+    private static final int DATABASE_VERSION = 48;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -70,7 +70,6 @@ import java.util.HashMap;
         public static final String PHONE_LOOKUP = "phone_lookup";
         public static final String NAME_LOOKUP = "name_lookup";
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
-        public static final String RESTRICTION_EXCEPTIONS = "rest_exceptions";
         public static final String DATA = "data";
         public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
@@ -247,7 +246,23 @@ import java.util.HashMap;
         public static final String CONCRETE_DATA8 = Tables.DATA + "." + Data.DATA8;
         public static final String CONCRETE_DATA9 = Tables.DATA + "." + Data.DATA9;
         public static final String CONCRETE_DATA10 = Tables.DATA + "." + Data.DATA10;
+        public static final String CONCRETE_DATA11 = Tables.DATA + "." + Data.DATA11;
+        public static final String CONCRETE_DATA12 = Tables.DATA + "." + Data.DATA12;
+        public static final String CONCRETE_DATA13 = Tables.DATA + "." + Data.DATA13;
+        public static final String CONCRETE_DATA14 = Tables.DATA + "." + Data.DATA14;
+        public static final String CONCRETE_DATA15 = Tables.DATA + "." + Data.DATA15;
         public static final String CONCRETE_IS_PRIMARY = Tables.DATA + "." + Data.IS_PRIMARY;
+    }
+
+    // Used only for legacy API support
+    public interface ExtensionsColumns {
+        public static final String NAME = Data.DATA1;
+        public static final String VALUE = Data.DATA2;
+    }
+
+    public interface GroupMembershipColumns {
+        public static final String CONTACT_ID = Data.CONTACT_ID;
+        public static final String GROUP_ROW_ID = GroupMembership.GROUP_ROW_ID;
     }
 
     public interface PhoneColumns {
@@ -321,11 +336,6 @@ import java.util.HashMap;
         public static final String _ID = BaseColumns._ID;
         public static final String CONTACT_ID1 = "contact_id1";
         public static final String CONTACT_ID2 = "contact_id2";
-    }
-
-    public interface RestrictionExceptionsColumns {
-        public static final String PACKAGE_PROVIDER_ID = "package_provider_id";
-        public static final String PACKAGE_CLIENT_ID = "package_client_id";
     }
 
     public interface NicknameLookupColumns {
@@ -625,6 +635,8 @@ import java.util.HashMap;
                 Groups.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.TITLE + " TEXT," +
                 Groups.TITLE_RES + " INTEGER," +
+                Groups.NOTES + " TEXT," +
+                Groups.SYSTEM_ID + " TEXT," +
                 Groups.GROUP_VISIBLE + " INTEGER" +
         ");");
 
@@ -692,7 +704,6 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
 
         // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
@@ -722,7 +733,6 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
-        db.execSQL("DELETE FROM " + Tables.RESTRICTION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
