@@ -37,6 +37,7 @@ import android.test.suitebuilder.annotation.LargeTest;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 
@@ -64,6 +65,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri uri = mResolver.insert(People.CONTENT_URI, values);
         assertStoredValues(uri, values);
+        assertSelection(People.CONTENT_URI, values, People._ID, ContentUris.parseId(uri));
     }
 
     // TODO fix and reenable the test
@@ -274,6 +276,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri uri = mResolver.insert(Organizations.CONTENT_URI, values);
         assertStoredValues(uri, values);
+        assertSelection(Organizations.CONTENT_URI, values,
+                Organizations._ID, ContentUris.parseId(uri));
 
         assertPersonIdConstraint(Organizations.CONTENT_URI, Organizations.TYPE,
                 Organizations.TYPE_WORK);
@@ -304,6 +308,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         // The result is joined with People
         putContactValues(values);
         assertStoredValues(uri, values);
+        assertSelection(Phones.CONTENT_URI, values,
+                Phones._ID, ContentUris.parseId(uri));
 
         // Access the phone through People
         Uri twigUri = Uri.withAppendedPath(personUri, People.Phones.CONTENT_DIRECTORY);
@@ -359,6 +365,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         // The result is joined with People
         putContactValues(values);
         assertStoredValues(uri, values);
+        assertSelection(ContactMethods.CONTENT_URI, values,
+                ContactMethods._ID, ContentUris.parseId(uri));
 
         // Access the contact method through People
         Uri twigUri = Uri.withAppendedPath(personUri, People.ContactMethods.CONTENT_DIRECTORY);
@@ -384,6 +392,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri uri = mResolver.insert(Extensions.CONTENT_URI, values);
         assertStoredValues(uri, values);
+        assertSelection(Extensions.CONTENT_URI, values,
+                Extensions._ID, ContentUris.parseId(uri));
 
         // Access the extensions through People
         Uri twigUri = Uri.withAppendedPath(personUri, People.Extensions.CONTENT_DIRECTORY);
@@ -413,18 +423,19 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         long groupId = ContentUris.parseId(groupUri);
         long personId = ContentUris.parseId(personUri);
 
-        ContentValues values1 = new ContentValues();
-        values1.put(GroupMembership.GROUP_ID, groupId);
-        values1.put(GroupMembership.PERSON_ID, personId);
-        Uri membershipUri = mResolver.insert(GroupMembership.CONTENT_URI, values1);
-        assertStoredValues(membershipUri, values1);
+        values.clear();
+        values.put(GroupMembership.GROUP_ID, groupId);
+        values.put(GroupMembership.PERSON_ID, personId);
+        Uri membershipUri = mResolver.insert(GroupMembership.CONTENT_URI, values);
+        assertStoredValues(membershipUri, values);
+        assertSelection(GroupMembership.CONTENT_URI, values,
+                GroupMembership._ID, ContentUris.parseId(membershipUri));
 
         Uri personsGroupsUri = Uri.withAppendedPath(personUri, GroupMembership.CONTENT_DIRECTORY);
-        assertStoredValues(personsGroupsUri, values1);
+        assertStoredValues(personsGroupsUri, values);
     }
 
-    // TODO fix and reenable the test
-    public void __testAddToGroup() {
+    public void testAddToGroup() {
         ContentValues values = new ContentValues();
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -643,6 +654,39 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
             assertEquals("Record count", 1, c.getCount());
             c.moveToFirst();
             assertCursorValues(c, expectedValues);
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Constructs a selection (where clause) out of all supplied values, uses it
+     * to query the provider and verifies that a single row is returned and it
+     * has the same values as requested.
+     */
+    private void assertSelection(Uri uri, ContentValues values, String idColumn, long id) {
+        StringBuilder sb = new StringBuilder();
+        ArrayList<String> selectionArgs = new ArrayList<String>(values.size());
+        sb.append(idColumn).append("=").append(id);
+        Set<Map.Entry<String, Object>> entries = values.valueSet();
+        for (Map.Entry<String, Object> entry : entries) {
+            String column = entry.getKey();
+            Object value = entry.getValue();
+            sb.append(" AND ").append(column);
+            if (value == null) {
+                sb.append(" IS NULL");
+            } else {
+                sb.append("=?");
+                selectionArgs.add(String.valueOf(value));
+            }
+        }
+
+        Cursor c = mResolver.query(uri, null, sb.toString(), selectionArgs.toArray(new String[0]),
+                null);
+        try {
+            assertEquals("Record count", 1, c.getCount());
+            c.moveToFirst();
+            assertCursorValues(c, values);
         } finally {
             c.close();
         }

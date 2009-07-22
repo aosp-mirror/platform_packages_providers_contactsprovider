@@ -908,10 +908,10 @@ public class ContactsProvider2 extends ContentProvider {
         final Context context = getContext();
 
         mOpenHelper = getOpenHelper(context);
-        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
-
+        mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this);
         mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
 
+        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
         mSetPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA + " SET " + Data.IS_PRIMARY
                 + "=(_id=?) WHERE " + sSetPrimaryWhere);
@@ -930,8 +930,6 @@ public class ContactsProvider2 extends ContentProvider {
                 context.getString(com.android.internal.R.string.common_last_name_prefixes),
                 context.getString(com.android.internal.R.string.common_name_suffixes),
                 context.getString(com.android.internal.R.string.common_name_conjunctions));
-
-        mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this);
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 

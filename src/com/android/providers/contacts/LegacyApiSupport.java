@@ -52,7 +52,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 
 import java.util.HashMap;
 
-public class LegacyApiSupport {
+public class LegacyApiSupport implements OpenHelper.Delegate {
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -80,7 +80,6 @@ public class LegacyApiSupport {
     private static final int PEOPLE_GROUPMEMBERSHIP = 22;
     private static final int PEOPLE_GROUPMEMBERSHIP_ID = 23;
 
-
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
             + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = name.mimetype_id)"
@@ -98,13 +97,18 @@ public class LegacyApiSupport {
             + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = phone.mimetype_id)"
                     + "='" + Phone.CONTENT_ITEM_TYPE + "' AND phone.is_primary)";
 
+    public static final String DATA_JOINS =
+            " JOIN mimetypes ON (mimetypes._id = data.mimetype_id)"
+            + " JOIN contacts ON (contacts._id = data.contact_id)"
+            + PEOPLE_JOINS;
+
     private static final String PHONETIC_NAME_SQL = "trim(trim("
             + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
             + "ifnull(name." + StructuredName.PHONETIC_MIDDLE_NAME + ",' '))||' '||"
             + "ifnull(name." + StructuredName.PHONETIC_FAMILY_NAME + ",' ')) ";
 
     private static final String CONTACT_METHOD_KIND_SQL =
-            "(CASE WHEN mimetype='" + Email.CONTENT_ITEM_TYPE + "'"
+            "CAST ((CASE WHEN mimetype='" + Email.CONTENT_ITEM_TYPE + "'"
                 + " THEN " + android.provider.Contacts.KIND_EMAIL
                 + " ELSE"
                     + " (CASE WHEN mimetype='" + Im.CONTENT_ITEM_TYPE +"'"
@@ -116,15 +120,16 @@ public class LegacyApiSupport {
                                 + " NULL"
                             + " END)"
                         + " END)"
-                + " END)";
+                + " END) AS INTEGER)";
 
     public interface LegacyTables {
-        public static final String PEOPLE = "contacts" + PEOPLE_JOINS;
-
-        public static final String DATA = "data"
-                + " JOIN mimetypes ON (mimetypes._id = data.mimetype_id)"
-                + " JOIN contacts ON (contacts._id = data.contact_id)"
-                + PEOPLE_JOINS;
+        public static final String PEOPLE = "view_v1_people";
+        public static final String GROUPS = "view_v1_groups";
+        public static final String ORGANIZATIONS = "view_v1_organizations";
+        public static final String CONTACT_METHODS = "view_v1_contact_methods";
+        public static final String PHONES = "view_v1_phones";
+        public static final String EXTENSIONS = "view_v1_extensions";
+        public static final String GROUP_MEMBERSHIP = "view_v1_group_membership";
     }
 
     private static final String[] ORGANIZATION_MIME_TYPES = new String[] {
@@ -242,123 +247,85 @@ public class LegacyApiSupport {
 
 
         HashMap<String, String> peopleProjectionMap = new HashMap<String, String>();
-        peopleProjectionMap.put(People.NAME,
-                "name." + StructuredName.DISPLAY_NAME + " AS " + People.NAME);
-        peopleProjectionMap.put(People.DISPLAY_NAME,
-                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME + " AS " + People.DISPLAY_NAME);
-        peopleProjectionMap.put(People.PHONETIC_NAME, PHONETIC_NAME_SQL + "AS " + People.PHONETIC_NAME);
-        peopleProjectionMap.put(People.NOTES,
-                "note." + Note.NOTE + " AS " + People.NOTES);
-        peopleProjectionMap.put(People.TIMES_CONTACTED,
-                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
-                + " AS " + People.TIMES_CONTACTED);
-        peopleProjectionMap.put(People.LAST_TIME_CONTACTED,
-                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
-                + " AS " + People.LAST_TIME_CONTACTED);
-        peopleProjectionMap.put(People.CUSTOM_RINGTONE,
-                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
-                + " AS " + People.CUSTOM_RINGTONE);
-        peopleProjectionMap.put(People.SEND_TO_VOICEMAIL,
-                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
-                + " AS " + People.SEND_TO_VOICEMAIL);
-        peopleProjectionMap.put(People.STARRED,
-                Tables.CONTACTS + "." + Contacts.STARRED
-                + " AS " + People.STARRED);
+        peopleProjectionMap.put(People.NAME, People.NAME);
+        peopleProjectionMap.put(People.DISPLAY_NAME, People.DISPLAY_NAME);
+        peopleProjectionMap.put(People.PHONETIC_NAME, People.PHONETIC_NAME);
+        peopleProjectionMap.put(People.NOTES, People.NOTES);
+        peopleProjectionMap.put(People.TIMES_CONTACTED, People.TIMES_CONTACTED);
+        peopleProjectionMap.put(People.LAST_TIME_CONTACTED, People.LAST_TIME_CONTACTED);
+        peopleProjectionMap.put(People.CUSTOM_RINGTONE, People.CUSTOM_RINGTONE);
+        peopleProjectionMap.put(People.SEND_TO_VOICEMAIL, People.SEND_TO_VOICEMAIL);
+        peopleProjectionMap.put(People.STARRED, People.STARRED);
 
         sPeopleProjectionMap = new HashMap<String, String>(peopleProjectionMap);
-        sPeopleProjectionMap.put(People.PRIMARY_ORGANIZATION_ID,
-                "organization." + Data._ID + " AS " + People.PRIMARY_ORGANIZATION_ID);
-        sPeopleProjectionMap.put(People.PRIMARY_EMAIL_ID,
-                "email." + Data._ID + " AS " + People.PRIMARY_EMAIL_ID);
-        sPeopleProjectionMap.put(People.PRIMARY_PHONE_ID,
-                "phone." + Data._ID + " AS " + People.PRIMARY_PHONE_ID);
-        sPeopleProjectionMap.put(People.NUMBER,
-                "phone." + Phone.NUMBER + " AS " + People.NUMBER);
-        sPeopleProjectionMap.put(People.TYPE,
-                "phone." + Phone.TYPE + " AS " + People.TYPE);
-        sPeopleProjectionMap.put(People.LABEL,
-                "phone." + Phone.LABEL + " AS " + People.LABEL);
-        sPeopleProjectionMap.put(People.NUMBER_KEY,
-                "phone." + PhoneColumns.NORMALIZED_NUMBER + " AS " + People.NUMBER_KEY);
+        sPeopleProjectionMap.put(People.PRIMARY_ORGANIZATION_ID, People.PRIMARY_ORGANIZATION_ID);
+        sPeopleProjectionMap.put(People.PRIMARY_EMAIL_ID, People.PRIMARY_EMAIL_ID);
+        sPeopleProjectionMap.put(People.PRIMARY_PHONE_ID, People.PRIMARY_PHONE_ID);
+        sPeopleProjectionMap.put(People.NUMBER, People.NUMBER);
+        sPeopleProjectionMap.put(People.TYPE, People.TYPE);
+        sPeopleProjectionMap.put(People.LABEL, People.LABEL);
+        sPeopleProjectionMap.put(People.NUMBER_KEY, People.NUMBER_KEY);
 
         sOrganizationProjectionMap = new HashMap<String, String>();
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.PERSON_ID,
-                Data.CONTACT_ID + " AS " + android.provider.Contacts.Organizations.PERSON_ID);
+                android.provider.Contacts.Organizations.PERSON_ID);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.ISPRIMARY,
-                Data.IS_PRIMARY + " AS " + android.provider.Contacts.Organizations.ISPRIMARY);
+                android.provider.Contacts.Organizations.ISPRIMARY);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.COMPANY,
-                Organization.COMPANY + " AS " + android.provider.Contacts.Organizations.COMPANY);
+                android.provider.Contacts.Organizations.COMPANY);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.TYPE,
-                Organization.TYPE + " AS " + android.provider.Contacts.Organizations.TYPE);
+                android.provider.Contacts.Organizations.TYPE);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.LABEL,
-                Organization.LABEL + " AS " + android.provider.Contacts.Organizations.LABEL);
+                android.provider.Contacts.Organizations.LABEL);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.TITLE,
-                Organization.TITLE + " AS " + android.provider.Contacts.Organizations.TITLE);
+                android.provider.Contacts.Organizations.TITLE);
 
         sContactMethodProjectionMap = new HashMap<String, String>(peopleProjectionMap);
-        sContactMethodProjectionMap.put(ContactMethods.PERSON_ID,
-                DataColumns.CONCRETE_CONTACT_ID + " AS " + ContactMethods.PERSON_ID);
-        sContactMethodProjectionMap.put(ContactMethods.KIND,
-                CONTACT_METHOD_KIND_SQL + " AS " + ContactMethods.KIND);
-        sContactMethodProjectionMap.put(ContactMethods.ISPRIMARY,
-                DataColumns.CONCRETE_IS_PRIMARY + " AS " + ContactMethods.ISPRIMARY);
-        sContactMethodProjectionMap.put(ContactMethods.TYPE,
-                DataColumns.CONCRETE_DATA1 + " AS " + ContactMethods.TYPE);
-        sContactMethodProjectionMap.put(ContactMethods.DATA,
-                DataColumns.CONCRETE_DATA2 + " AS " + ContactMethods.DATA);
-        sContactMethodProjectionMap.put(ContactMethods.LABEL,
-                DataColumns.CONCRETE_DATA3 + " AS " + ContactMethods.LABEL);
-        sContactMethodProjectionMap.put(ContactMethods.AUX_DATA,
-                DataColumns.CONCRETE_DATA14 + " AS " + ContactMethods.AUX_DATA);
+        sContactMethodProjectionMap.put(ContactMethods.PERSON_ID, ContactMethods.PERSON_ID);
+        sContactMethodProjectionMap.put(ContactMethods.KIND, ContactMethods.KIND);
+        sContactMethodProjectionMap.put(ContactMethods.ISPRIMARY, ContactMethods.ISPRIMARY);
+        sContactMethodProjectionMap.put(ContactMethods.TYPE, ContactMethods.TYPE);
+        sContactMethodProjectionMap.put(ContactMethods.DATA, ContactMethods.DATA);
+        sContactMethodProjectionMap.put(ContactMethods.LABEL, ContactMethods.LABEL);
+        sContactMethodProjectionMap.put(ContactMethods.AUX_DATA, ContactMethods.AUX_DATA);
 
         sPhoneProjectionMap = new HashMap<String, String>(peopleProjectionMap);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.PERSON_ID,
-                DataColumns.CONCRETE_CONTACT_ID
-                        + " AS " + android.provider.Contacts.Phones.PERSON_ID);
+                android.provider.Contacts.Phones.PERSON_ID);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.ISPRIMARY,
-                DataColumns.CONCRETE_IS_PRIMARY
-                        + " AS " + android.provider.Contacts.Phones.ISPRIMARY);
+                android.provider.Contacts.Phones.ISPRIMARY);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.NUMBER,
-                Tables.DATA + "." + Phone.NUMBER
-                        + " AS " + android.provider.Contacts.Phones.NUMBER);
+                android.provider.Contacts.Phones.NUMBER);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.TYPE,
-                Tables.DATA + "." + Phone.TYPE
-                        + " AS " + android.provider.Contacts.Phones.TYPE);
+                android.provider.Contacts.Phones.TYPE);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.LABEL,
-                Tables.DATA + "." + Phone.LABEL
-                        + " AS " + android.provider.Contacts.Phones.LABEL);
+                android.provider.Contacts.Phones.LABEL);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.NUMBER_KEY,
-                PhoneColumns.CONCRETE_NORMALIZED_NUMBER
-                        + " AS " + android.provider.Contacts.Phones.NUMBER_KEY);
+                android.provider.Contacts.Phones.NUMBER_KEY);
 
         sExtensionProjectionMap = new HashMap<String, String>();
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.PERSON_ID,
-                DataColumns.CONCRETE_CONTACT_ID
-                        + " AS " + android.provider.Contacts.Extensions.PERSON_ID);
+                android.provider.Contacts.Extensions.PERSON_ID);
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.NAME,
-                ExtensionsColumns.NAME
-                        + " AS " + android.provider.Contacts.Extensions.NAME);
+                android.provider.Contacts.Extensions.NAME);
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.VALUE,
-                ExtensionsColumns.VALUE
-                        + " AS " + android.provider.Contacts.Extensions.VALUE);
+                android.provider.Contacts.Extensions.VALUE);
 
         sGroupProjectionMap = new HashMap<String, String>();
         sGroupProjectionMap.put(android.provider.Contacts.Groups._ID,
-                GroupsColumns.CONCRETE_ID + " AS " + android.provider.Contacts.Groups._ID);
+                android.provider.Contacts.Groups._ID);
         sGroupProjectionMap.put(android.provider.Contacts.Groups.NAME,
-                Groups.TITLE + " AS " + android.provider.Contacts.Groups.NAME);
+                android.provider.Contacts.Groups.NAME);
         sGroupProjectionMap.put(android.provider.Contacts.Groups.NOTES,
-                Groups.NOTES + " AS " + android.provider.Contacts.Groups.NOTES);
+                android.provider.Contacts.Groups.NOTES);
         sGroupProjectionMap.put(android.provider.Contacts.Groups.SYSTEM_ID,
-                Groups.SYSTEM_ID + " AS " + android.provider.Contacts.Groups.SYSTEM_ID);
+                android.provider.Contacts.Groups.SYSTEM_ID);
 
         sGroupMembershipProjectionMap = new HashMap<String, String>();
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.PERSON_ID,
-                 GroupMembershipColumns.CONTACT_ID
-                         + " AS " + android.provider.Contacts.GroupMembership.PERSON_ID);
+                android.provider.Contacts.GroupMembership.PERSON_ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.GROUP_ID,
-                GroupMembershipColumns.GROUP_ROW_ID
-                        + " AS " + android.provider.Contacts.GroupMembership.GROUP_ID);
+                android.provider.Contacts.GroupMembership.GROUP_ID);
     }
 
     private final Context mContext;
@@ -376,6 +343,7 @@ public class LegacyApiSupport {
         mContext = context;
         mContactsProvider = contactsProvider;
         mOpenHelper = openHelper;
+        mOpenHelper.setDelegate(this);
 
         mPhoneticNameSplitter = new NameSplitter("", "", "",
                 context.getString(com.android.internal.R.string.common_name_conjunctions));
@@ -386,6 +354,198 @@ public class LegacyApiSupport {
                 + Contacts.TIMES_CONTACTED + "+1,"
                 + Contacts.LAST_TIME_CONTACTED + "=? WHERE "
                 + Contacts._ID + "=?");
+    }
+
+
+    public void createDatabase(SQLiteDatabase db) {
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PEOPLE + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.PEOPLE + " AS SELECT " +
+                ContactsColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.People._ID + ", " +
+                "name." + StructuredName.DISPLAY_NAME
+                        + " AS " + People.NAME + ", " +
+                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME
+                        + " AS " + People.DISPLAY_NAME + ", " +
+                PHONETIC_NAME_SQL
+                        + " AS " + People.PHONETIC_NAME + " , " +
+                "note." + Note.NOTE
+                        + " AS " + People.NOTES + ", " +
+                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
+                        + " AS " + People.TIMES_CONTACTED + ", " +
+                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
+                        + " AS " + People.LAST_TIME_CONTACTED + ", " +
+                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
+                        + " AS " + People.CUSTOM_RINGTONE + ", " +
+                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
+                        + " AS " + People.SEND_TO_VOICEMAIL + ", " +
+                Tables.CONTACTS + "." + Contacts.STARRED
+                        + " AS " + People.STARRED + ", " +
+                "organization." + Data._ID
+                        + " AS " + People.PRIMARY_ORGANIZATION_ID + ", " +
+                "email." + Data._ID
+                        + " AS " + People.PRIMARY_EMAIL_ID + ", " +
+                "phone." + Data._ID
+                        + " AS " + People.PRIMARY_PHONE_ID + ", " +
+                "phone." + Phone.NUMBER
+                        + " AS " + People.NUMBER + ", " +
+                "phone." + Phone.TYPE
+                        + " AS " + People.TYPE + ", " +
+                "phone." + Phone.LABEL
+                        + " AS " + People.LABEL + ", " +
+                "phone." + PhoneColumns.NORMALIZED_NUMBER
+                        + " AS " + People.NUMBER_KEY +
+                " FROM " + Tables.CONTACTS + PEOPLE_JOINS +
+        ";");
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.ORGANIZATIONS + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.ORGANIZATIONS + " AS SELECT " +
+                DataColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.Organizations._ID + ", " +
+                Data.CONTACT_ID
+                        + " AS " + android.provider.Contacts.Organizations.PERSON_ID + ", " +
+                Data.IS_PRIMARY
+                        + " AS " + android.provider.Contacts.Organizations.ISPRIMARY + ", " +
+                Organization.COMPANY
+                        + " AS " + android.provider.Contacts.Organizations.COMPANY + ", " +
+                Organization.TYPE
+                        + " AS " + android.provider.Contacts.Organizations.TYPE + ", " +
+                Organization.LABEL
+                        + " AS " + android.provider.Contacts.Organizations.LABEL + ", " +
+                Organization.TITLE
+                        + " AS " + android.provider.Contacts.Organizations.TITLE + ", " +
+                Contacts.IS_RESTRICTED +
+                " FROM " + Tables.DATA_JOIN_MIMETYPE_CONTACTS +
+                " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + Organization.CONTENT_ITEM_TYPE + "'" +
+        ";");
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.CONTACT_METHODS + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.CONTACT_METHODS + " AS SELECT " +
+                DataColumns.CONCRETE_ID
+                        + " AS " + ContactMethods._ID + ", " +
+                DataColumns.CONCRETE_CONTACT_ID
+                        + " AS " + ContactMethods.PERSON_ID + ", " +
+                CONTACT_METHOD_KIND_SQL
+                        + " AS " + ContactMethods.KIND + ", " +
+                DataColumns.CONCRETE_IS_PRIMARY
+                        + " AS " + ContactMethods.ISPRIMARY + ", " +
+                DataColumns.CONCRETE_DATA1
+                        + " AS " + ContactMethods.TYPE + ", " +
+                DataColumns.CONCRETE_DATA2
+                        + " AS " + ContactMethods.DATA + ", " +
+                DataColumns.CONCRETE_DATA3
+                        + " AS " + ContactMethods.LABEL + ", " +
+                DataColumns.CONCRETE_DATA14
+                        + " AS " + ContactMethods.AUX_DATA + ", " +
+                "name." + StructuredName.DISPLAY_NAME
+                        + " AS " + ContactMethods.NAME + ", " +
+                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME
+                        + " AS " + ContactMethods.DISPLAY_NAME + ", " +
+                PHONETIC_NAME_SQL
+                        + " AS " + ContactMethods.PHONETIC_NAME + " , " +
+                "note." + Note.NOTE
+                        + " AS " + ContactMethods.NOTES + ", " +
+                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
+                        + " AS " + ContactMethods.TIMES_CONTACTED + ", " +
+                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
+                        + " AS " + ContactMethods.LAST_TIME_CONTACTED + ", " +
+                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
+                        + " AS " + ContactMethods.CUSTOM_RINGTONE + ", " +
+                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
+                        + " AS " + ContactMethods.SEND_TO_VOICEMAIL + ", " +
+                Tables.CONTACTS + "." + Contacts.STARRED
+                        + " AS " + ContactMethods.STARRED + ", " +
+                Contacts.IS_RESTRICTED +
+                " FROM " + Tables.DATA + DATA_JOINS +
+                " WHERE " + ContactMethods.KIND + " IS NOT NULL" +
+        ";");
+
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PHONES + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.PHONES + " AS SELECT " +
+                DataColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.Phones._ID + ", " +
+                DataColumns.CONCRETE_CONTACT_ID
+                        + " AS " + android.provider.Contacts.Phones.PERSON_ID + ", " +
+                DataColumns.CONCRETE_IS_PRIMARY
+                        + " AS " + android.provider.Contacts.Phones.ISPRIMARY + ", " +
+                Tables.DATA + "." + Phone.NUMBER
+                        + " AS " + android.provider.Contacts.Phones.NUMBER + ", " +
+                Tables.DATA + "." + Phone.TYPE
+                        + " AS " + android.provider.Contacts.Phones.TYPE + ", " +
+                Tables.DATA + "." + Phone.LABEL
+                        + " AS " + android.provider.Contacts.Phones.LABEL + ", " +
+                PhoneColumns.CONCRETE_NORMALIZED_NUMBER
+                        + " AS " + android.provider.Contacts.Phones.NUMBER_KEY + ", " +
+                "name." + StructuredName.DISPLAY_NAME
+                        + " AS " + android.provider.Contacts.Phones.NAME + ", " +
+                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME
+                        + " AS " + android.provider.Contacts.Phones.DISPLAY_NAME + ", " +
+                PHONETIC_NAME_SQL
+                        + " AS " + android.provider.Contacts.Phones.PHONETIC_NAME + " , " +
+                "note." + Note.NOTE
+                        + " AS " + android.provider.Contacts.Phones.NOTES + ", " +
+                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
+                        + " AS " + android.provider.Contacts.Phones.TIMES_CONTACTED + ", " +
+                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
+                        + " AS " + android.provider.Contacts.Phones.LAST_TIME_CONTACTED + ", " +
+                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
+                        + " AS " + android.provider.Contacts.Phones.CUSTOM_RINGTONE + ", " +
+                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
+                        + " AS " + android.provider.Contacts.Phones.SEND_TO_VOICEMAIL + ", " +
+                Tables.CONTACTS + "." + Contacts.STARRED
+                        + " AS " + android.provider.Contacts.Phones.STARRED + ", " +
+                Contacts.IS_RESTRICTED +
+                " FROM " + Tables.DATA + DATA_JOINS +
+                " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + Phone.CONTENT_ITEM_TYPE + "'" +
+        ";");
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.EXTENSIONS + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.EXTENSIONS + " AS SELECT " +
+                DataColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.Extensions._ID + ", " +
+                DataColumns.CONCRETE_CONTACT_ID
+                        + " AS " + android.provider.Contacts.Extensions.PERSON_ID + ", " +
+                ExtensionsColumns.NAME
+                        + " AS " + android.provider.Contacts.Extensions.NAME + ", " +
+                ExtensionsColumns.VALUE
+                        + " AS " + android.provider.Contacts.Extensions.VALUE + ", " +
+                Contacts.IS_RESTRICTED +
+                " FROM " + Tables.DATA_JOIN_MIMETYPE_CONTACTS +
+                " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'" +
+        ";");
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.GROUPS + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.GROUPS + " AS SELECT " +
+                GroupsColumns.CONCRETE_ID + " AS " + android.provider.Contacts.Groups._ID + ", " +
+                Groups.TITLE + " AS " + android.provider.Contacts.Groups.NAME + ", " +
+                Groups.NOTES + " AS " + android.provider.Contacts.Groups.NOTES + " , " +
+                Groups.SYSTEM_ID + " AS " + android.provider.Contacts.Groups.SYSTEM_ID +
+                " FROM " + Tables.GROUPS +
+        ";");
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.GROUP_MEMBERSHIP + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.GROUP_MEMBERSHIP + " AS SELECT " +
+                DataColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.GroupMembership._ID + ", " +
+                DataColumns.CONCRETE_CONTACT_ID
+                        + " AS " + android.provider.Contacts.GroupMembership.PERSON_ID + ", " +
+                GroupMembership.GROUP_ROW_ID
+                        + " AS " + android.provider.Contacts.GroupMembership.GROUP_ID + ", " +
+                Groups.TITLE
+                        + " AS " + android.provider.Contacts.GroupMembership.NAME + ", " +
+                Groups.NOTES
+                        + " AS " + android.provider.Contacts.GroupMembership.NOTES + " , " +
+                Groups.SYSTEM_ID
+                        + " AS " + android.provider.Contacts.GroupMembership.SYSTEM_ID + ", " +
+                Contacts.IS_RESTRICTED +
+                " FROM " + Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS +
+                " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + GroupMembership.CONTENT_ITEM_TYPE + "'" +
+        ";");
     }
 
     public Uri insert(Uri uri, ContentValues values) {
@@ -722,178 +882,164 @@ public class LegacyApiSupport {
             case PEOPLE_ID:
                 qb.setTables(LegacyTables.PEOPLE);
                 qb.setProjectionMap(sPeopleProjectionMap);
-                qb.appendWhere("contacts._id=");
+                qb.appendWhere(People._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
             case ORGANIZATIONS:
-                // TODO
+                qb.setTables(LegacyTables.ORGANIZATIONS);
+                qb.setProjectionMap(sOrganizationProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
                 break;
 
             case ORGANIZATIONS_ID:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.ORGANIZATIONS);
                 qb.setProjectionMap(sOrganizationProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Organizations._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
             case CONTACTMETHODS:
-                // TODO
+                qb.setTables(LegacyTables.CONTACT_METHODS);
+                qb.setProjectionMap(sContactMethodProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
                 break;
 
             case CONTACTMETHODS_ID:
-                qb.setTables(LegacyTables.DATA);
+                qb.setTables(LegacyTables.CONTACT_METHODS);
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + ContactMethods._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + ContactMethods.KIND + " IS NOT NULL");
                 break;
 
             case PEOPLE_CONTACTMETHODS:
-                qb.setTables(LegacyTables.DATA);
+                qb.setTables(LegacyTables.CONTACT_METHODS);
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + ContactMethods.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + ContactMethods.KIND + " IS NOT NULL");
                 break;
 
             case PEOPLE_CONTACTMETHODS_ID:
-                qb.setTables(LegacyTables.DATA);
+                qb.setTables(LegacyTables.CONTACT_METHODS);
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + ContactMethods.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + ContactMethods._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(3));
                 qb.appendWhere(" AND " + ContactMethods.KIND + " IS NOT NULL");
                 break;
 
             case PHONES:
-                // TODO
+                qb.setTables(LegacyTables.PHONES);
+                qb.setProjectionMap(sPhoneProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
                 break;
 
             case PHONES_ID:
-                qb.setTables(LegacyTables.DATA);
+                qb.setTables(LegacyTables.PHONES);
                 qb.setProjectionMap(sPhoneProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Phones._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + Phone.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case PEOPLE_PHONES:
-                qb.setTables(LegacyTables.DATA);
+                qb.setTables(LegacyTables.PHONES);
                 qb.setProjectionMap(sPhoneProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Phones.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + Phone.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case PEOPLE_PHONES_ID:
-                qb.setTables(LegacyTables.DATA);
+                qb.setTables(LegacyTables.PHONES);
                 qb.setProjectionMap(sPhoneProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Phones.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Phones._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(3));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + Phone.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case EXTENSIONS:
-                // TODO
+                qb.setTables(LegacyTables.EXTENSIONS);
+                qb.setProjectionMap(sExtensionProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
                 break;
 
             case EXTENSIONS_ID:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.EXTENSIONS);
                 qb.setProjectionMap(sExtensionProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Extensions._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
             case PEOPLE_EXTENSIONS:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.EXTENSIONS);
                 qb.setProjectionMap(sExtensionProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Extensions.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case PEOPLE_EXTENSIONS_ID:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.EXTENSIONS);
                 qb.setProjectionMap(sExtensionProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Extensions.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.Extensions._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(3));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case GROUPS:
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setTables(LegacyTables.GROUPS);
                 qb.setProjectionMap(sGroupProjectionMap);
                 break;
 
             case GROUPS_ID:
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setTables(LegacyTables.GROUPS);
                 qb.setProjectionMap(sGroupProjectionMap);
-                qb.appendWhere(GroupsColumns.CONCRETE_ID + "=");
+                qb.appendWhere(android.provider.Contacts.Groups._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
             case GROUPMEMBERSHIP:
-                // TODO
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
+                qb.setProjectionMap(sGroupMembershipProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
                 break;
 
             case GROUPMEMBERSHIP_ID:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + GroupMembership.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case PEOPLE_GROUPMEMBERSHIP:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + GroupMembership.CONTENT_ITEM_TYPE + "'");
                 break;
 
             case PEOPLE_GROUPMEMBERSHIP_ID:
-                // TODO exclude mimetype from this join
-                qb.setTables(Tables.DATA_JOIN_MIMETYPE_CONTACTS);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 mContactsProvider.applyDataRestrictionExceptions(qb);
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
-                qb.appendWhere(" AND " + DataColumns.CONCRETE_ID + "=");
+                qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(3));
-                qb.appendWhere(" AND " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + GroupMembership.CONTENT_ITEM_TYPE + "'");
                 break;
 
             default:

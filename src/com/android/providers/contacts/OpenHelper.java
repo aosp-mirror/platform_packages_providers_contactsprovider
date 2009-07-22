@@ -61,6 +61,10 @@ import java.util.HashMap;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
+    public interface Delegate {
+        void createDatabase(SQLiteDatabase db);
+    }
+
     public interface Tables {
         public static final String ACCOUNTS = "accounts";
         public static final String AGGREGATES = "aggregates";
@@ -376,6 +380,8 @@ import java.util.HashMap;
     private SQLiteStatement mVisibleAllUpdate;
     private SQLiteStatement mVisibleSpecificUpdate;
 
+    private Delegate mDelegate;
+
     private static OpenHelper sSingleton = null;
 
     public static synchronized OpenHelper getInstance(Context context) {
@@ -395,6 +401,14 @@ import java.util.HashMap;
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
+    }
+
+    public Delegate getDelegate() {
+        return mDelegate;
+    }
+
+    public void setDelegate(Delegate delegate) {
+        mDelegate = delegate;
     }
 
     @Override
@@ -687,6 +701,9 @@ import java.util.HashMap;
         ");");
 
         loadNicknameLookupTable(db);
+        if (mDelegate != null) {
+            mDelegate.createDatabase(db);
+        }
     }
 
     @Override
