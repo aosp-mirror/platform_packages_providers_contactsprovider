@@ -47,8 +47,10 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.text.TextUtils;
 
 import java.util.HashMap;
 
@@ -79,6 +81,9 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int GROUPMEMBERSHIP_ID = 21;
     private static final int PEOPLE_GROUPMEMBERSHIP = 22;
     private static final int PEOPLE_GROUPMEMBERSHIP_ID = 23;
+    private static final int PEOPLE_PHOTO = 24;
+    private static final int PHOTOS = 25;
+    private static final int PHOTOS_ID = 26;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
@@ -130,6 +135,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         public static final String PHONES = "view_v1_phones";
         public static final String EXTENSIONS = "view_v1_extensions";
         public static final String GROUP_MEMBERSHIP = "view_v1_group_membership";
+        public static final String PHOTOS = "view_v1_photos";
     }
 
     private static final String[] ORGANIZATION_MIME_TYPES = new String[] {
@@ -146,6 +152,33 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         Phone.CONTENT_ITEM_TYPE
     };
 
+    private interface PhotoQuery {
+        String[] COLUMNS = { Data._ID };
+
+        int _ID = 0;
+    }
+
+    /**
+     * A custom data row that is used to store legacy photo data fields no
+     * longer directly supported by the API.
+     */
+    private interface LegacyPhotoData {
+        public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/photo_v1_extras";
+
+        public static final String PHOTO_DATA_ID = Data.DATA1;
+        public static final String LOCAL_VERSION = Data.DATA2;
+        public static final String DOWNLOAD_REQUIRED = Data.DATA3;
+        public static final String EXISTS_ON_SERVER = Data.DATA4;
+        public static final String SYNC_ERROR = Data.DATA5;
+    }
+
+    public static final String LEGACY_PHOTO_JOIN =
+            " LEFT OUTER JOIN data legacy_photo ON (contacts._id = legacy_photo.contact_id"
+            + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = legacy_photo.mimetype_id)"
+                + "='" + LegacyPhotoData.CONTENT_ITEM_TYPE + "'"
+            + " AND " + DataColumns.CONCRETE_ID + " = legacy_photo." + LegacyPhotoData.PHOTO_DATA_ID
+            + ")";
+
     private static final HashMap<String, String> sPeopleProjectionMap;
     private static final HashMap<String, String> sOrganizationProjectionMap;
     private static final HashMap<String, String> sContactMethodProjectionMap;
@@ -153,6 +186,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sExtensionProjectionMap;
     private static final HashMap<String, String> sGroupProjectionMap;
     private static final HashMap<String, String> sGroupMembershipProjectionMap;
+    private static final HashMap<String, String> sPhotoProjectionMap;
 
     static {
 
@@ -188,7 +222,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         matcher.addURI(authority, "people/#/phones/#", PEOPLE_PHONES_ID);
 //        matcher.addURI(authority, "people/#/phones_with_presence",
 //                PEOPLE_PHONES_WITH_PRESENCE);
-//        matcher.addURI(authority, "people/#/photo", PEOPLE_PHOTO);
+        matcher.addURI(authority, "people/#/photo", PEOPLE_PHOTO);
 //        matcher.addURI(authority, "people/#/photo/data", PEOPLE_PHOTO_DATA);
         matcher.addURI(authority, "people/#/contact_methods", PEOPLE_CONTACTMETHODS);
 //        matcher.addURI(authority, "people/#/contact_methods_with_presence",
@@ -211,8 +245,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 //        matcher.addURI(authority, "phones/mobile_filter_name/*",
 //                PHONES_MOBILE_FILTER_NAME);
         matcher.addURI(authority, "phones/#", PHONES_ID);
-//        matcher.addURI(authority, "photos", PHOTOS);
-//        matcher.addURI(authority, "photos/#", PHOTOS_ID);
+        matcher.addURI(authority, "photos", PHOTOS);
+        matcher.addURI(authority, "photos/#", PHOTOS_ID);
         matcher.addURI(authority, "contact_methods", CONTACTMETHODS);
 //        matcher.addURI(authority, "contact_methods/email", CONTACTMETHODS_EMAIL);
 //        matcher.addURI(authority, "contact_methods/email/*", CONTACTMETHODS_EMAIL_FILTER);
@@ -326,6 +360,20 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 android.provider.Contacts.GroupMembership.PERSON_ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.GROUP_ID,
                 android.provider.Contacts.GroupMembership.GROUP_ID);
+
+        sPhotoProjectionMap = new HashMap<String, String>();
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos.PERSON_ID,
+                android.provider.Contacts.Photos.PERSON_ID);
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos.DATA,
+                android.provider.Contacts.Photos.DATA);
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos.LOCAL_VERSION,
+                android.provider.Contacts.Photos.LOCAL_VERSION);
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos.DOWNLOAD_REQUIRED,
+                android.provider.Contacts.Photos.DOWNLOAD_REQUIRED);
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos.EXISTS_ON_SERVER,
+                android.provider.Contacts.Photos.EXISTS_ON_SERVER);
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos.SYNC_ERROR,
+                android.provider.Contacts.Photos.SYNC_ERROR);
     }
 
     private final Context mContext;
@@ -545,6 +593,28 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 " FROM " + Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + GroupMembership.CONTENT_ITEM_TYPE + "'" +
+        ";");
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PHOTOS + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.PHOTOS + " AS SELECT " +
+                DataColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.Photos._ID + ", " +
+                DataColumns.CONCRETE_CONTACT_ID
+                        + " AS " + android.provider.Contacts.Photos.PERSON_ID + ", " +
+                Tables.DATA + "." + Photo.PHOTO
+                        + " AS " + android.provider.Contacts.Photos.DATA + ", " +
+                "legacy_photo." + LegacyPhotoData.EXISTS_ON_SERVER
+                        + " AS " + android.provider.Contacts.Photos.EXISTS_ON_SERVER + ", " +
+                "legacy_photo." + LegacyPhotoData.DOWNLOAD_REQUIRED
+                        + " AS " + android.provider.Contacts.Photos.DOWNLOAD_REQUIRED + ", " +
+                "legacy_photo." + LegacyPhotoData.LOCAL_VERSION
+                        + " AS " + android.provider.Contacts.Photos.LOCAL_VERSION + ", " +
+                "legacy_photo." + LegacyPhotoData.SYNC_ERROR
+                        + " AS " + android.provider.Contacts.Photos.SYNC_ERROR + ", " +
+                Contacts.IS_RESTRICTED +
+                " FROM " + Tables.DATA + DATA_JOINS + LEGACY_PHOTO_JOIN +
+                " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                        + Photo.CONTENT_ITEM_TYPE + "'" +
         ";");
     }
 
@@ -800,11 +870,26 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         final int match = sUriMatcher.match(uri);
-        int count;
+        int count = 0;
         switch(match) {
             case PEOPLE_UPDATE_CONTACT_TIME:
                 count = updateContactTime(uri, values);
                 break;
+
+            case PEOPLE_PHOTO: {
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                return updatePhoto(contactId, values);
+            }
+
+            case PHOTOS:
+                // TODO
+                break;
+
+            case PHOTOS_ID:
+                // TODO
+                break;
+
+
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -814,6 +899,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         }
         return count;
     }
+
 
     private int updateContactTime(Uri uri, ContentValues values) {
 
@@ -836,6 +922,64 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
             mLastTimeContactedUpdate.execute();
         }
         return 1;
+    }
+
+    private int updatePhoto(long contactId, ContentValues values) {
+
+        // TODO check sanctions
+
+        int count;
+
+        long dataId = -1;
+        Cursor c = mContactsProvider.query(Data.CONTENT_URI, PhotoQuery.COLUMNS,
+                Data.CONTACT_ID + "=" + contactId + " AND "
+                        + Data.MIMETYPE + "=" + mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE),
+                null, null);
+        try {
+            if (c.moveToFirst()) {
+                dataId = c.getLong(PhotoQuery._ID);
+            }
+        } finally {
+            c.close();
+        }
+
+        mValues.clear();
+        byte[] bytes = values.getAsByteArray(android.provider.Contacts.Photos.DATA);
+        mValues.put(Photo.PHOTO, bytes);
+
+        if (dataId == -1) {
+            mValues.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+            mValues.put(Data.CONTACT_ID, contactId);
+            Uri dataUri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+            dataId = ContentUris.parseId(dataUri);
+            count = 1;
+        } else {
+            Uri dataUri = ContentUris.withAppendedId(Data.CONTENT_URI, dataId);
+            count = mContactsProvider.update(dataUri, mValues, null, null);
+        }
+
+        mValues.clear();
+        OpenHelper.copyStringValue(mValues, LegacyPhotoData.LOCAL_VERSION,
+                values, android.provider.Contacts.Photos.LOCAL_VERSION);
+        OpenHelper.copyStringValue(mValues, LegacyPhotoData.DOWNLOAD_REQUIRED,
+                values, android.provider.Contacts.Photos.DOWNLOAD_REQUIRED);
+        OpenHelper.copyStringValue(mValues, LegacyPhotoData.EXISTS_ON_SERVER,
+                values, android.provider.Contacts.Photos.EXISTS_ON_SERVER);
+        OpenHelper.copyStringValue(mValues, LegacyPhotoData.SYNC_ERROR,
+                values, android.provider.Contacts.Photos.SYNC_ERROR);
+
+        int updated = mContactsProvider.update(Data.CONTENT_URI, mValues,
+                Data.MIMETYPE + "='" + LegacyPhotoData.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Data.CONTACT_ID + "=" + contactId
+                        + " AND " + LegacyPhotoData.PHOTO_DATA_ID + "=" + dataId, null);
+        if (updated == 0) {
+            mValues.put(Data.CONTACT_ID, contactId);
+            mValues.put(Data.MIMETYPE, LegacyPhotoData.CONTENT_ITEM_TYPE);
+            mValues.put(LegacyPhotoData.PHOTO_DATA_ID, dataId);
+            mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        }
+
+        return count;
     }
 
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -1040,6 +1184,15 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(3));
+                break;
+
+            case PEOPLE_PHOTO:
+                qb.setTables(LegacyTables.PHOTOS);
+                qb.setProjectionMap(sPhotoProjectionMap);
+                mContactsProvider.applyDataRestrictionExceptions(qb);
+                qb.appendWhere(" AND " + android.provider.Contacts.Photos.PERSON_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                limit = "1";
                 break;
 
             default:

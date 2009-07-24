@@ -529,8 +529,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personUri, values);
     }
 
-    // TODO fix and reenable the test
-    public void __testPhotoUpdate() throws Exception {
+    public void testPhotoUpdate() throws Exception {
         byte[] photo = loadTestPhoto();
 
         ContentValues values = new ContentValues();
@@ -538,6 +537,10 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Photos.DATA, photo);
+        values.put(Photos.LOCAL_VERSION, "10");
+        values.put(Photos.DOWNLOAD_REQUIRED, 1);
+        values.put(Photos.EXISTS_ON_SERVER, 1);
+        values.put(Photos.SYNC_ERROR, "404 does not exist");
 
         Uri photoUri = Uri.withAppendedPath(personUri, Photos.CONTENT_DIRECTORY);
         mResolver.update(photoUri, values, null, null);
