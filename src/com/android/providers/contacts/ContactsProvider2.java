@@ -153,7 +153,7 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     private interface DataContactsQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES;
+        public static final String TABLE = Tables.DATA_JOIN_MIMETYPE_CONTACTS;
 
         public static final String[] PROJECTION = new String[] {
             ContactsColumns.CONCRETE_ID,
@@ -168,7 +168,6 @@ public class ContactsProvider2 extends ContentProvider {
         public static final int AGGREGATE_ID = 2;
         public static final int IS_RESTRICTED = 3;
         public static final int MIMETYPE = 4;
-
     }
 
     private interface DataAggregatesQuery {
@@ -404,14 +403,15 @@ public class ContactsProvider2 extends ContentProvider {
                 AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID);
         sAggregatesProjectionMap = columns;
 
-        // Aggregates primaries projection map. The overall presence status is
-        // the most-present value, as indicated by the largest value.
         columns = new HashMap<String, String>();
         columns.putAll(sAggregatesProjectionMap);
-        columns.put(CommonDataKinds.Phone.TYPE, CommonDataKinds.Phone.TYPE);
-        columns.put(CommonDataKinds.Phone.LABEL, CommonDataKinds.Phone.LABEL);
-        columns.put(CommonDataKinds.Phone.NUMBER, CommonDataKinds.Phone.NUMBER);
-        columns.put(Presence.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
+
+        // Aggregates primaries projection map. The overall presence status is
+        // the most-present value, as indicated by the largest value.
+        columns.put(Aggregates.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
+        columns.put(Aggregates.PRIMARY_PHONE_TYPE, CommonDataKinds.Phone.TYPE);
+        columns.put(Aggregates.PRIMARY_PHONE_LABEL, CommonDataKinds.Phone.LABEL);
+        columns.put(Aggregates.PRIMARY_PHONE_NUMBER, CommonDataKinds.Phone.NUMBER);
         sAggregatesSummaryProjectionMap = columns;
 
         // Contacts projection map
@@ -1471,14 +1471,14 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         long dataId = -1;
-        long aggId = -1;
+        long contactId = -1;
         Cursor cursor = null;
         try {
             cursor = db.query(DataContactsQuery.TABLE,
                     DataContactsQuery.PROJECTION, selection, selectionArgs, null, null, null);
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
-                aggId = cursor.getLong(DataContactsQuery.AGGREGATE_ID);
+                contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
             } else {
                 // No contact found, return a null URI
                 return -1;
@@ -1490,7 +1490,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         values.put(Presence.DATA_ID, dataId);
-        values.put(Presence.AGGREGATE_ID, aggId);
+        values.put(Presence.CONTACT_ID, contactId);
 
         // Insert the presence update
         long presenceId = db.replace(Tables.PRESENCE, null, values);

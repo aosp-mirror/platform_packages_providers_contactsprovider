@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 48;
+    private static final int DATABASE_VERSION = 49;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -80,7 +80,8 @@ import java.util.HashMap;
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
 
         public static final String AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE = "aggregates "
-                + "LEFT OUTER JOIN presence ON (aggregates._id = presence.aggregate_id) "
+                + "LEFT OUTER JOIN contacts ON (aggregates._id = contacts.aggregate_id) "
+                + "LEFT OUTER JOIN presence ON (contacts._id = presence.contact_id) "
                 + "LEFT OUTER JOIN data ON (primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
@@ -190,7 +191,6 @@ import java.util.HashMap;
                 Groups.SOURCE_ID + "=? AND "
                         + Groups.ACCOUNT_NAME + "=? AND "
                         + Groups.ACCOUNT_TYPE + "=?";
-
     }
 
     public interface AggregatesColumns {
@@ -453,19 +453,20 @@ import java.util.HashMap;
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + tableName + " ("+
-                BaseColumns._ID + " INTEGER PRIMARY KEY," +
-                Presence.AGGREGATE_ID + " INTEGER REFERENCES aggregates(_id)," +
+                Presence._ID + " INTEGER PRIMARY KEY," +
+                Presence.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
                 Presence.IM_PROTOCOL + " TEXT," +
                 Presence.IM_HANDLE + " TEXT," +
                 Presence.IM_ACCOUNT + " TEXT," +
                 Presence.PRESENCE_STATUS + " INTEGER," +
                 Presence.PRESENCE_CUSTOM_STATUS + " TEXT," +
-                "UNIQUE(" + Presence.IM_PROTOCOL + ", " + Presence.IM_HANDLE + ", " + Presence.IM_ACCOUNT + ")" +
+                "UNIQUE(" + Presence.IM_PROTOCOL + ", " + Presence.IM_HANDLE + ", "
+                        + Presence.IM_ACCOUNT + ")" +
         ");");
 
         db.execSQL("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + Tables.PRESENCE + " ("
-                + Presence.AGGREGATE_ID + ");");
+                + Presence.CONTACT_ID + ");");
     }
 
     @Override
