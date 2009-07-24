@@ -354,6 +354,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA15, "new15");
         mResolver.update(Data.CONTENT_URI, values, Data.CONTACT_ID + "=" + contactId +
                 " AND " + Data.MIMETYPE + "='testmimetype'", null);
+
+        // Should not be able to change IS_PRIMARY and IS_SUPER_PRIMARY by the above update
+        values.put(Data.IS_PRIMARY, 1);
+        values.put(Data.IS_SUPER_PRIMARY, 1);
         assertStoredValues(uri, values);
 
         int count = mResolver.delete(Data.CONTENT_URI, Data.CONTACT_ID + "=" + contactId

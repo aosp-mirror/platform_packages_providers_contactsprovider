@@ -21,6 +21,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.res.Resources;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.Contacts;
 import android.provider.Contacts.ContactMethods;
@@ -451,11 +452,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personsGroupsUri, values);
     }
 
-    /**
-     * We will not support presence compatibility mode.  Leaving the test for now in case we change
-     * our mind.
-     */
-    public void __testPresenceInsertMatchOnHandle() {
+    public void testPresenceInsertMatchOnHandle() {
         ContentValues values = new ContentValues();
         putContactValues(values);
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -476,21 +473,28 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(Presence.IM_PROTOCOL, encodedProtocol);
         values.put(Presence.IM_HANDLE, "Android");
         values.put(Presence.IM_ACCOUNT, "foo");
+        values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Coding for Android");
 
         Uri presenceUri = mResolver.insert(Presence.CONTENT_URI, values);
+        assertSelection(Presence.CONTENT_URI, values,
+                Presence._ID, ContentUris.parseId(presenceUri));
 
         values.put(Presence.PERSON_ID, personId);
-
-        // Presence is joined with People
-        putContactValues(values);
         assertStoredValues(presenceUri, values);
+
+        // Now the person should be joined with Presence
+        values.clear();
+        putContactValues(values);
+        values.put(People.IM_PROTOCOL, encodedProtocol);
+        values.put(People.IM_HANDLE, "Android");
+        values.put(People.IM_ACCOUNT, "foo");
+        values.put(People.PRESENCE_STATUS, Presence.OFFLINE);
+        values.put(People.PRESENCE_CUSTOM_STATUS, "Coding for Android");
+        assertStoredValues(personUri, values);
     }
 
-    /**
-     * We will not support presence compatibility mode.  Leaving the test for now in case we change
-     * our mind.
-     */
-    public void __testPresenceInsertMatchOnEmail() {
+    public void testPresenceInsertMatchOnEmail() {
         ContentValues values = new ContentValues();
         putContactValues(values);
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -517,6 +521,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         values.put(Presence.PERSON_ID, personId);
         assertStoredValues(presenceUri, values);
+        assertSelection(Presence.CONTENT_URI, values,
+                Presence._ID, ContentUris.parseId(presenceUri));
 
         // Now the person should be joined with Presence
         values.clear();

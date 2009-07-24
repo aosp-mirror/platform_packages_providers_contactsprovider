@@ -1494,7 +1494,7 @@ public class ContactsProvider2 extends ContentProvider {
     /**
      * Inserts a presence update.
      */
-    private long insertPresence(ContentValues values) {
+    public long insertPresence(ContentValues values) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final String handle = values.getAsString(Presence.IM_HANDLE);
         final String protocol = values.getAsString(Presence.IM_PROTOCOL);
@@ -1505,22 +1505,36 @@ public class ContactsProvider2 extends ContentProvider {
         // TODO: generalize to allow other providers to match against email
         boolean matchEmail = GTALK_PROTOCOL_STRING.equals(protocol);
 
-        String selection;
+        StringBuilder selection = new StringBuilder();
         String[] selectionArgs;
         if (matchEmail) {
-            selection = "(" + Clauses.WHERE_IM_MATCHES + ") OR (" + Clauses.WHERE_EMAIL_MATCHES + ")";
+            selection.append("(" + Clauses.WHERE_IM_MATCHES + ") OR ("
+                    + Clauses.WHERE_EMAIL_MATCHES + ")");
             selectionArgs = new String[] { protocol, handle, handle };
         } else {
-            selection = Clauses.WHERE_IM_MATCHES;
+            selection.append(Clauses.WHERE_IM_MATCHES);
             selectionArgs = new String[] { protocol, handle };
         }
 
+        if (values.containsKey(Presence.DATA_ID)) {
+            selection.append(" AND " + DataColumns.CONCRETE_ID + "=")
+                    .append(values.getAsLong(Presence.DATA_ID));
+        }
+
+        if (values.containsKey(Presence.CONTACT_ID)) {
+            selection.append(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=")
+                    .append(values.getAsLong(Presence.CONTACT_ID));
+        }
+
+        selection.append(" AND ").append(getContactsRestrictionExceptions());
+
         long dataId = -1;
         long contactId = -1;
+
         Cursor cursor = null;
         try {
-            cursor = db.query(DataContactsQuery.TABLE,
-                    DataContactsQuery.PROJECTION, selection, selectionArgs, null, null, null);
+            cursor = db.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
+                    selection.toString(), selectionArgs, null, null, null);
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
                 contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
@@ -1728,18 +1742,18 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
         }
 
-        boolean containsIsSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
-        boolean containsIsPrimary = values.containsKey(Data.IS_PRIMARY);
+        boolean containsIsSuperPrimary = mValues.containsKey(Data.IS_SUPER_PRIMARY);
+        boolean containsIsPrimary = mValues.containsKey(Data.IS_PRIMARY);
 
         // Remove primary or super primary values being set to 0. This is disallowed by the
         // content provider.
-        if (containsIsSuperPrimary && values.getAsInteger(Data.IS_SUPER_PRIMARY) == 0) {
+        if (containsIsSuperPrimary && mValues.getAsInteger(Data.IS_SUPER_PRIMARY) == 0) {
             containsIsSuperPrimary = false;
-            values.remove(Data.IS_SUPER_PRIMARY);
+            mValues.remove(Data.IS_SUPER_PRIMARY);
         }
-        if (containsIsPrimary && values.getAsInteger(Data.IS_PRIMARY) == 0) {
+        if (containsIsPrimary && mValues.getAsInteger(Data.IS_PRIMARY) == 0) {
             containsIsPrimary = false;
-            values.remove(Data.IS_PRIMARY);
+            mValues.remove(Data.IS_PRIMARY);
         }
 
         if (containsIsSuperPrimary) {
@@ -1747,19 +1761,19 @@ public class ContactsProvider2 extends ContentProvider {
             setIsPrimary(dataId);
 
             // Now that we've taken care of setting these, remove them from "values".
-            values.remove(Data.IS_SUPER_PRIMARY);
+            mValues.remove(Data.IS_SUPER_PRIMARY);
             if (containsIsPrimary) {
-                values.remove(Data.IS_PRIMARY);
+                mValues.remove(Data.IS_PRIMARY);
             }
         } else if (containsIsPrimary) {
             setIsPrimary(dataId);
 
             // Now that we've taken care of setting this, remove it from "values".
-            values.remove(Data.IS_PRIMARY);
+            mValues.remove(Data.IS_PRIMARY);
         }
 
-        if (values.size() > 0) {
-            return db.update(Tables.DATA, values, Data._ID + " = " + dataId, null);
+        if (mValues.size() > 0) {
+            return db.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
         }
         return 0;
     }
@@ -2256,10 +2270,23 @@ public class ContactsProvider2 extends ContentProvider {
      * {@link SQLiteQueryBuilder} to hide restricted data.
      */
     private void applyContactsRestrictionExceptions(SQLiteQueryBuilder qb) {
+        qb.appendWhere(getContactsRestrictionExceptions());
+    }
+
+    private String getContactsRestrictionExceptions() {
         if (hasRestrictedAccess()) {
-            qb.appendWhere("1");
+            return "1";
         } else {
-            qb.appendWhere(Contacts.IS_RESTRICTED + "=0");
+            return Contacts.IS_RESTRICTED + "=0";
+        }
+    }
+
+    public String getContactsRestrictionExceptionAsNestedQuery(String contactIdColumn) {
+        if (hasRestrictedAccess()) {
+            return "1";
+        } else {
+            return "(SELECT " + Contacts.IS_RESTRICTED + " FROM " + Tables.CONTACTS + " WHERE "
+                    + ContactsColumns.CONCRETE_ID + "=" + contactIdColumn + ")=0";
         }
     }
 

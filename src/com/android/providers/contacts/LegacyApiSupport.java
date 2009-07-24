@@ -34,6 +34,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.People;
@@ -41,6 +42,7 @@ import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -84,6 +86,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int PEOPLE_PHOTO = 24;
     private static final int PHOTOS = 25;
     private static final int PHOTOS_ID = 26;
+    private static final int PRESENCE = 27;
+    private static final int PRESENCE_ID = 28;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
@@ -107,6 +111,11 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
             + " JOIN contacts ON (contacts._id = data.contact_id)"
             + PEOPLE_JOINS;
 
+    public static final String PRESENCE_JOINS =
+            " LEFT OUTER JOIN presence ON ("
+            + " presence.presence_id = (SELECT max(presence_id) FROM presence"
+            + " WHERE view_v1_people._id = presence.contact_id))";
+
     private static final String PHONETIC_NAME_SQL = "trim(trim("
             + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
             + "ifnull(name." + StructuredName.PHONETIC_MIDDLE_NAME + ",' '))||' '||"
@@ -129,6 +138,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
     public interface LegacyTables {
         public static final String PEOPLE = "view_v1_people";
+        public static final String PEOPLE_JOIN_PRESENCE = "view_v1_people" + PRESENCE_JOINS;
         public static final String GROUPS = "view_v1_groups";
         public static final String ORGANIZATIONS = "view_v1_organizations";
         public static final String CONTACT_METHODS = "view_v1_contact_methods";
@@ -136,6 +146,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         public static final String EXTENSIONS = "view_v1_extensions";
         public static final String GROUP_MEMBERSHIP = "view_v1_group_membership";
         public static final String PHOTOS = "view_v1_photos";
+        public static final String PRESENCE_JOIN_CONTACTS = Tables.PRESENCE +
+                " LEFT OUTER JOIN " + Tables.CONTACTS
+                + " ON (" + Tables.PRESENCE + "." + Presence.CONTACT_ID + "="
+                + ContactsColumns.CONCRETE_ID + ")";
     }
 
     private static final String[] ORGANIZATION_MIME_TYPES = new String[] {
@@ -187,6 +201,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sGroupProjectionMap;
     private static final HashMap<String, String> sGroupMembershipProjectionMap;
     private static final HashMap<String, String> sPhotoProjectionMap;
+    private static final HashMap<String, String> sPresenceProjectionMap;
 
     static {
 
@@ -253,8 +268,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         matcher.addURI(authority, "contact_methods/#", CONTACTMETHODS_ID);
 //        matcher.addURI(authority, "contact_methods/with_presence",
 //                CONTACTMETHODS_WITH_PRESENCE);
-//        matcher.addURI(authority, "presence", PRESENCE);
-//        matcher.addURI(authority, "presence/#", PRESENCE_ID);
+        matcher.addURI(authority, "presence", PRESENCE);
+        matcher.addURI(authority, "presence/#", PRESENCE_ID);
         matcher.addURI(authority, "organizations", ORGANIZATIONS);
         matcher.addURI(authority, "organizations/#", ORGANIZATIONS_ID);
 //        matcher.addURI(authority, "voice_dialer_timestamp", VOICE_DIALER_TIMESTAMP);
@@ -299,6 +314,11 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         sPeopleProjectionMap.put(People.TYPE, People.TYPE);
         sPeopleProjectionMap.put(People.LABEL, People.LABEL);
         sPeopleProjectionMap.put(People.NUMBER_KEY, People.NUMBER_KEY);
+        sPeopleProjectionMap.put(People.IM_PROTOCOL, People.IM_PROTOCOL);
+        sPeopleProjectionMap.put(People.IM_HANDLE, People.IM_HANDLE);
+        sPeopleProjectionMap.put(People.IM_ACCOUNT, People.IM_ACCOUNT);
+        sPeopleProjectionMap.put(People.PRESENCE_STATUS, People.PRESENCE_STATUS);
+        sPeopleProjectionMap.put(People.PRESENCE_CUSTOM_STATUS, People.PRESENCE_CUSTOM_STATUS);
 
         sOrganizationProjectionMap = new HashMap<String, String>();
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.PERSON_ID,
@@ -374,6 +394,29 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 android.provider.Contacts.Photos.EXISTS_ON_SERVER);
         sPhotoProjectionMap.put(android.provider.Contacts.Photos.SYNC_ERROR,
                 android.provider.Contacts.Photos.SYNC_ERROR);
+
+        sPresenceProjectionMap = new HashMap<String, String>();
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence._ID,
+                Tables.PRESENCE + "." + Presence._ID
+                        + " AS " + android.provider.Contacts.Presence._ID);
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence.PERSON_ID,
+                Tables.PRESENCE + "." + Presence.CONTACT_ID
+                        + " AS " + android.provider.Contacts.Presence.PERSON_ID);
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence.IM_PROTOCOL,
+                Presence.IM_PROTOCOL
+                    + " AS " + android.provider.Contacts.Presence.IM_PROTOCOL);
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence.IM_HANDLE,
+                Presence.IM_HANDLE
+                    + " AS " + android.provider.Contacts.Presence.IM_HANDLE);
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence.IM_ACCOUNT,
+                Presence.IM_ACCOUNT
+                    + " AS " + android.provider.Contacts.Presence.IM_ACCOUNT);
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence.PRESENCE_STATUS,
+                Presence.PRESENCE_STATUS
+                    + " AS " + android.provider.Contacts.Presence.PRESENCE_STATUS);
+        sPresenceProjectionMap.put(android.provider.Contacts.Presence.PRESENCE_CUSTOM_STATUS,
+                Presence.PRESENCE_CUSTOM_STATUS
+                    + " AS " + android.provider.Contacts.Presence.PRESENCE_CUSTOM_STATUS);
     }
 
     private final Context mContext;
@@ -442,7 +485,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 "phone." + Phone.LABEL
                         + " AS " + People.LABEL + ", " +
                 "phone." + PhoneColumns.NORMALIZED_NUMBER
-                        + " AS " + People.NUMBER_KEY +
+                        + " AS " + People.NUMBER_KEY + ", " +
+                Contacts.IS_RESTRICTED +
                 " FROM " + Tables.CONTACTS + PEOPLE_JOINS +
         ";");
 
@@ -669,6 +713,11 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
             }
 
+            case PRESENCE: {
+                id = insertPresence(values);
+                break;
+            }
+
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -868,6 +917,27 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         return ContentUris.parseId(uri);
     }
 
+    private long insertPresence(ContentValues values) {
+        mValues.clear();
+
+        OpenHelper.copyLongValue(mValues, Presence._ID,
+                values, android.provider.Contacts.Presence._ID);
+        OpenHelper.copyLongValue(mValues, Presence.CONTACT_ID,
+                values, android.provider.Contacts.Presence.PERSON_ID);
+        OpenHelper.copyStringValue(mValues, Presence.IM_PROTOCOL,
+                values, android.provider.Contacts.Presence.IM_PROTOCOL);
+        OpenHelper.copyStringValue(mValues, Presence.IM_HANDLE,
+                values, android.provider.Contacts.Presence.IM_HANDLE);
+        OpenHelper.copyStringValue(mValues, Presence.IM_ACCOUNT,
+                values, android.provider.Contacts.Presence.IM_ACCOUNT);
+        OpenHelper.copyLongValue(mValues, Presence.PRESENCE_STATUS,
+                values, android.provider.Contacts.Presence.PRESENCE_STATUS);
+        OpenHelper.copyStringValue(mValues, Presence.PRESENCE_CUSTOM_STATUS,
+                values, android.provider.Contacts.Presence.PRESENCE_CUSTOM_STATUS);
+
+        return mContactsProvider.insertPresence(mValues);
+    }
+
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         final int match = sUriMatcher.match(uri);
         int count = 0;
@@ -1018,13 +1088,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case PEOPLE: {
-                qb.setTables(LegacyTables.PEOPLE);
+                qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
                 qb.setProjectionMap(sPeopleProjectionMap);
                 break;
             }
 
             case PEOPLE_ID:
-                qb.setTables(LegacyTables.PEOPLE);
+                qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
                 qb.setProjectionMap(sPeopleProjectionMap);
                 qb.appendWhere(People._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
@@ -1193,6 +1263,22 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 qb.appendWhere(" AND " + android.provider.Contacts.Photos.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 limit = "1";
+                break;
+
+            case PRESENCE:
+                qb.setTables(Tables.PRESENCE);
+                qb.setProjectionMap(sPresenceProjectionMap);
+                qb.appendWhere(mContactsProvider.getContactsRestrictionExceptionAsNestedQuery(
+                        android.provider.Contacts.Presence.PERSON_ID));
+                break;
+
+            case PRESENCE_ID:
+                qb.setTables(Tables.PRESENCE);
+                qb.setProjectionMap(sPresenceProjectionMap);
+                qb.appendWhere(mContactsProvider.getContactsRestrictionExceptionAsNestedQuery(
+                        android.provider.Contacts.Presence.PERSON_ID));
+                qb.appendWhere(" AND " + android.provider.Contacts.Presence._ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
             default:
