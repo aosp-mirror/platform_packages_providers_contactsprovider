@@ -305,5 +305,68 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertFalse(iterator.hasNext());
     }
+
+    public void testDataCreateUpdateDeleteByMimeType() throws Exception {
+        long contactId = createContact();
+
+        ContentValues values = new ContentValues();
+        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, "testmimetype");
+        values.put(Data.RES_PACKAGE, "oldpackage");
+        values.put(Data.IS_PRIMARY, 1);
+        values.put(Data.IS_SUPER_PRIMARY, 1);
+        values.put(Data.DATA1, "old1");
+        values.put(Data.DATA2, "old2");
+        values.put(Data.DATA3, "old3");
+        values.put(Data.DATA4, "old4");
+        values.put(Data.DATA5, "old5");
+        values.put(Data.DATA6, "old6");
+        values.put(Data.DATA7, "old7");
+        values.put(Data.DATA8, "old8");
+        values.put(Data.DATA9, "old9");
+        values.put(Data.DATA10, "old10");
+        values.put(Data.DATA11, "old11");
+        values.put(Data.DATA12, "old12");
+        values.put(Data.DATA13, "old13");
+        values.put(Data.DATA14, "old14");
+        values.put(Data.DATA15, "old15");
+        Uri uri = mResolver.insert(Data.CONTENT_URI, values);
+        assertStoredValues(uri, values);
+
+        values.clear();
+        values.put(Data.RES_PACKAGE, "newpackage");
+        values.put(Data.IS_PRIMARY, 0);
+        values.put(Data.IS_SUPER_PRIMARY, 0);
+        values.put(Data.DATA1, "new1");
+        values.put(Data.DATA2, "new2");
+        values.put(Data.DATA3, "new3");
+        values.put(Data.DATA4, "new4");
+        values.put(Data.DATA5, "new5");
+        values.put(Data.DATA6, "new6");
+        values.put(Data.DATA7, "new7");
+        values.put(Data.DATA8, "new8");
+        values.put(Data.DATA9, "new9");
+        values.put(Data.DATA10, "new10");
+        values.put(Data.DATA11, "new11");
+        values.put(Data.DATA12, "new12");
+        values.put(Data.DATA13, "new13");
+        values.put(Data.DATA14, "new14");
+        values.put(Data.DATA15, "new15");
+        mResolver.update(Data.CONTENT_URI, values, Data.CONTACT_ID + "=" + contactId +
+                " AND " + Data.MIMETYPE + "='testmimetype'", null);
+        assertStoredValues(uri, values);
+
+        int count = mResolver.delete(Data.CONTENT_URI, Data.CONTACT_ID + "=" + contactId
+                + " AND " + Data.MIMETYPE + "='testmimetype'", null);
+        assertEquals(1, count);
+
+        Cursor c = mResolver.query(Data.CONTENT_URI, null, Data.CONTACT_ID + "=" + contactId
+                + " AND " + Data.MIMETYPE + "='testmimetype'", null, null);
+        try {
+            assertEquals(0, c.getCount());
+        } finally {
+            c.close();
+        }
+    }
 }
 

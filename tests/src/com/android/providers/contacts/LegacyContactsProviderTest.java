@@ -37,9 +37,6 @@ import android.test.suitebuilder.annotation.LargeTest;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Tests for legacy contacts APIs.
@@ -631,83 +628,4 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         }
     }
 
-    private void assertStoredValues(Uri rowUri, String column, String expectedValue) {
-        String value = getStoredValue(rowUri, column);
-        assertEquals("Column value " + column, expectedValue, value);
-    }
-
-    private String getStoredValue(Uri rowUri, String column) {
-        String value;
-        Cursor c = mResolver.query(rowUri, new String[] { column }, null, null, null);
-        try {
-            c.moveToFirst();
-            value = c.getString(c.getColumnIndex(column));
-        } finally {
-            c.close();
-        }
-        return value;
-    }
-
-    private void assertStoredValues(Uri rowUri, ContentValues expectedValues) {
-        Cursor c = mResolver.query(rowUri, null, null, null, null);
-        try {
-            assertEquals("Record count", 1, c.getCount());
-            c.moveToFirst();
-            assertCursorValues(c, expectedValues);
-        } finally {
-            c.close();
-        }
-    }
-
-    /**
-     * Constructs a selection (where clause) out of all supplied values, uses it
-     * to query the provider and verifies that a single row is returned and it
-     * has the same values as requested.
-     */
-    private void assertSelection(Uri uri, ContentValues values, String idColumn, long id) {
-        StringBuilder sb = new StringBuilder();
-        ArrayList<String> selectionArgs = new ArrayList<String>(values.size());
-        sb.append(idColumn).append("=").append(id);
-        Set<Map.Entry<String, Object>> entries = values.valueSet();
-        for (Map.Entry<String, Object> entry : entries) {
-            String column = entry.getKey();
-            Object value = entry.getValue();
-            sb.append(" AND ").append(column);
-            if (value == null) {
-                sb.append(" IS NULL");
-            } else {
-                sb.append("=?");
-                selectionArgs.add(String.valueOf(value));
-            }
-        }
-
-        Cursor c = mResolver.query(uri, null, sb.toString(), selectionArgs.toArray(new String[0]),
-                null);
-        try {
-            assertEquals("Record count", 1, c.getCount());
-            c.moveToFirst();
-            assertCursorValues(c, values);
-        } finally {
-            c.close();
-        }
-    }
-
-    private void assertCursorValues(Cursor cursor, ContentValues expectedValues) {
-        Set<Map.Entry<String, Object>> entries = expectedValues.valueSet();
-        for (Map.Entry<String, Object> entry : entries) {
-            String column = entry.getKey();
-            int index = cursor.getColumnIndex(column);
-            assertTrue("No such column: " + column, index != -1);
-            Object expectedValue = expectedValues.get(column);
-            String value;
-            if (expectedValue instanceof byte[]) {
-                expectedValue = Hex.encodeHex((byte[])expectedValue, false);
-                value = Hex.encodeHex(cursor.getBlob(index), false);
-            } else {
-                expectedValue = expectedValues.getAsString(column);
-                value = cursor.getString(index);
-            }
-            assertEquals("Column value " + column, expectedValue, value);
-        }
-    }
 }

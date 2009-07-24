@@ -261,6 +261,12 @@ public class ContactsProvider2 extends ContentProvider {
         public static final int DATA15 = 18;
     }
 
+    private interface DataIdQuery {
+        String[] COLUMNS = { Data._ID };
+
+        int _ID = 0;
+    }
+
     // Higher number represents higher priority in choosing what data to use for the display name
     private static final int DISPLAY_NAME_PRIORITY_EMAIL = 1;
     private static final int DISPLAY_NAME_PRIORITY_PHONE = 2;
@@ -456,6 +462,8 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Data.DATA15, "data.data15 as data15");
         columns.put(GroupMembership.GROUP_SOURCE_ID, GroupsColumns.CONCRETE_SOURCE_ID + " AS "
                 + GroupMembership.GROUP_SOURCE_ID);
+
+        // TODO: remove this projection
         // Mappings used for backwards compatibility.
         columns.put("number", Phone.NUMBER);
         sDataGroupsProjectionMap = columns;
@@ -892,6 +900,8 @@ public class ContactsProvider2 extends ContentProvider {
     private NameSplitter mNameSplitter;
     private LegacyApiSupport mLegacyApiSupport;
 
+    private ContentValues mValues = new ContentValues();
+
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
     }
@@ -1129,23 +1139,30 @@ public class ContactsProvider2 extends ContentProvider {
         long id = 0;
         db.beginTransaction();
         try {
-            long contactId = values.getAsLong(Data.CONTACT_ID);
+            mValues.clear();
+            mValues.putAll(values);
+
+            long contactId = mValues.getAsLong(Data.CONTACT_ID);
 
             // Replace package with internal mapping
-            final String packageName = values.getAsString(Data.RES_PACKAGE);
+            final String packageName = mValues.getAsString(Data.RES_PACKAGE);
             if (packageName != null) {
-                values.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
+                mValues.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
             }
-            values.remove(Data.RES_PACKAGE);
+            mValues.remove(Data.RES_PACKAGE);
 
             // Replace mimetype with internal mapping
-            final String mimeType = values.getAsString(Data.MIMETYPE);
-            values.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
-            values.remove(Data.MIMETYPE);
+            final String mimeType = mValues.getAsString(Data.MIMETYPE);
+            if (TextUtils.isEmpty(mimeType)) {
+                throw new RuntimeException(Data.MIMETYPE + " is required");
+            }
+
+            mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
+            mValues.remove(Data.MIMETYPE);
 
             if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
-                boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
+                boolean containsGroupSourceId = mValues.containsKey(GroupMembership.GROUP_SOURCE_ID);
+                boolean containsGroupId = mValues.containsKey(GroupMembership.GROUP_ROW_ID);
                 if (containsGroupSourceId && containsGroupId) {
                     throw new IllegalArgumentException(
                             "you are not allowed to set both the GroupMembership.GROUP_SOURCE_ID "
@@ -1159,14 +1176,14 @@ public class ContactsProvider2 extends ContentProvider {
                 }
 
                 if (containsGroupSourceId) {
-                    final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
+                    final String sourceId = mValues.getAsString(GroupMembership.GROUP_SOURCE_ID);
                     final long groupId = getOrMakeGroup(db, contactId, sourceId);
-                    values.remove(GroupMembership.GROUP_SOURCE_ID);
-                    values.put(GroupMembership.GROUP_ROW_ID, groupId);
+                    mValues.remove(GroupMembership.GROUP_SOURCE_ID);
+                    mValues.put(GroupMembership.GROUP_ROW_ID, groupId);
                 }
             }
 
-            id = getDataRowHandler(mimeType).insert(db, contactId, values);
+            id = getDataRowHandler(mimeType).insert(db, contactId, mValues);
 
             aggregationMode = mContactAggregator.markContactForAggregation(contactId);
 
@@ -1192,36 +1209,6 @@ public class ContactsProvider2 extends ContentProvider {
             case Contacts.AGGREGATION_MODE_DISABLED:
                 // Do nothing
                 break;
-        }
-    }
-
-    public int deleteData(long dataId, String[] allowedMimeTypes) {
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        Cursor c = db.query(DataQuery.TABLE, DataQuery.COLUMNS,
-                DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
-        // TODO apply restrictions
-        try {
-            if (!c.moveToFirst()) {
-                return 0;
-            }
-
-            String mimeType = c.getString(DataQuery.MIMETYPE);
-            boolean valid = false;
-            for (int i = 0; i < allowedMimeTypes.length; i++) {
-                if (TextUtils.equals(mimeType, allowedMimeTypes[i])) {
-                    valid = true;
-                    break;
-                }
-            }
-
-            if (!valid) {
-                throw new RuntimeException("Data type mismatch: expected "
-                        + Lists.newArrayList(allowedMimeTypes));
-            }
-
-            return getDataRowHandler(mimeType).delete(db, c);
-        } finally {
-            c.close();
         }
     }
 
@@ -1276,6 +1263,64 @@ public class ContactsProvider2 extends ContentProvider {
                 }
                 return groupId;
             }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Delete data row by row so that fixing of primaries etc work correctly.
+     */
+    private int deleteData(String selection, String[] selectionArgs) {
+        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        int count = 0;
+        db.beginTransaction();
+        try {
+
+            // Note that the query will return data according to the access restrictions,
+            // so we don't need to worry about deleting data we don't have permission to read.
+            Cursor c = query(Data.CONTENT_URI, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+            try {
+                while(c.moveToNext()) {
+                    long dataId = c.getLong(DataIdQuery._ID);
+                    count += deleteData(dataId);
+                }
+            } finally {
+                c.close();
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+
+        return count;
+    }
+
+    public int deleteData(long dataId, String[] allowedMimeTypes) {
+        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        Cursor c = db.query(DataQuery.TABLE, DataQuery.COLUMNS,
+                DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
+        // TODO apply restrictions
+        try {
+            if (!c.moveToFirst()) {
+                return 0;
+            }
+
+            String mimeType = c.getString(DataQuery.MIMETYPE);
+            boolean valid = false;
+            for (int i = 0; i < allowedMimeTypes.length; i++) {
+                if (TextUtils.equals(mimeType, allowedMimeTypes[i])) {
+                    valid = true;
+                    break;
+                }
+            }
+
+            if (!valid) {
+                throw new RuntimeException("Data type mismatch: expected "
+                        + Lists.newArrayList(allowedMimeTypes));
+            }
+
+            return getDataRowHandler(mimeType).delete(db, c);
         } finally {
             c.close();
         }
@@ -1523,6 +1568,10 @@ public class ContactsProvider2 extends ContentProvider {
                 return contactsDeleted + dataDeleted;
             }
 
+            case DATA: {
+                return deleteData(selection, selectionArgs);
+            }
+
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
                 return deleteData(dataId);
@@ -1580,43 +1629,13 @@ public class ContactsProvider2 extends ContentProvider {
                 break;
             }
 
+            case DATA: {
+                count = updateData(values, selection, selectionArgs);
+                break;
+            }
+
             case DATA_ID: {
-                boolean containsIsSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
-                boolean containsIsPrimary = values.containsKey(Data.IS_PRIMARY);
-                final long id = ContentUris.parseId(uri);
-
-                // Remove primary or super primary values being set to 0. This is disallowed by the
-                // content provider.
-                if (containsIsSuperPrimary && values.getAsInteger(Data.IS_SUPER_PRIMARY) == 0) {
-                    containsIsSuperPrimary = false;
-                    values.remove(Data.IS_SUPER_PRIMARY);
-                }
-                if (containsIsPrimary && values.getAsInteger(Data.IS_PRIMARY) == 0) {
-                    containsIsPrimary = false;
-                    values.remove(Data.IS_PRIMARY);
-                }
-
-                if (containsIsSuperPrimary) {
-                    setIsSuperPrimary(id);
-                    setIsPrimary(id);
-
-                    // Now that we've taken care of setting these, remove them from "values".
-                    values.remove(Data.IS_SUPER_PRIMARY);
-                    if (containsIsPrimary) {
-                        values.remove(Data.IS_PRIMARY);
-                    }
-                } else if (containsIsPrimary) {
-                    setIsPrimary(id);
-
-                    // Now that we've taken care of setting this, remove it from "values".
-                    values.remove(Data.IS_PRIMARY);
-                }
-
-                if (values.size() > 0) {
-                    String selectionWithId = (Data._ID + " = " + ContentUris.parseId(uri) + " ")
-                            + (selection == null ? "" : " AND " + selection);
-                    count = db.update(Tables.DATA, values, selectionWithId, selectionArgs);
-                }
+                count = updateData(ContentUris.parseId(uri), values);
                 break;
             }
 
@@ -1630,11 +1649,6 @@ public class ContactsProvider2 extends ContentProvider {
                         + (selection == null ? "" : " AND " + selection);
                 count = db.update(Tables.CONTACTS, values, selectionWithId, selectionArgs);
                 Log.i(TAG, "Selection is: " + selectionWithId);
-                break;
-            }
-
-            case DATA: {
-                count = db.update(Tables.DATA, values, selection, selectionArgs);
                 break;
             }
 
@@ -1671,6 +1685,83 @@ public class ContactsProvider2 extends ContentProvider {
             getContext().getContentResolver().notifyChange(uri, null);
         }
         return count;
+    }
+
+    private int updateData(ContentValues values, String selection,
+            String[] selectionArgs) {
+        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        int count = 0;
+        db.beginTransaction();
+        try {
+
+            // Note that the query will return data according to the access restrictions,
+            // so we don't need to worry about deleting data we don't have permission to read.
+            Cursor c = query(Data.CONTENT_URI, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+            try {
+                while(c.moveToNext()) {
+                    long dataId = c.getLong(DataIdQuery._ID);
+                    count += updateData(dataId, values);
+                }
+            } finally {
+                c.close();
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+
+        return count;
+    }
+
+    private int updateData(long dataId, ContentValues values) {
+        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+
+        mValues.clear();
+        mValues.putAll(values);
+        mValues.remove(Data._ID);
+        mValues.remove(Data.CONTACT_ID);
+        mValues.remove(Data.MIMETYPE);
+
+        String packageName = values.getAsString(Data.RES_PACKAGE);
+        if (packageName != null) {
+            mValues.remove(Data.RES_PACKAGE);
+            mValues.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
+        }
+
+        boolean containsIsSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
+        boolean containsIsPrimary = values.containsKey(Data.IS_PRIMARY);
+
+        // Remove primary or super primary values being set to 0. This is disallowed by the
+        // content provider.
+        if (containsIsSuperPrimary && values.getAsInteger(Data.IS_SUPER_PRIMARY) == 0) {
+            containsIsSuperPrimary = false;
+            values.remove(Data.IS_SUPER_PRIMARY);
+        }
+        if (containsIsPrimary && values.getAsInteger(Data.IS_PRIMARY) == 0) {
+            containsIsPrimary = false;
+            values.remove(Data.IS_PRIMARY);
+        }
+
+        if (containsIsSuperPrimary) {
+            setIsSuperPrimary(dataId);
+            setIsPrimary(dataId);
+
+            // Now that we've taken care of setting these, remove them from "values".
+            values.remove(Data.IS_SUPER_PRIMARY);
+            if (containsIsPrimary) {
+                values.remove(Data.IS_PRIMARY);
+            }
+        } else if (containsIsPrimary) {
+            setIsPrimary(dataId);
+
+            // Now that we've taken care of setting this, remove it from "values".
+            values.remove(Data.IS_PRIMARY);
+        }
+
+        if (values.size() > 0) {
+            return db.update(Tables.DATA, values, Data._ID + " = " + dataId, null);
+        }
+        return 0;
     }
 
     private int updateAggregateData(SQLiteDatabase db, long aggregateId, ContentValues values) {
