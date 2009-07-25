@@ -2612,7 +2612,6 @@ public class ContactsProvider2 extends ContentProvider {
         if (values.size() > 0) {
             db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggId, null);
         }
-
     }
 
     private String buildAggregateLookupWhereClause(String filterParam) {
@@ -2626,13 +2625,18 @@ public class ContactsProvider2 extends ContentProvider {
         filter.append(Tables.CONTACTS);
         filter.append(" WHERE ");
         filter.append(Contacts._ID);
-        filter.append(" IN (SELECT  contact_id FROM name_lookup WHERE normalized_name GLOB '");
+        filter.append(" IN ");
+        filter.append(getContactsByFilterAsNestedQuery(filterParam));
+        filter.append(")");
+        return filter.toString();
+    }
+
+    public String getContactsByFilterAsNestedQuery(String filterParam) {
         // NOTE: Query parameters won't work here since the SQL compiler
         // needs to parse the actual string to know that it can use the
         // index to do a prefix scan.
-        filter.append(NameNormalizer.normalize(filterParam) + "*");
-        filter.append("'))");
-        return filter.toString();
+        return "(SELECT  contact_id FROM name_lookup WHERE normalized_name GLOB '"
+                + NameNormalizer.normalize(filterParam) + "*')";
     }
 
     private String[] appendGroupArg(String[] selectionArgs, String arg) {
