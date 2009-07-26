@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 49;
+    private static final int DATABASE_VERSION = 50;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -589,14 +589,14 @@ import java.util.HashMap;
                 + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
                 + "   UPDATE " + Tables.CONTACTS
                 + "     SET " + Contacts.DIRTY + "=1"
-                + "     WHERE " + Contacts._ID + "=OLD." + Contacts._ID + ";"
+                + "     WHERE " + Contacts._ID + "=OLD." + Data.CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.CONTACTS
                 + "     SET " + Contacts.DIRTY + "=1"
-                + "     WHERE " + Contacts._ID + "=OLD." + Contacts._ID + ";"
+                + "     WHERE " + Contacts._ID + "=OLD." + Data.CONTACT_ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
                 + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
                 + " END");
@@ -670,7 +670,7 @@ import java.util.HashMap;
                 AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
                 AggregationExceptionColumns.CONTACT_ID1 + " INTEGER REFERENCES contacts(_id), " +
                 AggregationExceptionColumns.CONTACT_ID2 + " INTEGER REFERENCES contacts(_id)" +
-		");");
+        ");");
 
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index1 ON " +
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
