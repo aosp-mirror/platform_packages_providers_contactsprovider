@@ -34,6 +34,7 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -391,6 +392,75 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Even though the Presence row is not deleted, it can no longer be accessed.
         assertEquals(0, getCount(Presence.CONTENT_URI, Presence.CONTACT_ID + "=" + contactId,
                 null));
+    }
+
+    public void testContactDirtySetOnChange() {
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
+                createContact(mAccount));
+        assertDirty(uri, true);
+        clearDirty(uri);
+        assertDirty(uri, false);
+    }
+
+    public void testContactDirtyAndVersion() {
+        final long contactId = createContact(mAccount);
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, contactId);
+        assertDirty(uri, true);
+        long version = getVersion(uri);
+
+        ContentValues values = new ContentValues();
+        values.put(ContactsContract.RawContacts.DIRTY, 0);
+        values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
+        assertEquals(1, mResolver.update(uri, values, null, null));
+        ++version;
+        assertEquals(version, getVersion(uri));
+
+        assertDirty(uri, false);
+
+        values = new ContentValues();
+        values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 0);
+        assertEquals(1, mResolver.update(uri, values, null, null));
+        ++version;
+        assertEquals(version, getVersion(uri));
+
+        assertDirty(uri, true);
+
+        clearDirty(uri);
+        assertDirty(uri, false);
+        ++version;
+        assertEquals(version, getVersion(uri));
+
+        Uri emailUri = insertEmail(contactId, "goo@woo.com");
+        assertDirty(uri, true);
+        ++version;
+        version = getVersion(uri);
+
+        clearDirty(uri);
+        assertDirty(uri, false);
+        ++version;
+        assertEquals(version, getVersion(uri));
+
+        values = new ContentValues();
+        values.put(Email.DATA, "goo@hoo.com");
+        mResolver.update(emailUri, values, null, null);
+        assertDirty(uri, true);
+        ++version;
+        assertEquals(version, getVersion(uri));
+
+        clearDirty(uri);
+        assertDirty(uri, false);
+        ++version;
+        assertEquals(version, getVersion(uri));
+    }
+
+    public void testContactVersionUpdates() {
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
+                createContact(mAccount));
+        long version = getVersion(uri);
+        ContentValues values = new ContentValues();
+        values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
+        mResolver.update(uri, values, null, null);
+        assertEquals(version + 1, getVersion(uri));
     }
 }
 

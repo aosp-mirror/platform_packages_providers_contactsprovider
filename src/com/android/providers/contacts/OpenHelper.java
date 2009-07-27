@@ -599,6 +599,13 @@ import java.util.HashMap;
                 + "     WHERE " + RawContacts._ID + "=OLD." + Data.CONTACT_ID + ";"
                 + " END");
 
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_inserted BEFORE INSERT ON " + Tables.DATA
+                + " BEGIN "
+                + "   UPDATE " + Tables.CONTACTS
+                + "     SET " + RawContacts.DIRTY + "=1"
+                + "     WHERE " + RawContacts._ID + "=NEW." + Data.CONTACT_ID + ";"
+                + " END");
+
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.CONTACTS
