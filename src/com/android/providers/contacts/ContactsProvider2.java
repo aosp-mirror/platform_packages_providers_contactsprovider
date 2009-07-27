@@ -434,6 +434,8 @@ public class ContactsProvider2 extends ContentProvider {
                 OpenHelper.RawContactsColumns.CONCRETE_VERSION + " as " + RawContacts.VERSION);
         columns.put(RawContacts.DIRTY,
                 OpenHelper.RawContactsColumns.CONCRETE_DIRTY + " as " + RawContacts.DIRTY);
+        columns.put(RawContacts.DELETED,
+                OpenHelper.RawContactsColumns.CONCRETE_DELETED + " as " + RawContacts.DELETED);
         sContactsProjectionMap = columns;
 
         // Data projection map
@@ -1578,11 +1580,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case CONTACTS_ID: {
-                long contactId = ContentUris.parseId(uri);
-                int contactsDeleted = db.delete(Tables.CONTACTS,
-                        RawContacts._ID + "=" + contactId, null);
-                int dataDeleted = db.delete(Tables.DATA, Data.CONTACT_ID + "=" + contactId, null);
-                return contactsDeleted + dataDeleted;
+                return deleteRawContact(uri);
             }
 
             case DATA: {
@@ -1612,6 +1610,29 @@ public class ContactsProvider2 extends ContentProvider {
 
             default:
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
+        }
+    }
+
+    private int deleteRawContact(Uri uri) {
+        boolean permanentDeletion = false;
+        String permanent = uri.getQueryParameter(RawContacts.DELETE_PERMANENTLY);
+        if (permanent != null && !"false".equals(permanent.toLowerCase())) {
+            permanentDeletion = true;
+        }
+
+        long contactId = ContentUris.parseId(uri);
+        return deleteRawContact(contactId, permanentDeletion);
+    }
+
+    public int deleteRawContact(long contactId, boolean permanently) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+
+        if (permanently) {
+            return db.delete(Tables.CONTACTS, RawContacts._ID + "=" + contactId, null);
+        } else {
+            mValues.clear();
+            mValues.put(RawContacts.DELETED, true);
+            return updateRawContact(contactId, mValues, null, null);
         }
     }
 
@@ -1662,10 +1683,8 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case CONTACTS_ID: {
-                String selectionWithId = (RawContacts._ID + " = " + ContentUris.parseId(uri) + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.CONTACTS, values, selectionWithId, selectionArgs);
-                Log.i(TAG, "Selection is: " + selectionWithId);
+                long rawContactId = ContentUris.parseId(uri);
+                count = updateRawContact(rawContactId, values, selection, selectionArgs);
                 break;
             }
 
@@ -1702,6 +1721,14 @@ public class ContactsProvider2 extends ContentProvider {
             getContext().getContentResolver().notifyChange(uri, null);
         }
         return count;
+    }
+
+    private int updateRawContact(long contactId, ContentValues values, String selection,
+            String[] selectionArgs) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        String selectionWithId = (RawContacts._ID + " = " + contactId + " ")
+                + (selection == null ? "" : " AND " + selection);
+        return db.update(Tables.CONTACTS, values, selectionWithId, selectionArgs);
     }
 
     private int updateData(ContentValues values, String selection,

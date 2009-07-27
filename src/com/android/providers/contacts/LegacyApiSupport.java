@@ -89,6 +89,9 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int PRESENCE = 27;
     private static final int PRESENCE_ID = 28;
     private static final int PEOPLE_FILTER = 29;
+    private static final int DELETED_PEOPLE = 30;
+    private static final int DELETED_GROUPS = 31;
+
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
@@ -204,7 +207,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sPhotoProjectionMap;
     private static final HashMap<String, String> sPresenceProjectionMap;
 
-
     static {
 
         // Contacts URI matching table
@@ -253,8 +255,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 //        matcher.addURI(authority, "people/owner", PEOPLE_OWNER);
         matcher.addURI(authority, "people/#/update_contact_time",
                 PEOPLE_UPDATE_CONTACT_TIME);
-//        matcher.addURI(authority, "deleted_people", DELETED_PEOPLE);
-//        matcher.addURI(authority, "deleted_groups", DELETED_GROUPS);
+        matcher.addURI(authority, "deleted_people", DELETED_PEOPLE);
+        matcher.addURI(authority, "deleted_groups", DELETED_GROUPS);
         matcher.addURI(authority, "phones", PHONES);
 //        matcher.addURI(authority, "phones_with_presence", PHONES_WITH_PRESENCE);
 //        matcher.addURI(authority, "phones/filter/*", PHONES_FILTER);
@@ -490,6 +492,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + People.NUMBER_KEY + ", " +
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.CONTACTS + PEOPLE_JOINS +
+                " WHERE " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.ORGANIZATIONS + ";");
@@ -511,7 +514,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA_JOIN_MIMETYPE_CONTACTS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + Organization.CONTENT_ITEM_TYPE + "'" +
+                        + Organization.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.CONTACT_METHODS + ";");
@@ -552,7 +556,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + ContactMethods.STARRED + ", " +
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA + DATA_JOINS +
-                " WHERE " + ContactMethods.KIND + " IS NOT NULL" +
+                " WHERE " + ContactMethods.KIND + " IS NOT NULL"
+                    + " AND " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
 
@@ -593,7 +598,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA + DATA_JOINS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + Phone.CONTENT_ITEM_TYPE + "'" +
+                        + Phone.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.EXTENSIONS + ";");
@@ -609,7 +615,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA_JOIN_MIMETYPE_CONTACTS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'" +
+                        + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.GROUPS + ";");
@@ -638,7 +645,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + GroupMembership.CONTENT_ITEM_TYPE + "'" +
+                        + GroupMembership.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PHOTOS + ";");
@@ -660,7 +668,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA + DATA_JOINS + LEGACY_PHOTO_JOIN +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                        + Photo.CONTENT_ITEM_TYPE + "'" +
+                        + Photo.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Tables.CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
     }
 
@@ -1058,6 +1067,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         final int match = sUriMatcher.match(uri);
         int count = 0;
         switch (match) {
+            case PEOPLE_ID:
+                count = mContactsProvider.deleteRawContact(ContentUris.parseId(uri), false);
+                break;
+
             case ORGANIZATIONS_ID:
                 count = mContactsProvider.deleteData(ContentUris.parseId(uri),
                         ORGANIZATION_MIME_TYPES);
@@ -1291,6 +1304,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 qb.appendWhere(" AND " + android.provider.Contacts.Presence._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
+
+            case DELETED_PEOPLE:
+            case DELETED_GROUPS:
+                throw new UnsupportedOperationException();
 
             default:
                 throw new IllegalArgumentException("Unknown URL " + uri);

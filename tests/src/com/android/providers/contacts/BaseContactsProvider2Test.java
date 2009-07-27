@@ -540,4 +540,13 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             assertEquals("Column value " + column, expectedValue, value);
         }
     }
+
+    protected int getCount(Uri uri, String selection, String[] selectionArgs) {
+        Cursor c = mResolver.query(uri, null, selection, selectionArgs, null);
+        try {
+            return c.getCount();
+        } finally {
+            c.close();
+        }
+    }
 }

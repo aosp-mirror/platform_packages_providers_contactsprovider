@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 50;
+    private static final int DATABASE_VERSION = 51;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -220,14 +220,20 @@ import java.util.HashMap;
     }
 
     public interface RawContactsColumns {
-        public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
+        public static final String CONCRETE_ID =
+                Tables.CONTACTS + "." + BaseColumns._ID;
         public static final String CONCRETE_ACCOUNT_NAME =
                 Tables.CONTACTS + "." + RawContacts.ACCOUNT_NAME;
         public static final String CONCRETE_ACCOUNT_TYPE =
                 Tables.CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
-        public static final String CONCRETE_SOURCE_ID = Tables.CONTACTS + "." + RawContacts.SOURCE_ID;
-        public static final String CONCRETE_VERSION = Tables.CONTACTS + "." + RawContacts.VERSION;
-        public static final String CONCRETE_DIRTY = Tables.CONTACTS + "." + RawContacts.DIRTY;
+        public static final String CONCRETE_SOURCE_ID =
+                Tables.CONTACTS + "." + RawContacts.SOURCE_ID;
+        public static final String CONCRETE_VERSION =
+                Tables.CONTACTS + "." + RawContacts.VERSION;
+        public static final String CONCRETE_DIRTY =
+                Tables.CONTACTS + "." + RawContacts.DIRTY;
+        public static final String CONCRETE_DELETED =
+                Tables.CONTACTS + "." + RawContacts.DELETED;
         public static final String DISPLAY_NAME = "display_name";
     }
 
@@ -504,6 +510,7 @@ import java.util.HashMap;
                 RawContacts.SOURCE_ID + " TEXT," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
+                RawContacts.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.AGGREGATE_ID + " INTEGER," +
                 RawContacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
                         RawContacts.AGGREGATION_MODE_DEFAULT + "," +
@@ -511,7 +518,7 @@ import java.util.HashMap;
                 RawContacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
-                RawContacts.STARRED + " INTEGER INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContactsColumns.DISPLAY_NAME + " TEXT" +
         ");");
 

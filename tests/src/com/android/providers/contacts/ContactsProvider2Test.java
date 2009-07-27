@@ -16,26 +16,25 @@
 package com.android.providers.contacts;
 
 import com.android.internal.util.ArrayUtils;
-import com.android.providers.contacts.BaseContactsProvider2Test;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.EntityIterator;
 import android.content.Entity;
+import android.content.EntityIterator;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.RemoteException;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.os.RemoteException;
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -363,14 +362,35 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         int count = mResolver.delete(Data.CONTENT_URI, Data.CONTACT_ID + "=" + contactId
                 + " AND " + Data.MIMETYPE + "='testmimetype'", null);
         assertEquals(1, count);
+        assertEquals(0, getCount(Data.CONTENT_URI, Data.CONTACT_ID + "=" + contactId
+                        + " AND " + Data.MIMETYPE + "='testmimetype'", null));
+    }
 
-        Cursor c = mResolver.query(Data.CONTENT_URI, null, Data.CONTACT_ID + "=" + contactId
-                + " AND " + Data.MIMETYPE + "='testmimetype'", null, null);
-        try {
-            assertEquals(0, c.getCount());
-        } finally {
-            c.close();
-        }
+    public void testRawContactDeletion() {
+        long contactId = createContact();
+        Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId);
+
+        insertImHandle(contactId, Im.PROTOCOL_GOOGLE_TALK, "deleteme@android.com");
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "deleteme@android.com", Presence.AVAILABLE);
+        assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
+                null, null));
+        assertEquals(1, getCount(Presence.CONTENT_URI, Presence.CONTACT_ID + "=" + contactId,
+                null));
+
+        mResolver.delete(uri, null, null);
+
+        assertStoredValues(uri, RawContacts.DELETED, "1");
+
+        Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
+                RawContacts.DELETE_PERMANENTLY, "true").build();
+        mResolver.delete(permanentDeletionUri, null, null);
+        assertEquals(0, getCount(uri, null, null));
+        assertEquals(0, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
+                null, null));
+
+        // Even though the Presence row is not deleted, it can no longer be accessed.
+        assertEquals(0, getCount(Presence.CONTENT_URI, Presence.CONTACT_ID + "=" + contactId,
+                null));
     }
 }
 

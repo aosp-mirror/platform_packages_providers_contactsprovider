@@ -65,8 +65,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertSelection(People.CONTENT_URI, values, People._ID, ContentUris.parseId(uri));
     }
 
-    // TODO fix and reenable the test
-    public void __testPeopleDelete() {
+    public void testPeopleDelete() {
         ContentValues values = new ContentValues();
         values.put(People.NAME, "John Doe");
         Uri personId = mResolver.insert(People.CONTENT_URI, values);
