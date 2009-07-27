@@ -16,17 +16,13 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
-
-import android.database.Cursor;
-import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.test.AndroidTestCase;
-import android.test.mock.MockContentResolver;
-import android.test.suitebuilder.annotation.LargeTest;
-import android.net.Uri;
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.test.suitebuilder.annotation.LargeTest;
 
 /**
  * Unit tests for {@link Groups} and {@link GroupMembership}.
@@ -156,7 +152,7 @@ public class GroupsTest extends BaseContactsProvider2Test {
         mResolver.update(uri, values, null, null);
         assertEquals(version + 1, getVersion(uri));
     }
-    
+
     private interface Projections {
         public static final String[] PROJ_SUMMARY = new String[] {
             Groups._ID,

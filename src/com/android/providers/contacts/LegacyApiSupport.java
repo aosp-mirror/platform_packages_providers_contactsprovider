@@ -15,7 +15,7 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.ContactsColumns;
+import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.ExtensionsColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
@@ -39,7 +39,7 @@ import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.People;
 import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
@@ -150,7 +150,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         public static final String PRESENCE_JOIN_CONTACTS = Tables.PRESENCE +
                 " LEFT OUTER JOIN " + Tables.CONTACTS
                 + " ON (" + Tables.PRESENCE + "." + Presence.CONTACT_ID + "="
-                + ContactsColumns.CONCRETE_ID + ")";
+                + RawContactsColumns.CONCRETE_ID + ")";
     }
 
     private static final String[] ORGANIZATION_MIME_TYPES = new String[] {
@@ -443,10 +443,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
         mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
-                + Contacts.TIMES_CONTACTED + "="
-                + Contacts.TIMES_CONTACTED + "+1,"
-                + Contacts.LAST_TIME_CONTACTED + "=? WHERE "
-                + Contacts._ID + "=?");
+                + RawContacts.TIMES_CONTACTED + "="
+                + RawContacts.TIMES_CONTACTED + "+1,"
+                + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
+                + RawContacts._ID + "=?");
     }
 
 
@@ -454,25 +454,25 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PEOPLE + ";");
         db.execSQL("CREATE VIEW " + LegacyTables.PEOPLE + " AS SELECT " +
-                ContactsColumns.CONCRETE_ID
+                RawContactsColumns.CONCRETE_ID
                         + " AS " + android.provider.Contacts.People._ID + ", " +
                 "name." + StructuredName.DISPLAY_NAME
                         + " AS " + People.NAME + ", " +
-                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME
+                Tables.CONTACTS + "." + RawContactsColumns.DISPLAY_NAME
                         + " AS " + People.DISPLAY_NAME + ", " +
                 PHONETIC_NAME_SQL
                         + " AS " + People.PHONETIC_NAME + " , " +
                 "note." + Note.NOTE
                         + " AS " + People.NOTES + ", " +
-                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
+                Tables.CONTACTS + "." + RawContacts.TIMES_CONTACTED
                         + " AS " + People.TIMES_CONTACTED + ", " +
-                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
+                Tables.CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
                         + " AS " + People.LAST_TIME_CONTACTED + ", " +
-                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
+                Tables.CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
                         + " AS " + People.CUSTOM_RINGTONE + ", " +
-                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
+                Tables.CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
                         + " AS " + People.SEND_TO_VOICEMAIL + ", " +
-                Tables.CONTACTS + "." + Contacts.STARRED
+                Tables.CONTACTS + "." + RawContacts.STARRED
                         + " AS " + People.STARRED + ", " +
                 "organization." + Data._ID
                         + " AS " + People.PRIMARY_ORGANIZATION_ID + ", " +
@@ -488,7 +488,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + People.LABEL + ", " +
                 "phone." + PhoneColumns.NORMALIZED_NUMBER
                         + " AS " + People.NUMBER_KEY + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.CONTACTS + PEOPLE_JOINS +
         ";");
 
@@ -508,7 +508,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + android.provider.Contacts.Organizations.LABEL + ", " +
                 Organization.TITLE
                         + " AS " + android.provider.Contacts.Organizations.TITLE + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA_JOIN_MIMETYPE_CONTACTS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Organization.CONTENT_ITEM_TYPE + "'" +
@@ -534,23 +534,23 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + ContactMethods.AUX_DATA + ", " +
                 "name." + StructuredName.DISPLAY_NAME
                         + " AS " + ContactMethods.NAME + ", " +
-                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME
+                Tables.CONTACTS + "." + RawContactsColumns.DISPLAY_NAME
                         + " AS " + ContactMethods.DISPLAY_NAME + ", " +
                 PHONETIC_NAME_SQL
                         + " AS " + ContactMethods.PHONETIC_NAME + " , " +
                 "note." + Note.NOTE
                         + " AS " + ContactMethods.NOTES + ", " +
-                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
+                Tables.CONTACTS + "." + RawContacts.TIMES_CONTACTED
                         + " AS " + ContactMethods.TIMES_CONTACTED + ", " +
-                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
+                Tables.CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
                         + " AS " + ContactMethods.LAST_TIME_CONTACTED + ", " +
-                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
+                Tables.CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
                         + " AS " + ContactMethods.CUSTOM_RINGTONE + ", " +
-                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
+                Tables.CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
                         + " AS " + ContactMethods.SEND_TO_VOICEMAIL + ", " +
-                Tables.CONTACTS + "." + Contacts.STARRED
+                Tables.CONTACTS + "." + RawContacts.STARRED
                         + " AS " + ContactMethods.STARRED + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA + DATA_JOINS +
                 " WHERE " + ContactMethods.KIND + " IS NOT NULL" +
         ";");
@@ -574,23 +574,23 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + android.provider.Contacts.Phones.NUMBER_KEY + ", " +
                 "name." + StructuredName.DISPLAY_NAME
                         + " AS " + android.provider.Contacts.Phones.NAME + ", " +
-                Tables.CONTACTS + "." + ContactsColumns.DISPLAY_NAME
+                Tables.CONTACTS + "." + RawContactsColumns.DISPLAY_NAME
                         + " AS " + android.provider.Contacts.Phones.DISPLAY_NAME + ", " +
                 PHONETIC_NAME_SQL
                         + " AS " + android.provider.Contacts.Phones.PHONETIC_NAME + " , " +
                 "note." + Note.NOTE
                         + " AS " + android.provider.Contacts.Phones.NOTES + ", " +
-                Tables.CONTACTS + "." + Contacts.TIMES_CONTACTED
+                Tables.CONTACTS + "." + RawContacts.TIMES_CONTACTED
                         + " AS " + android.provider.Contacts.Phones.TIMES_CONTACTED + ", " +
-                Tables.CONTACTS + "." + Contacts.LAST_TIME_CONTACTED
+                Tables.CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
                         + " AS " + android.provider.Contacts.Phones.LAST_TIME_CONTACTED + ", " +
-                Tables.CONTACTS + "." + Contacts.CUSTOM_RINGTONE
+                Tables.CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
                         + " AS " + android.provider.Contacts.Phones.CUSTOM_RINGTONE + ", " +
-                Tables.CONTACTS + "." + Contacts.SEND_TO_VOICEMAIL
+                Tables.CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
                         + " AS " + android.provider.Contacts.Phones.SEND_TO_VOICEMAIL + ", " +
-                Tables.CONTACTS + "." + Contacts.STARRED
+                Tables.CONTACTS + "." + RawContacts.STARRED
                         + " AS " + android.provider.Contacts.Phones.STARRED + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA + DATA_JOINS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Phone.CONTENT_ITEM_TYPE + "'" +
@@ -606,7 +606,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + android.provider.Contacts.Extensions.NAME + ", " +
                 ExtensionsColumns.VALUE
                         + " AS " + android.provider.Contacts.Extensions.VALUE + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA_JOIN_MIMETYPE_CONTACTS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'" +
@@ -635,7 +635,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + android.provider.Contacts.GroupMembership.NOTES + " , " +
                 Groups.SYSTEM_ID
                         + " AS " + android.provider.Contacts.GroupMembership.SYSTEM_ID + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + GroupMembership.CONTENT_ITEM_TYPE + "'" +
@@ -657,7 +657,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + android.provider.Contacts.Photos.LOCAL_VERSION + ", " +
                 "legacy_photo." + LegacyPhotoData.SYNC_ERROR
                         + " AS " + android.provider.Contacts.Photos.SYNC_ERROR + ", " +
-                Contacts.IS_RESTRICTED +
+                RawContacts.IS_RESTRICTED +
                 " FROM " + Tables.DATA + DATA_JOINS + LEGACY_PHOTO_JOIN +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Photo.CONTENT_ITEM_TYPE + "'" +
@@ -744,17 +744,17 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private long insertPeople(ContentValues values) {
         mValues.clear();
 
-        OpenHelper.copyStringValue(mValues, Contacts.CUSTOM_RINGTONE,
+        OpenHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
                 values, People.CUSTOM_RINGTONE);
-        OpenHelper.copyLongValue(mValues, Contacts.SEND_TO_VOICEMAIL,
+        OpenHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
                 values, People.SEND_TO_VOICEMAIL);
-        OpenHelper.copyLongValue(mValues, Contacts.LAST_TIME_CONTACTED,
+        OpenHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
                 values, People.LAST_TIME_CONTACTED);
-        OpenHelper.copyLongValue(mValues, Contacts.TIMES_CONTACTED,
+        OpenHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
                 values, People.TIMES_CONTACTED);
-        OpenHelper.copyLongValue(mValues, Contacts.STARRED,
+        OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, People.STARRED);
-        Uri contactUri = mContactsProvider.insert(Contacts.CONTENT_URI, mValues);
+        Uri contactUri = mContactsProvider.insert(RawContacts.CONTENT_URI, mValues);
         long contactId = ContentUris.parseId(contactUri);
 
         if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
@@ -1300,7 +1300,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         final Cursor c = qb.query(db, projection, selection, selectionArgs,
                 groupBy, null, sortOrder, limit);
         if (c != null) {
-            c.setNotificationUri(mContext.getContentResolver(), Contacts.CONTENT_URI);
+            c.setNotificationUri(mContext.getContentResolver(), RawContacts.CONTENT_URI);
         }
         DatabaseUtils.dumpCursor(c);
         return c;

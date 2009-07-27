@@ -28,7 +28,7 @@ import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -290,7 +290,8 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         // TODO: =======================
 
         // CONTACTS
-        cursor = mRed.resolver.query(Contacts.CONTENT_URI, Projections.PROJ_ID, null, null, null);
+        cursor = mRed.resolver.query(RawContacts.CONTENT_URI, Projections.PROJ_ID,
+                null, null, null);
         while (cursor.moveToNext()) {
             assertTrue("Discovered restricted contact",
                     (cursor.getLong(Projections.COL_ID) != greenContact));
@@ -299,14 +300,14 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
         // CONTACTS_ID
         cursor = mRed.resolver.query(ContentUris
-                .withAppendedId(Contacts.CONTENT_URI, greenContact), Projections.PROJ_ID, null,
+                .withAppendedId(RawContacts.CONTENT_URI, greenContact), Projections.PROJ_ID, null,
                 null, null);
         assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
         cursor.close();
 
         // CONTACTS_DATA
         cursor = mRed.resolver.query(Uri.withAppendedPath(ContentUris.withAppendedId(
-                Contacts.CONTENT_URI, greenContact), Contacts.Data.CONTENT_DIRECTORY),
+                RawContacts.CONTENT_URI, greenContact), RawContacts.Data.CONTENT_DIRECTORY),
                 Projections.PROJ_ID, null, null, null);
         assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
         cursor.close();

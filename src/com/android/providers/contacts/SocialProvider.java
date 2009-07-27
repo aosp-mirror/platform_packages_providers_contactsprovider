@@ -31,7 +31,7 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.SocialContract;
 import android.provider.SocialContract.Activities;
 
@@ -88,8 +88,8 @@ public class SocialProvider extends ContentProvider {
 
         // Contacts projection map
         columns = new HashMap<String, String>();
-        columns.put(Contacts._ID, "contacts._id AS _id");
-        columns.put(Contacts.AGGREGATE_ID, Contacts.AGGREGATE_ID);
+        columns.put(RawContacts._ID, Tables.CONTACTS + "." + RawContacts._ID + " AS _id");
+        columns.put(RawContacts.AGGREGATE_ID, RawContacts.AGGREGATE_ID);
         sContactsProjectionMap = columns;
 
         // Activities projection map
@@ -361,7 +361,7 @@ public class SocialProvider extends ContentProvider {
                 // authored by one of its children contacts.
                 qb.appendWhere(Activities.IN_REPLY_TO + " IS NULL AND ");
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + " IN (SELECT " + BaseColumns._ID
-                        + " FROM " + Tables.CONTACTS + " WHERE " + Contacts.AGGREGATE_ID + "="
+                        + " FROM " + Tables.CONTACTS + " WHERE " + RawContacts.AGGREGATE_ID + "="
                         + aggId + ")");
                 sortOrder = Activities.PUBLISHED + " DESC";
                 limit = "1";

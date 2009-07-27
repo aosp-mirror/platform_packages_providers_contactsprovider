@@ -28,7 +28,7 @@ import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
@@ -91,20 +91,20 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             return uri;
         }
         return uri.buildUpon()
-                .appendQueryParameter(Contacts.ACCOUNT_NAME, account.mName)
-                .appendQueryParameter(Contacts.ACCOUNT_TYPE, account.mType)
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.mName)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.mType)
                 .build();
     }
 
     protected long createContact() {
         ContentValues values = new ContentValues();
-        Uri contactUri = mResolver.insert(Contacts.CONTENT_URI, values);
+        Uri contactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
         return ContentUris.parseId(contactUri);
     }
 
     protected long createContact(Account account) {
         ContentValues values = new ContentValues();
-        final Uri uri = maybeAddAccountQueryParameters(Contacts.CONTENT_URI, account);
+        final Uri uri = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, account);
         Uri contactUri = mResolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
     }
@@ -225,10 +225,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected void setContactAccountName(long contactId, String accountName) {
         ContentValues values = new ContentValues();
-        values.put(Contacts.ACCOUNT_NAME, accountName);
+        values.put(RawContacts.ACCOUNT_NAME, accountName);
 
         mResolver.update(ContentUris.withAppendedId(
-                Contacts.CONTENT_URI, contactId), values, null, null);
+                RawContacts.CONTENT_URI, contactId), values, null, null);
     }
 
     protected void setAggregationException(int type, long aggregateId, long contactId) {
@@ -240,7 +240,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected Cursor queryContact(long contactId) {
-        return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), null,
+        return mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId), null,
                 null, null, null);
     }
 
@@ -261,7 +261,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected long queryAggregateId(long contactId) {
         Cursor c = queryContact(contactId);
         assertTrue(c.moveToFirst());
-        long aggregateId = c.getLong(c.getColumnIndex(Contacts.AGGREGATE_ID));
+        long aggregateId = c.getLong(c.getColumnIndex(RawContacts.AGGREGATE_ID));
         c.close();
         return aggregateId;
     }
@@ -305,8 +305,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected void assertStructuredName(long contactId, String prefix, String givenName,
             String middleName, String familyName, String suffix) {
-        Uri uri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
-                Contacts.Data.CONTENT_DIRECTORY);
+        Uri uri =
+                Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId),
+                RawContacts.Data.CONTENT_DIRECTORY);
 
         final String[] projection = new String[] {
                 StructuredName.PREFIX, StructuredName.GIVEN_NAME, StructuredName.MIDDLE_NAME,

@@ -26,7 +26,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -250,12 +250,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri id_3_1 = insertEmail(id, "c3@email.com");
         Uri id_3_2 = insertPhoneNumber(id, "5551212c3");
 
-        EntityIterator iterator = mResolver.queryEntities(Contacts.CONTENT_URI,
+        EntityIterator iterator = mResolver.queryEntities(RawContacts.CONTENT_URI,
                 "contact_id in (" + c1 + "," + c2 + "," + c3 + ")", null, null);
         Entity entity;
         ContentValues[] subValues;
         entity = iterator.next();
-        assertEquals(c1, (long) entity.getEntityValues().getAsLong(Contacts._ID));
+        assertEquals(c1, (long) entity.getEntityValues().getAsLong(RawContacts._ID));
         subValues = asSortedContentValuesArray(entity.getSubValues());
         assertEquals(4, subValues.length);
         assertDataRow(subValues[0], GroupMembership.CONTENT_ITEM_TYPE,
@@ -274,7 +274,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Email.DATA, "5551212c1");
 
         entity = iterator.next();
-        assertEquals(c2, (long) entity.getEntityValues().getAsLong(Contacts._ID));
+        assertEquals(c2, (long) entity.getEntityValues().getAsLong(RawContacts._ID));
         subValues = asSortedContentValuesArray(entity.getSubValues());
         assertEquals(3, subValues.length);
         assertDataRow(subValues[0], GroupMembership.CONTENT_ITEM_TYPE,
@@ -289,7 +289,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Email.DATA, "5551212c2");
 
         entity = iterator.next();
-        assertEquals(c3, (long) entity.getEntityValues().getAsLong(Contacts._ID));
+        assertEquals(c3, (long) entity.getEntityValues().getAsLong(RawContacts._ID));
         subValues = asSortedContentValuesArray(entity.getSubValues());
         assertEquals(3, subValues.length);
         assertDataRow(subValues[0], GroupMembership.CONTENT_ITEM_TYPE,

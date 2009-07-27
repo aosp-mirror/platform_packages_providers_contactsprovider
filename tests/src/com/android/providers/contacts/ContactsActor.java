@@ -31,7 +31,7 @@ import android.provider.ContactsContract;
 import android.provider.Contacts.Phones;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
@@ -167,10 +167,10 @@ public class ContactsActor {
     public long createContact(boolean isRestricted) {
         final ContentValues values = new ContentValues();
         if (isRestricted) {
-            values.put(Contacts.IS_RESTRICTED, 1);
+            values.put(RawContacts.IS_RESTRICTED, 1);
         }
 
-        Uri contactUri = resolver.insert(Contacts.CONTENT_URI, values);
+        Uri contactUri = resolver.insert(RawContacts.CONTENT_URI, values);
         return ContentUris.parseId(contactUri);
     }
 
@@ -181,8 +181,8 @@ public class ContactsActor {
         values.put(Data.IS_SUPER_PRIMARY, 1);
         values.put(Data.MIMETYPE, CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.StructuredName.FAMILY_NAME, name);
-        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                contactId), Contacts.Data.CONTENT_DIRECTORY);
+        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                contactId), RawContacts.Data.CONTENT_DIRECTORY);
         Uri dataUri = resolver.insert(insertUri, values);
         return ContentUris.parseId(dataUri);
     }
@@ -196,8 +196,8 @@ public class ContactsActor {
         values.put(ContactsContract.CommonDataKinds.Phone.TYPE,
                 ContactsContract.CommonDataKinds.Phone.TYPE_HOME);
         values.put(ContactsContract.CommonDataKinds.Phone.NUMBER, phoneNumber);
-        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                contactId), Contacts.Data.CONTENT_DIRECTORY);
+        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                contactId), RawContacts.Data.CONTENT_DIRECTORY);
         Uri dataUri = resolver.insert(insertUri, values);
         return ContentUris.parseId(dataUri);
     }
@@ -207,7 +207,7 @@ public class ContactsActor {
     }
 
     public long getAggregateForContact(long contactId) {
-        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri contactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId);
         final Cursor cursor = resolver.query(contactUri, Projections.PROJ_CONTACTS, null,
                 null, null);
         if (!cursor.moveToFirst()) {
@@ -262,8 +262,8 @@ public class ContactsActor {
         values.put(Data.CONTACT_ID, contactId);
         values.put(Data.MIMETYPE, CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.GroupMembership.GROUP_ROW_ID, groupId);
-        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                contactId), Contacts.Data.CONTENT_DIRECTORY);
+        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                contactId), RawContacts.Data.CONTENT_DIRECTORY);
         Uri dataUri = resolver.insert(insertUri, values);
         return ContentUris.parseId(dataUri);
     }
@@ -279,7 +279,7 @@ public class ContactsActor {
         static final int COL_ID = 0;
 
         static final String[] PROJ_CONTACTS = new String[] {
-                Contacts.AGGREGATE_ID
+                RawContacts.AGGREGATE_ID
         };
 
         static final int COL_CONTACTS_AGGREGATE = 0;

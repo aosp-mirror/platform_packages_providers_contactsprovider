@@ -34,7 +34,7 @@ import android.database.sqlite.SQLiteStatement;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
@@ -184,7 +184,7 @@ import java.util.HashMap;
         // TODO: add in check against package_visible
         public static final String IN_VISIBLE_GROUP = "SELECT MIN(COUNT(" + DataColumns.CONCRETE_ID
                 + "),1) FROM " + Tables.DATA_JOIN_CONTACTS_GROUPS + " WHERE "
-                + DataColumns.MIMETYPE_ID + "=? AND " + Contacts.AGGREGATE_ID + "="
+                + DataColumns.MIMETYPE_ID + "=? AND " + RawContacts.AGGREGATE_ID + "="
                 + AggregatesColumns.CONCRETE_ID + " AND " + Groups.GROUP_VISIBLE + "=1";
 
         public static final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID =
@@ -219,15 +219,15 @@ import java.util.HashMap;
                 + Aggregates.SEND_TO_VOICEMAIL;
     }
 
-    public interface ContactsColumns {
+    public interface RawContactsColumns {
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
         public static final String CONCRETE_ACCOUNT_NAME =
-                Tables.CONTACTS + "." + Contacts.ACCOUNT_NAME;
+                Tables.CONTACTS + "." + RawContacts.ACCOUNT_NAME;
         public static final String CONCRETE_ACCOUNT_TYPE =
-                Tables.CONTACTS + "." + Contacts.ACCOUNT_TYPE;
-        public static final String CONCRETE_SOURCE_ID = Tables.CONTACTS + "." + Contacts.SOURCE_ID;
-        public static final String CONCRETE_VERSION = Tables.CONTACTS + "." + Contacts.VERSION;
-        public static final String CONCRETE_DIRTY = Tables.CONTACTS + "." + Contacts.DIRTY;
+                Tables.CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
+        public static final String CONCRETE_SOURCE_ID = Tables.CONTACTS + "." + RawContacts.SOURCE_ID;
+        public static final String CONCRETE_VERSION = Tables.CONTACTS + "." + RawContacts.VERSION;
+        public static final String CONCRETE_DIRTY = Tables.CONTACTS + "." + RawContacts.DIRTY;
         public static final String DISPLAY_NAME = "display_name";
     }
 
@@ -420,12 +420,12 @@ import java.util.HashMap;
                 + Tables.MIMETYPES + " WHERE " + MimetypesColumns.MIMETYPE + "=?");
         mPackageQuery = db.compileStatement("SELECT " + PackagesColumns._ID + " FROM "
                 + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
-        mAggregateIdQuery = db.compileStatement("SELECT " + Contacts.AGGREGATE_ID + " FROM "
-                + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
+        mAggregateIdQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATE_ID + " FROM "
+                + Tables.CONTACTS + " WHERE " + RawContacts._ID + "=?");
         mAggregateIdUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
-                + Contacts.AGGREGATE_ID + "=?" + " WHERE " + Contacts._ID + "=?");
-        mAggregationModeQuery = db.compileStatement("SELECT " + Contacts.AGGREGATION_MODE + " FROM "
-                + Tables.CONTACTS + " WHERE " + Contacts._ID + "=?");
+                + RawContacts.AGGREGATE_ID + "=?" + " WHERE " + RawContacts._ID + "=?");
+        mAggregationModeQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATION_MODE
+                + " FROM " + Tables.CONTACTS + " WHERE " + RawContacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
                 + MimetypesColumns.MIMETYPE + ") VALUES (?)");
         mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGES + "("
@@ -497,22 +497,22 @@ import java.util.HashMap;
 
         // Contacts table
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
-                Contacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                Contacts.IS_RESTRICTED + " INTEGER DEFAULT 0," +
-                Contacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
-                Contacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
-                Contacts.SOURCE_ID + " TEXT," +
-                Contacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
-                Contacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
-                Contacts.AGGREGATE_ID + " INTEGER," +
-                Contacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
-                        Contacts.AGGREGATION_MODE_DEFAULT + "," +
-                Contacts.CUSTOM_RINGTONE + " TEXT," +
-                Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.LAST_TIME_CONTACTED + " INTEGER," +
-                Contacts.STARRED + " INTEGER INTEGER NOT NULL DEFAULT 0," +
-                ContactsColumns.DISPLAY_NAME + " TEXT" +
+                RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                RawContacts.IS_RESTRICTED + " INTEGER DEFAULT 0," +
+                RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
+                RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
+                RawContacts.SOURCE_ID + " TEXT," +
+                RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
+                RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
+                RawContacts.AGGREGATE_ID + " INTEGER," +
+                RawContacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
+                        RawContacts.AGGREGATION_MODE_DEFAULT + "," +
+                RawContacts.CUSTOM_RINGTONE + " TEXT," +
+                RawContacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
+                RawContacts.STARRED + " INTEGER INTEGER NOT NULL DEFAULT 0," +
+                RawContactsColumns.DISPLAY_NAME + " TEXT" +
         ");");
 
         // Package name mapping table
@@ -568,18 +568,18 @@ import java.util.HashMap;
                 + " BEGIN "
                 + "   UPDATE " + Tables.CONTACTS
                 + "     SET "
-                +         Contacts.VERSION + "=OLD." + Contacts.VERSION + "+1, "
-                +         Contacts.DIRTY + "=1"
-                + "     WHERE " + Contacts._ID + "=OLD." + Contacts._ID + ";"
+                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1, "
+                +         RawContacts.DIRTY + "=1"
+                + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.CONTACTS + "_deleted "
                 + "   BEFORE DELETE ON " + Tables.CONTACTS
                 + " BEGIN "
                 + "   DELETE FROM " + Tables.DATA
-                + "     WHERE " + Data.CONTACT_ID + "=OLD." + Contacts._ID + ";"
+                + "     WHERE " + Data.CONTACT_ID + "=OLD." + RawContacts._ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
-                + "     WHERE " + PhoneLookupColumns.CONTACT_ID + "=OLD." + Contacts._ID + ";"
+                + "     WHERE " + PhoneLookupColumns.CONTACT_ID + "=OLD." + RawContacts._ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated AFTER UPDATE ON " + Tables.DATA
@@ -588,15 +588,15 @@ import java.util.HashMap;
                 + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
                 + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
                 + "   UPDATE " + Tables.CONTACTS
-                + "     SET " + Contacts.DIRTY + "=1"
-                + "     WHERE " + Contacts._ID + "=OLD." + Data.CONTACT_ID + ";"
+                + "     SET " + RawContacts.DIRTY + "=1"
+                + "     WHERE " + RawContacts._ID + "=OLD." + Data.CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.CONTACTS
-                + "     SET " + Contacts.DIRTY + "=1"
-                + "     WHERE " + Contacts._ID + "=OLD." + Data.CONTACT_ID + ";"
+                + "     SET " + RawContacts.DIRTY + "=1"
+                + "     WHERE " + RawContacts._ID + "=OLD." + Data.CONTACT_ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
                 + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
                 + " END");
@@ -915,8 +915,8 @@ import java.util.HashMap;
             DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, contactId);
             return (int)mAggregationModeQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
-            // No valid mapping found, so return "disabled"
-            return Contacts.AGGREGATION_MODE_DISABLED;
+            // No valid row found, so return "disabled"
+            return RawContacts.AGGREGATION_MODE_DISABLED;
         }
     }
 
