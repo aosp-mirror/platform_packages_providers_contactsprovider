@@ -21,7 +21,6 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.res.Resources;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.Contacts;
 import android.provider.Contacts.ContactMethods;
@@ -84,8 +83,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         }
     }
 
-    // TODO fix and reenable the test
-    public void __testPeopleFilter() {
+    public void testPeopleFilter() {
         ContentValues values = new ContentValues();
         values.put(People.NAME, "Deer Doe");
         mResolver.insert(People.CONTENT_URI, values);

@@ -88,6 +88,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int PHOTOS_ID = 26;
     private static final int PRESENCE = 27;
     private static final int PRESENCE_ID = 28;
+    private static final int PEOPLE_FILTER = 29;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (contacts._id = name.contact_id"
@@ -203,6 +204,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sPhotoProjectionMap;
     private static final HashMap<String, String> sPresenceProjectionMap;
 
+
     static {
 
         // Contacts URI matching table
@@ -225,7 +227,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         matcher.addURI(authority, "people", PEOPLE);
 //        matcher.addURI(authority, "people/strequent", PEOPLE_STREQUENT);
 //        matcher.addURI(authority, "people/strequent/filter/*", PEOPLE_STREQUENT_FILTER);
-//        matcher.addURI(authority, "people/filter/*", PEOPLE_FILTER);
+        matcher.addURI(authority, "people/filter/*", PEOPLE_FILTER);
 //        matcher.addURI(authority, "people/with_phones_filter/*",
 //                PEOPLE_WITH_PHONES_FILTER);
 //        matcher.addURI(authority, "people/with_email_or_im_filter/*",
@@ -1099,6 +1101,15 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 qb.appendWhere(People._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
+
+            case PEOPLE_FILTER: {
+                qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
+                qb.setProjectionMap(sPeopleProjectionMap);
+                String filterParam = uri.getPathSegments().get(2);
+                qb.appendWhere(People._ID + " IN "
+                        + mContactsProvider.getContactsByFilterAsNestedQuery(filterParam));
+                break;
+            }
 
             case ORGANIZATIONS:
                 qb.setTables(LegacyTables.ORGANIZATIONS);

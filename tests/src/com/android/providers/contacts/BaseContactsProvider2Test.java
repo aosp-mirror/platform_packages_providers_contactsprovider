@@ -80,7 +80,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
         mActor = new ContactsActor(getContext(), PACKAGE_GREY, getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
-        ((SynchronousContactsProvider2) mActor.provider).getOpenHelper(mActor.context).wipeData();
+        if (mActor.provider instanceof SynchronousContactsProvider2) {
+            ((SynchronousContactsProvider2) mActor.provider)
+                    .getOpenHelper(mActor.context).wipeData();
+        }
     }
 
     protected Uri maybeAddAccountQueryParameters(Uri uri, Account account) {
