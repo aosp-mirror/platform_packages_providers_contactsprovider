@@ -88,7 +88,7 @@ public class SocialProvider extends ContentProvider {
 
         // Contacts projection map
         columns = new HashMap<String, String>();
-        columns.put(RawContacts._ID, Tables.CONTACTS + "." + RawContacts._ID + " AS _id");
+        columns.put(RawContacts._ID, Tables.RAW_CONTACTS + "." + RawContacts._ID + " AS _id");
         columns.put(RawContacts.AGGREGATE_ID, RawContacts.AGGREGATE_ID);
         sContactsProjectionMap = columns;
 
@@ -330,7 +330,7 @@ public class SocialProvider extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case ACTIVITIES: {
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 break;
             }
@@ -338,7 +338,7 @@ public class SocialProvider extends ContentProvider {
             case ACTIVITIES_ID: {
                 // TODO: enforce that caller has read access to this data
                 long activityId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities._ID + "=" + activityId);
                 break;
@@ -346,7 +346,7 @@ public class SocialProvider extends ContentProvider {
 
             case ACTIVITIES_AUTHORED_BY: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + "=" + contactId);
                 break;
@@ -354,14 +354,14 @@ public class SocialProvider extends ContentProvider {
 
             case AGGREGATE_STATUS_ID: {
                 long aggId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
 
                 // Latest status of an aggregate is any top-level status
                 // authored by one of its children contacts.
                 qb.appendWhere(Activities.IN_REPLY_TO + " IS NULL AND ");
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + " IN (SELECT " + BaseColumns._ID
-                        + " FROM " + Tables.CONTACTS + " WHERE " + RawContacts.AGGREGATE_ID + "="
+                        + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts.AGGREGATE_ID + "="
                         + aggId + ")");
                 sortOrder = Activities.PUBLISHED + " DESC";
                 limit = "1";

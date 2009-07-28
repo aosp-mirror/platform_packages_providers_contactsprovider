@@ -176,7 +176,7 @@ public class ContactsActor {
 
     public long createName(long contactId, String name) {
         final ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, contactId);
         values.put(Data.IS_PRIMARY, 1);
         values.put(Data.IS_SUPER_PRIMARY, 1);
         values.put(Data.MIMETYPE, CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
@@ -189,7 +189,7 @@ public class ContactsActor {
 
     public long createPhone(long contactId, String phoneNumber) {
         final ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, contactId);
         values.put(Data.IS_PRIMARY, 1);
         values.put(Data.IS_SUPER_PRIMARY, 1);
         values.put(Data.MIMETYPE, Phones.CONTENT_ITEM_TYPE);
@@ -257,13 +257,13 @@ public class ContactsActor {
         return ContentUris.parseId(groupUri);
     }
 
-    public long createGroupMembership(long contactId, long groupId) {
+    public long createGroupMembership(long rawContactId, long groupId) {
         final ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.GroupMembership.GROUP_ROW_ID, groupId);
         Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
-                contactId), RawContacts.Data.CONTENT_DIRECTORY);
+                rawContactId), RawContacts.Data.CONTENT_DIRECTORY);
         Uri dataUri = resolver.insert(insertUri, values);
         return ContentUris.parseId(dataUri);
     }

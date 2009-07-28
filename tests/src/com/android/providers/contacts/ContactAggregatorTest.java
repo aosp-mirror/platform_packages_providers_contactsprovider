@@ -37,7 +37,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
             AggregationExceptions.AGGREGATE_ID,
-            AggregationExceptions.CONTACT_ID
+            AggregationExceptions.RAW_CONTACT_ID
     };
 
     public void testCrudAggregationExceptions() throws Exception {
@@ -85,14 +85,14 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationCreatesNewAggregate() {
-        long contactId = createContact();
+        long rawContactId = createContact();
 
-        Uri resultUri = insertStructuredName(contactId, "Johna", "Smitha");
+        Uri resultUri = insertStructuredName(rawContactId, "Johna", "Smitha");
 
         // Parse the URI and confirm that it contains an ID
         assertTrue(ContentUris.parseId(resultUri) != 0);
 
-        long aggregateId = queryAggregateId(contactId);
+        long aggregateId = queryAggregateId(rawContactId);
         assertTrue(aggregateId != 0);
 
         String displayName = queryDisplayName(aggregateId);

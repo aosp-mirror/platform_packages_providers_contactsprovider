@@ -117,7 +117,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return ContentUris.parseId(mResolver.insert(uri, values));
     }
 
-    protected Uri insertStructuredName(long contactId, String givenName, String familyName) {
+    protected Uri insertStructuredName(long rawContactId, String givenName, String familyName) {
         ContentValues values = new ContentValues();
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
@@ -133,19 +133,19 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(StructuredName.GIVEN_NAME, givenName);
         values.put(StructuredName.FAMILY_NAME, familyName);
 
-        return insertStructuredName(contactId, values);
+        return insertStructuredName(rawContactId, values);
     }
 
-    protected Uri insertStructuredName(long contactId, ContentValues values) {
-        values.put(Data.CONTACT_ID, contactId);
+    protected Uri insertStructuredName(long rawContactId, ContentValues values) {
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }
 
-    protected Uri insertPhoneNumber(long contactId, String phoneNumber) {
+    protected Uri insertPhoneNumber(long rawContactId, String phoneNumber) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
         values.put(Phone.NUMBER, phoneNumber);
         values.put(Phone.TYPE, Phone.TYPE_HOME);
@@ -154,9 +154,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected Uri insertEmail(long contactId, String email) {
+    protected Uri insertEmail(long rawContactId, String email) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
         values.put(Email.DATA, email);
         values.put(Email.TYPE, Email.TYPE_HOME);
@@ -165,9 +165,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected Uri insertNickname(long contactId, String nickname) {
+    protected Uri insertNickname(long rawContactId, String nickname) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
         values.put(Nickname.NAME, nickname);
         values.put(Nickname.TYPE, Nickname.TYPE_OTHER_NAME);
@@ -176,26 +176,26 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected Uri insertPhoto(long contactId) {
+    protected Uri insertPhoto(long rawContactId) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }
 
-    protected Uri insertGroupMembership(long contactId, String sourceId) {
+    protected Uri insertGroupMembership(long rawContactId, String sourceId) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
         values.put(GroupMembership.GROUP_SOURCE_ID, sourceId);
         return mResolver.insert(Data.CONTENT_URI, values);
     }
 
-    protected Uri insertGroupMembership(long contactId, Long groupId) {
+    protected Uri insertGroupMembership(long rawContactId, Long groupId) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
         values.put(GroupMembership.GROUP_ROW_ID, groupId);
         return mResolver.insert(Data.CONTENT_URI, values);
@@ -211,9 +211,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected Uri insertImHandle(long contactId, int protocol, String handle) {
+    protected Uri insertImHandle(long rawContactId, int protocol, String handle) {
         ContentValues values = new ContentValues();
-        values.put(Data.CONTACT_ID, contactId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Im.CONTENT_ITEM_TYPE);
         values.put(Im.PROTOCOL, protocol);
         values.put(Im.DATA, handle);
@@ -223,24 +223,24 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected void setContactAccountName(long contactId, String accountName) {
+    protected void setContactAccountName(long rawContactId, String accountName) {
         ContentValues values = new ContentValues();
         values.put(RawContacts.ACCOUNT_NAME, accountName);
 
         mResolver.update(ContentUris.withAppendedId(
-                RawContacts.CONTENT_URI, contactId), values, null, null);
+                RawContacts.CONTENT_URI, rawContactId), values, null, null);
     }
 
-    protected void setAggregationException(int type, long aggregateId, long contactId) {
+    protected void setAggregationException(int type, long aggregateId, long rawContactId) {
         ContentValues values = new ContentValues();
         values.put(AggregationExceptions.AGGREGATE_ID, aggregateId);
-        values.put(AggregationExceptions.CONTACT_ID, contactId);
+        values.put(AggregationExceptions.RAW_CONTACT_ID, rawContactId);
         values.put(AggregationExceptions.TYPE, type);
         mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
     }
 
-    protected Cursor queryContact(long contactId) {
-        return mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId), null,
+    protected Cursor queryContact(long rawContactId) {
+        return mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), null,
                 null, null, null);
     }
 
@@ -258,8 +258,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return mResolver.query(Aggregates.CONTENT_SUMMARY_URI, null, null, null, null);
     }
 
-    protected long queryAggregateId(long contactId) {
-        Cursor c = queryContact(contactId);
+    protected long queryAggregateId(long rawContactId) {
+        Cursor c = queryContact(rawContactId);
         assertTrue(c.moveToFirst());
         long aggregateId = c.getLong(c.getColumnIndex(RawContacts.AGGREGATE_ID));
         c.close();
@@ -303,10 +303,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         assertTrue(aggregateId1 != aggregateId2);
     }
 
-    protected void assertStructuredName(long contactId, String prefix, String givenName,
+    protected void assertStructuredName(long rawContactId, String prefix, String givenName,
             String middleName, String familyName, String suffix) {
         Uri uri =
-                Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId),
+                Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
                 RawContacts.Data.CONTENT_DIRECTORY);
 
         final String[] projection = new String[] {
@@ -338,12 +338,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
-    protected long assertSingleGroupMembership(Long rowId, Long contactId, Long groupRowId,
+    protected long assertSingleGroupMembership(Long rowId, Long rawContactId, Long groupRowId,
             String sourceId) {
         Cursor c = mResolver.query(ContactsContract.Data.CONTENT_URI, null, null, null, null);
         try {
             assertTrue(c.moveToNext());
-            long actualRowId = assertGroupMembership(c, rowId, contactId, groupRowId, sourceId);
+            long actualRowId = assertGroupMembership(c, rowId, rawContactId, groupRowId, sourceId);
             assertFalse(c.moveToNext());
             return actualRowId;
         } finally {
@@ -351,10 +351,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
-    protected long assertGroupMembership(Cursor c, Long rowId, Long contactId, Long groupRowId,
+    protected long assertGroupMembership(Cursor c, Long rowId, Long rawContactId, Long groupRowId,
             String sourceId) {
         assertNullOrEquals(c, rowId, Data._ID);
-        assertNullOrEquals(c, contactId, GroupMembership.CONTACT_ID);
+        assertNullOrEquals(c, rawContactId, GroupMembership.RAW_CONTACT_ID);
         assertNullOrEquals(c, groupRowId, GroupMembership.GROUP_ROW_ID);
         assertNullOrEquals(c, sourceId, GroupMembership.GROUP_SOURCE_ID);
         return c.getLong(c.getColumnIndexOrThrow("_id"));

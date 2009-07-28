@@ -111,9 +111,9 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int AGGREGATES_SUMMARY_STREQUENT_FILTER = 1007;
     private static final int AGGREGATES_SUMMARY_GROUP = 1008;
 
-    private static final int CONTACTS = 2002;
-    private static final int CONTACTS_ID = 2003;
-    private static final int CONTACTS_DATA = 2004;
+    private static final int RAW_CONTACTS = 2002;
+    private static final int RAW_CONTACTS_ID = 2003;
+    private static final int RAW_CONTACTS_DATA = 2004;
     private static final int CONTACTS_FILTER_EMAIL = 2005;
 
     private static final int DATA = 3000;
@@ -139,7 +139,7 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int SYNCSTATE = 11000;
 
     private interface ContactsQuery {
-        public static final String TABLE = Tables.CONTACTS;
+        public static final String TABLE = Tables.RAW_CONTACTS;
 
         public static final String[] PROJECTION = new String[] {
             RawContactsColumns.CONCRETE_ID,
@@ -147,13 +147,13 @@ public class ContactsProvider2 extends ContentProvider {
             RawContacts.ACCOUNT_TYPE,
         };
 
-        public static final int CONTACT_ID = 0;
+        public static final int RAW_CONTACT_ID = 0;
         public static final int ACCOUNT_NAME = 1;
         public static final int ACCOUNT_TYPE = 2;
     }
 
     private interface DataContactsQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPE_CONTACTS;
+        public static final String TABLE = Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS;
 
         public static final String[] PROJECTION = new String[] {
             RawContactsColumns.CONCRETE_ID,
@@ -163,7 +163,7 @@ public class ContactsProvider2 extends ContentProvider {
             Data.MIMETYPE,
         };
 
-        public static final int CONTACT_ID = 0;
+        public static final int RAW_CONTACT_ID = 0;
         public static final int DATA_ID = 1;
         public static final int AGGREGATE_ID = 2;
         public static final int IS_RESTRICTED = 3;
@@ -171,7 +171,7 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     private interface DataAggregatesQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES;
+        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_AGGREGATES;
 
         public static final String[] PROJECTION = new String[] {
             RawContactsColumns.CONCRETE_ID,
@@ -221,7 +221,7 @@ public class ContactsProvider2 extends ContentProvider {
         public static final String[] COLUMNS = new String[] {
             DataColumns.CONCRETE_ID,
             MimetypesColumns.MIMETYPE,
-            Data.CONTACT_ID,
+            Data.RAW_CONTACT_ID,
             Data.IS_PRIMARY,
             Data.DATA1,
             Data.DATA2,
@@ -242,7 +242,7 @@ public class ContactsProvider2 extends ContentProvider {
 
         public static final int ID = 0;
         public static final int MIMETYPE = 1;
-        public static final int CONTACT_ID = 2;
+        public static final int RAW_CONTACT_ID = 2;
         public static final int IS_PRIMARY = 3;
         public static final int DATA1 = 4;
         public static final int DATA2 = 5;
@@ -355,10 +355,10 @@ public class ContactsProvider2 extends ContentProvider {
                 AGGREGATES_SUMMARY_GROUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregates/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_email/*",
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/filter_email/*",
                 CONTACTS_FILTER_EMAIL);
 
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
@@ -422,26 +422,32 @@ public class ContactsProvider2 extends ContentProvider {
 
         // RawContacts projection map
         columns = new HashMap<String, String>();
-        columns.put(RawContacts._ID, "contacts._id AS _id");
+        columns.put(RawContacts._ID, Tables.RAW_CONTACTS + "." + RawContacts._ID + " AS _id");
         columns.put(RawContacts.AGGREGATE_ID, RawContacts.AGGREGATE_ID);
         columns.put(RawContacts.ACCOUNT_NAME,
-                OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_NAME + " as " + RawContacts.ACCOUNT_NAME);
+                OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_NAME
+                        + " AS " + RawContacts.ACCOUNT_NAME);
         columns.put(RawContacts.ACCOUNT_TYPE,
-                OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " as " + RawContacts.ACCOUNT_TYPE);
+                OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_TYPE
+                        + " AS " + RawContacts.ACCOUNT_TYPE);
         columns.put(RawContacts.SOURCE_ID,
-                OpenHelper.RawContactsColumns.CONCRETE_SOURCE_ID + " as " + RawContacts.SOURCE_ID);
+                OpenHelper.RawContactsColumns.CONCRETE_SOURCE_ID
+                        + " AS " + RawContacts.SOURCE_ID);
         columns.put(RawContacts.VERSION,
-                OpenHelper.RawContactsColumns.CONCRETE_VERSION + " as " + RawContacts.VERSION);
+                OpenHelper.RawContactsColumns.CONCRETE_VERSION
+                        + " AS " + RawContacts.VERSION);
         columns.put(RawContacts.DIRTY,
-                OpenHelper.RawContactsColumns.CONCRETE_DIRTY + " as " + RawContacts.DIRTY);
+                OpenHelper.RawContactsColumns.CONCRETE_DIRTY
+                        + " AS " + RawContacts.DIRTY);
         columns.put(RawContacts.DELETED,
-                OpenHelper.RawContactsColumns.CONCRETE_DELETED + " as " + RawContacts.DELETED);
+                OpenHelper.RawContactsColumns.CONCRETE_DELETED
+                        + " AS " + RawContacts.DELETED);
         sContactsProjectionMap = columns;
 
         // Data projection map
         columns = new HashMap<String, String>();
-        columns.put(Data._ID, "data._id AS _id");
-        columns.put(Data.CONTACT_ID, Data.CONTACT_ID);
+        columns.put(Data._ID, Tables.DATA + "." + Data._ID + " AS _id");
+        columns.put(Data.RAW_CONTACT_ID, Data.RAW_CONTACT_ID);
         columns.put(Data.RES_PACKAGE, PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE);
         columns.put(Data.MIMETYPE, Data.MIMETYPE);
         columns.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
@@ -474,7 +480,7 @@ public class ContactsProvider2 extends ContentProvider {
         columns = new HashMap<String, String>();
         columns.putAll(sContactsProjectionMap);
         columns.putAll(sDataGroupsProjectionMap); // _id will be replaced with the one from data
-        columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
+        columns.put(Data.RAW_CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
         sDataContactsGroupsProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
@@ -488,7 +494,7 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sAggregatesProjectionMap);
         columns.putAll(sContactsProjectionMap); //
         columns.putAll(sDataGroupsProjectionMap); // _id will be replaced with the one from data
-        columns.put(Data.CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
+        columns.put(Data.RAW_CONTACT_ID, DataColumns.CONCRETE_CONTACT_ID);
         sDataContactsGroupsAggregateProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
@@ -516,13 +522,13 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sGroupsProjectionMap);
 
         columns.put(Groups.SUMMARY_COUNT, "(SELECT COUNT(DISTINCT " + AggregatesColumns.CONCRETE_ID
-                + ") FROM " + Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES + " WHERE "
+                + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_AGGREGATES + " WHERE "
                 + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
                 + ") AS " + Groups.SUMMARY_COUNT);
 
         columns.put(Groups.SUMMARY_WITH_PHONES, "(SELECT COUNT(DISTINCT "
                 + AggregatesColumns.CONCRETE_ID + ") FROM "
-                + Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES + " WHERE "
+                + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_AGGREGATES + " WHERE "
                 + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
                 + " AND " + Clauses.HAS_PRIMARY_PHONE + ") AS " + Groups.SUMMARY_WITH_PHONES);
 
@@ -533,27 +539,27 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(AggregationExceptionColumns._ID, Tables.AGGREGATION_EXCEPTIONS + "._id AS _id");
         columns.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE);
         columns.put(AggregationExceptions.AGGREGATE_ID,
-                "contacts1." + RawContacts.AGGREGATE_ID
+                "raw_contacts1." + RawContacts.AGGREGATE_ID
                 + " AS " + AggregationExceptions.AGGREGATE_ID);
-        columns.put(AggregationExceptions.CONTACT_ID, AggregationExceptionColumns.CONTACT_ID2);
+        columns.put(AggregationExceptions.RAW_CONTACT_ID, AggregationExceptionColumns.RAW_CONTACT_ID2);
         sAggregationExceptionsProjectionMap = columns;
 
-        sNestedContactIdSelect = "SELECT " + Data.CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
+        sNestedContactIdSelect = "SELECT " + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
                 + Data._ID + "=?";
         sNestedMimetypeSelect = "SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA
                 + " WHERE " + Data._ID + "=?";
-        sNestedAggregateIdSelect = "SELECT " + RawContacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS
+        sNestedAggregateIdSelect = "SELECT " + RawContacts.AGGREGATE_ID + " FROM " + Tables.RAW_CONTACTS
                 + " WHERE " + RawContacts._ID + "=(" + sNestedContactIdSelect + ")";
-        sNestedContactIdListSelect = "SELECT " + RawContacts._ID + " FROM " + Tables.CONTACTS
+        sNestedContactIdListSelect = "SELECT " + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS
                 + " WHERE " + RawContacts.AGGREGATE_ID + "=(" + sNestedAggregateIdSelect + ")";
-        sSetPrimaryWhere = Data.CONTACT_ID + "=(" + sNestedContactIdSelect + ") AND "
+        sSetPrimaryWhere = Data.RAW_CONTACT_ID + "=(" + sNestedContactIdSelect + ") AND "
                 + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
-        sSetSuperPrimaryWhere = Data.CONTACT_ID + " IN (" + sNestedContactIdListSelect + ") AND "
+        sSetSuperPrimaryWhere = Data.RAW_CONTACT_ID + " IN (" + sNestedContactIdListSelect + ") AND "
                 + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
         sAggregatesInGroupSelect = AggregatesColumns.CONCRETE_ID + " IN (SELECT "
-                + RawContacts.AGGREGATE_ID + " FROM " + Tables.CONTACTS + " WHERE ("
+                + RawContacts.AGGREGATE_ID + " FROM " + Tables.RAW_CONTACTS + " WHERE ("
                 + RawContactsColumns.CONCRETE_ID + " IN (SELECT " + Tables.DATA + "."
-                + Data.CONTACT_ID + " FROM " + Tables.DATA_JOIN_MIMETYPES + " WHERE ("
+                + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA_JOIN_MIMETYPES + " WHERE ("
                 + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE + "' AND "
                 + GroupMembership.GROUP_ROW_ID + "=(SELECT " + Tables.GROUPS + "."
                 + Groups._ID + " FROM " + Tables.GROUPS + " WHERE " + Groups.TITLE + "=?)))))";
@@ -573,7 +579,7 @@ public class ContactsProvider2 extends ContentProvider {
         /**
          * Inserts a row into the {@link Data} table.
          */
-        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             final long dataId = db.insert(Tables.DATA, null, values);
 
             Integer primary = values.getAsInteger(Data.IS_PRIMARY);
@@ -581,7 +587,7 @@ public class ContactsProvider2 extends ContentProvider {
                 setIsPrimary(dataId);
             }
 
-            fixContactDisplayName(db, contactId);
+            fixContactDisplayName(db, rawContactId);
             return dataId;
         }
 
@@ -595,27 +601,27 @@ public class ContactsProvider2 extends ContentProvider {
 
         public int delete(SQLiteDatabase db, Cursor c) {
             long dataId = c.getLong(DataQuery.ID);
-            long contactId = c.getLong(DataQuery.CONTACT_ID);
+            long rawContactId = c.getLong(DataQuery.RAW_CONTACT_ID);
             boolean primary = c.getInt(DataQuery.IS_PRIMARY) != 0;
             int count = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
             if (count != 0 && primary) {
-                fixPrimary(db, contactId);
-                fixContactDisplayName(db, contactId);
+                fixPrimary(db, rawContactId);
+                fixContactDisplayName(db, rawContactId);
             }
             return count;
         }
 
-        private void fixPrimary(SQLiteDatabase db, long contactId) {
-            long newPrimaryId = findNewPrimaryDataId(db, contactId);
+        private void fixPrimary(SQLiteDatabase db, long rawContactId) {
+            long newPrimaryId = findNewPrimaryDataId(db, rawContactId);
             if (newPrimaryId != -1) {
                 ContactsProvider2.this.setIsPrimary(newPrimaryId);
             }
         }
 
-        protected long findNewPrimaryDataId(SQLiteDatabase db, long contactId) {
+        protected long findNewPrimaryDataId(SQLiteDatabase db, long rawContactId) {
             long primaryId = -1;
             int primaryType = -1;
-            Cursor c = queryData(db, contactId);
+            Cursor c = queryData(db, rawContactId);
             try {
                 while (c.moveToNext()) {
                     long dataId = c.getLong(DataQuery.ID);
@@ -639,21 +645,21 @@ public class ContactsProvider2 extends ContentProvider {
             return 0;
         }
 
-        protected Cursor queryData(SQLiteDatabase db, long contactId) {
+        protected Cursor queryData(SQLiteDatabase db, long rawContactId) {
             // TODO Lookup integer mimetype IDs' instead of joining for speed
-            return db.query(DataQuery.TABLE, DataQuery.COLUMNS, Data.CONTACT_ID + "="
-                    + contactId + " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
+            return db.query(DataQuery.TABLE, DataQuery.COLUMNS, Data.RAW_CONTACT_ID + "="
+                    + rawContactId + " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
                     null, null, null, null);
         }
 
-        protected void fixContactDisplayName(SQLiteDatabase db, long contactId) {
+        protected void fixContactDisplayName(SQLiteDatabase db, long rawContactId) {
             if (!sDisplayNamePriorities.containsKey(mMimetype)) {
                 return;
             }
 
             String bestDisplayName = null;
             Cursor c = db.query(DisplayNameQuery.TABLE, DisplayNameQuery.COLUMNS,
-                    Data.CONTACT_ID + "=" + contactId, null, null, null, null);
+                    Data.RAW_CONTACT_ID + "=" + rawContactId, null, null, null, null);
             try {
                 int maxPriority = -1;
                 while (c.moveToNext()) {
@@ -682,7 +688,7 @@ public class ContactsProvider2 extends ContentProvider {
                 c.close();
             }
 
-            ContactsProvider2.this.setDisplayName(contactId, bestDisplayName);
+            ContactsProvider2.this.setDisplayName(rawContactId, bestDisplayName);
         }
     }
 
@@ -703,9 +709,9 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         @Override
-        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             fixStructuredNameComponents(values);
-            return super.insert(db, contactId, values);
+            return super.insert(db, rawContactId, values);
         }
 
         @Override
@@ -769,7 +775,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         @Override
-        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             int type;
             String label;
             if (values.containsKey(mTypeColumn)) {
@@ -793,7 +799,7 @@ public class ContactsProvider2 extends ContentProvider {
                         + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
             }
 
-            return super.insert(db, contactId, values);
+            return super.insert(db, rawContactId, values);
         }
 
         @Override
@@ -809,9 +815,9 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         @Override
-        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
-            long id = super.insert(db, contactId, values);
-            fixContactDisplayName(db, contactId);
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
+            long id = super.insert(db, rawContactId, values);
+            fixContactDisplayName(db, rawContactId);
             return id;
         }
 
@@ -833,9 +839,9 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         @Override
-        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
-            long id = super.insert(db, contactId, values);
-            fixContactDisplayName(db, contactId);
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
+            long id = super.insert(db, rawContactId, values);
+            fixContactDisplayName(db, rawContactId);
             return id;
         }
 
@@ -858,7 +864,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         @Override
-        public long insert(SQLiteDatabase db, long contactId, ContentValues values) {
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             ContentValues phoneValues = new ContentValues();
             String number = values.getAsString(Phone.NUMBER);
             String normalizedNumber = null;
@@ -867,10 +873,10 @@ public class ContactsProvider2 extends ContentProvider {
                 values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
             }
 
-            long id = super.insert(db, contactId, values);
+            long id = super.insert(db, rawContactId, values);
 
             if (number != null) {
-                phoneValues.put(PhoneLookupColumns.CONTACT_ID, contactId);
+                phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactId);
                 phoneValues.put(PhoneLookupColumns.DATA_ID, id);
                 phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
                 db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
@@ -931,11 +937,11 @@ public class ContactsProvider2 extends ContentProvider {
         mSetSuperPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA + " SET " + Data.IS_SUPER_PRIMARY
                 + "=(_id=?) WHERE " + sSetSuperPrimaryWhere);
-        mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+        mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.TIMES_CONTACTED + "=" + RawContacts.TIMES_CONTACTED + "+1,"
                 + RawContacts.LAST_TIME_CONTACTED + "=? WHERE " + RawContacts.AGGREGATE_ID + "=?");
 
-        mContactDisplayNameUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+        mContactDisplayNameUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContactsColumns.DISPLAY_NAME + "=? WHERE " + RawContacts._ID + "=?");
 
         mNameSplitter = new NameSplitter(
@@ -1020,14 +1026,14 @@ public class ContactsProvider2 extends ContentProvider {
                 break;
             }
 
-            case CONTACTS: {
+            case RAW_CONTACTS: {
                 final Account account = readAccountFromQueryParams(uri);
                 id = insertContact(values, account);
                 break;
             }
 
-            case CONTACTS_DATA: {
-                values.put(Data.CONTACT_ID, uri.getPathSegments().get(1));
+            case RAW_CONTACTS_DATA: {
+                values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(1));
                 id = insertData(values);
                 break;
             }
@@ -1117,16 +1123,17 @@ public class ContactsProvider2 extends ContentProvider {
             return -1;
         }
 
-        long contactId = db.insert(Tables.CONTACTS, RawContacts.AGGREGATE_ID, overriddenValues);
+        long rawContactId = db.insert(Tables.RAW_CONTACTS, RawContacts.AGGREGATE_ID,
+                overriddenValues);
 
         int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
         if (values.containsKey(RawContacts.AGGREGATION_MODE)) {
             aggregationMode = values.getAsInteger(RawContacts.AGGREGATION_MODE);
         }
 
-        triggerAggregation(contactId, aggregationMode);
+        triggerAggregation(rawContactId, aggregationMode);
 
-        return contactId;
+        return rawContactId;
     }
 
     /**
@@ -1145,7 +1152,7 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.clear();
             mValues.putAll(values);
 
-            long contactId = mValues.getAsLong(Data.CONTACT_ID);
+            long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
 
             // Replace package with internal mapping
             final String packageName = mValues.getAsString(Data.RES_PACKAGE);
@@ -1180,15 +1187,15 @@ public class ContactsProvider2 extends ContentProvider {
 
                 if (containsGroupSourceId) {
                     final String sourceId = mValues.getAsString(GroupMembership.GROUP_SOURCE_ID);
-                    final long groupId = getOrMakeGroup(db, contactId, sourceId);
+                    final long groupId = getOrMakeGroup(db, rawContactId, sourceId);
                     mValues.remove(GroupMembership.GROUP_SOURCE_ID);
                     mValues.put(GroupMembership.GROUP_ROW_ID, groupId);
                 }
             }
 
-            id = getDataRowHandler(mimeType).insert(db, contactId, mValues);
+            id = getDataRowHandler(mimeType).insert(db, rawContactId, mValues);
 
-            aggregationMode = mContactAggregator.markContactForAggregation(contactId);
+            aggregationMode = mContactAggregator.markContactForAggregation(rawContactId);
 
             db.setTransactionSuccessful();
         } finally {
@@ -1199,14 +1206,14 @@ public class ContactsProvider2 extends ContentProvider {
         return id;
     }
 
-    private void triggerAggregation(long contactId, int aggregationMode) {
+    private void triggerAggregation(long rawContactId, int aggregationMode) {
         switch (aggregationMode) {
             case RawContacts.AGGREGATION_MODE_DEFAULT:
                 mContactAggregator.schedule();
                 break;
 
             case RawContacts.AGGREGATION_MODE_IMMEDITATE:
-                mContactAggregator.aggregateContact(contactId);
+                mContactAggregator.aggregateContact(rawContactId);
                 break;
 
             case RawContacts.AGGREGATION_MODE_DISABLED:
@@ -1216,19 +1223,19 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /**
-     * Returns the group id of the group with sourceId and the same account as contactId.
+     * Returns the group id of the group with sourceId and the same account as rawContactId.
      * If the group doesn't already exist then it is first created,
      * @param db SQLiteDatabase to use for this operation
-     * @param contactId the contact this group is associated with
+     * @param rawContactId the contact this group is associated with
      * @param sourceId the sourceIf of the group to query or create
      * @return the group id of the existing or created group
      * @throws IllegalArgumentException if the contact is not associated with an account
      * @throws IllegalStateException if a group needs to be created but the creation failed
      */
-    private long getOrMakeGroup(SQLiteDatabase db, long contactId, String sourceId) {
+    private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId) {
         Account account = null;
         Cursor c = db.query(ContactsQuery.TABLE, ContactsQuery.PROJECTION, RawContacts._ID + "="
-                + contactId, null, null, null, null);
+                + rawContactId, null, null, null, null);
         try {
             if (c.moveToNext()) {
                 final String accountName = c.getString(ContactsQuery.ACCOUNT_NAME);
@@ -1247,7 +1254,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         // look up the group that contains this sourceId and has the same account name and type
-        // as the contact refered to by contactId
+        // as the contact refered to by rawContactId
         c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
                 Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
                 new String[]{sourceId, account.mName, account.mType}, null, null, null);
@@ -1404,7 +1411,7 @@ public class ContactsProvider2 extends ContentProvider {
             final int COL_IS_RESTRICTED = 1;
             final int COL_SCORE = 2;
 
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES, PROJ_PRIMARY,
+            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_AGGREGATES, PROJ_PRIMARY,
                     AggregatesColumns.CONCRETE_ID + "=" + aggId + " AND " + DataColumns.MIMETYPE_ID
                             + "=" + mimeId, null, null, null, SCORE);
 
@@ -1524,15 +1531,15 @@ public class ContactsProvider2 extends ContentProvider {
                     .append(values.getAsLong(Presence.DATA_ID));
         }
 
-        if (values.containsKey(Presence.CONTACT_ID)) {
+        if (values.containsKey(Presence.RAW_CONTACT_ID)) {
             selection.append(" AND " + DataColumns.CONCRETE_CONTACT_ID + "=")
-                    .append(values.getAsLong(Presence.CONTACT_ID));
+                    .append(values.getAsLong(Presence.RAW_CONTACT_ID));
         }
 
         selection.append(" AND ").append(getContactsRestrictionExceptions());
 
         long dataId = -1;
-        long contactId = -1;
+        long rawContactId = -1;
 
         Cursor cursor = null;
         try {
@@ -1540,7 +1547,7 @@ public class ContactsProvider2 extends ContentProvider {
                     selection.toString(), selectionArgs, null, null, null);
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
-                contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
+                rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
             } else {
                 // No contact found, return a null URI
                 return -1;
@@ -1552,7 +1559,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         values.put(Presence.DATA_ID, dataId);
-        values.put(Presence.CONTACT_ID, contactId);
+        values.put(Presence.RAW_CONTACT_ID, rawContactId);
 
         // Insert the presence update
         long presenceId = db.replace(Tables.PRESENCE, null, values);
@@ -1573,13 +1580,13 @@ public class ContactsProvider2 extends ContentProvider {
                 // Remove references to the aggregate first
                 ContentValues values = new ContentValues();
                 values.putNull(RawContacts.AGGREGATE_ID);
-                db.update(Tables.CONTACTS, values,
+                db.update(Tables.RAW_CONTACTS, values,
                         RawContacts.AGGREGATE_ID + "=" + aggregateId, null);
 
                 return db.delete(Tables.AGGREGATES, BaseColumns._ID + "=" + aggregateId, null);
             }
 
-            case CONTACTS_ID: {
+            case RAW_CONTACTS_ID: {
                 return deleteRawContact(uri);
             }
 
@@ -1620,19 +1627,19 @@ public class ContactsProvider2 extends ContentProvider {
             permanentDeletion = true;
         }
 
-        long contactId = ContentUris.parseId(uri);
-        return deleteRawContact(contactId, permanentDeletion);
+        long rawContactId = ContentUris.parseId(uri);
+        return deleteRawContact(rawContactId, permanentDeletion);
     }
 
-    public int deleteRawContact(long contactId, boolean permanently) {
+    public int deleteRawContact(long rawContactId, boolean permanently) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         if (permanently) {
-            return db.delete(Tables.CONTACTS, RawContacts._ID + "=" + contactId, null);
+            return db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
             mValues.clear();
             mValues.put(RawContacts.DELETED, true);
-            return updateRawContact(contactId, mValues, null, null);
+            return updateRawContact(rawContactId, mValues, null, null);
         }
     }
 
@@ -1677,12 +1684,12 @@ public class ContactsProvider2 extends ContentProvider {
                 break;
             }
 
-            case CONTACTS: {
-                count = db.update(Tables.CONTACTS, values, selection, selectionArgs);
+            case RAW_CONTACTS: {
+                count = db.update(Tables.RAW_CONTACTS, values, selection, selectionArgs);
                 break;
             }
 
-            case CONTACTS_ID: {
+            case RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
                 count = updateRawContact(rawContactId, values, selection, selectionArgs);
                 break;
@@ -1723,12 +1730,12 @@ public class ContactsProvider2 extends ContentProvider {
         return count;
     }
 
-    private int updateRawContact(long contactId, ContentValues values, String selection,
+    private int updateRawContact(long rawContactId, ContentValues values, String selection,
             String[] selectionArgs) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        String selectionWithId = (RawContacts._ID + " = " + contactId + " ")
+        String selectionWithId = (RawContacts._ID + " = " + rawContactId + " ")
                 + (selection == null ? "" : " AND " + selection);
-        return db.update(Tables.CONTACTS, values, selectionWithId, selectionArgs);
+        return db.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
     }
 
     private int updateData(ContentValues values, String selection,
@@ -1763,7 +1770,7 @@ public class ContactsProvider2 extends ContentProvider {
         mValues.clear();
         mValues.putAll(values);
         mValues.remove(Data._ID);
-        mValues.remove(Data.CONTACT_ID);
+        mValues.remove(Data.RAW_CONTACT_ID);
         mValues.remove(Data.MIMETYPE);
 
         String packageName = values.getAsString(Data.RES_PACKAGE);
@@ -1828,7 +1835,7 @@ public class ContactsProvider2 extends ContentProvider {
             return 0;
         }
 
-        db.update(Tables.CONTACTS, optionValues,
+        db.update(Tables.RAW_CONTACTS, optionValues,
                 RawContacts.AGGREGATE_ID + "=" + aggregateId, null);
         return db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
     }
@@ -1839,20 +1846,20 @@ public class ContactsProvider2 extends ContentProvider {
         mLastTimeContactedUpdate.execute();
     }
 
-    private static class ContactPair {
-        final long contactId1;
-        final long contactId2;
+    private static class RawContactPair {
+        final long rawContactId1;
+        final long rawContactId2;
 
         /**
-         * Constructor that ensures that this.contactId1 &lt; this.contactId2
+         * Constructor that ensures that this.rawContactId1 &lt; this.rawContactId2
          */
-        public ContactPair(long contactId1, long contactId2) {
-            if (contactId1 < contactId2) {
-                this.contactId1 = contactId1;
-                this.contactId2 = contactId2;
+        public RawContactPair(long rawContactId1, long rawContactId2) {
+            if (rawContactId1 < rawContactId2) {
+                this.rawContactId1 = rawContactId1;
+                this.rawContactId2 = rawContactId2;
             } else {
-                this.contactId2 = contactId1;
-                this.contactId1 = contactId2;
+                this.rawContactId2 = rawContactId1;
+                this.rawContactId1 = rawContactId2;
             }
         }
     }
@@ -1860,17 +1867,17 @@ public class ContactsProvider2 extends ContentProvider {
     private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
         int exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
         long aggregateId = values.getAsInteger(AggregationExceptions.AGGREGATE_ID);
-        long contactId = values.getAsInteger(AggregationExceptions.CONTACT_ID);
+        long rawContactId = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID);
 
         // First, we build a list of contactID-contactID pairs for the given aggregate and contact.
-        ArrayList<ContactPair> pairs = new ArrayList<ContactPair>();
+        ArrayList<RawContactPair> pairs = new ArrayList<RawContactPair>();
         Cursor c = db.query(ContactsQuery.TABLE, ContactsQuery.PROJECTION, RawContacts.AGGREGATE_ID
                 + "=" + aggregateId, null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long aggregatedContactId = c.getLong(ContactsQuery.CONTACT_ID);
-                if (aggregatedContactId != contactId) {
-                    pairs.add(new ContactPair(aggregatedContactId, contactId));
+                long aggregatedContactId = c.getLong(ContactsQuery.RAW_CONTACT_ID);
+                if (aggregatedContactId != rawContactId) {
+                    pairs.add(new RawContactPair(aggregatedContactId, rawContactId));
                 }
             }
         } finally {
@@ -1881,23 +1888,23 @@ public class ContactsProvider2 extends ContentProvider {
         // the corresponding exception
         ContentValues exceptionValues = new ContentValues(3);
         exceptionValues.put(AggregationExceptions.TYPE, exceptionType);
-        for (ContactPair pair : pairs) {
+        for (RawContactPair pair : pairs) {
             final String whereClause =
-                    AggregationExceptionColumns.CONTACT_ID1 + "=" + pair.contactId1 + " AND "
-                    + AggregationExceptionColumns.CONTACT_ID2 + "=" + pair.contactId2;
+                    AggregationExceptionColumns.RAW_CONTACT_ID1 + "=" + pair.rawContactId1 + " AND "
+                    + AggregationExceptionColumns.RAW_CONTACT_ID2 + "=" + pair.rawContactId2;
             if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC) {
                 db.delete(Tables.AGGREGATION_EXCEPTIONS, whereClause, null);
             } else {
-                exceptionValues.put(AggregationExceptionColumns.CONTACT_ID1, pair.contactId1);
-                exceptionValues.put(AggregationExceptionColumns.CONTACT_ID2, pair.contactId2);
+                exceptionValues.put(AggregationExceptionColumns.RAW_CONTACT_ID1, pair.rawContactId1);
+                exceptionValues.put(AggregationExceptionColumns.RAW_CONTACT_ID2, pair.rawContactId2);
                 db.replace(Tables.AGGREGATION_EXCEPTIONS, AggregationExceptions._ID,
                         exceptionValues);
             }
         }
 
-        int aggregationMode = mContactAggregator.markContactForAggregation(contactId);
+        int aggregationMode = mContactAggregator.markContactForAggregation(rawContactId);
         if (aggregationMode != RawContacts.AGGREGATION_MODE_DISABLED) {
-            mContactAggregator.aggregateContact(db, contactId);
+            mContactAggregator.aggregateContact(db, rawContactId);
             if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
                     || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
                 mContactAggregator.updateAggregateData(aggregateId);
@@ -2065,7 +2072,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             case AGGREGATES_DATA: {
                 long aggId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES_GROUPS);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES_GROUPS);
                 qb.setProjectionMap(sDataContactsGroupsAggregateProjectionMap);
                 qb.appendWhere(RawContacts.AGGREGATE_ID + "=" + aggId + " AND ");
                 applyDataRestrictionExceptions(qb);
@@ -2073,7 +2080,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case PHONES_FILTER: {
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
@@ -2084,47 +2091,47 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case PHONES: {
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = \"" + Phone.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
 
             case POSTALS: {
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sDataContactsAggregateProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = \"" + StructuredPostal.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
 
-            case CONTACTS: {
-                qb.setTables(Tables.CONTACTS);
+            case RAW_CONTACTS: {
+                qb.setTables(Tables.RAW_CONTACTS);
                 qb.setProjectionMap(sContactsProjectionMap);
                 applyContactsRestrictionExceptions(qb);
                 break;
             }
 
-            case CONTACTS_ID: {
-                long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.CONTACTS);
+            case RAW_CONTACTS_ID: {
+                long rawContactId = ContentUris.parseId(uri);
+                qb.setTables(Tables.RAW_CONTACTS);
                 qb.setProjectionMap(sContactsProjectionMap);
-                qb.appendWhere(RawContactsColumns.CONCRETE_ID + "=" + contactId + " AND ");
+                qb.appendWhere(RawContactsColumns.CONCRETE_ID + "=" + rawContactId + " AND ");
                 applyContactsRestrictionExceptions(qb);
                 break;
             }
 
-            case CONTACTS_DATA: {
-                long contactId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS);
+            case RAW_CONTACTS_DATA: {
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
                 qb.setProjectionMap(sDataContactsGroupsProjectionMap);
-                qb.appendWhere(Data.CONTACT_ID + "=" + contactId + " AND ");
+                qb.appendWhere(Data.RAW_CONTACT_ID + "=" + rawContactId + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
             }
 
             case CONTACTS_FILTER_EMAIL: {
                 // TODO: filter query based on callingUid
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sDataContactsProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + "='" + CommonDataKinds.Email.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
@@ -2141,14 +2148,14 @@ public class ContactsProvider2 extends ContentProvider {
                             + RawContacts.ACCOUNT_TYPE + "="
                             + DatabaseUtils.sqlEscapeString(accountType) + " AND ");
                 }
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
                 qb.setProjectionMap(sDataGroupsProjectionMap);
                 applyDataRestrictionExceptions(qb);
                 break;
             }
 
             case DATA_ID: {
-                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS);
+                qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
                 qb.setProjectionMap(sDataGroupsProjectionMap);
                 qb.appendWhere(DataColumns.CONCRETE_ID + "=" + ContentUris.parseId(uri) + " AND ");
                 applyDataRestrictionExceptions(qb);
@@ -2160,7 +2167,7 @@ public class ContactsProvider2 extends ContentProvider {
                 if (TextUtils.isEmpty(sortOrder)) {
                     // Default the sort order to something reasonable so we get consistent
                     // results when callers don't request an ordering
-                    sortOrder = Data.CONTACT_ID;
+                    sortOrder = Data.RAW_CONTACT_ID;
                 }
 
                 final String number = uri.getLastPathSegment();
@@ -2184,14 +2191,14 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case GROUPS_SUMMARY: {
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES_DATA_CONTACTS_AGGREGATES);
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES_DATA_RAW_CONTACTS_AGGREGATES);
                 qb.setProjectionMap(sGroupsSummaryProjectionMap);
                 groupBy = GroupsColumns.CONCRETE_ID;
                 break;
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                qb.setTables(Tables.AGGREGATION_EXCEPTIONS_JOIN_CONTACTS);
+                qb.setTables(Tables.AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS);
                 qb.setProjectionMap(sAggregationExceptionsProjectionMap);
                 break;
             }
@@ -2210,6 +2217,16 @@ public class ContactsProvider2 extends ContentProvider {
 
                 return mContactAggregator.queryAggregationSuggestions(aggregateId, projection,
                         sAggregatesProjectionMap, maxSuggestions);
+            }
+
+            case PRESENCE: {
+                // TODO
+                break;
+            }
+
+            case PRESENCE_ID: {
+                // TODO
+                break;
             }
 
             default:
@@ -2316,8 +2333,8 @@ public class ContactsProvider2 extends ContentProvider {
         if (hasRestrictedAccess()) {
             return "1";
         } else {
-            return "(SELECT " + RawContacts.IS_RESTRICTED + " FROM " + Tables.CONTACTS + " WHERE "
-                    + RawContactsColumns.CONCRETE_ID + "=" + contactIdColumn + ")=0";
+            return "(SELECT " + RawContacts.IS_RESTRICTED + " FROM " + Tables.RAW_CONTACTS
+                    + " WHERE " + RawContactsColumns.CONCRETE_ID + "=" + contactIdColumn + ")=0";
         }
     }
 
@@ -2379,7 +2396,7 @@ public class ContactsProvider2 extends ContentProvider {
                 RawContacts.Data.DATA13,
                 RawContacts.Data.DATA14,
                 RawContacts.Data.DATA15,
-                RawContacts.Data.CONTACT_ID,
+                RawContacts.Data.RAW_CONTACT_ID,
                 RawContacts.Data.IS_PRIMARY,
                 RawContacts.Data.DATA_VERSION,
                 GroupMembership.GROUP_SOURCE_ID};
@@ -2403,15 +2420,15 @@ public class ContactsProvider2 extends ContentProvider {
             mIsClosed = false;
 
             final String updatedSortOrder = (sortOrder == null)
-                    ? RawContacts.Data.CONTACT_ID
-                    : (RawContacts.Data.CONTACT_ID + "," + sortOrder);
+                    ? RawContacts.Data.RAW_CONTACT_ID
+                    : (RawContacts.Data.RAW_CONTACT_ID + "," + sortOrder);
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS);
+            qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
             qb.setProjectionMap(sDataContactsGroupsProjectionMap);
             if (contactsIdString != null) {
-                qb.appendWhere(Data.CONTACT_ID + "=" + contactsIdString);
+                qb.appendWhere(Data.RAW_CONTACT_ID + "=" + contactsIdString);
             }
             final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
             final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
@@ -2452,13 +2469,13 @@ public class ContactsProvider2 extends ContentProvider {
 
             final SQLiteCursor c = (SQLiteCursor) mEntityCursor;
 
-            final long contactId = c.getLong(COLUMN_CONTACT_ID);
+            final long rawContactId = c.getLong(COLUMN_CONTACT_ID);
 
             // we expect the cursor is already at the row we need to read from
             ContentValues contactValues = new ContentValues();
             contactValues.put(RawContacts.ACCOUNT_NAME, c.getString(COLUMN_ACCOUNT_NAME));
             contactValues.put(RawContacts.ACCOUNT_TYPE, c.getString(COLUMN_ACCOUNT_TYPE));
-            contactValues.put(RawContacts._ID, contactId);
+            contactValues.put(RawContacts._ID, rawContactId);
             contactValues.put(RawContacts.DIRTY, c.getLong(COLUMN_DIRTY));
             contactValues.put(RawContacts.VERSION, c.getLong(COLUMN_VERSION));
             contactValues.put(RawContacts.SOURCE_ID, c.getString(COLUMN_SOURCE_ID));
@@ -2466,7 +2483,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             // read data rows until the contact id changes
             do {
-                if (contactId != c.getLong(COLUMN_CONTACT_ID)) {
+                if (rawContactId != c.getLong(COLUMN_CONTACT_ID)) {
                     break;
                 }
                 // add the data to to the contact
@@ -2508,10 +2525,10 @@ public class ContactsProvider2 extends ContentProvider {
             String sortOrder) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
-            case CONTACTS:
-            case CONTACTS_ID:
+            case RAW_CONTACTS:
+            case RAW_CONTACTS_ID:
                 String contactsIdString = null;
-                if (match == CONTACTS_ID) {
+                if (match == RAW_CONTACTS_ID) {
                     contactsIdString = uri.getPathSegments().get(1);
                 }
 
@@ -2528,8 +2545,8 @@ public class ContactsProvider2 extends ContentProvider {
         switch (match) {
             case AGGREGATES: return Aggregates.CONTENT_TYPE;
             case AGGREGATES_ID: return Aggregates.CONTENT_ITEM_TYPE;
-            case CONTACTS: return RawContacts.CONTENT_TYPE;
-            case CONTACTS_ID: return RawContacts.CONTENT_ITEM_TYPE;
+            case RAW_CONTACTS: return RawContacts.CONTENT_TYPE;
+            case RAW_CONTACTS_ID: return RawContacts.CONTENT_ITEM_TYPE;
             case DATA_ID:
                 final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
                 long dataId = ContentUris.parseId(uri);
@@ -2556,13 +2573,13 @@ public class ContactsProvider2 extends ContentProvider {
         }
     }
 
-    private void setDisplayName(long contactId, String displayName) {
+    private void setDisplayName(long rawContactId, String displayName) {
         if (displayName != null) {
             mContactDisplayNameUpdate.bindString(1, displayName);
         } else {
             mContactDisplayNameUpdate.bindNull(1);
         }
-        mContactDisplayNameUpdate.bindLong(2, contactId);
+        mContactDisplayNameUpdate.bindLong(2, rawContactId);
         mContactDisplayNameUpdate.execute();
     }
 
@@ -2653,20 +2670,20 @@ public class ContactsProvider2 extends ContentProvider {
         filter.append(" IN (SELECT ");
         filter.append(RawContacts.AGGREGATE_ID);
         filter.append(" FROM ");
-        filter.append(Tables.CONTACTS);
+        filter.append(Tables.RAW_CONTACTS);
         filter.append(" WHERE ");
         filter.append(RawContacts._ID);
         filter.append(" IN ");
-        filter.append(getContactsByFilterAsNestedQuery(filterParam));
+        filter.append(getRawContactsByFilterAsNestedQuery(filterParam));
         filter.append(")");
         return filter.toString();
     }
 
-    public String getContactsByFilterAsNestedQuery(String filterParam) {
+    public String getRawContactsByFilterAsNestedQuery(String filterParam) {
         // NOTE: Query parameters won't work here since the SQL compiler
         // needs to parse the actual string to know that it can use the
         // index to do a prefix scan.
-        return "(SELECT  contact_id FROM name_lookup WHERE normalized_name GLOB '"
+        return "(SELECT raw_contact_id FROM name_lookup WHERE normalized_name GLOB '"
                 + NameNormalizer.normalize(filterParam) + "*')";
     }
 

@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 51;
+    private static final int DATABASE_VERSION = 52;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -68,7 +68,7 @@ import java.util.HashMap;
     public interface Tables {
         public static final String ACCOUNTS = "accounts";
         public static final String AGGREGATES = "aggregates";
-        public static final String CONTACTS = "contacts";
+        public static final String RAW_CONTACTS = "raw_contacts";
         public static final String PACKAGES = "packages";
         public static final String MIMETYPES = "mimetypes";
         public static final String PHONE_LOOKUP = "phone_lookup";
@@ -80,51 +80,52 @@ import java.util.HashMap;
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
 
         public static final String AGGREGATES_JOIN_PRESENCE_PRIMARY_PHONE = "aggregates "
-                + "LEFT OUTER JOIN contacts ON (aggregates._id = contacts.aggregate_id) "
-                + "LEFT OUTER JOIN presence ON (contacts._id = presence.contact_id) "
+                + "LEFT OUTER JOIN raw_contacts ON (aggregates._id = raw_contacts.aggregate_id) "
+                + "LEFT OUTER JOIN presence ON (raw_contacts._id = presence.raw_contact_id) "
                 + "LEFT OUTER JOIN data ON (primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
 
-        public static final String DATA_JOIN_MIMETYPE_CONTACTS = "data "
+        public static final String DATA_JOIN_MIMETYPE_RAW_CONTACTS = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
 
-        public static final String DATA_JOIN_CONTACTS_GROUPS = "data "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id)"
+        public static final String DATA_JOIN_RAW_CONTACTS_GROUPS = "data "
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)"
                 + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
                 + ")";
 
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS = "data "
+        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS = "data "
                 + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
 
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES = "data "
+        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES = "data "
                 + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + "LEFT OUTER JOIN aggregates ON (raw_contacts.aggregate_id = aggregates._id)";
 
-        public static final String DATA_JOIN_MIMETYPES_CONTACTS_AGGREGATES = "data "
+        public static final String DATA_JOIN_MIMETYPES_RAW_CONTACTS_AGGREGATES = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + "LEFT OUTER JOIN aggregates ON (raw_contacts.aggregate_id = aggregates._id)";
 
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES_GROUPS = "data "
+        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES_GROUPS =
+                "data "
                 + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN groups "
                 + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
                 + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + "LEFT OUTER JOIN aggregates ON (raw_contacts.aggregate_id = aggregates._id)";
 
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_CONTACTS_GROUPS = "data "
+        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS = "data "
                 + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN groups "
                 + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
                 + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") ";
@@ -132,36 +133,39 @@ import java.util.HashMap;
         public static final String GROUPS_JOIN_PACKAGES = "groups "
                 + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id)";
 
-        public static final String GROUPS_JOIN_PACKAGES_DATA_CONTACTS_AGGREGATES = "groups "
+        public static final String GROUPS_JOIN_PACKAGES_DATA_RAW_CONTACTS_AGGREGATES = "groups "
                 + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id) "
                 + "LEFT OUTER JOIN data "
                 + "  ON (groups._id = data." + GroupMembership.GROUP_ROW_ID + ") "
-                + "LEFT OUTER JOIN contacts ON (data.contact_id = contacts._id) "
-                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + "LEFT OUTER JOIN aggregates ON (raw_contacts.aggregate_id = aggregates._id)";
 
         public static final String ACTIVITIES = "activities";
 
         public static final String ACTIVITIES_JOIN_MIMETYPES = "activities "
                 + "LEFT OUTER JOIN mimetypes ON (activities.mimetype_id = mimetypes._id)";
 
-        public static final String ACTIVITIES_JOIN_PACKAGES_MIMETYPES_CONTACTS_AGGREGATES = "activities "
+        public static final String ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES =
+                "activities "
                 + "LEFT OUTER JOIN packages ON (activities.package_id = packages._id) "
                 + "LEFT OUTER JOIN mimetypes ON (activities.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN contacts ON (activities.author_contact_id = contacts._id) "
-                + "LEFT OUTER JOIN aggregates ON (contacts.aggregate_id = aggregates._id)";
+                + "LEFT OUTER JOIN raw_contacts ON (activities.author_contact_id = " +
+                		"raw_contacts._id) "
+                + "LEFT OUTER JOIN aggregates ON (raw_contacts.aggregate_id = aggregates._id)";
 
-        public static final String NAME_LOOKUP_JOIN_CONTACTS = "name_lookup "
-                + "INNER JOIN contacts ON (name_lookup.contact_id = contacts._id)";
+        public static final String NAME_LOOKUP_JOIN_RAW_CONTACTS = "name_lookup "
+                + "INNER JOIN raw_contacts ON (name_lookup.raw_contact_id = raw_contacts._id)";
 
-        public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS = "agg_exceptions "
-                + "INNER JOIN contacts contacts1 "
-                + "ON (agg_exceptions.contact_id1 = contacts1._id) ";
+        public static final String AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS = "agg_exceptions "
+                + "INNER JOIN raw_contacts raw_contacts1 "
+                + "ON (agg_exceptions.raw_contact_id1 = raw_contacts1._id) ";
 
-        public static final String AGGREGATION_EXCEPTIONS_JOIN_CONTACTS_TWICE = "agg_exceptions "
-                + "INNER JOIN contacts contacts1 "
-                + "ON (agg_exceptions.contact_id1 = contacts1._id) "
-                + "INNER JOIN contacts contacts2 "
-                + "ON (agg_exceptions.contact_id2 = contacts2._id) ";
+        public static final String AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS_TWICE =
+                "agg_exceptions "
+                + "INNER JOIN raw_contacts raw_contacts1 "
+                + "ON (agg_exceptions.raw_contact_id1 = raw_contacts1._id) "
+                + "INNER JOIN raw_contacts raw_contacts2 "
+                + "ON (agg_exceptions.raw_contact_id2 = raw_contacts2._id) ";
     }
 
     public interface Clauses {
@@ -183,7 +187,7 @@ import java.util.HashMap;
 
         // TODO: add in check against package_visible
         public static final String IN_VISIBLE_GROUP = "SELECT MIN(COUNT(" + DataColumns.CONCRETE_ID
-                + "),1) FROM " + Tables.DATA_JOIN_CONTACTS_GROUPS + " WHERE "
+                + "),1) FROM " + Tables.DATA_JOIN_RAW_CONTACTS_GROUPS + " WHERE "
                 + DataColumns.MIMETYPE_ID + "=? AND " + RawContacts.AGGREGATE_ID + "="
                 + AggregatesColumns.CONCRETE_ID + " AND " + Groups.GROUP_VISIBLE + "=1";
 
@@ -195,11 +199,13 @@ import java.util.HashMap;
 
     public interface AggregatesColumns {
         public static final String OPTIMAL_PRIMARY_PHONE_ID = "optimal_phone_id";
-        public static final String OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED = "optimal_phone_is_restricted";
+        public static final String OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED =
+                "optimal_phone_is_restricted";
         public static final String FALLBACK_PRIMARY_PHONE_ID = "fallback_phone_id";
 
         public static final String OPTIMAL_PRIMARY_EMAIL_ID = "optimal_email_id";
-        public static final String OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED = "optimal_email_is_restricted";
+        public static final String OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED =
+                "optimal_email_is_restricted";
         public static final String FALLBACK_PRIMARY_EMAIL_ID = "fallback_email_id";
 
         public static final String SINGLE_IS_RESTRICTED = "single_is_restricted";
@@ -221,19 +227,19 @@ import java.util.HashMap;
 
     public interface RawContactsColumns {
         public static final String CONCRETE_ID =
-                Tables.CONTACTS + "." + BaseColumns._ID;
+                Tables.RAW_CONTACTS + "." + BaseColumns._ID;
         public static final String CONCRETE_ACCOUNT_NAME =
-                Tables.CONTACTS + "." + RawContacts.ACCOUNT_NAME;
+                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_NAME;
         public static final String CONCRETE_ACCOUNT_TYPE =
-                Tables.CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
+                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
         public static final String CONCRETE_SOURCE_ID =
-                Tables.CONTACTS + "." + RawContacts.SOURCE_ID;
+                Tables.RAW_CONTACTS + "." + RawContacts.SOURCE_ID;
         public static final String CONCRETE_VERSION =
-                Tables.CONTACTS + "." + RawContacts.VERSION;
+                Tables.RAW_CONTACTS + "." + RawContacts.VERSION;
         public static final String CONCRETE_DIRTY =
-                Tables.CONTACTS + "." + RawContacts.DIRTY;
+                Tables.RAW_CONTACTS + "." + RawContacts.DIRTY;
         public static final String CONCRETE_DELETED =
-                Tables.CONTACTS + "." + RawContacts.DELETED;
+                Tables.RAW_CONTACTS + "." + RawContacts.DELETED;
         public static final String DISPLAY_NAME = "display_name";
     }
 
@@ -242,7 +248,7 @@ import java.util.HashMap;
         public static final String MIMETYPE_ID = "mimetype_id";
 
         public static final String CONCRETE_ID = Tables.DATA + "." + BaseColumns._ID;
-        public static final String CONCRETE_CONTACT_ID = Tables.DATA + "." + Data.CONTACT_ID;
+        public static final String CONCRETE_CONTACT_ID = Tables.DATA + "." + Data.RAW_CONTACT_ID;
         public static final String CONCRETE_GROUP_ID = Tables.DATA + "."
                 + GroupMembership.GROUP_ROW_ID;
 
@@ -271,7 +277,7 @@ import java.util.HashMap;
     }
 
     public interface GroupMembershipColumns {
-        public static final String CONTACT_ID = Data.CONTACT_ID;
+        public static final String RAW_CONTACT_ID = Data.RAW_CONTACT_ID;
         public static final String GROUP_ROW_ID = GroupMembership.GROUP_ROW_ID;
     }
 
@@ -295,13 +301,13 @@ import java.util.HashMap;
     public interface PhoneLookupColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String DATA_ID = "data_id";
-        public static final String CONTACT_ID = "contact_id";
+        public static final String RAW_CONTACT_ID = "raw_contact_id";
         public static final String NORMALIZED_NUMBER = "normalized_number";
     }
 
     public interface NameLookupColumns {
         public static final String _ID = BaseColumns._ID;
-        public static final String CONTACT_ID = "contact_id";
+        public static final String RAW_CONTACT_ID = "raw_contact_id";
         public static final String NORMALIZED_NAME = "normalized_name";
         public static final String NAME_TYPE = "name_type";
     }
@@ -344,8 +350,8 @@ import java.util.HashMap;
 
     public interface AggregationExceptionColumns {
         public static final String _ID = BaseColumns._ID;
-        public static final String CONTACT_ID1 = "contact_id1";
-        public static final String CONTACT_ID2 = "contact_id2";
+        public static final String RAW_CONTACT_ID1 = "raw_contact_id1";
+        public static final String RAW_CONTACT_ID2 = "raw_contact_id2";
     }
 
     public interface NicknameLookupColumns {
@@ -427,11 +433,11 @@ import java.util.HashMap;
         mPackageQuery = db.compileStatement("SELECT " + PackagesColumns._ID + " FROM "
                 + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
         mAggregateIdQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATE_ID + " FROM "
-                + Tables.CONTACTS + " WHERE " + RawContacts._ID + "=?");
-        mAggregateIdUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
+        mAggregateIdUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.AGGREGATE_ID + "=?" + " WHERE " + RawContacts._ID + "=?");
         mAggregationModeQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATION_MODE
-                + " FROM " + Tables.CONTACTS + " WHERE " + RawContacts._ID + "=?");
+                + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
                 + MimetypesColumns.MIMETYPE + ") VALUES (?)");
         mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGES + "("
@@ -443,7 +449,7 @@ import java.util.HashMap;
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
         mNameLookupInsert = db.compileStatement("INSERT INTO " + Tables.NAME_LOOKUP + "("
-                + NameLookupColumns.CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
+                + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
                 + NameLookupColumns.NORMALIZED_NAME + ") VALUES (?,?,?)");
 
         final String visibleUpdate = "UPDATE " + Tables.AGGREGATES + " SET "
@@ -460,7 +466,7 @@ import java.util.HashMap;
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + tableName + " ("+
                 Presence._ID + " INTEGER PRIMARY KEY," +
-                Presence.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
+                Presence.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
                 Presence.IM_PROTOCOL + " TEXT," +
                 Presence.IM_HANDLE + " TEXT," +
@@ -472,7 +478,7 @@ import java.util.HashMap;
         ");");
 
         db.execSQL("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + Tables.PRESENCE + " ("
-                + Presence.CONTACT_ID + ");");
+                + Presence.RAW_CONTACT_ID + ");");
     }
 
     @Override
@@ -502,7 +508,7 @@ import java.util.HashMap;
         ");");
 
         // Contacts table
-        db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
+        db.execSQL("CREATE TABLE " + Tables.RAW_CONTACTS + " (" +
                 RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 RawContacts.IS_RESTRICTED + " INTEGER DEFAULT 0," +
                 RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
@@ -539,7 +545,7 @@ import java.util.HashMap;
                 Data._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
-                Data.CONTACT_ID + " INTEGER NOT NULL," +
+                Data.RAW_CONTACT_ID + " INTEGER NOT NULL," +
                 Data.IS_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.IS_SUPER_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.DATA_VERSION + " INTEGER NOT NULL DEFAULT 0," +
@@ -570,23 +576,23 @@ import java.util.HashMap;
          *
          * increment the contact.version whenever the contact is updated
          */
-        db.execSQL("CREATE TRIGGER " + Tables.CONTACTS + "_updated1 "
-                + "   BEFORE UPDATE ON " + Tables.CONTACTS
+        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_updated1 "
+                + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
                 + " BEGIN "
-                + "   UPDATE " + Tables.CONTACTS
+                + "   UPDATE " + Tables.RAW_CONTACTS
                 + "     SET "
                 +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1, "
                 +         RawContacts.DIRTY + "=1"
                 + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID + ";"
                 + " END");
 
-        db.execSQL("CREATE TRIGGER " + Tables.CONTACTS + "_deleted "
-                + "   BEFORE DELETE ON " + Tables.CONTACTS
+        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_deleted "
+                + "   BEFORE DELETE ON " + Tables.RAW_CONTACTS
                 + " BEGIN "
                 + "   DELETE FROM " + Tables.DATA
-                + "     WHERE " + Data.CONTACT_ID + "=OLD." + RawContacts._ID + ";"
+                + "     WHERE " + Data.RAW_CONTACT_ID + "=OLD." + RawContacts._ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
-                + "     WHERE " + PhoneLookupColumns.CONTACT_ID + "=OLD." + RawContacts._ID + ";"
+                + "     WHERE " + PhoneLookupColumns.RAW_CONTACT_ID + "=OLD." + RawContacts._ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated AFTER UPDATE ON " + Tables.DATA
@@ -594,9 +600,9 @@ import java.util.HashMap;
                 + "   UPDATE " + Tables.DATA
                 + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
                 + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
-                + "   UPDATE " + Tables.CONTACTS
+                + "   UPDATE " + Tables.RAW_CONTACTS
                 + "     SET " + RawContacts.DIRTY + "=1"
-                + "     WHERE " + RawContacts._ID + "=OLD." + Data.CONTACT_ID + ";"
+                + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_inserted BEFORE INSERT ON " + Tables.DATA
@@ -608,9 +614,9 @@ import java.util.HashMap;
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
                 + " BEGIN "
-                + "   UPDATE " + Tables.CONTACTS
+                + "   UPDATE " + Tables.RAW_CONTACTS
                 + "     SET " + RawContacts.DIRTY + "=1"
-                + "     WHERE " + RawContacts._ID + "=OLD." + Data.CONTACT_ID + ";"
+                + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
                 + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
                 + " END");
@@ -619,20 +625,22 @@ import java.util.HashMap;
         db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
                 PhoneLookupColumns._ID + " INTEGER PRIMARY KEY," +
                 PhoneLookupColumns.DATA_ID + " INTEGER REFERENCES data(_id) NOT NULL," +
-                PhoneLookupColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL," +
+                PhoneLookupColumns.RAW_CONTACT_ID
+                        + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
                 PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL" +
         ");");
 
         db.execSQL("CREATE INDEX phone_lookup_index ON " + Tables.PHONE_LOOKUP + " (" +
                 PhoneLookupColumns.NORMALIZED_NUMBER + " ASC, " +
-                PhoneLookupColumns.CONTACT_ID + ", " +
+                PhoneLookupColumns.RAW_CONTACT_ID + ", " +
                 PhoneLookupColumns.DATA_ID +
         ");");
 
         // Private name/nickname table used for lookup
         db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                NameLookupColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL," +
+                NameLookupColumns.RAW_CONTACT_ID
+                        + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
                 NameLookupColumns.NORMALIZED_NAME + " TEXT," +
                 NameLookupColumns.NAME_TYPE + " INTEGER" +
         ");");
@@ -640,7 +648,7 @@ import java.util.HashMap;
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.NORMALIZED_NAME + " ASC, " +
                 NameLookupColumns.NAME_TYPE + " ASC, " +
-                NameLookupColumns.CONTACT_ID +
+                NameLookupColumns.RAW_CONTACT_ID +
         ");");
 
         db.execSQL("CREATE TABLE " + Tables.NICKNAME_LOOKUP + " (" +
@@ -682,20 +690,22 @@ import java.util.HashMap;
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
-                AggregationExceptionColumns.CONTACT_ID1 + " INTEGER REFERENCES contacts(_id), " +
-                AggregationExceptionColumns.CONTACT_ID2 + " INTEGER REFERENCES contacts(_id)" +
+                AggregationExceptionColumns.RAW_CONTACT_ID1
+                        + " INTEGER REFERENCES raw_contacts(_id), " +
+                AggregationExceptionColumns.RAW_CONTACT_ID2
+                        + " INTEGER REFERENCES raw_contacts(_id)" +
         ");");
 
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index1 ON " +
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
-                AggregationExceptionColumns.CONTACT_ID1 + ", " +
-                AggregationExceptionColumns.CONTACT_ID2 +
+                AggregationExceptionColumns.RAW_CONTACT_ID1 + ", " +
+                AggregationExceptionColumns.RAW_CONTACT_ID2 +
         ");");
 
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index2 ON " +
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
-                AggregationExceptionColumns.CONTACT_ID2 + ", " +
-                AggregationExceptionColumns.CONTACT_ID1 +
+                AggregationExceptionColumns.RAW_CONTACT_ID2 + ", " +
+                AggregationExceptionColumns.RAW_CONTACT_ID1 +
         ");");
 
         // Activities table
@@ -705,8 +715,8 @@ import java.util.HashMap;
                 ActivitiesColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Activities.RAW_ID + " TEXT," +
                 Activities.IN_REPLY_TO + " TEXT," +
-                Activities.AUTHOR_CONTACT_ID +  " INTEGER REFERENCES contacts(_id)," +
-                Activities.TARGET_CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
+                Activities.AUTHOR_CONTACT_ID +  " INTEGER REFERENCES raw_contacts(_id)," +
+                Activities.TARGET_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 Activities.PUBLISHED + " INTEGER NOT NULL," +
                 Activities.THREAD_PUBLISHED + " INTEGER NOT NULL," +
                 Activities.TITLE + " TEXT NOT NULL," +
@@ -728,7 +738,7 @@ import java.util.HashMap;
 
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACCOUNTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATES + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
@@ -759,7 +769,7 @@ import java.util.HashMap;
     public void wipeData() {
         SQLiteDatabase db = getWritableDatabase();
         db.execSQL("DELETE FROM " + Tables.AGGREGATES + ";");
-        db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
+        db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
@@ -902,20 +912,20 @@ import java.util.HashMap;
     /**
      * Updates the aggregate ID for the specified contact.
      */
-    public void setAggregateId(long contactId, long aggregateId) {
+    public void setAggregateId(long rawContactId, long aggregateId) {
         getWritableDatabase();
         DatabaseUtils.bindObjectToProgram(mAggregateIdUpdate, 1, aggregateId);
-        DatabaseUtils.bindObjectToProgram(mAggregateIdUpdate, 2, contactId);
+        DatabaseUtils.bindObjectToProgram(mAggregateIdUpdate, 2, rawContactId);
         mAggregateIdUpdate.execute();
     }
 
     /**
      * Returns aggregate ID for the given contact or zero if it is NULL.
      */
-    public long getAggregateId(long contactId) {
+    public long getAggregateId(long rawContactId) {
         getReadableDatabase();
         try {
-            DatabaseUtils.bindObjectToProgram(mAggregateIdQuery, 1, contactId);
+            DatabaseUtils.bindObjectToProgram(mAggregateIdQuery, 1, rawContactId);
             return mAggregateIdQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return -1
@@ -923,10 +933,10 @@ import java.util.HashMap;
         }
     }
 
-    public int getAggregationMode(long contactId) {
+    public int getAggregationMode(long rawContactId) {
         getReadableDatabase();
         try {
-            DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, contactId);
+            DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, rawContactId);
             return (int)mAggregationModeQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
             // No valid row found, so return "disabled"
@@ -937,9 +947,9 @@ import java.util.HashMap;
     /**
      * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
      */
-    public void insertNameLookup(long contactId, int lookupType, String name) {
+    public void insertNameLookup(long rawContactId, int lookupType, String name) {
         getWritableDatabase();
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 1, contactId);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 1, rawContactId);
         DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 2, lookupType);
         DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, name);
         mNameLookupInsert.executeInsert();
@@ -948,12 +958,12 @@ import java.util.HashMap;
     public static void buildPhoneLookupQuery(SQLiteQueryBuilder qb, final String number) {
         final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
         final StringBuilder tables = new StringBuilder();
-        tables.append("contacts, (SELECT data_id FROM phone_lookup "
+        tables.append(Tables.RAW_CONTACTS + ", (SELECT data_id FROM phone_lookup "
                 + "WHERE (phone_lookup.normalized_number GLOB '");
         tables.append(normalizedNumber);
         tables.append("*')) AS lookup, " + Tables.DATA_JOIN_MIMETYPES);
         qb.setTables(tables.toString());
-        qb.appendWhere("lookup.data_id=data._id AND data.contact_id=contacts._id AND ");
+        qb.appendWhere("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id AND ");
         qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
         qb.appendWhereEscapeString(number);
         qb.appendWhere(")");
