@@ -392,7 +392,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null));
     }
 
-    public void testContactDirtySetOnChange() {
+    public void testRawContactDirtySetOnChange() {
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
                 createRawContact(mAccount));
         assertDirty(uri, true);
@@ -400,7 +400,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDirty(uri, false);
     }
 
-    public void testContactDirtyAndVersion() {
+    public void testRawContactDirtyAndVersion() {
         final long rawContactId = createRawContact(mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId);
         assertDirty(uri, true);
@@ -409,34 +409,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(ContactsContract.RawContacts.DIRTY, 0);
         values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
+        values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
+                RawContacts.AGGREGATION_MODE_IMMEDITATE);
+        values.put(ContactsContract.RawContacts.STARRED, 1);
         assertEquals(1, mResolver.update(uri, values, null, null));
-        ++version;
         assertEquals(version, getVersion(uri));
 
         assertDirty(uri, false);
-
-        values = new ContentValues();
-        values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 0);
-        assertEquals(1, mResolver.update(uri, values, null, null));
-        ++version;
-        assertEquals(version, getVersion(uri));
-
-        assertDirty(uri, true);
-
-        clearDirty(uri);
-        assertDirty(uri, false);
-        ++version;
-        assertEquals(version, getVersion(uri));
 
         Uri emailUri = insertEmail(rawContactId, "goo@woo.com");
         assertDirty(uri, true);
         ++version;
-        version = getVersion(uri);
-
-        clearDirty(uri);
-        assertDirty(uri, false);
-        ++version;
         assertEquals(version, getVersion(uri));
+        clearDirty(uri);
 
         values = new ContentValues();
         values.put(Email.DATA, "goo@hoo.com");
@@ -444,21 +429,42 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDirty(uri, true);
         ++version;
         assertEquals(version, getVersion(uri));
-
         clearDirty(uri);
-        assertDirty(uri, false);
+
+        mResolver.delete(emailUri, null, null);
+        assertDirty(uri, true);
         ++version;
         assertEquals(version, getVersion(uri));
     }
 
-    public void testContactVersionUpdates() {
+    public void testRawContactClearDirty() {
+        final long rawContactId = createRawContact(mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
-                createRawContact(mAccount));
+                rawContactId);
         long version = getVersion(uri);
-        ContentValues values = new ContentValues();
-        values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
-        mResolver.update(uri, values, null, null);
-        assertEquals(version + 1, getVersion(uri));
+        insertEmail(rawContactId, "goo@woo.com");
+        assertDirty(uri, true);
+        version++;
+        assertEquals(version, getVersion(uri));
+
+        clearDirty(uri);
+        assertDirty(uri, false);
+        assertEquals(version, getVersion(uri));
+    }
+
+    public void testRawContactDeletionSetsDirty() {
+        final long rawContactId = createRawContact(mAccount);
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
+                rawContactId);
+        long version = getVersion(uri);
+        clearDirty(uri);
+        assertDirty(uri, false);
+
+        mResolver.delete(uri, null, null);
+        assertStoredValues(uri, RawContacts.DELETED, "1");
+        assertDirty(uri, true);
+        version++;
+        assertEquals(version, getVersion(uri));
     }
 }
 

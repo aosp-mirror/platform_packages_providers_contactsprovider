@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 54;
+    private static final int DATABASE_VERSION = 55;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -568,25 +568,8 @@ import java.util.HashMap;
         ");");
 
         /**
-         * set contact.dirty whenever the contact is updated and the new version does not explicity
-         * clear the dirty flag
-         *
-         * Want to have a data row that has the server version of the contact. Then when I save
-         * an entry from the server into the provider I will set the server version of the data
-         * while also clearing the dirty flag of the contact.
-         *
-         * increment the contact.version whenever the contact is updated
+         * Automatically delete Data rows when a raw contact is deleted.
          */
-        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_updated1 "
-                + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
-                + " BEGIN "
-                + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET "
-                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1, "
-                +         RawContacts.DIRTY + "=1"
-                + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID + ";"
-                + " END");
-
         db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_deleted "
                 + "   BEFORE DELETE ON " + Tables.RAW_CONTACTS
                 + " BEGIN "
@@ -596,27 +579,46 @@ import java.util.HashMap;
                 + "     WHERE " + PhoneLookupColumns.RAW_CONTACT_ID + "=OLD." + RawContacts._ID + ";"
                 + " END");
 
+        /**
+         * Triggers that set {@link RawContacts#DIRTY} and update {@link RawContacts#VERSION}
+         * when the contact is marked for deletion or any time a data row is inserted, updated
+         * or deleted.
+         */
+        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_marked_deleted "
+                + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
+                + " BEGIN "
+                + "   UPDATE " + Tables.RAW_CONTACTS
+                + "     SET "
+                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1, "
+                +         RawContacts.DIRTY + "=1"
+                + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID
+                + "       AND NEW." + RawContacts.DELETED + "!= OLD." + RawContacts.DELETED + ";"
+                + " END");
+
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated AFTER UPDATE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.DATA
                 + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
                 + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
                 + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.DIRTY + "=1"
+                + "     SET " + RawContacts.DIRTY + "=1, "
+                + "         " +	RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_inserted BEFORE INSERT ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.DIRTY + "=1"
+                + "     SET " + RawContacts.DIRTY + "=1, "
+                + "         " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=NEW." + Data.RAW_CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.DIRTY + "=1"
+                + "     SET " + RawContacts.DIRTY + "=1,"
+                + "         " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
                 + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
