@@ -367,8 +367,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         + " AND " + Data.MIMETYPE + "='testmimetype'", null));
     }
 
-    /** Fix and reenable the test */
-    public void __testRawContactDeletion() {
+    public void testRawContactDeletion() {
         long rawContactId = createContact();
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
@@ -389,8 +388,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(uri, null, null));
         assertEquals(0, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
-
-        // Even though the Presence row is not deleted, it can no longer be accessed.
         assertEquals(0, getCount(Presence.CONTENT_URI, Presence.RAW_CONTACT_ID + "=" + rawContactId,
                 null));
     }

@@ -306,8 +306,10 @@ public class ContactsProvider2 extends ContentProvider {
     private static final HashMap<String, String> sGroupsProjectionMap;
     /** Contains {@link Groups} columns along with summary details */
     private static final HashMap<String, String> sGroupsSummaryProjectionMap;
-    /** Contains the just the agg_exceptions columns */
+    /** Contains the agg_exceptions columns */
     private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
+    /** Contains Presence columns */
+    private static final HashMap<String, String> sPresenceProjectionMap;
 
     /** Sql select statement that returns the contact id associated with a data record. */
     private static final String sNestedContactIdSelect;
@@ -543,6 +545,18 @@ public class ContactsProvider2 extends ContentProvider {
                 + " AS " + AggregationExceptions.AGGREGATE_ID);
         columns.put(AggregationExceptions.RAW_CONTACT_ID, AggregationExceptionColumns.RAW_CONTACT_ID2);
         sAggregationExceptionsProjectionMap = columns;
+
+
+        columns = new HashMap<String, String>();
+        columns.put(Presence._ID, Presence._ID);
+        columns.put(Presence.RAW_CONTACT_ID, Presence.RAW_CONTACT_ID);
+        columns.put(Presence.DATA_ID, Presence.DATA_ID);
+        columns.put(Presence.IM_ACCOUNT, Presence.IM_ACCOUNT);
+        columns.put(Presence.IM_HANDLE, Presence.IM_HANDLE);
+        columns.put(Presence.IM_PROTOCOL, Presence.IM_PROTOCOL);
+        columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
+        columns.put(Presence.PRESENCE_CUSTOM_STATUS, Presence.PRESENCE_CUSTOM_STATUS);
+        sPresenceProjectionMap = columns;
 
         sNestedContactIdSelect = "SELECT " + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
                 + Data._ID + "=?";
@@ -1635,6 +1649,7 @@ public class ContactsProvider2 extends ContentProvider {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         if (permanently) {
+            db.delete(Tables.PRESENCE, Presence.RAW_CONTACT_ID + "=" + rawContactId, null);
             return db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
             mValues.clear();
@@ -2220,12 +2235,15 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case PRESENCE: {
-                // TODO
+                qb.setTables(Tables.PRESENCE);
+                qb.setProjectionMap(sPresenceProjectionMap);
                 break;
             }
 
             case PRESENCE_ID: {
-                // TODO
+                qb.setTables(Tables.PRESENCE);
+                qb.setProjectionMap(sPresenceProjectionMap);
+                qb.appendWhere(Presence._ID + "=" + ContentUris.parseId(uri));
                 break;
             }
 
