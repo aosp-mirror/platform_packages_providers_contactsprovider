@@ -97,13 +97,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected long createRawContact() {
-        ContentValues values = new ContentValues();
-        Uri contactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
-        return ContentUris.parseId(contactUri);
+        return createRawContact(null);
     }
 
-    protected long createRawContact(Account account) {
+    protected long createRawContact(Account account, String... extras) {
         ContentValues values = new ContentValues();
+        for (int i = 0; i < extras.length; ) {
+            values.put(extras[i], extras[i + 1]);
+            i += 2;
+        }
         final Uri uri = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, account);
         Uri contactUri = mResolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
@@ -409,13 +411,17 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 assertNull(actual.toString(), actual.get(columnName));
             }
             if (expectedValue instanceof Long) {
-                assertEquals(actual.toString(), expectedValue, actual.getAsLong(columnName));
+                assertEquals("mismatch at " + columnName + " from " + actual.toString(),
+                        expectedValue, actual.getAsLong(columnName));
             } else if (expectedValue instanceof Integer) {
-                assertEquals(actual.toString(), expectedValue, actual.getAsInteger(columnName));
+                assertEquals("mismatch at " + columnName + " from " + actual.toString(),
+                        expectedValue, actual.getAsInteger(columnName));
             } else if (expectedValue instanceof String) {
-                assertEquals(actual.toString(), expectedValue, actual.getAsString(columnName));
+                assertEquals("mismatch at " + columnName + " from " + actual.toString(),
+                        expectedValue, actual.getAsString(columnName));
             } else {
-                assertEquals(actual.toString(), expectedValue, actual.get(columnName));
+                assertEquals("mismatch at " + columnName + " from " + actual.toString(),
+                        expectedValue, actual.get(columnName));
             }
         }
     }

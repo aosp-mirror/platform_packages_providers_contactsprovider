@@ -2157,9 +2157,9 @@ public class ContactsProvider2 extends ContentProvider {
                 final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
                 final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
                 if (!TextUtils.isEmpty(accountName)) {
-                    qb.appendWhere(RawContacts.ACCOUNT_NAME + "="
+                    qb.appendWhere(RawContactsColumns.CONCRETE_ACCOUNT_NAME + "="
                             + DatabaseUtils.sqlEscapeString(accountName) + " AND "
-                            + RawContacts.ACCOUNT_TYPE + "="
+                            + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + "="
                             + DatabaseUtils.sqlEscapeString(accountType) + " AND ");
                 }
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
@@ -2442,8 +2442,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
-            qb.setProjectionMap(sDataContactsGroupsProjectionMap);
+            qb.setTables(Tables.CONTACT_ENTITIES);
             if (contactsIdString != null) {
                 qb.appendWhere(Data.RAW_CONTACT_ID + "=" + contactsIdString);
             }
@@ -2537,6 +2536,113 @@ public class ContactsProvider2 extends ContentProvider {
         }
     }
 
+    /**
+     * An implementation of EntityIterator that joins the contacts and data tables
+     * and consumes all the data rows for a contact in order to build the Entity for a contact.
+     */
+    private static class GroupsEntityIterator implements EntityIterator {
+        private final Cursor mEntityCursor;
+        private volatile boolean mIsClosed;
+
+        private static final String[] PROJECTION = new String[]{
+                Groups._ID,
+                Groups.ACCOUNT_NAME,
+                Groups.ACCOUNT_TYPE,
+                Groups.SOURCE_ID,
+                Groups.DIRTY,
+                Groups.VERSION,
+                Groups.RES_PACKAGE,
+                Groups.TITLE,
+                Groups.TITLE_RES,
+                Groups.GROUP_VISIBLE};
+
+        private static final int COLUMN_ID = 0;
+        private static final int COLUMN_ACCOUNT_NAME = 1;
+        private static final int COLUMN_ACCOUNT_TYPE = 2;
+        private static final int COLUMN_SOURCE_ID = 3;
+        private static final int COLUMN_DIRTY = 4;
+        private static final int COLUMN_VERSION = 5;
+        private static final int COLUMN_RES_PACKAGE = 6;
+        private static final int COLUMN_TITLE = 7;
+        private static final int COLUMN_TITLE_RES = 8;
+        private static final int COLUMN_GROUP_VISIBLE = 9;
+
+        public GroupsEntityIterator(ContactsProvider2 provider, String groupIdString, Uri uri,
+                String selection, String[] selectionArgs, String sortOrder) {
+            mIsClosed = false;
+
+            final String updatedSortOrder = (sortOrder == null)
+                    ? Groups._ID
+                    : (Groups._ID + "," + sortOrder);
+
+            final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
+            final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+            qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+            qb.setProjectionMap(sGroupsProjectionMap);
+            if (groupIdString != null) {
+                qb.appendWhere(Groups._ID + "=" + groupIdString);
+            }
+            final String accountName = uri.getQueryParameter(Groups.ACCOUNT_NAME);
+            final String accountType = uri.getQueryParameter(Groups.ACCOUNT_TYPE);
+            if (!TextUtils.isEmpty(accountName)) {
+                qb.appendWhere(Groups.ACCOUNT_NAME + "="
+                        + DatabaseUtils.sqlEscapeString(accountName) + " AND "
+                        + Groups.ACCOUNT_TYPE + "="
+                        + DatabaseUtils.sqlEscapeString(accountType));
+            }
+            mEntityCursor = qb.query(db, PROJECTION, selection, selectionArgs,
+                    null, null, updatedSortOrder);
+            mEntityCursor.moveToFirst();
+        }
+
+        public void close() {
+            if (mIsClosed) {
+                throw new IllegalStateException("closing when already closed");
+            }
+            mIsClosed = true;
+            mEntityCursor.close();
+        }
+
+        public boolean hasNext() throws RemoteException {
+            if (mIsClosed) {
+                throw new IllegalStateException("calling hasNext() when the iterator is closed");
+            }
+
+            return !mEntityCursor.isAfterLast();
+        }
+
+        public Entity next() throws RemoteException {
+            if (mIsClosed) {
+                throw new IllegalStateException("calling next() when the iterator is closed");
+            }
+            if (!hasNext()) {
+                throw new IllegalStateException("you may only call next() if hasNext() is true");
+            }
+
+            final SQLiteCursor c = (SQLiteCursor) mEntityCursor;
+
+            final long groupId = c.getLong(COLUMN_ID);
+
+            // we expect the cursor is already at the row we need to read from
+            ContentValues groupValues = new ContentValues();
+            groupValues.put(Groups.ACCOUNT_NAME, c.getString(COLUMN_ACCOUNT_NAME));
+            groupValues.put(Groups.ACCOUNT_TYPE, c.getString(COLUMN_ACCOUNT_TYPE));
+            groupValues.put(Groups._ID, groupId);
+            groupValues.put(Groups.DIRTY, c.getLong(COLUMN_DIRTY));
+            groupValues.put(Groups.VERSION, c.getLong(COLUMN_VERSION));
+            groupValues.put(Groups.SOURCE_ID, c.getString(COLUMN_SOURCE_ID));
+            groupValues.put(Groups.RES_PACKAGE, c.getString(COLUMN_RES_PACKAGE));
+            groupValues.put(Groups.TITLE, c.getString(COLUMN_TITLE));
+            groupValues.put(Groups.TITLE_RES, c.getString(COLUMN_TITLE_RES));
+            groupValues.put(Groups.GROUP_VISIBLE, c.getLong(COLUMN_GROUP_VISIBLE));
+            Entity group = new Entity(groupValues);
+
+            mEntityCursor.moveToNext();
+
+            return group;
+        }
+    }
+
     @Override
     public EntityIterator queryEntities(Uri uri, String selection, String[] selectionArgs,
             String sortOrder) {
@@ -2550,6 +2656,15 @@ public class ContactsProvider2 extends ContentProvider {
                 }
 
                 return new ContactsEntityIterator(this, contactsIdString,
+                        uri, selection, selectionArgs, sortOrder);
+            case GROUPS:
+            case GROUPS_ID:
+                String idString = null;
+                if (match == GROUPS_ID) {
+                    idString = uri.getPathSegments().get(1);
+                }
+
+                return new GroupsEntityIterator(this, idString,
                         uri, selection, selectionArgs, sortOrder);
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);

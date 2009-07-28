@@ -57,7 +57,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 55;
+    private static final int DATABASE_VERSION = 56;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -78,6 +78,7 @@ import java.util.HashMap;
         public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
+        public static final String CONTACT_ENTITIES = "contact_entities_view";
 
         public static final String CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE = "contacts "
                 + "LEFT OUTER JOIN raw_contacts ON (contacts._id = raw_contacts.contact_id) "
@@ -248,6 +249,7 @@ import java.util.HashMap;
         public static final String MIMETYPE_ID = "mimetype_id";
 
         public static final String CONCRETE_ID = Tables.DATA + "." + BaseColumns._ID;
+        public static final String CONCRETE_MIMETYPE_ID = Tables.DATA + "." + MIMETYPE_ID;
         public static final String CONCRETE_RAW_CONTACT_ID = Tables.DATA + "."
                 + Data.RAW_CONTACT_ID;
         public static final String CONCRETE_GROUP_ID = Tables.DATA + "."
@@ -269,6 +271,7 @@ import java.util.HashMap;
         public static final String CONCRETE_DATA14 = Tables.DATA + "." + Data.DATA14;
         public static final String CONCRETE_DATA15 = Tables.DATA + "." + Data.DATA15;
         public static final String CONCRETE_IS_PRIMARY = Tables.DATA + "." + Data.IS_PRIMARY;
+        public static final String CONCRETE_PACKAGE_ID = Tables.DATA + "." + PACKAGE_ID;
     }
 
     // Used only for legacy API support
@@ -339,6 +342,8 @@ import java.util.HashMap;
     public interface PackagesColumns {
         public static final String _ID = BaseColumns._ID;
         public static final String PACKAGE = "package";
+
+        public static final String CONCRETE_ID = Tables.PACKAGES + "." + _ID;
     }
 
     public interface MimetypesColumns {
@@ -727,6 +732,45 @@ import java.util.HashMap;
                 Activities.LINK + " TEXT, " +
                 Activities.THUMBNAIL + " BLOB" +
         ");");
+
+        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS SELECT "
+                + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
+                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
+                + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
+                + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
+                + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
+                + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
+                + Data.MIMETYPE + ", "
+                + Data.DATA1 + ", "
+                + Data.DATA2 + ", "
+                + Data.DATA3 + ", "
+                + Data.DATA4 + ", "
+                + Data.DATA5 + ", "
+                + Data.DATA6 + ", "
+                + Data.DATA7 + ", "
+                + Data.DATA8 + ", "
+                + Data.DATA9 + ", "
+                + Data.DATA10 + ", "
+                + Data.DATA11 + ", "
+                + Data.DATA12 + ", "
+                + Data.DATA13 + ", "
+                + Data.DATA14 + ", "
+                + Data.DATA15 + ", "
+                + Data.RAW_CONTACT_ID + ", "
+                + Data.IS_PRIMARY + ", "
+                + Data.DATA_VERSION + ", "
+                + DataColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
+                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
+                + " FROM " + Tables.DATA
+                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
+                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
+                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
+                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                +   "' AND " + GroupsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_DATA1 + ")");
 
         loadNicknameLookupTable(db);
         if (mDelegate != null) {

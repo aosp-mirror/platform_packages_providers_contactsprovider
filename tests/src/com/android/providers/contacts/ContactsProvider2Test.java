@@ -229,18 +229,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
         long groupId2 = createGroup(mAccount, "gsid2", "title2");
 
-        long c0 = id = createRawContact(mAccount);
+        long c0 = id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c0");
         Uri id_0_0 = insertGroupMembership(id, "gsid1");
         Uri id_0_1 = insertEmail(id, "c0@email.com");
         Uri id_0_2 = insertPhoneNumber(id, "5551212c0");
 
-        long c1 = id = createRawContact(mAccount);
+        long c1 = id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c1");
         Uri id_1_0 = insertGroupMembership(id, "gsid1");
         Uri id_1_1 = insertGroupMembership(id, "gsid2");
         Uri id_1_2 = insertEmail(id, "c1@email.com");
         Uri id_1_3 = insertPhoneNumber(id, "5551212c1");
 
-        long c2 = id = createRawContact(mAccount);
+        long c2 = id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c2");
         Uri id_2_0 = insertGroupMembership(id, "gsid1");
         Uri id_2_1 = insertEmail(id, "c2@email.com");
         Uri id_2_2 = insertPhoneNumber(id, "5551212c2");
@@ -250,8 +250,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri id_3_1 = insertEmail(id, "c3@email.com");
         Uri id_3_2 = insertPhoneNumber(id, "5551212c3");
 
-        EntityIterator iterator = mResolver.queryEntities(RawContacts.CONTENT_URI,
-                "raw_contact_id in (" + c1 + "," + c2 + "," + c3 + ")", null, null);
+        EntityIterator iterator = mResolver.queryEntities(
+                maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, mAccount),
+                RawContacts.SOURCE_ID + " in ('c1', 'c2', 'c3')", null, null);
         Entity entity;
         ContentValues[] subValues;
         entity = iterator.next();
