@@ -29,7 +29,7 @@ import android.os.Binder;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.Phones;
-import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
@@ -206,22 +206,22 @@ public class ContactsActor {
         throw new UnsupportedOperationException("RestrictionExceptions are hard-coded");
     }
 
-    public long getAggregateForContact(long contactId) {
-        Uri contactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, contactId);
-        final Cursor cursor = resolver.query(contactUri, Projections.PROJ_CONTACTS, null,
+    public long getContactForRawContact(long rawContactId) {
+        Uri contactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        final Cursor cursor = resolver.query(contactUri, Projections.PROJ_RAW_CONTACTS, null,
                 null, null);
         if (!cursor.moveToFirst()) {
             cursor.close();
             throw new RuntimeException("Contact didn't have an aggregate");
         }
-        final long aggId = cursor.getLong(Projections.COL_CONTACTS_AGGREGATE);
+        final long aggId = cursor.getLong(Projections.COL_CONTACTS_ID);
         cursor.close();
         return aggId;
     }
 
-    public int getDataCountForAggregate(long aggId) {
-        Uri contactUri = Uri.withAppendedPath(ContentUris.withAppendedId(Aggregates.CONTENT_URI,
-                aggId), Aggregates.Data.CONTENT_DIRECTORY);
+    public int getDataCountForContact(long contactId) {
+        Uri contactUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                contactId), Contacts.Data.CONTENT_DIRECTORY);
         final Cursor cursor = resolver.query(contactUri, Projections.PROJ_ID, null, null,
                 null);
         final int count = cursor.getCount();
@@ -237,13 +237,13 @@ public class ContactsActor {
         resolver.update(updateUri, values, null, null);
     }
 
-    public long getPrimaryPhoneId(long aggId) {
-        Uri aggUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggId);
-        final Cursor cursor = resolver.query(aggUri, Projections.PROJ_AGGREGATES, null,
+    public long getPrimaryPhoneId(long contactId) {
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        final Cursor cursor = resolver.query(contactUri, Projections.PROJ_CONTACTS, null,
                 null, null);
         long primaryPhoneId = -1;
         if (cursor.moveToFirst()) {
-            primaryPhoneId = cursor.getLong(Projections.COL_AGGREGATES_PRIMARY_PHONE_ID);
+            primaryPhoneId = cursor.getLong(Projections.COL_CONTACTS_PRIMARY_PHONE_ID);
         }
         cursor.close();
         return primaryPhoneId;
@@ -278,17 +278,17 @@ public class ContactsActor {
 
         static final int COL_ID = 0;
 
+        static final String[] PROJ_RAW_CONTACTS = new String[] {
+                RawContacts.CONTACT_ID
+        };
+
+        static final int COL_CONTACTS_ID = 0;
+
         static final String[] PROJ_CONTACTS = new String[] {
-                RawContacts.AGGREGATE_ID
+                Contacts.PRIMARY_PHONE_ID
         };
 
-        static final int COL_CONTACTS_AGGREGATE = 0;
-
-        static final String[] PROJ_AGGREGATES = new String[] {
-                Aggregates.PRIMARY_PHONE_ID
-        };
-
-        static final int COL_AGGREGATES_PRIMARY_PHONE_ID = 0;
+        static final int COL_CONTACTS_PRIMARY_PHONE_ID = 0;
 
     }
 }

@@ -27,7 +27,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.test.AndroidTestCase;
@@ -91,13 +91,13 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         // Grey creates an unprotected contact
         long greyContact = mGrey.createContact(false);
         long greyData = mGrey.createPhone(greyContact, PHONE_GREY);
-        long greyAgg = mGrey.getAggregateForContact(greyContact);
+        long greyAgg = mGrey.getContactForRawContact(greyContact);
 
         // Assert that both Grey and Blue can read contact
         assertTrue("Owner of unrestricted contact unable to read",
-                (mGrey.getDataCountForAggregate(greyAgg) == 1));
+                (mGrey.getDataCountForContact(greyAgg) == 1));
         assertTrue("Non-owner of unrestricted contact unable to read",
-                (mBlue.getDataCountForAggregate(greyAgg) == 1));
+                (mBlue.getDataCountForContact(greyAgg) == 1));
 
         // Red grants protected access to itself
         mRed.updateException(PACKAGE_RED, PACKAGE_RED, true);
@@ -105,15 +105,15 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         // Red creates a protected contact
         long redContact = mRed.createContact(true);
         long redData = mRed.createPhone(redContact, PHONE_RED);
-        long redAgg = mRed.getAggregateForContact(redContact);
+        long redAgg = mRed.getContactForRawContact(redContact);
 
         // Assert that only Red can read contact
         assertTrue("Owner of restricted contact unable to read",
-                (mRed.getDataCountForAggregate(redAgg) == 1));
+                (mRed.getDataCountForContact(redAgg) == 1));
         assertTrue("Non-owner of restricted contact able to read",
-                (mBlue.getDataCountForAggregate(redAgg) == 0));
+                (mBlue.getDataCountForContact(redAgg) == 0));
         assertTrue("Non-owner of restricted contact able to read",
-                (mGreen.getDataCountForAggregate(redAgg) == 0));
+                (mGreen.getDataCountForContact(redAgg) == 0));
 
         try {
             // Blue tries to grant an exception for Red data, which should throw
@@ -129,28 +129,28 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
         // Both Blue and Red can read Red contact, but still not Green
         assertTrue("Owner of restricted contact unable to read",
-                (mRed.getDataCountForAggregate(redAgg) == 1));
+                (mRed.getDataCountForContact(redAgg) == 1));
         assertTrue("Non-owner with restriction exception unable to read",
-                (mBlue.getDataCountForAggregate(redAgg) == 1));
+                (mBlue.getDataCountForContact(redAgg) == 1));
         assertTrue("Non-owner of restricted contact able to read",
-                (mGreen.getDataCountForAggregate(redAgg) == 0));
+                (mGreen.getDataCountForContact(redAgg) == 0));
 
         // Red revokes exception to Blue
         mRed.updateException(PACKAGE_RED, PACKAGE_BLUE, false);
 
         // Assert that only Red can read contact
         assertTrue("Owner of restricted contact unable to read",
-                (mRed.getDataCountForAggregate(redAgg) == 1));
+                (mRed.getDataCountForContact(redAgg) == 1));
         assertTrue("Non-owner of restricted contact able to read",
-                (mBlue.getDataCountForAggregate(redAgg) == 0));
+                (mBlue.getDataCountForContact(redAgg) == 0));
         assertTrue("Non-owner of restricted contact able to read",
-                (mGreen.getDataCountForAggregate(redAgg) == 0));
+                (mGreen.getDataCountForContact(redAgg) == 0));
 
     }
 
     /**
      * Create an aggregate that has multiple contacts with various levels of
-     * protected data, and ensure that {@link Aggregates#CONTENT_SUMMARY_URI}
+     * protected data, and ensure that {@link Contacts#CONTENT_SUMMARY_URI}
      * details don't expose {@link Contacts#IS_RESTRICTED} data.
      */
     public void __testAggregateSummary() {
@@ -179,8 +179,8 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         // Make sure both aggregates were joined
         long singleAgg;
         {
-            long redAgg = mRed.getAggregateForContact(redContact);
-            long blueAgg = mBlue.getAggregateForContact(blueContact);
+            long redAgg = mRed.getContactForRawContact(redContact);
+            long blueAgg = mBlue.getContactForRawContact(blueContact);
             assertTrue("Two contacts with identical name not aggregated correctly",
                     (redAgg == blueAgg));
             singleAgg = redAgg;
@@ -208,9 +208,9 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
         // Make sure all three aggregates were joined
         {
-            long redAgg = mRed.getAggregateForContact(redContact);
-            long blueAgg = mBlue.getAggregateForContact(blueContact);
-            long greyAgg = mGrey.getAggregateForContact(greyContact);
+            long redAgg = mRed.getContactForRawContact(redContact);
+            long blueAgg = mBlue.getContactForRawContact(blueContact);
+            long greyAgg = mGrey.getContactForRawContact(greyContact);
             assertTrue("Three contacts with identical name not aggregated correctly",
                     (redAgg == blueAgg) && (blueAgg == greyAgg));
             singleAgg = redAgg;
@@ -244,11 +244,11 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         // Green creates a protected contact
         long greenContact = mGreen.createContact(true);
         long greenData = mGreen.createPhone(greenContact, PHONE_GREEN);
-        long greenAgg = mGreen.getAggregateForContact(greenContact);
+        long greenAgg = mGreen.getContactForRawContact(greenContact);
 
         // AGGREGATES
         cursor = mRed.resolver
-                .query(Aggregates.CONTENT_URI, Projections.PROJ_ID, null, null, null);
+                .query(Contacts.CONTENT_URI, Projections.PROJ_ID, null, null, null);
         while (cursor.moveToNext()) {
             assertTrue("Discovered restricted contact",
                     (cursor.getLong(Projections.COL_ID) != greenAgg));
@@ -256,20 +256,20 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         cursor.close();
 
         // AGGREGATES_ID
-        cursor = mRed.resolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_URI, greenAgg),
+        cursor = mRed.resolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, greenAgg),
                 Projections.PROJ_ID, null, null, null);
         assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
         cursor.close();
 
         // AGGREGATES_DATA
         cursor = mRed.resolver.query(Uri.withAppendedPath(ContentUris.withAppendedId(
-                Aggregates.CONTENT_URI, greenAgg), Aggregates.Data.CONTENT_DIRECTORY),
+                Contacts.CONTENT_URI, greenAgg), Contacts.Data.CONTENT_DIRECTORY),
                 Projections.PROJ_ID, null, null, null);
         assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
         cursor.close();
 
         // AGGREGATES_SUMMARY
-        cursor = mRed.resolver.query(Aggregates.CONTENT_SUMMARY_URI, Projections.PROJ_ID, null,
+        cursor = mRed.resolver.query(Contacts.CONTENT_SUMMARY_URI, Projections.PROJ_ID, null,
                 null, null);
         while (cursor.moveToNext()) {
             assertTrue("Discovered restricted contact",
@@ -278,7 +278,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         cursor.close();
 
         // AGGREGATES_SUMMARY_ID
-        cursor = mRed.resolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_SUMMARY_URI,
+        cursor = mRed.resolver.query(ContentUris.withAppendedId(Contacts.CONTENT_SUMMARY_URI,
                 greenAgg), Projections.PROJ_ID, null, null, null);
         assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
         cursor.close();

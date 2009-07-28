@@ -26,7 +26,7 @@ import android.content.Entity;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
@@ -96,13 +96,13 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 .build();
     }
 
-    protected long createContact() {
+    protected long createRawContact() {
         ContentValues values = new ContentValues();
         Uri contactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
         return ContentUris.parseId(contactUri);
     }
 
-    protected long createContact(Account account) {
+    protected long createRawContact(Account account) {
         ContentValues values = new ContentValues();
         final Uri uri = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, account);
         Uri contactUri = mResolver.insert(uri, values);
@@ -231,76 +231,77 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 RawContacts.CONTENT_URI, rawContactId), values, null, null);
     }
 
-    protected void setAggregationException(int type, long aggregateId, long rawContactId) {
+    protected void setAggregationException(int type, long contactId, long rawContactId) {
         ContentValues values = new ContentValues();
-        values.put(AggregationExceptions.AGGREGATE_ID, aggregateId);
+        values.put(AggregationExceptions.CONTACT_ID, contactId);
         values.put(AggregationExceptions.RAW_CONTACT_ID, rawContactId);
         values.put(AggregationExceptions.TYPE, type);
         mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
     }
 
-    protected Cursor queryContact(long rawContactId) {
+    protected Cursor queryRawContact(long rawContactId) {
         return mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), null,
                 null, null, null);
     }
 
-    protected Cursor queryAggregate(long aggregateId) {
-        return mResolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId),
+    protected Cursor queryContact(long contactId) {
+        return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                 null, null, null, null);
     }
 
-    protected Cursor queryAggregateSummary(long aggregateId, String[] projection) {
-        return mResolver.query(ContentUris.withAppendedId(Aggregates.CONTENT_SUMMARY_URI,
-                aggregateId), projection, null, null, null);
+    protected Cursor queryContactSummary(long contactId, String[] projection) {
+        return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_SUMMARY_URI,
+                contactId), projection, null, null, null);
     }
 
-    protected Cursor queryAggregateSummary() {
-        return mResolver.query(Aggregates.CONTENT_SUMMARY_URI, null, null, null, null);
+    protected Cursor queryContactSummary() {
+        return mResolver.query(Contacts.CONTENT_SUMMARY_URI, null, null, null, null);
     }
 
-    protected long queryAggregateId(long rawContactId) {
-        Cursor c = queryContact(rawContactId);
+    protected long queryContactId(long rawContactId) {
+        Cursor c = queryRawContact(rawContactId);
         assertTrue(c.moveToFirst());
-        long aggregateId = c.getLong(c.getColumnIndex(RawContacts.AGGREGATE_ID));
+        long contactId = c.getLong(c.getColumnIndex(RawContacts.CONTACT_ID));
         c.close();
-        return aggregateId;
+        return contactId;
     }
 
-    protected long queryPhotoId(long aggregateId) {
-        Cursor c = queryAggregate(aggregateId);
+    protected long queryPhotoId(long contactId) {
+        Cursor c = queryContact(contactId);
         assertTrue(c.moveToFirst());
-        long photoId = c.getInt(c.getColumnIndex(Aggregates.PHOTO_ID));
+        long photoId = c.getInt(c.getColumnIndex(Contacts.PHOTO_ID));
         c.close();
         return photoId;
     }
 
-    protected String queryDisplayName(long aggregateId) {
-        Cursor c = queryAggregate(aggregateId);
+    protected String queryDisplayName(long contactId) {
+        Cursor c = queryContact(contactId);
         assertTrue(c.moveToFirst());
-        String displayName = c.getString(c.getColumnIndex(Aggregates.DISPLAY_NAME));
+        String displayName = c.getString(c.getColumnIndex(Contacts.DISPLAY_NAME));
         c.close();
         return displayName;
     }
 
-    protected void assertAggregated(long contactId1, long contactId2) {
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 == aggregateId2);
+    protected void assertAggregated(long rawContactId1, long rawContactId2) {
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 == contactId2);
     }
 
-    protected void assertAggregated(long contactId1, long contactId2, String expectedDisplayName) {
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 == aggregateId2);
+    protected void assertAggregated(long rawContactId1, long rawContactId2,
+            String expectedDisplayName) {
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 == contactId2);
 
-        String displayName = queryDisplayName(aggregateId1);
+        String displayName = queryDisplayName(contactId1);
         assertEquals(expectedDisplayName, displayName);
     }
 
-    protected void assertNotAggregated(long contactId1, long contactId2) {
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 != aggregateId2);
+    protected void assertNotAggregated(long rawContactId1, long rawContactId2) {
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 != contactId2);
     }
 
     protected void assertStructuredName(long rawContactId, String prefix, String givenName,

@@ -18,7 +18,7 @@ package com.android.providers.contacts;
 import android.content.ContentUris;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.test.suitebuilder.annotation.LargeTest;
 
@@ -36,519 +36,519 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
-            AggregationExceptions.AGGREGATE_ID,
+            AggregationExceptions.CONTACT_ID,
             AggregationExceptions.RAW_CONTACT_ID
     };
 
     public void testCrudAggregationExceptions() throws Exception {
-        long contactId1 = createContact();
-        long aggregateId = queryAggregateId(contactId1);
-        long contactId2 = createContact();
+        long rawContactId1 = createRawContact();
+        long contactId = queryContactId(rawContactId1);
+        long rawContactId2 = createRawContact();
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
 
         // Refetch the row we have just inserted
         Cursor c = mResolver.query(AggregationExceptions.CONTENT_URI,
-                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.AGGREGATE_ID + "="
-                        + aggregateId, null, null);
+                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.CONTACT_ID + "="
+                        + contactId, null, null);
 
         assertTrue(c.moveToFirst());
         assertEquals(AggregationExceptions.TYPE_KEEP_IN, c.getInt(0));
-        assertEquals(aggregateId, c.getLong(1));
-        assertEquals(contactId2, c.getLong(2));
+        assertEquals(contactId, c.getLong(1));
+        assertEquals(rawContactId2, c.getLong(2));
         assertFalse(c.moveToNext());
         c.close();
 
         // Change from TYPE_KEEP_IN to TYPE_KEEP_OUT
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId, rawContactId2);
 
         c = mResolver.query(AggregationExceptions.CONTENT_URI,
-                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.AGGREGATE_ID + "="
-                        + aggregateId, null, null);
+                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.CONTACT_ID + "="
+                        + contactId, null, null);
 
         assertTrue(c.moveToFirst());
         assertEquals(AggregationExceptions.TYPE_KEEP_OUT, c.getInt(0));
-        assertEquals(aggregateId, c.getLong(1));
-        assertEquals(contactId2, c.getLong(2));
+        assertEquals(contactId, c.getLong(1));
+        assertEquals(rawContactId2, c.getLong(2));
         assertFalse(c.moveToNext());
         c.close();
 
         // Delete the rule
-        setAggregationException(AggregationExceptions.TYPE_AUTOMATIC, aggregateId, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_AUTOMATIC, contactId, rawContactId2);
 
         // Verify that the row is gone
         c = mResolver.query(AggregationExceptions.CONTENT_URI,
-                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.AGGREGATE_ID + "="
-                        + aggregateId, null, null);
+                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.CONTACT_ID + "="
+                        + contactId, null, null);
         assertFalse(c.moveToFirst());
         c.close();
     }
 
     public void testAggregationCreatesNewAggregate() {
-        long rawContactId = createContact();
+        long rawContactId = createRawContact();
 
         Uri resultUri = insertStructuredName(rawContactId, "Johna", "Smitha");
 
         // Parse the URI and confirm that it contains an ID
         assertTrue(ContentUris.parseId(resultUri) != 0);
 
-        long aggregateId = queryAggregateId(rawContactId);
-        assertTrue(aggregateId != 0);
+        long contactId = queryContactId(rawContactId);
+        assertTrue(contactId != 0);
 
-        String displayName = queryDisplayName(aggregateId);
+        String displayName = queryDisplayName(contactId);
         assertEquals("Johna Smitha", displayName);
     }
 
     public void testAggregationOfExactFullNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnb", "Smithb");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johnb", "Smithb");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnb", "Smithb");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johnb", "Smithb");
 
-        assertAggregated(contactId1, contactId2, "Johnb Smithb");
+        assertAggregated(rawContactId1, rawContactId2, "Johnb Smithb");
     }
 
     public void testAggregationOfCaseInsensitiveFullNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnc", "Smithc");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johnc", "Smithc");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnc", "smithc");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johnc", "smithc");
 
-        assertAggregated(contactId1, contactId2, "Johnc Smithc");
+        assertAggregated(rawContactId1, rawContactId2, "Johnc Smithc");
     }
 
     public void testAggregationOfLastNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, null, "Johnd");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, null, "Johnd");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, null, "johnd");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, null, "johnd");
 
-        assertAggregated(contactId1, contactId2, "Johnd");
+        assertAggregated(rawContactId1, rawContactId2, "Johnd");
     }
 
     public void testNonAggregationOfFirstNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johne", "Smithe");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johne", "Smithe");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johne", null);
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johne", null);
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     // TODO: should this be allowed to match?
     public void testNonAggregationOfLastNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnf", "Smithf");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johnf", "Smithf");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, null, "Smithf");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, null, "Smithf");
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationOfConcatenatedFullNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johng", "Smithg");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johng", "Smithg");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "johngsmithg", null);
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "johngsmithg", null);
 
-        assertAggregated(contactId1, contactId2, "Johng Smithg");
+        assertAggregated(rawContactId1, rawContactId2, "Johng Smithg");
     }
 
     public void testAggregationOfNormalizedFullNameMatch() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "helene bjorn", null);
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "helene bjorn", null);
 
-        assertAggregated(contactId1, contactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
+        assertAggregated(rawContactId1, rawContactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
     }
 
     public void testAggregationBasedOnPhoneNumberNoNameData() {
-        long contactId1 = createContact();
-        insertPhoneNumber(contactId1, "(888)555-1231");
+        long rawContactId1 = createRawContact();
+        insertPhoneNumber(rawContactId1, "(888)555-1231");
 
-        long contactId2 = createContact();
-        insertPhoneNumber(contactId2, "1(888)555-1231");
+        long rawContactId2 = createRawContact();
+        insertPhoneNumber(rawContactId2, "1(888)555-1231");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWhenTargetAggregateHasNoName() {
-        long contactId1 = createContact();
-        insertPhoneNumber(contactId1, "(888)555-1232");
+        long rawContactId1 = createRawContact();
+        insertPhoneNumber(rawContactId1, "(888)555-1232");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnl", "Smithl");
-        insertPhoneNumber(contactId2, "1(888)555-1232");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johnl", "Smithl");
+        insertPhoneNumber(rawContactId2, "1(888)555-1232");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWhenNewContactHasNoName() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnm", "Smithm");
-        insertPhoneNumber(contactId1, "(888)555-1233");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johnm", "Smithm");
+        insertPhoneNumber(rawContactId1, "(888)555-1233");
 
-        long contactId2 = createContact();
-        insertPhoneNumber(contactId2, "1(888)555-1233");
+        long rawContactId2 = createRawContact();
+        insertPhoneNumber(rawContactId2, "1(888)555-1233");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWithSimilarNames() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Ogre", "Hunter");
-        insertPhoneNumber(contactId1, "(888)555-1234");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Ogre", "Hunter");
+        insertPhoneNumber(rawContactId1, "(888)555-1234");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Opra", "Humper");
-        insertPhoneNumber(contactId2, "1(888)555-1234");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Opra", "Humper");
+        insertPhoneNumber(rawContactId2, "1(888)555-1234");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWithDifferentNames() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Baby", "Bear");
-        insertPhoneNumber(contactId1, "(888)555-1235");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Baby", "Bear");
+        insertPhoneNumber(rawContactId1, "(888)555-1235");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Blind", "Mouse");
-        insertPhoneNumber(contactId2, "1(888)555-1235");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Blind", "Mouse");
+        insertPhoneNumber(rawContactId2, "1(888)555-1235");
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailNoNameData() {
-        long contactId1 = createContact();
-        insertEmail(contactId1, "lightning@android.com");
+        long rawContactId1 = createRawContact();
+        insertEmail(rawContactId1, "lightning@android.com");
 
-        long contactId2 = createContact();
-        insertEmail(contactId2, "lightning@android.com");
+        long rawContactId2 = createRawContact();
+        insertEmail(rawContactId2, "lightning@android.com");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailWhenTargetAggregateHasNoName() {
-        long contactId1 = createContact();
-        insertEmail(contactId1, "mcqueen@android.com");
+        long rawContactId1 = createRawContact();
+        insertEmail(rawContactId1, "mcqueen@android.com");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Lightning", "McQueen");
-        insertEmail(contactId2, "mcqueen@android.com");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Lightning", "McQueen");
+        insertEmail(rawContactId2, "mcqueen@android.com");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailWhenNewContactHasNoName() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Doc", "Hudson");
-        insertEmail(contactId1, "doc@android.com");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Doc", "Hudson");
+        insertEmail(rawContactId1, "doc@android.com");
 
-        long contactId2 = createContact();
-        insertEmail(contactId2, "doc@android.com");
+        long rawContactId2 = createRawContact();
+        insertEmail(rawContactId2, "doc@android.com");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailWithSimilarNames() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Sally", "Carrera");
-        insertEmail(contactId1, "sally@android.com");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Sally", "Carrera");
+        insertEmail(rawContactId1, "sally@android.com");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Sallie", "Carerra");
-        insertEmail(contactId2, "sally@android.com");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Sallie", "Carerra");
+        insertEmail(rawContactId2, "sally@android.com");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailWithDifferentNames() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Chick", "Hicks");
-        insertEmail(contactId1, "hicky@android.com");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Chick", "Hicks");
+        insertEmail(rawContactId1, "hicky@android.com");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Luigi", "Guido");
-        insertEmail(contactId2, "hicky@android.com");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Luigi", "Guido");
+        insertEmail(rawContactId2, "hicky@android.com");
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationByCommonNicknameWithLastName() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Bill", "Gore");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Bill", "Gore");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "William", "Gore");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "William", "Gore");
 
-        assertAggregated(contactId1, contactId2, "William Gore");
+        assertAggregated(rawContactId1, rawContactId2, "William Gore");
     }
 
     public void testAggregationByCommonNicknameOnly() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Lawrence", null);
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Lawrence", null);
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Larry", null);
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Larry", null);
 
-        assertAggregated(contactId1, contactId2, "Lawrence");
+        assertAggregated(rawContactId1, rawContactId2, "Lawrence");
     }
 
     public void testAggregationByNicknameNoStructuredName() {
-        long contactId1 = createContact();
-        insertNickname(contactId1, "Frozone");
+        long rawContactId1 = createRawContact();
+        insertNickname(rawContactId1, "Frozone");
 
-        long contactId2 = createContact();
-        insertNickname(contactId2, "Frozone");
+        long rawContactId2 = createRawContact();
+        insertNickname(rawContactId2, "Frozone");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationByNicknameWithSimilarNames() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Buddy", "Pine");
-        insertNickname(contactId1, "Syndrome");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Buddy", "Pine");
+        insertNickname(rawContactId1, "Syndrome");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Body", "Pane");
-        insertNickname(contactId2, "Syndrome");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Body", "Pane");
+        insertNickname(rawContactId2, "Syndrome");
 
-        assertAggregated(contactId1, contactId2);
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationByNicknameWithDifferentNames() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Helen", "Parr");
-        insertNickname(contactId1, "Elastigirl");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Helen", "Parr");
+        insertNickname(rawContactId1, "Elastigirl");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Shawn", "Johnson");
-        insertNickname(contactId2, "Elastigirl");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Shawn", "Johnson");
+        insertNickname(rawContactId2, "Elastigirl");
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationExceptionKeepIn() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnk", "Smithk");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johnk", "Smithk");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnkx", "Smithkx");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johnkx", "Smithkx");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
-                queryAggregateId(contactId1), contactId2);
+                queryContactId(rawContactId1), rawContactId2);
 
-        assertAggregated(contactId1, contactId2, "Johnkx Smithkx");
+        assertAggregated(rawContactId1, rawContactId2, "Johnkx Smithkx");
 
         // Assert that the empty aggregate got removed
-        long newAggregateId1 = queryAggregateId(contactId1);
-        if (aggregateId1 != newAggregateId1) {
-            Cursor cursor = queryAggregate(aggregateId1);
+        long newContactId1 = queryContactId(rawContactId1);
+        if (contactId1 != newContactId1) {
+            Cursor cursor = queryContact(contactId1);
             assertFalse(cursor.moveToFirst());
             cursor.close();
         } else {
-            Cursor cursor = queryAggregate(aggregateId2);
+            Cursor cursor = queryContact(contactId2);
             assertFalse(cursor.moveToFirst());
             cursor.close();
         }
     }
 
     public void testAggregationExceptionKeepOut() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johnh", "Smithh");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johnh", "Smithh");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnh", "Smithh");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johnh", "Smithh");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryAggregateId(contactId1), contactId2);
+                queryContactId(rawContactId1), rawContactId2);
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationExceptionKeepOutCheckUpdatesDisplayName() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Johni", "Smithi");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Johni", "Smithi");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Johnj", "Smithj");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Johnj", "Smithj");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
-                queryAggregateId(contactId1), contactId2);
+                queryContactId(rawContactId1), rawContactId2);
 
-        assertAggregated(contactId1, contactId2, "Johnj Smithj");
+        assertAggregated(rawContactId1, rawContactId2, "Johnj Smithj");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryAggregateId(contactId1), contactId2);
+                queryContactId(rawContactId1), rawContactId2);
 
-        assertNotAggregated(contactId1, contactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
 
-        String displayName1 = queryDisplayName(queryAggregateId(contactId1));
+        String displayName1 = queryDisplayName(queryContactId(rawContactId1));
         assertEquals("Johni Smithi", displayName1);
 
-        String displayName2 = queryDisplayName(queryAggregateId(contactId2));
+        String displayName2 = queryDisplayName(queryContactId(rawContactId2));
         assertEquals("Johnj Smithj", displayName2);
     }
 
     public void testAggregationSuggestionsBasedOnName() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Duane", null);
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Duane", null);
 
         // Exact name match
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Duane", null);
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Duane", null);
         setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryAggregateId(contactId1), contactId2);
+                queryContactId(rawContactId1), rawContactId2);
 
         // Edit distance == 0.84
-        long contactId3 = createContact();
-        insertStructuredName(contactId3, "Dwayne", null);
+        long rawContactId3 = createRawContact();
+        insertStructuredName(rawContactId3, "Dwayne", null);
 
         // Edit distance == 0.6
-        long contactId4 = createContact();
-        insertStructuredName(contactId4, "Donny", null);
+        long rawContactId4 = createRawContact();
+        insertStructuredName(rawContactId4, "Donny", null);
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        long aggregateId3 = queryAggregateId(contactId3);
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        long contactId3 = queryContactId(rawContactId3);
 
-        assertSuggestions(aggregateId1, aggregateId2, aggregateId3);
+        assertSuggestions(contactId1, contactId2, contactId3);
     }
 
     public void testAggregationSuggestionsBasedOnPhoneNumber() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Lord", "Farquaad");
-        insertPhoneNumber(contactId1, "(888)555-1236");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Lord", "Farquaad");
+        insertPhoneNumber(rawContactId1, "(888)555-1236");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Talking", "Donkey");
-        insertPhoneNumber(contactId2, "1(888)555-1236");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Talking", "Donkey");
+        insertPhoneNumber(rawContactId2, "1(888)555-1236");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 != aggregateId2);
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 != contactId2);
 
-        assertSuggestions(aggregateId1, aggregateId2);
+        assertSuggestions(contactId1, contactId2);
     }
 
     public void testAggregationSuggestionsBasedOnEmailAddress() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Carl", "Fredricksen");
-        insertEmail(contactId1, "up@android.com");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Carl", "Fredricksen");
+        insertEmail(rawContactId1, "up@android.com");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Charles", "Muntz");
-        insertEmail(contactId2, "up@android.com");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Charles", "Muntz");
+        insertEmail(rawContactId2, "up@android.com");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 != aggregateId2);
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 != contactId2);
 
-        assertSuggestions(aggregateId1, aggregateId2);
+        assertSuggestions(contactId1, contactId2);
     }
 
     public void testAggregationSuggestionsBasedOnEmailAddressApproximateMatch() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Bob", null);
-        insertEmail(contactId1, "incredible2004@android.com");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Bob", null);
+        insertEmail(rawContactId1, "incredible2004@android.com");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Lucius", "Best");
-        insertEmail(contactId2, "incrediball@androidd.com");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Lucius", "Best");
+        insertEmail(rawContactId2, "incrediball@androidd.com");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertTrue(aggregateId1 != aggregateId2);
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 != contactId2);
 
-        assertSuggestions(aggregateId1, aggregateId2);
+        assertSuggestions(contactId1, contactId2);
     }
 
     public void testAggregationSuggestionsBasedOnNickname() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Peter", "Parker");
-        insertNickname(contactId1, "Spider-Man");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Peter", "Parker");
+        insertNickname(rawContactId1, "Spider-Man");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Manny", "Spider");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Manny", "Spider");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+        long contactId1 = queryContactId(rawContactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
 
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertSuggestions(aggregateId1, aggregateId2);
+        long contactId2 = queryContactId(rawContactId2);
+        assertSuggestions(contactId1, contactId2);
     }
 
     public void testAggregationSuggestionsBasedOnNicknameMatchingName() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Clark", "Kent");
-        insertNickname(contactId1, "Superman");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Clark", "Kent");
+        insertNickname(rawContactId1, "Superman");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Roy", "Williams");
-        insertNickname(contactId2, "superman");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Roy", "Williams");
+        insertNickname(rawContactId2, "superman");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+        long contactId1 = queryContactId(rawContactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
 
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertSuggestions(aggregateId1, aggregateId2);
+        long contactId2 = queryContactId(rawContactId2);
+        assertSuggestions(contactId1, contactId2);
     }
 
     public void testAggregationSuggestionsBasedOnCommonNickname() {
-        long contactId1 = createContact();
-        insertStructuredName(contactId1, "Dick", "Cherry");
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Dick", "Cherry");
 
-        long contactId2 = createContact();
-        insertStructuredName(contactId2, "Richard", "Cherry");
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Richard", "Cherry");
 
-        long aggregateId1 = queryAggregateId(contactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+        long contactId1 = queryContactId(rawContactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
 
-        long aggregateId2 = queryAggregateId(contactId2);
-        assertSuggestions(aggregateId1, aggregateId2);
+        long contactId2 = queryContactId(rawContactId2);
+        assertSuggestions(contactId1, contactId2);
     }
 
     public void testChoosePhoto() {
-        long contactId1 = createContact();
-        setContactAccountName(contactId1, "donut");
-        long donutId = ContentUris.parseId(insertPhoto(contactId1));
-        long aggregateId = queryAggregateId(contactId1);
+        long rawContactId1 = createRawContact();
+        setContactAccountName(rawContactId1, "donut");
+        long donutId = ContentUris.parseId(insertPhoto(rawContactId1));
+        long contactId = queryContactId(rawContactId1);
 
-        long contactId2 = createContact();
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId, contactId2);
-        setContactAccountName(contactId2, "cupcake");
-        long cupcakeId = ContentUris.parseId(insertPhoto(contactId2));
+        long rawContactId2 = createRawContact();
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
+        setContactAccountName(rawContactId2, "cupcake");
+        long cupcakeId = ContentUris.parseId(insertPhoto(rawContactId2));
 
-        long contactId3 = createContact();
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId, contactId3);
-        setContactAccountName(contactId3, "flan");
-        long flanId = ContentUris.parseId(insertPhoto(contactId3));
+        long rawContactId3 = createRawContact();
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId3);
+        setContactAccountName(rawContactId3, "flan");
+        long flanId = ContentUris.parseId(insertPhoto(rawContactId3));
 
-        assertEquals(cupcakeId, queryPhotoId(queryAggregateId(contactId2)));
+        assertEquals(cupcakeId, queryPhotoId(queryContactId(rawContactId2)));
     }
 
-    private void assertSuggestions(long aggregateId, long... suggestions) {
-        final Uri aggregateUri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId);
+    private void assertSuggestions(long contactId, long... suggestions) {
+        final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,
-                Aggregates.AggregationSuggestions.CONTENT_DIRECTORY);
-        final Cursor cursor = mResolver.query(uri, new String[] { Aggregates._ID },
+                Contacts.AggregationSuggestions.CONTENT_DIRECTORY);
+        final Cursor cursor = mResolver.query(uri, new String[] { Contacts._ID },
                 null, null, null);
 
         assertEquals(suggestions.length, cursor.getCount());

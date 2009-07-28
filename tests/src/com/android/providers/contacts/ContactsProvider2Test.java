@@ -24,7 +24,7 @@ import android.content.EntityIterator;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.RemoteException;
-import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
@@ -50,7 +50,7 @@ import android.test.suitebuilder.annotation.LargeTest;
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testDisplayNameParsingWhenPartsUnspecified() {
-        long rawContactId = createContact();
+        long rawContactId = createRawContact();
         ContentValues values = new ContentValues();
         values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
         insertStructuredName(rawContactId, values);
@@ -59,7 +59,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDisplayNameParsingWhenPartsSpecified() {
-        long rawContactId = createContact();
+        long rawContactId = createRawContact();
         ContentValues values = new ContentValues();
         values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
         values.put(StructuredName.FAMILY_NAME, "Johnson");
@@ -69,87 +69,87 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testSendToVoicemailDefault() {
-        long rawContactId = createContact();
-        long aggregateId = queryAggregateId(rawContactId);
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
 
-        Cursor c = queryAggregate(aggregateId);
+        Cursor c = queryContact(contactId);
         assertTrue(c.moveToNext());
-        int sendToVoicemail = c.getInt(c.getColumnIndex(Aggregates.SEND_TO_VOICEMAIL));
+        int sendToVoicemail = c.getInt(c.getColumnIndex(Contacts.SEND_TO_VOICEMAIL));
         assertEquals(0, sendToVoicemail);
         c.close();
     }
 
     public void testSetSendToVoicemailAndRingtone() {
-        long rawContactId = createContact();
-        long aggregateId = queryAggregateId(rawContactId);
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
 
-        updateSendToVoicemailAndRingtone(aggregateId, true, "foo");
-        assertSendToVoicemailAndRingtone(aggregateId, true, "foo");
+        updateSendToVoicemailAndRingtone(contactId, true, "foo");
+        assertSendToVoicemailAndRingtone(contactId, true, "foo");
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
-        long contactId1 = createContact();
-        long aggregateId1 = queryAggregateId(contactId1);
-        updateSendToVoicemailAndRingtone(aggregateId1, true, "foo");
+        long rawContactId1 = createRawContact();
+        long contactId1 = queryContactId(rawContactId1);
+        updateSendToVoicemailAndRingtone(contactId1, true, "foo");
 
-        long contactId2 = createContact();
-        long aggregateId2 = queryAggregateId(contactId2);
-        updateSendToVoicemailAndRingtone(aggregateId2, true, "bar");
+        long rawContactId2 = createRawContact();
+        long contactId2 = queryContactId(rawContactId2);
+        updateSendToVoicemailAndRingtone(contactId2, true, "bar");
 
         // Aggregate them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId1, rawContactId2);
 
-        // Both contacts had "send to VM", the aggregate now has the same value
-        assertSendToVoicemailAndRingtone(aggregateId1, true, "foo,bar"); // Either foo or bar
+        // Both contacts had "send to VM", the contact now has the same value
+        assertSendToVoicemailAndRingtone(contactId1, true, "foo,bar"); // Either foo or bar
     }
 
     public void testDoNotSendToVoicemailAfterAggregation() {
-        long contactId1 = createContact();
-        long aggregateId1 = queryAggregateId(contactId1);
-        updateSendToVoicemailAndRingtone(aggregateId1, true, null);
+        long rawContactId1 = createRawContact();
+        long contactId1 = queryContactId(rawContactId1);
+        updateSendToVoicemailAndRingtone(contactId1, true, null);
 
-        long contactId2 = createContact();
-        long aggregateId2 = queryAggregateId(contactId2);
-        updateSendToVoicemailAndRingtone(aggregateId2, false, null);
+        long rawContactId2 = createRawContact();
+        long contactId2 = queryContactId(rawContactId2);
+        updateSendToVoicemailAndRingtone(contactId2, false, null);
 
         // Aggregate them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId1, rawContactId2);
 
         // Since one of the contacts had "don't send to VM" that setting wins for the aggregate
-        assertSendToVoicemailAndRingtone(aggregateId1, false, null);
+        assertSendToVoicemailAndRingtone(contactId1, false, null);
     }
 
     public void testSetSendToVoicemailAndRingtonePreservedAfterJoinAndSplit() {
-        long contactId1 = createContact();
-        long aggregateId1 = queryAggregateId(contactId1);
-        updateSendToVoicemailAndRingtone(aggregateId1, true, "foo");
+        long rawContactId1 = createRawContact();
+        long contactId1 = queryContactId(rawContactId1);
+        updateSendToVoicemailAndRingtone(contactId1, true, "foo");
 
-        long contactId2 = createContact();
-        long aggregateId2 = queryAggregateId(contactId2);
-        updateSendToVoicemailAndRingtone(aggregateId2, false, "bar");
+        long rawContactId2 = createRawContact();
+        long contactId2 = queryContactId(rawContactId2);
+        updateSendToVoicemailAndRingtone(contactId2, false, "bar");
 
         // Aggregate them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, aggregateId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId1, rawContactId2);
 
         // Split them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, aggregateId1, contactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
 
-        assertSendToVoicemailAndRingtone(aggregateId1, true, "foo");
-        assertSendToVoicemailAndRingtone(queryAggregateId(contactId2), false, "bar");
+        assertSendToVoicemailAndRingtone(contactId1, true, "foo");
+        assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
     }
 
-    public void testSinglePresenceRowPerAggregate() {
+    public void testSinglePresenceRowPerContact() {
         int protocol1 = Im.PROTOCOL_GOOGLE_TALK;
         String handle1 = "test@gmail.com";
 
-        long contactId1 = createContact();
-        insertImHandle(contactId1, protocol1, handle1);
+        long rawContactId1 = createRawContact();
+        insertImHandle(rawContactId1, protocol1, handle1);
 
         insertPresence(protocol1, handle1, Presence.AVAILABLE);
         insertPresence(protocol1, handle1, Presence.AWAY);
         insertPresence(protocol1, handle1, Presence.INVISIBLE);
 
-        Cursor c = queryAggregateSummary(queryAggregateId(contactId1),
+        Cursor c = queryContactSummary(queryContactId(rawContactId1),
                 new String[] {Presence.PRESENCE_STATUS});
         assertEquals(c.getCount(), 1);
 
@@ -158,26 +158,26 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     }
 
-    private void updateSendToVoicemailAndRingtone(long aggregateId, boolean sendToVoicemail,
+    private void updateSendToVoicemailAndRingtone(long contactId, boolean sendToVoicemail,
             String ringtone) {
         ContentValues values = new ContentValues();
-        values.put(Aggregates.SEND_TO_VOICEMAIL, sendToVoicemail);
+        values.put(Contacts.SEND_TO_VOICEMAIL, sendToVoicemail);
         if (ringtone != null) {
-            values.put(Aggregates.CUSTOM_RINGTONE, ringtone);
+            values.put(Contacts.CUSTOM_RINGTONE, ringtone);
         }
 
-        final Uri uri = ContentUris.withAppendedId(Aggregates.CONTENT_URI, aggregateId);
+        final Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
     }
 
-    private void assertSendToVoicemailAndRingtone(long aggregateId, boolean expectedSendToVoicemail,
+    private void assertSendToVoicemailAndRingtone(long contactId, boolean expectedSendToVoicemail,
             String expectedRingtone) {
-        Cursor c = queryAggregate(aggregateId);
+        Cursor c = queryContact(contactId);
         assertTrue(c.moveToNext());
-        int sendToVoicemail = c.getInt(c.getColumnIndex(Aggregates.SEND_TO_VOICEMAIL));
+        int sendToVoicemail = c.getInt(c.getColumnIndex(Contacts.SEND_TO_VOICEMAIL));
         assertEquals(expectedSendToVoicemail ? 1 : 0, sendToVoicemail);
-        String ringtone = c.getString(c.getColumnIndex(Aggregates.CUSTOM_RINGTONE));
+        String ringtone = c.getString(c.getColumnIndex(Contacts.CUSTOM_RINGTONE));
         if (expectedRingtone == null) {
             assertNull(ringtone);
         } else {
@@ -187,30 +187,30 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testGroupCreationAfterMembershipInsert() {
-        long contactId1 = createContact(mAccount);
-        Uri groupMembershipUri = insertGroupMembership(contactId1, "gsid1");
+        long rawContactId1 = createRawContact(mAccount);
+        Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
 
         long groupId = assertSingleGroup(NO_LONG, mAccount, "gsid1", null);
         assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
-                contactId1, groupId, "gsid1");
+                rawContactId1, groupId, "gsid1");
     }
 
     public void testGroupReuseAfterMembershipInsert() {
-        long contactId1 = createContact(mAccount);
+        long rawContactId1 = createRawContact(mAccount);
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
-        Uri groupMembershipUri = insertGroupMembership(contactId1, "gsid1");
+        Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
 
         assertSingleGroup(groupId1, mAccount, "gsid1", "title1");
         assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
-                contactId1, groupId1, "gsid1");
+                rawContactId1, groupId1, "gsid1");
     }
 
     public void testGroupInsertFailureOnGroupIdConflict() {
-        long contactId1 = createContact(mAccount);
+        long rawContactId1 = createRawContact(mAccount);
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
 
         ContentValues values = new ContentValues();
-        values.put(GroupMembership.RAW_CONTACT_ID, contactId1);
+        values.put(GroupMembership.RAW_CONTACT_ID, rawContactId1);
         values.put(GroupMembership.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
         values.put(GroupMembership.GROUP_SOURCE_ID, "gsid1");
         values.put(GroupMembership.GROUP_ROW_ID, groupId1);
@@ -229,23 +229,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
         long groupId2 = createGroup(mAccount, "gsid2", "title2");
 
-        long c0 = id = createContact(mAccount);
+        long c0 = id = createRawContact(mAccount);
         Uri id_0_0 = insertGroupMembership(id, "gsid1");
         Uri id_0_1 = insertEmail(id, "c0@email.com");
         Uri id_0_2 = insertPhoneNumber(id, "5551212c0");
 
-        long c1 = id = createContact(mAccount);
+        long c1 = id = createRawContact(mAccount);
         Uri id_1_0 = insertGroupMembership(id, "gsid1");
         Uri id_1_1 = insertGroupMembership(id, "gsid2");
         Uri id_1_2 = insertEmail(id, "c1@email.com");
         Uri id_1_3 = insertPhoneNumber(id, "5551212c1");
 
-        long c2 = id = createContact(mAccount);
+        long c2 = id = createRawContact(mAccount);
         Uri id_2_0 = insertGroupMembership(id, "gsid1");
         Uri id_2_1 = insertEmail(id, "c2@email.com");
         Uri id_2_2 = insertPhoneNumber(id, "5551212c2");
 
-        long c3 = id = createContact(mAccount);
+        long c3 = id = createRawContact(mAccount);
         Uri id_3_0 = insertGroupMembership(id, groupId2);
         Uri id_3_1 = insertEmail(id, "c3@email.com");
         Uri id_3_2 = insertPhoneNumber(id, "5551212c3");
@@ -307,7 +307,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDataCreateUpdateDeleteByMimeType() throws Exception {
-        long rawContactId = createContact();
+        long rawContactId = createRawContact();
 
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
@@ -368,7 +368,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testRawContactDeletion() {
-        long rawContactId = createContact();
+        long rawContactId = createRawContact();
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, "deleteme@android.com");
@@ -394,15 +394,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testContactDirtySetOnChange() {
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
-                createContact(mAccount));
+                createRawContact(mAccount));
         assertDirty(uri, true);
         clearDirty(uri);
         assertDirty(uri, false);
     }
 
     public void testContactDirtyAndVersion() {
-        final long contactId = createContact(mAccount);
-        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, contactId);
+        final long rawContactId = createRawContact(mAccount);
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId);
         assertDirty(uri, true);
         long version = getVersion(uri);
 
@@ -428,7 +428,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ++version;
         assertEquals(version, getVersion(uri));
 
-        Uri emailUri = insertEmail(contactId, "goo@woo.com");
+        Uri emailUri = insertEmail(rawContactId, "goo@woo.com");
         assertDirty(uri, true);
         ++version;
         version = getVersion(uri);
@@ -453,7 +453,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testContactVersionUpdates() {
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
-                createContact(mAccount));
+                createRawContact(mAccount));
         long version = getVersion(uri);
         ContentValues values = new ContentValues();
         values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);

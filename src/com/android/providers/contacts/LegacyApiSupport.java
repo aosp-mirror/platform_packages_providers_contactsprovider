@@ -428,7 +428,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private final ContactsProvider2 mContactsProvider;
     private final NameSplitter mPhoneticNameSplitter;
 
-    /** Precompiled sql statement for incrementing times contacted for an aggregate */
+    /** Precompiled sql statement for incrementing times contacted for a contact */
     private final SQLiteStatement mLastTimeContactedUpdate;
 
     private final ContentValues mValues = new ContentValues();
@@ -522,7 +522,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         db.execSQL("CREATE VIEW " + LegacyTables.CONTACT_METHODS + " AS SELECT " +
                 DataColumns.CONCRETE_ID
                         + " AS " + ContactMethods._ID + ", " +
-                DataColumns.CONCRETE_CONTACT_ID
+                DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + ContactMethods.PERSON_ID + ", " +
                 CONTACT_METHOD_KIND_SQL
                         + " AS " + ContactMethods.KIND + ", " +
@@ -565,7 +565,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         db.execSQL("CREATE VIEW " + LegacyTables.PHONES + " AS SELECT " +
                 DataColumns.CONCRETE_ID
                         + " AS " + android.provider.Contacts.Phones._ID + ", " +
-                DataColumns.CONCRETE_CONTACT_ID
+                DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.Phones.PERSON_ID + ", " +
                 DataColumns.CONCRETE_IS_PRIMARY
                         + " AS " + android.provider.Contacts.Phones.ISPRIMARY + ", " +
@@ -606,7 +606,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         db.execSQL("CREATE VIEW " + LegacyTables.EXTENSIONS + " AS SELECT " +
                 DataColumns.CONCRETE_ID
                         + " AS " + android.provider.Contacts.Extensions._ID + ", " +
-                DataColumns.CONCRETE_CONTACT_ID
+                DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.Extensions.PERSON_ID + ", " +
                 ExtensionsColumns.NAME
                         + " AS " + android.provider.Contacts.Extensions.NAME + ", " +
@@ -632,7 +632,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         db.execSQL("CREATE VIEW " + LegacyTables.GROUP_MEMBERSHIP + " AS SELECT " +
                 DataColumns.CONCRETE_ID
                         + " AS " + android.provider.Contacts.GroupMembership._ID + ", " +
-                DataColumns.CONCRETE_CONTACT_ID
+                DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.GroupMembership.PERSON_ID + ", " +
                 GroupMembership.GROUP_ROW_ID
                         + " AS " + android.provider.Contacts.GroupMembership.GROUP_ID + ", " +
@@ -653,7 +653,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         db.execSQL("CREATE VIEW " + LegacyTables.PHOTOS + " AS SELECT " +
                 DataColumns.CONCRETE_ID
                         + " AS " + android.provider.Contacts.Photos._ID + ", " +
-                DataColumns.CONCRETE_CONTACT_ID
+                DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.Photos.PERSON_ID + ", " +
                 Tables.DATA + "." + Photo.PHOTO
                         + " AS " + android.provider.Contacts.Photos.DATA + ", " +
@@ -994,9 +994,9 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         }
 
         long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-        long aggregateId = mOpenHelper.getAggregateId(rawContactId);
-        if (aggregateId != 0) {
-            mContactsProvider.updateContactTime(aggregateId, lastTimeContacted);
+        long contactId = mOpenHelper.getContactId(rawContactId);
+        if (contactId != 0) {
+            mContactsProvider.updateContactTime(contactId, lastTimeContacted);
         } else {
             mLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
             mLastTimeContactedUpdate.bindLong(2, rawContactId);

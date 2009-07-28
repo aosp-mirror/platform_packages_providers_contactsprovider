@@ -73,8 +73,8 @@ public class GroupsTest extends BaseContactsProvider2Test {
 
         // Make sure that Charlie was aggregated
         {
-            long aggCharlie = mActor.getAggregateForContact(contactCharlie);
-            long aggCharlieDupe = mActor.getAggregateForContact(contactCharlieDupe);
+            long aggCharlie = mActor.getContactForRawContact(contactCharlie);
+            long aggCharlieDupe = mActor.getContactForRawContact(contactCharlieDupe);
             assertTrue("Didn't aggregate two contacts with identical names",
                     (aggCharlie == aggCharlieDupe));
         }

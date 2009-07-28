@@ -30,7 +30,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Aggregates;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.SocialContract;
 import android.provider.SocialContract.Activities;
@@ -54,20 +54,20 @@ public class SocialProvider extends ContentProvider {
     private static final int ACTIVITIES_ID = 1001;
     private static final int ACTIVITIES_AUTHORED_BY = 1002;
 
-    private static final int AGGREGATE_STATUS_ID = 3000;
+    private static final int CONTACT_STATUS_ID = 3000;
 
     private static final String DEFAULT_SORT_ORDER = Activities.THREAD_PUBLISHED + " DESC, "
             + Activities.PUBLISHED + " ASC";
 
     /** Contains just the contacts columns */
-    private static final HashMap<String, String> sAggregatesProjectionMap;
-    /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
+    /** Contains just the contacts columns */
+    private static final HashMap<String, String> sRawContactsProjectionMap;
     /** Contains just the activities columns */
     private static final HashMap<String, String> sActivitiesProjectionMap;
 
-    /** Contains the activities, contacts, and aggregates columns, for joined tables */
-    private static final HashMap<String, String> sActivitiesAggregatesProjectionMap;
+    /** Contains the activities, raw contacts, and contacts columns, for joined tables */
+    private static final HashMap<String, String> sActivitiesContactsProjectionMap;
 
     static {
         // Contacts URI matching table
@@ -77,20 +77,20 @@ public class SocialProvider extends ContentProvider {
         matcher.addURI(SocialContract.AUTHORITY, "activities/#", ACTIVITIES_ID);
         matcher.addURI(SocialContract.AUTHORITY, "activities/authored_by/#", ACTIVITIES_AUTHORED_BY);
 
-        matcher.addURI(SocialContract.AUTHORITY, "aggregate_status/#", AGGREGATE_STATUS_ID);
+        matcher.addURI(SocialContract.AUTHORITY, "contact_status/#", CONTACT_STATUS_ID);
 
         HashMap<String, String> columns;
 
-        // Aggregates projection map
+        // Contacts projection map
         columns = new HashMap<String, String>();
-        columns.put(Aggregates.DISPLAY_NAME, Aggregates.DISPLAY_NAME);
-        sAggregatesProjectionMap = columns;
+        columns.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
+        sContactsProjectionMap = columns;
 
         // Contacts projection map
         columns = new HashMap<String, String>();
         columns.put(RawContacts._ID, Tables.RAW_CONTACTS + "." + RawContacts._ID + " AS _id");
-        columns.put(RawContacts.AGGREGATE_ID, RawContacts.AGGREGATE_ID);
-        sContactsProjectionMap = columns;
+        columns.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
+        sRawContactsProjectionMap = columns;
 
         // Activities projection map
         columns = new HashMap<String, String>();
@@ -110,12 +110,12 @@ public class SocialProvider extends ContentProvider {
         columns.put(Activities.THUMBNAIL, Activities.THUMBNAIL);
         sActivitiesProjectionMap = columns;
 
-        // Activities, contacts, and aggregates projection map for joins
+        // Activities, raw contacts, and contacts projection map for joins
         columns = new HashMap<String, String>();
-        columns.putAll(sAggregatesProjectionMap);
         columns.putAll(sContactsProjectionMap);
+        columns.putAll(sRawContactsProjectionMap);
         columns.putAll(sActivitiesProjectionMap); // Final _id will be from Activities
-        sActivitiesAggregatesProjectionMap = columns;
+        sActivitiesContactsProjectionMap = columns;
 
     }
 
@@ -330,38 +330,38 @@ public class SocialProvider extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case ACTIVITIES: {
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
-                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
+                qb.setProjectionMap(sActivitiesContactsProjectionMap);
                 break;
             }
 
             case ACTIVITIES_ID: {
                 // TODO: enforce that caller has read access to this data
                 long activityId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
-                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
+                qb.setProjectionMap(sActivitiesContactsProjectionMap);
                 qb.appendWhere(Activities._ID + "=" + activityId);
                 break;
             }
 
             case ACTIVITIES_AUTHORED_BY: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
-                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
+                qb.setProjectionMap(sActivitiesContactsProjectionMap);
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + "=" + contactId);
                 break;
             }
 
-            case AGGREGATE_STATUS_ID: {
+            case CONTACT_STATUS_ID: {
                 long aggId = ContentUris.parseId(uri);
-                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES);
-                qb.setProjectionMap(sActivitiesAggregatesProjectionMap);
+                qb.setTables(Tables.ACTIVITIES_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
+                qb.setProjectionMap(sActivitiesContactsProjectionMap);
 
-                // Latest status of an aggregate is any top-level status
+                // Latest status of a contact is any top-level status
                 // authored by one of its children contacts.
                 qb.appendWhere(Activities.IN_REPLY_TO + " IS NULL AND ");
                 qb.appendWhere(Activities.AUTHOR_CONTACT_ID + " IN (SELECT " + BaseColumns._ID
-                        + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts.AGGREGATE_ID + "="
+                        + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "="
                         + aggId + ")");
                 sortOrder = Activities.PUBLISHED + " DESC";
                 limit = "1";
@@ -396,8 +396,8 @@ public class SocialProvider extends ContentProvider {
                 final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
                 long activityId = ContentUris.parseId(uri);
                 return mOpenHelper.getActivityMimeType(activityId);
-            case AGGREGATE_STATUS_ID:
-                return Aggregates.CONTENT_ITEM_TYPE;
+            case CONTACT_STATUS_ID:
+                return Contacts.CONTENT_ITEM_TYPE;
         }
         throw new UnsupportedOperationException("Unknown uri: " + uri);
     }

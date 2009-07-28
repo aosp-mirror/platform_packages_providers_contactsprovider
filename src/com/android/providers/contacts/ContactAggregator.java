@@ -17,13 +17,13 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
-import com.android.providers.contacts.OpenHelper.AggregatesColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
-import com.android.providers.contacts.OpenHelper.RawContactsColumns;
+import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupType;
+import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.content.ContentValues;
@@ -32,12 +32,11 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
-import android.database.sqlite.SQLiteStatement;
-import android.provider.ContactsContract.Aggregates;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
@@ -84,32 +83,32 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_DATA2 = 2;
 
     private static final String[] DATA_JOIN_MIMETYPE_AND_CONTACT_COLUMNS = new String[] {
-            Data.DATA1, Data.DATA2, RawContacts.AGGREGATE_ID
+            Data.DATA1, Data.DATA2, RawContacts.CONTACT_ID
     };
 
     private static final int COL_DATA_CONTACT_DATA1 = 0;
     private static final int COL_DATA_CONTACT_DATA2 = 1;
-    private static final int COL_DATA_CONTACT_AGGREGATE_ID = 2;
+    private static final int COL_DATA_CONTACT_CONTACT_ID = 2;
 
     private static final String[] NAME_LOOKUP_COLUMNS = new String[] {
-            RawContacts.AGGREGATE_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
+            RawContacts.CONTACT_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
     };
 
-    private static final int COL_NAME_LOOKUP_AGGREGATE_ID = 0;
+    private static final int COL_NAME_LOOKUP_CONTACT_ID = 0;
     private static final int COL_NORMALIZED_NAME = 1;
     private static final int COL_NAME_TYPE = 2;
 
     private static final String[] AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS = new String[]{
             AggregationExceptions.TYPE,
             AggregationExceptionColumns.RAW_CONTACT_ID1,
-            "raw_contacts1." + RawContacts.AGGREGATE_ID,
-            "raw_contacts2." + RawContacts.AGGREGATE_ID
+            "raw_contacts1." + RawContacts.CONTACT_ID,
+            "raw_contacts2." + RawContacts.CONTACT_ID
     };
 
     private static final int COL_TYPE = 0;
-    private static final int COL_CONTACT_ID1 = 1;
-    private static final int COL_AGGREGATE_ID1 = 2;
-    private static final int COL_AGGREGATE_ID2 = 3;
+    private static final int COL_RAW_CONTACT_ID1 = 1;
+    private static final int COL_CONTACT_ID1 = 2;
+    private static final int COL_CONTACT_ID2 = 3;
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
 
@@ -127,8 +126,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_TIMES_CONTACTED = 3;
     private static final int COL_STARRED = 4;
 
-    private static final String[] AGGREGATE_ID_COLUMNS = new String[]{ RawContacts.AGGREGATE_ID };
-    private static final int COL_AGGREGATE_ID = 0;
+    private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
+    private static final int COL_CONTACT_ID = 0;
 
     private static final int MODE_INSERT_LOOKUP_DATA = 0;
     private static final int MODE_AGGREGATION = 1;
@@ -202,7 +201,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     /**
      * Schedules aggregation pass after a short delay.  This method should be called every time
-     * the {@link RawContacts#AGGREGATE_ID} field is reset on any record.
+     * the {@link RawContacts#CONTACT_ID} field is reset on any record.
      */
     public void schedule() {
         mScheduler.schedule();
@@ -236,7 +235,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final Cursor c = db.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
-                RawContacts.AGGREGATE_ID + " IS NULL AND "
+                RawContacts.CONTACT_ID + " IS NULL AND "
                         + RawContacts.AGGREGATION_MODE + "=" + RawContacts.AGGREGATION_MODE_DEFAULT,
                 null, null, null, null);
 
@@ -308,12 +307,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     public int markContactForAggregation(long rawContactId) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
-        long aggregateId = mOpenHelper.getAggregateId(rawContactId);
-        if (aggregateId != 0) {
+        long contactId = mOpenHelper.getContactId(rawContactId);
+        if (contactId != 0) {
 
-            // Clear out the aggregate ID field on the contact
+            // Clear out the contact ID field on the contact
             ContentValues values = new ContentValues();
-            values.putNull(RawContacts.AGGREGATE_ID);
+            values.putNull(RawContacts.CONTACT_ID);
             int updated = db.update(Tables.RAW_CONTACTS, values,
                     RawContacts._ID + "=" + rawContactId + " AND " + RawContacts.AGGREGATION_MODE + "="
                             + RawContacts.AGGREGATION_MODE_DEFAULT, null);
@@ -325,56 +324,56 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
                     + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId);
 
-            // Delete the aggregate itself if it no longer has constituent contacts
-            db.execSQL("DELETE FROM " + Tables.AGGREGATES + " WHERE " + Aggregates._ID + "="
-                    + aggregateId + " AND " + Aggregates._ID + " NOT IN (SELECT "
-                    + RawContacts.AGGREGATE_ID + " FROM " + Tables.RAW_CONTACTS + ");");
+            // Delete the aggregate contact itself if it no longer has constituent raw contacts
+            db.execSQL("DELETE FROM " + Tables.CONTACTS + " WHERE " + Contacts._ID + "="
+                    + contactId + " AND " + Contacts._ID + " NOT IN (SELECT "
+                    + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS + ");");
             return RawContacts.AGGREGATION_MODE_DEFAULT;
         }
         return RawContacts.AGGREGATION_MODE_DISABLED;
     }
 
-    public void updateAggregateData(long aggregateId) {
+    public void updateAggregateData(long contactId) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final ContentValues values = new ContentValues();
-        updateAggregateData(db, aggregateId, values);
+        updateAggregateData(db, contactId, values);
     }
 
     /**
-     * Given a specific contact, finds all matching aggregates and chooses the aggregate
-     * with the highest match score.  If no such aggregate is found, creates a new aggregate.
+     * Given a specific raw contact, finds all matching aggregate contacts and chooses the one
+     * with the highest match score.  If no such contact is found, creates a new contact.
      */
     /* package */ synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
             MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
         candidates.clear();
         matcher.clear();
 
-        long aggregateId = pickBestMatchBasedOnExceptions(db, rawContactId, matcher);
-        if (aggregateId == -1) {
-            aggregateId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
+        long contactId = pickBestMatchBasedOnExceptions(db, rawContactId, matcher);
+        if (contactId == -1) {
+            contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
         }
 
         boolean newAgg = false;
 
-        if (aggregateId == -1) {
+        if (contactId == -1) {
             newAgg = true;
-            ContentValues aggregateValues = new ContentValues();
-            aggregateValues.put(Aggregates.DISPLAY_NAME, "");
-            aggregateId = db.insert(Tables.AGGREGATES, Aggregates.DISPLAY_NAME, aggregateValues);
+            ContentValues contactValues = new ContentValues();
+            contactValues.put(Contacts.DISPLAY_NAME, "");
+            contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
         }
 
         updateContactAggregationData(db, rawContactId, candidates, values);
-        mOpenHelper.setAggregateId(rawContactId, aggregateId);
+        mOpenHelper.setContactId(rawContactId, contactId);
 
-        updateAggregateData(db, aggregateId, values);
-        updatePrimaries(db, aggregateId, rawContactId, newAgg);
-        mOpenHelper.updateAggregateVisible(aggregateId);
+        updateAggregateData(db, contactId, values);
+        updatePrimaries(db, contactId, rawContactId, newAgg);
+        mOpenHelper.updateContactVisible(contactId);
 
     }
 
     /**
      * Computes match scores based on exceptions entered by the user: always match and never match.
-     * Returns the aggregate with the always match exception if any.
+     * Returns the aggregate contact with the always match exception if any.
      */
     private long pickBestMatchBasedOnExceptions(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
@@ -387,22 +386,22 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         try {
             while (c.moveToNext()) {
                 int type = c.getInt(COL_TYPE);
-                long contactId1 = c.getLong(COL_CONTACT_ID1);
-                long aggregateId = -1;
-                if (rawContactId == contactId1) {
-                    if (!c.isNull(COL_AGGREGATE_ID2)) {
-                        aggregateId = c.getLong(COL_AGGREGATE_ID2);
+                long rawContactId1 = c.getLong(COL_RAW_CONTACT_ID1);
+                long contactId = -1;
+                if (rawContactId == rawContactId1) {
+                    if (!c.isNull(COL_CONTACT_ID2)) {
+                        contactId = c.getLong(COL_CONTACT_ID2);
                     }
                 } else {
-                    if (!c.isNull(COL_AGGREGATE_ID1)) {
-                        aggregateId = c.getLong(COL_AGGREGATE_ID1);
+                    if (!c.isNull(COL_CONTACT_ID1)) {
+                        contactId = c.getLong(COL_CONTACT_ID1);
                     }
                 }
-                if (aggregateId != -1) {
+                if (contactId != -1) {
                     if (type == AggregationExceptions.TYPE_KEEP_IN) {
-                        return aggregateId;
+                        return contactId;
                     } else {
-                        matcher.keepOut(aggregateId);
+                        matcher.keepOut(contactId);
                     }
                 }
             }
@@ -414,7 +413,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Picks the best matching aggregate based on matches between data elements.  It considers
+     * Picks the best matching contact based on matches between data elements.  It considers
      * name match to be primary and phone, email etc matches to be secondary.  A good primary
      * match triggers aggregation, while a good secondary match only triggers aggregation in
      * the absence of a strong primary mismatch.
@@ -443,25 +442,25 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Picks the best matching aggregate based on secondary data matches.  The method loads
-     * structured names for all candidate aggregates and recomputes match scores using approximate
+     * Picks the best matching contact based on secondary data matches.  The method loads
+     * structured names for all candidate contacts and recomputes match scores using approximate
      * matching.
      */
     private long pickBestMatchBasedOnSecondaryData(SQLiteDatabase db,
             MatchCandidateList candidates, ContactMatcher matcher) {
-        List<Long> secondaryAggregateIds = matcher.prepareSecondaryMatchCandidates(
+        List<Long> secondaryContactIds = matcher.prepareSecondaryMatchCandidates(
                 ContactMatcher.SCORE_THRESHOLD_PRIMARY);
-        if (secondaryAggregateIds == null) {
+        if (secondaryContactIds == null) {
             return -1;
         }
 
         StringBuilder selection = new StringBuilder();
-        selection.append(RawContacts.AGGREGATE_ID).append(" IN (");
-        for (int i = 0; i < secondaryAggregateIds.size(); i++) {
+        selection.append(RawContacts.CONTACT_ID).append(" IN (");
+        for (int i = 0; i < secondaryContactIds.size(); i++) {
             if (i != 0) {
                 selection.append(',');
             }
-            selection.append(secondaryAggregateIds.get(i));
+            selection.append(secondaryContactIds.get(i));
         }
         selection.append(") AND ")
                 .append(MimetypesColumns.MIMETYPE)
@@ -478,7 +477,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             while (c.moveToNext()) {
                 String givenName = c.getString(COL_DATA_CONTACT_DATA1);
                 String familyName = c.getString(COL_DATA_CONTACT_DATA2);
-                long aggregateId = c.getLong(COL_DATA_CONTACT_AGGREGATE_ID);
+                long contactId = c.getLong(COL_DATA_CONTACT_CONTACT_ID);
 
                 nameCandidates.clear();
                 addMatchCandidatesStructuredName(givenName, familyName, MODE_INSERT_LOOKUP_DATA,
@@ -495,7 +494,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                     if (NameLookupType.isBasedOnStructuredName(candidate.mLookupType)) {
                         for (int j = 0; j < nameCandidates.mCount; j++) {
                             NameMatchCandidate nameCandidate = nameCandidates.mList.get(j);
-                            matcher.matchName(aggregateId,
+                            matcher.matchName(contactId,
                                     nameCandidate.mLookupType, nameCandidate.mName,
                                     candidate.mLookupType, candidate.mName, true);
                         }
@@ -510,7 +509,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Computes scores for aggregates that have matching data rows.
+     * Computes scores for contacts that have matching data rows.
      */
     private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long rawContactId,
             int mode, MatchCandidateList candidates, ContactMatcher matcher) {
@@ -556,8 +555,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             MatchCandidateList candidates) {
         if (TextUtils.isEmpty(givenName)) {
 
-            // If neither the first nor last name are specified, we won't
-            // aggregate
+            // If neither the first nor last name are specified, we won't aggregate
             if (TextUtils.isEmpty(familyName)) {
                 return;
             }
@@ -688,7 +686,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // Yank the last comma
         selection.setLength(selection.length() - 1);
         selection.append(") AND ");
-        selection.append(RawContacts.AGGREGATE_ID);
+        selection.append(RawContacts.CONTACT_ID);
         selection.append(" NOT NULL");
 
         matchAllCandidates(db, selection.toString(), candidates, matcher, false);
@@ -708,7 +706,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (!firstLetters.contains(firstLetter)) {
                     firstLetters.add(firstLetter);
                     final String selection = "(" + NameLookupColumns.NORMALIZED_NAME + " GLOB '"
-                            + firstLetter + "*') AND " + RawContacts.AGGREGATE_ID + " NOT NULL";
+                            + firstLetter + "*') AND " + RawContacts.CONTACT_ID + " NOT NULL";
                     matchAllCandidates(db, selection, candidates, matcher, true);
                 }
             }
@@ -726,14 +724,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         try {
             while (c.moveToNext()) {
-                Long aggregateId = c.getLong(COL_NAME_LOOKUP_AGGREGATE_ID);
+                Long contactId = c.getLong(COL_NAME_LOOKUP_CONTACT_ID);
                 String name = c.getString(COL_NORMALIZED_NAME);
                 int nameType = c.getInt(COL_NAME_TYPE);
 
                 // Determine which candidate produced this match
                 for (int i = 0; i < candidates.mCount; i++) {
                     NameMatchCandidate candidate = candidates.mList.get(i);
-                    matcher.matchName(aggregateId, candidate.mLookupType, candidate.mName,
+                    matcher.matchName(contactId, candidate.mLookupType, candidate.mName,
                             nameType, name, approximate);
                 }
             }
@@ -745,12 +743,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         OpenHelper.buildPhoneLookupQuery(qb, phoneNumber);
-        Cursor c = qb.query(db, AGGREGATE_ID_COLUMNS,
-                RawContacts.AGGREGATE_ID + " NOT NULL", null, null, null, null);
+        Cursor c = qb.query(db, CONTACT_ID_COLUMNS,
+                RawContacts.CONTACT_ID + " NOT NULL", null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long aggregateId = c.getLong(COL_AGGREGATE_ID);
-                matcher.updateScoreWithPhoneNumberMatch(aggregateId);
+                long contactId = c.getLong(COL_CONTACT_ID);
+                matcher.updateScoreWithPhoneNumberMatch(contactId);
             }
         } finally {
             c.close();
@@ -761,13 +759,13 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Finds exact email matches and updates their match scores.
      */
     private void lookupEmailMatches(SQLiteDatabase db, String address, ContactMatcher matcher) {
-        Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS, AGGREGATE_ID_COLUMNS,
-                Clauses.WHERE_EMAIL_MATCHES + " AND " + RawContacts.AGGREGATE_ID + " NOT NULL",
+        Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS, CONTACT_ID_COLUMNS,
+                Clauses.WHERE_EMAIL_MATCHES + " AND " + RawContacts.CONTACT_ID + " NOT NULL",
                 new String[]{address}, null, null, null);
         try {
             while (c.moveToNext()) {
-                long aggregateId = c.getLong(COL_AGGREGATE_ID);
-                matcher.updateScoreWithEmailMatch(aggregateId);
+                long contactId = c.getLong(COL_CONTACT_ID);
+                matcher.updateScoreWithEmailMatch(contactId);
             }
         } finally {
             c.close();
@@ -779,15 +777,15 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private void lookupNicknameMatches(SQLiteDatabase db, String nickname, ContactMatcher matcher) {
         String normalized = NameNormalizer.normalize(nickname);
-        Cursor c = db.query(true, Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, AGGREGATE_ID_COLUMNS,
+        Cursor c = db.query(true, Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, CONTACT_ID_COLUMNS,
                 NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + " AND "
                         + NameLookupColumns.NORMALIZED_NAME + "='" + normalized + "' AND "
-                        + RawContacts.AGGREGATE_ID + " NOT NULL",
+                        + RawContacts.CONTACT_ID + " NOT NULL",
                 null, null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long aggregateId = c.getLong(COL_AGGREGATE_ID);
-                matcher.updateScoreWithNicknameMatch(aggregateId);
+                long contactId = c.getLong(COL_CONTACT_ID);
+                matcher.updateScoreWithNicknameMatch(contactId);
             }
         } finally {
             c.close();
@@ -835,19 +833,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     /**
      * Updates aggregate-level data from constituent contacts.
      */
-    private void updateAggregateData(final SQLiteDatabase db, long aggregateId,
+    private void updateAggregateData(final SQLiteDatabase db, long contactId,
             final ContentValues values) {
-        updateDisplayName(db, aggregateId, values);
-        updateSendToVoicemailAndRingtone(db, aggregateId);
-        updatePhotoId(db, aggregateId, values);
+        updateDisplayName(db, contactId, values);
+        updateSendToVoicemailAndRingtone(db, contactId);
+        updatePhotoId(db, contactId, values);
     }
 
     /**
-     * Updates the aggregate record's {@link Aggregates#DISPLAY_NAME} field. If none of the
-     * constituent contacts has a suitable name, leaves the aggregate record unchanged.
+     * Updates the contact record's {@link Contacts#DISPLAY_NAME} field. If none of the
+     * constituent raw contacts has a suitable name, leaves the aggregate contact record unchanged.
      */
-    private void updateDisplayName(SQLiteDatabase db, long aggregateId, ContentValues values) {
-        String displayName = getBestDisplayName(db, aggregateId);
+    private void updateDisplayName(SQLiteDatabase db, long contactId, ContentValues values) {
+        String displayName = getBestDisplayName(db, contactId);
 
         // If don't have anything to base the display name on, let's just leave what was in
         // that field hoping that there was something there before and it is still valid.
@@ -856,24 +854,24 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         values.clear();
-        values.put(Aggregates.DISPLAY_NAME, displayName);
-        db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
+        values.put(Contacts.DISPLAY_NAME, displayName);
+        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
     }
 
-    private void updatePhotoId(SQLiteDatabase db, long aggregateId, ContentValues values) {
-        int photoId = choosePhotoId(db, aggregateId);
+    private void updatePhotoId(SQLiteDatabase db, long contactId, ContentValues values) {
+        int photoId = choosePhotoId(db, contactId);
 
         if (photoId == -1) {
             return;
         }
 
         values.clear();
-        values.put(Aggregates.PHOTO_ID, photoId);
-        db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
+        values.put(Contacts.PHOTO_ID, photoId);
+        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
     }
 
     /**
-     * Updates the various {@link AggregatesColumns} primary values based on the
+     * Updates the various {@link ContactsColumns} primary values based on the
      * newly joined {@link RawContacts} entry. If some aggregate primary values are
      * unassigned, primary values from this contact will be promoted as the new
      * super-primaries.
@@ -888,8 +886,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         // Read currently recorded aggregate primary values
         try {
-            cursor = db.query(Tables.AGGREGATES, Projections.PROJ_AGGREGATE_PRIMARIES,
-                    Aggregates._ID + "=" + aggId, null, null, null, null);
+            cursor = db.query(Tables.CONTACTS, Projections.PROJ_CONTACT_PRIMARIES,
+                    Contacts._ID + "=" + aggId, null, null, null, null);
             if (cursor.moveToNext()) {
                 hasOptimalPhone = (cursor.getLong(Projections.COL_OPTIMAL_PRIMARY_PHONE_ID) != 0);
                 hasFallbackPhone = (cursor.getLong(Projections.COL_FALLBACK_PRIMARY_PHONE_ID) != 0);
@@ -934,24 +932,24 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         final ContentValues values = new ContentValues();
 
-        // If a new aggregate, and single child is restricted, then mark
-        // aggregate as being protected by package. Otherwise set as null if
-        // multiple under aggregate or not restricted.
-        values.put(AggregatesColumns.SINGLE_IS_RESTRICTED, (newAgg && candidateIsRestricted) ? 1
+        // If a new contact, and single child is restricted, then mark
+        // contact as being protected by package. Otherwise set as null if
+        // multiple under contact or not restricted.
+        values.put(ContactsColumns.SINGLE_IS_RESTRICTED, (newAgg && candidateIsRestricted) ? 1
                 : 0);
 
         // If newly joined contact has a primary phone number, consider
         // promoting it up into aggregate as super-primary.
         if (candidatePhone != 0) {
             if (!hasOptimalPhone) {
-                values.put(AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID, candidatePhone);
-                values.put(AggregatesColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED,
+                values.put(ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID, candidatePhone);
+                values.put(ContactsColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED,
                         candidateIsRestricted ? 1 : 0);
             }
 
             // Also promote to unrestricted value, if none provided yet.
             if (!hasFallbackPhone && !candidateIsRestricted) {
-                values.put(AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID, candidatePhone);
+                values.put(ContactsColumns.FALLBACK_PRIMARY_PHONE_ID, candidatePhone);
             }
         }
 
@@ -959,34 +957,34 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // into aggregate as super-primary.
         if (candidateEmail != 0) {
             if (!hasOptimalEmail) {
-                values.put(AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID, candidateEmail);
-                values.put(AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED,
+                values.put(ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID, candidateEmail);
+                values.put(ContactsColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED,
                         candidateIsRestricted ? 1 : 0);
             }
 
             // Also promote to unrestricted value, if none provided yet.
             if (!hasFallbackEmail && !candidateIsRestricted) {
-                values.put(AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID, candidateEmail);
+                values.put(ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID, candidateEmail);
             }
         }
 
-        // Only write updated aggregate values if we made changes.
+        // Only write updated contact values if we made changes.
         if (values.size() > 0) {
             Log.d(TAG, "some sort of promotion is going on: " + values.toString());
-            db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggId, null);
+            db.update(Tables.CONTACTS, values, Contacts._ID + "=" + aggId, null);
         }
 
     }
 
     /**
-     * Computes display name for the given aggregate.  Chooses a longer name over a shorter name
+     * Computes display name for the given contact.  Chooses a longer name over a shorter name
      * and a mixed-case name over an all lowercase or uppercase name.
      */
-    private String getBestDisplayName(SQLiteDatabase db, long aggregateId) {
+    private String getBestDisplayName(SQLiteDatabase db, long contactId) {
         String bestDisplayName = null;
 
         final Cursor c = db.query(Tables.RAW_CONTACTS, new String[] {RawContactsColumns.DISPLAY_NAME},
-                RawContacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
 
         try {
             while (c.moveToNext()) {
@@ -1008,17 +1006,17 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Iterates over the photos associated with aggregate defined by aggregateId, and chooses one
-     * to be associated with the aggregate. Initially this just chooses the first photo in a list
+     * Iterates over the photos associated with contact defined by contactId, and chooses one
+     * to be associated with the contact. Initially this just chooses the first photo in a list
      * sorted by account name.
      */
-    private int choosePhotoId(SQLiteDatabase db, long aggregateId) {
+    private int choosePhotoId(SQLiteDatabase db, long contactId) {
         int chosenPhotoId = -1;
         String chosenAccount = null;
 
-        final Cursor c = db.query(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_AGGREGATES,
+        final Cursor c = db.query(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS,
                 new String[] {"data._id AS _id", RawContacts.ACCOUNT_NAME},
-                DatabaseUtils.concatenateWhere(RawContacts.AGGREGATE_ID + "=" + aggregateId,
+                DatabaseUtils.concatenateWhere(RawContacts.CONTACT_ID + "=" + contactId,
                         Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'"),
                 null, null, null, null);
 
@@ -1043,19 +1041,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Updates the aggregate's send-to-voicemail and custom-ringtone options based on
+     * Updates the contact's send-to-voicemail and custom-ringtone options based on
      * constituent contacts' options.
      */
-    private void updateSendToVoicemailAndRingtone(SQLiteDatabase db, long aggregateId) {
+    private void updateSendToVoicemailAndRingtone(SQLiteDatabase db, long contactId) {
         int totalContactCount = 0;
-        int aggregateSendToVoicemail = 0;
-        String aggregateCustomRingtone = null;
-        long aggregateLastTimeContacted = 0;
-        int aggregateTimesContacted = 0;
-        boolean aggregateStarred = false;
+        int contactSendToVoicemail = 0;
+        String contactCustomRingtone = null;
+        long contactLastTimeContacted = 0;
+        int contactTimesContacted = 0;
+        boolean contactStarred = false;
 
         final Cursor c = db.query(Tables.RAW_CONTACTS, CONTACT_OPTIONS_COLUMNS,
-                RawContacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
 
         try {
             while (c.moveToNext()) {
@@ -1063,44 +1061,44 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (!c.isNull(COL_SEND_TO_VOICEMAIL)) {
                     boolean sendToVoicemail = (c.getInt(COL_SEND_TO_VOICEMAIL) != 0);
                     if (sendToVoicemail) {
-                        aggregateSendToVoicemail++;
+                        contactSendToVoicemail++;
                     }
                 }
 
-                if (aggregateCustomRingtone == null && !c.isNull(COL_CUSTOM_RINGTONE)) {
-                    aggregateCustomRingtone = c.getString(COL_CUSTOM_RINGTONE);
+                if (contactCustomRingtone == null && !c.isNull(COL_CUSTOM_RINGTONE)) {
+                    contactCustomRingtone = c.getString(COL_CUSTOM_RINGTONE);
                 }
 
                 long lastTimeContacted = c.getLong(COL_LAST_TIME_CONTACTED);
-                if (lastTimeContacted > aggregateLastTimeContacted) {
-                    aggregateLastTimeContacted = lastTimeContacted;
+                if (lastTimeContacted > contactLastTimeContacted) {
+                    contactLastTimeContacted = lastTimeContacted;
                 }
 
                 int timesContacted = c.getInt(COL_TIMES_CONTACTED);
-                if (timesContacted > aggregateTimesContacted) {
-                    aggregateTimesContacted = timesContacted;
+                if (timesContacted > contactTimesContacted) {
+                    contactTimesContacted = timesContacted;
                 }
 
-                aggregateStarred |= (c.getInt(COL_STARRED) != 0);
+                contactStarred |= (c.getInt(COL_STARRED) != 0);
             }
         } finally {
             c.close();
         }
 
         ContentValues values = new ContentValues(2);
-        values.put(Aggregates.SEND_TO_VOICEMAIL, totalContactCount == aggregateSendToVoicemail);
-        values.put(Aggregates.CUSTOM_RINGTONE, aggregateCustomRingtone);
-        values.put(Aggregates.LAST_TIME_CONTACTED, aggregateLastTimeContacted);
-        values.put(Aggregates.TIMES_CONTACTED, aggregateTimesContacted);
-        values.put(Aggregates.STARRED, aggregateStarred);
+        values.put(Contacts.SEND_TO_VOICEMAIL, totalContactCount == contactSendToVoicemail);
+        values.put(Contacts.CUSTOM_RINGTONE, contactCustomRingtone);
+        values.put(Contacts.LAST_TIME_CONTACTED, contactLastTimeContacted);
+        values.put(Contacts.TIMES_CONTACTED, contactTimesContacted);
+        values.put(Contacts.STARRED, contactStarred);
 
-        db.update(Tables.AGGREGATES, values, Aggregates._ID + "=" + aggregateId, null);
+        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
     }
 
     /**
-     * Finds matching aggregates and returns a cursor on those.
+     * Finds matching contacts and returns a cursor on those.
      */
-    public Cursor queryAggregationSuggestions(long aggregateId, String[] projection,
+    public Cursor queryAggregationSuggestions(long contactId, String[] projection,
             HashMap<String, String> projectionMap, int maxSuggestions) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
@@ -1110,8 +1108,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // aggregation, but not kill it.
         db.beginTransaction();
         try {
-            List<MatchScore> bestMatches = findMatchingAggregates(db, aggregateId, maxSuggestions);
-            c = queryMatchingAggregates(db, aggregateId, projection, projectionMap, bestMatches);
+            List<MatchScore> bestMatches = findMatchingContacts(db, contactId, maxSuggestions);
+            c = queryMatchingContacts(db, contactId, projection, projectionMap, bestMatches);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -1120,63 +1118,63 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Loads aggregates with specified IDs and returns them in the order of IDs in the
+     * Loads contacts with specified IDs and returns them in the order of IDs in the
      * supplied list.
      */
-    private Cursor queryMatchingAggregates(final SQLiteDatabase db, long aggregateId,
+    private Cursor queryMatchingContacts(final SQLiteDatabase db, long contactId,
             String[] projection, HashMap<String, String> projectionMap,
             List<MatchScore> bestMatches) {
 
         StringBuilder selection = new StringBuilder();
-        selection.append(Aggregates._ID);
+        selection.append(Contacts._ID);
         selection.append(" IN (");
         for (int i = 0; i < bestMatches.size(); i++) {
             MatchScore matchScore = bestMatches.get(i);
             if (i != 0) {
                 selection.append(",");
             }
-            selection.append(matchScore.getAggregateId());
+            selection.append(matchScore.getContactId());
         }
         selection.append(")");
 
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        qb.setTables(Tables.AGGREGATES);
+        qb.setTables(Tables.CONTACTS);
         qb.setProjectionMap(projectionMap);
 
         final Cursor cursor = qb.query(db, projection, selection.toString(), null, null, null,
-                Aggregates._ID);
+                Contacts._ID);
 
-        ArrayList<Long> sortedAggregateIds = new ArrayList<Long>(bestMatches.size());
+        ArrayList<Long> sortedContactIds = new ArrayList<Long>(bestMatches.size());
         for (MatchScore matchScore : bestMatches) {
-            sortedAggregateIds.add(matchScore.getAggregateId());
+            sortedContactIds.add(matchScore.getContactId());
         }
 
-        Collections.sort(sortedAggregateIds);
+        Collections.sort(sortedContactIds);
 
         int[] positionMap = new int[bestMatches.size()];
         for (int i = 0; i < positionMap.length; i++) {
-            long id = bestMatches.get(i).getAggregateId();
-            positionMap[i] = sortedAggregateIds.indexOf(id);
+            long id = bestMatches.get(i).getContactId();
+            positionMap[i] = sortedContactIds.indexOf(id);
         }
 
         return new ReorderingCursorWrapper(cursor, positionMap);
     }
 
     /**
-     * Finds aggregates with data matches and returns a list of {@link MatchScore}'s in the
+     * Finds contacts with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
      */
-    private List<MatchScore> findMatchingAggregates(final SQLiteDatabase db,
-            long aggregateId, int maxSuggestions) {
+    private List<MatchScore> findMatchingContacts(final SQLiteDatabase db,
+            long contactId, int maxSuggestions) {
 
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
 
-        // Don't aggregate an aggregate with itself
-        matcher.keepOut(aggregateId);
+        // Don't aggregate a contact with itself
+        matcher.keepOut(contactId);
 
         final Cursor c = db.query(Tables.RAW_CONTACTS, CONTACT_ID_COLUMN,
-                RawContacts.AGGREGATE_ID + "=" + aggregateId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(0);
@@ -1199,12 +1197,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Various database projections used internally.
      */
     private interface Projections {
-        static final String[] PROJ_AGGREGATE_PRIMARIES = new String[] {
-                AggregatesColumns.OPTIMAL_PRIMARY_PHONE_ID,
-                AggregatesColumns.FALLBACK_PRIMARY_PHONE_ID,
-                AggregatesColumns.OPTIMAL_PRIMARY_EMAIL_ID,
-                AggregatesColumns.FALLBACK_PRIMARY_EMAIL_ID,
-                AggregatesColumns.SINGLE_IS_RESTRICTED,
+        static final String[] PROJ_CONTACT_PRIMARIES = new String[] {
+                ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID,
+                ContactsColumns.FALLBACK_PRIMARY_PHONE_ID,
+                ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID,
+                ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID,
+                ContactsColumns.SINGLE_IS_RESTRICTED,
         };
 
         static final int COL_OPTIMAL_PRIMARY_PHONE_ID = 0;
