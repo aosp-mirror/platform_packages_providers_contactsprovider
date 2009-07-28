@@ -267,9 +267,11 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     private interface DataIdQuery {
-        String[] COLUMNS = { Data._ID };
+        String[] COLUMNS = { Data._ID, Data.RAW_CONTACT_ID, Data.MIMETYPE };
 
         int _ID = 0;
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE = 2;
     }
 
     // Higher number represents higher priority in choosing what data to use for the display name
@@ -1227,28 +1229,7 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
             mValues.remove(Data.MIMETYPE);
 
-            if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                boolean containsGroupSourceId = mValues.containsKey(GroupMembership.GROUP_SOURCE_ID);
-                boolean containsGroupId = mValues.containsKey(GroupMembership.GROUP_ROW_ID);
-                if (containsGroupSourceId && containsGroupId) {
-                    throw new IllegalArgumentException(
-                            "you are not allowed to set both the GroupMembership.GROUP_SOURCE_ID "
-                                    + "and GroupMembership.GROUP_ROW_ID");
-                }
-
-                if (!containsGroupSourceId && !containsGroupId) {
-                    throw new IllegalArgumentException(
-                            "you must set exactly one of GroupMembership.GROUP_SOURCE_ID "
-                                    + "and GroupMembership.GROUP_ROW_ID");
-                }
-
-                if (containsGroupSourceId) {
-                    final String sourceId = mValues.getAsString(GroupMembership.GROUP_SOURCE_ID);
-                    final long groupId = getOrMakeGroup(db, rawContactId, sourceId);
-                    mValues.remove(GroupMembership.GROUP_SOURCE_ID);
-                    mValues.put(GroupMembership.GROUP_ROW_ID, groupId);
-                }
-            }
+            resolveGroupSourceIdInValues(rawContactId, mimeType, db, mValues, true /* isInsert */);
 
             id = getDataRowHandler(mimeType).insert(db, rawContactId, mValues);
 
@@ -1737,12 +1718,12 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case DATA: {
-                count = updateData(values, selection, selectionArgs);
+                count = updateData(uri, values, selection, selectionArgs);
                 break;
             }
 
             case DATA_ID: {
-                count = updateData(ContentUris.parseId(uri), values);
+                count = updateData(uri, values, selection, selectionArgs);
                 break;
             }
 
@@ -1800,20 +1781,21 @@ public class ContactsProvider2 extends ContentProvider {
         return db.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
     }
 
-    private int updateData(ContentValues values, String selection,
+    private int updateData(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         int count = 0;
         db.beginTransaction();
         try {
-
             // Note that the query will return data according to the access restrictions,
             // so we don't need to worry about deleting data we don't have permission to read.
-            Cursor c = query(Data.CONTENT_URI, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+            Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
             try {
                 while(c.moveToNext()) {
-                    long dataId = c.getLong(DataIdQuery._ID);
-                    count += updateData(dataId, values);
+                    final long dataId = c.getLong(DataIdQuery._ID);
+                    final long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
+                    final String mimetype = c.getString(DataIdQuery.MIMETYPE);
+                    count += updateData(dataId, rawContactId, mimetype, values);
                 }
             } finally {
                 c.close();
@@ -1826,7 +1808,7 @@ public class ContactsProvider2 extends ContentProvider {
         return count;
     }
 
-    private int updateData(long dataId, ContentValues values) {
+    private int updateData(long dataId, long rawContactId, String mimeType, ContentValues values) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         mValues.clear();
@@ -1871,10 +1853,42 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.remove(Data.IS_PRIMARY);
         }
 
+        resolveGroupSourceIdInValues(rawContactId, mimeType, db, mValues, false /* isInsert */);
+
         if (mValues.size() > 0) {
             return db.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
         }
         return 0;
+    }
+
+    private void resolveGroupSourceIdInValues(long rawContactId, String mimeType, SQLiteDatabase db,
+            ContentValues values, boolean isInsert) {
+        if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
+            boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
+            boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
+            if (containsGroupSourceId && containsGroupId) {
+                throw new IllegalArgumentException(
+                        "you are not allowed to set both the GroupMembership.GROUP_SOURCE_ID "
+                                + "and GroupMembership.GROUP_ROW_ID");
+            }
+
+            if (!containsGroupSourceId && !containsGroupId) {
+                if (isInsert) {
+                    throw new IllegalArgumentException(
+                            "you must set exactly one of GroupMembership.GROUP_SOURCE_ID "
+                                    + "and GroupMembership.GROUP_ROW_ID");
+                } else {
+                    return;
+                }
+            }
+
+            if (containsGroupSourceId) {
+                final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
+                final long groupId = getOrMakeGroup(db, rawContactId, sourceId);
+                values.remove(GroupMembership.GROUP_SOURCE_ID);
+                values.put(GroupMembership.GROUP_ROW_ID, groupId);
+            }
+        }
     }
 
     private int updateContactData(SQLiteDatabase db, long contactId, ContentValues values) {

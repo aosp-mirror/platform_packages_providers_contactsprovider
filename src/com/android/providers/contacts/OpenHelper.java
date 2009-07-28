@@ -776,7 +776,6 @@ import java.util.HashMap;
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
-                + RawContacts.CONTACT_ID + ", "
                 + Data.MIMETYPE + ", "
                 + Data.DATA1 + ", "
                 + Data.DATA2 + ", "
