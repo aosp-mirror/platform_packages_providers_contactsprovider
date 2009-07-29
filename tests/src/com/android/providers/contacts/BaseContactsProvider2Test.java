@@ -17,36 +17,35 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
-import com.android.providers.contacts.ContactsActor;
-
+import android.accounts.Account;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Entity;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
-import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.accounts.Account;
 
-import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
 
@@ -84,6 +83,19 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             ((SynchronousContactsProvider2) mActor.provider)
                     .getOpenHelper(mActor.context).wipeData();
         }
+    }
+
+    public Context getMockContext() {
+        return mActor.context;
+    }
+
+    public void addAuthority(String authority) {
+        mActor.addAuthority(authority);
+    }
+
+    public ContentProvider addProvider(Class<? extends ContentProvider> providerClass,
+            String authority) throws Exception {
+        return mActor.addProvider(providerClass, authority);
     }
 
     protected Uri maybeAddAccountQueryParameters(Uri uri, Account account) {

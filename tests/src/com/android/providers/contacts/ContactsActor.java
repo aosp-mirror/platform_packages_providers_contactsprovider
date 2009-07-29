@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import android.content.ContentProvider;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -29,16 +30,15 @@ import android.os.Binder;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.Phones;
-import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.RawContacts;
 import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
 import android.test.mock.MockPackageManager;
-import android.util.Log;
 
 import java.util.HashMap;
 
@@ -61,6 +61,8 @@ public class ContactsActor {
     public MockContentResolver resolver;
     public ContentProvider provider;
 
+    private IsolatedContext mProviderContext;
+
     /**
      * Create an "actor" using the given parent {@link Context} and the specific
      * package name. Internally, all {@link Context} method calls are passed to
@@ -69,17 +71,26 @@ public class ContactsActor {
      */
     public ContactsActor(Context overallContext, String packageName,
             Class<? extends ContentProvider> providerClass, String authority) throws Exception {
-        context = new RestrictionMockContext(overallContext, packageName);
-        this.packageName = packageName;
         resolver = new MockContentResolver();
+        context = new RestrictionMockContext(overallContext, packageName, resolver);
+        this.packageName = packageName;
 
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 overallContext, FILENAME_PREFIX);
-        Context providerContext = new IsolatedContext(resolver, targetContextWrapper);
+        mProviderContext = new IsolatedContext(resolver, targetContextWrapper);
+        provider = addProvider(providerClass, authority);
+    }
 
-        provider = providerClass.newInstance();
-        provider.attachInfo(providerContext, null);
+    public void addAuthority(String authority) {
         resolver.addProvider(authority, provider);
+    }
+
+    public ContentProvider addProvider(Class<? extends ContentProvider> providerClass,
+            String authority) throws Exception {
+        ContentProvider provider = providerClass.newInstance();
+        provider.attachInfo(mProviderContext, null);
+        resolver.addProvider(authority, provider);
+        return provider;
     }
 
     /**
@@ -96,13 +107,16 @@ public class ContactsActor {
         private final Context mOverallContext;
         private final String mReportedPackageName;
         private final RestrictionMockPackageManager mPackageManager;
+        private final ContentResolver mResolver;
 
         /**
          * Create a {@link Context} under the given package name.
          */
-        public RestrictionMockContext(Context overallContext, String reportedPackageName) {
+        public RestrictionMockContext(Context overallContext, String reportedPackageName,
+                ContentResolver resolver) {
             mOverallContext = overallContext;
             mReportedPackageName = reportedPackageName;
+            mResolver = resolver;
             mPackageManager = new RestrictionMockPackageManager();
             mPackageManager.addPackage(1000, PACKAGE_GREY);
             mPackageManager.addPackage(2000, PACKAGE_RED);
@@ -123,6 +137,11 @@ public class ContactsActor {
         @Override
         public Resources getResources() {
             return mOverallContext.getResources();
+        }
+
+        @Override
+        public ContentResolver getContentResolver() {
+            return mResolver;
         }
     }
 

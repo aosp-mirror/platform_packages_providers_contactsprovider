@@ -32,6 +32,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.provider.BaseColumns;
+import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -78,6 +79,7 @@ import java.util.HashMap;
         public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
+        public static final String CALLS = "calls";
         public static final String CONTACT_ENTITIES = "contact_entities_view";
 
         public static final String CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE = "contacts "
@@ -716,6 +718,20 @@ import java.util.HashMap;
                 AggregationExceptionColumns.RAW_CONTACT_ID1 +
         ");");
 
+        // The table for recent calls is here so we can do table joins
+        // on people, phones, and calls all in one place.
+        db.execSQL("CREATE TABLE " + Tables.CALLS + " (" +
+                Calls._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                Calls.NUMBER + " TEXT," +
+                Calls.DATE + " INTEGER," +
+                Calls.DURATION + " INTEGER," +
+                Calls.TYPE + " INTEGER," +
+                Calls.NEW + " INTEGER," +
+                Calls.CACHED_NAME + " TEXT," +
+                Calls.CACHED_NUMBER_TYPE + " INTEGER," +
+                Calls.CACHED_NUMBER_LABEL + " TEXT" +
+        ");");
+
         // Activities table
         db.execSQL("CREATE TABLE " + Tables.ACTIVITIES + " (" +
                 Activities._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -794,6 +810,7 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS);
 
         // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
         // schema changes, we should try to preserve the data, because it was entered by the user
@@ -823,6 +840,7 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
+        db.execSQL("DELETE FROM " + Tables.CALLS);
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
 
