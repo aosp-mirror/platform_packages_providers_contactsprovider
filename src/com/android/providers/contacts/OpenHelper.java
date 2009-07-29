@@ -110,6 +110,9 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
+        public static final String RAW_CONTACTS_JOIN_CONTACTS = "raw_contacts "
+                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
+
         public static final String DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "

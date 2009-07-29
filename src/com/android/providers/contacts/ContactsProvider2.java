@@ -104,11 +104,12 @@ public class ContactsProvider2 extends ContentProvider {
     private static final int CONTACTS_ID = 1001;
     private static final int CONTACTS_DATA = 1002;
     private static final int CONTACTS_SUMMARY = 1003;
-    private static final int CONTACTS_SUMMARY_ID = 1004;
-    private static final int CONTACTS_SUMMARY_FILTER = 1005;
-    private static final int CONTACTS_SUMMARY_STREQUENT = 1006;
-    private static final int CONTACTS_SUMMARY_STREQUENT_FILTER = 1007;
-    private static final int CONTACTS_SUMMARY_GROUP = 1008;
+    private static final int CONTACTS_RAW_CONTACTS = 1004;
+    private static final int CONTACTS_SUMMARY_ID = 1005;
+    private static final int CONTACTS_SUMMARY_FILTER = 1006;
+    private static final int CONTACTS_SUMMARY_STREQUENT = 1007;
+    private static final int CONTACTS_SUMMARY_STREQUENT_FILTER = 1008;
+    private static final int CONTACTS_SUMMARY_GROUP = 1009;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -293,6 +294,8 @@ public class ContactsProvider2 extends ContentProvider {
     private static final HashMap<String, String> sDataContactsContactProjectionMap;
     /** Contains the data, contacts, group sourceid and contact columns, for joined tables. */
     private static final HashMap<String, String> sDataContactsGroupsContactProjectionMap;
+    /** Contains the contacts, and raw contact columns, for joined tables. */
+    private static final HashMap<String, String> sRawContactsContactsProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sRawContactsProjectionMap;
     /** Contains just the data columns */
@@ -344,6 +347,7 @@ public class ContactsProvider2 extends ContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/raw_contacts", CONTACTS_RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary", CONTACTS_SUMMARY);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/#", CONTACTS_SUMMARY_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/filter/*",
@@ -445,6 +449,11 @@ public class ContactsProvider2 extends ContentProvider {
                 OpenHelper.RawContactsColumns.CONCRETE_DELETED
                         + " AS " + RawContacts.DELETED);
         sRawContactsProjectionMap = columns;
+
+        columns = new HashMap<String, String>();
+        columns.putAll(sContactsProjectionMap);
+        columns.putAll(sRawContactsProjectionMap);
+        sRawContactsContactsProjectionMap = columns;
 
         // Data projection map
         columns = new HashMap<String, String>();
@@ -2090,6 +2099,15 @@ public class ContactsProvider2 extends ContentProvider {
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS_GROUPS);
                 qb.setProjectionMap(sDataContactsGroupsContactProjectionMap);
                 qb.appendWhere(RawContacts.CONTACT_ID + "=" + aggId + " AND ");
+                applyDataRestrictionExceptions(qb);
+                break;
+            }
+
+            case CONTACTS_RAW_CONTACTS: {
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                qb.setTables(Tables.RAW_CONTACTS_JOIN_CONTACTS);
+                qb.setProjectionMap(sRawContactsContactsProjectionMap);
+                qb.appendWhere(RawContacts.CONTACT_ID + "=" + contactId + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
             }
