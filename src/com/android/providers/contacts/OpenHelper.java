@@ -58,7 +58,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 56;
+    private static final int DATABASE_VERSION = 58;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -198,6 +198,8 @@ import java.util.HashMap;
                 Groups.SOURCE_ID + "=? AND "
                         + Groups.ACCOUNT_NAME + "=? AND "
                         + Groups.ACCOUNT_TYPE + "=?";
+
+        public static final String COUNT_STAR = "count(*)";
     }
 
     public interface ContactsColumns {
@@ -756,6 +758,7 @@ import java.util.HashMap;
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
+                + RawContacts.CONTACT_ID + ", "
                 + Data.MIMETYPE + ", "
                 + Data.DATA1 + ", "
                 + Data.DATA2 + ", "
@@ -811,6 +814,8 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS);
+
+        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
 
         // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
         // schema changes, we should try to preserve the data, because it was entered by the user

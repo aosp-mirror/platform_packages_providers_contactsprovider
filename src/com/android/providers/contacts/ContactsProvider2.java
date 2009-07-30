@@ -424,6 +424,7 @@ public class ContactsProvider2 extends ContentProvider {
         // RawContacts projection map
         columns = new HashMap<String, String>();
         columns.put(RawContacts._ID, Tables.RAW_CONTACTS + "." + RawContacts._ID + " AS _id");
+        columns.put(Clauses.COUNT_STAR, Clauses.COUNT_STAR);
         columns.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
         columns.put(RawContacts.ACCOUNT_NAME,
                 OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_NAME
