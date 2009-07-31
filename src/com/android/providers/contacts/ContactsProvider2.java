@@ -348,9 +348,6 @@ public class ContactsProvider2 extends ContentProvider {
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mContactDisplayNameUpdate;
 
-    private static final String GTALK_PROTOCOL_STRING = Im
-            .encodePredefinedImProtocol(Im.PROTOCOL_GOOGLE_TALK);
-
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
@@ -1543,7 +1540,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         // TODO: generalize to allow other providers to match against email
-        boolean matchEmail = GTALK_PROTOCOL_STRING.equals(protocol);
+        boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == Integer.parseInt(protocol);
 
         StringBuilder selection = new StringBuilder();
         String[] selectionArgs;

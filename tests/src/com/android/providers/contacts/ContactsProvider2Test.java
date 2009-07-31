@@ -585,10 +585,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             values.put(Email.DATA, "foo@acme.com");
             mResolver.insert(Data.CONTENT_URI, values);
 
-            String protocol = Im.encodePredefinedImProtocol(Im.PROTOCOL_GOOGLE_TALK);
-
             values.clear();
-            values.put(Presence.IM_PROTOCOL, protocol);
+            values.put(Presence.IM_PROTOCOL, Im.PROTOCOL_GOOGLE_TALK);
             values.put(Presence.IM_HANDLE, "foo@acme.com");
             values.put(Presence.IM_ACCOUNT, "foo");
             values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
