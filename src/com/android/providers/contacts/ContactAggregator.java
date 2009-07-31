@@ -307,30 +307,31 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     public int markContactForAggregation(long rawContactId) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
-        long contactId = mOpenHelper.getContactId(rawContactId);
-        if (contactId != 0) {
-
-            // Clear out the contact ID field on the contact
-            ContentValues values = new ContentValues();
-            values.putNull(RawContacts.CONTACT_ID);
-            int updated = db.update(Tables.RAW_CONTACTS, values,
-                    RawContacts._ID + "=" + rawContactId + " AND " + RawContacts.AGGREGATION_MODE + "="
-                            + RawContacts.AGGREGATION_MODE_DEFAULT, null);
-            if (updated == 0) {
-                return mOpenHelper.getAggregationMode(rawContactId);
-            }
-
-            // Clear out data used for aggregation - we will recreate it during aggregation
-            db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
-                    + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId);
-
-            // Delete the aggregate contact itself if it no longer has constituent raw contacts
-            db.execSQL("DELETE FROM " + Tables.CONTACTS + " WHERE " + Contacts._ID + "="
-                    + contactId + " AND " + Contacts._ID + " NOT IN (SELECT "
-                    + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS + ");");
-            return RawContacts.AGGREGATION_MODE_DEFAULT;
+        int aggregationMode = mOpenHelper.getAggregationMode(rawContactId);
+        if (aggregationMode == RawContacts.AGGREGATION_MODE_DISABLED) {
+            return aggregationMode;
         }
-        return RawContacts.AGGREGATION_MODE_DISABLED;
+
+        long contactId = mOpenHelper.getContactId(rawContactId);
+        if (contactId == 0) {
+            // Not aggregated
+            return aggregationMode;
+        }
+
+        mOpenHelper.removeContactIfSingleton(rawContactId);
+
+        // TODO compiled statements
+
+        // Clear out data used for aggregation - we will recreate it during aggregation
+        db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+                + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId);
+
+        // Clear out the contact ID field on the contact
+        ContentValues values = new ContentValues();
+        values.putNull(RawContacts.CONTACT_ID);
+        db.update(Tables.RAW_CONTACTS, values, RawContacts._ID + "=" + rawContactId, null);
+
+        return aggregationMode;
     }
 
     public void updateAggregateData(long contactId) {
@@ -462,11 +463,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             }
             selection.append(secondaryContactIds.get(i));
         }
-        selection.append(") AND ")
-                .append(MimetypesColumns.MIMETYPE)
-                .append("='")
-                .append(StructuredName.CONTENT_ITEM_TYPE)
-                .append("'");
+        selection.append(") AND " + MimetypesColumns.MIMETYPE + "='"
+                + StructuredName.CONTENT_ITEM_TYPE + "'");
 
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS,
                 DATA_JOIN_MIMETYPE_AND_CONTACT_COLUMNS,
@@ -516,8 +514,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS,
                 DATA_JOIN_MIMETYPE_COLUMNS,
-                DatabaseUtils.concatenateWhere(Data.RAW_CONTACT_ID + "=" + rawContactId,
-                        MIMETYPE_SELECTION_IN_CLAUSE),
+                Data.RAW_CONTACT_ID + "=" + rawContactId + " AND ("
+                        + MIMETYPE_SELECTION_IN_CLAUSE + ")",
                 null, null, null, null);
 
         try {

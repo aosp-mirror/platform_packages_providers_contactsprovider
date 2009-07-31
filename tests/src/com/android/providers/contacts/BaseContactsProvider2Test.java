@@ -112,6 +112,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return createRawContact(null);
     }
 
+    protected long createRawContactWithName() {
+        long rawContactId = createRawContact(null);
+        insertStructuredName(rawContactId, "John", "Doe");
+        return rawContactId;
+    }
+
     protected long createRawContact(Account account, String... extras) {
         ContentValues values = new ContentValues();
         for (int i = 0; i < extras.length; ) {
@@ -516,12 +522,17 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected void assertSelection(Uri uri, ContentValues values, String idColumn, long id) {
         StringBuilder sb = new StringBuilder();
         ArrayList<String> selectionArgs = new ArrayList<String>(values.size());
-        sb.append(idColumn).append("=").append(id);
+        if (idColumn != null) {
+            sb.append(idColumn).append("=").append(id);
+        }
         Set<Map.Entry<String, Object>> entries = values.valueSet();
         for (Map.Entry<String, Object> entry : entries) {
             String column = entry.getKey();
             Object value = entry.getValue();
-            sb.append(" AND ").append(column);
+            if (sb.length() != 0) {
+                sb.append(" AND ");
+            }
+            sb.append(column);
             if (value == null) {
                 sb.append(" IS NULL");
             } else {

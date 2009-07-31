@@ -18,11 +18,12 @@
         android:icon="@drawable/app_icon">
 
         <provider android:name="ContactsProvider" 
-            android:authorities="contacts;call_log"
+            android:authorities="contacts"
             android:syncable="false" android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
-            <path-permission android:path="/people/search_suggest_query"
+            <path-permission
+                    android:path="/people/search_suggest_query"
                     android:readPermission="android.permission.GLOBAL_SEARCH" />
         </provider>
 
@@ -31,7 +32,18 @@
             android:syncable="false"
             android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
-            android:writePermission="android.permission.WRITE_CONTACTS" />
+            android:writePermission="android.permission.WRITE_CONTACTS">
+            <path-permission
+                    android:path="/contacts/search_suggest_query"
+                    android:readPermission="android.permission.GLOBAL_SEARCH" />
+        </provider>
+
+        <provider android:name="CallLogProvider"
+            android:authorities="call_log"
+            android:syncable="false" android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS">
+        </provider>
 
         <!-- TODO: create permissions for social data -->
         <provider android:name="SocialProvider"

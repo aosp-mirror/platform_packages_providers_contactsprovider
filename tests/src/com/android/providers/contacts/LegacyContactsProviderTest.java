@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -27,6 +28,7 @@ import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.GroupMembership;
 import android.provider.Contacts.Groups;
+import android.provider.Contacts.Intents;
 import android.provider.Contacts.Organizations;
 import android.provider.Contacts.People;
 import android.provider.Contacts.Phones;
@@ -516,7 +518,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri presenceUri = mResolver.insert(Presence.CONTENT_URI, values);
 
-        values.put(Presence.PERSON_ID, personId);
+        // FIXME person_id was not available in legacy ContactsProvider
+        // values.put(Presence.PERSON_ID, personId);
         assertStoredValues(presenceUri, values);
         assertSelection(Presence.CONTENT_URI, values,
                 Presence._ID, ContentUris.parseId(presenceUri));
@@ -541,13 +544,225 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.clear();
         values.put(Photos.DATA, photo);
         values.put(Photos.LOCAL_VERSION, "10");
-        values.put(Photos.DOWNLOAD_REQUIRED, 1);
+        // FIXME this column was unavailable for update in legacy ContactsProvider
+        // values.put(Photos.DOWNLOAD_REQUIRED, 1);
         values.put(Photos.EXISTS_ON_SERVER, 1);
         values.put(Photos.SYNC_ERROR, "404 does not exist");
 
         Uri photoUri = Uri.withAppendedPath(personUri, Photos.CONTENT_DIRECTORY);
         mResolver.update(photoUri, values, null, null);
         assertStoredValues(photoUri, values);
+    }
+
+    /**
+     * Capturing the search suggestion requirements in test cases as a reference.
+     */
+    public void testSearchSuggestionsNotInMyContacts() throws Exception {
+
+        // We don't provide compatibility for search suggestions
+        if (!USE_LEGACY_PROVIDER) {
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+        putContactValues(values);
+        mResolver.insert(People.CONTENT_URI, values);
+
+        Uri searchUri = new Uri.Builder().scheme("content").authority(Contacts.AUTHORITY)
+                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("D").build();
+
+        // If the contact is not in the "my contacts" group, nothing should be found
+        Cursor c = mResolver.query(searchUri, null, null, null, null);
+        assertEquals(0, c.getCount());
+        c.close();
+    }
+
+    /**
+     * Capturing the search suggestion requirements in test cases as a reference.
+     */
+    public void testSearchSuggestionsByName() throws Exception {
+
+        // We don't provide compatibility for search suggestions
+        if (!USE_LEGACY_PROVIDER) {
+            return;
+        }
+
+        assertSearchSuggestion(
+                true,  // name
+                true,  // photo
+                true,  // organization
+                false, // phone
+                false, // email
+                "D",   // query
+                true,  // expect icon URI
+                null, "Deer Dough", "Google");
+
+        assertSearchSuggestion(
+                true,  // name
+                true,  // photo
+                false, // organization
+                true,  // phone
+                false, // email
+                "D",   // query
+                true,  // expect icon URI
+                null, "Deer Dough", "1-800-4664-411");
+
+        assertSearchSuggestion(
+                true,  // name
+                true,  // photo
+                false, // organization
+                false, // phone
+                true,  // email
+                "D",   // query
+                true,  // expect icon URI
+                String.valueOf(Presence.getPresenceIconResourceId(Presence.OFFLINE)),
+                "Deer Dough", "foo@acme.com");
+
+        assertSearchSuggestion(
+                true,  // name
+                false, // photo
+                true,  // organization
+                false, // phone
+                false, // email
+                "D",   // query
+                false, // expect icon URI
+                null, "Deer Dough", "Google");
+    }
+
+    private void assertSearchSuggestion(boolean name, boolean photo, boolean organization,
+            boolean phone, boolean email, String query, boolean expectIcon1Uri, String expectedIcon2,
+            String expectedText1, String expectedText2) throws IOException {
+        ContentValues values = new ContentValues();
+
+        if (name) {
+            values.put(People.NAME, "Deer Dough");
+        }
+
+        final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        People.addToMyContactsGroup(mResolver, personId);
+
+        if (photo) {
+            values.clear();
+            byte[] photoData = loadTestPhoto();
+            values.put(Photos.DATA, photoData);
+            values.put(Photos.LOCAL_VERSION, "1");
+            values.put(Photos.EXISTS_ON_SERVER, 0);
+            Uri photoUri = Uri.withAppendedPath(personUri, Photos.CONTENT_DIRECTORY);
+            mResolver.update(photoUri, values, null, null);
+        }
+
+        if (organization) {
+            values.clear();
+            values.put(Organizations.ISPRIMARY, 1);
+            values.put(Organizations.COMPANY, "Google");
+            values.put(Organizations.TYPE, Organizations.TYPE_WORK);
+            values.put(Organizations.PERSON_ID, personId);
+            mResolver.insert(Organizations.CONTENT_URI, values);
+        }
+
+        if (email) {
+            values.clear();
+            values.put(ContactMethods.PERSON_ID, personId);
+            values.put(ContactMethods.KIND, Contacts.KIND_EMAIL);
+            values.put(ContactMethods.TYPE, ContactMethods.TYPE_HOME);
+            values.put(ContactMethods.DATA, "foo@acme.com");
+            values.put(ContactMethods.ISPRIMARY, 1);
+            mResolver.insert(ContactMethods.CONTENT_URI, values);
+
+
+            String protocol = ContactMethods
+                    .encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
+            values.clear();
+            values.put(Presence.IM_PROTOCOL, protocol);
+            values.put(Presence.IM_HANDLE, "foo@acme.com");
+            values.put(Presence.IM_ACCOUNT, "foo");
+            values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
+            values.put(Presence.PRESENCE_CUSTOM_STATUS, "Coding for Android");
+            mResolver.insert(Presence.CONTENT_URI, values);
+        }
+
+        if (phone) {
+            values.clear();
+            values.put(Phones.PERSON_ID, personId);
+            values.put(Phones.TYPE, Phones.TYPE_HOME);
+            values.put(Phones.NUMBER, "1-800-4664-411");
+            values.put(Phones.ISPRIMARY, 1);
+            mResolver.insert(Phones.CONTENT_URI, values);
+        }
+
+        Uri searchUri = new Uri.Builder().scheme("content").authority(Contacts.AUTHORITY)
+                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath(query).build();
+
+        Cursor c = mResolver.query(searchUri, null, null, null, null);
+        assertEquals(1, c.getCount());
+        c.moveToFirst();
+        values.clear();
+
+        String icon1 = c.getString(c.getColumnIndex(SearchManager.SUGGEST_COLUMN_ICON_1));
+        if (expectIcon1Uri) {
+            assertTrue(icon1.startsWith("content:"));
+        } else {
+            assertEquals(String.valueOf(com.android.internal.R.drawable.ic_contact_picture), icon1);
+        }
+
+        // SearchManager does not declare a constant for _id
+        values.put("_id", personId);
+        values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, personId);
+        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, personId);
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
+        assertCursorValues(c, values);
+        c.close();
+
+        // Cleanup
+        mResolver.delete(personUri, null, null);
+    }
+
+    /**
+     * Capturing the search suggestion requirements in test cases as a reference.
+     */
+    public void testSearchSuggestionsByPhoneNumber() throws Exception {
+
+        // We don't provide compatibility for search suggestions
+        if (!USE_LEGACY_PROVIDER) {
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+
+        Uri searchUri = new Uri.Builder().scheme("content").authority(Contacts.AUTHORITY)
+                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("12345").build();
+
+        Cursor c = mResolver.query(searchUri, null, null, null, null);
+        assertEquals(2, c.getCount());
+        c.moveToFirst();
+
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Execute");
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "");
+        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
+                String.valueOf(com.android.internal.R.drawable.call_contact));
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
+                Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
+        values.putNull(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
+        assertCursorValues(c, values);
+
+        c.moveToNext();
+        values.clear();
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Dial number");
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345");
+        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
+                String.valueOf(com.android.internal.R.drawable.create_contact));
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
+                Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
+        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
+                SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
+        assertCursorValues(c, values);
+        c.close();
     }
 
     private void putContactValues(ContentValues values) {
@@ -634,4 +849,14 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         }
     }
 
+    @Override
+    protected void assertSelection(Uri uri, ContentValues values, String idColumn, long id) {
+        if (USE_LEGACY_PROVIDER) {
+            // A bug in the legacy ContactsProvider prevents us from using the
+            // _id column in selection.
+            super.assertSelection(uri, values, null, 0);
+        } else {
+            super.assertSelection(uri, values, idColumn, id);
+        }
+    }
 }

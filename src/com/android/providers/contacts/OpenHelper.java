@@ -91,8 +91,8 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
 
         public static final String DATA_JOIN_MIMETYPE_RAW_CONTACTS = "data "
-                + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
+                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
+                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
 
         public static final String DATA_JOIN_RAW_CONTACTS_GROUPS = "data "
                 + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)"
@@ -117,6 +117,11 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
+
+        public static final String DATA_INNER_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS = "data "
+                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
+                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + "JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS_GROUPS =
                 "data "
@@ -1148,5 +1153,28 @@ import java.util.HashMap;
 
     public SyncStateContentProviderHelper getSyncState() {
         return mSyncState;
+    }
+
+    /**
+     * Delete the aggregate contact if it has no constituent raw contacts other
+     * than the supplied one.
+     */
+    public void removeContactIfSingleton(long rawContactId) {
+        SQLiteDatabase db = getWritableDatabase();
+
+        // Obtain contact ID from the supplied raw contact ID
+        String contactIdFromRawContactId = "(SELECT " + RawContacts.CONTACT_ID + " FROM "
+                + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=" + rawContactId + ")";
+
+        // Find other raw contacts in the same aggregate contact
+        String otherRawContacts = "(SELECT contacts1." + RawContacts._ID + " FROM "
+                + Tables.RAW_CONTACTS + " contacts1 JOIN " + Tables.RAW_CONTACTS + " contacts2 ON ("
+                + "contacts1." + RawContacts.CONTACT_ID + "=contacts2." + RawContacts.CONTACT_ID
+                + ") WHERE contacts1." + RawContacts._ID + "!=" + rawContactId + ""
+                + " AND contacts2." + RawContacts._ID + "=" + rawContactId + ")";
+
+        db.execSQL("DELETE FROM " + Tables.CONTACTS
+                + " WHERE " + Contacts._ID + "=" + contactIdFromRawContactId
+                + " AND NOT EXISTS " + otherRawContacts + ";");
     }
 }

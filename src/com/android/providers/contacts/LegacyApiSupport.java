@@ -15,15 +15,15 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.ExtensionsColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
-import com.android.providers.contacts.OpenHelper.GroupMembershipColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
+import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
+import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -34,15 +34,13 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
-import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.People;
-import android.provider.ContactsContract.CommonDataKinds;
-import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -52,7 +50,7 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.text.TextUtils;
+import android.util.Log;
 
 import java.util.HashMap;
 
@@ -91,6 +89,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int PEOPLE_FILTER = 29;
     private static final int DELETED_PEOPLE = 30;
     private static final int DELETED_GROUPS = 31;
+    private static final int SEARCH_SUGGESTIONS = 32;
+
 
 
     private static final String PEOPLE_JOINS =
@@ -277,10 +277,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         matcher.addURI(authority, "organizations", ORGANIZATIONS);
         matcher.addURI(authority, "organizations/#", ORGANIZATIONS_ID);
 //        matcher.addURI(authority, "voice_dialer_timestamp", VOICE_DIALER_TIMESTAMP);
-//        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY,
-//                SEARCH_SUGGESTIONS);
-//        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
-//                SEARCH_SUGGESTIONS);
+        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY,
+                SEARCH_SUGGESTIONS);
+        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
+                SEARCH_SUGGESTIONS);
 //        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
 //                SEARCH_SHORTCUT);
 //        matcher.addURI(authority, "settings", SETTINGS);
@@ -292,11 +292,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 //                LIVE_FOLDERS_PEOPLE_WITH_PHONES);
 //        matcher.addURI(authority, "live_folders/favorites",
 //                LIVE_FOLDERS_PEOPLE_FAVORITES);
-//
-//        // Call log URI matching table
-//        matcher.addURI(CALL_LOG_AUTHORITY, "calls", CALLS);
-//        matcher.addURI(CALL_LOG_AUTHORITY, "calls/filter/*", CALLS_FILTER);
-//        matcher.addURI(CALL_LOG_AUTHORITY, "calls/#", CALLS_ID);
 
 
         HashMap<String, String> peopleProjectionMap = new HashMap<String, String>();
@@ -1094,11 +1089,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     }
 
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
-            String sortOrder) {
+            String sortOrder, String limit) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
-        String limit = null;
 
         final int match = sUriMatcher.match(uri);
         switch (match) {
@@ -1304,6 +1298,11 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 qb.appendWhere(" AND " + android.provider.Contacts.Presence._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
+
+            case SEARCH_SUGGESTIONS:
+
+                // No legacy compatibility for search suggestions
+                return mContactsProvider.handleSearchSuggestionsQuery(uri, limit);
 
             case DELETED_PEOPLE:
             case DELETED_GROUPS:
