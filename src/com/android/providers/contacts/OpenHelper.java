@@ -206,8 +206,6 @@ import java.util.HashMap;
                 Groups.SOURCE_ID + "=? AND "
                         + Groups.ACCOUNT_NAME + "=? AND "
                         + Groups.ACCOUNT_TYPE + "=?";
-
-        public static final String COUNT_STAR = "count(*)";
     }
 
     public interface ContactsColumns {
