@@ -301,9 +301,9 @@ public class ContactsProvider2 extends ContentProvider {
     /** Contains the contact columns along with primary phone */
     private static final HashMap<String, String> sContactsSummaryProjectionMap;
     /** Contains the data, contacts, and contact columns, for joined tables. */
-    private static final HashMap<String, String> sDataContactsContactProjectionMap;
+    private static final HashMap<String, String> sDataRawContactsContactProjectionMap;
     /** Contains the data, contacts, group sourceid and contact columns, for joined tables. */
-    private static final HashMap<String, String> sDataContactsGroupsContactProjectionMap;
+    private static final HashMap<String, String> sDataRawContactsGroupsContactProjectionMap;
     /** Contains the contacts, and raw contact columns, for joined tables. */
     private static final HashMap<String, String> sRawContactsContactsProjectionMap;
     /** Contains just the contacts columns */
@@ -311,9 +311,9 @@ public class ContactsProvider2 extends ContentProvider {
     /** Contains just the data columns */
     private static final HashMap<String, String> sDataGroupsProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
-    private static final HashMap<String, String> sDataContactsGroupsProjectionMap;
+    private static final HashMap<String, String> sDataRawContactsGroupsProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
-    private static final HashMap<String, String> sDataContactsProjectionMap;
+    private static final HashMap<String, String> sDataRawContactsProjectionMap;
     /** Contains the just the {@link Groups} columns */
     private static final HashMap<String, String> sGroupsProjectionMap;
     /** Contains {@link Groups} columns along with summary details */
@@ -505,13 +505,13 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sRawContactsProjectionMap);
         columns.putAll(sDataGroupsProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.RAW_CONTACT_ID, DataColumns.CONCRETE_RAW_CONTACT_ID);
-        sDataContactsGroupsProjectionMap = columns;
+        sDataRawContactsGroupsProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
-        columns.putAll(sDataContactsGroupsProjectionMap);
+        columns.putAll(sDataRawContactsGroupsProjectionMap);
         columns.remove(GroupMembership.GROUP_SOURCE_ID);
-        sDataContactsProjectionMap = columns;
+        sDataRawContactsProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
@@ -519,13 +519,13 @@ public class ContactsProvider2 extends ContentProvider {
         columns.putAll(sRawContactsProjectionMap); //
         columns.putAll(sDataGroupsProjectionMap); // _id will be replaced with the one from data
         columns.put(Data.RAW_CONTACT_ID, DataColumns.CONCRETE_RAW_CONTACT_ID);
-        sDataContactsGroupsContactProjectionMap = columns;
+        sDataRawContactsGroupsContactProjectionMap = columns;
 
         // Data and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
-        columns.putAll(sDataContactsGroupsContactProjectionMap);
+        columns.putAll(sDataRawContactsGroupsContactProjectionMap);
         columns.remove(GroupMembership.GROUP_SOURCE_ID);
-        sDataContactsContactProjectionMap = columns;
+        sDataRawContactsContactProjectionMap = columns;
 
         // Groups projection map
         columns = new HashMap<String, String>();
@@ -2105,7 +2105,7 @@ public class ContactsProvider2 extends ContentProvider {
             case CONTACTS_DATA: {
                 long aggId = Long.parseLong(uri.getPathSegments().get(1));
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS_GROUPS);
-                qb.setProjectionMap(sDataContactsGroupsContactProjectionMap);
+                qb.setProjectionMap(sDataRawContactsGroupsContactProjectionMap);
                 qb.appendWhere(RawContacts.CONTACT_ID + "=" + aggId + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
@@ -2122,7 +2122,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             case PHONES_FILTER: {
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
-                qb.setProjectionMap(sDataContactsContactProjectionMap);
+                qb.setProjectionMap(sDataRawContactsContactProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(" AND " + buildContactLookupWhereClause(
@@ -2133,14 +2133,14 @@ public class ContactsProvider2 extends ContentProvider {
 
             case PHONES: {
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
-                qb.setProjectionMap(sDataContactsContactProjectionMap);
+                qb.setProjectionMap(sDataRawContactsContactProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = \"" + Phone.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
 
             case POSTALS: {
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
-                qb.setProjectionMap(sDataContactsContactProjectionMap);
+                qb.setProjectionMap(sDataRawContactsContactProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = \"" + StructuredPostal.CONTENT_ITEM_TYPE + "\"");
                 break;
             }
@@ -2164,7 +2164,7 @@ public class ContactsProvider2 extends ContentProvider {
             case RAW_CONTACTS_DATA: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS);
-                qb.setProjectionMap(sDataContactsGroupsProjectionMap);
+                qb.setProjectionMap(sDataRawContactsGroupsProjectionMap);
                 qb.appendWhere(Data.RAW_CONTACT_ID + "=" + rawContactId + " AND ");
                 applyDataRestrictionExceptions(qb);
                 break;
@@ -2173,7 +2173,7 @@ public class ContactsProvider2 extends ContentProvider {
             case CONTACTS_FILTER_EMAIL: {
                 // TODO: filter query based on callingUid
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS);
-                qb.setProjectionMap(sDataContactsProjectionMap);
+                qb.setProjectionMap(sDataRawContactsProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + "='" + CommonDataKinds.Email.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
                 qb.appendWhereEscapeString(uri.getPathSegments().get(2));
@@ -2213,7 +2213,7 @@ public class ContactsProvider2 extends ContentProvider {
 
                 final String number = uri.getLastPathSegment();
                 OpenHelper.buildPhoneLookupQuery(qb, number);
-                qb.setProjectionMap(sDataContactsProjectionMap);
+                qb.setProjectionMap(sDataRawContactsProjectionMap);
                 break;
             }
 
