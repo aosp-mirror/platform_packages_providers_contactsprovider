@@ -28,6 +28,7 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -48,6 +49,86 @@ import android.test.suitebuilder.annotation.LargeTest;
  */
 @LargeTest
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
+
+    public void testRawContactsInsert() {
+        ContentValues values = new ContentValues();
+
+        values.put(RawContacts.ACCOUNT_NAME, "a");
+        values.put(RawContacts.ACCOUNT_TYPE, "b");
+        values.put(RawContacts.SOURCE_ID, "c");
+        values.put(RawContacts.VERSION, 42);
+        values.put(RawContacts.DIRTY, 1);
+        values.put(RawContacts.DELETED, 1);
+        values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        values.put(RawContacts.LAST_TIME_CONTACTED, 12345);
+        values.put(RawContacts.STARRED, 1);
+        values.put(RawContacts.SYNC1, "e");
+        values.put(RawContacts.SYNC2, "f");
+        values.put(RawContacts.SYNC3, "g");
+        values.put(RawContacts.SYNC4, "h");
+
+        Uri rowUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+
+        assertStoredValues(rowUri, values);
+    }
+
+    public void testDataInsert() {
+        long rawContactId = createRawContact();
+
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, "testmimetype");
+        values.put(Data.RES_PACKAGE, "oldpackage");
+        values.put(Data.IS_PRIMARY, 1);
+        values.put(Data.IS_SUPER_PRIMARY, 1);
+        values.put(Data.DATA1, "one");
+        values.put(Data.DATA2, "two");
+        values.put(Data.DATA3, "three");
+        values.put(Data.DATA4, "four");
+        values.put(Data.DATA5, "five");
+        values.put(Data.DATA6, "six");
+        values.put(Data.DATA7, "seven");
+        values.put(Data.DATA8, "eight");
+        values.put(Data.DATA9, "nine");
+        values.put(Data.DATA10, "ten");
+        values.put(Data.DATA11, "eleven");
+        values.put(Data.DATA12, "twelve");
+        values.put(Data.DATA13, "thirteen");
+        values.put(Data.DATA14, "fourteen");
+        values.put(Data.DATA15, "fifteen");
+        values.put(Data.SYNC1, "sync1");
+        values.put(Data.SYNC2, "sync2");
+        values.put(Data.SYNC3, "sync3");
+        values.put(Data.SYNC4, "sync4");
+        Uri uri = mResolver.insert(Data.CONTENT_URI, values);
+        assertStoredValues(uri, values);
+    }
+
+    public void testGroupInsert() {
+        ContentValues values = new ContentValues();
+
+        values.put(Groups.ACCOUNT_NAME, "a");
+        values.put(Groups.ACCOUNT_TYPE, "b");
+        values.put(Groups.SOURCE_ID, "c");
+        values.put(Groups.VERSION, 42);
+        values.put(Groups.DIRTY, 1);
+        values.put(Groups.GROUP_VISIBLE, 1);
+        values.put(Groups.TITLE, "d");
+        values.put(Groups.TITLE_RES, 1234);
+        values.put(Groups.NOTES, "e");
+        values.put(Groups.RES_PACKAGE, "f");
+        values.put(Groups.SYSTEM_ID, "g");
+        values.put(Groups.SYNC1, "h");
+        values.put(Groups.SYNC2, "i");
+        values.put(Groups.SYNC3, "j");
+        values.put(Groups.SYNC4, "k");
+
+        Uri rowUri = mResolver.insert(Groups.CONTENT_URI, values);
+
+        assertStoredValues(rowUri, values);
+    }
 
     public void testDisplayNameParsingWhenPartsUnspecified() {
         long rawContactId = createRawContact();
@@ -88,11 +169,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
-        long rawContactId1 = createRawContactWithName();
+        long rawContactId1 = createRawContactWithName("a", "b");
         long contactId1 = queryContactId(rawContactId1);
         updateSendToVoicemailAndRingtone(contactId1, true, "foo");
 
-        long rawContactId2 = createRawContactWithName();
+        long rawContactId2 = createRawContactWithName("c", "d");
         long contactId2 = queryContactId(rawContactId2);
         updateSendToVoicemailAndRingtone(contactId2, true, "bar");
 
@@ -104,11 +185,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDoNotSendToVoicemailAfterAggregation() {
-        long rawContactId1 = createRawContactWithName();
+        long rawContactId1 = createRawContactWithName("e", "f");
         long contactId1 = queryContactId(rawContactId1);
         updateSendToVoicemailAndRingtone(contactId1, true, null);
 
-        long rawContactId2 = createRawContactWithName();
+        long rawContactId2 = createRawContactWithName("g", "h");
         long contactId2 = queryContactId(rawContactId2);
         updateSendToVoicemailAndRingtone(contactId2, false, null);
 
@@ -120,11 +201,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testSetSendToVoicemailAndRingtonePreservedAfterJoinAndSplit() {
-        long rawContactId1 = createRawContactWithName();
+        long rawContactId1 = createRawContactWithName("i", "j");
         long contactId1 = queryContactId(rawContactId1);
         updateSendToVoicemailAndRingtone(contactId1, true, "foo");
 
-        long rawContactId2 = createRawContactWithName();
+        long rawContactId2 = createRawContactWithName("k", "l");
         long contactId2 = queryContactId(rawContactId2);
         updateSendToVoicemailAndRingtone(contactId2, false, "bar");
 
@@ -134,7 +215,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Split them
         setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
 
-        assertSendToVoicemailAndRingtone(contactId1, true, "foo");
+        assertSendToVoicemailAndRingtone(queryContactId(rawContactId1), true, "foo");
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
     }
 
@@ -229,10 +310,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
         long groupId2 = createGroup(mAccount, "gsid2", "title2");
 
-        long c0 = id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c0");
-        Uri id_0_0 = insertGroupMembership(id, "gsid1");
-        Uri id_0_1 = insertEmail(id, "c0@email.com");
-        Uri id_0_2 = insertPhoneNumber(id, "5551212c0");
+        id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c0");
+        insertGroupMembership(id, "gsid1");
+        insertEmail(id, "c0@email.com");
+        insertPhoneNumber(id, "5551212c0");
 
         long c1 = id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c1");
         Uri id_1_0 = insertGroupMembership(id, "gsid1");
@@ -245,7 +326,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri id_2_1 = insertEmail(id, "c2@email.com");
         Uri id_2_2 = insertPhoneNumber(id, "5551212c2");
 
-        long c3 = id = createRawContact(mAccount);
+        long c3 = id = createRawContact(mAccount, RawContacts.SOURCE_ID, "c3");
         Uri id_3_0 = insertGroupMembership(id, groupId2);
         Uri id_3_1 = insertEmail(id, "c3@email.com");
         Uri id_3_2 = insertPhoneNumber(id, "5551212c3");
@@ -305,6 +386,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Email.DATA, "5551212c3");
 
         assertFalse(iterator.hasNext());
+        iterator.close();
     }
 
     public void testDataCreateUpdateDeleteByMimeType() throws Exception {

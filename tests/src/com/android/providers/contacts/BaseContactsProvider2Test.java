@@ -117,8 +117,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected long createRawContactWithName() {
+        return createRawContactWithName("John", "Doe");
+    }
+
+    protected long createRawContactWithName(String firstName, String lastName) {
         long rawContactId = createRawContact(null);
-        insertStructuredName(rawContactId, "John", "Doe");
+        insertStructuredName(rawContactId, firstName, lastName);
         return rawContactId;
     }
 
@@ -475,6 +479,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         assertTrue(c.moveToNext());
         assertEquals(state, c.getLong(0) != 0);
         assertFalse(c.moveToNext());
+        c.close();
     }
 
     protected long getVersion(Uri uri) {
@@ -482,6 +487,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         assertTrue(c.moveToNext());
         long version = c.getLong(0);
         assertFalse(c.moveToNext());
+        c.close();
         return version;
     }
 
