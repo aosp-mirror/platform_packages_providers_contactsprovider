@@ -58,7 +58,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 58;
+    private static final int DATABASE_VERSION = 59;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -541,7 +541,11 @@ import java.util.HashMap;
                 RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
                 RawContacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
-                RawContactsColumns.DISPLAY_NAME + " TEXT" +
+                RawContactsColumns.DISPLAY_NAME + " TEXT," +
+                RawContacts.SYNC1 + " TEXT, " +
+                RawContacts.SYNC2 + " TEXT, " +
+                RawContacts.SYNC3 + " TEXT, " +
+                RawContacts.SYNC4 + " TEXT " +
         ");");
 
         // Package name mapping table
@@ -579,7 +583,11 @@ import java.util.HashMap;
                 Data.DATA12 + " TEXT," +
                 Data.DATA13 + " TEXT," +
                 Data.DATA14 + " TEXT," +
-                Data.DATA15 + " TEXT" +
+                Data.DATA15 + " TEXT," +
+                Data.SYNC1 + " TEXT, " +
+                Data.SYNC2 + " TEXT, " +
+                Data.SYNC3 + " TEXT, " +
+                Data.SYNC4 + " TEXT " +
         ");");
 
         /**
@@ -692,7 +700,11 @@ import java.util.HashMap;
                 Groups.TITLE_RES + " INTEGER," +
                 Groups.NOTES + " TEXT," +
                 Groups.SYSTEM_ID + " TEXT," +
-                Groups.GROUP_VISIBLE + " INTEGER" +
+                Groups.GROUP_VISIBLE + " INTEGER," +
+                Groups.SYNC1 + " TEXT, " +
+                Groups.SYNC2 + " TEXT, " +
+                Groups.SYNC3 + " TEXT, " +
+                Groups.SYNC4 + " TEXT " +
         ");");
 
         db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_updated1 "

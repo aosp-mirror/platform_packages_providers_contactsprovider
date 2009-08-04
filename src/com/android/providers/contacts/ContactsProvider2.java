@@ -54,6 +54,7 @@ import android.os.Binder;
 import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
+import android.provider.Contacts.People;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -455,6 +456,30 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(RawContacts.DELETED,
                 OpenHelper.RawContactsColumns.CONCRETE_DELETED
                         + " AS " + RawContacts.DELETED);
+        columns.put(RawContacts.TIMES_CONTACTED,
+                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED
+                        + " AS " + People.TIMES_CONTACTED);
+        columns.put(RawContacts.LAST_TIME_CONTACTED,
+                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
+                        + " AS " + People.LAST_TIME_CONTACTED);
+        columns.put(RawContacts.CUSTOM_RINGTONE,
+                Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
+                        + " AS " + People.CUSTOM_RINGTONE);
+        columns.put(RawContacts.SEND_TO_VOICEMAIL,
+                Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
+                        + " AS " + People.SEND_TO_VOICEMAIL);
+        columns.put(RawContacts.STARRED,
+                Tables.RAW_CONTACTS + "." + RawContacts.STARRED
+                        + " AS " + People.STARRED);
+        columns.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE);
+        columns.put(RawContacts.SYNC1,
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC1 + " AS " + RawContacts.SYNC1);
+        columns.put(RawContacts.SYNC2,
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC2 + " AS " + RawContacts.SYNC2);
+        columns.put(RawContacts.SYNC3,
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC3 + " AS " + RawContacts.SYNC3);
+        columns.put(RawContacts.SYNC4,
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC4 + " AS " + RawContacts.SYNC4);
         sRawContactsProjectionMap = columns;
 
         columns = new HashMap<String, String>();
@@ -486,6 +511,10 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Data.DATA13, "data.data13 as data13");
         columns.put(Data.DATA14, "data.data14 as data14");
         columns.put(Data.DATA15, "data.data15 as data15");
+        columns.put(Data.SYNC1, Tables.DATA + "." + Data.SYNC1 + " AS " + Data.SYNC1);
+        columns.put(Data.SYNC2, Tables.DATA + "." + Data.SYNC2 + " AS " + Data.SYNC2);
+        columns.put(Data.SYNC3, Tables.DATA + "." + Data.SYNC3 + " AS " + Data.SYNC3);
+        columns.put(Data.SYNC4, Tables.DATA + "." + Data.SYNC4 + " AS " + Data.SYNC4);
         columns.put(GroupMembership.GROUP_SOURCE_ID, GroupsColumns.CONCRETE_SOURCE_ID + " AS "
                 + GroupMembership.GROUP_SOURCE_ID);
 
@@ -533,6 +562,12 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Groups.TITLE, Groups.TITLE);
         columns.put(Groups.TITLE_RES, Groups.TITLE_RES);
         columns.put(Groups.GROUP_VISIBLE, Groups.GROUP_VISIBLE);
+        columns.put(Groups.SYSTEM_ID, Groups.SYSTEM_ID);
+        columns.put(Groups.NOTES, Groups.NOTES);
+        columns.put(Groups.SYNC1, Tables.GROUPS + "." + Groups.SYNC1 + " AS " + Groups.SYNC1);
+        columns.put(Groups.SYNC2, Tables.GROUPS + "." + Groups.SYNC2 + " AS " + Groups.SYNC2);
+        columns.put(Groups.SYNC3, Tables.GROUPS + "." + Groups.SYNC3 + " AS " + Groups.SYNC3);
+        columns.put(Groups.SYNC4, Tables.GROUPS + "." + Groups.SYNC4 + " AS " + Groups.SYNC4);
         sGroupsProjectionMap = columns;
 
         // RawContacts and groups projection map
@@ -1896,7 +1931,7 @@ public class ContactsProvider2 extends ContentProvider {
         long contactId = values.getAsInteger(AggregationExceptions.CONTACT_ID);
         long rawContactId = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID);
 
-        // First, we build a list of contactID-contactID pairs for the given contact and contact.
+        // First, we build a list of rawContactID-rawContactID pairs for the given contact.
         ArrayList<RawContactPair> pairs = new ArrayList<RawContactPair>();
         Cursor c = db.query(ContactsQuery.TABLE, ContactsQuery.PROJECTION, RawContacts.CONTACT_ID
                 + "=" + contactId, null, null, null, null);
