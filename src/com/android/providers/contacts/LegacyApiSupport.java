@@ -422,17 +422,20 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private final OpenHelper mOpenHelper;
     private final ContactsProvider2 mContactsProvider;
     private final NameSplitter mPhoneticNameSplitter;
+    private final GlobalSearchSupport mGlobalSearchSupport;
 
     /** Precompiled sql statement for incrementing times contacted for a contact */
     private final SQLiteStatement mLastTimeContactedUpdate;
 
     private final ContentValues mValues = new ContentValues();
 
+
     public LegacyApiSupport(Context context, OpenHelper openHelper,
-            ContactsProvider2 contactsProvider) {
+            ContactsProvider2 contactsProvider, GlobalSearchSupport globalSearchSupport) {
         mContext = context;
         mContactsProvider = contactsProvider;
         mOpenHelper = openHelper;
+        mGlobalSearchSupport = globalSearchSupport;
         mOpenHelper.setDelegate(this);
 
         mPhoneticNameSplitter = new NameSplitter("", "", "",
@@ -1302,7 +1305,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
             case SEARCH_SUGGESTIONS:
 
                 // No legacy compatibility for search suggestions
-                return mContactsProvider.handleSearchSuggestionsQuery(uri, limit);
+                return mGlobalSearchSupport.handleSearchSuggestionsQuery(db, uri, limit);
 
             case DELETED_PEOPLE:
             case DELETED_GROUPS:

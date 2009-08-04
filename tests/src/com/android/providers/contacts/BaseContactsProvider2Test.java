@@ -23,6 +23,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
@@ -43,6 +44,9 @@ import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -133,6 +137,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         ContentValues values = new ContentValues();
         values.put(Groups.SOURCE_ID, sourceId);
         values.put(Groups.TITLE, title);
+        values.put(Groups.GROUP_VISIBLE, 1);
         final Uri uri = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account);
         return ContentUris.parseId(mResolver.insert(uri, values));
     }
@@ -578,5 +583,18 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         } finally {
             c.close();
         }
+    }
+
+    protected byte[] loadTestPhoto() throws IOException {
+        final Resources resources = getContext().getResources();
+        InputStream is =
+                resources.openRawResource(com.android.internal.R.drawable.ic_contact_picture);
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1000];
+        int count;
+        while((count = is.read(buffer)) != -1) {
+            os.write(buffer, 0, count);
+        }
+        return os.toByteArray();
     }
 }

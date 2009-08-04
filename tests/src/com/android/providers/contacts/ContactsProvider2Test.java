@@ -17,18 +17,14 @@ package com.android.providers.contacts;
 
 import com.android.internal.util.ArrayUtils;
 
-import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
-import android.content.res.Resources;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
-import android.provider.Contacts.Intents;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -37,15 +33,9 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.suitebuilder.annotation.LargeTest;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -476,213 +466,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDirty(uri, true);
         version++;
         assertEquals(version, getVersion(uri));
-    }
-
-    // TODO fix and enable test
-    public void __testSearchSuggestionsNotInMyContacts() throws Exception {
-
-        long rawContactId = createRawContact();
-        insertStructuredName(rawContactId, "Deer", "Dough");
-
-        Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("D").build();
-
-        // If the contact is not in the "my contacts" group, nothing should be found
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        assertEquals(0, c.getCount());
-        c.close();
-    }
-
-    public void testSearchSuggestionsByName() throws Exception {
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                false, // organization
-                false, // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", null);
-
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                true,  // organization
-                false, // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", "Google");
-
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                false, // organization
-                true,  // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", "1-800-4664-411");
-
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                false, // organization
-                false, // phone
-                true,  // email
-                "D",   // query
-                true,  // expect icon URI
-                String.valueOf(Presence.getPresenceIconResourceId(Presence.OFFLINE)),
-                "Deer Dough", "foo@acme.com");
-
-        assertSearchSuggestion(
-                true,  // name
-                false, // photo
-                true,  // organization
-                false, // phone
-                false, // email
-                "D",   // query
-                false, // expect icon URI
-                null, "Deer Dough", "Google");
-    }
-
-    private void assertSearchSuggestion(boolean name, boolean photo, boolean organization,
-            boolean phone, boolean email, String query, boolean expectIcon1Uri, String expectedIcon2,
-            String expectedText1, String expectedText2) throws IOException {
-        ContentValues values = new ContentValues();
-
-        long rawContactId = createRawContact();
-
-        if (name) {
-            insertStructuredName(rawContactId, "Deer", "Dough");
-        }
-
-
-        final Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
-        if (photo) {
-            values.clear();
-            byte[] photoData = loadTestPhoto();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
-            values.put(Photo.PHOTO, photoData);
-            mResolver.insert(Data.CONTENT_URI, values);
-        }
-
-        if (organization) {
-            values.clear();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
-            values.put(Organization.TYPE, Organization.TYPE_WORK);
-            values.put(Organization.COMPANY, "Google");
-            mResolver.insert(Data.CONTENT_URI, values);
-        }
-
-        if (email) {
-            values.clear();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
-            values.put(Email.TYPE, Email.TYPE_WORK);
-            values.put(Email.DATA, "foo@acme.com");
-            mResolver.insert(Data.CONTENT_URI, values);
-
-            values.clear();
-            values.put(Presence.IM_PROTOCOL, Im.PROTOCOL_GOOGLE_TALK);
-            values.put(Presence.IM_HANDLE, "foo@acme.com");
-            values.put(Presence.IM_ACCOUNT, "foo");
-            values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
-            values.put(Presence.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-            mResolver.insert(Presence.CONTENT_URI, values);
-        }
-
-        if (phone) {
-            values.clear();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
-            values.put(Data.IS_PRIMARY, 1);
-            values.put(Phone.TYPE, Phone.TYPE_HOME);
-            values.put(Phone.NUMBER, "1-800-4664-411");
-            mResolver.insert(Data.CONTENT_URI, values);
-        }
-
-        long contactId = queryContactId(rawContactId);
-        Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath(query).build();
-
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        DatabaseUtils.dumpCursor(c);
-        assertEquals(1, c.getCount());
-        c.moveToFirst();
-        values.clear();
-
-        // SearchManager does not declare a constant for _id
-        values.put("_id", contactId);
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
-
-        String icon1 = c.getString(c.getColumnIndex(SearchManager.SUGGEST_COLUMN_ICON_1));
-        if (expectIcon1Uri) {
-            assertTrue(icon1.startsWith("content:"));
-        } else {
-            assertEquals(String.valueOf(com.android.internal.R.drawable.ic_contact_picture), icon1);
-        }
-
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, contactId);
-        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contactId);
-        assertCursorValues(c, values);
-        c.close();
-
-        // Cleanup
-        mResolver.delete(rawContactUri, null, null);
-    }
-
-    public void testSearchSuggestionsByPhoneNumber() throws Exception {
-        ContentValues values = new ContentValues();
-
-        Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("12345").build();
-
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        DatabaseUtils.dumpCursor(c);
-        assertEquals(2, c.getCount());
-        c.moveToFirst();
-
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Dial number");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345");
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                String.valueOf(com.android.internal.R.drawable.call_contact));
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-                Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
-        values.putNull(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
-        assertCursorValues(c, values);
-
-        c.moveToNext();
-        values.clear();
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Create contact");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345");
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                String.valueOf(com.android.internal.R.drawable.create_contact));
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-                Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
-        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-                SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
-        assertCursorValues(c, values);
-        c.close();
-    }
-
-    private byte[] loadTestPhoto() throws IOException {
-        final Resources resources = getContext().getResources();
-        InputStream is =
-                resources.openRawResource(com.android.internal.R.drawable.ic_contact_picture);
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1000];
-        int count;
-        while((count = is.read(buffer)) != -1) {
-            os.write(buffer, 0, count);
-        }
-        return os.toByteArray();
     }
 }
 
