@@ -306,7 +306,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                         "SELECT _TOKENIZE('peopleLookup', _id, name, ' ') from people;",
                         null);
             } catch (SQLiteDoneException ex) {
-                // it is ok to throw this, 
+                // it is ok to throw this,
                 // it just means you don't have data in people table
             }
             oldVersion = 73;
@@ -367,13 +367,33 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         }
 
         if (oldVersion == 80) {
+
+            // We will not do this upgrade work, because we are deprecating this content provider
+            oldVersion = 81;
+        }
+
+        if (oldVersion == 81) {
+            Log.i(TAG, "Upgrading contacts database from version " + oldVersion + " to " +
+                    newVersion + ", which will preserve existing data");
+            // 81 adds the token_index column
+            db.execSQL("DELETE FROM peopleLookup");
+            db.execSQL("ALTER TABLE peopleLookup ADD token_index INTEGER;");
+            String[] tokenize = {"_TOKENIZE('peopleLookup', _id, name, ' ', 1)"};
+            Cursor cursor = db.query("people", tokenize, null, null, null, null, null);
+            int rows = cursor.getCount();
+            cursor.close();
+            Log.i(TAG, "Processed " + rows + " contacts.");
+            oldVersion = 82;
+        }
+
+        if (oldVersion == 82) {
             db.execSQL("ALTER TABLE people ADD COLUMN _sync_account_type TEXT;");
             db.execSQL("ALTER TABLE _deleted_people ADD COLUMN _sync_account_type TEXT;");
             db.execSQL("ALTER TABLE groups ADD COLUMN _sync_account_type TEXT;");
             db.execSQL("ALTER TABLE _deleted_groups ADD COLUMN _sync_account_type TEXT;");
             db.execSQL("ALTER TABLE settings ADD COLUMN _sync_account_type TEXT;");
             db.execSQL("ALTER TABLE photos ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE groupmembership ADD COLUMN _sync_account_type TEXT;");
+            db.execSQL("ALTER TABLE groupmembership ADD COLUMN group_sync_account_type TEXT;");
 
             db.execSQL("UPDATE people"
                     + " SET _sync_account_type='com.google.GAIA'"
@@ -394,8 +414,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                     + " SET _sync_account_type='com.google.GAIA'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE groupmembership"
-                    + " SET _sync_account_type='com.google.GAIA'"
-                    + " WHERE _sync_account IS NOT NULL");
+                    + " SET group_sync_account_type='com.google.GAIA'"
+                    + " WHERE group_sync_account IS NOT NULL");
 
             db.execSQL("CREATE INDEX groupTempIndex ON groups ("
                     + Groups.NAME + ","  + Groups.SYSTEM_ID + "," + Groups._SYNC_ACCOUNT + ","
@@ -417,20 +437,6 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                         "END");
 
             oldVersion++;
-        }
-
-        if (oldVersion == 81) {
-            Log.i(TAG, "Upgrading contacts database from version " + oldVersion + " to " +
-                    newVersion + ", which will preserve existing data");
-            // 81 adds the token_index column
-            db.execSQL("DELETE FROM peopleLookup");
-            db.execSQL("ALTER TABLE peopleLookup ADD token_index INTEGER;");
-            String[] tokenize = {"_TOKENIZE('peopleLookup', _id, name, ' ', 1)"};
-            Cursor cursor = db.query("people", tokenize, null, null, null, null, null);
-            int rows = cursor.getCount();
-            cursor.close();
-            Log.i(TAG, "Processed " + rows + " contacts.");
-            oldVersion = 81;
         }
 
         return upgradeWasLossless;
@@ -486,7 +492,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         db.execSQL("CREATE INDEX peopleNameIndex ON people (" + People.NAME + ");");
         db.execSQL("CREATE INDEX peopleSyncDirtyIndex ON people (" + People._SYNC_DIRTY + ");");
         db.execSQL("CREATE INDEX peopleSyncIdIndex ON people (" + People._SYNC_ID + ");");
-        
+
         db.execSQL("CREATE TRIGGER people_timesContacted UPDATE OF last_time_contacted ON people " +
                     "BEGIN " +
                         "UPDATE people SET "
@@ -846,7 +852,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         // NOTE: Query parameters won't work here since the SQL compiler
         // needs to parse the actual string to know that it can use the
         // index to do a prefix scan.
-        DatabaseUtils.appendEscapedSQLString(filter, 
+        DatabaseUtils.appendEscapedSQLString(filter,
                 DatabaseUtils.getHexCollationKey(filterParam) + "*");
         filter.append(')');
         return filter.toString();
@@ -927,7 +933,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 qb.setProjectionMap(sPeopleProjectionMap);
                 qb.appendWhere(buildGroupNameMatchWhereClause(url.getPathSegments().get(2)));
                 break;
-                
+
             case GROUP_SYSTEM_ID_MEMBERS_FILTER:
                 if (url.getPathSegments().size() > 5) {
                     qb.appendWhere(buildPeopleLookupWhereClause(url.getLastPathSegment()));
@@ -969,7 +975,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             case PEOPLE_WITH_EMAIL_OR_IM_FILTER:
                 String email = url.getPathSegments().get(2);
                 whereClause = new StringBuilder();
-                
+
                 // Match any E-mail or IM contact methods where data exactly
                 // matches the provided string.
                 whereClause.append(ContactMethods.DATA);
@@ -978,16 +984,16 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 whereClause.append(" AND (kind = " + Contacts.KIND_EMAIL +
                         " OR kind = " + Contacts.KIND_IM + ")");
                 qb.appendWhere(whereClause.toString());
-                
+
                 qb.setTables("people INNER JOIN contact_methods on (people._id = contact_methods.person)");
                 qb.setProjectionMap(sPeopleWithEmailOrImProjectionMap);
-                
+
                 // Prevent returning the same person for multiple matches
                 groupBy = "contact_methods.person";
 
                 qb.setDistinct(true);
                 break;
-                
+
             case PHOTOS_ID:
                 qb.appendWhere("_id="+url.getPathSegments().get(1));
                 // Fall through.
@@ -1327,7 +1333,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
                 break;
-                
+
             case LIVE_FOLDERS_PEOPLE_WITH_PHONES:
                 qb.setTables("people LEFT OUTER JOIN photos ON (people._id = photos.person)");
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
@@ -1472,7 +1478,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             // once that information is factored out of the shared prefs of the contacts
             // app into this content provider.
             qb.appendWhere(buildGroupSystemIdMatchWhereClause(Groups.GROUP_MY_CONTACTS));
-            qb.appendWhere(" AND ");            
+            qb.appendWhere(" AND ");
 
             // match the query
             final String searchClause = url.getLastPathSegment();
@@ -1506,7 +1512,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 }
                 dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
                 dialNumber.add("tel:" + searchClause);
-                dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);  
+                dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
                 dialNumber.add(null);
 
                 ArrayList<Object> createContact = new ArrayList<Object>();
@@ -2054,7 +2060,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 throw new IllegalStateException("at least one of the groupId or "
                         + "the syncId must be set, " + starredGroupInfo);
             }
-            
+
             // now add this person to the group
             mValuesLocal.clear();
             mValuesLocal.put(GroupMembership.PERSON_ID, personId);
@@ -2486,7 +2492,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 mValues.putAll(values);
 
                 // The _SYNC_DIRTY flag should only be set if the data was modified and if
-                // it isn't already provided. 
+                // it isn't already provided.
                 if (!mValues.containsKey(Photos._SYNC_DIRTY) && mValues.containsKey(Photos.DATA)) {
                     mValues.put(Photos._SYNC_DIRTY, 1);
                 }
@@ -2761,7 +2767,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             if (personId == null) {
                 personId = lookupPerson(table, changedItemId);
             }
-            
+
             boolean isPrimary = isPrimaryValue != 0;
             Long newPrimary = changedItemId;
             if (!isPrimary) {
@@ -4019,7 +4025,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final String TAG = "ContactsProvider";
 
     /* package private */ static final String DATABASE_NAME = "contacts.db";
-    /* package private */ static final int DATABASE_VERSION = 82;
+    /* package private */ static final int DATABASE_VERSION = 83;
 
     protected static final String CONTACTS_AUTHORITY = "contacts";
     protected static final String CALL_LOG_AUTHORITY = "call_log";
@@ -4108,7 +4114,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private static final int EXTENSIONS_ID = EXTENSIONS_BASE + 2;
 
     private static final int SETTINGS = 12000;
-    
+
     private static final int LIVE_FOLDERS_BASE = 13000;
     private static final int LIVE_FOLDERS_PEOPLE = LIVE_FOLDERS_BASE + 1;
     private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = LIVE_FOLDERS_BASE + 2;
@@ -4162,7 +4168,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                     + "END) "
                 + "END) "
             + "END) ";
-    
+
     private static final String PHONETICALLY_SORTABLE_STRING_SQL =
         "GET_PHONETICALLY_SORTABLE_STRING("
             + "CASE WHEN (phonetic_name IS NOT NULL AND phonetic_name != '') "
@@ -4184,7 +4190,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 + "END) "
             + "END"
         + ")";
-    
+
     private static final String PRIMARY_ORGANIZATION_WHEN_SQL
             = " WHEN primary_organization is NOT NULL THEN "
             + "(SELECT company FROM organizations WHERE organizations._id = primary_organization)";
@@ -4198,7 +4204,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             + "(SELECT data FROM contact_methods WHERE contact_methods._id = primary_email)";
 
     // The outer CASE is for figuring out what info DISPLAY_NAME_SQL returned.
-    // We then pick the next piece of info, to avoid the two lines in the search 
+    // We then pick the next piece of info, to avoid the two lines in the search
     // suggestion being identical.
     private static final String SUGGEST_DESCRIPTION_SQL
             = "(CASE"
@@ -4363,7 +4369,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 DISPLAY_NAME_SQL + " AS " + People.DISPLAY_NAME);
         peopleColumns.put(PeopleColumns.SORT_STRING,
                 PHONETICALLY_SORTABLE_STRING_SQL + " AS " + People.SORT_STRING);
-        
+
         // Create the common groups columns
         HashMap<String, String> groupsColumns = new HashMap<String, String>();
         groupsColumns.put(GroupsColumns.NAME, Groups.NAME);
@@ -4413,7 +4419,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         map = new HashMap<String, String>(sPeopleProjectionMap);
         map.put("photo_data", "photos.data AS photo_data");
         sPeopleWithPhotoProjectionMap = map;
-        
+
         // People with E-mail or IM projection map
         map = new HashMap<String, String>();
         map.put(People._ID, "people._id AS " + People._ID);
@@ -4423,7 +4429,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 "contact_methods." + ContactMethods.KIND + " AS " + ContactMethods.KIND);
         map.putAll(peopleColumns);
         sPeopleWithEmailOrImProjectionMap = map;
-        
+
         // Groups projection map
         map = new HashMap<String, String>();
         map.put(Groups._ID, Groups._ID);
@@ -4571,7 +4577,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         // for contacts without a photo
         // map.put(LiveFolders.ICON_BITMAP, Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
         sLiveFoldersProjectionMap = map;
-        
+
         // Order by statements
         sPhonesKeyOrderBy = buildOrderBy(sPhonesTable, Phones.NUMBER);
         sContactMethodsKeyOrderBy = buildOrderBy(sContactMethodsTable,
