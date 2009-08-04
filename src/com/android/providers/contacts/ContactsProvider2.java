@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import com.android.internal.content.SyncStateContentProviderHelper;
-import com.android.internal.database.ArrayListCursor;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
@@ -44,7 +43,6 @@ import android.content.EntityIterator;
 import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.content.pm.PackageManager;
-import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
@@ -56,7 +54,6 @@ import android.os.Binder;
 import android.os.RemoteException;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.Contacts.Intents;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -71,7 +68,6 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
@@ -80,8 +76,6 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 
 /**
@@ -944,6 +938,7 @@ public class ContactsProvider2 extends ContentProvider {
     private ContactAggregator mContactAggregator;
     private NameSplitter mNameSplitter;
     private LegacyApiSupport mLegacyApiSupport;
+    private GlobalSearchSupport mGlobalSearchSupport;
 
     private ContentValues mValues = new ContentValues();
 
@@ -963,7 +958,8 @@ public class ContactsProvider2 extends ContentProvider {
         final Context context = getContext();
 
         mOpenHelper = getOpenHelper(context);
-        mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this);
+        mGlobalSearchSupport = new GlobalSearchSupport(this);
+        mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this, mGlobalSearchSupport);
         mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
 
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
@@ -2276,7 +2272,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case SEARCH_SUGGESTIONS: {
-                return handleSearchSuggestionsQuery(uri, limit);
+                return mGlobalSearchSupport.handleSearchSuggestionsQuery(db, uri, limit);
             }
 
             case SEARCH_SHORTCUT: {
@@ -2321,279 +2317,6 @@ public class ContactsProvider2 extends ContentProvider {
             Log.w(TAG, "Invalid limit parameter: " + limitParam);
             return null;
         }
-    }
-
-
-    public Cursor handleSearchSuggestionsQuery(Uri url, String limit) {
-        if (url.getPathSegments().size() <= 1) {
-            return null;
-        }
-
-        final String searchClause = url.getLastPathSegment();
-        if (TextUtils.isDigitsOnly(searchClause)) {
-            return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
-        } else {
-            return buildCursorForSearchSuggestionsBasedOnName(searchClause, limit);
-        }
-    }
-
-    private static final String[] SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS = {
-            "_id",
-            SearchManager.SUGGEST_COLUMN_TEXT_1,
-            SearchManager.SUGGEST_COLUMN_TEXT_2,
-            SearchManager.SUGGEST_COLUMN_ICON_1,
-            SearchManager.SUGGEST_COLUMN_INTENT_DATA,
-            SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-            SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-    };
-
-    private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
-        Resources r = getContext().getResources();
-        String s;
-        int i;
-
-        ArrayList<Object> dialNumber = new ArrayList<Object>();
-        dialNumber.add(0);  // _id
-        s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
-        i = s.indexOf('\n');
-        if (i < 0) {
-            dialNumber.add(s);
-            dialNumber.add("");
-        } else {
-            dialNumber.add(s.substring(0, i));
-            dialNumber.add(s.substring(i + 1));
-        }
-        dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
-        dialNumber.add("tel:" + searchClause);
-        dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-        dialNumber.add(null);
-
-        ArrayList<Object> createContact = new ArrayList<Object>();
-        createContact.add(1);  // _id
-        s = r.getString(com.android.internal.R.string.create_contact_using, searchClause);
-        i = s.indexOf('\n');
-        if (i < 0) {
-            createContact.add(s);
-            createContact.add("");
-        } else {
-            createContact.add(s.substring(0, i));
-            createContact.add(s.substring(i + 1));
-        }
-        createContact.add(String.valueOf(com.android.internal.R.drawable.create_contact));
-        createContact.add("tel:" + searchClause);
-        createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
-        createContact.add(SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
-
-        @SuppressWarnings({"unchecked"}) ArrayList<ArrayList> rows = new ArrayList<ArrayList>();
-        rows.add(dialNumber);
-        rows.add(createContact);
-
-        return new ArrayListCursor(SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS, rows);
-    }
-
-    private interface SearchSuggestionQuery {
-        public static final String JOIN_RAW_CONTACTS =
-                " JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) ";
-
-        public static final String JOIN_CONTACTS =
-                " JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
-
-        public static final String JOIN_MIMETYPES =
-                " JOIN mimetypes ON (data.mimetype_id = mimetypes._id AND mimetypes.mimetype IN ('"
-                + StructuredName.CONTENT_ITEM_TYPE + "','" + Email.CONTENT_ITEM_TYPE + "','"
-                + Phone.CONTENT_ITEM_TYPE + "','" + Organization.CONTENT_ITEM_TYPE + "','"
-                + Photo.CONTENT_ITEM_TYPE + "','" + GroupMembership.CONTENT_ITEM_TYPE + "')) ";
-
-        // TODO join with groups and ensure that suggestions are from the My Contacts group
-        public static final String JOIN_GROUPS = " JOIN groups ON (mimetypes.mimetype='"
-                + GroupMembership.CONTENT_ITEM_TYPE + "' " + " AND groups._id = data."
-                + GroupMembership.GROUP_ROW_ID + ") ";
-
-        public static final String TABLE = "data " + JOIN_RAW_CONTACTS + JOIN_MIMETYPES
-                + JOIN_CONTACTS;
-
-        public static final String PRESENCE_SQL = "(SELECT MAX(" + Presence.PRESENCE_STATUS
-                + ") FROM " + Tables.PRESENCE + " WHERE " + Tables.PRESENCE + "."
-                + Presence.RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")";
-
-        public static final String[] COLUMNS = {
-            ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID,
-            ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME,
-            PRESENCE_SQL + " AS " + Contacts.PRESENCE_STATUS,
-            DataColumns.CONCRETE_ID + " AS data_id",
-            MimetypesColumns.MIMETYPE,
-            Data.IS_SUPER_PRIMARY,
-            Data.DATA2,
-        };
-
-        public static final int CONTACT_ID = 0;
-        public static final int DISPLAY_NAME = 1;
-        public static final int PRESENCE_STATUS = 2;
-        public static final int DATA_ID = 3;
-        public static final int MIMETYPE = 4;
-        public static final int IS_SUPER_PRIMARY = 5;
-        public static final int DATA2 = 6;
-    }
-
-    private static class SearchSuggestion {
-        String contactId;
-        boolean titleIsName;
-        String organization;
-        String email;
-        String phoneNumber;
-        String photoUri;
-        String normalizedName;
-        int presence = -1;
-        boolean processed;
-        String text1;
-        String text2;
-        String icon1;
-        String icon2;
-
-        public SearchSuggestion(long contactId) {
-            this.contactId = String.valueOf(contactId);
-        }
-
-        private void process() {
-            if (processed) {
-                return;
-            }
-
-            boolean hasOrganization = !TextUtils.isEmpty(organization);
-            boolean hasEmail = !TextUtils.isEmpty(email);
-            boolean hasPhone = !TextUtils.isEmpty(phoneNumber);
-
-            boolean titleIsOrganization = !titleIsName && hasOrganization;
-            boolean titleIsEmail = !titleIsName && !titleIsOrganization && hasEmail;
-            boolean titleIsPhone = !titleIsName && !titleIsOrganization && !titleIsEmail
-                    && hasPhone;
-
-            if (!titleIsOrganization && hasOrganization) {
-                text2 = organization;
-            } else if (!titleIsEmail && hasEmail) {
-                text2 = email;
-            } else if (!titleIsPhone && hasPhone) {
-                text2 = phoneNumber;
-            }
-
-            if (photoUri != null) {
-                icon1 = photoUri;
-            } else {
-                icon1 = String.valueOf(com.android.internal.R.drawable.ic_contact_picture);
-            }
-
-            if (presence != -1) {
-                icon2 = String.valueOf(Presence.getPresenceIconResourceId(presence));
-            }
-
-            processed = true;
-        }
-
-        public String getSortKey() {
-            if (normalizedName == null) {
-                process();
-                normalizedName = text1 == null ? "" : NameNormalizer.normalize(text1);
-            }
-            return normalizedName;
-        }
-
-        @SuppressWarnings({"unchecked"})
-        public ArrayList asList() {
-            process();
-
-            ArrayList<Object> list = new ArrayList<Object>();
-            list.add(contactId);
-            list.add(text1);
-            list.add(text2);
-            list.add(icon1);
-            list.add(icon2);
-            list.add(contactId);
-            list.add(contactId);
-            return list;
-        }
-    }
-
-    private static final String[] SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS = {
-            "_id",
-            SearchManager.SUGGEST_COLUMN_TEXT_1,
-            SearchManager.SUGGEST_COLUMN_TEXT_2,
-            SearchManager.SUGGEST_COLUMN_ICON_1,
-            SearchManager.SUGGEST_COLUMN_ICON_2,
-            SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
-            SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-    };
-
-    private Cursor buildCursorForSearchSuggestionsBasedOnName(String searchClause, String limit) {
-        ArrayList<SearchSuggestion> suggestionList = new ArrayList<SearchSuggestion>();
-        HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
-
-        StringBuilder selection = new StringBuilder();
-        selection.append(getContactsRestrictionExceptions());
-        selection.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
-        appendRawContactsByFilterAsNestedQuery(selection, searchClause, limit);
-
-        SQLiteDatabase db = mOpenHelper.getReadableDatabase();
-        Cursor c = db.query(true, SearchSuggestionQuery.TABLE,
-                SearchSuggestionQuery.COLUMNS, selection.toString(), null, null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-
-                long contactId = c.getLong(SearchSuggestionQuery.CONTACT_ID);
-                SearchSuggestion suggestion = suggestionMap.get(contactId);
-                if (suggestion == null) {
-                    suggestion = new SearchSuggestion(contactId);
-                    suggestionList.add(suggestion);
-                    suggestionMap.put(contactId, suggestion);
-                }
-
-                boolean isSuperPrimary = c.getInt(SearchSuggestionQuery.IS_SUPER_PRIMARY) != 0;
-                suggestion.text1 = c.getString(SearchSuggestionQuery.DISPLAY_NAME);
-
-                if (!c.isNull(SearchSuggestionQuery.PRESENCE_STATUS)) {
-                    suggestion.presence = c.getInt(SearchSuggestionQuery.PRESENCE_STATUS);
-                }
-
-                String mimetype = c.getString(SearchSuggestionQuery.MIMETYPE);
-                if (StructuredName.CONTENT_ITEM_TYPE.equals(mimetype)) {
-                    suggestion.titleIsName = true;
-                } else if (Photo.CONTENT_ITEM_TYPE.equals(mimetype)) {
-                    if (isSuperPrimary || suggestion.photoUri == null) {
-
-                        // TODO introduce a dedicate URI for contact photo: /contact/#/photo
-                        long dataId = c.getLong(SearchSuggestionQuery.DATA_ID);
-                        suggestion.photoUri =
-                                ContentUris.withAppendedId(Data.CONTENT_URI, dataId).toString();
-                    }
-                } else if (Organization.CONTENT_ITEM_TYPE.equals(mimetype)) {
-                    if (isSuperPrimary || suggestion.organization == null) {
-                        suggestion.organization = c.getString(SearchSuggestionQuery.DATA2);
-                    }
-                } else if (Email.CONTENT_ITEM_TYPE.equals(mimetype)) {
-                    if (isSuperPrimary || suggestion.email == null) {
-                        suggestion.email = c.getString(SearchSuggestionQuery.DATA2);
-                    }
-                } else if (Phone.CONTENT_ITEM_TYPE.equals(mimetype)) {
-                    if (isSuperPrimary || suggestion.phoneNumber == null) {
-                        suggestion.phoneNumber = c.getString(SearchSuggestionQuery.DATA2);
-                    }
-                }
-            }
-        } finally {
-            c.close();
-        }
-
-        Collections.sort(suggestionList, new Comparator<SearchSuggestion>() {
-            public int compare(SearchSuggestion row1, SearchSuggestion row2) {
-                return row1.getSortKey().compareTo(row2.getSortKey());
-            }
-        });
-
-        @SuppressWarnings({"unchecked"}) ArrayList<ArrayList> rows = new ArrayList<ArrayList>();
-        for (int i = 0; i < suggestionList.size(); i++) {
-            rows.add(suggestionList.get(i).asList());
-        }
-
-        return new ArrayListCursor(SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS, rows);
     }
 
     /**
@@ -2674,7 +2397,7 @@ public class ContactsProvider2 extends ContentProvider {
         qb.appendWhere(getContactsRestrictionExceptions());
     }
 
-    private String getContactsRestrictionExceptions() {
+    String getContactsRestrictionExceptions() {
         if (hasRestrictedAccess()) {
             return "1";
         } else {
@@ -3157,7 +2880,7 @@ public class ContactsProvider2 extends ContentProvider {
         return sb.toString();
     }
 
-    private void appendRawContactsByFilterAsNestedQuery(StringBuilder sb, String filterParam,
+    public void appendRawContactsByFilterAsNestedQuery(StringBuilder sb, String filterParam,
             String limit) {
         sb.append("(SELECT DISTINCT raw_contact_id FROM name_lookup WHERE normalized_name GLOB '");
         sb.append(NameNormalizer.normalize(filterParam));

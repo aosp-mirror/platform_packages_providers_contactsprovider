@@ -777,19 +777,6 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(People.STARRED, 1);
     }
 
-    private byte[] loadTestPhoto() throws IOException {
-        final Resources resources = getContext().getResources();
-        InputStream is =
-                resources.openRawResource(com.android.internal.R.drawable.ic_contact_picture);
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1000];
-        int count;
-        while((count = is.read(buffer)) != -1) {
-            os.write(buffer, 0, count);
-        }
-        return os.toByteArray();
-    }
-
     private void assertFilteredContacts(String filter, String... expectedNames) {
         Uri filterUri = Uri.withAppendedPath(People.CONTENT_FILTER_URI, filter);
         Cursor c = mResolver.query(filterUri, null, null, null, null);
