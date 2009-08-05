@@ -387,13 +387,41 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         }
 
         if (oldVersion == 82) {
-            db.execSQL("ALTER TABLE people ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE _deleted_people ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE groups ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE _deleted_groups ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE settings ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE photos ADD COLUMN _sync_account_type TEXT;");
-            db.execSQL("ALTER TABLE groupmembership ADD COLUMN group_sync_account_type TEXT;");
+            try {
+                db.execSQL("ALTER TABLE people ADD COLUMN _sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
+            try {
+                db.execSQL("ALTER TABLE _deleted_people ADD COLUMN _sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
+            try {
+                db.execSQL("ALTER TABLE groups ADD COLUMN _sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
+            try {
+                db.execSQL("ALTER TABLE _deleted_groups ADD COLUMN _sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
+            try {
+                db.execSQL("ALTER TABLE settings ADD COLUMN _sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
+            try {
+                db.execSQL("ALTER TABLE photos ADD COLUMN _sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
+            try {
+                db.execSQL("ALTER TABLE groupmembership ADD COLUMN group_sync_account_type TEXT;");
+            } catch (SQLException e) {
+                // in some upgrade paths, these column might already exists
+            }
 
             db.execSQL("UPDATE people"
                     + " SET _sync_account_type='com.google.GAIA'"
