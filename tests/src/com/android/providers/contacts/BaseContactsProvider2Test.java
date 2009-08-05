@@ -102,6 +102,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return mActor.addProvider(providerClass, authority);
     }
 
+    public ContentProvider getProvider() {
+        return mActor.provider;
+    }
+
     protected Uri maybeAddAccountQueryParameters(Uri uri, Account account) {
         if (account == null) {
             return uri;
@@ -265,7 +269,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(AggregationExceptions.CONTACT_ID, contactId);
         values.put(AggregationExceptions.RAW_CONTACT_ID, rawContactId);
         values.put(AggregationExceptions.TYPE, type);
-        mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
+        assertEquals(1, mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null));
     }
 
     protected Cursor queryRawContact(long rawContactId) {

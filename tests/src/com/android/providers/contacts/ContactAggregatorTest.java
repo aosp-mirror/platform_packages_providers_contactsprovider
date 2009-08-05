@@ -41,9 +41,9 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     };
 
     public void testCrudAggregationExceptions() throws Exception {
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = createRawContactWithName("zz", "top");
         long contactId = queryContactId(rawContactId1);
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = createRawContactWithName("aa", "bottom");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
 

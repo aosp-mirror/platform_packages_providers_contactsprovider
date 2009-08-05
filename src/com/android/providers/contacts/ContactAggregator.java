@@ -135,9 +135,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private final OpenHelper mOpenHelper;
     private final ContactAggregationScheduler mScheduler;
+    private boolean mEnabled = true;
 
     // Set if the current aggregation pass should be interrupted
     private volatile boolean mCancel;
+
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -199,12 +201,18 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mScheduler.schedule();
     }
 
+    public void setEnabled(boolean enabled) {
+        mEnabled = enabled;
+    }
+
     /**
      * Schedules aggregation pass after a short delay.  This method should be called every time
      * the {@link RawContacts#CONTACT_ID} field is reset on any record.
      */
     public void schedule() {
-        mScheduler.schedule();
+        if (mEnabled) {
+            mScheduler.schedule();
+        }
     }
 
     /**
@@ -226,6 +234,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Do not call directly.  It is invoked by the scheduler.
      */
     public void run() {
+        if (!mEnabled) {
+            return;
+        }
+
         mCancel = false;
         Log.i(TAG, "Contact aggregation");
 
@@ -275,6 +287,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Synchronously aggregate the specified contact.
      */
     public void aggregateContact(long rawContactId) {
+        if (!mEnabled) {
+            return;
+        }
+
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         db.beginTransaction();
         try {
@@ -289,6 +305,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Synchronously aggregate the specified contact assuming an open transaction.
      */
     public void aggregateContact(SQLiteDatabase db, long rawContactId) {
+        if (!mEnabled) {
+            return;
+        }
+
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
@@ -305,6 +325,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      *         {@link RawContacts#AGGREGATION_MODE_DISABLED}.
      */
     public int markContactForAggregation(long rawContactId) {
+        if (!mEnabled) {
+            return RawContacts.AGGREGATION_MODE_DISABLED;
+        }
+
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         int aggregationMode = mOpenHelper.getAggregationMode(rawContactId);
@@ -335,6 +359,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     public void updateAggregateData(long contactId) {
+        if (!mEnabled) {
+            return;
+        }
+
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final ContentValues values = new ContentValues();
         updateAggregateData(db, contactId, values);
@@ -344,7 +372,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Given a specific raw contact, finds all matching aggregate contacts and chooses the one
      * with the highest match score.  If no such contact is found, creates a new contact.
      */
-    /* package */ synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
+    private synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
             MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
         candidates.clear();
         matcher.clear();

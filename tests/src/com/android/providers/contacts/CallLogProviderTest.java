@@ -46,7 +46,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
-       return USE_LEGACY_PROVIDER ? ContactsProvider.class : ContactsProvider2.class;
+       return USE_LEGACY_PROVIDER ? ContactsProvider.class : SynchronousContactsProvider2.class;
     }
 
     @Override

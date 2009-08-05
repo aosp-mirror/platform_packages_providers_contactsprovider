@@ -43,6 +43,12 @@ public class ReorderingCursorWrapper extends AbstractCursor {
     }
 
     @Override
+    public void close() {
+        super.close();
+        mCursor.close();
+    }
+
+    @Override
     public boolean onMove(int oldPosition, int newPosition) {
         return mCursor.moveToPosition(mPositionMap[newPosition]);
     }

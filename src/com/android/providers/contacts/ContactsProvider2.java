@@ -41,7 +41,9 @@ import android.content.Context;
 import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.OperationApplicationException;
+import android.content.SharedPreferences;
 import android.content.UriMatcher;
+import android.content.SharedPreferences.Editor;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -51,7 +53,9 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Debug;
 import android.os.RemoteException;
+import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.People;
@@ -92,6 +96,14 @@ public class ContactsProvider2 extends ContentProvider {
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
+
+    /**
+     * Shared preference key for the legacy contact import version. The need for a version
+     * as opposed to a boolean flag is that if we discover bugs in the contact import process,
+     * we can trigger re-import by incrementing the import version.
+     */
+    private static final String PREF_CONTACTS_IMPORTED = "contacts_imported_v1";
+    private static final int PREF_CONTACTS_IMPORT_VERSION = 1;
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -1033,12 +1045,52 @@ public class ContactsProvider2 extends ContentProvider {
         mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
                 new StructuredNameRowHandler(mNameSplitter));
 
+        if (isLegacyContactImportNeeded()) {
+            if (!importLegacyContacts()) {
+                return false;
+            }
+        }
         return (db != null);
     }
 
     /* Visible for testing */
     protected OpenHelper getOpenHelper(final Context context) {
         return OpenHelper.getInstance(context);
+    }
+
+    protected boolean isLegacyContactImportNeeded() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        return prefs.getInt(PREF_CONTACTS_IMPORTED, 0) < PREF_CONTACTS_IMPORT_VERSION;
+    }
+
+    private boolean importLegacyContacts() {
+        if (importLegacyContacts(getLegacyContactImporter())) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+            Editor editor = prefs.edit();
+            editor.putInt(PREF_CONTACTS_IMPORTED, PREF_CONTACTS_IMPORT_VERSION);
+            editor.commit();
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    protected LegacyContactImporter getLegacyContactImporter() {
+        return new LegacyContactImporter(getContext(), this);
+    }
+
+    /* Visible for testing */
+    /* package */ boolean importLegacyContacts(LegacyContactImporter importer) {
+        mContactAggregator.setEnabled(false);
+        try {
+            importer.importContacts();
+            mContactAggregator.setEnabled(true);
+            mContactAggregator.run();
+            return true;
+        } catch (Throwable e) {
+           Log.e(TAG, "Legacy contact import failed", e);
+           return false;
+        }
     }
 
     @Override
@@ -1190,6 +1242,12 @@ public class ContactsProvider2 extends ContentProvider {
         overriddenValues.putNull(RawContacts.CONTACT_ID);
         if (!resolveAccount(overriddenValues, account)) {
             return -1;
+        }
+
+        if (values.containsKey(RawContacts.DELETED)
+                && values.getAsInteger(RawContacts.DELETED) != 0) {
+            overriddenValues.put(RawContacts.AGGREGATION_MODE,
+                    RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
         return db.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);

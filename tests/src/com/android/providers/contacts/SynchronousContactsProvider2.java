@@ -38,6 +38,10 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return mOpenHelper;
     }
 
+    public static void resetOpenHelper() {
+        mOpenHelper = null;
+    }
+
     @Override
     public boolean onCreate() {
         boolean created = super.onCreate();
@@ -48,6 +52,13 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
             }
         }
         return created;
+    }
+
+    @Override
+    protected boolean isLegacyContactImportNeeded() {
+
+        // We have an explicit test for data conversion - no need to do it every time
+        return false;
     }
 
     private static class SynchronousAggregationScheduler extends ContactAggregationScheduler {

@@ -831,7 +831,7 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS);
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
 
@@ -855,6 +855,7 @@ import java.util.HashMap;
      */
     public void wipeData() {
         SQLiteDatabase db = getWritableDatabase();
+
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
@@ -863,7 +864,7 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
-        db.execSQL("DELETE FROM " + Tables.CALLS);
+        db.execSQL("DELETE FROM " + Tables.CALLS + ";");
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
 

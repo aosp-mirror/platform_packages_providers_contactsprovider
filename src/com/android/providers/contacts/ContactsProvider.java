@@ -41,6 +41,7 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Debug;
 import android.os.MemoryFile;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
@@ -387,6 +388,9 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         }
 
         if (oldVersion == 82) {
+            Log.w(TAG, "Upgrading database from version " + oldVersion + " to " +
+                    newVersion + ", which will preserve all old data");
+
             try {
                 db.execSQL("ALTER TABLE people ADD COLUMN _sync_account_type TEXT;");
             } catch (SQLException e) {
@@ -422,7 +426,6 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             } catch (SQLException e) {
                 // in some upgrade paths, these column might already exists
             }
-
             db.execSQL("UPDATE people"
                     + " SET _sync_account_type='com.google.GAIA'"
                     + " WHERE _sync_account IS NOT NULL");
