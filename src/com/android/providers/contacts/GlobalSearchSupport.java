@@ -257,7 +257,7 @@ public class GlobalSearchSupport {
         HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
 
         StringBuilder selection = new StringBuilder();
-        selection.append(mContactsProvider.getContactsRestrictionExceptions());
+        selection.append(mContactsProvider.getContactsRestrictions());
         selection.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
         mContactsProvider.appendRawContactsByFilterAsNestedQuery(selection, searchClause, limit);
         selection.append(" AND " + Contacts.IN_VISIBLE_GROUP + "=1");

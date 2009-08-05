@@ -442,7 +442,8 @@ public class ContactsProvider2 extends ContentProvider {
 
         // Contacts primaries projection map. The overall presence status is
         // the most-present value, as indicated by the largest value.
-        columns.put(Contacts.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ")");
+        columns.put(Contacts.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ") AS "
+                + Contacts.PRESENCE_STATUS);
         columns.put(Contacts.PRIMARY_PHONE_TYPE, CommonDataKinds.Phone.TYPE);
         columns.put(Contacts.PRIMARY_PHONE_LABEL, CommonDataKinds.Phone.LABEL);
         columns.put(Contacts.PRIMARY_PHONE_NUMBER, CommonDataKinds.Phone.NUMBER);
@@ -1632,7 +1633,7 @@ public class ContactsProvider2 extends ContentProvider {
                     .append(values.getAsLong(Presence.RAW_CONTACT_ID));
         }
 
-        selection.append(" AND ").append(getContactsRestrictionExceptions());
+        selection.append(" AND ").append(getContactsRestrictions());
 
         long dataId = -1;
         long rawContactId = -1;
@@ -2069,9 +2070,7 @@ public class ContactsProvider2 extends ContentProvider {
      * array if the value doesn't already appear.
      */
     private String[] assertContained(String[] array, String value) {
-        if (array == null) {
-            array = new String[] {value};
-        } else if (!isContained(array, value)) {
+        if (array != null && !isContained(array, value)) {
             String[] newArray = new String[array.length + 1];
             System.arraycopy(array, 0, newArray, 0, array.length);
             newArray[array.length] = value;
@@ -2101,8 +2100,8 @@ public class ContactsProvider2 extends ContentProvider {
 
             case CONTACTS: {
                 qb.setTables(Tables.CONTACTS);
-                applyAggregateRestrictionExceptions(qb);
-                applyAggregatePrimaryRestrictionExceptions(sContactsProjectionMap);
+                applyContactsRestrictions(qb);
+                applyContactsPrimaryRestrictions(sContactsProjectionMap);
                 qb.setProjectionMap(sContactsProjectionMap);
                 break;
             }
@@ -2111,8 +2110,8 @@ public class ContactsProvider2 extends ContentProvider {
                 long aggId = ContentUris.parseId(uri);
                 qb.setTables(Tables.CONTACTS);
                 qb.appendWhere(ContactsColumns.CONCRETE_ID + "=" + aggId + " AND ");
-                applyAggregateRestrictionExceptions(qb);
-                applyAggregatePrimaryRestrictionExceptions(sContactsProjectionMap);
+                applyContactsRestrictions(qb);
+                applyContactsPrimaryRestrictions(sContactsProjectionMap);
                 qb.setProjectionMap(sContactsProjectionMap);
                 break;
             }
@@ -2120,8 +2119,8 @@ public class ContactsProvider2 extends ContentProvider {
             case CONTACTS_SUMMARY: {
                 // TODO: join into social status tables
                 qb.setTables(Tables.CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE);
-                applyAggregateRestrictionExceptions(qb);
-                applyAggregatePrimaryRestrictionExceptions(sContactsSummaryProjectionMap);
+                applyContactsRestrictions(qb);
+                applyContactsPrimaryRestrictions(sContactsSummaryProjectionMap);
                 projection = assertContained(projection, Contacts.PRIMARY_PHONE_ID);
                 qb.setProjectionMap(sContactsSummaryProjectionMap);
                 groupBy = contactIdColName;
@@ -2133,8 +2132,8 @@ public class ContactsProvider2 extends ContentProvider {
                 long aggId = ContentUris.parseId(uri);
                 qb.setTables(Tables.CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE);
                 qb.appendWhere(ContactsColumns.CONCRETE_ID + "=" + aggId + " AND ");
-                applyAggregateRestrictionExceptions(qb);
-                applyAggregatePrimaryRestrictionExceptions(sContactsSummaryProjectionMap);
+                applyContactsRestrictions(qb);
+                applyContactsPrimaryRestrictions(sContactsSummaryProjectionMap);
                 projection = assertContained(projection, Contacts.PRIMARY_PHONE_ID);
                 qb.setProjectionMap(sContactsSummaryProjectionMap);
                 groupBy = contactIdColName;
@@ -2193,8 +2192,8 @@ public class ContactsProvider2 extends ContentProvider {
 
             case CONTACTS_SUMMARY_GROUP: {
                 qb.setTables(Tables.CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE);
-                applyAggregateRestrictionExceptions(qb);
-                applyAggregatePrimaryRestrictionExceptions(sContactsSummaryProjectionMap);
+                applyContactsRestrictions(qb);
+                applyContactsPrimaryRestrictions(sContactsSummaryProjectionMap);
                 projection = assertContained(projection, Contacts.PRIMARY_PHONE_ID);
                 qb.setProjectionMap(sContactsSummaryProjectionMap);
                 if (uri.getPathSegments().size() > 2) {
@@ -2208,9 +2207,10 @@ public class ContactsProvider2 extends ContentProvider {
             case CONTACTS_DATA: {
                 long aggId = Long.parseLong(uri.getPathSegments().get(1));
                 qb.setTables(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS_GROUPS);
-                qb.setProjectionMap(sDataRawContactsGroupsContactProjectionMap);
                 qb.appendWhere(RawContacts.CONTACT_ID + "=" + aggId + " AND ");
                 applyDataRestrictionExceptions(qb);
+                applyContactsPrimaryRestrictions(sDataRawContactsGroupsContactProjectionMap);
+                qb.setProjectionMap(sDataRawContactsGroupsContactProjectionMap);
                 break;
             }
 
@@ -2251,7 +2251,7 @@ public class ContactsProvider2 extends ContentProvider {
             case RAW_CONTACTS: {
                 qb.setTables(Tables.RAW_CONTACTS);
                 qb.setProjectionMap(sRawContactsProjectionMap);
-                applyContactsRestrictionExceptions(qb);
+                applyContactsRestrictions(qb);
                 break;
             }
 
@@ -2260,7 +2260,7 @@ public class ContactsProvider2 extends ContentProvider {
                 qb.setTables(Tables.RAW_CONTACTS);
                 qb.setProjectionMap(sRawContactsProjectionMap);
                 qb.appendWhere(RawContactsColumns.CONCRETE_ID + "=" + rawContactId + " AND ");
-                applyContactsRestrictionExceptions(qb);
+                applyContactsRestrictions(qb);
                 break;
             }
 
@@ -2454,23 +2454,11 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /**
-     * Restrict selection of {@link Contacts} to only public ones, or those
-     * the caller has been granted an exception to.
-     */
-    private void applyAggregateRestrictionExceptions(SQLiteQueryBuilder qb) {
-        if (hasRestrictedAccess()) {
-            qb.appendWhere("1");
-        } else {
-            qb.appendWhere(ContactsColumns.SINGLE_IS_RESTRICTED + "=0");
-        }
-    }
-
-    /**
      * Find any exceptions that have been granted to the calling process, and
      * add projections to correctly select {@link Contacts#PRIMARY_PHONE_ID}
      * and {@link Contacts#PRIMARY_EMAIL_ID}.
      */
-    private void applyAggregatePrimaryRestrictionExceptions(HashMap<String, String> projection) {
+    private void applyContactsPrimaryRestrictions(HashMap<String, String> projection) {
         String projectionPhone;
         String projectionEmail;
 
@@ -2496,15 +2484,14 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /**
-     * Find any exceptions that have been granted to the
-     * {@link Binder#getCallingUid()}, and add a limiting clause to the given
-     * {@link SQLiteQueryBuilder} to hide restricted data.
+     * Restrict selection of {@link Contacts} to only public ones, or those
+     * the caller has been granted an exception to.
      */
-    private void applyContactsRestrictionExceptions(SQLiteQueryBuilder qb) {
-        qb.appendWhere(getContactsRestrictionExceptions());
+    private void applyContactsRestrictions(SQLiteQueryBuilder qb) {
+        qb.appendWhere(getContactsRestrictions());
     }
 
-    String getContactsRestrictionExceptions() {
+    String getContactsRestrictions() {
         if (hasRestrictedAccess()) {
             return "1";
         } else {
@@ -2527,7 +2514,7 @@ public class ContactsProvider2 extends ContentProvider {
      * {@link SQLiteQueryBuilder} to hide restricted data.
      */
     void applyDataRestrictionExceptions(SQLiteQueryBuilder qb) {
-        applyContactsRestrictionExceptions(qb);
+        applyContactsRestrictions(qb);
     }
 
     /**
