@@ -53,7 +53,6 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Debug;
 import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -870,12 +869,12 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             if (type != BaseTypes.TYPE_CUSTOM && label != null) {
-                throw new RuntimeException(mLabelColumn + " value can only be specified with "
+                throw new IllegalArgumentException(mLabelColumn + " value can only be specified with "
                         + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
             }
 
             if (type == BaseTypes.TYPE_CUSTOM && label == null) {
-                throw new RuntimeException(mLabelColumn + " value must be specified when "
+                throw new IllegalArgumentException(mLabelColumn + " value must be specified when "
                         + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
             }
 
@@ -1282,7 +1281,7 @@ public class ContactsProvider2 extends ContentProvider {
             // Replace mimetype with internal mapping
             final String mimeType = mValues.getAsString(Data.MIMETYPE);
             if (TextUtils.isEmpty(mimeType)) {
-                throw new RuntimeException(Data.MIMETYPE + " is required");
+                throw new IllegalArgumentException(Data.MIMETYPE + " is required");
             }
 
             mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
@@ -1423,7 +1422,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             if (!valid) {
-                throw new RuntimeException("Data type mismatch: expected "
+                throw new IllegalArgumentException("Data type mismatch: expected "
                         + Lists.newArrayList(allowedMimeTypes));
             }
 
@@ -1718,14 +1717,10 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     private int deleteRawContact(Uri uri) {
-        boolean permanentDeletion = false;
-        String permanent = uri.getQueryParameter(RawContacts.DELETE_PERMANENTLY);
-        if (permanent != null && !"false".equals(permanent.toLowerCase())) {
-            permanentDeletion = true;
-        }
-
-        long rawContactId = ContentUris.parseId(uri);
-        return deleteRawContact(rawContactId, permanentDeletion);
+        final String flag = uri.getQueryParameter(RawContacts.DELETE_PERMANENTLY);
+        final boolean permanently = flag != null && "true".equals(flag.toLowerCase());
+        final long rawContactId = ContentUris.parseId(uri);
+        return deleteRawContact(rawContactId, permanently);
     }
 
     public int deleteRawContact(long rawContactId, boolean permanently) {
@@ -2526,21 +2521,25 @@ public class ContactsProvider2 extends ContentProvider {
         private volatile boolean mIsClosed;
 
         private static final String[] DATA_KEYS = new String[]{
-                "data1",
-                "data2",
-                "data3",
-                "data4",
-                "data5",
-                "data6",
-                "data7",
-                "data8",
-                "data9",
-                "data10",
-                "data11",
-                "data12",
-                "data13",
-                "data14",
-                "data15"};
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+                Data.DATA4,
+                Data.DATA5,
+                Data.DATA6,
+                Data.DATA7,
+                Data.DATA8,
+                Data.DATA9,
+                Data.DATA10,
+                Data.DATA11,
+                Data.DATA12,
+                Data.DATA13,
+                Data.DATA14,
+                Data.DATA15,
+                Data.SYNC1,
+                Data.SYNC2,
+                Data.SYNC3,
+                Data.SYNC4};
 
         private static final String[] PROJECTION = new String[]{
                 RawContacts.ACCOUNT_NAME,
@@ -2548,28 +2547,36 @@ public class ContactsProvider2 extends ContentProvider {
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
                 RawContacts.DIRTY,
-                RawContacts.Data._ID,
-                RawContacts.Data.RES_PACKAGE,
-                RawContacts.Data.MIMETYPE,
-                RawContacts.Data.DATA1,
-                RawContacts.Data.DATA2,
-                RawContacts.Data.DATA3,
-                RawContacts.Data.DATA4,
-                RawContacts.Data.DATA5,
-                RawContacts.Data.DATA6,
-                RawContacts.Data.DATA7,
-                RawContacts.Data.DATA8,
-                RawContacts.Data.DATA9,
-                RawContacts.Data.DATA10,
-                RawContacts.Data.DATA11,
-                RawContacts.Data.DATA12,
-                RawContacts.Data.DATA13,
-                RawContacts.Data.DATA14,
-                RawContacts.Data.DATA15,
-                RawContacts.Data.RAW_CONTACT_ID,
-                RawContacts.Data.IS_PRIMARY,
-                RawContacts.Data.DATA_VERSION,
-                GroupMembership.GROUP_SOURCE_ID};
+                Data._ID,
+                Data.RES_PACKAGE,
+                Data.MIMETYPE,
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+                Data.DATA4,
+                Data.DATA5,
+                Data.DATA6,
+                Data.DATA7,
+                Data.DATA8,
+                Data.DATA9,
+                Data.DATA10,
+                Data.DATA11,
+                Data.DATA12,
+                Data.DATA13,
+                Data.DATA14,
+                Data.DATA15,
+                Data.SYNC1,
+                Data.SYNC2,
+                Data.SYNC3,
+                Data.SYNC4,
+                Data.RAW_CONTACT_ID,
+                Data.IS_PRIMARY,
+                Data.DATA_VERSION,
+                GroupMembership.GROUP_SOURCE_ID,
+                RawContacts.SYNC1,
+                RawContacts.SYNC2,
+                RawContacts.SYNC3,
+                RawContacts.SYNC4};
 
         private static final int COLUMN_ACCOUNT_NAME = 0;
         private static final int COLUMN_ACCOUNT_TYPE = 1;
@@ -2580,18 +2587,22 @@ public class ContactsProvider2 extends ContentProvider {
         private static final int COLUMN_RES_PACKAGE = 6;
         private static final int COLUMN_MIMETYPE = 7;
         private static final int COLUMN_DATA1 = 8;
-        private static final int COLUMN_CONTACT_ID = 23;
-        private static final int COLUMN_IS_PRIMARY = 24;
-        private static final int COLUMN_DATA_VERSION = 25;
-        private static final int COLUMN_GROUP_SOURCE_ID = 26;
+        private static final int COLUMN_RAW_CONTACT_ID = 27;
+        private static final int COLUMN_IS_PRIMARY = 28;
+        private static final int COLUMN_DATA_VERSION = 29;
+        private static final int COLUMN_GROUP_SOURCE_ID = 30;
+        private static final int COLUMN_SYNC1 = 31;
+        private static final int COLUMN_SYNC2 = 32;
+        private static final int COLUMN_SYNC3 = 33;
+        private static final int COLUMN_SYNC4 = 34;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
             mIsClosed = false;
 
             final String updatedSortOrder = (sortOrder == null)
-                    ? RawContacts.Data.RAW_CONTACT_ID
-                    : (RawContacts.Data.RAW_CONTACT_ID + "," + sortOrder);
+                    ? Data.RAW_CONTACT_ID
+                    : (Data.RAW_CONTACT_ID + "," + sortOrder);
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
@@ -2638,7 +2649,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             final SQLiteCursor c = (SQLiteCursor) mEntityCursor;
 
-            final long rawContactId = c.getLong(COLUMN_CONTACT_ID);
+            final long rawContactId = c.getLong(COLUMN_RAW_CONTACT_ID);
 
             // we expect the cursor is already at the row we need to read from
             ContentValues contactValues = new ContentValues();
@@ -2648,26 +2659,30 @@ public class ContactsProvider2 extends ContentProvider {
             contactValues.put(RawContacts.DIRTY, c.getLong(COLUMN_DIRTY));
             contactValues.put(RawContacts.VERSION, c.getLong(COLUMN_VERSION));
             contactValues.put(RawContacts.SOURCE_ID, c.getString(COLUMN_SOURCE_ID));
+            contactValues.put(RawContacts.SYNC1, c.getString(COLUMN_SYNC1));
+            contactValues.put(RawContacts.SYNC2, c.getString(COLUMN_SYNC2));
+            contactValues.put(RawContacts.SYNC3, c.getString(COLUMN_SYNC3));
+            contactValues.put(RawContacts.SYNC4, c.getString(COLUMN_SYNC4));
             Entity contact = new Entity(contactValues);
 
             // read data rows until the contact id changes
             do {
-                if (rawContactId != c.getLong(COLUMN_CONTACT_ID)) {
+                if (rawContactId != c.getLong(COLUMN_RAW_CONTACT_ID)) {
                     break;
                 }
                 // add the data to to the contact
                 ContentValues dataValues = new ContentValues();
-                dataValues.put(RawContacts.Data._ID, c.getString(COLUMN_DATA_ID));
-                dataValues.put(RawContacts.Data.RES_PACKAGE, c.getString(COLUMN_RES_PACKAGE));
-                dataValues.put(RawContacts.Data.MIMETYPE, c.getString(COLUMN_MIMETYPE));
-                dataValues.put(RawContacts.Data.IS_PRIMARY, c.getString(COLUMN_IS_PRIMARY));
-                dataValues.put(RawContacts.Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
+                dataValues.put(Data._ID, c.getString(COLUMN_DATA_ID));
+                dataValues.put(Data.RES_PACKAGE, c.getString(COLUMN_RES_PACKAGE));
+                dataValues.put(Data.MIMETYPE, c.getString(COLUMN_MIMETYPE));
+                dataValues.put(Data.IS_PRIMARY, c.getString(COLUMN_IS_PRIMARY));
+                dataValues.put(Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
                 if (!c.isNull(COLUMN_GROUP_SOURCE_ID)) {
                     dataValues.put(GroupMembership.GROUP_SOURCE_ID,
                             c.getString(COLUMN_GROUP_SOURCE_ID));
                 }
-                dataValues.put(RawContacts.Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
-                for (int i = 0; i < 10; i++) {
+                dataValues.put(Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
+                for (int i = 0; i < DATA_KEYS.length; i++) {
                     final int columnIndex = i + COLUMN_DATA1;
                     String key = DATA_KEYS[i];
                     if (c.isNull(columnIndex)) {
@@ -2707,7 +2722,13 @@ public class ContactsProvider2 extends ContentProvider {
                 Groups.RES_PACKAGE,
                 Groups.TITLE,
                 Groups.TITLE_RES,
-                Groups.GROUP_VISIBLE};
+                Groups.GROUP_VISIBLE,
+                Groups.SYNC1,
+                Groups.SYNC2,
+                Groups.SYNC3,
+                Groups.SYNC4,
+                Groups.SYSTEM_ID,
+                Groups.NOTES};
 
         private static final int COLUMN_ID = 0;
         private static final int COLUMN_ACCOUNT_NAME = 1;
@@ -2719,6 +2740,12 @@ public class ContactsProvider2 extends ContentProvider {
         private static final int COLUMN_TITLE = 7;
         private static final int COLUMN_TITLE_RES = 8;
         private static final int COLUMN_GROUP_VISIBLE = 9;
+        private static final int COLUMN_SYNC1 = 10;
+        private static final int COLUMN_SYNC2 = 11;
+        private static final int COLUMN_SYNC3 = 12;
+        private static final int COLUMN_SYNC4 = 13;
+        private static final int COLUMN_SYSTEM_ID = 14;
+        private static final int COLUMN_NOTES = 15;
 
         public GroupsEntityIterator(ContactsProvider2 provider, String groupIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -2788,6 +2815,12 @@ public class ContactsProvider2 extends ContentProvider {
             groupValues.put(Groups.TITLE, c.getString(COLUMN_TITLE));
             groupValues.put(Groups.TITLE_RES, c.getString(COLUMN_TITLE_RES));
             groupValues.put(Groups.GROUP_VISIBLE, c.getLong(COLUMN_GROUP_VISIBLE));
+            groupValues.put(Groups.SYNC1, c.getString(COLUMN_SYNC1));
+            groupValues.put(Groups.SYNC2, c.getString(COLUMN_SYNC2));
+            groupValues.put(Groups.SYNC3, c.getString(COLUMN_SYNC3));
+            groupValues.put(Groups.SYNC4, c.getString(COLUMN_SYNC4));
+            groupValues.put(Groups.SYSTEM_ID, c.getString(COLUMN_SYSTEM_ID));
+            groupValues.put(Groups.NOTES, c.getString(COLUMN_NOTES));
             Entity group = new Entity(groupValues);
 
             mEntityCursor.moveToNext();

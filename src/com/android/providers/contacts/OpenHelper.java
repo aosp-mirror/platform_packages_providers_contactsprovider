@@ -58,7 +58,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 60;
+    private static final int DATABASE_VERSION = 61;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -252,6 +252,14 @@ import java.util.HashMap;
         public static final String CONCRETE_DELETED =
                 Tables.RAW_CONTACTS + "." + RawContacts.DELETED;
         public static final String DISPLAY_NAME = "display_name";
+        public static final String CONCRETE_SYNC1 =
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC1;
+        public static final String CONCRETE_SYNC2 =
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC2;
+        public static final String CONCRETE_SYNC3 =
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC3;
+        public static final String CONCRETE_SYNC4 =
+                Tables.RAW_CONTACTS + "." + RawContacts.SYNC4;
     }
 
     public interface DataColumns {
@@ -777,6 +785,10 @@ import java.util.HashMap;
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
                 + RawContacts.CONTACT_ID + ", "
+                + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ", "
+                + RawContactsColumns.CONCRETE_SYNC2 + " AS " + RawContacts.SYNC2 + ", "
+                + RawContactsColumns.CONCRETE_SYNC3 + " AS " + RawContacts.SYNC3 + ", "
+                + RawContactsColumns.CONCRETE_SYNC4 + " AS " + RawContacts.SYNC4 + ", "
                 + Data.MIMETYPE + ", "
                 + Data.DATA1 + ", "
                 + Data.DATA2 + ", "
@@ -793,6 +805,10 @@ import java.util.HashMap;
                 + Data.DATA13 + ", "
                 + Data.DATA14 + ", "
                 + Data.DATA15 + ", "
+                + Data.SYNC1 + ", "
+                + Data.SYNC2 + ", "
+                + Data.SYNC3 + ", "
+                + Data.SYNC4 + ", "
                 + Data.RAW_CONTACT_ID + ", "
                 + Data.IS_PRIMARY + ", "
                 + Data.DATA_VERSION + ", "
