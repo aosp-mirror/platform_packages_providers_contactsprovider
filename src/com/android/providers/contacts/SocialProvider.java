@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.OpenHelper.ActivitiesColumns;
+import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.PackagesColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
@@ -83,7 +84,8 @@ public class SocialProvider extends ContentProvider {
 
         // Contacts projection map
         columns = new HashMap<String, String>();
-        columns.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
+        columns.put(Contacts.DISPLAY_NAME, ContactsColumns.CONCRETE_DISPLAY_NAME + " AS "
+                + Contacts.DISPLAY_NAME);
         sContactsProjectionMap = columns;
 
         // Contacts projection map
