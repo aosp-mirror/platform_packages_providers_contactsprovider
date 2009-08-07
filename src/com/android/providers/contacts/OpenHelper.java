@@ -84,7 +84,7 @@ import java.util.HashMap;
 
         public static final String CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE = "contacts "
                 + "LEFT OUTER JOIN raw_contacts ON (contacts._id = raw_contacts.contact_id) "
-                + "LEFT OUTER JOIN presence ON (raw_contacts._id = presence.raw_contact_id) "
+                + "LEFT OUTER JOIN presence ON (raw_contacts._id = presence_raw_contact_id) "
                 + "LEFT OUTER JOIN data ON (primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
