@@ -118,7 +118,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     public static final String PRESENCE_JOINS =
             " LEFT OUTER JOIN presence ON ("
             + " presence.presence_id = (SELECT max(presence_id) FROM presence"
-            + " WHERE view_v1_people._id = presence.raw_contact_id))";
+            + " WHERE view_v1_people._id = presence_raw_contact_id))";
 
     private static final String PHONETIC_NAME_SQL = "trim(trim("
             + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
