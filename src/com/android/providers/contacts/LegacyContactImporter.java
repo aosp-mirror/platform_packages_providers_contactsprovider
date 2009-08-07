@@ -25,6 +25,7 @@ import android.content.OperationApplicationException;
 import android.content.ContentProviderOperation.Builder;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.Data;
@@ -72,7 +73,15 @@ public class LegacyContactImporter {
         SQLiteDatabase sourceDb = null;
         try {
             String path = mContext.getDatabasePath(DATABASE_NAME).getPath();
-            sourceDb = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
+            try {
+                sourceDb = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
+            } catch(SQLiteException e) {
+
+                // If we cannot open the original database, it is either non-existent or corrupt;
+                // in both bases - just bail.
+                return;
+            }
+
             int version = sourceDb.getVersion();
 
             // Upgrade to version 78 was the latest that wiped out data.  Might as well follow suit
