@@ -40,6 +40,7 @@ import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -204,6 +205,16 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
         values.put(Nickname.NAME, nickname);
         values.put(Nickname.TYPE, Nickname.TYPE_OTHER_NAME);
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertPostalAddress(long rawContactId, String formattedAddress) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, StructuredPostal.CONTENT_ITEM_TYPE);
+        values.put(StructuredPostal.FORMATTED_ADDRESS, formattedAddress);
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;

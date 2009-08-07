@@ -1164,7 +1164,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         selection.append(")");
 
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        qb.setTables(Tables.CONTACTS);
+        qb.setTables(mOpenHelper.getContactView());
         qb.setProjectionMap(projectionMap);
 
         final Cursor cursor = qb.query(db, projection, selection.toString(), null, null, null,

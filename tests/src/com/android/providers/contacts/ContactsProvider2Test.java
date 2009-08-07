@@ -22,6 +22,7 @@ import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
@@ -29,6 +30,7 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -36,6 +38,7 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -70,40 +73,269 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.SYNC4, "h");
 
         Uri rowUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rowUri);
 
         assertStoredValues(rowUri, values);
+        assertSelection(RawContacts.CONTENT_URI, values, RawContacts._ID, rawContactId);
     }
 
     public void testDataInsert() {
-        long rawContactId = createRawContact();
+        long rawContactId = createRawContactWithName("John", "Doe");
 
         ContentValues values = new ContentValues();
+        putDataValues(values, rawContactId);
+        Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
+        long dataId = ContentUris.parseId(dataUri);
+
+        long contactId = queryContactId(rawContactId);
+        values.put(RawContacts.CONTACT_ID, contactId);
+        assertStoredValues(dataUri, values);
+
+        assertSelection(Data.CONTENT_URI, values, Data._ID, dataId);
+
+        // Access the same data through the directory under RawContacts
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        Uri rawContactDataUri =
+                Uri.withAppendedPath(rawContactUri, RawContacts.Data.CONTENT_DIRECTORY);
+        assertSelection(rawContactDataUri, values, Data._ID, dataId);
+
+        // Access the same data through the directory under Contacts
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri contactDataUri = Uri.withAppendedPath(contactUri, Contacts.Data.CONTENT_DIRECTORY);
+        assertSelection(contactDataUri, values, Data._ID, dataId);
+    }
+
+    public void testPhonesQuery() {
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        values.put(RawContacts.LAST_TIME_CONTACTED, 12345);
+        values.put(RawContacts.TIMES_CONTACTED, 54321);
+        values.put(RawContacts.STARRED, 1);
+
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Meghan", "Knox");
+        Uri uri = insertPhoneNumber(rawContactId, "18004664411");
+        long phoneId = ContentUris.parseId(uri);
+
+
+        long contactId = queryContactId(rawContactId);
+        values.clear();
+        values.put(Data._ID, phoneId);
         values.put(Data.RAW_CONTACT_ID, rawContactId);
-        values.put(Data.MIMETYPE, "testmimetype");
-        values.put(Data.RES_PACKAGE, "oldpackage");
-        values.put(Data.IS_PRIMARY, 1);
-        values.put(Data.IS_SUPER_PRIMARY, 1);
-        values.put(Data.DATA1, "one");
-        values.put(Data.DATA2, "two");
-        values.put(Data.DATA3, "three");
-        values.put(Data.DATA4, "four");
-        values.put(Data.DATA5, "five");
-        values.put(Data.DATA6, "six");
-        values.put(Data.DATA7, "seven");
-        values.put(Data.DATA8, "eight");
-        values.put(Data.DATA9, "nine");
-        values.put(Data.DATA10, "ten");
-        values.put(Data.DATA11, "eleven");
-        values.put(Data.DATA12, "twelve");
-        values.put(Data.DATA13, "thirteen");
-        values.put(Data.DATA14, "fourteen");
-        values.put(Data.DATA15, "fifteen");
-        values.put(Data.SYNC1, "sync1");
-        values.put(Data.SYNC2, "sync2");
-        values.put(Data.SYNC3, "sync3");
-        values.put(Data.SYNC4, "sync4");
-        Uri uri = mResolver.insert(Data.CONTENT_URI, values);
-        assertStoredValues(uri, values);
+        values.put(RawContacts.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values.put(Phone.NUMBER, "18004664411");
+        values.put(Phone.TYPE, Phone.TYPE_HOME);
+        values.putNull(Phone.LABEL);
+        values.put(Contacts.DISPLAY_NAME, "Meghan Knox");
+        values.put(Contacts.CUSTOM_RINGTONE, "d");
+        values.put(Contacts.SEND_TO_VOICEMAIL, 1);
+        values.put(Contacts.LAST_TIME_CONTACTED, 12345);
+        values.put(Contacts.TIMES_CONTACTED, 54321);
+        values.put(Contacts.STARRED, 1);
+
+        assertSelection(Phone.CONTENT_URI, values, Data._ID, phoneId);
+    }
+
+    public void testPhonesFilterQuery() {
+        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        insertPhoneNumber(rawContactId, "18004664411");
+
+        Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
+        ContentValues values = new ContentValues();
+        values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values.put(Phone.NUMBER, "18004664411");
+        values.put(Phone.TYPE, Phone.TYPE_HOME);
+        values.putNull(Phone.LABEL);
+        assertStoredValues(filterUri1, values);
+
+        Uri filterUri2 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "encilada");
+        assertEquals(0, getCount(filterUri2, null, null));
+    }
+
+    // TODO fix and reenable the test
+    public void _testPhoneLookup() {
+        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        insertPhoneNumber(rawContactId, "18004664411");
+
+        Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664411");
+        ContentValues values = new ContentValues();
+        values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values.put(Phone.NUMBER, "18004664411");
+        values.put(Phone.TYPE, Phone.TYPE_HOME);
+        values.putNull(Phone.LABEL);
+        assertStoredValues(lookupUri1, values);
+
+        Uri lookupUri2 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "4664411");
+        assertEquals(0, getCount(lookupUri2, null, null));
+    }
+
+    public void testEmailsQuery() {
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        values.put(RawContacts.LAST_TIME_CONTACTED, 12345);
+        values.put(RawContacts.TIMES_CONTACTED, 54321);
+        values.put(RawContacts.STARRED, 1);
+
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Meghan", "Knox");
+        Uri uri = insertEmail(rawContactId, "meghan@acme.com");
+        long emailId = ContentUris.parseId(uri);
+
+        long contactId = queryContactId(rawContactId);
+        values.clear();
+        values.put(Data._ID, emailId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(RawContacts.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        values.put(Email.DATA, "meghan@acme.com");
+        values.put(Email.TYPE, Email.TYPE_HOME);
+        values.putNull(Email.LABEL);
+        values.put(Contacts.DISPLAY_NAME, "Meghan Knox");
+        values.put(Contacts.CUSTOM_RINGTONE, "d");
+        values.put(Contacts.SEND_TO_VOICEMAIL, 1);
+        values.put(Contacts.LAST_TIME_CONTACTED, 12345);
+        values.put(Contacts.TIMES_CONTACTED, 54321);
+        values.put(Contacts.STARRED, 1);
+
+        assertSelection(Email.CONTENT_URI, values, Data._ID, emailId);
+    }
+
+    public void testEmailsFilterQuery() {
+        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        insertEmail(rawContactId, "tamale@acme.com");
+
+        Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_FILTER_EMAIL_URI, "tamale@acme.com");
+        ContentValues values = new ContentValues();
+        values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        values.put(Email.DATA, "tamale@acme.com");
+        values.put(Email.TYPE, Email.TYPE_HOME);
+        values.putNull(Email.LABEL);
+        assertStoredValues(filterUri1, values);
+
+        Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_FILTER_EMAIL_URI, "encilada@acme.com");
+        assertEquals(0, getCount(filterUri2, null, null));
+    }
+
+    public void testPostalsQuery() {
+        long rawContactId = createRawContactWithName("Alice", "Nextore");
+        Uri dataUri = insertPostalAddress(rawContactId, "1600 Amphiteatre Ave, Mountain View");
+        long dataId = ContentUris.parseId(dataUri);
+
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+        values.put(Data._ID, dataId);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(RawContacts.CONTACT_ID, contactId);
+        values.put(Data.MIMETYPE, StructuredPostal.CONTENT_ITEM_TYPE);
+        values.put(StructuredPostal.FORMATTED_ADDRESS, "1600 Amphiteatre Ave, Mountain View");
+        values.put(Contacts.DISPLAY_NAME, "Alice Nextore");
+
+        assertSelection(StructuredPostal.CONTENT_URI, values, Data._ID, dataId);
+    }
+
+    public void testQueryContactData() {
+        ContentValues values = new ContentValues();
+        long contactId = createContact(values, "John", "Doe",
+                "18004664411", "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        assertStoredValues(contactUri, values);
+        assertSelection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
+    }
+
+    public void testQueryContactSummaryData() {
+        ContentValues values = new ContentValues();
+        long contactId = createContact(values, "John", "Doe",
+                "18004664411", "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
+        values.put(Contacts.PRESENCE_STATUS, Presence.INVISIBLE);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_SUMMARY_URI, contactId);
+        assertStoredValues(contactUri, values);
+        assertSelection(Contacts.CONTENT_SUMMARY_URI, values, Contacts._ID, contactId);
+    }
+
+    public void testQueryContactSummaryFilterData() {
+        ContentValues values = new ContentValues();
+        createContact(values, "Stu", "Goulash", "18004664411",
+                "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
+        values.put(Contacts.PRESENCE_STATUS, Presence.INVISIBLE);
+        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_FILTER_URI, "goulash");
+        assertStoredValues(filterUri1, values);
+
+        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_FILTER_URI, "goolish");
+        assertEquals(0, getCount(filterUri2, null, null));
+    }
+
+    public void testQueryContactSummaryStrequent() {
+        ContentValues values1 = new ContentValues();
+        createContact(values1, "Noah", "Tever", "18004664411",
+                "a@acme.com", Presence.OFFLINE, 0, 0, 0);
+        ContentValues values2 = new ContentValues();
+        createContact(values2, "Sam", "Times", "18004664412",
+                "b@acme.com", Presence.INVISIBLE, 3, 0, 0);
+        ContentValues values3 = new ContentValues();
+        createContact(values3, "Lotta", "Calling", "18004664413",
+                "c@acme.com", Presence.AWAY, 5, 0, 0);
+        ContentValues values4 = new ContentValues();
+        createContact(values4, "Fay", "Veritt", "18004664414",
+                "d@acme.com", Presence.AVAILABLE, 0, 1, 0);
+
+        Cursor c = mResolver.query(Contacts.CONTENT_SUMMARY_STREQUENT_URI, null, null, null,
+                Contacts._ID);
+        assertEquals(3, c.getCount());
+        c.moveToFirst();
+        assertCursorValues(c, values4);
+        c.moveToNext();
+        assertCursorValues(c, values3);
+        c.moveToNext();
+        assertCursorValues(c, values2);
+        c.close();
+
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_STREQUENT_FILTER_URI, "fay");
+        c = mResolver.query(filterUri, null, null, null, Contacts._ID);
+        assertEquals(1, c.getCount());
+        c.moveToFirst();
+        assertCursorValues(c, values4);
+        c.close();
+    }
+
+    public void testQueryContactSummaryGroup() {
+        long groupId = createGroup(null, "testGroup", "Test Group");
+
+        ContentValues values1 = new ContentValues();
+        createContact(values1, "Best", "West", "18004664411",
+                "west@acme.com", Presence.OFFLINE, 0, 0, groupId);
+
+        ContentValues values2 = new ContentValues();
+        createContact(values2, "Rest", "East", "18004664422",
+                "east@acme.com", Presence.AVAILABLE, 0, 0, 0);
+
+        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_GROUP_URI, "Test Group");
+        Cursor c = mResolver.query(filterUri1, null, null, null, Contacts._ID);
+        assertEquals(1, c.getCount());
+        c.moveToFirst();
+        assertCursorValues(c, values1);
+        c.close();
+
+        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_GROUP_URI, "Test Group");
+        c = mResolver.query(filterUri2, null, Contacts.DISPLAY_NAME + "=?",
+                new String[] { "Best West" }, Contacts._ID);
+        assertEquals(1, c.getCount());
+        c.close();
+
+        Uri filterUri3 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_GROUP_URI, "Next Group");
+        c = mResolver.query(filterUri3, null, null, null, Contacts._ID);
+        assertEquals(0, c.getCount());
+        c.close();
     }
 
     public void testGroupInsert() {
@@ -232,10 +464,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Cursor c = queryContactSummary(queryContactId(rawContactId1),
                 new String[] {Presence.PRESENCE_STATUS});
-        assertEquals(c.getCount(), 1);
+        assertEquals(1, c.getCount());
 
         c.moveToFirst();
-        assertEquals(c.getInt(0), Presence.AVAILABLE);
+        assertEquals(Presence.AVAILABLE, c.getInt(0));
 
     }
 
@@ -548,6 +780,72 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDirty(uri, true);
         version++;
         assertEquals(version, getVersion(uri));
+    }
+
+    private long createContact(ContentValues values, String firstName, String givenName,
+            String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
+            long groupId) {
+        values.put(RawContacts.STARRED, starred);
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        values.put(RawContacts.CUSTOM_RINGTONE, "beethoven5");
+        values.put(RawContacts.LAST_TIME_CONTACTED, 12345);
+        values.put(RawContacts.TIMES_CONTACTED, timesContacted);
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+        insertStructuredName(rawContactId, firstName, givenName);
+        Uri photoUri = insertPhoto(rawContactId);
+        long photoId = ContentUris.parseId(photoUri);
+        values.put(Contacts.PHOTO_ID, photoId);
+        Uri phoneUri = insertPhoneNumber(rawContactId, phoneNumber);
+        long phoneId = ContentUris.parseId(phoneUri);
+        values.put(Contacts.PRIMARY_PHONE_ID, phoneId);
+        Uri emailUri = insertEmail(rawContactId, email);
+        long emailId = ContentUris.parseId(emailUri);
+        values.put(Contacts.PRIMARY_EMAIL_ID, emailId);
+
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, email, presenceStatus);
+
+        if (groupId != 0) {
+            insertGroupMembership(rawContactId, groupId);
+        }
+
+        // FIXME: should not have to set these as primaries explicitly. They should be
+        // returned as defaults
+        ContentValues primaryValues = new ContentValues();
+        primaryValues.clear();
+        primaryValues.put(Data.IS_PRIMARY, 1);
+        primaryValues.put(Data.IS_SUPER_PRIMARY, 1);
+        mResolver.update(phoneUri, primaryValues, null, null);
+        mResolver.update(emailUri, primaryValues, null, null);
+
+        return queryContactId(rawContactId);
+    }
+
+    private void putDataValues(ContentValues values, long rawContactId) {
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, "testmimetype");
+        values.put(Data.RES_PACKAGE, "oldpackage");
+        values.put(Data.IS_PRIMARY, 1);
+        values.put(Data.IS_SUPER_PRIMARY, 1);
+        values.put(Data.DATA1, "one");
+        values.put(Data.DATA2, "two");
+        values.put(Data.DATA3, "three");
+        values.put(Data.DATA4, "four");
+        values.put(Data.DATA5, "five");
+        values.put(Data.DATA6, "six");
+        values.put(Data.DATA7, "seven");
+        values.put(Data.DATA8, "eight");
+        values.put(Data.DATA9, "nine");
+        values.put(Data.DATA10, "ten");
+        values.put(Data.DATA11, "eleven");
+        values.put(Data.DATA12, "twelve");
+        values.put(Data.DATA13, "thirteen");
+        values.put(Data.DATA14, "fourteen");
+        values.put(Data.DATA15, "fifteen");
+        values.put(Data.SYNC1, "sync1");
+        values.put(Data.SYNC2, "sync2");
+        values.put(Data.SYNC3, "sync3");
+        values.put(Data.SYNC4, "sync4");
     }
 }
 

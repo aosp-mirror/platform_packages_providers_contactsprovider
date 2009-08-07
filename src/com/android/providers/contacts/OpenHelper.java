@@ -31,6 +31,7 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.os.Binder;
 import android.provider.BaseColumns;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -58,7 +59,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 61;
+    private static final int DATABASE_VERSION = 62;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -179,6 +180,20 @@ import java.util.HashMap;
                 + "ON (agg_exceptions.raw_contact_id2 = raw_contacts2._id) ";
     }
 
+    public interface Views {
+        public static final String DATA_ALL = "view_data";
+        public static final String DATA_RESTRICTED = "view_data_restricted";
+
+        public static final String RAW_CONTACTS_ALL = "view_raw_contacts";
+        public static final String RAW_CONTACTS_RESTRICTED = "view_raw_contacts_restricted";
+
+        public static final String CONTACTS_ALL = "view_contacts";
+        public static final String CONTACTS_RESTRICTED = "view_contacts_restricted";
+
+        public static final String CONTACT_SUMMARY_ALL = "view_contact_summaries";
+        public static final String CONTACT_SUMMARY_RESTRICTED = "view_contact_summaries_restricted";
+    }
+
     public interface Clauses {
         public static final String WHERE_IM_MATCHES = MimetypesColumns.MIMETYPE + "=" + Im.MIMETYPE
                 + " AND " + Im.PROTOCOL + "=? AND " + Im.DATA + "=?";
@@ -219,6 +234,10 @@ import java.util.HashMap;
                 "optimal_email_is_restricted";
         public static final String FALLBACK_PRIMARY_EMAIL_ID = "fallback_email_id";
 
+        /**
+         * This flag is set for a contact if it has only one constituent raw contact and
+         * it is restricted.
+         */
         public static final String SINGLE_IS_RESTRICTED = "single_is_restricted";
 
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
@@ -389,6 +408,9 @@ import java.util.HashMap;
 
     private static final int COL_NICKNAME_LOOKUP_CLUSTER = 0;
 
+    /** A table alias for the join with the default phone */
+    private static final String DEFAULT_PHONE = "default_phone";
+
     /** In-memory cache of previously found mimetype mappings */
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
@@ -528,7 +550,7 @@ import java.util.HashMap;
                 ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
                 ContactsColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED + " INTEGER DEFAULT 0," +
                 ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
-                ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER REFERENCES package(_id)" +
+                ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
         // Contacts table
@@ -825,7 +847,186 @@ import java.util.HashMap;
                 +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
                 +   "' AND " + GroupsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_DATA1 + ")");
 
+
+        String dataColumns =
+                Data.IS_PRIMARY + ", "
+                + Data.IS_SUPER_PRIMARY + ", "
+                + Data.DATA_VERSION + ", "
+                + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
+                + MimetypesColumns.MIMETYPE + " AS " + Data.MIMETYPE + ", "
+                + Data.DATA1 + ", "
+                + Data.DATA2 + ", "
+                + Data.DATA3 + ", "
+                + Data.DATA4 + ", "
+                + Data.DATA5 + ", "
+                + Data.DATA6 + ", "
+                + Data.DATA7 + ", "
+                + Data.DATA8 + ", "
+                + Data.DATA9 + ", "
+                + Data.DATA10 + ", "
+                + Data.DATA11 + ", "
+                + Data.DATA12 + ", "
+                + Data.DATA13 + ", "
+                + Data.DATA14 + ", "
+                + Data.DATA15 + ", "
+                + Data.SYNC1 + ", "
+                + Data.SYNC2 + ", "
+                + Data.SYNC3 + ", "
+                + Data.SYNC4;
+
+        String syncColumns =
+                RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
+                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
+                + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
+                + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
+                + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
+                + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ","
+                + RawContactsColumns.CONCRETE_SYNC2 + " AS " + RawContacts.SYNC2 + ","
+                + RawContactsColumns.CONCRETE_SYNC3 + " AS " + RawContacts.SYNC3 + ","
+                + RawContactsColumns.CONCRETE_SYNC4 + " AS " + RawContacts.SYNC4;
+
+        String contactOptionColumns =
+                ContactsColumns.CONCRETE_CUSTOM_RINGTONE
+                        + " AS " + RawContacts.CUSTOM_RINGTONE + ","
+                + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
+                        + " AS " + RawContacts.SEND_TO_VOICEMAIL + ","
+                + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
+                        + " AS " + RawContacts.LAST_TIME_CONTACTED + ","
+                + ContactsColumns.CONCRETE_TIMES_CONTACTED
+                        + " AS " + RawContacts.TIMES_CONTACTED + ","
+                + ContactsColumns.CONCRETE_STARRED
+                        + " AS " + RawContacts.STARRED;
+
+        String dataSelect = "SELECT "
+                + DataColumns.CONCRETE_ID + " AS " + Data._ID + ","
+                + Data.RAW_CONTACT_ID + ", "
+                + RawContacts.CONTACT_ID + ", "
+                + syncColumns + ", "
+                + dataColumns + ", "
+                + contactOptionColumns + ", "
+                + ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME + ", "
+                + Contacts.PHOTO_ID + ", "
+                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
+                + " FROM " + Tables.DATA
+                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
+                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
+                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
+                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                +   "' AND " + GroupsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_DATA1 + ")"
+                + " LEFT OUTER JOIN " + Tables.CONTACTS + " ON ("
+                +   RawContacts.CONTACT_ID + "=" + Tables.CONTACTS + "." + Contacts._ID + ")";
+
+        db.execSQL("CREATE VIEW " + Views.DATA_ALL + " AS " + dataSelect);
+        db.execSQL("CREATE VIEW " + Views.DATA_RESTRICTED + " AS " + dataSelect + " WHERE "
+                + RawContacts.IS_RESTRICTED + "=0");
+
+        String rawContactOptionColumns =
+                RawContacts.CUSTOM_RINGTONE + ","
+                + RawContacts.SEND_TO_VOICEMAIL + ","
+                + RawContacts.LAST_TIME_CONTACTED + ","
+                + RawContacts.TIMES_CONTACTED + ","
+                + RawContacts.STARRED;
+
+        String rawContactsSelect = "SELECT "
+                + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
+                + RawContacts.CONTACT_ID + ", "
+                + RawContacts.AGGREGATION_MODE + ", "
+                + RawContacts.DELETED + ", "
+                + rawContactOptionColumns + ", "
+                + syncColumns
+                + " FROM " + Tables.RAW_CONTACTS;
+
+        db.execSQL("CREATE VIEW " + Views.RAW_CONTACTS_ALL + " AS " + rawContactsSelect);
+        db.execSQL("CREATE VIEW " + Views.RAW_CONTACTS_RESTRICTED + " AS " + rawContactsSelect
+                + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
+
+        String contactsColumns =
+                ContactsColumns.CONCRETE_CUSTOM_RINGTONE
+                        + " AS " + Contacts.CUSTOM_RINGTONE + ", "
+                + ContactsColumns.CONCRETE_DISPLAY_NAME
+                        + " AS " + Contacts.DISPLAY_NAME + ", "
+                + Contacts.IN_VISIBLE_GROUP + ", "
+                + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
+                        + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
+                + Contacts.PHOTO_ID + ", "
+                + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
+                        + " AS " + Contacts.SEND_TO_VOICEMAIL + ", "
+                + ContactsColumns.CONCRETE_STARRED
+                        + " AS " + Contacts.STARRED + ", "
+                + ContactsColumns.CONCRETE_TIMES_CONTACTED
+                        + " AS " + Contacts.TIMES_CONTACTED;
+
+        String defaultPhoneColumns =
+                DEFAULT_PHONE + "." + Phone.NUMBER + " AS " + Contacts.PRIMARY_PHONE_NUMBER + ", "
+                + DEFAULT_PHONE + "." + Phone.LABEL + " AS " + Contacts.PRIMARY_PHONE_LABEL + ", "
+                + DEFAULT_PHONE + "." + Phone.TYPE + " AS " + Contacts.PRIMARY_PHONE_TYPE;
+
+        String contactsSelect = "SELECT "
+                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
+                + contactsColumns + ", "
+                + ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID
+                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
+                + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID
+                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + " FROM " + Tables.CONTACTS;
+
+        String restrictedContactsSelect = "SELECT "
+                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
+                + contactsColumns + ", "
+                + ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID
+                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
+                + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID
+                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + " FROM " + Tables.CONTACTS
+                + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
+
+        db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
+        db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + restrictedContactsSelect);
+
+        String contactSummarySelect = "SELECT "
+                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
+                + RawContactsColumns.CONCRETE_ID + " AS raw_contact_id,"
+                + contactsColumns + ", "
+                + defaultPhoneColumns + ", "
+                + ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID
+                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
+                + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID
+                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + " FROM " + Tables.CONTACTS
+                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
+                        + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.DATA + " " + DEFAULT_PHONE + " ON ("
+                        + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID
+                        + " = " + DEFAULT_PHONE + "." + Data._ID + ")";
+
+        String restrictedContactSummarySelect = "SELECT "
+                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
+                + RawContactsColumns.CONCRETE_ID + " AS raw_contact_id,"
+                + contactsColumns + ", "
+                + defaultPhoneColumns + ", "
+                + ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID
+                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
+                + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID
+                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + " FROM " + Tables.CONTACTS
+                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
+                        + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.DATA + " " + DEFAULT_PHONE + " ON ("
+                        + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID
+                        + " = " + DEFAULT_PHONE + "." + Data._ID + ")"
+                + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
+
+        db.execSQL("CREATE VIEW " + Views.CONTACT_SUMMARY_ALL
+                + " AS " + contactSummarySelect);
+        db.execSQL("CREATE VIEW " + Views.CONTACT_SUMMARY_RESTRICTED
+                + " AS " + restrictedContactSummarySelect);
+
         loadNicknameLookupTable(db);
+
         if (mDelegate != null) {
             mDelegate.createDatabase(db);
         }
@@ -850,6 +1051,14 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACT_SUMMARY_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACT_SUMMARY_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
 
         // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
         // schema changes, we should try to preserve the data, because it was entered by the user
@@ -1203,5 +1412,53 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.CONTACTS
                 + " WHERE " + Contacts._ID + "=" + contactIdFromRawContactId
                 + " AND NOT EXISTS " + otherRawContacts + ";");
+    }
+
+    /**
+     * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
+     */
+    static final String[] sAllowedPackages = new String[] {
+        "com.android.contacts",
+        "com.facebook",
+    };
+
+    /**
+     * Check if {@link Binder#getCallingUid()} should be allowed access to
+     * {@link RawContacts#IS_RESTRICTED} data.
+     */
+    boolean hasRestrictedAccess() {
+        final PackageManager pm = mContext.getPackageManager();
+        final String[] callerPackages = pm.getPackagesForUid(Binder.getCallingUid());
+
+        // Has restricted access if caller matches any packages
+        for (String callerPackage : callerPackages) {
+            for (String allowedPackage : sAllowedPackages) {
+                if (allowedPackage.equals(callerPackage)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public String getDataView() {
+        return hasRestrictedAccess() ? Views.DATA_ALL : Views.DATA_RESTRICTED;
+    }
+
+    public String getRawContactView() {
+        return hasRestrictedAccess() ? Views.RAW_CONTACTS_ALL
+                : Views.RAW_CONTACTS_RESTRICTED;
+    }
+
+    public String getContactView() {
+        return hasRestrictedAccess() ? Views.CONTACTS_ALL
+                : Views.CONTACTS_RESTRICTED;
+    }
+
+    public String getContactSummaryView() {
+        String summaryView = hasRestrictedAccess() ? Views.CONTACT_SUMMARY_ALL
+                : Views.CONTACT_SUMMARY_RESTRICTED;
+        return summaryView + " LEFT OUTER JOIN " + Tables.PRESENCE + " ON (raw_contact_id = "
+                + Presence.RAW_CONTACT_ID + ") ";
     }
 }
