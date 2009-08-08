@@ -640,7 +640,7 @@ public class ContactsProvider2 extends ContentProvider {
         // Data, groups and contacts projection map for joins. _id comes from the data table
         columns = new HashMap<String, String>();
         columns.putAll(sDeprecatedRawContactsProjectionMap);
-        columns.putAll(sDeprecatedDataGroupsProjectionMap); 
+        columns.putAll(sDeprecatedDataGroupsProjectionMap);
         columns.put(Data.RAW_CONTACT_ID, DataColumns.CONCRETE_RAW_CONTACT_ID);
         sDataRawContactsGroupsProjectionMap = columns;
 
@@ -2406,7 +2406,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case GROUPS_SUMMARY: {
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES_DATA_RAW_CONTACTS_CONTACTS);
+                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
                 qb.setProjectionMap(sGroupsSummaryProjectionMap);
                 groupBy = GroupsColumns.CONCRETE_ID;
                 break;
