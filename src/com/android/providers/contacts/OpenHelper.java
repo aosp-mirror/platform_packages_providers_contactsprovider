@@ -59,7 +59,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 62;
+    private static final int DATABASE_VERSION = 63;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -730,6 +730,7 @@ import java.util.HashMap;
                 Groups.TITLE_RES + " INTEGER," +
                 Groups.NOTES + " TEXT," +
                 Groups.SYSTEM_ID + " TEXT," +
+                Groups.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.GROUP_VISIBLE + " INTEGER," +
                 Groups.SYNC1 + " TEXT, " +
                 Groups.SYNC2 + " TEXT, " +
@@ -805,6 +806,7 @@ import java.util.HashMap;
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
+                + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
                 + RawContacts.CONTACT_ID + ", "
                 + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ", "

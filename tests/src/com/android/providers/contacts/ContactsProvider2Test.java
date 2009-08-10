@@ -352,6 +352,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Groups.NOTES, "e");
         values.put(Groups.RES_PACKAGE, "f");
         values.put(Groups.SYSTEM_ID, "g");
+        values.put(Groups.DELETED, 1);
         values.put(Groups.SYNC1, "h");
         values.put(Groups.SYNC2, "i");
         values.put(Groups.SYNC3, "j");

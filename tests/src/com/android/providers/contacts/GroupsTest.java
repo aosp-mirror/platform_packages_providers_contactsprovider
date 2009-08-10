@@ -22,6 +22,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -154,6 +155,32 @@ public class GroupsTest extends BaseContactsProvider2Test {
         assertEquals(1, mResolver.update(uri, values, null, null));
 
         assertDirty(uri, false);
+    }
+
+    public void testGroupDeletion1() {
+        long groupId = createGroup(mAccount, "g1", "gt1");
+        Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI, groupId);
+
+        assertEquals(1, getCount(uri, null, null));
+        mResolver.delete(uri, null, null);
+        assertEquals(1, getCount(uri, null, null));
+        assertStoredValues(uri, Groups.DELETED, "1");
+
+        Uri permanentDeletionUri =
+                uri.buildUpon().appendQueryParameter(Groups.DELETE_PERMANENTLY, "true").build();
+        mResolver.delete(permanentDeletionUri, null, null);
+        assertEquals(0, getCount(uri, null, null));
+    }
+
+    public void testGroupDeletion2() {
+        long groupId = createGroup(mAccount, "g1", "gt1");
+        Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI, groupId);
+
+        assertEquals(1, getCount(uri, null, null));
+        Uri permanentDeletionUri =
+                uri.buildUpon().appendQueryParameter(Groups.DELETE_PERMANENTLY, "true").build();
+        mResolver.delete(permanentDeletionUri, null, null);
+        assertEquals(0, getCount(uri, null, null));
     }
 
     public void testGroupVersionUpdates() {

@@ -664,6 +664,7 @@ public class ContactsProvider2 extends ContentProvider {
         columns.put(Groups.TITLE_RES, Groups.TITLE_RES);
         columns.put(Groups.GROUP_VISIBLE, Groups.GROUP_VISIBLE);
         columns.put(Groups.SYSTEM_ID, Groups.SYSTEM_ID);
+        columns.put(Groups.DELETED, Groups.DELETED);
         columns.put(Groups.NOTES, Groups.NOTES);
         columns.put(Groups.SYNC1, Tables.GROUPS + "." + Groups.SYNC1 + " AS " + Groups.SYNC1);
         columns.put(Groups.SYNC2, Tables.GROUPS + "." + Groups.SYNC2 + " AS " + Groups.SYNC2);
@@ -1787,15 +1788,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case GROUPS_ID: {
-                long groupId = ContentUris.parseId(uri);
-                final long groupMembershipMimetypeId = mOpenHelper
-                        .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-                int groupsDeleted = db.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
-                int dataDeleted = db.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
-                        + groupMembershipMimetypeId + " AND " + GroupMembership.GROUP_ROW_ID + "="
-                        + groupId, null);
-                mOpenHelper.updateAllVisible();
-                return groupsDeleted + dataDeleted;
+                return deleteGroup(uri);
             }
 
             case PRESENCE: {
@@ -1804,6 +1797,33 @@ public class ContactsProvider2 extends ContentProvider {
 
             default:
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
+        }
+    }
+
+    private int deleteGroup(Uri uri) {
+        final String flag = uri.getQueryParameter(Groups.DELETE_PERMANENTLY);
+        final boolean permanently = flag != null && "true".equals(flag.toLowerCase());
+        return deleteGroup(ContentUris.parseId(uri), permanently);
+    }
+
+    private int deleteGroup(long groupId, boolean permanently) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final long groupMembershipMimetypeId = mOpenHelper
+                .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+        db.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
+                + groupMembershipMimetypeId + " AND " + GroupMembership.GROUP_ROW_ID + "="
+                + groupId, null);
+
+        try {
+            if (permanently) {
+                return db.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
+            } else {
+                mValues.clear();
+                mValues.put(Groups.DELETED, 1);
+                return updateGroup(groupId, mValues, null, null);
+            }
+        } finally {
+            mOpenHelper.updateAllVisible();
         }
     }
 
@@ -1824,7 +1844,7 @@ public class ContactsProvider2 extends ContentProvider {
             return db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
             mValues.clear();
-            mValues.put(RawContacts.DELETED, true);
+            mValues.put(RawContacts.DELETED, 1);
             mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
             mValues.putNull(RawContacts.CONTACT_ID);
             return updateRawContact(rawContactId, mValues, null, null);
@@ -1891,14 +1911,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             case GROUPS_ID: {
                 long groupId = ContentUris.parseId(uri);
-                String selectionWithId = (Groups._ID + "=" + groupId + " ")
-                        + (selection == null ? "" : " AND " + selection);
-                count = db.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
-
-                // If changing visibility, then update contacts
-                if (values.containsKey(Groups.GROUP_VISIBLE)) {
-                    mOpenHelper.updateAllVisible();
-                }
+                count = updateGroup(groupId, values, selection, selectionArgs);
 
                 break;
             }
@@ -1914,6 +1927,21 @@ public class ContactsProvider2 extends ContentProvider {
 
         if (count > 0) {
             getContext().getContentResolver().notifyChange(uri, null);
+        }
+        return count;
+    }
+
+    private int updateGroup(long groupId, ContentValues values,
+            String selection, String[] selectionArgs) {
+        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        int count;
+        String selectionWithId = (Groups._ID + "=" + groupId + " ")
+                + (selection == null ? "" : " AND " + selection);
+        count = db.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
+
+        // If changing visibility, then update contacts
+        if (values.containsKey(Groups.GROUP_VISIBLE)) {
+            mOpenHelper.updateAllVisible();
         }
         return count;
     }
@@ -2597,7 +2625,8 @@ public class ContactsProvider2 extends ContentProvider {
                 RawContacts.SYNC1,
                 RawContacts.SYNC2,
                 RawContacts.SYNC3,
-                RawContacts.SYNC4};
+                RawContacts.SYNC4,
+                RawContacts.DELETED};
 
         private static final int COLUMN_ACCOUNT_NAME = 0;
         private static final int COLUMN_ACCOUNT_TYPE = 1;
@@ -2616,6 +2645,7 @@ public class ContactsProvider2 extends ContentProvider {
         private static final int COLUMN_SYNC2 = 32;
         private static final int COLUMN_SYNC3 = 33;
         private static final int COLUMN_SYNC4 = 34;
+        private static final int COLUMN_DELETED = 35;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -2684,6 +2714,7 @@ public class ContactsProvider2 extends ContentProvider {
             contactValues.put(RawContacts.SYNC2, c.getString(COLUMN_SYNC2));
             contactValues.put(RawContacts.SYNC3, c.getString(COLUMN_SYNC3));
             contactValues.put(RawContacts.SYNC4, c.getString(COLUMN_SYNC4));
+            contactValues.put(RawContacts.DELETED, c.getLong(COLUMN_DELETED));
             Entity contact = new Entity(contactValues);
 
             // read data rows until the contact id changes
@@ -2749,7 +2780,8 @@ public class ContactsProvider2 extends ContentProvider {
                 Groups.SYNC3,
                 Groups.SYNC4,
                 Groups.SYSTEM_ID,
-                Groups.NOTES};
+                Groups.NOTES,
+                Groups.DELETED};
 
         private static final int COLUMN_ID = 0;
         private static final int COLUMN_ACCOUNT_NAME = 1;
@@ -2767,6 +2799,7 @@ public class ContactsProvider2 extends ContentProvider {
         private static final int COLUMN_SYNC4 = 13;
         private static final int COLUMN_SYSTEM_ID = 14;
         private static final int COLUMN_NOTES = 15;
+        private static final int COLUMN_DELETED = 16;
 
         public GroupsEntityIterator(ContactsProvider2 provider, String groupIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -2841,6 +2874,7 @@ public class ContactsProvider2 extends ContentProvider {
             groupValues.put(Groups.SYNC3, c.getString(COLUMN_SYNC3));
             groupValues.put(Groups.SYNC4, c.getString(COLUMN_SYNC4));
             groupValues.put(Groups.SYSTEM_ID, c.getString(COLUMN_SYSTEM_ID));
+            groupValues.put(Groups.DELETED, c.getLong(COLUMN_DELETED));
             groupValues.put(Groups.NOTES, c.getString(COLUMN_NOTES));
             Entity group = new Entity(groupValues);
 
