@@ -554,13 +554,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
                     addMatchCandidatesStructuredName(data1, data2, mode, candidates);
                 } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesEmail(data2, mode, candidates);
-                    lookupEmailMatches(db, data2, matcher);
+                    if (!TextUtils.isEmpty(data2)) {
+                        addMatchCandidatesEmail(data2, mode, candidates);
+                        lookupEmailMatches(db, data2, matcher);
+                    }
                 } else if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
-                    lookupPhoneMatches(db, data2, matcher);
+                    if (!TextUtils.isEmpty(data2)) {
+                        lookupPhoneMatches(db, data2, matcher);
+                    }
                 } else if (mimeType.equals(CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesNickname(data2, mode, candidates);
-                    lookupNicknameMatches(db, data2, matcher);
+                    if (!TextUtils.isEmpty(data2)) {
+                        addMatchCandidatesNickname(data2, mode, candidates);
+                        lookupNicknameMatches(db, data2, matcher);
+                    }
                 }
             }
         } finally {
