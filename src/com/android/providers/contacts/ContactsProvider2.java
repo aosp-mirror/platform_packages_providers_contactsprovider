@@ -44,6 +44,7 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
@@ -2420,14 +2421,9 @@ public class ContactsProvider2 extends ContentProvider {
 
             case AGGREGATION_SUGGESTIONS: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-
-                // TODO drop MAX_SUGGESTIONS in favor of LIMIT
-                final String maxSuggestionsParam =
-                        uri.getQueryParameter(AggregationSuggestions.MAX_SUGGESTIONS);
-
                 final int maxSuggestions;
-                if (maxSuggestionsParam != null) {
-                    maxSuggestions = Integer.parseInt(maxSuggestionsParam);
+                if (limit != null) {
+                    maxSuggestions = Integer.parseInt(limit);
                 } else {
                     maxSuggestions = DEFAULT_MAX_SUGGESTIONS;
                 }
