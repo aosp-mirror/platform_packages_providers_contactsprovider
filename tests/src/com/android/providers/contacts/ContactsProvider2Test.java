@@ -803,27 +803,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = insertPhoto(rawContactId);
         long photoId = ContentUris.parseId(photoUri);
         values.put(Contacts.PHOTO_ID, photoId);
-        Uri phoneUri = insertPhoneNumber(rawContactId, phoneNumber);
-        long phoneId = ContentUris.parseId(phoneUri);
-        values.put(Contacts.PRIMARY_PHONE_ID, phoneId);
-        Uri emailUri = insertEmail(rawContactId, email);
-        long emailId = ContentUris.parseId(emailUri);
-        values.put(Contacts.PRIMARY_EMAIL_ID, emailId);
+        insertPhoneNumber(rawContactId, phoneNumber);
+        insertEmail(rawContactId, email);
 
         insertPresence(Im.PROTOCOL_GOOGLE_TALK, email, presenceStatus);
 
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);
         }
-
-        // FIXME: should not have to set these as primaries explicitly. They should be
-        // returned as defaults
-        ContentValues primaryValues = new ContentValues();
-        primaryValues.clear();
-        primaryValues.put(Data.IS_PRIMARY, 1);
-        primaryValues.put(Data.IS_SUPER_PRIMARY, 1);
-        mResolver.update(phoneUri, primaryValues, null, null);
-        mResolver.update(emailUri, primaryValues, null, null);
 
         return queryContactId(rawContactId);
     }

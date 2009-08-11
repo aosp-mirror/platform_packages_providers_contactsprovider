@@ -256,18 +256,6 @@ public class ContactsActor {
         resolver.update(updateUri, values, null, null);
     }
 
-    public long getPrimaryPhoneId(long contactId) {
-        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
-        final Cursor cursor = resolver.query(contactUri, Projections.PROJ_CONTACTS, null,
-                null, null);
-        long primaryPhoneId = -1;
-        if (cursor.moveToFirst()) {
-            primaryPhoneId = cursor.getLong(Projections.COL_CONTACTS_PRIMARY_PHONE_ID);
-        }
-        cursor.close();
-        return primaryPhoneId;
-    }
-
     public long createGroup(String groupName) {
         final ContentValues values = new ContentValues();
         values.put(ContactsContract.Groups.RES_PACKAGE, packageName);
@@ -302,12 +290,5 @@ public class ContactsActor {
         };
 
         static final int COL_CONTACTS_ID = 0;
-
-        static final String[] PROJ_CONTACTS = new String[] {
-                Contacts.PRIMARY_PHONE_ID
-        };
-
-        static final int COL_CONTACTS_PRIMARY_PHONE_ID = 0;
-
     }
 }

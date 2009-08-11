@@ -20,6 +20,7 @@ import com.android.providers.contacts.ContactMatcher.MatchScore;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
+import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupType;
@@ -362,10 +363,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
         }
 
-        boolean newAgg = false;
-
         if (contactId == -1) {
-            newAgg = true;
             ContentValues contactValues = new ContentValues();
             contactValues.put(Contacts.DISPLAY_NAME, "");
             contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
@@ -375,7 +373,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mOpenHelper.setContactId(rawContactId, contactId);
 
         updateAggregateData(db, contactId, values);
-        updatePrimaries(db, contactId, rawContactId, newAgg);
+        updateContactValues(db, contactId);
         mOpenHelper.updateContactVisible(contactId);
 
     }
@@ -883,109 +881,32 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Updates the various {@link ContactsColumns} primary values based on the
-     * newly joined {@link RawContacts} entry. If some aggregate primary values are
-     * unassigned, primary values from this contact will be promoted as the new
-     * super-primaries.
+     * Updates various {@link ContactsColumns} values based on the newly joined
+     * {@link RawContacts} entry.
      */
-    private void updatePrimaries(SQLiteDatabase db, long aggId, long rawContactId, boolean newAgg) {
-        Cursor cursor = null;
+    private void updateContactValues(SQLiteDatabase db, long contactId) {
 
-        boolean hasOptimalPhone = false;
-        boolean hasFallbackPhone = false;
-        boolean hasOptimalEmail = false;
-        boolean hasFallbackEmail = false;
+        // TODO compiled statement
+        String countRestrictedSql = "SELECT COUNT(_id) FROM " + Tables.RAW_CONTACTS + " WHERE "
+                + RawContacts.CONTACT_ID + "=" + contactId + " AND " + RawContacts.IS_RESTRICTED + "=1";
+        String countUnrestrictedSql = "SELECT COUNT(_id) FROM " + Tables.RAW_CONTACTS + " WHERE "
+                + RawContacts.CONTACT_ID + "=" + contactId + " AND " + RawContacts.IS_RESTRICTED + "=0";
 
-        // Read currently recorded aggregate primary values
-        try {
-            cursor = db.query(Tables.CONTACTS, Projections.PROJ_CONTACT_PRIMARIES,
-                    Contacts._ID + "=" + aggId, null, null, null, null);
-            if (cursor.moveToNext()) {
-                hasOptimalPhone = (cursor.getLong(Projections.COL_OPTIMAL_PRIMARY_PHONE_ID) != 0);
-                hasFallbackPhone = (cursor.getLong(Projections.COL_FALLBACK_PRIMARY_PHONE_ID) != 0);
-                hasOptimalEmail = (cursor.getLong(Projections.COL_OPTIMAL_PRIMARY_EMAIL_ID) != 0);
-                hasFallbackEmail = (cursor.getLong(Projections.COL_FALLBACK_PRIMARY_EMAIL_ID) != 0);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
+        String singleRestrictedSql = "(CASE WHEN (" + countRestrictedSql + ")=1"
+                + " AND (" + countUnrestrictedSql + ")=0 THEN 1 ELSE 0 END)";
 
-        long candidatePhone = 0;
-        long candidateEmail = 0;
-        boolean candidateIsRestricted = false;
+        String hasPhoneNumberSql = "(CASE WHEN EXISTS (SELECT " + DataColumns.CONCRETE_ID
+                + " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS
+                + " WHERE " + MimetypesColumns.MIMETYPE + "='" + Phone.CONTENT_ITEM_TYPE + "'"
+                + " AND " + Phone.NUMBER + " NOT NULL"
+                + " AND " + RawContacts.CONTACT_ID + "=" + contactId + ") THEN 1 ELSE 0 END)";
 
-        // Find primary data items from newly-joined contact, returning one
-        // candidate for each mimetype.
-        try {
-            cursor = db.query(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS,
-                    Projections.PROJ_DATA,
-                    Data.RAW_CONTACT_ID + "=" + rawContactId + " AND " + Data.IS_PRIMARY + "=1 AND "
-                            + Projections.PRIMARY_MIME_CLAUSE, null, Data.MIMETYPE, null, null);
-            while (cursor.moveToNext()) {
-                final long dataId = cursor.getLong(Projections.COL_DATA_ID);
-                final String mimeType = cursor.getString(Projections.COL_DATA_MIMETYPE);
+        String updateSql = "UPDATE " + Tables.CONTACTS + " SET "
+                + ContactsColumns.SINGLE_IS_RESTRICTED + "=" + singleRestrictedSql + ","
+                + Contacts.HAS_PHONE_NUMBER + "=" + hasPhoneNumberSql
+                + " WHERE " + ContactsColumns.CONCRETE_ID + "=" + contactId;
 
-                candidateIsRestricted = (cursor.getInt(Projections.COL_IS_RESTRICTED) == 1);
-
-                if (CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                    candidatePhone = dataId;
-                } else if (CommonDataKinds.Email.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                    candidateEmail = dataId;
-                }
-
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        final ContentValues values = new ContentValues();
-
-        // If a new contact, and single child is restricted, then mark
-        // contact as being protected by package. Otherwise set as null if
-        // multiple under contact or not restricted.
-        values.put(ContactsColumns.SINGLE_IS_RESTRICTED, (newAgg && candidateIsRestricted) ? 1
-                : 0);
-
-        // If newly joined contact has a primary phone number, consider
-        // promoting it up into aggregate as super-primary.
-        if (candidatePhone != 0) {
-            if (!hasOptimalPhone) {
-                values.put(ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID, candidatePhone);
-                values.put(ContactsColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED,
-                        candidateIsRestricted ? 1 : 0);
-            }
-
-            // Also promote to unrestricted value, if none provided yet.
-            if (!hasFallbackPhone && !candidateIsRestricted) {
-                values.put(ContactsColumns.FALLBACK_PRIMARY_PHONE_ID, candidatePhone);
-            }
-        }
-
-        // If newly joined contact has a primary email, consider promoting it up
-        // into aggregate as super-primary.
-        if (candidateEmail != 0) {
-            if (!hasOptimalEmail) {
-                values.put(ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID, candidateEmail);
-                values.put(ContactsColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED,
-                        candidateIsRestricted ? 1 : 0);
-            }
-
-            // Also promote to unrestricted value, if none provided yet.
-            if (!hasFallbackEmail && !candidateIsRestricted) {
-                values.put(ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID, candidateEmail);
-            }
-        }
-
-        // Only write updated contact values if we made changes.
-        if (values.size() > 0) {
-            Log.d(TAG, "some sort of promotion is going on: " + values.toString());
-            db.update(Tables.CONTACTS, values, Contacts._ID + "=" + aggId, null);
-        }
-
+        db.execSQL(updateSql);
     }
 
     /**
@@ -1209,20 +1130,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Various database projections used internally.
      */
     private interface Projections {
-        static final String[] PROJ_CONTACT_PRIMARIES = new String[] {
-                ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID,
-                ContactsColumns.FALLBACK_PRIMARY_PHONE_ID,
-                ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID,
-                ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID,
-                ContactsColumns.SINGLE_IS_RESTRICTED,
-        };
-
-        static final int COL_OPTIMAL_PRIMARY_PHONE_ID = 0;
-        static final int COL_FALLBACK_PRIMARY_PHONE_ID = 1;
-        static final int COL_OPTIMAL_PRIMARY_EMAIL_ID = 2;
-        static final int COL_FALLBACK_PRIMARY_EMAIL_ID = 3;
-        static final int COL_SINGLE_IS_RESTRICTED = 4;
-
         static final String[] PROJ_DATA = new String[] {
                 Tables.DATA + "." + Data._ID,
                 Data.MIMETYPE,

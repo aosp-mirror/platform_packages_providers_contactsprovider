@@ -113,14 +113,13 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Contacts._ID,
                 Contacts.DISPLAY_NAME,
                 Contacts.PHOTO_ID,
-                Contacts.PRIMARY_PHONE_ID,
-                Contacts.PRIMARY_EMAIL_ID,
                 Contacts.TIMES_CONTACTED,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.SEND_TO_VOICEMAIL,
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
+                Contacts.HAS_PHONE_NUMBER,
         });
 
         assertQueryResults("expected_raw_contacts.txt", RawContacts.CONTENT_URI, new String[]{

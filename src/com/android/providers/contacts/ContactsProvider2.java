@@ -189,25 +189,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             DataColumns.CONCRETE_ID,
             ContactsColumns.CONCRETE_ID,
             MimetypesColumns.CONCRETE_ID,
-            Phone.NUMBER,
-            Email.DATA,
-            ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID,
-            ContactsColumns.FALLBACK_PRIMARY_PHONE_ID,
-            ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID,
-            ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID,
         };
 
         public static final int RAW_CONTACT_ID = 0;
         public static final int DATA_ID = 1;
         public static final int CONTACT_ID = 2;
         public static final int MIMETYPE_ID = 3;
-        public static final int PHONE_NUMBER = 4;
-        public static final int EMAIL_DATA = 5;
-        public static final int OPTIMAL_PHONE_ID = 6;
-        public static final int FALLBACK_PHONE_ID = 7;
-        public static final int OPTIMAL_EMAIL_ID = 8;
-        public static final int FALLBACK_EMAIL_ID = 9;
-
     }
 
     private interface DisplayNameQuery {
@@ -434,23 +421,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sContactsProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sContactsProjectionMap.put(Contacts.IN_VISIBLE_GROUP, Contacts.IN_VISIBLE_GROUP);
         sContactsProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
-        sContactsProjectionMap.put(Contacts.PRIMARY_PHONE_ID, Contacts.PRIMARY_PHONE_ID);
-        sContactsProjectionMap.put(Contacts.PRIMARY_EMAIL_ID, Contacts.PRIMARY_EMAIL_ID);
         sContactsProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
+        sContactsProjectionMap.put(Contacts.HAS_PHONE_NUMBER, Contacts.HAS_PHONE_NUMBER);
         sContactsProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
-        sContactsProjectionMap.put(Contacts.PRIMARY_PHONE_ID, Contacts.PRIMARY_PHONE_ID);
-        sContactsProjectionMap.put(Contacts.PRIMARY_EMAIL_ID, Contacts.PRIMARY_EMAIL_ID);
 
         sContactsSummaryProjectionMap = new HashMap<String, String>();
         sContactsSummaryProjectionMap.putAll(sContactsProjectionMap);
         sContactsSummaryProjectionMap.put(Contacts.PRESENCE_STATUS,
                 "MAX(" + Presence.PRESENCE_STATUS + ") AS " + Contacts.PRESENCE_STATUS);
-        sContactsSummaryProjectionMap.put(Contacts.PRIMARY_PHONE_TYPE,
-                Contacts.PRIMARY_PHONE_TYPE);
-        sContactsSummaryProjectionMap.put(Contacts.PRIMARY_PHONE_LABEL,
-                Contacts.PRIMARY_PHONE_LABEL);
-        sContactsSummaryProjectionMap.put(Contacts.PRIMARY_PHONE_NUMBER,
-                Contacts.PRIMARY_PHONE_NUMBER);
 
         HashMap<String, String> columns;
 
@@ -467,16 +445,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + Contacts.STARRED);
         columns.put(Contacts.IN_VISIBLE_GROUP, Contacts.IN_VISIBLE_GROUP);
         columns.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
-        columns.put(Contacts.PRIMARY_PHONE_ID, Contacts.PRIMARY_PHONE_ID);
-        columns.put(Contacts.PRIMARY_EMAIL_ID, Contacts.PRIMARY_EMAIL_ID);
         columns.put(Contacts.CUSTOM_RINGTONE, ContactsColumns.CONCRETE_CUSTOM_RINGTONE + " AS "
                 + Contacts.CUSTOM_RINGTONE);
         columns.put(Contacts.SEND_TO_VOICEMAIL, ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
                 + " AS " + Contacts.SEND_TO_VOICEMAIL);
-        columns.put(ContactsColumns.FALLBACK_PRIMARY_PHONE_ID,
-                ContactsColumns.FALLBACK_PRIMARY_PHONE_ID);
-        columns.put(ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID,
-                ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID);
         sDeprecatedContactsProjectionMap = columns;
 
         columns = new HashMap<String, String>();
@@ -685,7 +657,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + ContactsColumns.CONCRETE_ID + ") FROM "
                 + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS + " WHERE "
                 + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
-                + " AND " + Clauses.HAS_PRIMARY_PHONE + ") AS " + Groups.SUMMARY_WITH_PHONES);
+                + " AND " + Contacts.HAS_PHONE_NUMBER + ") AS " + Groups.SUMMARY_WITH_PHONES);
 
         sGroupsSummaryProjectionMap = columns;
 
@@ -1477,7 +1449,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         try {
             while(c.moveToNext()) {
                 long dataId = c.getLong(DataIdQuery._ID);
-                count += deleteData(dataId, markRawContactAsDirty);
+                long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
+                count += deleteData(dataId, rawContactId, markRawContactAsDirty);
             }
         } finally {
             c.close();
@@ -1488,6 +1461,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
     @Deprecated
     public int deleteData(long dataId, String[] allowedMimeTypes) {
+
+
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         Cursor c = db.query(DataQuery.TABLE, DataQuery.COLUMNS,
                 DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
@@ -1518,153 +1493,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     /**
-     * Delete the given {@link Data} row, fixing up any {@link Contacts}
-     * primaries that reference it.
+     * Delete the given {@link Data} row.
      */
-    private int deleteData(long dataId, boolean markRawContactAsDirty) {
-
-        // TODO redo this method with the use of DataRowHandlers
-
-        final long mimePhone = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-        final long mimeEmail = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-
-        // Check to see if the data about to be deleted was a super-primary on
-        // the parent aggregate, and set flags to fix-up once deleted.
-        long contactId = -1;
-        long rawContactId = -1;
-        long mimeId = -1;
-        String dataRaw = null;
-        boolean fixOptimal = false;
-        boolean fixFallback = false;
-
-        // TODO check security
-        Cursor cursor = null;
-        try {
-            cursor = mDb.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
-                    DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
-            if (!cursor.moveToFirst()) {
-                return 0;
-            }
-
-            contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
-            rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
-            mimeId = cursor.getLong(DataContactsQuery.MIMETYPE_ID);
-            if (mimeId == mimePhone) {
-                dataRaw = cursor.getString(DataContactsQuery.PHONE_NUMBER);
-                fixOptimal = (cursor.getLong(DataContactsQuery.OPTIMAL_PHONE_ID) == dataId);
-                fixFallback = (cursor.getLong(DataContactsQuery.FALLBACK_PHONE_ID) == dataId);
-            } else if (mimeId == mimeEmail) {
-                dataRaw = cursor.getString(DataContactsQuery.EMAIL_DATA);
-                fixOptimal = (cursor.getLong(DataContactsQuery.OPTIMAL_EMAIL_ID) == dataId);
-                fixFallback = (cursor.getLong(DataContactsQuery.FALLBACK_EMAIL_ID) == dataId);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-                cursor = null;
-            }
-        }
-
+    private int deleteData(long dataId, long rawContactId, boolean markRawContactAsDirty) {
         // Delete the requested data item.
         int dataDeleted = mDb.delete(Tables.DATA, Data._ID + "=" + dataId, null);
         if (markRawContactAsDirty) {
             setRawContactDirty(rawContactId);
-        }
-
-        // Fix-up any super-primary values that are now invalid.
-        if (fixOptimal || fixFallback) {
-            final ContentValues values = new ContentValues();
-            final StringBuilder scoreClause = new StringBuilder();
-
-            final String SCORE = "score";
-
-            // Build scoring clause that will first pick data items under the
-            // same aggregate that have identical values, otherwise fall back to
-            // normal primary scoring from the member contacts.
-            scoreClause.append("(CASE WHEN ");
-            if (mimeId == mimePhone) {
-                scoreClause.append(Phone.NUMBER);
-            } else if (mimeId == mimeEmail) {
-                scoreClause.append(Email.DATA);
-            }
-            scoreClause.append("=");
-            DatabaseUtils.appendEscapedSQLString(scoreClause, dataRaw);
-            scoreClause.append(" THEN 2 ELSE " + Data.IS_PRIMARY + " END) AS " + SCORE);
-
-            final String[] PROJ_PRIMARY = new String[] {
-                    DataColumns.CONCRETE_ID,
-                    RawContacts.IS_RESTRICTED,
-                    scoreClause.toString(),
-            };
-
-            final int COL_DATA_ID = 0;
-            final int COL_IS_RESTRICTED = 1;
-            final int COL_SCORE = 2;
-
-            cursor = mDb.query(Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS, PROJ_PRIMARY,
-                    ContactsColumns.CONCRETE_ID + "=" + contactId + " AND " + DataColumns.MIMETYPE_ID
-                            + "=" + mimeId, null, null, null, SCORE);
-
-            if (fixOptimal) {
-                String colId = null;
-                String colIsRestricted = null;
-                if (mimeId == mimePhone) {
-                    colId = ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID;
-                    colIsRestricted = ContactsColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED;
-                } else if (mimeId == mimeEmail) {
-                    colId = ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID;
-                    colIsRestricted = ContactsColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED;
-                }
-
-                // Start by replacing with null, since fixOptimal told us that
-                // the previous aggregate values are bad.
-                values.putNull(colId);
-                values.putNull(colIsRestricted);
-
-                // When finding a new optimal primary, we only care about the
-                // highest scoring value, regardless of source.
-                if (cursor.moveToFirst()) {
-                    final long newOptimal = cursor.getLong(COL_DATA_ID);
-                    final long newIsRestricted = cursor.getLong(COL_IS_RESTRICTED);
-
-                    if (newOptimal != 0) {
-                        values.put(colId, newOptimal);
-                    }
-                    if (newIsRestricted != 0) {
-                        values.put(colIsRestricted, newIsRestricted);
-                    }
-                }
-            }
-
-            if (fixFallback) {
-                String colId = null;
-                if (mimeId == mimePhone) {
-                    colId = ContactsColumns.FALLBACK_PRIMARY_PHONE_ID;
-                } else if (mimeId == mimeEmail) {
-                    colId = ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID;
-                }
-
-                // Start by replacing with null, since fixFallback told us that
-                // the previous aggregate values are bad.
-                values.putNull(colId);
-
-                // The best fallback value is the highest scoring data item that
-                // hasn't been restricted.
-                cursor.moveToPosition(-1);
-                while (cursor.moveToNext()) {
-                    final boolean isRestricted = (cursor.getInt(COL_IS_RESTRICTED) == 1);
-                    if (!isRestricted) {
-                        values.put(colId, cursor.getLong(COL_DATA_ID));
-                        break;
-                    }
-                }
-            }
-
-            // Push through any contact updates we have
-            if (values.size() > 0) {
-                mDb.update(Tables.CONTACTS, values, ContactsColumns.CONCRETE_ID + "=" + contactId,
-                        null);
-            }
         }
 
         return dataDeleted;
@@ -1786,7 +1621,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                return deleteData(dataId, shouldMarkRawContactAsDirty(uri));
+                return deleteData(Data._ID + "=" + dataId, null, shouldMarkRawContactAsDirty(uri));
             }
 
             case GROUPS_ID: {
@@ -3009,57 +2844,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mSetSuperPrimaryStatement.bindLong(2, dataId);
         mSetSuperPrimaryStatement.bindLong(3, dataId);
         mSetSuperPrimaryStatement.execute();
-
-        // Find the parent aggregate and package for this new primary
-        long aggId = -1;
-        boolean isRestricted = false;
-        String mimeType = null;
-
-        Cursor cursor = null;
-        try {
-            cursor = mDb.query(DataRawContactsQuery.TABLE, DataRawContactsQuery.PROJECTION,
-                    DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
-            if (cursor.moveToFirst()) {
-                aggId = cursor.getLong(DataRawContactsQuery.CONTACT_ID);
-                isRestricted = (cursor.getInt(DataRawContactsQuery.IS_RESTRICTED) == 1);
-                mimeType = cursor.getString(DataRawContactsQuery.MIMETYPE);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        // Bypass aggregate update if no parent found, or if we don't keep track
-        // of super-primary for this mimetype.
-        if (aggId == -1) {
-            return;
-        }
-
-        boolean isPhone = CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mimeType);
-        boolean isEmail = CommonDataKinds.Email.CONTENT_ITEM_TYPE.equals(mimeType);
-
-        // Record this value as the new primary for the parent aggregate
-        final ContentValues values = new ContentValues();
-        if (isPhone) {
-            values.put(ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID, dataId);
-            values.put(ContactsColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED, isRestricted);
-        } else if (isEmail) {
-            values.put(ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID, dataId);
-            values.put(ContactsColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED, isRestricted);
-        }
-
-        // If this data is unrestricted, then also set as fallback
-        if (!isRestricted && isPhone) {
-            values.put(ContactsColumns.FALLBACK_PRIMARY_PHONE_ID, dataId);
-        } else if (!isRestricted && isEmail) {
-            values.put(ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID, dataId);
-        }
-
-        // Push update into contacts table, if needed
-        if (values.size() > 0) {
-            mDb.update(Tables.CONTACTS, values, Contacts._ID + "=" + aggId, null);
-        }
     }
 
     public String getRawContactsByFilterAsNestedQuery(String filterParam) {

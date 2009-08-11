@@ -59,7 +59,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 64;
+    private static final int DATABASE_VERSION = 65;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -206,10 +206,6 @@ import java.util.HashMap;
         public static final String BELONGS_TO_GROUP = DataColumns.CONCRETE_GROUP_ID + "="
                 + GroupsColumns.CONCRETE_ID;
 
-        public static final String HAS_PRIMARY_PHONE = "("
-                + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID + " IS NOT NULL OR "
-                + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID + " IS NOT NULL)";
-
         // TODO: add in check against package_visible
         public static final String IN_VISIBLE_GROUP = "SELECT MIN(COUNT(" + DataColumns.CONCRETE_ID
                 + "),1) FROM " + Tables.DATA_JOIN_RAW_CONTACTS_GROUPS + " WHERE "
@@ -223,16 +219,6 @@ import java.util.HashMap;
     }
 
     public interface ContactsColumns {
-        public static final String OPTIMAL_PRIMARY_PHONE_ID = "optimal_phone_id";
-        public static final String OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED =
-                "optimal_phone_is_restricted";
-        public static final String FALLBACK_PRIMARY_PHONE_ID = "fallback_phone_id";
-
-        public static final String OPTIMAL_PRIMARY_EMAIL_ID = "optimal_email_id";
-        public static final String OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED =
-                "optimal_email_is_restricted";
-        public static final String FALLBACK_PRIMARY_EMAIL_ID = "fallback_email_id";
-
         /**
          * This flag is set for a contact if it has only one constituent raw contact and
          * it is restricted.
@@ -407,9 +393,6 @@ import java.util.HashMap;
 
     private static final int COL_NICKNAME_LOOKUP_CLUSTER = 0;
 
-    /** A table alias for the join with the default phone */
-    private static final String DEFAULT_PHONE = "default_phone";
-
     /** In-memory cache of previously found mimetype mappings */
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
@@ -543,12 +526,7 @@ import java.util.HashMap;
                 Contacts.LAST_TIME_CONTACTED + " INTEGER," +
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1," +
-                ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
-                ContactsColumns.OPTIMAL_PRIMARY_PHONE_IS_RESTRICTED + " INTEGER DEFAULT 0," +
-                ContactsColumns.FALLBACK_PRIMARY_PHONE_ID + " INTEGER REFERENCES data(_id)," +
-                ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
-                ContactsColumns.OPTIMAL_PRIMARY_EMAIL_IS_RESTRICTED + " INTEGER DEFAULT 0," +
-                ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID + " INTEGER REFERENCES data(_id)," +
+                Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
@@ -946,6 +924,7 @@ import java.util.HashMap;
                 + ContactsColumns.CONCRETE_DISPLAY_NAME
                         + " AS " + Contacts.DISPLAY_NAME + ", "
                 + Contacts.IN_VISIBLE_GROUP + ", "
+                + Contacts.HAS_PHONE_NUMBER + ", "
                 + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
                         + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
                 + Contacts.PHOTO_ID + ", "
@@ -956,27 +935,14 @@ import java.util.HashMap;
                 + ContactsColumns.CONCRETE_TIMES_CONTACTED
                         + " AS " + Contacts.TIMES_CONTACTED;
 
-        String defaultPhoneColumns =
-                DEFAULT_PHONE + "." + Phone.NUMBER + " AS " + Contacts.PRIMARY_PHONE_NUMBER + ", "
-                + DEFAULT_PHONE + "." + Phone.LABEL + " AS " + Contacts.PRIMARY_PHONE_LABEL + ", "
-                + DEFAULT_PHONE + "." + Phone.TYPE + " AS " + Contacts.PRIMARY_PHONE_TYPE;
-
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + contactsColumns + ", "
-                + ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID
-                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
-                + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID
-                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + contactsColumns
                 + " FROM " + Tables.CONTACTS;
 
         String restrictedContactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + contactsColumns + ", "
-                + ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID
-                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
-                + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID
-                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + contactsColumns
                 + " FROM " + Tables.CONTACTS
                 + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
 
@@ -986,34 +952,18 @@ import java.util.HashMap;
         String contactSummarySelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
                 + RawContactsColumns.CONCRETE_ID + " AS raw_contact_id,"
-                + contactsColumns + ", "
-                + defaultPhoneColumns + ", "
-                + ContactsColumns.OPTIMAL_PRIMARY_EMAIL_ID
-                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
-                + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID
-                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + contactsColumns
                 + " FROM " + Tables.CONTACTS
                 + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
-                        + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.DATA + " " + DEFAULT_PHONE + " ON ("
-                        + ContactsColumns.OPTIMAL_PRIMARY_PHONE_ID
-                        + " = " + DEFAULT_PHONE + "." + Data._ID + ")";
+                        + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")";
 
         String restrictedContactSummarySelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
                 + RawContactsColumns.CONCRETE_ID + " AS raw_contact_id,"
-                + contactsColumns + ", "
-                + defaultPhoneColumns + ", "
-                + ContactsColumns.FALLBACK_PRIMARY_EMAIL_ID
-                        + " AS " + Contacts.PRIMARY_EMAIL_ID + ", "
-                + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID
-                        + " AS " + Contacts.PRIMARY_PHONE_ID
+                + contactsColumns
                 + " FROM " + Tables.CONTACTS
                 + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
                         + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.DATA + " " + DEFAULT_PHONE + " ON ("
-                        + ContactsColumns.FALLBACK_PRIMARY_PHONE_ID
-                        + " = " + DEFAULT_PHONE + "." + Data._ID + ")"
                 + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
 
         db.execSQL("CREATE VIEW " + Views.CONTACT_SUMMARY_ALL

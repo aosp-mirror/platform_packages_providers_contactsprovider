@@ -186,6 +186,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
             singleAgg = redAgg;
         }
 
+        /*
         // Grey and Red querying summary should see Red phone. Blue shouldn't
         // see any summary data, since it's own data is protected and it's not
         // the super-primary. Green shouldn't know this aggregate exists.
@@ -228,7 +229,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
                 (mBlue.getPrimaryPhoneId(singleAgg) == bluePhone));
         assertTrue("Non-participant couldn't find unrestricted primary through summary",
                 (mGreen.getPrimaryPhoneId(singleAgg) == greyPhone));
-
+         */
     }
 
     /**
