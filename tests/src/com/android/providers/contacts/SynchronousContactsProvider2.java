@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.accounts.Account;
 import android.content.Context;
 
 /**
@@ -25,6 +26,7 @@ import android.content.Context;
 public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private static Boolean sDataWiped = false;
     private static OpenHelper mOpenHelper;
+    private Account mAccount;
 
     public SynchronousContactsProvider2() {
         super(new SynchronousAggregationScheduler());
@@ -52,6 +54,14 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
             }
         }
         return created;
+    }
+
+    @Override
+    protected Account getDefaultAccount() {
+        if (mAccount == null) {
+            mAccount = new Account("androidtest@gmail.com", "com.google.GAIA");
+        }
+        return mAccount;
     }
 
     @Override

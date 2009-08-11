@@ -31,6 +31,7 @@ import com.android.providers.contacts.OpenHelper.Tables;
 import com.google.android.collect.Lists;
 
 import android.accounts.Account;
+import android.accounts.AccountManager;
 import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
@@ -44,7 +45,6 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
@@ -52,7 +52,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
-import android.os.Binder;
 import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -74,7 +73,6 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
@@ -87,6 +85,7 @@ import java.util.HashMap;
  * is defined in {@link ContactsContract}.
  */
 public class ContactsProvider2 extends ContentProvider {
+
     // TODO: clean up debug tag and rename this class
     private static final String TAG = "ContactsProvider ~~~~";
 
@@ -304,6 +303,9 @@ public class ContactsProvider2 extends ContentProvider {
                 DISPLAY_NAME_PRIORITY_EMAIL);
     }
 
+    public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
+    public static final String FEATURE_APPS_FOR_DOMAIN = "google_or_dasher";
+
     /** Contains just the contacts columns
      * @deprecated*/
     @Deprecated
@@ -375,8 +377,6 @@ public class ContactsProvider2 extends ContentProvider {
     private SQLiteStatement mContactDisplayNameUpdate;
     /** Precompiled sql statement for marking a raw contact as dirty */
     private SQLiteStatement mRawContactDirtyUpdate;
-    /** Precompiled sql statement for marking a group as dirty */
-    private SQLiteStatement mGroupDirtyUpdate;
 
     static {
         // Contacts URI matching table
@@ -1125,9 +1125,6 @@ public class ContactsProvider2 extends ContentProvider {
 
         mRawContactDirtyUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.DIRTY + "=1 WHERE " + RawContacts._ID + "=?");
-
-        mGroupDirtyUpdate = db.compileStatement("UPDATE " + Tables.GROUPS + " SET "
-                + Groups.DIRTY + "=1 WHERE " + Groups._ID + "=?");
 
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
@@ -2615,16 +2612,6 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /**
-     * Find any exceptions that have been granted to the
-     * {@link Binder#getCallingUid()}, and add a limiting clause to the given
-     * {@link SQLiteQueryBuilder} to hide restricted data.
-     */
-    void applyDataRestrictionExceptions(SQLiteQueryBuilder qb) {
-        String restrictions = getContactsRestrictions();
-        qb.appendWhere(restrictions);
-    }
-
-    /**
      * An implementation of EntityIterator that joins the contacts and data tables
      * and consumes all the data rows for a contact in order to build the Entity for a contact.
      */
@@ -3138,23 +3125,6 @@ public class ContactsProvider2 extends ContentProvider {
         }
     }
 
-    private String buildContactLookupWhereClause(String filterParam) {
-        StringBuilder filter = new StringBuilder();
-        filter.append(Tables.CONTACTS);
-        filter.append(".");
-        filter.append(Contacts._ID);
-        filter.append(" IN (SELECT ");
-        filter.append(RawContacts.CONTACT_ID);
-        filter.append(" FROM ");
-        filter.append(Tables.RAW_CONTACTS);
-        filter.append(" WHERE ");
-        filter.append(RawContacts._ID);
-        filter.append(" IN ");
-        appendRawContactsByFilterAsNestedQuery(filter, filterParam, null);
-        filter.append(")");
-        return filter.toString();
-    }
-
     public String getRawContactsByFilterAsNestedQuery(String filterParam) {
         StringBuilder sb = new StringBuilder();
         appendRawContactsByFilterAsNestedQuery(sb, filterParam, null);
@@ -3185,5 +3155,21 @@ public class ContactsProvider2 extends ContentProvider {
             System.arraycopy(selectionArgs, 0, newSelectionArgs, 1, selectionArgs.length);
             return newSelectionArgs;
         }
+    }
+
+    protected Account getDefaultAccount() {
+        AccountManager accountManager = AccountManager.get(getContext());
+        try {
+            Account[] accounts = accountManager.blockingGetAccountsWithTypeAndFeatures(
+                    DEFAULT_ACCOUNT_TYPE, new String[] {FEATURE_APPS_FOR_DOMAIN});
+            if (accounts != null && accounts.length > 0) {
+                return accounts[0];
+            }
+        } catch (Throwable e) {
+            throw new RuntimeException("Cannot determine the default account "
+                    + "for contacts compatibility", e);
+        }
+        throw new RuntimeException("Cannot determine the default account "
+                + "for contacts compatibility");
     }
 }

@@ -59,7 +59,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 63;
+    private static final int DATABASE_VERSION = 64;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -68,7 +68,6 @@ import java.util.HashMap;
     }
 
     public interface Tables {
-        public static final String ACCOUNTS = "accounts";
         public static final String CONTACTS = "contacts";
         public static final String RAW_CONTACTS = "raw_contacts";
         public static final String PACKAGES = "packages";
@@ -1034,7 +1033,6 @@ import java.util.HashMap;
         Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
                 + ", data will be lost!");
 
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.ACCOUNTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGES + ";");
