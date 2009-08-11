@@ -373,6 +373,10 @@ public class ContactsProvider2 extends ContentProvider {
     private SQLiteStatement mLastTimeContactedUpdate;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mContactDisplayNameUpdate;
+    /** Precompiled sql statement for marking a raw contact as dirty */
+    private SQLiteStatement mRawContactDirtyUpdate;
+    /** Precompiled sql statement for marking a group as dirty */
+    private SQLiteStatement mGroupDirtyUpdate;
 
     static {
         // Contacts URI matching table
@@ -1083,6 +1087,8 @@ public class ContactsProvider2 extends ContentProvider {
 
     private ContentValues mValues = new ContentValues();
 
+    private boolean mImportMode;
+
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
     }
@@ -1116,6 +1122,12 @@ public class ContactsProvider2 extends ContentProvider {
 
         mContactDisplayNameUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContactsColumns.DISPLAY_NAME + "=? WHERE " + RawContacts._ID + "=?");
+
+        mRawContactDirtyUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
+                + RawContacts.DIRTY + "=1 WHERE " + RawContacts._ID + "=?");
+
+        mGroupDirtyUpdate = db.compileStatement("UPDATE " + Tables.GROUPS + " SET "
+                + Groups.DIRTY + "=1 WHERE " + Groups._ID + "=?");
 
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
@@ -1174,6 +1186,7 @@ public class ContactsProvider2 extends ContentProvider {
     /* Visible for testing */
     /* package */ boolean importLegacyContacts(LegacyContactImporter importer) {
         mContactAggregator.setEnabled(false);
+        mImportMode = true;
         try {
             importer.importContacts();
             mContactAggregator.setEnabled(true);
@@ -1182,6 +1195,8 @@ public class ContactsProvider2 extends ContentProvider {
         } catch (Throwable e) {
            Log.e(TAG, "Legacy contact import failed", e);
            return false;
+        } finally {
+            mImportMode = false;
         }
     }
 
@@ -1247,18 +1262,18 @@ public class ContactsProvider2 extends ContentProvider {
 
             case RAW_CONTACTS_DATA: {
                 values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(1));
-                id = insertData(values);
+                id = insertData(values, shouldMarkRawContactAsDirty(uri));
                 break;
             }
 
             case DATA: {
-                id = insertData(values);
+                id = insertData(values, shouldMarkRawContactAsDirty(uri));
                 break;
             }
 
             case GROUPS: {
                 final Account account = readAccountFromQueryParams(uri);
-                id = insertGroup(values, account);
+                id = insertGroup(values, account, shouldMarkGroupAsDirty(uri));
                 break;
             }
 
@@ -1351,7 +1366,7 @@ public class ContactsProvider2 extends ContentProvider {
      * @param values the values for the new row
      * @return the row ID of the newly created row
      */
-    private long insertData(ContentValues values) {
+    private long insertData(ContentValues values, boolean markRawContactAsDirty) {
         int aggregationMode = RawContacts.AGGREGATION_MODE_DISABLED;
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
@@ -1379,9 +1394,13 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
             mValues.remove(Data.MIMETYPE);
 
+            // TODO create GroupMembershipRowHandler and move this code there
             resolveGroupSourceIdInValues(rawContactId, mimeType, db, mValues, true /* isInsert */);
 
             id = getDataRowHandler(mimeType).insert(db, rawContactId, mValues);
+            if (markRawContactAsDirty) {
+                setRawContactDirty(rawContactId);
+            }
 
             aggregationMode = mContactAggregator.markContactForAggregation(rawContactId);
 
@@ -1469,7 +1488,8 @@ public class ContactsProvider2 extends ContentProvider {
     /**
      * Delete data row by row so that fixing of primaries etc work correctly.
      */
-    private int deleteData(String selection, String[] selectionArgs) {
+    private int deleteData(String selection, String[] selectionArgs,
+            boolean markRawContactAsDirty) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         int count = 0;
         db.beginTransaction();
@@ -1481,7 +1501,7 @@ public class ContactsProvider2 extends ContentProvider {
             try {
                 while(c.moveToNext()) {
                     long dataId = c.getLong(DataIdQuery._ID);
-                    count += deleteData(dataId);
+                    count += deleteData(dataId, markRawContactAsDirty);
                 }
             } finally {
                 c.close();
@@ -1494,6 +1514,7 @@ public class ContactsProvider2 extends ContentProvider {
         return count;
     }
 
+    @Deprecated
     public int deleteData(long dataId, String[] allowedMimeTypes) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         Cursor c = db.query(DataQuery.TABLE, DataQuery.COLUMNS,
@@ -1528,7 +1549,9 @@ public class ContactsProvider2 extends ContentProvider {
      * Delete the given {@link Data} row, fixing up any {@link Contacts}
      * primaries that reference it.
      */
-    private int deleteData(long dataId) {
+    private int deleteData(long dataId, boolean markRawContactAsDirty) {
+
+        // TODO redo this method with the use of DataRowHandlers
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         final long mimePhone = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
@@ -1536,28 +1559,33 @@ public class ContactsProvider2 extends ContentProvider {
 
         // Check to see if the data about to be deleted was a super-primary on
         // the parent aggregate, and set flags to fix-up once deleted.
-        long aggId = -1;
+        long contactId = -1;
+        long rawContactId = -1;
         long mimeId = -1;
         String dataRaw = null;
         boolean fixOptimal = false;
         boolean fixFallback = false;
 
+        // TODO check security
         Cursor cursor = null;
         try {
             cursor = db.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
                     DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
-            if (cursor.moveToFirst()) {
-                aggId = cursor.getLong(DataContactsQuery.CONTACT_ID);
-                mimeId = cursor.getLong(DataContactsQuery.MIMETYPE_ID);
-                if (mimeId == mimePhone) {
-                    dataRaw = cursor.getString(DataContactsQuery.PHONE_NUMBER);
-                    fixOptimal = (cursor.getLong(DataContactsQuery.OPTIMAL_PHONE_ID) == dataId);
-                    fixFallback = (cursor.getLong(DataContactsQuery.FALLBACK_PHONE_ID) == dataId);
-                } else if (mimeId == mimeEmail) {
-                    dataRaw = cursor.getString(DataContactsQuery.EMAIL_DATA);
-                    fixOptimal = (cursor.getLong(DataContactsQuery.OPTIMAL_EMAIL_ID) == dataId);
-                    fixFallback = (cursor.getLong(DataContactsQuery.FALLBACK_EMAIL_ID) == dataId);
-                }
+            if (!cursor.moveToFirst()) {
+                return 0;
+            }
+
+            contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
+            rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
+            mimeId = cursor.getLong(DataContactsQuery.MIMETYPE_ID);
+            if (mimeId == mimePhone) {
+                dataRaw = cursor.getString(DataContactsQuery.PHONE_NUMBER);
+                fixOptimal = (cursor.getLong(DataContactsQuery.OPTIMAL_PHONE_ID) == dataId);
+                fixFallback = (cursor.getLong(DataContactsQuery.FALLBACK_PHONE_ID) == dataId);
+            } else if (mimeId == mimeEmail) {
+                dataRaw = cursor.getString(DataContactsQuery.EMAIL_DATA);
+                fixOptimal = (cursor.getLong(DataContactsQuery.OPTIMAL_EMAIL_ID) == dataId);
+                fixFallback = (cursor.getLong(DataContactsQuery.FALLBACK_EMAIL_ID) == dataId);
             }
         } finally {
             if (cursor != null) {
@@ -1568,6 +1596,9 @@ public class ContactsProvider2 extends ContentProvider {
 
         // Delete the requested data item.
         int dataDeleted = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
+        if (markRawContactAsDirty) {
+            setRawContactDirty(rawContactId);
+        }
 
         // Fix-up any super-primary values that are now invalid.
         if (fixOptimal || fixFallback) {
@@ -1600,7 +1631,7 @@ public class ContactsProvider2 extends ContentProvider {
             final int COL_SCORE = 2;
 
             cursor = db.query(Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS, PROJ_PRIMARY,
-                    ContactsColumns.CONCRETE_ID + "=" + aggId + " AND " + DataColumns.MIMETYPE_ID
+                    ContactsColumns.CONCRETE_ID + "=" + contactId + " AND " + DataColumns.MIMETYPE_ID
                             + "=" + mimeId, null, null, null, SCORE);
 
             if (fixOptimal) {
@@ -1660,7 +1691,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             // Push through any contact updates we have
             if (values.size() > 0) {
-                db.update(Tables.CONTACTS, values, ContactsColumns.CONCRETE_ID + "=" + aggId,
+                db.update(Tables.CONTACTS, values, ContactsColumns.CONCRETE_ID + "=" + contactId,
                         null);
             }
         }
@@ -1671,7 +1702,7 @@ public class ContactsProvider2 extends ContentProvider {
     /**
      * Inserts an item in the groups table
      */
-    private long insertGroup(ContentValues values, Account account) {
+    private long insertGroup(ContentValues values, Account account, boolean markAsDirty) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         ContentValues overriddenValues = new ContentValues(values);
@@ -1685,6 +1716,10 @@ public class ContactsProvider2 extends ContentProvider {
             overriddenValues.put(GroupsColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
         }
         overriddenValues.remove(Groups.RES_PACKAGE);
+
+        if (markAsDirty) {
+            overriddenValues.put(Groups.DIRTY, 1);
+        }
 
         return db.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
     }
@@ -1779,12 +1814,12 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case DATA: {
-                return deleteData(selection, selectionArgs);
+                return deleteData(selection, selectionArgs, shouldMarkRawContactAsDirty(uri));
             }
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                return deleteData(dataId);
+                return deleteData(dataId, shouldMarkRawContactAsDirty(uri));
             }
 
             case GROUPS_ID: {
@@ -1803,10 +1838,11 @@ public class ContactsProvider2 extends ContentProvider {
     private int deleteGroup(Uri uri) {
         final String flag = uri.getQueryParameter(Groups.DELETE_PERMANENTLY);
         final boolean permanently = flag != null && "true".equals(flag.toLowerCase());
-        return deleteGroup(ContentUris.parseId(uri), permanently);
+        boolean markAsDirty = shouldMarkGroupAsDirty(uri);
+        return deleteGroup(ContentUris.parseId(uri), markAsDirty, permanently);
     }
 
-    private int deleteGroup(long groupId, boolean permanently) {
+    private int deleteGroup(long groupId, boolean markAsDirty, boolean permanently) {
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final long groupMembershipMimetypeId = mOpenHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
@@ -1820,7 +1856,10 @@ public class ContactsProvider2 extends ContentProvider {
             } else {
                 mValues.clear();
                 mValues.put(Groups.DELETED, 1);
-                return updateGroup(groupId, mValues, null, null);
+                if (markAsDirty) {
+                    mValues.put(Groups.DIRTY, 1);
+                }
+                return db.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
             }
         } finally {
             mOpenHelper.updateAllVisible();
@@ -1847,6 +1886,7 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.put(RawContacts.DELETED, 1);
             mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
             mValues.putNull(RawContacts.CONTACT_ID);
+            mValues.put(RawContacts.DIRTY, 1);
             return updateRawContact(rawContactId, mValues, null, null);
         }
     }
@@ -1883,16 +1923,20 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case DATA: {
-                count = updateData(uri, values, selection, selectionArgs);
+                count = updateData(uri, values, selection, selectionArgs,
+                        shouldMarkRawContactAsDirty(uri));
                 break;
             }
 
             case DATA_ID: {
-                count = updateData(uri, values, selection, selectionArgs);
+                count = updateData(uri, values, selection, selectionArgs,
+                        shouldMarkRawContactAsDirty(uri));
                 break;
             }
 
             case RAW_CONTACTS: {
+
+                // TODO: security checks
                 count = db.update(Tables.RAW_CONTACTS, values, selection, selectionArgs);
                 break;
             }
@@ -1904,15 +1948,17 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case GROUPS: {
-                count = db.update(Tables.GROUPS, values, selection, selectionArgs);
-                mOpenHelper.updateAllVisible();
+                count = updateGroups(db, values, selection, selectionArgs,
+                        shouldMarkGroupAsDirty(uri));
                 break;
             }
 
             case GROUPS_ID: {
                 long groupId = ContentUris.parseId(uri);
-                count = updateGroup(groupId, values, selection, selectionArgs);
-
+                String selectionWithId = (Groups._ID + "=" + groupId + " ")
+                        + (selection == null ? "" : " AND " + selection);
+                count = updateGroups(db, values, selectionWithId, selectionArgs,
+                        shouldMarkGroupAsDirty(uri));
                 break;
             }
 
@@ -1931,13 +1977,20 @@ public class ContactsProvider2 extends ContentProvider {
         return count;
     }
 
-    private int updateGroup(long groupId, ContentValues values,
-            String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        int count;
-        String selectionWithId = (Groups._ID + "=" + groupId + " ")
-                + (selection == null ? "" : " AND " + selection);
-        count = db.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
+    private int updateGroups(SQLiteDatabase db, ContentValues values, String selectionWithId,
+            String[] selectionArgs, boolean markAsDirty) {
+
+        ContentValues updatedValues;
+        if (markAsDirty) {
+            updatedValues = mValues;
+            updatedValues.clear();
+            updatedValues.putAll(values);
+            updatedValues.put(Groups.DIRTY, 1);
+        } else {
+            updatedValues = values;
+        }
+
+        int count = db.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
 
         // If changing visibility, then update contacts
         if (values.containsKey(Groups.GROUP_VISIBLE)) {
@@ -1948,6 +2001,8 @@ public class ContactsProvider2 extends ContentProvider {
 
     private int updateRawContact(long rawContactId, ContentValues values, String selection,
             String[] selectionArgs) {
+
+        // TODO: security checks
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         String selectionWithId = (RawContacts._ID + " = " + rawContactId + " ")
                 + (selection == null ? "" : " AND " + selection);
@@ -1955,20 +2010,21 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     private int updateData(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
+            String[] selectionArgs, boolean markRawContactAsDirty) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         int count = 0;
         db.beginTransaction();
         try {
             // Note that the query will return data according to the access restrictions,
-            // so we don't need to worry about deleting data we don't have permission to read.
+            // so we don't need to worry about updating data we don't have permission to read.
             Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
             try {
                 while(c.moveToNext()) {
                     final long dataId = c.getLong(DataIdQuery._ID);
                     final long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
                     final String mimetype = c.getString(DataIdQuery.MIMETYPE);
-                    count += updateData(dataId, rawContactId, mimetype, values);
+                    count += updateData(dataId, rawContactId, mimetype, values,
+                            markRawContactAsDirty);
                 }
             } finally {
                 c.close();
@@ -1981,7 +2037,8 @@ public class ContactsProvider2 extends ContentProvider {
         return count;
     }
 
-    private int updateData(long dataId, long rawContactId, String mimeType, ContentValues values) {
+    private int updateData(long dataId, long rawContactId, String mimeType, ContentValues values,
+            boolean markRawContactAsDirty) {
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         mValues.clear();
@@ -2026,10 +2083,16 @@ public class ContactsProvider2 extends ContentProvider {
             mValues.remove(Data.IS_PRIMARY);
         }
 
+        // TODO create GroupMembershipRowHandler and move this code there
         resolveGroupSourceIdInValues(rawContactId, mimeType, db, mValues, false /* isInsert */);
 
         if (mValues.size() > 0) {
-            return db.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
+            db.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
+            if (markRawContactAsDirty) {
+                setRawContactDirty(rawContactId);
+            }
+
+            return 1;
         }
         return 0;
     }
@@ -2958,6 +3021,42 @@ public class ContactsProvider2 extends ContentProvider {
         }
         mContactDisplayNameUpdate.bindLong(2, rawContactId);
         mContactDisplayNameUpdate.execute();
+    }
+
+    /**
+     * Checks the {@link Data#MARK_AS_DIRTY} query parameter.
+     *
+     * Returns true if the parameter is missing or is either "true" or "1".
+     */
+    private boolean shouldMarkRawContactAsDirty(Uri uri) {
+        if (mImportMode) {
+            return false;
+        }
+
+        String param = uri.getQueryParameter(Data.MARK_AS_DIRTY);
+        return param == null || (!param.equalsIgnoreCase("false") && !param.equals("0"));
+    }
+
+    /**
+     * Sets the {@link RawContacts#DIRTY} for the specified raw contact.
+     */
+    private void setRawContactDirty(long rawContactId) {
+        mRawContactDirtyUpdate.bindLong(1, rawContactId);
+        mRawContactDirtyUpdate.execute();
+    }
+
+    /**
+     * Checks the {@link Groups#MARK_AS_DIRTY} query parameter.
+     *
+     * Returns true if the parameter is missing or is either "true" or "1".
+     */
+    private boolean shouldMarkGroupAsDirty(Uri uri) {
+        if (mImportMode) {
+            return false;
+        }
+
+        String param = uri.getQueryParameter(Groups.MARK_AS_DIRTY);
+        return param == null || (!param.equalsIgnoreCase("false") && !param.equals("0"));
     }
 
     /*

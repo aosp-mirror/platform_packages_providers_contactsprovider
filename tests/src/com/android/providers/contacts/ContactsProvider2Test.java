@@ -22,7 +22,6 @@ import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
@@ -345,7 +344,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Groups.ACCOUNT_TYPE, "b");
         values.put(Groups.SOURCE_ID, "c");
         values.put(Groups.VERSION, 42);
-        values.put(Groups.DIRTY, 1);
         values.put(Groups.GROUP_VISIBLE, 1);
         values.put(Groups.TITLE, "d");
         values.put(Groups.TITLE_RES, 1234);
@@ -360,6 +358,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri rowUri = mResolver.insert(Groups.CONTENT_URI, values);
 
+        values.put(Groups.DIRTY, 1);
         assertStoredValues(rowUri, values);
     }
 
@@ -708,18 +707,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null));
     }
 
-    public void testRawContactDirtySetOnChange() {
-        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
-                createRawContact(mAccount));
-        assertDirty(uri, true);
-        clearDirty(uri);
-        assertDirty(uri, false);
+    public void testMarkAsDirtyParameter() {
+        long rawContactId = createRawContact(mAccount);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+
+        Uri uri = insertStructuredName(rawContactId, "John", "Doe");
+        clearDirty(rawContactUri);
+        Uri updateUri = uri.buildUpon().appendQueryParameter(Data.MARK_AS_DIRTY, "0").build();
+
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.FAMILY_NAME, "Dough");
+        mResolver.update(updateUri, values, null, null);
+        assertStoredValues(uri, StructuredName.FAMILY_NAME, "Dough");
+        assertDirty(rawContactUri, false);
     }
 
     public void testRawContactDirtyAndVersion() {
         final long rawContactId = createRawContact(mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId);
-        assertDirty(uri, true);
+        assertDirty(uri, false);
         long version = getVersion(uri);
 
         ContentValues values = new ContentValues();

@@ -561,7 +561,7 @@ import java.util.HashMap;
                 RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 RawContacts.SOURCE_ID + " TEXT," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
-                RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
+                RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.CONTACT_ID + " INTEGER," +
                 RawContacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
@@ -633,17 +633,16 @@ import java.util.HashMap;
                 + " END");
 
         /**
-         * Triggers that set {@link RawContacts#DIRTY} and update {@link RawContacts#VERSION}
-         * when the contact is marked for deletion or any time a data row is inserted, updated
-         * or deleted.
+         * Triggers that update {@link RawContacts#VERSION} when the contact is
+         * marked for deletion or any time a data row is inserted, updated or
+         * deleted.
          */
         db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_marked_deleted "
                 + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
                 + " BEGIN "
                 + "   UPDATE " + Tables.RAW_CONTACTS
                 + "     SET "
-                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1, "
-                +         RawContacts.DIRTY + "=1"
+                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID
                 + "       AND NEW." + RawContacts.DELETED + "!= OLD." + RawContacts.DELETED + ";"
                 + " END");
@@ -654,24 +653,21 @@ import java.util.HashMap;
                 + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
                 + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
                 + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.DIRTY + "=1, "
-                + "         " +	RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
+                + "     SET " +	RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_inserted BEFORE INSERT ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.DIRTY + "=1, "
-                + "         " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
+                + "     SET " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=NEW." + Data.RAW_CONTACT_ID + ";"
                 + " END");
 
         db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.DIRTY + "=1,"
-                + "         " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
+                + "     SET " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
                 + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
                 + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
@@ -725,7 +721,7 @@ import java.util.HashMap;
                 Groups.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 Groups.SOURCE_ID + " TEXT," +
                 Groups.VERSION + " INTEGER NOT NULL DEFAULT 1," +
-                Groups.DIRTY + " INTEGER NOT NULL DEFAULT 1," +
+                Groups.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.TITLE + " TEXT," +
                 Groups.TITLE_RES + " INTEGER," +
                 Groups.NOTES + " TEXT," +
@@ -743,8 +739,7 @@ import java.util.HashMap;
                 + " BEGIN "
                 + "   UPDATE " + Tables.GROUPS
                 + "     SET "
-                +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1, "
-                +         Groups.DIRTY + "=1"
+                +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1"
                 + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
                 + " END");
 

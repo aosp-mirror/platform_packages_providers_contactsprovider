@@ -53,7 +53,7 @@
 53    _id=4
 54    account_name=android.contacts.test.eclair@gmail.com
 55    account_type=com.google.GAIA
-56    dirty=1
+56    dirty=0
 57    group_visible=1
 58    notes=null
 59    res_package=null

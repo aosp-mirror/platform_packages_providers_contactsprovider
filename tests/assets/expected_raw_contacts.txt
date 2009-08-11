@@ -55,7 +55,7 @@
 55    account_name=android.contacts.test.eclair@gmail.com
 56    account_type=com.google.GAIA
 57    deleted=1
-58    dirty=1
+58    dirty=0
 59    sourceid=http://www.google.com/m8/feeds/contacts/android.contacts.test.eclair@gmail.com/base/20d08a710c3df43d
 60    version=1
 61    sync1=null
@@ -63,3 +63,4 @@
 63    sync3=null
 64    sync4=null
 65 }
+

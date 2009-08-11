@@ -144,6 +144,18 @@ public class GroupsTest extends BaseContactsProvider2Test {
         assertDirty(uri, false);
     }
 
+    public void testMarkAsDirtyParameter() {
+        Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
+                createGroup(mAccount, "gsid1", "title1"));
+        clearDirty(uri);
+        Uri updateUri = uri.buildUpon().appendQueryParameter(Groups.MARK_AS_DIRTY, "0").build();
+
+        ContentValues values = new ContentValues();
+        values.put(Groups.NOTES, "New notes");
+        mResolver.update(updateUri, values, null, null);
+        assertDirty(uri, false);
+    }
+
     public void testGroupDirtyClearedWhenSetExplicitly() {
         Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
                 createGroup(mAccount, "gsid1", "title1"));
