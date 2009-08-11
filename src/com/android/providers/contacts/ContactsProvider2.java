@@ -33,15 +33,11 @@ import com.google.android.collect.Lists;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.SearchManager;
-import android.content.ContentProvider;
-import android.content.ContentProviderOperation;
-import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
 import android.content.EntityIterator;
-import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
@@ -84,7 +80,7 @@ import java.util.HashMap;
  * Contacts content provider. The contract between this provider and applications
  * is defined in {@link ContactsContract}.
  */
-public class ContactsProvider2 extends ContentProvider {
+public class ContactsProvider2 extends SQLiteContentProvider {
 
     // TODO: clean up debug tag and rename this class
     private static final String TAG = "ContactsProvider ~~~~";
@@ -1089,6 +1085,8 @@ public class ContactsProvider2 extends ContentProvider {
 
     private boolean mImportMode;
 
+    private boolean mScheduleAggregation;
+
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
     }
@@ -1102,9 +1100,10 @@ public class ContactsProvider2 extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        final Context context = getContext();
+        super.onCreate();
 
-        mOpenHelper = getOpenHelper(context);
+        final Context context = getContext();
+        mOpenHelper = (OpenHelper)getOpenHelper();
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this, mGlobalSearchSupport);
         mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
@@ -1155,6 +1154,7 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     /* Visible for testing */
+    @Override
     protected OpenHelper getOpenHelper(final Context context) {
         return OpenHelper.getInstance(context);
     }
@@ -1213,18 +1213,13 @@ public class ContactsProvider2 extends ContentProvider {
         mOpenHelper.wipeData();
     }
 
-    /**
-     * Called when a change has been made.
-     *
-     * @param uri the uri that the change was made to
-     */
-    private void onChange(Uri uri) {
-        getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null);
-    }
-
     @Override
-    public boolean isTemporary() {
-        return false;
+    protected void onTransactionComplete() {
+        if (mScheduleAggregation) {
+            mScheduleAggregation = false;
+            mContactAggregator.schedule();
+        }
+        super.onTransactionComplete();
     }
 
     private DataRowHandler getDataRowHandler(final String mimeType) {
@@ -1237,13 +1232,13 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     @Override
-    public Uri insert(Uri uri, ContentValues values) {
+    protected Uri insertInTransaction(Uri uri, ContentValues values) {
         final int match = sUriMatcher.match(uri);
         long id = 0;
 
         switch (match) {
             case SYNCSTATE:
-                id = mOpenHelper.getSyncState().insert(mOpenHelper.getWritableDatabase(), values);
+                id = mOpenHelper.getSyncState().insert(mDb, values);
                 break;
 
             case CONTACTS: {
@@ -1287,9 +1282,7 @@ public class ContactsProvider2 extends ContentProvider {
             return null;
         }
 
-        final Uri result = ContentUris.withAppendedId(uri, id);
-        onChange(result);
-        return result;
+        return ContentUris.withAppendedId(uri, id);
     }
 
     /**
@@ -1324,7 +1317,7 @@ public class ContactsProvider2 extends ContentProvider {
      * @return the row ID of the newly created row
      */
     private long insertContact(ContentValues values) {
-        throw new UnsupportedOperationException("Aggregates are created automatically");
+        throw new UnsupportedOperationException("Aggregate contacts are created automatically");
     }
 
     /**
@@ -1340,8 +1333,6 @@ public class ContactsProvider2 extends ContentProvider {
          * be processed by the aggregator before it will be returned by the
          * "aggregates" queries.
          */
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-
         ContentValues overriddenValues = new ContentValues(values);
         overriddenValues.putNull(RawContacts.CONTACT_ID);
         if (!resolveAccount(overriddenValues, account)) {
@@ -1354,7 +1345,7 @@ public class ContactsProvider2 extends ContentProvider {
                     RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
-        return db.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);
+        return mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);
     }
 
     /**
@@ -1365,46 +1356,37 @@ public class ContactsProvider2 extends ContentProvider {
      */
     private long insertData(ContentValues values, boolean markRawContactAsDirty) {
         int aggregationMode = RawContacts.AGGREGATION_MODE_DISABLED;
-
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         long id = 0;
-        db.beginTransaction();
-        try {
-            mValues.clear();
-            mValues.putAll(values);
+        mValues.clear();
+        mValues.putAll(values);
 
-            long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
+        long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
 
-            // Replace package with internal mapping
-            final String packageName = mValues.getAsString(Data.RES_PACKAGE);
-            if (packageName != null) {
-                mValues.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
-            }
-            mValues.remove(Data.RES_PACKAGE);
-
-            // Replace mimetype with internal mapping
-            final String mimeType = mValues.getAsString(Data.MIMETYPE);
-            if (TextUtils.isEmpty(mimeType)) {
-                throw new IllegalArgumentException(Data.MIMETYPE + " is required");
-            }
-
-            mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
-            mValues.remove(Data.MIMETYPE);
-
-            // TODO create GroupMembershipRowHandler and move this code there
-            resolveGroupSourceIdInValues(rawContactId, mimeType, db, mValues, true /* isInsert */);
-
-            id = getDataRowHandler(mimeType).insert(db, rawContactId, mValues);
-            if (markRawContactAsDirty) {
-                setRawContactDirty(rawContactId);
-            }
-
-            aggregationMode = mContactAggregator.markContactForAggregation(rawContactId);
-
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
+        // Replace package with internal mapping
+        final String packageName = mValues.getAsString(Data.RES_PACKAGE);
+        if (packageName != null) {
+            mValues.put(DataColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
         }
+        mValues.remove(Data.RES_PACKAGE);
+
+        // Replace mimetype with internal mapping
+        final String mimeType = mValues.getAsString(Data.MIMETYPE);
+        if (TextUtils.isEmpty(mimeType)) {
+            throw new IllegalArgumentException(Data.MIMETYPE + " is required");
+        }
+
+        mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
+        mValues.remove(Data.MIMETYPE);
+
+        // TODO create GroupMembershipRowHandler and move this code there
+        resolveGroupSourceIdInValues(rawContactId, mimeType, mDb, mValues, true /* isInsert */);
+
+        id = getDataRowHandler(mimeType).insert(mDb, rawContactId, mValues);
+        if (markRawContactAsDirty) {
+            setRawContactDirty(rawContactId);
+        }
+
+        aggregationMode = mContactAggregator.markContactForAggregation(mDb, rawContactId);
 
         triggerAggregation(id, aggregationMode);
         return id;
@@ -1413,11 +1395,11 @@ public class ContactsProvider2 extends ContentProvider {
     private void triggerAggregation(long rawContactId, int aggregationMode) {
         switch (aggregationMode) {
             case RawContacts.AGGREGATION_MODE_DEFAULT:
-                mContactAggregator.schedule();
+                mScheduleAggregation = true;
                 break;
 
             case RawContacts.AGGREGATION_MODE_IMMEDITATE:
-                mContactAggregator.aggregateContact(rawContactId);
+                mContactAggregator.aggregateContact(mDb, rawContactId);
                 break;
 
             case RawContacts.AGGREGATION_MODE_DISABLED:
@@ -1487,25 +1469,18 @@ public class ContactsProvider2 extends ContentProvider {
      */
     private int deleteData(String selection, String[] selectionArgs,
             boolean markRawContactAsDirty) {
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         int count = 0;
-        db.beginTransaction();
-        try {
 
-            // Note that the query will return data according to the access restrictions,
-            // so we don't need to worry about deleting data we don't have permission to read.
-            Cursor c = query(Data.CONTENT_URI, DataIdQuery.COLUMNS, selection, selectionArgs, null);
-            try {
-                while(c.moveToNext()) {
-                    long dataId = c.getLong(DataIdQuery._ID);
-                    count += deleteData(dataId, markRawContactAsDirty);
-                }
-            } finally {
-                c.close();
+        // Note that the query will return data according to the access restrictions,
+        // so we don't need to worry about deleting data we don't have permission to read.
+        Cursor c = query(Data.CONTENT_URI, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+        try {
+            while(c.moveToNext()) {
+                long dataId = c.getLong(DataIdQuery._ID);
+                count += deleteData(dataId, markRawContactAsDirty);
             }
-            db.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
+            c.close();
         }
 
         return count;
@@ -1549,7 +1524,6 @@ public class ContactsProvider2 extends ContentProvider {
     private int deleteData(long dataId, boolean markRawContactAsDirty) {
 
         // TODO redo this method with the use of DataRowHandlers
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         final long mimePhone = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
         final long mimeEmail = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
@@ -1566,7 +1540,7 @@ public class ContactsProvider2 extends ContentProvider {
         // TODO check security
         Cursor cursor = null;
         try {
-            cursor = db.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
+            cursor = mDb.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
                     DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
             if (!cursor.moveToFirst()) {
                 return 0;
@@ -1592,7 +1566,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         // Delete the requested data item.
-        int dataDeleted = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
+        int dataDeleted = mDb.delete(Tables.DATA, Data._ID + "=" + dataId, null);
         if (markRawContactAsDirty) {
             setRawContactDirty(rawContactId);
         }
@@ -1627,7 +1601,7 @@ public class ContactsProvider2 extends ContentProvider {
             final int COL_IS_RESTRICTED = 1;
             final int COL_SCORE = 2;
 
-            cursor = db.query(Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS, PROJ_PRIMARY,
+            cursor = mDb.query(Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS, PROJ_PRIMARY,
                     ContactsColumns.CONCRETE_ID + "=" + contactId + " AND " + DataColumns.MIMETYPE_ID
                             + "=" + mimeId, null, null, null, SCORE);
 
@@ -1688,7 +1662,7 @@ public class ContactsProvider2 extends ContentProvider {
 
             // Push through any contact updates we have
             if (values.size() > 0) {
-                db.update(Tables.CONTACTS, values, ContactsColumns.CONCRETE_ID + "=" + contactId,
+                mDb.update(Tables.CONTACTS, values, ContactsColumns.CONCRETE_ID + "=" + contactId,
                         null);
             }
         }
@@ -1700,8 +1674,6 @@ public class ContactsProvider2 extends ContentProvider {
      * Inserts an item in the groups table
      */
     private long insertGroup(ContentValues values, Account account, boolean markAsDirty) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-
         ContentValues overriddenValues = new ContentValues(values);
         if (!resolveAccount(overriddenValues, account)) {
             return -1;
@@ -1718,14 +1690,13 @@ public class ContactsProvider2 extends ContentProvider {
             overriddenValues.put(Groups.DIRTY, 1);
         }
 
-        return db.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
+        return mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
     }
 
     /**
      * Inserts a presence update.
      */
     public long insertPresence(ContentValues values) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final String handle = values.getAsString(Presence.IM_HANDLE);
         final String protocol = values.getAsString(Presence.IM_PROTOCOL);
         if (TextUtils.isEmpty(handle) || TextUtils.isEmpty(protocol)) {
@@ -1763,7 +1734,7 @@ public class ContactsProvider2 extends ContentProvider {
 
         Cursor cursor = null;
         try {
-            cursor = db.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
+            cursor = mDb.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
                     selection.toString(), selectionArgs, null, null, null);
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
@@ -1782,17 +1753,16 @@ public class ContactsProvider2 extends ContentProvider {
         values.put(Presence.RAW_CONTACT_ID, rawContactId);
 
         // Insert the presence update
-        long presenceId = db.replace(Tables.PRESENCE, null, values);
+        long presenceId = mDb.replace(Tables.PRESENCE, null, values);
         return presenceId;
     }
 
     @Override
-    public int delete(Uri uri, String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+    protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
-                return mOpenHelper.getSyncState().delete(db, selection, selectionArgs);
+                return mOpenHelper.getSyncState().delete(mDb, selection, selectionArgs);
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
@@ -1800,10 +1770,10 @@ public class ContactsProvider2 extends ContentProvider {
                 // Remove references to the contact first
                 ContentValues values = new ContentValues();
                 values.putNull(RawContacts.CONTACT_ID);
-                db.update(Tables.RAW_CONTACTS, values,
+                mDb.update(Tables.RAW_CONTACTS, values,
                         RawContacts.CONTACT_ID + "=" + contactId, null);
 
-                return db.delete(Tables.CONTACTS, BaseColumns._ID + "=" + contactId, null);
+                return mDb.delete(Tables.CONTACTS, BaseColumns._ID + "=" + contactId, null);
             }
 
             case RAW_CONTACTS_ID: {
@@ -1824,7 +1794,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case PRESENCE: {
-                return db.delete(Tables.PRESENCE, null, null);
+                return mDb.delete(Tables.PRESENCE, null, null);
             }
 
             default:
@@ -1840,23 +1810,22 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     private int deleteGroup(long groupId, boolean markAsDirty, boolean permanently) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final long groupMembershipMimetypeId = mOpenHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        db.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
+        mDb.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
                 + groupMembershipMimetypeId + " AND " + GroupMembership.GROUP_ROW_ID + "="
                 + groupId, null);
 
         try {
             if (permanently) {
-                return db.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
+                return mDb.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
             } else {
                 mValues.clear();
                 mValues.put(Groups.DELETED, 1);
                 if (markAsDirty) {
                     mValues.put(Groups.DIRTY, 1);
                 }
-                return db.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
+                return mDb.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
             }
         } finally {
             mOpenHelper.updateAllVisible();
@@ -1871,13 +1840,11 @@ public class ContactsProvider2 extends ContentProvider {
     }
 
     public int deleteRawContact(long rawContactId, boolean permanently) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-
         // TODO delete aggregation exceptions
         mOpenHelper.removeContactIfSingleton(rawContactId);
         if (permanently) {
-            db.delete(Tables.PRESENCE, Presence.RAW_CONTACT_ID + "=" + rawContactId, null);
-            return db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
+            mDb.delete(Tables.PRESENCE, Presence.RAW_CONTACT_ID + "=" + rawContactId, null);
+            return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
             mValues.clear();
             mValues.put(RawContacts.DELETED, 1);
@@ -1897,25 +1864,24 @@ public class ContactsProvider2 extends ContentProvider {
         return new Account(name, type);
     }
 
-
     @Override
-    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+    protected int updateInTransaction(Uri uri, ContentValues values, String selection,
+            String[] selectionArgs) {
         int count = 0;
 
         final int match = sUriMatcher.match(uri);
         switch(match) {
             case SYNCSTATE:
-                return mOpenHelper.getSyncState().update(db, values, selection, selectionArgs);
+                return mOpenHelper.getSyncState().update(mDb, values, selection, selectionArgs);
 
             // TODO(emillar): We will want to disallow editing the contacts table at some point.
             case CONTACTS: {
-                count = db.update(Tables.CONTACTS, values, selection, selectionArgs);
+                count = mDb.update(Tables.CONTACTS, values, selection, selectionArgs);
                 break;
             }
 
             case CONTACTS_ID: {
-                count = updateContactData(db, ContentUris.parseId(uri), values);
+                count = updateContactData(ContentUris.parseId(uri), values);
                 break;
             }
 
@@ -1934,7 +1900,7 @@ public class ContactsProvider2 extends ContentProvider {
             case RAW_CONTACTS: {
 
                 // TODO: security checks
-                count = db.update(Tables.RAW_CONTACTS, values, selection, selectionArgs);
+                count = mDb.update(Tables.RAW_CONTACTS, values, selection, selectionArgs);
                 break;
             }
 
@@ -1945,7 +1911,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
 
             case GROUPS: {
-                count = updateGroups(db, values, selection, selectionArgs,
+                count = updateGroups(values, selection, selectionArgs,
                         shouldMarkGroupAsDirty(uri));
                 break;
             }
@@ -1954,13 +1920,13 @@ public class ContactsProvider2 extends ContentProvider {
                 long groupId = ContentUris.parseId(uri);
                 String selectionWithId = (Groups._ID + "=" + groupId + " ")
                         + (selection == null ? "" : " AND " + selection);
-                count = updateGroups(db, values, selectionWithId, selectionArgs,
+                count = updateGroups(values, selectionWithId, selectionArgs,
                         shouldMarkGroupAsDirty(uri));
                 break;
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                count = updateAggregationException(db, values);
+                count = updateAggregationException(mDb, values);
                 break;
             }
 
@@ -1968,13 +1934,10 @@ public class ContactsProvider2 extends ContentProvider {
                 return mLegacyApiSupport.update(uri, values, selection, selectionArgs);
         }
 
-        if (count > 0) {
-            getContext().getContentResolver().notifyChange(uri, null);
-        }
         return count;
     }
 
-    private int updateGroups(SQLiteDatabase db, ContentValues values, String selectionWithId,
+    private int updateGroups(ContentValues values, String selectionWithId,
             String[] selectionArgs, boolean markAsDirty) {
 
         ContentValues updatedValues;
@@ -1987,7 +1950,7 @@ public class ContactsProvider2 extends ContentProvider {
             updatedValues = values;
         }
 
-        int count = db.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
+        int count = mDb.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
 
         // If changing visibility, then update contacts
         if (values.containsKey(Groups.GROUP_VISIBLE)) {
@@ -2000,35 +1963,28 @@ public class ContactsProvider2 extends ContentProvider {
             String[] selectionArgs) {
 
         // TODO: security checks
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         String selectionWithId = (RawContacts._ID + " = " + rawContactId + " ")
                 + (selection == null ? "" : " AND " + selection);
-        return db.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
+        return mDb.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
     }
 
     private int updateData(Uri uri, ContentValues values, String selection,
             String[] selectionArgs, boolean markRawContactAsDirty) {
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         int count = 0;
-        db.beginTransaction();
+
+        // Note that the query will return data according to the access restrictions,
+        // so we don't need to worry about updating data we don't have permission to read.
+        Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
         try {
-            // Note that the query will return data according to the access restrictions,
-            // so we don't need to worry about updating data we don't have permission to read.
-            Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
-            try {
-                while(c.moveToNext()) {
-                    final long dataId = c.getLong(DataIdQuery._ID);
-                    final long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
-                    final String mimetype = c.getString(DataIdQuery.MIMETYPE);
-                    count += updateData(dataId, rawContactId, mimetype, values,
-                            markRawContactAsDirty);
-                }
-            } finally {
-                c.close();
+            while(c.moveToNext()) {
+                final long dataId = c.getLong(DataIdQuery._ID);
+                final long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
+                final String mimetype = c.getString(DataIdQuery.MIMETYPE);
+                count += updateData(dataId, rawContactId, mimetype, values,
+                        markRawContactAsDirty);
             }
-            db.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
+            c.close();
         }
 
         return count;
@@ -2036,8 +1992,6 @@ public class ContactsProvider2 extends ContentProvider {
 
     private int updateData(long dataId, long rawContactId, String mimeType, ContentValues values,
             boolean markRawContactAsDirty) {
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-
         mValues.clear();
         mValues.putAll(values);
         mValues.remove(Data._ID);
@@ -2081,10 +2035,10 @@ public class ContactsProvider2 extends ContentProvider {
         }
 
         // TODO create GroupMembershipRowHandler and move this code there
-        resolveGroupSourceIdInValues(rawContactId, mimeType, db, mValues, false /* isInsert */);
+        resolveGroupSourceIdInValues(rawContactId, mimeType, mDb, mValues, false /* isInsert */);
 
         if (mValues.size() > 0) {
-            db.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
+            mDb.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
             if (markRawContactAsDirty) {
                 setRawContactDirty(rawContactId);
             }
@@ -2124,7 +2078,7 @@ public class ContactsProvider2 extends ContentProvider {
         }
     }
 
-    private int updateContactData(SQLiteDatabase db, long contactId, ContentValues values) {
+    private int updateContactData(long contactId, ContentValues values) {
 
         // First update all constituent contacts
         ContentValues optionValues = new ContentValues(5);
@@ -2144,9 +2098,9 @@ public class ContactsProvider2 extends ContentProvider {
             return 0;
         }
 
-        db.update(Tables.RAW_CONTACTS, optionValues,
+        mDb.update(Tables.RAW_CONTACTS, optionValues,
                 RawContacts.CONTACT_ID + "=" + contactId, null);
-        return db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+        return mDb.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
     }
 
     public void updateContactTime(long contactId, long lastTimeContacted) {
@@ -2211,7 +2165,7 @@ public class ContactsProvider2 extends ContentProvider {
             }
         }
 
-        int aggregationMode = mContactAggregator.markContactForAggregation(rawContactId);
+        int aggregationMode = mContactAggregator.markContactForAggregation(mDb, rawContactId);
         if (aggregationMode != RawContacts.AGGREGATION_MODE_DISABLED) {
             mContactAggregator.aggregateContact(db, rawContactId);
             if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
@@ -2985,21 +2939,6 @@ public class ContactsProvider2 extends ContentProvider {
         throw new UnsupportedOperationException("Unknown uri: " + uri);
     }
 
-    @Override
-    public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
-            throws OperationApplicationException {
-
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        db.beginTransaction();
-        try {
-            ContentProviderResult[] results = super.applyBatch(operations);
-            db.setTransactionSuccessful();
-            return results;
-        } finally {
-            db.endTransaction();
-        }
-    }
-
     private void setDisplayName(long rawContactId, String displayName) {
         if (displayName != null) {
             mContactDisplayNameUpdate.bindString(1, displayName);
@@ -3072,15 +3011,13 @@ public class ContactsProvider2 extends ContentProvider {
         mSetSuperPrimaryStatement.execute();
 
         // Find the parent aggregate and package for this new primary
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-
         long aggId = -1;
         boolean isRestricted = false;
         String mimeType = null;
 
         Cursor cursor = null;
         try {
-            cursor = db.query(DataRawContactsQuery.TABLE, DataRawContactsQuery.PROJECTION,
+            cursor = mDb.query(DataRawContactsQuery.TABLE, DataRawContactsQuery.PROJECTION,
                     DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
             if (cursor.moveToFirst()) {
                 aggId = cursor.getLong(DataRawContactsQuery.CONTACT_ID);
@@ -3121,7 +3058,7 @@ public class ContactsProvider2 extends ContentProvider {
 
         // Push update into contacts table, if needed
         if (values.size() > 0) {
-            db.update(Tables.CONTACTS, values, Contacts._ID + "=" + aggId, null);
+            mDb.update(Tables.CONTACTS, values, Contacts._ID + "=" + aggId, null);
         }
     }
 

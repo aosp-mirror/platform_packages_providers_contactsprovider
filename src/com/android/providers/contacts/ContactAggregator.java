@@ -284,24 +284,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Synchronously aggregate the specified contact.
-     */
-    public void aggregateContact(long rawContactId) {
-        if (!mEnabled) {
-            return;
-        }
-
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        db.beginTransaction();
-        try {
-            aggregateContact(db, rawContactId);
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-        }
-    }
-
-    /**
      * Synchronously aggregate the specified contact assuming an open transaction.
      */
     public void aggregateContact(SQLiteDatabase db, long rawContactId) {
@@ -324,12 +306,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      *         {@link RawContacts#AGGREGATION_MODE_IMMEDIATE} or
      *         {@link RawContacts#AGGREGATION_MODE_DISABLED}.
      */
-    public int markContactForAggregation(long rawContactId) {
+    public int markContactForAggregation(SQLiteDatabase db, long rawContactId) {
         if (!mEnabled) {
             return RawContacts.AGGREGATION_MODE_DISABLED;
         }
-
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
 
         int aggregationMode = mOpenHelper.getAggregationMode(rawContactId);
         if (aggregationMode == RawContacts.AGGREGATION_MODE_DISABLED) {
