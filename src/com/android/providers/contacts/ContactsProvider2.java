@@ -216,47 +216,27 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private interface DataQuery {
         public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
 
-        public static final String[] COLUMNS = new String[] {
+        public static final String[] CONCRETE_COLUMNS = new String[] {
             DataColumns.CONCRETE_ID,
             MimetypesColumns.MIMETYPE,
             Data.RAW_CONTACT_ID,
             Data.IS_PRIMARY,
-            Data.DATA1,
             Data.DATA2,
-            Data.DATA3,
-            Data.DATA4,
-            Data.DATA5,
-            Data.DATA6,
-            Data.DATA7,
-            Data.DATA8,
-            Data.DATA9,
-            Data.DATA10,
-            Data.DATA11,
-            Data.DATA12,
-            Data.DATA13,
-            Data.DATA14,
-            Data.DATA15,
+        };
+
+        public static final String[] COLUMNS = new String[] {
+            Data._ID,
+            MimetypesColumns.MIMETYPE,
+            Data.RAW_CONTACT_ID,
+            Data.IS_PRIMARY,
+            Data.DATA2,
         };
 
         public static final int ID = 0;
         public static final int MIMETYPE = 1;
         public static final int RAW_CONTACT_ID = 2;
         public static final int IS_PRIMARY = 3;
-        public static final int DATA1 = 4;
-        public static final int DATA2 = 5;
-        public static final int DATA3 = 6;
-        public static final int DATA4 = 7;
-        public static final int DATA5 = 8;
-        public static final int DATA6 = 9;
-        public static final int DATA7 = 10;
-        public static final int DATA8 = 11;
-        public static final int DATA9 = 12;
-        public static final int DATA10 = 13;
-        public static final int DATA11 = 14;
-        public static final int DATA12 = 15;
-        public static final int DATA13 = 16;
-        public static final int DATA14 = 17;
-        public static final int DATA15 = 18;
+        public static final int DATA2 = 4;
     }
 
     private interface DataIdQuery {
@@ -789,8 +769,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         protected Cursor queryData(SQLiteDatabase db, long rawContactId) {
-            // TODO Lookup integer mimetype IDs' instead of joining for speed
-            return db.query(DataQuery.TABLE, DataQuery.COLUMNS, Data.RAW_CONTACT_ID + "="
+            return db.query(DataQuery.TABLE, DataQuery.CONCRETE_COLUMNS, Data.RAW_CONTACT_ID + "="
                     + rawContactId + " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
                     null, null, null, null);
         }
@@ -1445,12 +1424,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about deleting data we don't have permission to read.
-        Cursor c = query(Data.CONTENT_URI, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+        Cursor c = query(Data.CONTENT_URI, DataQuery.COLUMNS, selection, selectionArgs, null);
         try {
             while(c.moveToNext()) {
-                long dataId = c.getLong(DataIdQuery._ID);
-                long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
-                count += deleteData(dataId, rawContactId, markRawContactAsDirty);
+                long rawContactId = c.getLong(DataQuery.RAW_CONTACT_ID);
+                String mimeType = c.getString(DataQuery.MIMETYPE);
+                count += getDataRowHandler(mimeType).delete(mDb, c);
+                if (markRawContactAsDirty) {
+                    setRawContactDirty(rawContactId);
+                }
             }
         } finally {
             c.close();
@@ -1459,14 +1441,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         return count;
     }
 
-    @Deprecated
+    /**
+     * Delete a data row provided that it is one of the allowed mime types.
+     */
     public int deleteData(long dataId, String[] allowedMimeTypes) {
 
+        // Note that the query will return data according to the access restrictions,
+        // so we don't need to worry about deleting data we don't have permission to read.
+        Cursor c = query(Data.CONTENT_URI, DataQuery.COLUMNS, Data._ID + "=" + dataId, null, null);
 
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        Cursor c = db.query(DataQuery.TABLE, DataQuery.COLUMNS,
-                DataColumns.CONCRETE_ID + "=" + dataId, null, null, null, null);
-        // TODO apply restrictions
         try {
             if (!c.moveToFirst()) {
                 return 0;
@@ -1486,23 +1469,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         + Lists.newArrayList(allowedMimeTypes));
             }
 
-            return getDataRowHandler(mimeType).delete(db, c);
+            return getDataRowHandler(mimeType).delete(mDb, c);
         } finally {
             c.close();
         }
-    }
-
-    /**
-     * Delete the given {@link Data} row.
-     */
-    private int deleteData(long dataId, long rawContactId, boolean markRawContactAsDirty) {
-        // Delete the requested data item.
-        int dataDeleted = mDb.delete(Tables.DATA, Data._ID + "=" + dataId, null);
-        if (markRawContactAsDirty) {
-            setRawContactDirty(rawContactId);
-        }
-
-        return dataDeleted;
     }
 
     /**
