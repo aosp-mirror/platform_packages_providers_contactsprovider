@@ -66,6 +66,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected MockContentResolver mResolver;
     protected Account mAccount = new Account("account1", "account type1");
 
+    private byte[] mTestPhoto;
+
     protected final static Long NO_LONG = new Long(0);
     protected final static String NO_STRING = new String("");
     protected final static Account NO_ACCOUNT = new Account("a", "b");
@@ -224,7 +226,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
-
+        values.put(Photo.PHOTO, loadTestPhoto());
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }
@@ -606,16 +608,23 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
-    protected byte[] loadTestPhoto() throws IOException {
-        final Resources resources = getContext().getResources();
-        InputStream is =
-                resources.openRawResource(com.android.internal.R.drawable.ic_contact_picture);
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1000];
-        int count;
-        while((count = is.read(buffer)) != -1) {
-            os.write(buffer, 0, count);
+    protected byte[] loadTestPhoto() {
+        if (mTestPhoto == null) {
+            final Resources resources = getContext().getResources();
+            InputStream is = resources
+                    .openRawResource(com.android.internal.R.drawable.ic_contact_picture);
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1000];
+            int count;
+            try {
+                while ((count = is.read(buffer)) != -1) {
+                    os.write(buffer, 0, count);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            mTestPhoto = os.toByteArray();
         }
-        return os.toByteArray();
+        return mTestPhoto;
     }
 }

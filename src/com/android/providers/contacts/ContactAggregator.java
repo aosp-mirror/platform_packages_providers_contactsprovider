@@ -113,20 +113,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
 
-    private static final String[] CONTACT_OPTIONS_COLUMNS = new String[] {
-            RawContacts.CUSTOM_RINGTONE,
-            RawContacts.SEND_TO_VOICEMAIL,
-            RawContacts.LAST_TIME_CONTACTED,
-            RawContacts.TIMES_CONTACTED,
-            RawContacts.STARRED,
-    };
-
-    private static final int COL_CUSTOM_RINGTONE = 0;
-    private static final int COL_SEND_TO_VOICEMAIL = 1;
-    private static final int COL_LAST_TIME_CONTACTED = 2;
-    private static final int COL_TIMES_CONTACTED = 3;
-    private static final int COL_STARRED = 4;
-
     private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
     private static final int COL_CONTACT_ID = 0;
 
@@ -346,7 +332,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final ContentValues values = new ContentValues();
-        updateAggregateData(db, contactId, values);
+        computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
+        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+
     }
 
     /**
@@ -365,17 +353,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         if (contactId == -1) {
             ContentValues contactValues = new ContentValues();
-            contactValues.put(Contacts.DISPLAY_NAME, "");
+            contactValues.put(RawContactsColumns.DISPLAY_NAME, "");
+            computeAggregateData(db,
+                    RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
             contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
+            mOpenHelper.setContactId(rawContactId, contactId);
+        } else {
+            mOpenHelper.setContactId(rawContactId, contactId);
+            computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
+            db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+            mOpenHelper.updateContactVisible(contactId);
         }
 
         updateContactAggregationData(db, rawContactId, candidates, values);
-        mOpenHelper.setContactId(rawContactId, contactId);
-
-        updateAggregateData(db, contactId, values);
-        updateContactValues(db, contactId);
-        mOpenHelper.updateContactVisible(contactId);
-
     }
 
     /**
@@ -840,192 +830,170 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
     }
 
+    private interface RawContactsQuery {
+        String[] COLUMNS = new String[] {
+            RawContactsColumns.CONCRETE_ID,
+            RawContactsColumns.DISPLAY_NAME,
+            RawContacts.ACCOUNT_NAME,
+            RawContacts.CUSTOM_RINGTONE,
+            RawContacts.SEND_TO_VOICEMAIL,
+            RawContacts.LAST_TIME_CONTACTED,
+            RawContacts.TIMES_CONTACTED,
+            RawContacts.STARRED,
+            RawContacts.IS_RESTRICTED,
+            DataColumns.CONCRETE_ID,
+            DataColumns.CONCRETE_MIMETYPE_ID,
+        };
+
+        int RAW_CONTACT_ID = 0;
+        int DISPLAY_NAME = 1;
+        int ACCOUNT_NAME = 2;
+        int CUSTOM_RINGTONE = 3;
+        int SEND_TO_VOICEMAIL = 4;
+        int LAST_TIME_CONTACTED = 5;
+        int TIMES_CONTACTED = 6;
+        int STARRED = 7;
+        int IS_RESTRICTED = 8;
+        int DATA_ID = 9;
+        int MIMETYPE_ID = 10;
+    }
+
     /**
-     * Updates aggregate-level data from constituent contacts.
+     * Computes aggregate-level data from constituent raw contacts.
      */
-    private void updateAggregateData(final SQLiteDatabase db, long contactId,
+    private void computeAggregateData(final SQLiteDatabase db, String selection,
             final ContentValues values) {
-        updateDisplayName(db, contactId, values);
-        updateSendToVoicemailAndRingtone(db, contactId);
-        updatePhotoId(db, contactId, values);
-    }
 
-    /**
-     * Updates the contact record's {@link Contacts#DISPLAY_NAME} field. If none of the
-     * constituent raw contacts has a suitable name, leaves the aggregate contact record unchanged.
-     */
-    private void updateDisplayName(SQLiteDatabase db, long contactId, ContentValues values) {
-        String displayName = getBestDisplayName(db, contactId);
-
-        // If don't have anything to base the display name on, let's just leave what was in
-        // that field hoping that there was something there before and it is still valid.
-        if (displayName == null) {
-            return;
-        }
-
-        values.clear();
-        values.put(Contacts.DISPLAY_NAME, displayName);
-        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
-    }
-
-    private void updatePhotoId(SQLiteDatabase db, long contactId, ContentValues values) {
-        int photoId = choosePhotoId(db, contactId);
-
-        if (photoId == -1) {
-            return;
-        }
-
-        values.clear();
-        values.put(Contacts.PHOTO_ID, photoId);
-        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
-    }
-
-    /**
-     * Updates various {@link ContactsColumns} values based on the newly joined
-     * {@link RawContacts} entry.
-     */
-    private void updateContactValues(SQLiteDatabase db, long contactId) {
-
-        // TODO compiled statement
-        String countRestrictedSql = "SELECT COUNT(_id) FROM " + Tables.RAW_CONTACTS + " WHERE "
-                + RawContacts.CONTACT_ID + "=" + contactId + " AND " + RawContacts.IS_RESTRICTED + "=1";
-        String countUnrestrictedSql = "SELECT COUNT(_id) FROM " + Tables.RAW_CONTACTS + " WHERE "
-                + RawContacts.CONTACT_ID + "=" + contactId + " AND " + RawContacts.IS_RESTRICTED + "=0";
-
-        String singleRestrictedSql = "(CASE WHEN (" + countRestrictedSql + ")=1"
-                + " AND (" + countUnrestrictedSql + ")=0 THEN 1 ELSE 0 END)";
-
-        String hasPhoneNumberSql = "(CASE WHEN EXISTS (SELECT " + DataColumns.CONCRETE_ID
-                + " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS
-                + " WHERE " + MimetypesColumns.MIMETYPE + "='" + Phone.CONTENT_ITEM_TYPE + "'"
-                + " AND " + Phone.NUMBER + " NOT NULL"
-                + " AND " + RawContacts.CONTACT_ID + "=" + contactId + ") THEN 1 ELSE 0 END)";
-
-        String updateSql = "UPDATE " + Tables.CONTACTS + " SET "
-                + ContactsColumns.SINGLE_IS_RESTRICTED + "=" + singleRestrictedSql + ","
-                + Contacts.HAS_PHONE_NUMBER + "=" + hasPhoneNumberSql
-                + " WHERE " + ContactsColumns.CONCRETE_ID + "=" + contactId;
-
-        db.execSQL(updateSql);
-    }
-
-    /**
-     * Computes display name for the given contact.  Chooses a longer name over a shorter name
-     * and a mixed-case name over an all lowercase or uppercase name.
-     */
-    private String getBestDisplayName(SQLiteDatabase db, long contactId) {
+        long currentRawContactId = -1;
         String bestDisplayName = null;
-
-        final Cursor c = db.query(Tables.RAW_CONTACTS, new String[] {RawContactsColumns.DISPLAY_NAME},
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
-
-        try {
-            while (c.moveToNext()) {
-                String displayName = c.getString(0);
-                if (!TextUtils.isEmpty(displayName)) {
-                    if (bestDisplayName == null) {
-                        bestDisplayName = displayName;
-                    } else {
-                        if (NameNormalizer.compareComplexity(displayName, bestDisplayName) > 0) {
-                            bestDisplayName = displayName;
-                        }
-                    }
-                }
-            }
-        } finally {
-            c.close();
-        }
-        return bestDisplayName;
-    }
-
-    /**
-     * Iterates over the photos associated with contact defined by contactId, and chooses one
-     * to be associated with the contact. Initially this just chooses the first photo in a list
-     * sorted by account name.
-     */
-    private int choosePhotoId(SQLiteDatabase db, long contactId) {
-        int chosenPhotoId = -1;
-        String chosenAccount = null;
-
-        final Cursor c = db.query(Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS,
-                new String[] {"data._id AS _id", RawContacts.ACCOUNT_NAME},
-                DatabaseUtils.concatenateWhere(RawContacts.CONTACT_ID + "=" + contactId,
-                        Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'"),
-                null, null, null, null);
-
-        try {
-            while (c.moveToNext()) {
-                int photoId = c.getInt(0);
-                String account = c.getString(1);
-                if (chosenAccount == null) {
-                    chosenAccount = account;
-                    chosenPhotoId = photoId;
-                } else {
-                    if (account.compareToIgnoreCase(chosenAccount) < 0 ) {
-                        chosenAccount = account;
-                        chosenPhotoId = photoId;
-                    }
-                }
-            }
-        } finally {
-            c.close();
-        }
-        return chosenPhotoId;
-    }
-
-    /**
-     * Updates the contact's send-to-voicemail and custom-ringtone options based on
-     * constituent contacts' options.
-     */
-    private void updateSendToVoicemailAndRingtone(SQLiteDatabase db, long contactId) {
-        int totalContactCount = 0;
+        long bestPhotoId = -1;
+        String photoAccount = null;
+        int totalRowCount = 0;
         int contactSendToVoicemail = 0;
         String contactCustomRingtone = null;
         long contactLastTimeContacted = 0;
         int contactTimesContacted = 0;
         boolean contactStarred = false;
+        int singleIsRestricted = 1;
+        int hasPhoneNumber = 0;
 
-        final Cursor c = db.query(Tables.RAW_CONTACTS, CONTACT_OPTIONS_COLUMNS,
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+        long photoMimeType = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        long phoneMimeType = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
+        String isPhotoSql = "(" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
+                + Photo.PHOTO + " NOT NULL)";
+        String isPhoneSql = "(" + DataColumns.MIMETYPE_ID + "=" + phoneMimeType + " AND "
+                + Phone.NUMBER + " NOT NULL)";
+
+        String tables = Tables.RAW_CONTACTS + " LEFT OUTER JOIN " + Tables.DATA + " ON("
+                + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                + " AND (" + isPhotoSql + " OR " + isPhoneSql + "))";
+
+        final Cursor c = db.query(tables, RawContactsQuery.COLUMNS, selection, null, null, null,
+                null);
         try {
             while (c.moveToNext()) {
-                totalContactCount++;
-                if (!c.isNull(COL_SEND_TO_VOICEMAIL)) {
-                    boolean sendToVoicemail = (c.getInt(COL_SEND_TO_VOICEMAIL) != 0);
-                    if (sendToVoicemail) {
-                        contactSendToVoicemail++;
+                long rawContactId = c.getLong(RawContactsQuery.RAW_CONTACT_ID);
+                if (rawContactId != currentRawContactId) {
+                    currentRawContactId = rawContactId;
+                    totalRowCount++;
+
+                    // Display name
+                    String displayName = c.getString(RawContactsQuery.DISPLAY_NAME);
+                    if (!TextUtils.isEmpty(displayName)) {
+                        if (bestDisplayName == null) {
+                            bestDisplayName = displayName;
+                        } else if (NameNormalizer.compareComplexity(displayName,
+                                bestDisplayName) > 0) {
+                            bestDisplayName = displayName;
+                        }
+                    }
+
+                    // Contact options
+                    if (!c.isNull(RawContactsQuery.SEND_TO_VOICEMAIL)) {
+                        boolean sendToVoicemail =
+                                (c.getInt(RawContactsQuery.SEND_TO_VOICEMAIL) != 0);
+                        if (sendToVoicemail) {
+                            contactSendToVoicemail++;
+                        }
+                    }
+
+                    if (contactCustomRingtone == null
+                            && !c.isNull(RawContactsQuery.CUSTOM_RINGTONE)) {
+                        contactCustomRingtone = c.getString(RawContactsQuery.CUSTOM_RINGTONE);
+                    }
+
+                    long lastTimeContacted = c.getLong(RawContactsQuery.LAST_TIME_CONTACTED);
+                    if (lastTimeContacted > contactLastTimeContacted) {
+                        contactLastTimeContacted = lastTimeContacted;
+                    }
+
+                    int timesContacted = c.getInt(RawContactsQuery.TIMES_CONTACTED);
+                    if (timesContacted > contactTimesContacted) {
+                        contactTimesContacted = timesContacted;
+                    }
+
+                    contactStarred |= (c.getInt(RawContactsQuery.STARRED) != 0);
+
+                    // Single restricted
+                    if (totalRowCount > 1) {
+                        // Not single
+                        singleIsRestricted = 0;
+                    } else {
+                        int isRestricted = c.getInt(RawContactsQuery.IS_RESTRICTED);
+
+                        if (isRestricted == 0) {
+                            // Not restricted
+                            singleIsRestricted = 0;
+                        }
                     }
                 }
 
-                if (contactCustomRingtone == null && !c.isNull(COL_CUSTOM_RINGTONE)) {
-                    contactCustomRingtone = c.getString(COL_CUSTOM_RINGTONE);
+                if (!c.isNull(RawContactsQuery.DATA_ID)) {
+                    long dataId = c.getLong(RawContactsQuery.DATA_ID);
+                    int mimetypeId = c.getInt(RawContactsQuery.MIMETYPE_ID);
+                    if (mimetypeId == photoMimeType) {
+
+                        // For now, just choose the first photo in a list sorted by account name.
+                        String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
+                        if (photoAccount == null) {
+                            photoAccount = account;
+                            bestPhotoId = dataId;
+                        } else {
+                            if (account.compareToIgnoreCase(photoAccount) < 0) {
+                                photoAccount = account;
+                                bestPhotoId = dataId;
+                            }
+                        }
+                    } else if (mimetypeId == phoneMimeType) {
+                        hasPhoneNumber = 1;
+                    }
                 }
 
-                long lastTimeContacted = c.getLong(COL_LAST_TIME_CONTACTED);
-                if (lastTimeContacted > contactLastTimeContacted) {
-                    contactLastTimeContacted = lastTimeContacted;
-                }
-
-                int timesContacted = c.getInt(COL_TIMES_CONTACTED);
-                if (timesContacted > contactTimesContacted) {
-                    contactTimesContacted = timesContacted;
-                }
-
-                contactStarred |= (c.getInt(COL_STARRED) != 0);
             }
         } finally {
             c.close();
         }
 
-        ContentValues values = new ContentValues(2);
-        values.put(Contacts.SEND_TO_VOICEMAIL, totalContactCount == contactSendToVoicemail);
+        values.clear();
+
+        // If don't have anything to base the display name on, let's just leave what was in
+        // that field hoping that there was something there before and it is still valid.
+        if (bestDisplayName != null) {
+            values.put(Contacts.DISPLAY_NAME, bestDisplayName);
+        }
+
+        if (bestPhotoId != -1) {
+            values.put(Contacts.PHOTO_ID, bestPhotoId);
+        }
+
+        values.put(Contacts.SEND_TO_VOICEMAIL, totalRowCount == contactSendToVoicemail);
         values.put(Contacts.CUSTOM_RINGTONE, contactCustomRingtone);
         values.put(Contacts.LAST_TIME_CONTACTED, contactLastTimeContacted);
         values.put(Contacts.TIMES_CONTACTED, contactTimesContacted);
         values.put(Contacts.STARRED, contactStarred);
-
-        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+        values.put(Contacts.HAS_PHONE_NUMBER, hasPhoneNumber);
+        values.put(ContactsColumns.SINGLE_IS_RESTRICTED, singleIsRestricted);
     }
 
     /**

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.accounts.Account;
 import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
 
 /**
  * A version of {@link ContactsProvider2} class that performs aggregation
@@ -26,10 +27,15 @@ import android.content.Context;
 public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private static Boolean sDataWiped = false;
     private static OpenHelper mOpenHelper;
+    private boolean mDataWipeEnabled = true;
     private Account mAccount;
 
     public SynchronousContactsProvider2() {
-        super(new SynchronousAggregationScheduler());
+        this(new SynchronousAggregationScheduler());
+    }
+
+    public SynchronousContactsProvider2(ContactAggregationScheduler scheduler) {
+        super(scheduler);
     }
 
     @Override
@@ -44,13 +50,19 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         mOpenHelper = null;
     }
 
+    public void setDataWipeEnabled(boolean flag) {
+        mDataWipeEnabled = flag;
+    }
+
     @Override
     public boolean onCreate() {
         boolean created = super.onCreate();
-        synchronized (sDataWiped) {
-            if (!sDataWiped) {
-                sDataWiped = true;
-                wipeData();
+        if (mDataWipeEnabled) {
+            synchronized (sDataWiped) {
+                if (!sDataWiped) {
+                    sDataWiped = true;
+                    wipeData();
+                }
             }
         }
         return created;
@@ -62,6 +74,26 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
             mAccount = new Account("androidtest@gmail.com", "com.google.GAIA");
         }
         return mAccount;
+    }
+
+    public void prepareForFullAggregation(int maxContact) {
+        SQLiteDatabase db = getOpenHelper().getWritableDatabase();
+        db.execSQL("UPDATE raw_contacts SET contact_id = NULL, aggregation_mode=0;");
+        db.execSQL("DELETE FROM contacts;");
+        long rowId =
+            db.compileStatement("SELECT _id FROM raw_contacts LIMIT 1 OFFSET " + maxContact)
+                .simpleQueryForLong();
+        db.execSQL("DELETE FROM raw_contacts WHERE _id > " + rowId + ";");
+    }
+
+    public long getRawContactCount() {
+        SQLiteDatabase db = getOpenHelper().getReadableDatabase();
+        return db.compileStatement("SELECT COUNT(*) FROM raw_contacts").simpleQueryForLong();
+    }
+
+    public long getContactCount() {
+        SQLiteDatabase db = getOpenHelper().getReadableDatabase();
+        return db.compileStatement("SELECT COUNT(*) FROM contacts").simpleQueryForLong();
     }
 
     @Override
