@@ -46,14 +46,15 @@ public class ContactAggregationScheduler {
     private static final int START_AGGREGATION_MESSAGE_ID = 1;
 
     // Aggregation is delayed by this many milliseconds to allow changes to accumulate
-    public static final int AGGREGATION_DELAY = 500;
+    public static final int AGGREGATION_DELAY = 1000;
 
     // Maximum delay of aggregation from the initial aggregation request
-    public static final int MAX_AGGREGATION_DELAY = 5000;
+    public static final int MAX_AGGREGATION_DELAY = 10000;
 
     public static final int STATUS_STAND_BY = 0;
     public static final int STATUS_SCHEDULED = 1;
     public static final int STATUS_RUNNING = 2;
+    public static final int STATUS_INTERRUPTED = 3;
 
     private Aggregator mAggregator;
 
@@ -114,6 +115,16 @@ public class ContactAggregationScheduler {
                 break;
             }
 
+            case STATUS_INTERRUPTED: {
+
+                // If the previous aggregation run was interrupted, do not reset
+                // the initial request timestamp - we don't want a continuous string
+                // of interrupted runs
+                mStatus = STATUS_SCHEDULED;
+                runDelayed();
+                break;
+            }
+
             case STATUS_SCHEDULED: {
 
                 // If it has been less than MAX_AGGREGATION_DELAY millis since the initial request,
@@ -130,6 +141,7 @@ public class ContactAggregationScheduler {
                 // interrupt the current pass and reschedule the request.
                 if (currentTime() - mInitialRequestTimestamp < MAX_AGGREGATION_DELAY) {
                     mAggregator.interrupt();
+                    mStatus = STATUS_INTERRUPTED;
                 }
 
                 mRescheduleWhenComplete = true;
@@ -150,8 +162,9 @@ public class ContactAggregationScheduler {
             mAggregator.run();
         } finally {
             synchronized (this) {
-                mStatus = STATUS_STAND_BY;
-                mInitialRequestTimestamp = 0;
+                if (mStatus == STATUS_RUNNING) {
+                    mStatus = STATUS_STAND_BY;
+                }
                 if (mRescheduleWhenComplete) {
                     mRescheduleWhenComplete = false;
                     schedule();
