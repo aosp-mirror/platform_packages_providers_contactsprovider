@@ -71,6 +71,40 @@ public class ContactAggregationSchedulerTest extends TestCase {
         assertEquals(1, mScheduler.mRunDelayed);
     }
 
+    public void testRepeatedInterruptions() {
+        mScheduler.setAggregator(new ContactAggregationScheduler.Aggregator() {
+            boolean mInterruptCalled;
+
+            public void interrupt() {
+                mInterruptCalled = true;
+            }
+
+            public void run() {
+                mScheduler.schedule();
+                assertTrue(mInterruptCalled);
+            }
+        });
+
+        mScheduler.run();
+        assertEquals(1, mScheduler.mRunDelayed);
+
+        mScheduler.mTime += ContactAggregationScheduler.MAX_AGGREGATION_DELAY + 100;
+        mScheduler.setAggregator(new ContactAggregationScheduler.Aggregator() {
+            boolean mInterruptCalled;
+
+            public void interrupt() {
+                mInterruptCalled = true;
+            }
+
+            public void run() {
+                mScheduler.schedule();
+                assertFalse(mInterruptCalled);
+            }
+        });
+
+        mScheduler.run();
+    }
+
     public void testScheduleWhileRunningExceedingMaxDelay() {
         mScheduler.schedule();
 
