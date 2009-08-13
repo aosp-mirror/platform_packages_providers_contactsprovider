@@ -111,7 +111,7 @@
 111    data9=null
 112    is_primary=1
 113    is_super_primary=0
-114    data_version=1
+114    data_version=0
 115    data_sync1=null
 116    data_sync2=null
 117    data_sync3=null
@@ -264,7 +264,7 @@
 264    data9=null
 265    is_primary=1
 266    is_super_primary=0
-267    data_version=1
+267    data_version=0
 268    data_sync1=null
 269    data_sync2=null
 270    data_sync3=null
@@ -281,7 +281,7 @@
 281    data9=null
 282    is_primary=1
 283    is_super_primary=0
-284    data_version=1
+284    data_version=0
 285    data_sync1=null
 286    data_sync2=null
 287    data_sync3=null
@@ -485,7 +485,7 @@
 485    data9=null
 486    is_primary=1
 487    is_super_primary=0
-488    data_version=1
+488    data_version=0
 489    data_sync1=null
 490    data_sync2=null
 491    data_sync3=null

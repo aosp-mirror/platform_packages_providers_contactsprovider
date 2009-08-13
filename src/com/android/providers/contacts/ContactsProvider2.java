@@ -1111,13 +1111,17 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         return OpenHelper.getInstance(context);
     }
 
+    /* package */ NameSplitter getNameSplitter() {
+        return mNameSplitter;
+    }
+
     protected boolean isLegacyContactImportNeeded() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
         return prefs.getInt(PREF_CONTACTS_IMPORTED, 0) < PREF_CONTACTS_IMPORT_VERSION;
     }
 
     private boolean importLegacyContacts() {
-        if (importLegacyContacts(getLegacyContactImporter())) {
+        if (importLegacyContacts(getLegacyContactImporter(), true)) {
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
             Editor editor = prefs.edit();
             editor.putInt(PREF_CONTACTS_IMPORTED, PREF_CONTACTS_IMPORT_VERSION);
@@ -1133,13 +1137,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     /* Visible for testing */
-    /* package */ boolean importLegacyContacts(LegacyContactImporter importer) {
+    /* package */ boolean importLegacyContacts(LegacyContactImporter importer, boolean aggregate) {
         mContactAggregator.setEnabled(false);
         mImportMode = true;
         try {
             importer.importContacts();
             mContactAggregator.setEnabled(true);
-            mContactAggregator.run();
+            if (aggregate) {
+                mContactAggregator.run();
+            }
             return true;
         } catch (Throwable e) {
            Log.e(TAG, "Legacy contact import failed", e);

@@ -16,16 +16,20 @@
 
 package com.android.providers.contacts;
 
-import android.content.ContentProviderOperation;
+import com.android.providers.contacts.OpenHelper.DataColumns;
+import com.android.providers.contacts.OpenHelper.PhoneColumns;
+import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
+import com.android.providers.contacts.OpenHelper.RawContactsColumns;
+import com.android.providers.contacts.OpenHelper.Tables;
+
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.OperationApplicationException;
-import android.content.ContentProviderOperation.Builder;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.Data;
@@ -40,10 +44,9 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
-
-import java.util.ArrayList;
 
 public class LegacyContactImporter {
 
@@ -56,11 +59,29 @@ public class LegacyContactImporter {
     private static final String GROUPS_FEED_URL = "http://www.google.com/m8/feeds/groups/";
     private static final String PHOTO_FEED_URL = "http://www.google.com/m8/feeds/photos/media/";
 
+    private static final int INSERT_BATCH_SIZE = 200;
+
     private final Context mContext;
     private final ContactsProvider2 mContactsProvider;
     private ContentValues mValues = new ContentValues();
     private ContentResolver mResolver;
     private boolean mPhoneticNameAvailable = true;
+
+    private SQLiteDatabase mSourceDb;
+    private SQLiteDatabase mTargetDb;
+
+    private NameSplitter mNameSplitter;
+    private int mBatchCounter;
+
+    private long mStructuredNameMimetypeId;
+    private long mNoteMimetypeId;
+    private long mOrganizationMimetypeId;
+    private long mPhoneMimetypeId;
+    private long mEmailMimetypeId;
+    private long mImMimetypeId;
+    private long mPostalMimetypeId;
+    private long mPhotoMimetypeId;
+    private long mGroupMembershipMimetypeId;
 
     public LegacyContactImporter(Context context, ContactsProvider2 contactsProvider) {
         mContext = context;
@@ -70,11 +91,10 @@ public class LegacyContactImporter {
 
     public void importContacts() throws Exception {
 
-        SQLiteDatabase sourceDb = null;
         try {
             String path = mContext.getDatabasePath(DATABASE_NAME).getPath();
             try {
-                sourceDb = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
+                mSourceDb = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
             } catch(SQLiteException e) {
 
                 // If we cannot open the original database, it is either non-existent or corrupt;
@@ -82,7 +102,7 @@ public class LegacyContactImporter {
                 return;
             }
 
-            int version = sourceDb.getVersion();
+            int version = mSourceDb.getVersion();
 
             // Upgrade to version 78 was the latest that wiped out data.  Might as well follow suit
             // and ignore earlier versions.
@@ -96,6 +116,9 @@ public class LegacyContactImporter {
                 mPhoneticNameAvailable = false;
             }
 
+            OpenHelper openHelper = (OpenHelper)mContactsProvider.getOpenHelper();
+            mTargetDb = openHelper.getWritableDatabase();
+
             /*
              * At this point there should be no data in the contacts provider, but in case
              * some was inserted by mistake, we should remove it.  The main reason for this
@@ -104,23 +127,41 @@ public class LegacyContactImporter {
              */
             mContactsProvider.wipeData();
 
-            importGroups(sourceDb);
-            importPeople(sourceDb);
-            importOrganizations(sourceDb);
-            importPhones(sourceDb);
-            importContactMethods(sourceDb);
-            importPhotos(sourceDb);
-            importGroupMemberships(sourceDb);
-            importCalls(sourceDb);
+            mStructuredNameMimetypeId = openHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+            mNoteMimetypeId = openHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
+            mOrganizationMimetypeId = openHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+            mPhoneMimetypeId = openHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+            mEmailMimetypeId = openHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+            mImMimetypeId = openHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+            mPostalMimetypeId = openHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
+            mPhotoMimetypeId = openHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+            mGroupMembershipMimetypeId =
+                    openHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+
+            mNameSplitter = mContactsProvider.getNameSplitter();
+
+            mTargetDb.beginTransaction();
+            importGroups();
+            importPeople();
+            importOrganizations();
+            importPhones();
+            importContactMethods();
+            importPhotos();
+            importGroupMemberships();
 
             // Deleted contacts should be inserted after everything else, because
             // the legacy table does not provide an _ID field - the _ID field
             // will be autoincremented
-            importDeletedPeople(sourceDb);
+            importDeletedPeople();
+
+            mTargetDb.setTransactionSuccessful();
+            mTargetDb.endTransaction();
+
+            importCalls();
 
             Log.w(TAG, "Contact import completed");
         } finally {
-            if (sourceDb != null) sourceDb.close();
+            if (mSourceDb != null) mSourceDb.close();
         }
     }
 
@@ -143,42 +184,66 @@ public class LegacyContactImporter {
         static int _SYNC_DIRTY = 7;
     }
 
-    private void importGroups(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(GroupsQuery.TABLE, GroupsQuery.COLUMNS, null, null,
+    private interface GroupsInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.GROUPS + "(" +
+                Groups._ID + "," +
+                Groups.TITLE + "," +
+                Groups.NOTES + "," +
+                Groups.SYSTEM_ID + "," +
+                Groups.DIRTY + "," +
+                Groups.GROUP_VISIBLE + "," +
+                Groups.ACCOUNT_NAME + "," +
+                Groups.ACCOUNT_TYPE + "," +
+                Groups.SOURCE_ID +
+        ") VALUES (?,?,?,?,?,?,?,?,?)";
+
+        int ID = 1;
+        int TITLE = 2;
+        int NOTES = 3;
+        int SYSTEM_ID = 4;
+        int DIRTY = 5;
+        int GROUP_VISIBLE = 6;
+        int ACCOUNT_NAME = 7;
+        int ACCOUNT_TYPE = 8;
+        int SOURCE_ID = 9;
+    }
+
+    private void importGroups() {
+        SQLiteStatement insert = mTargetDb.compileStatement(GroupsInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(GroupsQuery.TABLE, GroupsQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertGroup(c);
+                insertGroup(c, insert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertGroup(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
-
+    private void insertGroup(Cursor c, SQLiteStatement insert) {
         long id = c.getLong(GroupsQuery.ID);
 
-        Builder builder = ContentProviderOperation.newInsert(Groups.CONTENT_URI)
-                .withValue(Groups._ID, id)
-                .withValue(Groups.TITLE, c.getString(GroupsQuery.NAME))
-                .withValue(Groups.NOTES, c.getString(GroupsQuery.NOTES))
-                .withValue(Groups.SYSTEM_ID, c.getString(GroupsQuery.SYSTEM_ID))
-                .withValue(Groups.DIRTY, c.getInt(GroupsQuery._SYNC_DIRTY))
-                .withValue(Groups.GROUP_VISIBLE, 1);
+        insert.bindLong(GroupsInsert.ID, id);
+        bindString(insert, GroupsInsert.TITLE, c.getString(GroupsQuery.NAME));
+        bindString(insert, GroupsInsert.NOTES, c.getString(GroupsQuery.NOTES));
+        bindString(insert, GroupsInsert.SYSTEM_ID, c.getString(GroupsQuery.SYSTEM_ID));
+        insert.bindLong(GroupsInsert.DIRTY, c.getLong(GroupsQuery._SYNC_DIRTY));
+        insert.bindLong(GroupsInsert.GROUP_VISIBLE, 1);
 
         String account = c.getString(GroupsQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
             String syncId = c.getString(GroupsQuery._SYNC_ID);
             String sourceId = buildGroupSourceId(account, syncId);
-            builder.withValue(Groups.ACCOUNT_NAME, account)
-                    .withValue(Groups.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE)
-                    .withValue(Groups.SOURCE_ID, sourceId);
+            bindString(insert, GroupsInsert.ACCOUNT_NAME, account);
+            bindString(insert, GroupsInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
+            bindString(insert, GroupsInsert.SOURCE_ID, sourceId);
+        } else {
+            insert.bindNull(GroupsInsert.ACCOUNT_NAME);
+            insert.bindNull(GroupsInsert.ACCOUNT_TYPE);
+            insert.bindNull(GroupsInsert.SOURCE_ID);
         }
-        operations.add(builder.build());
-
-        mContactsProvider.applyBatch(operations);
+        insert(insert);
     }
 
     private String buildGroupSourceId(String account, String syncId) {
@@ -227,75 +292,173 @@ public class LegacyContactImporter {
         static int PHONETIC_NAME = 16;
     }
 
-    private void importPeople(SQLiteDatabase sourceDb) throws OperationApplicationException {
+
+    private interface RawContactsInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.RAW_CONTACTS + "(" +
+                RawContacts._ID + "," +
+                RawContacts.CUSTOM_RINGTONE + "," +
+                RawContacts.DIRTY + "," +
+                RawContacts.LAST_TIME_CONTACTED + "," +
+                RawContacts.SEND_TO_VOICEMAIL + "," +
+                RawContacts.STARRED + "," +
+                RawContacts.TIMES_CONTACTED + "," +
+                RawContacts.SYNC1 + "," +
+                RawContacts.SYNC2 + "," +
+                RawContacts.ACCOUNT_NAME + "," +
+                RawContacts.ACCOUNT_TYPE + "," +
+                RawContacts.SOURCE_ID + "," +
+                RawContactsColumns.DISPLAY_NAME +
+         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+
+        int ID = 1;
+        int CUSTOM_RINGTONE = 2;
+        int DIRTY = 3;
+        int LAST_TIME_CONTACTED = 4;
+        int SEND_TO_VOICEMAIL = 5;
+        int STARRED = 6;
+        int TIMES_CONTACTED = 7;
+        int SYNC1 = 8;
+        int SYNC2 = 9;
+        int ACCOUNT_NAME = 10;
+        int ACCOUNT_TYPE = 11;
+        int SOURCE_ID = 12;
+        int DISPLAY_NAME = 13;
+    }
+
+    private interface StructuredNameInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                StructuredName.DISPLAY_NAME + "," +
+                StructuredName.PREFIX + "," +
+                StructuredName.GIVEN_NAME + "," +
+                StructuredName.MIDDLE_NAME + "," +
+                StructuredName.FAMILY_NAME + "," +
+                StructuredName.SUFFIX +
+         ") VALUES (?,?,?,?,?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int DISPLAY_NAME = 3;
+        int PREFIX = 4;
+        int GIVEN_NAME = 5;
+        int MIDDLE_NAME = 6;
+        int FAMILY_NAME = 7;
+        int SUFFIX = 8;
+    }
+
+    private interface NoteInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Note.NOTE +
+         ") VALUES (?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int NOTE = 3;
+    }
+
+    private void importPeople() {
+        SQLiteStatement rawContactInsert = mTargetDb.compileStatement(RawContactsInsert.INSERT_SQL);
+        SQLiteStatement structuredNameInsert =
+                mTargetDb.compileStatement(StructuredNameInsert.INSERT_SQL);
+        SQLiteStatement noteInsert = mTargetDb.compileStatement(NoteInsert.INSERT_SQL);
         String[] columns = mPhoneticNameAvailable ? PeopleQuery.COLUMNS_WITH_PHONETIC_NAME :
             PeopleQuery.COLUMNS_WITHOUT_PHONETIC_NAME;
-        Cursor c = sourceDb.query(PeopleQuery.TABLE, columns, null, null, null, null,
+        Cursor c = mSourceDb.query(PeopleQuery.TABLE, columns, null, null, null, null,
                 null);
         try {
             while (c.moveToNext()) {
-                insertPerson(c);
+                insertRawContact(c, rawContactInsert);
+                insertStructuredName(c, structuredNameInsert);
+                insertNote(c, noteInsert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertPerson(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
-
+    private void insertRawContact(Cursor c, SQLiteStatement insert)
+            {
         long id = c.getLong(PeopleQuery._ID);
-
-        Builder builder = ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
-                .withValue(RawContacts._ID, id)
-                .withValue(RawContacts.CUSTOM_RINGTONE,
-                            c.getString(PeopleQuery.CUSTOM_RINGTONE))
-                .withValue(RawContacts.DIRTY,
-                            c.getString(PeopleQuery._SYNC_DIRTY))
-                .withValue(RawContacts.LAST_TIME_CONTACTED,
-                            c.getLong(PeopleQuery.LAST_TIME_CONTACTED))
-                .withValue(RawContacts.SEND_TO_VOICEMAIL,
-                            c.getInt(PeopleQuery.SEND_TO_VOICEMAIL))
-                .withValue(RawContacts.STARRED,
-                            c.getInt(PeopleQuery.STARRED))
-                .withValue(RawContacts.TIMES_CONTACTED,
-                            c.getLong(PeopleQuery.TIMES_CONTACTED))
-                .withValue(RawContacts.SYNC1, c.getString(PeopleQuery._SYNC_TIME))
-                .withValue(RawContacts.SYNC2, c.getString(PeopleQuery._SYNC_LOCAL_ID));
+        insert.bindLong(RawContactsInsert.ID, id);
+        bindString(insert, RawContactsInsert.CUSTOM_RINGTONE,
+                c.getString(PeopleQuery.CUSTOM_RINGTONE));
+        bindString(insert, RawContactsInsert.DIRTY,
+                c.getString(PeopleQuery._SYNC_DIRTY));
+        insert.bindLong(RawContactsInsert.LAST_TIME_CONTACTED,
+                c.getLong(PeopleQuery.LAST_TIME_CONTACTED));
+        insert.bindLong(RawContactsInsert.SEND_TO_VOICEMAIL,
+                c.getLong(PeopleQuery.SEND_TO_VOICEMAIL));
+        insert.bindLong(RawContactsInsert.STARRED,
+                c.getLong(PeopleQuery.STARRED));
+        insert.bindLong(RawContactsInsert.TIMES_CONTACTED,
+                c.getLong(PeopleQuery.TIMES_CONTACTED));
+        bindString(insert, RawContactsInsert.SYNC1,
+                c.getString(PeopleQuery._SYNC_TIME));
+        bindString(insert, RawContactsInsert.SYNC2,
+                c.getString(PeopleQuery._SYNC_LOCAL_ID));
+        bindString(insert, RawContactsInsert.DISPLAY_NAME,
+                c.getString(PeopleQuery.NAME));
 
         String account = c.getString(PeopleQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
             String syncId = c.getString(PeopleQuery._SYNC_ID);
             String sourceId = buildRawContactSourceId(account, syncId);
-            builder.withValue(RawContacts.ACCOUNT_NAME, account)
-                    .withValue(RawContacts.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE)
-                    .withValue(RawContacts.SOURCE_ID, sourceId);
+            bindString(insert, RawContactsInsert.ACCOUNT_NAME, account);
+            bindString(insert, RawContactsInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
+            bindString(insert, RawContactsInsert.SOURCE_ID, sourceId);
+        } else {
+            insert.bindNull(RawContactsInsert.ACCOUNT_NAME);
+            insert.bindNull(RawContactsInsert.ACCOUNT_TYPE);
+            insert.bindNull(RawContactsInsert.SOURCE_ID);
         }
-        operations.add(builder.build());
+        insert(insert);
+    }
 
-
+    private void insertStructuredName(Cursor c, SQLiteStatement insert)
+            {
         String name = c.getString(PeopleQuery.NAME);
-        builder = ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                .withValue(Data.RAW_CONTACT_ID, id)
-                .withValue(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE)
-                .withValue(StructuredName.DISPLAY_NAME, name);
+        if (TextUtils.isEmpty(name)) {
+            return;
+        }
+
+        long id = c.getLong(PeopleQuery._ID);
+
+        insert.bindLong(StructuredNameInsert.RAW_CONTACT_ID, id);
+        insert.bindLong(StructuredNameInsert.MIMETYPE_ID, mStructuredNameMimetypeId);
+        bindString(insert, StructuredNameInsert.DISPLAY_NAME, name);
+
+        NameSplitter.Name splitName = new NameSplitter.Name();
+        mNameSplitter.split(splitName, name);
+
+        bindString(insert, StructuredNameInsert.PREFIX, splitName.getPrefix());
+        bindString(insert, StructuredNameInsert.GIVEN_NAME, splitName.getGivenNames());
+        bindString(insert, StructuredNameInsert.MIDDLE_NAME, splitName.getMiddleName());
+        bindString(insert, StructuredNameInsert.FAMILY_NAME, splitName.getFamilyName());
+        bindString(insert, StructuredNameInsert.SUFFIX, splitName.getSuffix());
 
         if (mPhoneticNameAvailable) {
             // TODO: add the ability to insert an unstructured phonetic name
             String phoneticName = c.getString(PeopleQuery.PHONETIC_NAME);
         }
 
-        operations.add(builder.build());
+        insert(insert);
+    }
 
+    private void insertNote(Cursor c, SQLiteStatement insert) {
         String notes = c.getString(PeopleQuery.NOTES);
-        if (!TextUtils.isEmpty(notes)) {
-            operations.add(ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                    .withValue(Data.RAW_CONTACT_ID, id)
-                    .withValue(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE)
-                    .withValue(Note.NOTE, notes)
-                    .build());
+
+        if (TextUtils.isEmpty(notes)) {
+            return;
         }
-        mContactsProvider.applyBatch(operations);
+
+        long id = c.getLong(PeopleQuery._ID);
+        insert.bindLong(NoteInsert.RAW_CONTACT_ID, id);
+        insert.bindLong(NoteInsert.MIMETYPE_ID, mNoteMimetypeId);
+        bindString(insert, NoteInsert.NOTE, notes);
+        insert(insert);
     }
 
     private String buildRawContactSourceId(String account, String syncId) {
@@ -321,34 +484,51 @@ public class LegacyContactImporter {
         static int LABEL = 5;
     }
 
-    private void importOrganizations(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(OrganizationsQuery.TABLE, OrganizationsQuery.COLUMNS, null, null,
+    private interface OrganizationInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Data.IS_PRIMARY + "," +
+                Organization.COMPANY + "," +
+                Organization.TITLE + "," +
+                Organization.TYPE + "," +
+                Organization.LABEL +
+         ") VALUES (?,?,?,?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int IS_PRIMARY = 3;
+        int COMPANY = 4;
+        int TITLE = 5;
+        int TYPE = 6;
+        int LABEL = 7;
+    }
+
+    private void importOrganizations() {
+        SQLiteStatement insert = mTargetDb.compileStatement(OrganizationInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(OrganizationsQuery.TABLE, OrganizationsQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertOrganization(c);
+                insertOrganization(c, insert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertOrganization(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
+    private void insertOrganization(Cursor c, SQLiteStatement insert)
+            {
 
-        long personId = c.getLong(OrganizationsQuery.PERSON);
-
-        operations.add(ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                .withValue(Data.RAW_CONTACT_ID, personId)
-                .withValue(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE)
-                .withValue(Data.IS_PRIMARY, c.getString(OrganizationsQuery.ISPRIMARY))
-                .withValue(Organization.COMPANY, c.getString(OrganizationsQuery.COMPANY))
-                .withValue(Organization.TITLE, c.getString(OrganizationsQuery.TITLE))
-                .withValue(Organization.TYPE, c.getString(OrganizationsQuery.TYPE))
-                .withValue(Organization.LABEL, c.getString(OrganizationsQuery.LABEL))
-                .build());
-
-        mContactsProvider.applyBatch(operations);
+        long id = c.getLong(OrganizationsQuery.PERSON);
+        insert.bindLong(OrganizationInsert.RAW_CONTACT_ID, id);
+        insert.bindLong(OrganizationInsert.MIMETYPE_ID, mOrganizationMimetypeId);
+        bindString(insert, OrganizationInsert.IS_PRIMARY, c.getString(OrganizationsQuery.ISPRIMARY));
+        bindString(insert, OrganizationInsert.COMPANY, c.getString(OrganizationsQuery.COMPANY));
+        bindString(insert, OrganizationInsert.TITLE, c.getString(OrganizationsQuery.TITLE));
+        bindString(insert, OrganizationInsert.TYPE, c.getString(OrganizationsQuery.TYPE));
+        bindString(insert, OrganizationInsert.LABEL, c.getString(OrganizationsQuery.LABEL));
+        insert(insert);
     }
 
     private interface ContactMethodsQuery {
@@ -367,62 +547,131 @@ public class LegacyContactImporter {
         static int ISPRIMARY = 6;
     }
 
-    private void importContactMethods(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(ContactMethodsQuery.TABLE, ContactMethodsQuery.COLUMNS, null, null,
-                null, null, null);
+    private interface EmailInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Data.IS_PRIMARY + "," +
+                Email.DATA + "," +
+                Email.TYPE + "," +
+                Email.LABEL + "," +
+                Data.DATA14 +
+         ") VALUES (?,?,?,?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int IS_PRIMARY = 3;
+        int DATA = 4;
+        int TYPE = 5;
+        int LABEL = 6;
+        int AUX_DATA = 7;
+    }
+
+    private interface ImInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Data.IS_PRIMARY + "," +
+                Im.DATA + "," +
+                Im.TYPE + "," +
+                Im.LABEL + "," +
+                Data.DATA14 +
+         ") VALUES (?,?,?,?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int IS_PRIMARY = 3;
+        int DATA = 4;
+        int TYPE = 5;
+        int LABEL = 6;
+        int AUX_DATA = 7;
+    }
+
+    private interface PostalInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Data.IS_PRIMARY + "," +
+                StructuredPostal.FORMATTED_ADDRESS + "," +
+                StructuredPostal.TYPE + "," +
+                StructuredPostal.LABEL + "," +
+                Data.DATA14 +
+         ") VALUES (?,?,?,?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int IS_PRIMARY = 3;
+        int DATA = 4;
+        int TYPE = 5;
+        int LABEL = 6;
+        int AUX_DATA = 7;
+    }
+
+    private void importContactMethods() {
+        SQLiteStatement emailInsert = mTargetDb.compileStatement(EmailInsert.INSERT_SQL);
+        SQLiteStatement imInsert = mTargetDb.compileStatement(ImInsert.INSERT_SQL);
+        SQLiteStatement postalInsert = mTargetDb.compileStatement(PostalInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(ContactMethodsQuery.TABLE, ContactMethodsQuery.COLUMNS, null,
+                null, null, null, null);
         try {
             while (c.moveToNext()) {
-                insertContactMethod(c);
+                int kind = c.getInt(ContactMethodsQuery.KIND);
+                switch (kind) {
+                    case android.provider.Contacts.KIND_EMAIL:
+                        insertEmail(c, emailInsert);
+                        break;
+
+                    case android.provider.Contacts.KIND_IM:
+                        insertIm(c, imInsert);
+                        break;
+
+                    case android.provider.Contacts.KIND_POSTAL:
+                        insertPostal(c, postalInsert);
+                        break;
+                }
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertContactMethod(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
-
+    private void insertEmail(Cursor c, SQLiteStatement insert) {
         long personId = c.getLong(ContactMethodsQuery.PERSON);
-        int kind = c.getInt(ContactMethodsQuery.KIND);
-        String data = c.getString(ContactMethodsQuery.DATA);
-        String auxData = c.getString(ContactMethodsQuery.AUX_DATA);
-        String type = c.getString(ContactMethodsQuery.TYPE);
-        String label = c.getString(ContactMethodsQuery.LABEL);
-        int primary = c.getInt(ContactMethodsQuery.ISPRIMARY);
 
-        Builder builder = ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                .withValue(Data.RAW_CONTACT_ID, personId)
-                .withValue(Data.IS_PRIMARY, primary);
+        insert.bindLong(EmailInsert.RAW_CONTACT_ID, personId);
+        insert.bindLong(EmailInsert.MIMETYPE_ID, mEmailMimetypeId);
+        bindString(insert, EmailInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
+        bindString(insert, EmailInsert.DATA, c.getString(ContactMethodsQuery.DATA));
+        bindString(insert, EmailInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
+        bindString(insert, EmailInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
+        bindString(insert, EmailInsert.LABEL, c.getString(ContactMethodsQuery.LABEL));
+        insert(insert);
+    }
 
-        switch (kind) {
-            case android.provider.Contacts.KIND_EMAIL:
-                builder.withValue(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE)
-                        .withValue(Email.TYPE, type)
-                        .withValue(Email.LABEL, label)
-                        .withValue(Email.DATA, data)
-                        .withValue(Data.DATA14, auxData);
-                break;
+    private void insertIm(Cursor c, SQLiteStatement insert) {
+        long personId = c.getLong(ContactMethodsQuery.PERSON);
 
-            case android.provider.Contacts.KIND_IM:
-                builder.withValue(Data.MIMETYPE, Im.CONTENT_ITEM_TYPE)
-                        .withValue(Im.TYPE, type)
-                        .withValue(Im.LABEL, label)
-                        .withValue(Im.DATA, data)
-                        .withValue(Data.DATA14, auxData);
-                break;
+        insert.bindLong(ImInsert.RAW_CONTACT_ID, personId);
+        insert.bindLong(ImInsert.MIMETYPE_ID, mImMimetypeId);
+        bindString(insert, ImInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
+        bindString(insert, ImInsert.DATA, c.getString(ContactMethodsQuery.DATA));
+        bindString(insert, ImInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
+        bindString(insert, ImInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
+        bindString(insert, ImInsert.LABEL, c.getString(ContactMethodsQuery.LABEL));
+        insert(insert);
+    }
 
-            case android.provider.Contacts.KIND_POSTAL:
-                builder.withValue(Data.MIMETYPE, StructuredPostal.CONTENT_ITEM_TYPE)
-                        .withValue(StructuredPostal.TYPE, type)
-                        .withValue(StructuredPostal.LABEL, label)
-                        .withValue(StructuredPostal.FORMATTED_ADDRESS, data)
-                        .withValue(Data.DATA14, auxData);
-                break;
-        }
+    private void insertPostal(Cursor c, SQLiteStatement insert) {
+        long personId = c.getLong(ContactMethodsQuery.PERSON);
 
-        operations.add(builder.build());
-
-        mContactsProvider.applyBatch(operations);
+        insert.bindLong(PostalInsert.RAW_CONTACT_ID, personId);
+        insert.bindLong(PostalInsert.MIMETYPE_ID, mPostalMimetypeId);
+        bindString(insert, PostalInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
+        bindString(insert, PostalInsert.DATA, c.getString(ContactMethodsQuery.DATA));
+        bindString(insert, PostalInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
+        bindString(insert, PostalInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
+        bindString(insert, PostalInsert.LABEL, c.getString(ContactMethodsQuery.LABEL));
+        insert(insert);
     }
 
     private interface PhonesQuery {
@@ -439,33 +688,75 @@ public class LegacyContactImporter {
         static int ISPRIMARY = 4;
     }
 
-    private void importPhones(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(PhonesQuery.TABLE, PhonesQuery.COLUMNS, null, null,
+    private interface PhoneInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Data.IS_PRIMARY + "," +
+                Phone.NUMBER + "," +
+                Phone.TYPE + "," +
+                Phone.LABEL + "," +
+                PhoneColumns.NORMALIZED_NUMBER +
+         ") VALUES (?,?,?,?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int IS_PRIMARY = 3;
+        int NUMBER = 4;
+        int TYPE = 5;
+        int LABEL = 6;
+        int NORMALIZED_NUMBER = 7;
+    }
+
+    private interface PhoneLookupInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.PHONE_LOOKUP + "(" +
+                PhoneLookupColumns.RAW_CONTACT_ID + "," +
+                PhoneLookupColumns.DATA_ID + "," +
+                PhoneLookupColumns.NORMALIZED_NUMBER +
+         ") VALUES (?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int DATA_ID = 2;
+        int NORMALIZED_NUMBER = 3;
+    }
+
+    private void importPhones() {
+        SQLiteStatement phoneInsert = mTargetDb.compileStatement(PhoneInsert.INSERT_SQL);
+        SQLiteStatement phoneLookupInsert = mTargetDb.compileStatement(PhoneLookupInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(PhonesQuery.TABLE, PhonesQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertPhone(c);
+                insertPhone(c, phoneInsert, phoneLookupInsert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertPhone(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
+    private void insertPhone(Cursor c, SQLiteStatement phoneInsert,
+            SQLiteStatement phoneLookupInsert) {
+        long id = c.getLong(PhonesQuery.PERSON);
+        String number = c.getString(PhonesQuery.NUMBER);
+        String normalizedNumber = null;
+        if (number != null) {
+            normalizedNumber = PhoneNumberUtils.getStrippedReversed(number);
+        }
+        phoneInsert.bindLong(PhoneInsert.RAW_CONTACT_ID, id);
+        phoneInsert.bindLong(PhoneInsert.MIMETYPE_ID, mPhoneMimetypeId);
+        bindString(phoneInsert, PhoneInsert.IS_PRIMARY, c.getString(PhonesQuery.ISPRIMARY));
+        bindString(phoneInsert, PhoneInsert.NUMBER, number);
+        bindString(phoneInsert, PhoneInsert.TYPE, c.getString(PhonesQuery.TYPE));
+        bindString(phoneInsert, PhoneInsert.LABEL, c.getString(PhonesQuery.LABEL));
+        bindString(phoneInsert, PhoneInsert.NORMALIZED_NUMBER, normalizedNumber);
 
-        long personId = c.getLong(PhonesQuery.PERSON);
-
-        operations.add(ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                .withValue(Data.RAW_CONTACT_ID, personId)
-                .withValue(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE)
-                .withValue(Data.IS_PRIMARY, c.getString(PhonesQuery.ISPRIMARY))
-                .withValue(Phone.NUMBER, c.getString(PhonesQuery.NUMBER))
-                .withValue(Phone.TYPE, c.getString(PhonesQuery.TYPE))
-                .withValue(Phone.LABEL, c.getString(PhonesQuery.LABEL))
-                .build());
-
-        mContactsProvider.applyBatch(operations);
+        long dataId = insert(phoneInsert);
+        if (normalizedNumber != null) {
+            phoneLookupInsert.bindLong(PhoneLookupInsert.RAW_CONTACT_ID, id);
+            phoneLookupInsert.bindLong(PhoneLookupInsert.DATA_ID, dataId);
+            phoneLookupInsert.bindString(PhoneLookupInsert.NORMALIZED_NUMBER, normalizedNumber);
+            insert(phoneLookupInsert);
+        }
     }
 
     private interface PhotosQuery {
@@ -481,40 +772,54 @@ public class LegacyContactImporter {
         static int _SYNC_ACCOUNT = 3;
     }
 
-    private void importPhotos(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(PhotosQuery.TABLE, PhotosQuery.COLUMNS, null, null,
+    private interface PhotoInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                Photo.PHOTO + "," +
+                Data.SYNC1 +
+         ") VALUES (?,?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int PHOTO = 3;
+        int SYNC1 = 4;
+    }
+
+    private void importPhotos() {
+        SQLiteStatement insert = mTargetDb.compileStatement(PhotoInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(PhotosQuery.TABLE, PhotosQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertPhoto(c);
+                insertPhoto(c, insert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertPhoto(Cursor c) throws OperationApplicationException {
+    private void insertPhoto(Cursor c, SQLiteStatement insert) {
         if (c.isNull(PhotosQuery.DATA)) {
             return;
         }
 
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
-
         long personId = c.getLong(PhotosQuery.PERSON);
 
-        Builder builder = ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                .withValue(Data.RAW_CONTACT_ID, personId)
-                .withValue(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE)
-                .withValue(Photo.PHOTO, c.getBlob(PhotosQuery.DATA));
+        insert.bindLong(PhotoInsert.RAW_CONTACT_ID, personId);
+        insert.bindLong(PhotoInsert.MIMETYPE_ID, mPhotoMimetypeId);
+        insert.bindBlob(PhotoInsert.PHOTO, c.getBlob(PhotosQuery.DATA));
+
         String account = c.getString(PhotosQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
             String syncId = c.getString(PhotosQuery._SYNC_ID);
             String sourceId = buildPhotoSourceId(account, syncId);
-            builder.withValue(Data.SYNC1, sourceId);
+            insert.bindString(PhotoInsert.SYNC1, sourceId);
+        } else {
+            insert.bindNull(PhotoInsert.SYNC1);
         }
-        operations.add(builder.build());
 
-        mContactsProvider.applyBatch(operations);
+        insert(insert);
     }
 
     private String buildPhotoSourceId(String account, String syncId) {
@@ -538,21 +843,32 @@ public class LegacyContactImporter {
         static int GROUP_SYNC_ID = 3;
     }
 
-    private void importGroupMemberships(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(GroupMembershipQuery.TABLE, GroupMembershipQuery.COLUMNS, null, null,
-                null, null, null);
+    private interface GroupMembershipInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.DATA + "(" +
+                Data.RAW_CONTACT_ID + "," +
+                DataColumns.MIMETYPE_ID + "," +
+                GroupMembership.GROUP_ROW_ID +
+         ") VALUES (?,?,?)";
+
+        int RAW_CONTACT_ID = 1;
+        int MIMETYPE_ID = 2;
+        int GROUP_ROW_ID = 3;
+    }
+
+    private void importGroupMemberships() {
+        SQLiteStatement insert = mTargetDb.compileStatement(GroupMembershipInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(GroupMembershipQuery.TABLE, GroupMembershipQuery.COLUMNS, null,
+                null, null, null, null);
         try {
             while (c.moveToNext()) {
-                insertGroupMembership(c);
+                insertGroupMembership(c, insert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertGroupMembership(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
-
+    private void insertGroupMembership(Cursor c, SQLiteStatement insert) {
         long personId = c.getLong(GroupMembershipQuery.PERSON_ID);
 
         long groupId = 0;
@@ -587,14 +903,10 @@ public class LegacyContactImporter {
             groupId = c.getLong(GroupMembershipQuery.GROUP_ID);
         }
 
-        operations.add(ContentProviderOperation.newInsert(Data.CONTENT_URI)
-                .withValue(Data.RAW_CONTACT_ID, personId)
-                .withValue(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE)
-                .withValue(GroupMembership.RAW_CONTACT_ID, personId)
-                .withValue(GroupMembership.GROUP_ROW_ID, groupId)
-                .build());
-
-        mContactsProvider.applyBatch(operations);
+        insert.bindLong(GroupMembershipInsert.RAW_CONTACT_ID, personId);
+        insert.bindLong(GroupMembershipInsert.MIMETYPE_ID, mGroupMembershipMimetypeId);
+        insert.bindLong(GroupMembershipInsert.GROUP_ROW_ID, groupId);
+        insert(insert);
     }
 
     private interface CallsQuery {
@@ -616,8 +928,8 @@ public class LegacyContactImporter {
         static int NUMBER_LABEL = 8;
     }
 
-    private void importCalls(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(CallsQuery.TABLE, CallsQuery.COLUMNS, null, null,
+    private void importCalls() {
+        Cursor c = mSourceDb.query(CallsQuery.TABLE, CallsQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
@@ -628,7 +940,7 @@ public class LegacyContactImporter {
         }
     }
 
-    private void insertCall(Cursor c) throws OperationApplicationException {
+    private void insertCall(Cursor c) {
 
         // Cannot use batch operations here, because call log is serviced by a separate provider
         mValues.clear();
@@ -658,31 +970,75 @@ public class LegacyContactImporter {
         static int _SYNC_ACCOUNT = 1;
     }
 
-    private void importDeletedPeople(SQLiteDatabase sourceDb) throws OperationApplicationException {
-        Cursor c = sourceDb.query(DeletedPeopleQuery.TABLE, DeletedPeopleQuery.COLUMNS, null, null,
+    private interface DeletedRawContactInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.RAW_CONTACTS + "(" +
+                RawContacts.ACCOUNT_NAME + "," +
+                RawContacts.ACCOUNT_TYPE + "," +
+                RawContacts.SOURCE_ID + "," +
+                RawContacts.DELETED + "," +
+                RawContacts.AGGREGATION_MODE +
+         ") VALUES (?,?,?,?,?)";
+
+
+        int ACCOUNT_NAME = 1;
+        int ACCOUNT_TYPE = 2;
+        int SOURCE_ID = 3;
+        int DELETED = 4;
+        int AGGREGATION_MODE = 5;
+    }
+
+    private void importDeletedPeople() {
+        SQLiteStatement insert = mTargetDb.compileStatement(DeletedRawContactInsert.INSERT_SQL);
+        Cursor c = mSourceDb.query(DeletedPeopleQuery.TABLE, DeletedPeopleQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertDeletedPerson(c);
+                insertDeletedPerson(c, insert);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertDeletedPerson(Cursor c) throws OperationApplicationException {
-        ArrayList<ContentProviderOperation> operations = new ArrayList<ContentProviderOperation>();
-
+    private void insertDeletedPerson(Cursor c, SQLiteStatement insert) {
         String account = c.getString(DeletedPeopleQuery._SYNC_ACCOUNT);
+        if (account == null) {
+            return;
+        }
+
         String syncId = c.getString(DeletedPeopleQuery._SYNC_ID);
         String sourceId = buildRawContactSourceId(account, syncId);
-        operations.add(ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
-                .withValue(RawContacts.ACCOUNT_NAME, account)
-                .withValue(RawContacts.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE)
-                .withValue(RawContacts.SOURCE_ID, sourceId)
-                .withValue(RawContacts.DELETED, 1)
-                .build());
 
-        mContactsProvider.applyBatch(operations);
+        insert.bindString(DeletedRawContactInsert.ACCOUNT_NAME, account);
+        insert.bindString(DeletedRawContactInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
+        insert.bindString(DeletedRawContactInsert.SOURCE_ID, sourceId);
+        insert.bindLong(DeletedRawContactInsert.DELETED, 1);
+        insert.bindLong(DeletedRawContactInsert.AGGREGATION_MODE,
+                RawContacts.AGGREGATION_MODE_DISABLED);
+        insert(insert);
+    }
+
+    private void bindString(SQLiteStatement insert, int index, String string) {
+        if (string == null) {
+            insert.bindNull(index);
+        } else {
+            insert.bindString(index, string);
+        }
+    }
+
+    private long insert(SQLiteStatement insertStatement) {
+        long rowId = insertStatement.executeInsert();
+        if (rowId == 0) {
+            throw new RuntimeException("Insert failed");
+        }
+
+        mBatchCounter++;
+        if (mBatchCounter >= INSERT_BATCH_SIZE) {
+            mTargetDb.setTransactionSuccessful();
+            mTargetDb.endTransaction();
+            mTargetDb.beginTransaction();
+            mBatchCounter = 0;
+        }
+        return rowId;
     }
 }

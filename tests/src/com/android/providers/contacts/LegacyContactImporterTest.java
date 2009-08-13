@@ -89,7 +89,7 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
         ContactsProvider2 provider = (ContactsProvider2)getProvider();
         LegacyContactImporter importer =
                 new LegacyContactImporter(createLegacyMockContext(), provider);
-        provider.importLegacyContacts(importer);
+        provider.importLegacyContacts(importer, true);
 
         assertQueryResults("expected_groups.txt", Groups.CONTENT_URI, new String[]{
                 Groups._ID,
