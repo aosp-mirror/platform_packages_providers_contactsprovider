@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
-import com.android.providers.contacts.OpenHelper.Clauses;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
@@ -112,6 +111,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_CONTACT_ID2 = 3;
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
+
+    private interface EmailLookupQuery {
+        String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
+
+        String[] COLUMNS = new String[] {
+            RawContacts.CONTACT_ID
+        };
+
+        int CONTACT_ID = 0;
+    }
 
     private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
     private static final int COL_CONTACT_ID = 0;
@@ -362,9 +371,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             mOpenHelper.setContactId(rawContactId, contactId);
             computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
             db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
-            mOpenHelper.updateContactVisible(contactId);
         }
 
+        mOpenHelper.updateContactVisible(contactId);
         updateContactAggregationData(db, rawContactId, candidates, values);
     }
 
@@ -685,9 +694,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         // Yank the last comma
         selection.setLength(selection.length() - 1);
-        selection.append(") AND ");
-        selection.append(RawContacts.CONTACT_ID);
-        selection.append(" NOT NULL");
+        selection.append(")");
 
         matchAllCandidates(db, selection.toString(), candidates, matcher, false);
     }
@@ -706,7 +713,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (!firstLetters.contains(firstLetter)) {
                     firstLetters.add(firstLetter);
                     final String selection = "(" + NameLookupColumns.NORMALIZED_NAME + " GLOB '"
-                            + firstLetter + "*') AND " + RawContacts.CONTACT_ID + " NOT NULL";
+                            + firstLetter + "*')";
                     matchAllCandidates(db, selection, candidates, matcher, true);
                 }
             }
@@ -742,7 +749,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        OpenHelper.buildPhoneLookupQuery(qb, phoneNumber);
+        OpenHelper.buildPhoneLookupQuery(qb, phoneNumber, false /* join mimetypes */);
         Cursor c = qb.query(db, CONTACT_ID_COLUMNS,
                 RawContacts.CONTACT_ID + " NOT NULL", null, null, null, null);
         try {
@@ -759,12 +766,15 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Finds exact email matches and updates their match scores.
      */
     private void lookupEmailMatches(SQLiteDatabase db, String address, ContactMatcher matcher) {
-        Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS, CONTACT_ID_COLUMNS,
-                Clauses.WHERE_EMAIL_MATCHES + " AND " + RawContacts.CONTACT_ID + " NOT NULL",
-                new String[]{address}, null, null, null);
+        long mimetypeId = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        Cursor c = db.query(EmailLookupQuery.TABLE, EmailLookupQuery.COLUMNS,
+                DataColumns.MIMETYPE_ID + "=" + mimetypeId
+                        + " AND " + Email.DATA + "=?"
+                        + " AND " + RawContacts.CONTACT_ID + " NOT NULL",
+                new String[] {address}, null, null, null);
         try {
             while (c.moveToNext()) {
-                long contactId = c.getLong(COL_CONTACT_ID);
+                long contactId = c.getLong(EmailLookupQuery.CONTACT_ID);
                 matcher.updateScoreWithEmailMatch(contactId);
             }
         } finally {
@@ -824,6 +834,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
 
+        db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+                + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId + ";");
         for (int i = 0; i < candidates.mCount; i++) {
             NameMatchCandidate candidate = candidates.mList.get(i);
             mOpenHelper.insertNameLookup(rawContactId, candidate.mLookupType, candidate.mName);

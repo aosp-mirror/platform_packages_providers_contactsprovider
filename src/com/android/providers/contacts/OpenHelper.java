@@ -90,6 +90,9 @@ import java.util.HashMap;
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
 
+        public static final String DATA_JOIN_RAW_CONTACTS = "data "
+            + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
+
         public static final String DATA_JOIN_MIMETYPE_RAW_CONTACTS = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
@@ -194,11 +197,11 @@ import java.util.HashMap;
     }
 
     public interface Clauses {
-        public static final String WHERE_IM_MATCHES = MimetypesColumns.MIMETYPE + "=" + Im.MIMETYPE
-                + " AND " + Im.PROTOCOL + "=? AND " + Im.DATA + "=?";
+        public static final String WHERE_IM_MATCHES = MimetypesColumns.MIMETYPE + "='"
+                + Im.CONTENT_ITEM_TYPE + "' AND " + Im.PROTOCOL + "=? AND " + Im.DATA + "=?";
 
-        public static final String WHERE_EMAIL_MATCHES = MimetypesColumns.MIMETYPE + "="
-                + Email.MIMETYPE + " AND " + Email.DATA + "=?";
+        public static final String WHERE_EMAIL_MATCHES = MimetypesColumns.MIMETYPE + "='"
+                + Email.CONTENT_ITEM_TYPE + "' AND " + Email.DATA + "=?";
 
         public static final String MIMETYPE_IS_GROUP_MEMBERSHIP = MimetypesColumns.CONCRETE_MIMETYPE
                 + "='" + GroupMembership.CONTENT_ITEM_TYPE + "'";
@@ -476,7 +479,7 @@ import java.util.HashMap;
         mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns.MIMETYPE
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
-        mNameLookupInsert = db.compileStatement("INSERT INTO " + Tables.NAME_LOOKUP + "("
+        mNameLookupInsert = db.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
                 + NameLookupColumns.NORMALIZED_NAME + ") VALUES (?,?,?)");
 
@@ -572,7 +575,7 @@ import java.util.HashMap;
                 Data._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
-                Data.RAW_CONTACT_ID + " INTEGER NOT NULL," +
+                Data.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
                 Data.IS_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.IS_SUPER_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.DATA_VERSION + " INTEGER NOT NULL DEFAULT 0," +
@@ -595,6 +598,18 @@ import java.util.HashMap;
                 Data.SYNC2 + " TEXT, " +
                 Data.SYNC3 + " TEXT, " +
                 Data.SYNC4 + " TEXT " +
+        ");");
+
+        db.execSQL("CREATE INDEX data_raw_contact_id ON " + Tables.DATA + " (" +
+                Data.RAW_CONTACT_ID +
+        ");");
+
+        /**
+         * For email lookup and similar queries.
+         */
+        db.execSQL("CREATE INDEX data_mimetype_data2_index ON " + Tables.DATA + " (" +
+                DataColumns.MIMETYPE_ID + "," +
+                Data.DATA2 +
         ");");
 
         /**
@@ -667,11 +682,13 @@ import java.util.HashMap;
 
         // Private name/nickname table used for lookup
         db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
-                NameLookupColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 NameLookupColumns.RAW_CONTACT_ID
                         + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
-                NameLookupColumns.NORMALIZED_NAME + " TEXT," +
-                NameLookupColumns.NAME_TYPE + " INTEGER" +
+                NameLookupColumns.NORMALIZED_NAME + " TEXT NOT NULL," +
+                NameLookupColumns.NAME_TYPE + " INTEGER NOT NULL," +
+                "PRIMARY KEY (" + NameLookupColumns.RAW_CONTACT_ID + ", "
+                        + NameLookupColumns.NORMALIZED_NAME + ", "
+                        + NameLookupColumns.NAME_TYPE + ")" +
         ");");
 
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
@@ -1214,13 +1231,19 @@ import java.util.HashMap;
         mNameLookupInsert.executeInsert();
     }
 
-    public static void buildPhoneLookupQuery(SQLiteQueryBuilder qb, final String number) {
+    public static void buildPhoneLookupQuery(SQLiteQueryBuilder qb, String number,
+            boolean joinWithMimetypes) {
         final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
         final StringBuilder tables = new StringBuilder();
         tables.append(Tables.RAW_CONTACTS + ", (SELECT data_id FROM phone_lookup "
                 + "WHERE (phone_lookup.normalized_number GLOB '");
         tables.append(normalizedNumber);
-        tables.append("*')) AS lookup, " + Tables.DATA_JOIN_MIMETYPES);
+        tables.append("*')) AS lookup, ");
+        if (joinWithMimetypes) {
+            tables.append(Tables.DATA_JOIN_MIMETYPES);
+        } else {
+            tables.append(Tables.DATA);
+        }
         qb.setTables(tables.toString());
         qb.appendWhere("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id AND ");
         qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");

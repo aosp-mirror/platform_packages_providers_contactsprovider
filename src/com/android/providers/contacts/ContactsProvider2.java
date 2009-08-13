@@ -23,6 +23,7 @@ import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
+import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.PackagesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
@@ -1651,6 +1652,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             mDb.delete(Tables.PRESENCE, Presence.RAW_CONTACT_ID + "=" + rawContactId, null);
             return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
+
+            // Clear out data used for aggregation - this deleted contact should not be aggregated
+            mDb.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+                    + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId);
+
             mValues.clear();
             mValues.put(RawContacts.DELETED, 1);
             mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
@@ -2234,7 +2240,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 }
 
                 final String number = uri.getLastPathSegment();
-                OpenHelper.buildPhoneLookupQuery(qb, number);
+                OpenHelper.buildPhoneLookupQuery(qb, number, true /* join mimetype */);
                 qb.setProjectionMap(sDataRawContactsProjectionMap);
                 break;
             }

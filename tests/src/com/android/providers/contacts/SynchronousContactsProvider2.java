@@ -80,6 +80,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         SQLiteDatabase db = getOpenHelper().getWritableDatabase();
         db.execSQL("UPDATE raw_contacts SET contact_id = NULL, aggregation_mode=0;");
         db.execSQL("DELETE FROM contacts;");
+        db.execSQL("DELETE FROM name_lookup;");
         long rowId =
             db.compileStatement("SELECT _id FROM raw_contacts LIMIT 1 OFFSET " + maxContact)
                 .simpleQueryForLong();
