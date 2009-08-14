@@ -91,90 +91,29 @@ public class ContactMatcher {
      * scores than direct matches.
      */
     static {
-        setScoreRange(NameLookupType.FULL_NAME,
-                NameLookupType.FULL_NAME, 99, 99);
-        setScoreRange(NameLookupType.FULL_NAME,
-                NameLookupType.FULL_NAME_REVERSE, 90, 90);
+        setScoreRange(NameLookupType.NAME_EXACT,
+                NameLookupType.NAME_EXACT, 99, 99);
+        setScoreRange(NameLookupType.NAME_VARIANT,
+                NameLookupType.NAME_VARIANT, 90, 90);
+        setScoreRange(NameLookupType.NAME_COLLATION_KEY,
+                NameLookupType.NAME_COLLATION_KEY, 40, 80);
 
-        setScoreRange(NameLookupType.FULL_NAME_REVERSE,
-                NameLookupType.FULL_NAME, 90, 90);
-        setScoreRange(NameLookupType.FULL_NAME_REVERSE,
-                NameLookupType.FULL_NAME_REVERSE, 99, 99);
-
-        setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
-                NameLookupType.FULL_NAME_CONCATENATED, 40, 80);
-        setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
-        setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
+        setScoreRange(NameLookupType.NAME_COLLATION_KEY,
                 NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
-        setScoreRange(NameLookupType.FULL_NAME_CONCATENATED,
+        setScoreRange(NameLookupType.NAME_COLLATION_KEY,
                 NameLookupType.NICKNAME, 30, 60);
-
-        setScoreRange(NameLookupType.FULL_NAME_REVERSE_CONCATENATED,
-                NameLookupType.FULL_NAME_CONCATENATED, 30, 70);
-        setScoreRange(NameLookupType.FULL_NAME_REVERSE_CONCATENATED,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 40, 80);
-
-        setScoreRange(NameLookupType.FULL_NAME_WITH_NICKNAME,
-                NameLookupType.FULL_NAME_WITH_NICKNAME, 75, 75);
-        setScoreRange(NameLookupType.FULL_NAME_WITH_NICKNAME_REVERSE,
-                NameLookupType.FULL_NAME_WITH_NICKNAME_REVERSE, 73, 73);
-
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
-                NameLookupType.FAMILY_NAME_ONLY, 45, 75);
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
-                NameLookupType.FULL_NAME_CONCATENATED, 32, 72);
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
-                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY,
-                NameLookupType.NICKNAME, 30, 60);
-
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME,
-                NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME, 71, 71);
-        setScoreRange(NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME,
-                NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME, 70, 70);
-
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
-                NameLookupType.GIVEN_NAME_ONLY, 40, 70);
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
-                NameLookupType.FULL_NAME_CONCATENATED, 32, 72);
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 70);
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
-                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY,
-                NameLookupType.NICKNAME, 30, 60);
-
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME,
-                NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME, 73, 73);
-        setScoreRange(NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME,
-                NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME, 70, 70);
 
         setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
                 NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
         setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.GIVEN_NAME_ONLY, 30, 60);
-        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.FAMILY_NAME_ONLY, 30, 60);
-        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.FULL_NAME_CONCATENATED, 30, 60);
-        setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 60);
+                NameLookupType.NAME_COLLATION_KEY, 30, 60);
         setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
                 NameLookupType.NICKNAME, 30, 60);
 
         setScoreRange(NameLookupType.NICKNAME,
                 NameLookupType.NICKNAME, 30, 60);
         setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.GIVEN_NAME_ONLY, 30, 60);
-        setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.FAMILY_NAME_ONLY, 30, 60);
-        setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.FULL_NAME_CONCATENATED, 30, 60);
-        setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.FULL_NAME_REVERSE_CONCATENATED, 30, 60);
+                NameLookupType.NAME_COLLATION_KEY, 30, 60);
         setScoreRange(NameLookupType.NICKNAME,
                 NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
     }
