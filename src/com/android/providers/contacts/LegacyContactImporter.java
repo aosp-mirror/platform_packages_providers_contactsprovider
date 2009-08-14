@@ -48,9 +48,14 @@ import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.io.File;
+
 public class LegacyContactImporter {
 
     public static final String TAG = "LegacyContactImporter";
+
+    private static final int MAX_ATTEMPTS = 5;
+    private static final int DELAY_BETWEEN_ATTEMPTS = 2000;
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
     private static final String DATABASE_NAME = "contacts.db";
@@ -69,6 +74,8 @@ public class LegacyContactImporter {
     private NameSplitter mNameSplitter;
     private int mBatchCounter;
 
+    private int mContactCount;
+
     private long mStructuredNameMimetypeId;
     private long mNoteMimetypeId;
     private long mOrganizationMimetypeId;
@@ -86,79 +93,92 @@ public class LegacyContactImporter {
     }
 
     public void importContacts() throws Exception {
+        String path = mContext.getDatabasePath(DATABASE_NAME).getPath();
+        Log.w(TAG, "Importing contacts from " + path);
 
-        try {
-            String path = mContext.getDatabasePath(DATABASE_NAME).getPath();
+        if (!new File(path).exists()) {
+            Log.i(TAG, "Legacy contacts database does not exist");
+            return;
+        }
+
+        for (int i = 0; i < MAX_ATTEMPTS; i++) {
             try {
                 mSourceDb = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
-            } catch(SQLiteException e) {
-
-                // If we cannot open the original database, it is either non-existent or corrupt;
-                // in both bases - just bail.
+                importContactsFromLegacyDb();
+                Log.i(TAG, "Imported legacy contacts: " + mContactCount);
                 return;
+
+            } catch (SQLiteException e) {
+                Log.e(TAG, "Database import exception. Will retry in " + DELAY_BETWEEN_ATTEMPTS
+                        + "ms", e);
+
+                // We could get a "database locked" exception here, in which
+                // case we should retry
+                Thread.sleep(DELAY_BETWEEN_ATTEMPTS);
+
+            } finally {
+                if (mSourceDb != null) {
+                    mSourceDb.close();
+                }
             }
-
-            int version = mSourceDb.getVersion();
-
-            // Upgrade to version 78 was the latest that wiped out data.  Might as well follow suit
-            // and ignore earlier versions.
-            if (version < 78) {
-                return;
-            }
-
-            Log.w(TAG, "Importing contacts from " + path);
-
-            if (version < 80) {
-                mPhoneticNameAvailable = false;
-            }
-
-            OpenHelper openHelper = (OpenHelper)mContactsProvider.getOpenHelper();
-            mTargetDb = openHelper.getWritableDatabase();
-
-            /*
-             * At this point there should be no data in the contacts provider, but in case
-             * some was inserted by mistake, we should remove it.  The main reason for this
-             * is that we will be preserving original contact IDs and don't want to run into
-             * any collisions.
-             */
-            mContactsProvider.wipeData();
-
-            mStructuredNameMimetypeId = openHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
-            mNoteMimetypeId = openHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
-            mOrganizationMimetypeId = openHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
-            mPhoneMimetypeId = openHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-            mEmailMimetypeId = openHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-            mImMimetypeId = openHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
-            mPostalMimetypeId = openHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
-            mPhotoMimetypeId = openHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
-            mGroupMembershipMimetypeId =
-                    openHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-
-            mNameSplitter = mContactsProvider.getNameSplitter();
-
-            mTargetDb.beginTransaction();
-            importGroups();
-            importPeople();
-            importOrganizations();
-            importPhones();
-            importContactMethods();
-            importPhotos();
-            importGroupMemberships();
-
-            // Deleted contacts should be inserted after everything else, because
-            // the legacy table does not provide an _ID field - the _ID field
-            // will be autoincremented
-            importDeletedPeople();
-
-            mTargetDb.setTransactionSuccessful();
-            mTargetDb.endTransaction();
-
-            importCalls();
-
-            Log.w(TAG, "Contact import completed");
-        } finally {
-            if (mSourceDb != null) mSourceDb.close();
         }
+    }
+
+    private void importContactsFromLegacyDb() {
+        int version = mSourceDb.getVersion();
+
+        // Upgrade to version 78 was the latest that wiped out data.  Might as well follow suit
+        // and ignore earlier versions.
+        if (version < 78) {
+            return;
+        }
+
+        if (version < 80) {
+            mPhoneticNameAvailable = false;
+        }
+
+        OpenHelper openHelper = (OpenHelper)mContactsProvider.getOpenHelper();
+        mTargetDb = openHelper.getWritableDatabase();
+
+        /*
+         * At this point there should be no data in the contacts provider, but in case
+         * some was inserted by mistake, we should remove it.  The main reason for this
+         * is that we will be preserving original contact IDs and don't want to run into
+         * any collisions.
+         */
+        mContactsProvider.wipeData();
+
+        mStructuredNameMimetypeId = openHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+        mNoteMimetypeId = openHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
+        mOrganizationMimetypeId = openHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+        mPhoneMimetypeId = openHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+        mEmailMimetypeId = openHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mImMimetypeId = openHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mPostalMimetypeId = openHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
+        mPhotoMimetypeId = openHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        mGroupMembershipMimetypeId =
+                openHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+
+        mNameSplitter = mContactsProvider.getNameSplitter();
+
+        mTargetDb.beginTransaction();
+        importGroups();
+        importPeople();
+        importOrganizations();
+        importPhones();
+        importContactMethods();
+        importPhotos();
+        importGroupMemberships();
+
+        // Deleted contacts should be inserted after everything else, because
+        // the legacy table does not provide an _ID field - the _ID field
+        // will be autoincremented
+        importDeletedPeople();
+
+        mTargetDb.setTransactionSuccessful();
+        mTargetDb.endTransaction();
+
+        importCalls();
     }
 
     private interface GroupsQuery {
@@ -410,14 +430,14 @@ public class LegacyContactImporter {
                 insertRawContact(c, rawContactInsert);
                 insertStructuredName(c, structuredNameInsert);
                 insertNote(c, noteInsert);
+                mContactCount++;
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertRawContact(Cursor c, SQLiteStatement insert)
-            {
+    private void insertRawContact(Cursor c, SQLiteStatement insert) {
         long id = c.getLong(PeopleQuery._ID);
         insert.bindLong(RawContactsInsert.ID, id);
         bindString(insert, RawContactsInsert.CUSTOM_RINGTONE,
@@ -452,8 +472,7 @@ public class LegacyContactImporter {
         insert(insert);
     }
 
-    private void insertStructuredName(Cursor c, SQLiteStatement insert)
-            {
+    private void insertStructuredName(Cursor c, SQLiteStatement insert) {
         String name = c.getString(PeopleQuery.NAME);
         if (TextUtils.isEmpty(name)) {
             return;
@@ -544,8 +563,7 @@ public class LegacyContactImporter {
         }
     }
 
-    private void insertOrganization(Cursor c, SQLiteStatement insert)
-            {
+    private void insertOrganization(Cursor c, SQLiteStatement insert) {
 
         long id = c.getLong(OrganizationsQuery.PERSON);
         insert.bindLong(OrganizationInsert.RAW_CONTACT_ID, id);
