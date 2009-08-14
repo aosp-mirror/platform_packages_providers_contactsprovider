@@ -17,7 +17,7 @@
 17    account_type=com.google.GAIA
 18    deleted=0
 19    dirty=1
-20    sourceid=http://www.google.com/m8/feeds/contacts/android.contacts.test.eclair@gmail.com/base/3d09f37e0f0dbc6f
+20    sourceid=3d09f37e0f0dbc6f
 21    version=25
 22    sync1=1249441106583000
 23    sync2=null
@@ -30,7 +30,7 @@
 30    account_type=com.google.GAIA
 31    deleted=0
 32    dirty=1
-33    sourceid=http://www.google.com/m8/feeds/contacts/android.contacts.test.eclair@gmail.com/base/5c9ae978b346ac9
+33    sourceid=5c9ae978b346ac9
 34    version=12
 35    sync1=1249441067558000
 36    sync2=null
@@ -56,7 +56,7 @@
 56    account_type=com.google.GAIA
 57    deleted=1
 58    dirty=0
-59    sourceid=http://www.google.com/m8/feeds/contacts/android.contacts.test.eclair@gmail.com/base/20d08a710c3df43d
+59    sourceid=20d08a710c3df43d
 60    version=1
 61    sync1=null
 62    sync2=null

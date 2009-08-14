@@ -538,7 +538,7 @@
 538    is_primary=0
 539    is_super_primary=0
 540    data_version=0
-541    data_sync1=http://www.google.com/m8/feeds/photos/media/android.contacts.test.eclair@gmail.com/3d09f37e0f0dbc6f
+541    data_sync1=3d09f37e0f0dbc6f
 542    data_sync2=null
 543    data_sync3=null
 544    data_sync4=null
@@ -555,7 +555,7 @@
 555    is_primary=0
 556    is_super_primary=0
 557    data_version=0
-558    data_sync1=http://www.google.com/m8/feeds/photos/media/android.contacts.test.eclair@gmail.com/5c9ae978b346ac9
+558    data_sync1=5c9ae978b346ac9
 559    data_sync2=null
 560    data_sync3=null
 561    data_sync4=null

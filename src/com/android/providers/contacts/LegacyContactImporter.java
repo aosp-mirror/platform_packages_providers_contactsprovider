@@ -55,10 +55,6 @@ public class LegacyContactImporter {
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
     private static final String DATABASE_NAME = "contacts.db";
 
-    private static final String CONTACTS_FEED_URL = "http://www.google.com/m8/feeds/contacts/";
-    private static final String GROUPS_FEED_URL = "http://www.google.com/m8/feeds/groups/";
-    private static final String PHOTO_FEED_URL = "http://www.google.com/m8/feeds/photos/media/";
-
     private static final int INSERT_BATCH_SIZE = 200;
 
     private final Context mContext;
@@ -233,25 +229,15 @@ public class LegacyContactImporter {
 
         String account = c.getString(GroupsQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
-            String syncId = c.getString(GroupsQuery._SYNC_ID);
-            String sourceId = buildGroupSourceId(account, syncId);
             bindString(insert, GroupsInsert.ACCOUNT_NAME, account);
             bindString(insert, GroupsInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
-            bindString(insert, GroupsInsert.SOURCE_ID, sourceId);
+            bindString(insert, GroupsInsert.SOURCE_ID, c.getString(GroupsQuery._SYNC_ID));
         } else {
             insert.bindNull(GroupsInsert.ACCOUNT_NAME);
             insert.bindNull(GroupsInsert.ACCOUNT_TYPE);
             insert.bindNull(GroupsInsert.SOURCE_ID);
         }
         insert(insert);
-    }
-
-    private String buildGroupSourceId(String account, String syncId) {
-        if (account == null || syncId == null) {
-            return null;
-        }
-
-        return GROUPS_FEED_URL + account + "/base/" + syncId;
     }
 
     private interface PeopleQuery {
@@ -455,11 +441,9 @@ public class LegacyContactImporter {
 
         String account = c.getString(PeopleQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
-            String syncId = c.getString(PeopleQuery._SYNC_ID);
-            String sourceId = buildRawContactSourceId(account, syncId);
             bindString(insert, RawContactsInsert.ACCOUNT_NAME, account);
             bindString(insert, RawContactsInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
-            bindString(insert, RawContactsInsert.SOURCE_ID, sourceId);
+            bindString(insert, RawContactsInsert.SOURCE_ID, c.getString(PeopleQuery._SYNC_ID));
         } else {
             insert.bindNull(RawContactsInsert.ACCOUNT_NAME);
             insert.bindNull(RawContactsInsert.ACCOUNT_TYPE);
@@ -510,14 +494,6 @@ public class LegacyContactImporter {
         insert.bindLong(NoteInsert.MIMETYPE_ID, mNoteMimetypeId);
         bindString(insert, NoteInsert.NOTE, notes);
         insert(insert);
-    }
-
-    private String buildRawContactSourceId(String account, String syncId) {
-        if (account == null || syncId == null) {
-            return null;
-        }
-
-        return CONTACTS_FEED_URL + account + "/base/" + syncId;
     }
 
     private interface OrganizationsQuery {
@@ -863,22 +839,12 @@ public class LegacyContactImporter {
 
         String account = c.getString(PhotosQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
-            String syncId = c.getString(PhotosQuery._SYNC_ID);
-            String sourceId = buildPhotoSourceId(account, syncId);
-            insert.bindString(PhotoInsert.SYNC1, sourceId);
+            insert.bindString(PhotoInsert.SYNC1, c.getString(PhotosQuery._SYNC_ID));
         } else {
             insert.bindNull(PhotoInsert.SYNC1);
         }
 
         insert(insert);
-    }
-
-    private String buildPhotoSourceId(String account, String syncId) {
-        if (account == null || syncId == null) {
-            return null;
-        }
-
-        return PHOTO_FEED_URL + account + "/" + syncId;
     }
 
     private interface GroupMembershipQuery {
@@ -927,10 +893,9 @@ public class LegacyContactImporter {
             String account = c.getString(GroupMembershipQuery.GROUP_SYNC_ACCOUNT);
             if (!TextUtils.isEmpty(account)) {
                 String syncId = c.getString(GroupMembershipQuery.GROUP_SYNC_ID);
-                String sourceId = buildGroupSourceId(account, syncId);
 
                 Cursor cursor = mContactsProvider.query(Groups.CONTENT_URI,
-                        new String[]{Groups._ID}, Groups.SOURCE_ID + "=?", new String[]{sourceId},
+                        new String[]{Groups._ID}, Groups.SOURCE_ID + "=?", new String[]{syncId},
                         null);
                 try {
                     if (cursor.moveToFirst()) {
@@ -945,7 +910,7 @@ public class LegacyContactImporter {
                     values.put(Groups.ACCOUNT_NAME, account);
                     values.put(Groups.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
                     values.put(Groups.GROUP_VISIBLE, true);
-                    values.put(Groups.SOURCE_ID, sourceId);
+                    values.put(Groups.SOURCE_ID, syncId);
                     Uri groupUri = mContactsProvider.insert(Groups.CONTENT_URI, values);
                     groupId = ContentUris.parseId(groupUri);
                 }
@@ -1057,12 +1022,10 @@ public class LegacyContactImporter {
             return;
         }
 
-        String syncId = c.getString(DeletedPeopleQuery._SYNC_ID);
-        String sourceId = buildRawContactSourceId(account, syncId);
-
         insert.bindString(DeletedRawContactInsert.ACCOUNT_NAME, account);
         insert.bindString(DeletedRawContactInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
-        insert.bindString(DeletedRawContactInsert.SOURCE_ID, sourceId);
+        insert.bindString(DeletedRawContactInsert.SOURCE_ID,
+                c.getString(DeletedPeopleQuery._SYNC_ID));
         insert.bindLong(DeletedRawContactInsert.DELETED, 1);
         insert.bindLong(DeletedRawContactInsert.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_DISABLED);
