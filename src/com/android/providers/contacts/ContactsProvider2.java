@@ -34,11 +34,14 @@ import com.google.android.collect.Lists;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.SearchManager;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
@@ -49,6 +52,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.os.Handler;
 import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -76,6 +80,7 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.Semaphore;
 
 /**
  * Contacts content provider. The contract between this provider and applications
@@ -1035,6 +1040,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
     private ContentValues mValues = new ContentValues();
 
+    private volatile Semaphore mAccessSemaphore;
     private boolean mImportMode;
 
     private boolean mScheduleAggregation;
@@ -1098,10 +1104,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 new StructuredNameRowHandler(mNameSplitter));
 
         if (isLegacyContactImportNeeded()) {
-            if (!importLegacyContacts()) {
-                return false;
-            }
+            importLegacyContactsAsync();
         }
+
         return (db != null);
     }
 
@@ -1120,8 +1125,47 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         return prefs.getInt(PREF_CONTACTS_IMPORTED, 0) < PREF_CONTACTS_IMPORT_VERSION;
     }
 
+    protected LegacyContactImporter getLegacyContactImporter() {
+        return new LegacyContactImporter(getContext(), this);
+    }
+
+    /**
+     * Imports legacy contacts in a separate thread.  As long as the import process is running
+     * all other access to the contacts is blocked.
+     */
+    private void importLegacyContactsAsync() {
+        mAccessSemaphore = new Semaphore(1);
+
+        // Parameter (0) indicates that release must be called before acquire is granted
+        final Semaphore importThreadStarted = new Semaphore(0);
+
+        Thread importThread = new Thread("LegacyContactImport") {
+            @Override
+            public void run() {
+                mAccessSemaphore.acquireUninterruptibly();
+                importThreadStarted.release();
+                if (importLegacyContacts()) {
+
+                    /*
+                     * When the import process is done, we can unlock the provider and
+                     * start aggregating the imported contacts asynchronously.
+                     */
+                    mAccessSemaphore.release();
+                    mAccessSemaphore = null;
+                    scheduleContactAggregation();
+                }
+            }
+        };
+
+        importThread.start();
+
+        // Wait for the import thread to start
+        importThreadStarted.acquireUninterruptibly();
+    }
+
     private boolean importLegacyContacts() {
-        if (importLegacyContacts(getLegacyContactImporter(), true)) {
+        LegacyContactImporter importer = getLegacyContactImporter();
+        if (importLegacyContacts(importer)) {
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
             Editor editor = prefs.edit();
             editor.putInt(PREF_CONTACTS_IMPORTED, PREF_CONTACTS_IMPORT_VERSION);
@@ -1132,20 +1176,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
     }
 
-    protected LegacyContactImporter getLegacyContactImporter() {
-        return new LegacyContactImporter(getContext(), this);
-    }
-
     /* Visible for testing */
-    /* package */ boolean importLegacyContacts(LegacyContactImporter importer, boolean aggregate) {
+    /* package */ boolean importLegacyContacts(LegacyContactImporter importer) {
         mContactAggregator.setEnabled(false);
         mImportMode = true;
         try {
             importer.importContacts();
             mContactAggregator.setEnabled(true);
-            if (aggregate) {
-                mContactAggregator.run();
-            }
             return true;
         } catch (Throwable e) {
            Log.e(TAG, "Legacy contact import failed", e);
@@ -1171,13 +1208,61 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mOpenHelper.wipeData();
     }
 
+    /**
+     * While importing and aggregating contacts, this content provider will
+     * block all attempts to change contacts data. In particular, it will hold
+     * up all contact syncs. As soon as the import process is complete, all
+     * processes waiting to write to the provider are unblocked and can proceed
+     * to compete for the database transaction monitor.
+     */
+    private void waitForAccess() {
+        Semaphore semaphore = mAccessSemaphore;
+        if (semaphore != null) {
+            semaphore.acquireUninterruptibly();
+
+            // We don't need to hold this semaphore, the database lock will later ensure
+            // exclusive access to the database.
+            semaphore.release();
+        }
+    }
+
+    @Override
+    public Uri insert(Uri uri, ContentValues values) {
+        waitForAccess();
+        return super.insert(uri, values);
+    }
+
+    @Override
+    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        waitForAccess();
+        return super.update(uri, values, selection, selectionArgs);
+    }
+
+    @Override
+    public int delete(Uri uri, String selection, String[] selectionArgs) {
+        waitForAccess();
+        return super.delete(uri, selection, selectionArgs);
+    }
+
+    @Override
+    public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
+            throws OperationApplicationException {
+        waitForAccess();
+        return super.applyBatch(operations);
+    }
+
     @Override
     protected void onTransactionComplete() {
         if (mScheduleAggregation) {
             mScheduleAggregation = false;
-            mContactAggregator.schedule();
+            scheduleContactAggregation();
         }
         super.onTransactionComplete();
+    }
+
+
+    protected void scheduleContactAggregation() {
+        mContactAggregator.schedule();
     }
 
     private DataRowHandler getDataRowHandler(final String mimeType) {
@@ -2708,6 +2793,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     @Override
     public EntityIterator queryEntities(Uri uri, String selection, String[] selectionArgs,
             String sortOrder) {
+        waitForAccess();
+
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case RAW_CONTACTS:

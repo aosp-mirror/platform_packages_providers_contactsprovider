@@ -77,36 +77,12 @@ public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
         if (TRACE) {
             Debug.startMethodTracing("import");
         }
-        provider.importLegacyContacts(importer, false);
+        provider.importLegacyContacts(importer);
         if (TRACE) {
             Debug.stopMethodTracing();
         }
         long end = System.currentTimeMillis();
         long contactCount = provider.getRawContactCount();
-
-        // long rawContactCount = provider.getRawContactCount();
-        // if (rawContactCount == 0) {
-        // Log.w(TAG,
-        // "The test has not been set up. Use this command to copy a legacy contact db"
-        // + " to the device:\nadb push <large contacts.db> "
-        // +
-        // "data/data/com.android.providers.contacts/databases/perf_imp.contacts.db");
-        // return;
-        // }
-
-        // provider.prepareForFullAggregation(100);
-        // rawContactCount = provider.getRawContactCount();
-        // long start = System.currentTimeMillis();
-        // if (TRACE) {
-        // Debug.startMethodTracing("aggregation");
-        // }
-        // scheduler.trigger();
-        // if (TRACE) {
-        // Debug.stopMethodTracing();
-        // }
-        // long end = System.currentTimeMillis();
-        // long contactCount = provider.getContactCount();
-        //
         Log.i(TAG, String.format("Imported contacts in %d ms.\n"
                 + "Contacts: %d\n"
                 + "Per contact: %.3f",
