@@ -257,6 +257,42 @@ public class LegacyContactImporter {
     private interface PeopleQuery {
         String TABLE = "people";
 
+        String NAME_SQL =
+                "(CASE WHEN (name IS NOT NULL AND name != '') "
+                    + "THEN name "
+                + "ELSE "
+                    + "(CASE WHEN primary_organization is NOT NULL THEN "
+                        + "(SELECT company FROM organizations WHERE "
+                            + "organizations._id = primary_organization) "
+                    + "ELSE "
+                        + "(CASE WHEN primary_phone IS NOT NULL THEN "
+                            +"(SELECT number FROM phones WHERE phones._id = primary_phone) "
+                        + "ELSE "
+                            + "(CASE WHEN primary_email IS NOT NULL THEN "
+                                + "(SELECT data FROM contact_methods WHERE "
+                                    + "contact_methods._id = primary_email) "
+                            + "ELSE "
+                                + "null "
+                            + "END) "
+                        + "END) "
+                    + "END) "
+                + "END) ";
+
+
+        String[] COLUMNS_WITH_DISPLAY_NAME_WITHOUT_PHONETIC_NAME = {
+                "_id", NAME_SQL, "notes", "times_contacted", "last_time_contacted", "starred",
+                "primary_phone", "primary_organization", "primary_email", "custom_ringtone",
+                "send_to_voicemail", "_sync_account", "_sync_id", "_sync_time", "_sync_local_id",
+                "_sync_dirty",
+        };
+
+        String[] COLUMNS_WITH_DISPLAY_NAME_WITH_PHONETIC_NAME = {
+                "_id", NAME_SQL, "notes", "times_contacted", "last_time_contacted", "starred",
+                "primary_phone", "primary_organization", "primary_email", "custom_ringtone",
+                "send_to_voicemail", "_sync_account", "_sync_id", "_sync_time", "_sync_local_id",
+                "_sync_dirty", "phonetic_name",
+        };
+
         String[] COLUMNS_WITHOUT_PHONETIC_NAME = {
                 "_id", "name", "notes", "times_contacted", "last_time_contacted", "starred",
                 "primary_phone", "primary_organization", "primary_email", "custom_ringtone",
@@ -364,10 +400,25 @@ public class LegacyContactImporter {
         SQLiteStatement structuredNameInsert =
                 mTargetDb.compileStatement(StructuredNameInsert.INSERT_SQL);
         SQLiteStatement noteInsert = mTargetDb.compileStatement(NoteInsert.INSERT_SQL);
-        String[] columns = mPhoneticNameAvailable ? PeopleQuery.COLUMNS_WITH_PHONETIC_NAME :
-            PeopleQuery.COLUMNS_WITHOUT_PHONETIC_NAME;
-        Cursor c = mSourceDb.query(PeopleQuery.TABLE, columns, null, null, null, null,
-                null);
+
+        String[] columns = mPhoneticNameAvailable
+                ? PeopleQuery.COLUMNS_WITH_DISPLAY_NAME_WITH_PHONETIC_NAME
+                : PeopleQuery.COLUMNS_WITH_DISPLAY_NAME_WITHOUT_PHONETIC_NAME;
+        Cursor c =
+                mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NULL", null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                insertRawContact(c, rawContactInsert);
+                insertNote(c, noteInsert);
+            }
+        } finally {
+            c.close();
+        }
+
+        columns = mPhoneticNameAvailable
+                ? PeopleQuery.COLUMNS_WITH_PHONETIC_NAME
+                : PeopleQuery.COLUMNS_WITHOUT_PHONETIC_NAME;
+        c = mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NOT NULL", null, null, null, null);
         try {
             while (c.moveToNext()) {
                 insertRawContact(c, rawContactInsert);
