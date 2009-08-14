@@ -6,7 +6,7 @@
 6    group_visible=1
 7    notes=System Group: My Contacts
 8    res_package=null
-9    sourceid=http://www.google.com/m8/feeds/groups/android.contacts.test.eclair@gmail.com/base/6
+9    sourceid=6
 10    system_id=Contacts
 11    title=System Group: My Contacts
 12    version=1
@@ -23,7 +23,7 @@
 23    group_visible=1
 24    notes=Eclair Contacts
 25    res_package=null
-26    sourceid=http://www.google.com/m8/feeds/groups/android.contacts.test.eclair@gmail.com/base/20a186238cf27aaa
+26    sourceid=20a186238cf27aaa
 27    system_id=null
 28    title=Eclair Contacts
 29    version=1
@@ -40,7 +40,7 @@
 40    group_visible=1
 41    notes=Starred in Android
 42    res_package=null
-43    sourceid=http://www.google.com/m8/feeds/groups/android.contacts.test.eclair@gmail.com/base/2fcbf74c8be345dc
+43    sourceid=2fcbf74c8be345dc
 44    system_id=null
 45    title=Starred in Android
 46    version=1
@@ -57,7 +57,7 @@
 57    group_visible=1
 58    notes=null
 59    res_package=null
-60    sourceid=http://www.google.com/m8/feeds/groups/android.contacts.test.eclair@gmail.com/base/55555555555
+60    sourceid=55555555555
 61    system_id=null
 62    title=null
 63    version=1
