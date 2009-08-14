@@ -272,7 +272,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
-    public static final String FEATURE_APPS_FOR_DOMAIN = "google_or_dasher";
+    public static final String FEATURE_APPS_FOR_DOMAIN = "hosted_or_google";
 
     /** Contains just the contacts columns
      * @deprecated*/
@@ -1341,8 +1341,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             account = valuesAccount;
         }
         if (account != null) {
-            values.put(RawContacts.ACCOUNT_NAME, account.mName);
-            values.put(RawContacts.ACCOUNT_TYPE, account.mType);
+            values.put(RawContacts.ACCOUNT_NAME, account.name);
+            values.put(RawContacts.ACCOUNT_TYPE, account.type);
         }
         return true;
     }
@@ -1480,14 +1480,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         // as the contact refered to by rawContactId
         c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
                 Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
-                new String[]{sourceId, account.mName, account.mType}, null, null, null);
+                new String[]{sourceId, account.name, account.type}, null, null, null);
         try {
             if (c.moveToNext()) {
                 return c.getLong(0);
             } else {
                 ContentValues groupValues = new ContentValues();
-                groupValues.put(Groups.ACCOUNT_NAME, account.mName);
-                groupValues.put(Groups.ACCOUNT_TYPE, account.mType);
+                groupValues.put(Groups.ACCOUNT_NAME, account.name);
+                groupValues.put(Groups.ACCOUNT_TYPE, account.type);
                 groupValues.put(Groups.SOURCE_ID, sourceId);
                 long groupId = db.insert(Tables.GROUPS, Groups.ACCOUNT_NAME, groupValues);
                 if (groupId < 0) {
@@ -2944,8 +2944,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     protected Account getDefaultAccount() {
         AccountManager accountManager = AccountManager.get(getContext());
         try {
-            Account[] accounts = accountManager.blockingGetAccountsWithTypeAndFeatures(
-                    DEFAULT_ACCOUNT_TYPE, new String[] {FEATURE_APPS_FOR_DOMAIN});
+            String[] features = new String[] {FEATURE_APPS_FOR_DOMAIN};
+            Account[] accounts = accountManager.getAccountsByTypeAndFeatures(
+                    DEFAULT_ACCOUNT_TYPE, features, null, null).getResult();
             if (accounts != null && accounts.length > 0) {
                 return accounts[0];
             }

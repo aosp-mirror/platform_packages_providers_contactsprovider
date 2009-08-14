@@ -24,7 +24,6 @@ import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.accounts.Account;
-import android.accounts.AccountManager;
 import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -52,7 +51,6 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.util.Log;
 
 import java.util.HashMap;
 
@@ -787,8 +785,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 values, People.TIMES_CONTACTED);
         OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, People.STARRED);
-        mValues.put(RawContacts.ACCOUNT_NAME, mAccount.mName);
-        mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.mType);
+        mValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
+        mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
         Uri contactUri = mContactsProvider.insert(RawContacts.CONTENT_URI, mValues);
         long rawContactId = ContentUris.parseId(contactUri);
 
@@ -940,8 +938,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         OpenHelper.copyStringValue(mValues, Groups.SYSTEM_ID,
                 values, android.provider.Contacts.Groups.SYSTEM_ID);
 
-        mValues.put(Groups.ACCOUNT_NAME, mAccount.mName);
-        mValues.put(Groups.ACCOUNT_TYPE, mAccount.mType);
+        mValues.put(Groups.ACCOUNT_NAME, mAccount.name);
+        mValues.put(Groups.ACCOUNT_TYPE, mAccount.type);
 
         Uri uri = mContactsProvider.insert(Groups.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
@@ -1376,18 +1374,18 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private void applyRawContactsAccount(SQLiteQueryBuilder qb, Uri uri) {
         StringBuilder sb = new StringBuilder();
         sb.append(RawContacts.ACCOUNT_NAME + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.mName);
+        DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
         sb.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.mType);
+        DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
         qb.appendWhere(sb.toString());
     }
 
     private void applyGroupAccount(SQLiteQueryBuilder qb, Uri uri) {
         StringBuilder sb = new StringBuilder();
         sb.append(Groups.ACCOUNT_NAME + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.mName);
+        DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
         sb.append(" AND " + Groups.ACCOUNT_TYPE + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.mType);
+        DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
         qb.appendWhere(sb.toString());
     }
 
