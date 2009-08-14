@@ -19,6 +19,7 @@ import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 import android.accounts.Account;
 import android.content.ContentProvider;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -44,6 +45,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -626,5 +628,64 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             mTestPhoto = os.toByteArray();
         }
         return mTestPhoto;
+    }
+
+    public static void dump(ContentResolver resolver, boolean aggregatedOnly) {
+        String[] projection = new String[] {
+                Contacts._ID,
+                Contacts.DISPLAY_NAME
+        };
+        String selection = null;
+        if (aggregatedOnly) {
+            selection = Contacts._ID
+                    + " IN (SELECT contact_id" +
+                    		" FROM raw_contacts GROUP BY contact_id HAVING count(*) > 1)";
+        }
+
+        Cursor c = resolver.query(Contacts.CONTENT_URI, projection, selection, null,
+                Contacts.DISPLAY_NAME);
+        while(c.moveToNext()) {
+            long contactId = c.getLong(0);
+            Log.i("Contact   ", String.format("%5d %s", contactId, c.getString(1)));
+            dumpRawContacts(resolver, contactId);
+            Log.i("          ", ".");
+        }
+        c.close();
+    }
+
+    private static void dumpRawContacts(ContentResolver resolver, long contactId) {
+        String[] projection = new String[] {
+                RawContacts._ID,
+        };
+        Cursor c = resolver.query(RawContacts.CONTENT_URI, projection, RawContacts.CONTACT_ID + "="
+                + contactId, null, null);
+        while(c.moveToNext()) {
+            long rawContactId = c.getLong(0);
+            Log.i("RawContact", String.format("      %-5d", rawContactId));
+            dumpData(resolver, rawContactId);
+        }
+        c.close();
+    }
+
+    private static void dumpData(ContentResolver resolver, long rawContactId) {
+        String[] projection = new String[] {
+                Data.MIMETYPE,
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+        };
+        Cursor c = resolver.query(Data.CONTENT_URI, projection, Data.RAW_CONTACT_ID + "="
+                + rawContactId, null, Data.MIMETYPE);
+        while(c.moveToNext()) {
+            String mimetype = c.getString(0);
+            if (Photo.CONTENT_ITEM_TYPE.equals(mimetype)) {
+                Log.i("Photo     ", "");
+            } else {
+                mimetype = mimetype.substring(mimetype.indexOf('/') + 1);
+                Log.i("Data      ", String.format("            %-10s %s,%s,%s", mimetype,
+                        c.getString(1), c.getString(2), c.getString(3)));
+            }
+        }
+        c.close();
     }
 }
