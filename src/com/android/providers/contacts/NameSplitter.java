@@ -163,7 +163,13 @@ public class NameSplitter {
 
         NameTokenizer tokens = new NameTokenizer(fullName);
         parsePrefix(name, tokens);
-        parseSuffix(name, tokens);
+
+        // If the name consists of just one or two tokens, treat them as first/last name,
+        // not as suffix.  Example: John Ma; Ma is last name, not "M.A.".
+        if (tokens.mEndPointer > 2) {
+            parseSuffix(name, tokens);
+        }
+
         parseLastName(name, tokens);
         parseMiddleName(name, tokens);
         parseGivenNames(name, tokens);
