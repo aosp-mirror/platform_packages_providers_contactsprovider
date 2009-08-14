@@ -59,7 +59,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 65;
+    private static final int DATABASE_VERSION = 66;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -342,25 +342,19 @@ import java.util.HashMap;
     }
 
     public final static class NameLookupType {
-        public static final int FULL_NAME = 0;
-        public static final int FULL_NAME_CONCATENATED = 1;
-        public static final int FULL_NAME_REVERSE = 2;
-        public static final int FULL_NAME_REVERSE_CONCATENATED = 3;
-        public static final int FULL_NAME_WITH_NICKNAME = 4;
-        public static final int FULL_NAME_WITH_NICKNAME_REVERSE = 5;
-        public static final int GIVEN_NAME_ONLY = 6;
-        public static final int GIVEN_NAME_ONLY_AS_NICKNAME = 7;
-        public static final int FAMILY_NAME_ONLY = 8;
-        public static final int FAMILY_NAME_ONLY_AS_NICKNAME = 9;
-        public static final int NICKNAME = 10;
-        public static final int EMAIL_BASED_NICKNAME = 11;
+        public static final int NAME_EXACT = 0;
+        public static final int NAME_VARIANT = 1;
+        public static final int NAME_COLLATION_KEY = 2;
+        public static final int NICKNAME = 3;
+        public static final int EMAIL_BASED_NICKNAME = 4;
 
         // This is the highest name lookup type code plus one
-        public static final int TYPE_COUNT = 12;
+        public static final int TYPE_COUNT = 5;
 
         public static boolean isBasedOnStructuredName(int nameLookupType) {
-            return nameLookupType != NameLookupType.EMAIL_BASED_NICKNAME
-                    && nameLookupType != NameLookupType.NICKNAME;
+            return nameLookupType == NameLookupType.NAME_EXACT
+                    || nameLookupType == NameLookupType.NAME_VARIANT
+                    || nameLookupType == NameLookupType.NAME_COLLATION_KEY;
         }
     }
 

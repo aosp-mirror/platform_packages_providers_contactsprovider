@@ -569,39 +569,27 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 return;
             }
 
-            addMatchCandidatesFamilyNameOnly(familyName, candidates);
+            addMatchCandidatesSingleName(familyName, candidates);
         } else if (TextUtils.isEmpty(familyName)) {
-            addMatchCandidatesGivenNameOnly(givenName, candidates);
+            addMatchCandidatesSingleName(givenName, candidates);
         } else {
             addMatchCandidatesFullName(givenName, familyName, mode, candidates);
         }
     }
 
-    private void addMatchCandidatesGivenNameOnly(String givenName,
-            MatchCandidateList candidates) {
-        String givenNameN = NameNormalizer.normalize(givenName);
-        candidates.add(givenNameN, NameLookupType.GIVEN_NAME_ONLY);
-
-        String[] clusters = mOpenHelper.getCommonNicknameClusters(givenNameN);
-        if (clusters != null) {
-            for (int i = 0; i < clusters.length; i++) {
-                candidates.add(clusters[i], NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME);
-            }
-        }
-    }
-
-    private void addMatchCandidatesFamilyNameOnly(String familyName,
-            MatchCandidateList candidates) {
-        String familyNameN = NameNormalizer.normalize(familyName);
-        candidates.add(familyNameN, NameLookupType.FAMILY_NAME_ONLY);
+    private void addMatchCandidatesSingleName(String name, MatchCandidateList candidates) {
+        String nameN = NameNormalizer.normalize(name);
+        candidates.add(nameN, NameLookupType.NAME_EXACT);
 
         // Take care of first and last names swapped
-        String[] clusters = mOpenHelper.getCommonNicknameClusters(familyNameN);
+        String[] clusters = mOpenHelper.getCommonNicknameClusters(nameN);
         if (clusters != null) {
             for (int i = 0; i < clusters.length; i++) {
-                candidates.add(clusters[i], NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME);
+                candidates.add(clusters[i], NameLookupType.NAME_VARIANT);
             }
         }
+
+        candidates.add(nameN, NameLookupType.NAME_COLLATION_KEY);
     }
 
     private void addMatchCandidatesFullName(String givenName, String familyName, int mode,
@@ -610,40 +598,22 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         final String[] givenNameNicknames = mOpenHelper.getCommonNicknameClusters(givenNameN);
         final String familyNameN = NameNormalizer.normalize(familyName);
         final String[] familyNameNicknames = mOpenHelper.getCommonNicknameClusters(familyNameN);
-        candidates.add(givenNameN + "." + familyNameN, NameLookupType.FULL_NAME);
+        candidates.add(givenNameN + "." + familyNameN, NameLookupType.NAME_EXACT);
         if (givenNameNicknames != null) {
             for (int i = 0; i < givenNameNicknames.length; i++) {
                 candidates.add(givenNameNicknames[i] + "." + familyNameN,
-                        NameLookupType.FULL_NAME_WITH_NICKNAME);
+                        NameLookupType.NAME_VARIANT);
             }
         }
-        candidates.add(familyNameN + "." + givenNameN, NameLookupType.FULL_NAME_REVERSE);
+        candidates.add(familyNameN + "." + givenNameN, NameLookupType.NAME_VARIANT);
         if (familyNameNicknames != null) {
             for (int i = 0; i < familyNameNicknames.length; i++) {
                 candidates.add(familyNameNicknames[i] + "." + givenNameN,
-                        NameLookupType.FULL_NAME_WITH_NICKNAME_REVERSE);
+                        NameLookupType.NAME_VARIANT);
             }
         }
-        candidates.add(givenNameN + familyNameN, NameLookupType.FULL_NAME_CONCATENATED);
-        candidates.add(familyNameN + givenNameN, NameLookupType.FULL_NAME_REVERSE_CONCATENATED);
-
-        if (mode == MODE_AGGREGATION || mode == MODE_SUGGESTIONS) {
-            candidates.add(givenNameN, NameLookupType.GIVEN_NAME_ONLY);
-            if (givenNameNicknames != null) {
-                for (int i = 0; i < givenNameNicknames.length; i++) {
-                    candidates.add(givenNameNicknames[i],
-                            NameLookupType.GIVEN_NAME_ONLY_AS_NICKNAME);
-                }
-            }
-
-            candidates.add(familyNameN, NameLookupType.FAMILY_NAME_ONLY);
-            if (familyNameNicknames != null) {
-                for (int i = 0; i < familyNameNicknames.length; i++) {
-                    candidates.add(familyNameNicknames[i],
-                            NameLookupType.FAMILY_NAME_ONLY_AS_NICKNAME);
-                }
-            }
-        }
+        candidates.add(givenNameN + familyNameN, NameLookupType.NAME_COLLATION_KEY);
+        candidates.add(familyNameN + givenNameN, NameLookupType.NAME_COLLATION_KEY);
     }
 
     /**
