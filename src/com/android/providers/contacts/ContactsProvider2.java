@@ -52,7 +52,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
-import android.os.Handler;
 import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -80,7 +79,7 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Contacts content provider. The contract between this provider and applications
@@ -1040,7 +1039,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
     private ContentValues mValues = new ContentValues();
 
-    private volatile Semaphore mAccessSemaphore;
+    private volatile CountDownLatch mAccessLatch;
     private boolean mImportMode;
 
     private boolean mScheduleAggregation;
@@ -1134,33 +1133,25 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      * all other access to the contacts is blocked.
      */
     private void importLegacyContactsAsync() {
-        mAccessSemaphore = new Semaphore(1);
-
-        // Parameter (0) indicates that release must be called before acquire is granted
-        final Semaphore importThreadStarted = new Semaphore(0);
+        mAccessLatch = new CountDownLatch(1);
 
         Thread importThread = new Thread("LegacyContactImport") {
             @Override
             public void run() {
-                mAccessSemaphore.acquireUninterruptibly();
-                importThreadStarted.release();
                 if (importLegacyContacts()) {
 
                     /*
                      * When the import process is done, we can unlock the provider and
                      * start aggregating the imported contacts asynchronously.
                      */
-                    mAccessSemaphore.release();
-                    mAccessSemaphore = null;
+                    mAccessLatch.countDown();
+                    mAccessLatch = null;
                     scheduleContactAggregation();
                 }
             }
         };
 
         importThread.start();
-
-        // Wait for the import thread to start
-        importThreadStarted.acquireUninterruptibly();
     }
 
     private boolean importLegacyContacts() {
@@ -1216,13 +1207,16 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      * to compete for the database transaction monitor.
      */
     private void waitForAccess() {
-        Semaphore semaphore = mAccessSemaphore;
-        if (semaphore != null) {
-            semaphore.acquireUninterruptibly();
-
-            // We don't need to hold this semaphore, the database lock will later ensure
-            // exclusive access to the database.
-            semaphore.release();
+        CountDownLatch latch = mAccessLatch;
+        if (latch != null) {
+            while (true) {
+                try {
+                    latch.await();
+                    mAccessLatch = null;
+                    return;
+                } catch (InterruptedException e) {
+                }
+            }
         }
     }
 
