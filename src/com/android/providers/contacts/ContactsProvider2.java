@@ -623,6 +623,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         columns.put(Groups.SYSTEM_ID, Groups.SYSTEM_ID);
         columns.put(Groups.DELETED, Groups.DELETED);
         columns.put(Groups.NOTES, Groups.NOTES);
+        columns.put(Groups.SHOULD_SYNC, Groups.SHOULD_SYNC);
         columns.put(Groups.SYNC1, Tables.GROUPS + "." + Groups.SYNC1 + " AS " + Groups.SYNC1);
         columns.put(Groups.SYNC2, Tables.GROUPS + "." + Groups.SYNC2 + " AS " + Groups.SYNC2);
         columns.put(Groups.SYNC3, Tables.GROUPS + "." + Groups.SYNC3 + " AS " + Groups.SYNC3);
@@ -2526,7 +2527,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 RawContacts.SYNC2,
                 RawContacts.SYNC3,
                 RawContacts.SYNC4,
-                RawContacts.DELETED};
+                RawContacts.DELETED,
+                RawContacts.CONTACT_ID};
 
         private static final int COLUMN_ACCOUNT_NAME = 0;
         private static final int COLUMN_ACCOUNT_TYPE = 1;
@@ -2546,6 +2548,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         private static final int COLUMN_SYNC3 = 33;
         private static final int COLUMN_SYNC4 = 34;
         private static final int COLUMN_DELETED = 35;
+        private static final int COLUMN_CONTACT_ID = 36;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -2615,6 +2618,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             contactValues.put(RawContacts.SYNC3, c.getString(COLUMN_SYNC3));
             contactValues.put(RawContacts.SYNC4, c.getString(COLUMN_SYNC4));
             contactValues.put(RawContacts.DELETED, c.getLong(COLUMN_DELETED));
+            contactValues.put(RawContacts.CONTACT_ID, c.getLong(COLUMN_CONTACT_ID));
             Entity contact = new Entity(contactValues);
 
             // read data rows until the contact id changes
