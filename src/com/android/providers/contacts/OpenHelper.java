@@ -716,6 +716,7 @@ import java.util.HashMap;
                 Groups.SYSTEM_ID + " TEXT," +
                 Groups.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.GROUP_VISIBLE + " INTEGER," +
+                Groups.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.SYNC1 + " TEXT, " +
                 Groups.SYNC2 + " TEXT, " +
                 Groups.SYNC3 + " TEXT, " +
