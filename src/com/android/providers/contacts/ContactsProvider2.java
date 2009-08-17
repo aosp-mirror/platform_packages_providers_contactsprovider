@@ -272,7 +272,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
-    public static final String FEATURE_APPS_FOR_DOMAIN = "hosted_or_google";
+    public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
     /** Contains just the contacts columns
      * @deprecated*/
@@ -2948,9 +2948,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     protected Account getDefaultAccount() {
         AccountManager accountManager = AccountManager.get(getContext());
         try {
-            String[] features = new String[] {FEATURE_APPS_FOR_DOMAIN};
-            Account[] accounts = accountManager.getAccountsByTypeAndFeatures(
-                    DEFAULT_ACCOUNT_TYPE, features, null, null).getResult();
+            Account[] accounts = accountManager.getAccountsByTypeAndFeatures(DEFAULT_ACCOUNT_TYPE,
+                    new String[] {FEATURE_LEGACY_HOSTED_OR_GOOGLE}, null, null).getResult();
             if (accounts != null && accounts.length > 0) {
                 return accounts[0];
             }
