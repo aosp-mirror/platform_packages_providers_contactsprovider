@@ -1672,7 +1672,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
         String[] whereArgs;
         if (account != null) {
             whereString = "_sync_account=? AND _sync_account_type=? AND name=?";
-            whereArgs = new String[]{account.mName, account.mType, Groups.GROUP_ANDROID_STARRED};
+            whereArgs = new String[]{account.name, account.type, Groups.GROUP_ANDROID_STARRED};
         } else {
             whereString = "_sync_account is null AND name=?";
             whereArgs = new String[]{Groups.GROUP_ANDROID_STARRED};
@@ -1969,8 +1969,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             }
             if (account == null && mAccounts.length > 0) {
                 // TODO(fredq) change this to pick the account that is syncable for contacts
-                values.put(SyncConstValue._SYNC_ACCOUNT, mAccounts[0].mName);
-                values.put(SyncConstValue._SYNC_ACCOUNT_TYPE, mAccounts[0].mType);
+                values.put(SyncConstValue._SYNC_ACCOUNT, mAccounts[0].name);
+                values.put(SyncConstValue._SYNC_ACCOUNT_TYPE, mAccounts[0].type);
             }
         }
     }
@@ -2067,8 +2067,8 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 mValuesLocal.clear();
                 mValuesLocal.put(Groups.NAME, Groups.GROUP_ANDROID_STARRED);
                 mValuesLocal.put(Groups._SYNC_DIRTY, 1);
-                mValuesLocal.put(Groups._SYNC_ACCOUNT, account == null ? null : account.mName);
-                mValuesLocal.put(Groups._SYNC_ACCOUNT_TYPE, account == null ? null : account.mType);
+                mValuesLocal.put(Groups._SYNC_ACCOUNT, account == null ? null : account.name);
+                mValuesLocal.put(Groups._SYNC_ACCOUNT_TYPE, account == null ? null : account.type);
                 long groupId = mGroupsInserter.insert(mValuesLocal);
                 starredGroupInfo = new ContentValues();
                 starredGroupInfo.put(Groups._ID, groupId);
@@ -2689,7 +2689,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             db.delete(sSettingsTable, "_sync_account IS NULL AND key=?", new String[]{key});
         } else {
             db.delete(sSettingsTable, "_sync_account=? AND _sync_account_type=? AND key=?",
-                    new String[]{account.mName, account.mType, key});
+                    new String[]{account.name, account.type, key});
         }
         long rowId = db.insert(sSettingsTable, Contacts.Settings.KEY, values);
         if (rowId < 0) {
@@ -2778,7 +2778,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             Account syncAccount, String syncId) {
         fixupPeopleStarredOnGroupRename(oldName, newName,
                 "_sync_account=? AND _sync_account_type=? AND _sync_id=?",
-                new String[]{syncAccount.mName, syncAccount.mType, syncId});
+                new String[]{syncAccount.name, syncAccount.type, syncId});
     }
 
     void fixupPeopleStarredOnGroupRename(String oldName, String newName, long groupId) {

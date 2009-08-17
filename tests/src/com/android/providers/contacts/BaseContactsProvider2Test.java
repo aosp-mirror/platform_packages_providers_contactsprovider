@@ -116,8 +116,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             return uri;
         }
         return uri.buildUpon()
-                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.mName)
-                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.mType)
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
                 .build();
     }
 
@@ -425,8 +425,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             assertTrue(c.isNull(c.getColumnIndexOrThrow(Groups.ACCOUNT_NAME)));
             assertTrue(c.isNull(c.getColumnIndexOrThrow(Groups.ACCOUNT_TYPE)));
         } else {
-            assertEquals(account.mName, c.getString(c.getColumnIndexOrThrow(Groups.ACCOUNT_NAME)));
-            assertEquals(account.mType, c.getString(c.getColumnIndexOrThrow(Groups.ACCOUNT_TYPE)));
+            assertEquals(account.name, c.getString(c.getColumnIndexOrThrow(Groups.ACCOUNT_NAME)));
+            assertEquals(account.type, c.getString(c.getColumnIndexOrThrow(Groups.ACCOUNT_TYPE)));
         }
     }
 
