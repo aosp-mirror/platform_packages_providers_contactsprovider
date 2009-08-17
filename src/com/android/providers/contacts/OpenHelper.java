@@ -40,6 +40,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -59,7 +60,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 68;
+    private static final int DATABASE_VERSION = 70;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -75,6 +76,7 @@ import java.util.HashMap;
         public static final String PHONE_LOOKUP = "phone_lookup";
         public static final String NAME_LOOKUP = "name_lookup";
         public static final String AGGREGATION_EXCEPTIONS = "agg_exceptions";
+        public static final String SETTINGS = "settings";
         public static final String DATA = "data";
         public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
@@ -731,8 +733,8 @@ import java.util.HashMap;
                 Groups.NOTES + " TEXT," +
                 Groups.SYSTEM_ID + " TEXT," +
                 Groups.DELETED + " INTEGER NOT NULL DEFAULT 0," +
-                Groups.GROUP_VISIBLE + " INTEGER," +
-                Groups.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1," +
+                Groups.GROUP_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
+                Groups.SHOULD_SYNC + " INTEGER NOT NULL," +
                 Groups.SYNC1 + " TEXT, " +
                 Groups.SYNC2 + " TEXT, " +
                 Groups.SYNC3 + " TEXT, " +
@@ -767,6 +769,17 @@ import java.util.HashMap;
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns.RAW_CONTACT_ID2 + ", " +
                 AggregationExceptionColumns.RAW_CONTACT_ID1 +
+        ");");
+
+        // Settings uses SYNC_MODE_UNSUPPORTED as default unless specified.
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.SETTINGS + " (" +
+                Settings.ACCOUNT_NAME + " STRING NOT NULL," +
+                Settings.ACCOUNT_TYPE + " STRING NOT NULL," +
+                Settings.UNGROUPED_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
+                Settings.SHOULD_SYNC_MODE + " INTEGER NOT NULL DEFAULT 0, " +
+                Settings.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1, " +
+                "PRIMARY KEY (" + Settings.ACCOUNT_NAME + ", " +
+                Settings.ACCOUNT_TYPE + ") ON CONFLICT REPLACE" +
         ");");
 
         // The table for recent calls is here so we can do table joins
@@ -1022,6 +1035,7 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
@@ -1061,6 +1075,7 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
+        db.execSQL("DELETE FROM " + Tables.SETTINGS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
 
