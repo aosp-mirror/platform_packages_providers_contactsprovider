@@ -323,6 +323,29 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 Phones.TYPE_CUSTOM, Phones.TYPE_OTHER, Phones.LABEL);
     }
 
+    public void testPhonesFilterQuery() {
+        ContentValues values = new ContentValues();
+        putContactValues(values);
+        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        values.clear();
+        values.put(Phones.PERSON_ID, personId);
+        values.put(Phones.TYPE, Phones.TYPE_CUSTOM);
+        values.put(Phones.LABEL, "Directory");
+        values.put(Phones.NUMBER, "1-800-4664-411");
+        values.put(Phones.ISPRIMARY, 1);
+
+        Uri uri = mResolver.insert(Phones.CONTENT_URI, values);
+
+        Uri filterUri1 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "8004664411");
+        assertStoredValues(filterUri1, values);
+
+        Uri filterUri2 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "7773334444");
+        assertEquals(0, getCount(filterUri2, null, null));
+    }
+
+
     public void testEmailInsert() {
         assertContactMethodInsert(Contacts.KIND_EMAIL, ContactMethods.TYPE_CUSTOM,
                 "Some other way", "foo@acme.com", null, true);

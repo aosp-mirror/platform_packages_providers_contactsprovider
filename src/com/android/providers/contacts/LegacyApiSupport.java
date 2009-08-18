@@ -24,7 +24,6 @@ import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.accounts.Account;
-import android.accounts.AccountManager;
 import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -52,7 +51,6 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.util.Log;
 
 import java.util.HashMap;
 
@@ -94,6 +92,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int DELETED_PEOPLE = 30;
     private static final int DELETED_GROUPS = 31;
     private static final int SEARCH_SUGGESTIONS = 32;
+    private static final int PHONES_FILTER = 33;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -209,6 +208,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sPhotoProjectionMap;
     private static final HashMap<String, String> sPresenceProjectionMap;
 
+
     static {
 
         // Contacts URI matching table
@@ -261,7 +261,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         matcher.addURI(authority, "deleted_groups", DELETED_GROUPS);
         matcher.addURI(authority, "phones", PHONES);
 //        matcher.addURI(authority, "phones_with_presence", PHONES_WITH_PRESENCE);
-//        matcher.addURI(authority, "phones/filter/*", PHONES_FILTER);
+        matcher.addURI(authority, "phones/filter/*", PHONES_FILTER);
 //        matcher.addURI(authority, "phones/filter_name/*", PHONES_FILTER_NAME);
 //        matcher.addURI(authority, "phones/mobile_filter_name/*",
 //                PHONES_MOBILE_FILTER_NAME);
@@ -1240,6 +1240,19 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case PHONES_FILTER:
+                qb.setTables(LegacyTables.PHONES);
+                qb.setProjectionMap(sPhoneProjectionMap);
+                applyRawContactsAccount(qb, uri);
+                if (uri.getPathSegments().size() > 2) {
+                    String filterParam = uri.getLastPathSegment();
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(" AND person =");
+                    mOpenHelper.appendRawContactsByPhoneNumberAsNestedQuery(sb, filterParam);
+                    qb.appendWhere(sb.toString());
+                }
                 break;
 
             case PEOPLE_PHONES:
