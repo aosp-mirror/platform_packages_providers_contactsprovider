@@ -226,6 +226,18 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
+    public void testAggregationBasedOnPhoneNumberWithJustFirstName() {
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Chick", "Notnull");
+        insertPhoneNumber(rawContactId1, "(888)555-1236");
+
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Chick", null);
+        insertPhoneNumber(rawContactId2, "1(888)555-1236");
+
+        assertAggregated(rawContactId1, rawContactId2);
+    }
+
     public void testAggregationBasedOnEmailNoNameData() {
         long rawContactId1 = createRawContact();
         insertEmail(rawContactId1, "lightning@android.com");
