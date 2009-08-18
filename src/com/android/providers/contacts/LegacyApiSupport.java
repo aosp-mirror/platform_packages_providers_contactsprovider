@@ -308,6 +308,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         peopleProjectionMap.put(People.STARRED, People.STARRED);
 
         sPeopleProjectionMap = new HashMap<String, String>(peopleProjectionMap);
+        sPeopleProjectionMap.put(People._ID, People._ID);
         sPeopleProjectionMap.put(People.PRIMARY_ORGANIZATION_ID, People.PRIMARY_ORGANIZATION_ID);
         sPeopleProjectionMap.put(People.PRIMARY_EMAIL_ID, People.PRIMARY_EMAIL_ID);
         sPeopleProjectionMap.put(People.PRIMARY_PHONE_ID, People.PRIMARY_PHONE_ID);
@@ -322,6 +323,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         sPeopleProjectionMap.put(People.PRESENCE_CUSTOM_STATUS, People.PRESENCE_CUSTOM_STATUS);
 
         sOrganizationProjectionMap = new HashMap<String, String>();
+        sOrganizationProjectionMap.put(android.provider.Contacts.Organizations._ID,
+                android.provider.Contacts.Organizations._ID);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.PERSON_ID,
                 android.provider.Contacts.Organizations.PERSON_ID);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.ISPRIMARY,
@@ -336,6 +339,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 android.provider.Contacts.Organizations.TITLE);
 
         sContactMethodProjectionMap = new HashMap<String, String>(peopleProjectionMap);
+        sContactMethodProjectionMap.put(ContactMethods._ID, ContactMethods._ID);
         sContactMethodProjectionMap.put(ContactMethods.PERSON_ID, ContactMethods.PERSON_ID);
         sContactMethodProjectionMap.put(ContactMethods.KIND, ContactMethods.KIND);
         sContactMethodProjectionMap.put(ContactMethods.ISPRIMARY, ContactMethods.ISPRIMARY);
@@ -345,6 +349,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         sContactMethodProjectionMap.put(ContactMethods.AUX_DATA, ContactMethods.AUX_DATA);
 
         sPhoneProjectionMap = new HashMap<String, String>(peopleProjectionMap);
+        sPhoneProjectionMap.put(android.provider.Contacts.Phones._ID,
+                android.provider.Contacts.Phones._ID);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.PERSON_ID,
                 android.provider.Contacts.Phones.PERSON_ID);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.ISPRIMARY,
@@ -359,6 +365,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 android.provider.Contacts.Phones.NUMBER_KEY);
 
         sExtensionProjectionMap = new HashMap<String, String>();
+        sExtensionProjectionMap.put(android.provider.Contacts.Extensions._ID,
+                android.provider.Contacts.Extensions._ID);
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.PERSON_ID,
                 android.provider.Contacts.Extensions.PERSON_ID);
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.NAME,
@@ -377,12 +385,16 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 android.provider.Contacts.Groups.SYSTEM_ID);
 
         sGroupMembershipProjectionMap = new HashMap<String, String>();
+        sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership._ID,
+                android.provider.Contacts.GroupMembership._ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.PERSON_ID,
                 android.provider.Contacts.GroupMembership.PERSON_ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.GROUP_ID,
                 android.provider.Contacts.GroupMembership.GROUP_ID);
 
         sPhotoProjectionMap = new HashMap<String, String>();
+        sPhotoProjectionMap.put(android.provider.Contacts.Photos._ID,
+                android.provider.Contacts.Photos._ID);
         sPhotoProjectionMap.put(android.provider.Contacts.Photos.PERSON_ID,
                 android.provider.Contacts.Photos.PERSON_ID);
         sPhotoProjectionMap.put(android.provider.Contacts.Photos.DATA,
