@@ -289,7 +289,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
             mValuesLocal.putNull(Photos._SYNC_VERSION);
             mValuesLocal.putNull(Photos._SYNC_TIME);
             db.update(sPhotosTable, mValuesLocal, null, null);
-            getContext().getContentResolver().startSync(Contacts.CONTENT_URI, new Bundle());
+            ContentResolver.requestSync(null /* account */, Contacts.AUTHORITY, new Bundle());
             oldVersion = 72;
         }
         if (oldVersion == 72) {
