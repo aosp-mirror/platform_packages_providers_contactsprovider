@@ -1242,6 +1242,7 @@ import java.util.HashMap;
         mNameLookupInsert.executeInsert();
     }
 
+    @Deprecated
     public static void buildPhoneLookupQuery(SQLiteQueryBuilder qb, String number,
             boolean joinWithMimetypes) {
         final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
@@ -1262,6 +1263,20 @@ import java.util.HashMap;
         qb.appendWhere(")");
     }
 
+    public void appendRawContactsByPhoneNumberAsNestedQuery(StringBuilder sb, String number) {
+        final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        sb.append("(SELECT DISTINCT raw_contact_id"
+                + " FROM " + Tables.RAW_CONTACTS
+                + ", (SELECT data_id FROM phone_lookup "
+                + "WHERE (phone_lookup.normalized_number GLOB '");
+        sb.append(normalizedNumber);
+        sb.append("*')) AS lookup, " + Tables.DATA
+                + " WHERE lookup.data_id=data._id"
+                + " AND data.raw_contact_id=raw_contacts._id"
+                + " AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
+        DatabaseUtils.appendEscapedSQLString(sb, number);
+        sb.append("))");
+    }
 
     /**
      * Loads common nickname mappings into the database.
