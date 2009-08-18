@@ -59,7 +59,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 67;
+    private static final int DATABASE_VERSION = 68;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -527,6 +527,18 @@ import java.util.HashMap;
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
+        db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
+                Contacts.IN_VISIBLE_GROUP +
+        ");");
+
+        db.execSQL("CREATE INDEX contacts_has_phone_index ON " + Tables.CONTACTS + " (" +
+                Contacts.HAS_PHONE_NUMBER +
+        ");");
+
+        db.execSQL("CREATE INDEX contacts_restricted_index ON " + Tables.CONTACTS + " (" +
+                ContactsColumns.SINGLE_IS_RESTRICTED +
+        ");");
+
         // Contacts table
         db.execSQL("CREATE TABLE " + Tables.RAW_CONTACTS + " (" +
                 RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -537,7 +549,7 @@ import java.util.HashMap;
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.DELETED + " INTEGER NOT NULL DEFAULT 0," +
-                RawContacts.CONTACT_ID + " INTEGER," +
+                RawContacts.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 RawContacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
                         RawContacts.AGGREGATION_MODE_DEFAULT + "," +
                 RawContacts.CUSTOM_RINGTONE + " TEXT," +
@@ -550,6 +562,10 @@ import java.util.HashMap;
                 RawContacts.SYNC2 + " TEXT, " +
                 RawContacts.SYNC3 + " TEXT, " +
                 RawContacts.SYNC4 + " TEXT " +
+        ");");
+
+        db.execSQL("CREATE INDEX raw_contacts_contact_id_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContacts.CONTACT_ID +
         ");");
 
         // Package name mapping table
