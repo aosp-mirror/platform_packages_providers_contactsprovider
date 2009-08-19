@@ -49,6 +49,7 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
@@ -64,6 +65,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -144,6 +146,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final int PRESENCE_ID = 7001;
 
     private static final int AGGREGATION_SUGGESTIONS = 8000;
+
+    private static final int SETTINGS = 9000;
 
     private static final int GROUPS = 10000;
     private static final int GROUPS_ID = 10001;
@@ -316,6 +320,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final HashMap<String, String> sGroupsSummaryProjectionMap;
     /** Contains the agg_exceptions columns */
     private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
+    /** Contains the agg_exceptions columns */
+    private static final HashMap<String, String> sSettingsProjectionMap;
     /** Contains Presence columns */
     private static final HashMap<String, String> sPresenceProjectionMap;
 
@@ -387,6 +393,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 AGGREGATION_EXCEPTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions/*",
                 AGGREGATION_EXCEPTION_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "settings", SETTINGS);
 
         matcher.addURI(ContactsContract.AUTHORITY, "presence", PRESENCE);
         matcher.addURI(ContactsContract.AUTHORITY, "presence/#", PRESENCE_ID);
@@ -656,6 +664,16 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + " AS " + AggregationExceptions.CONTACT_ID);
         columns.put(AggregationExceptions.RAW_CONTACT_ID, AggregationExceptionColumns.RAW_CONTACT_ID2);
         sAggregationExceptionsProjectionMap = columns;
+
+        // Settings projection map
+        columns = new HashMap<String, String>();
+        columns.put(Settings._ID, Settings._ID);
+        columns.put(Settings.ACCOUNT_NAME, Settings.ACCOUNT_NAME);
+        columns.put(Settings.ACCOUNT_TYPE, Settings.ACCOUNT_TYPE);
+        columns.put(Settings.UNGROUPED_VISIBLE, Settings.UNGROUPED_VISIBLE);
+        columns.put(Settings.SHOULD_SYNC_MODE, Settings.SHOULD_SYNC_MODE);
+        columns.put(Settings.SHOULD_SYNC, Settings.SHOULD_SYNC);
+        sSettingsProjectionMap = columns;
 
 
         columns = new HashMap<String, String>();
@@ -1307,6 +1325,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 break;
             }
 
+            case SETTINGS: {
+                id = mDb.insert(Tables.SETTINGS, null, values);
+                break;
+            }
+
             case PRESENCE: {
                 id = insertPresence(values);
                 break;
@@ -1685,8 +1708,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 return deleteGroup(uri);
             }
 
+            case SETTINGS: {
+                return mDb.delete(Tables.SETTINGS, selection, selectionArgs);
+            }
+
             case PRESENCE: {
-                return mDb.delete(Tables.PRESENCE, null, null);
+                return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
             }
 
             default:
@@ -1824,6 +1851,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case AGGREGATION_EXCEPTIONS: {
                 count = updateAggregationException(mDb, values);
+                break;
+            }
+
+            case SETTINGS: {
+                count = mDb.update(Tables.SETTINGS, values, selection, selectionArgs);
                 break;
             }
 
@@ -2371,6 +2403,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         sContactsProjectionMap, maxSuggestions);
             }
 
+            case SETTINGS: {
+                qb.setTables(Tables.SETTINGS);
+                qb.setProjectionMap(sSettingsProjectionMap);
+                break;
+            }
+
             case PRESENCE: {
                 qb.setTables(Tables.PRESENCE);
                 qb.setProjectionMap(sPresenceProjectionMap);
@@ -2832,6 +2870,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 return mOpenHelper.getDataMimeType(dataId);
             case AGGREGATION_EXCEPTIONS: return AggregationExceptions.CONTENT_TYPE;
             case AGGREGATION_EXCEPTION_ID: return AggregationExceptions.CONTENT_ITEM_TYPE;
+            case SETTINGS: return Settings.CONTENT_TYPE;
             case AGGREGATION_SUGGESTIONS: return Contacts.CONTENT_TYPE;
             case SEARCH_SUGGESTIONS:
                 return SearchManager.SUGGEST_MIME_TYPE;
