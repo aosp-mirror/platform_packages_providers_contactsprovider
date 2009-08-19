@@ -63,6 +63,7 @@ import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
@@ -278,42 +279,16 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
     public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
-    /** Contains just the contacts columns
-     * @deprecated*/
-    @Deprecated
-    private static final HashMap<String, String> sDeprecatedContactsProjectionMap;
-
+    /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
-
-
     /** Contains the contact columns along with primary phone */
     private static final HashMap<String, String> sContactsSummaryProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sRawContactsProjectionMap;
-
-    /**
-     * Contains just the contacts columns
-     *
-     * @deprecated
-     */
-    @Deprecated
-    private static final HashMap<String, String> sDeprecatedRawContactsProjectionMap;
-
-    /**
-     * Contains just the data columns
-     *
-     * @deprecated
-     */
-    @Deprecated
-    private static final HashMap<String, String> sDeprecatedDataGroupsProjectionMap;
-
     /** Contains columns from the data view */
     private static final HashMap<String, String> sDataProjectionMap;
-
     /** Contains the data and contacts columns, for joined tables */
-    private static final HashMap<String, String> sDataRawContactsGroupsProjectionMap;
-    /** Contains the data and contacts columns, for joined tables */
-    private static final HashMap<String, String> sDataRawContactsProjectionMap;
+    private static final HashMap<String, String> sPhoneLookupProjectionMap;
     /** Contains the just the {@link Groups} columns */
     private static final HashMap<String, String> sGroupsProjectionMap;
     /** Contains {@link Groups} columns along with summary details */
@@ -423,87 +398,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sContactsSummaryProjectionMap.put(Contacts.PRESENCE_STATUS,
                 "MAX(" + Presence.PRESENCE_STATUS + ") AS " + Contacts.PRESENCE_STATUS);
 
-        HashMap<String, String> columns;
-
-        // Contacts projection map
-        columns = new HashMap<String, String>();
-        columns.put(Contacts._ID, "contacts._id AS _id");
-        columns.put(Contacts.DISPLAY_NAME, ContactsColumns.CONCRETE_DISPLAY_NAME + " AS "
-                + Contacts.DISPLAY_NAME);
-        columns.put(Contacts.LAST_TIME_CONTACTED, ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
-                + " AS " + Contacts.LAST_TIME_CONTACTED);
-        columns.put(Contacts.TIMES_CONTACTED, ContactsColumns.CONCRETE_TIMES_CONTACTED + " AS "
-                + Contacts.TIMES_CONTACTED);
-        columns.put(Contacts.STARRED, ContactsColumns.CONCRETE_STARRED + " AS "
-                + Contacts.STARRED);
-        columns.put(Contacts.IN_VISIBLE_GROUP, Contacts.IN_VISIBLE_GROUP);
-        columns.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
-        columns.put(Contacts.CUSTOM_RINGTONE, ContactsColumns.CONCRETE_CUSTOM_RINGTONE + " AS "
-                + Contacts.CUSTOM_RINGTONE);
-        columns.put(Contacts.SEND_TO_VOICEMAIL, ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
-                + " AS " + Contacts.SEND_TO_VOICEMAIL);
-        sDeprecatedContactsProjectionMap = columns;
-
-        columns = new HashMap<String, String>();
-        columns.putAll(sDeprecatedContactsProjectionMap);
-
-//        // Contacts primaries projection map. The overall presence status is
-//        // the most-present value, as indicated by the largest value.
-//        columns.put(Contacts.PRESENCE_STATUS, "MAX(" + Presence.PRESENCE_STATUS + ") AS "
-//                + Contacts.PRESENCE_STATUS);
-//        columns.put(Contacts.PRIMARY_PHONE_TYPE, CommonDataKinds.Phone.TYPE);
-//        columns.put(Contacts.PRIMARY_PHONE_LABEL, CommonDataKinds.Phone.LABEL);
-//        columns.put(Contacts.PRIMARY_PHONE_NUMBER, CommonDataKinds.Phone.NUMBER);
-//        sContactsSummaryProjectionMap = columns;
-
-        // RawContacts projection map
-        columns = new HashMap<String, String>();
-        columns.put(RawContacts._ID, Tables.RAW_CONTACTS + "." + RawContacts._ID + " AS _id");
-        columns.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
-        columns.put(RawContacts.ACCOUNT_NAME,
-                OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_NAME
-                        + " AS " + RawContacts.ACCOUNT_NAME);
-        columns.put(RawContacts.ACCOUNT_TYPE,
-                OpenHelper.RawContactsColumns.CONCRETE_ACCOUNT_TYPE
-                        + " AS " + RawContacts.ACCOUNT_TYPE);
-        columns.put(RawContacts.SOURCE_ID,
-                OpenHelper.RawContactsColumns.CONCRETE_SOURCE_ID
-                        + " AS " + RawContacts.SOURCE_ID);
-        columns.put(RawContacts.VERSION,
-                OpenHelper.RawContactsColumns.CONCRETE_VERSION
-                        + " AS " + RawContacts.VERSION);
-        columns.put(RawContacts.DIRTY,
-                OpenHelper.RawContactsColumns.CONCRETE_DIRTY
-                        + " AS " + RawContacts.DIRTY);
-        columns.put(RawContacts.DELETED,
-                OpenHelper.RawContactsColumns.CONCRETE_DELETED
-                        + " AS " + RawContacts.DELETED);
-        columns.put(RawContacts.TIMES_CONTACTED,
-                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED
-                        + " AS " + People.TIMES_CONTACTED);
-        columns.put(RawContacts.LAST_TIME_CONTACTED,
-                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
-                        + " AS " + People.LAST_TIME_CONTACTED);
-        columns.put(RawContacts.CUSTOM_RINGTONE,
-                Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
-                        + " AS " + People.CUSTOM_RINGTONE);
-        columns.put(RawContacts.SEND_TO_VOICEMAIL,
-                Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
-                        + " AS " + People.SEND_TO_VOICEMAIL);
-        columns.put(RawContacts.STARRED,
-                Tables.RAW_CONTACTS + "." + RawContacts.STARRED
-                        + " AS " + People.STARRED);
-        columns.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE);
-        columns.put(RawContacts.SYNC1,
-                Tables.RAW_CONTACTS + "." + RawContacts.SYNC1 + " AS " + RawContacts.SYNC1);
-        columns.put(RawContacts.SYNC2,
-                Tables.RAW_CONTACTS + "." + RawContacts.SYNC2 + " AS " + RawContacts.SYNC2);
-        columns.put(RawContacts.SYNC3,
-                Tables.RAW_CONTACTS + "." + RawContacts.SYNC3 + " AS " + RawContacts.SYNC3);
-        columns.put(RawContacts.SYNC4,
-                Tables.RAW_CONTACTS + "." + RawContacts.SYNC4 + " AS " + RawContacts.SYNC4);
-        sDeprecatedRawContactsProjectionMap = columns;
-
         sRawContactsProjectionMap = new HashMap<String, String>();
         sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
         sRawContactsProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
@@ -524,42 +418,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sRawContactsProjectionMap.put(RawContacts.SYNC2, RawContacts.SYNC2);
         sRawContactsProjectionMap.put(RawContacts.SYNC3, RawContacts.SYNC3);
         sRawContactsProjectionMap.put(RawContacts.SYNC4, RawContacts.SYNC4);
-
-        // Data projection map
-        columns = new HashMap<String, String>();
-        columns.put(Data._ID, Tables.DATA + "." + Data._ID + " AS _id");
-        columns.put(Data.RAW_CONTACT_ID, Data.RAW_CONTACT_ID);
-        columns.put(Data.RES_PACKAGE, PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE);
-        columns.put(Data.MIMETYPE, Data.MIMETYPE);
-        columns.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
-        columns.put(Data.IS_SUPER_PRIMARY, Data.IS_SUPER_PRIMARY);
-        columns.put(Data.DATA_VERSION, Data.DATA_VERSION);
-        columns.put(Data.DATA1, "data.data1 as data1");
-        columns.put(Data.DATA2, "data.data2 as data2");
-        columns.put(Data.DATA3, "data.data3 as data3");
-        columns.put(Data.DATA4, "data.data4 as data4");
-        columns.put(Data.DATA5, "data.data5 as data5");
-        columns.put(Data.DATA6, "data.data6 as data6");
-        columns.put(Data.DATA7, "data.data7 as data7");
-        columns.put(Data.DATA8, "data.data8 as data8");
-        columns.put(Data.DATA9, "data.data9 as data9");
-        columns.put(Data.DATA10, "data.data10 as data10");
-        columns.put(Data.DATA11, "data.data11 as data11");
-        columns.put(Data.DATA12, "data.data12 as data12");
-        columns.put(Data.DATA13, "data.data13 as data13");
-        columns.put(Data.DATA14, "data.data14 as data14");
-        columns.put(Data.DATA15, "data.data15 as data15");
-        columns.put(Data.SYNC1, Tables.DATA + "." + Data.SYNC1 + " AS " + Data.SYNC1);
-        columns.put(Data.SYNC2, Tables.DATA + "." + Data.SYNC2 + " AS " + Data.SYNC2);
-        columns.put(Data.SYNC3, Tables.DATA + "." + Data.SYNC3 + " AS " + Data.SYNC3);
-        columns.put(Data.SYNC4, Tables.DATA + "." + Data.SYNC4 + " AS " + Data.SYNC4);
-        columns.put(GroupMembership.GROUP_SOURCE_ID, GroupsColumns.CONCRETE_SOURCE_ID + " AS "
-                + GroupMembership.GROUP_SOURCE_ID);
-
-        // TODO: remove this projection
-        // Mappings used for backwards compatibility.
-        columns.put("number", Phone.NUMBER);
-        sDeprecatedDataGroupsProjectionMap = columns;
 
         sDataProjectionMap = new HashMap<String, String>();
         sDataProjectionMap.put(Data._ID, Data._ID);
@@ -603,18 +461,37 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
         sDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
 
-        // Data, groups and contacts projection map for joins. _id comes from the data table
-        columns = new HashMap<String, String>();
-        columns.putAll(sDeprecatedRawContactsProjectionMap);
-        columns.putAll(sDeprecatedDataGroupsProjectionMap);
-        columns.put(Data.RAW_CONTACT_ID, DataColumns.CONCRETE_RAW_CONTACT_ID);
-        sDataRawContactsGroupsProjectionMap = columns;
+        sPhoneLookupProjectionMap = new HashMap<String, String>();
+        sPhoneLookupProjectionMap.put(PhoneLookup._ID,
+                ContactsColumns.CONCRETE_ID + " AS " + PhoneLookup._ID);
+        sPhoneLookupProjectionMap.put(PhoneLookup.DISPLAY_NAME,
+                ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + PhoneLookup.DISPLAY_NAME);
+        sPhoneLookupProjectionMap.put(PhoneLookup.LAST_TIME_CONTACTED,
+                ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
+                        + " AS " + PhoneLookup.LAST_TIME_CONTACTED);
+        sPhoneLookupProjectionMap.put(PhoneLookup.TIMES_CONTACTED,
+                ContactsColumns.CONCRETE_TIMES_CONTACTED + " AS " + PhoneLookup.TIMES_CONTACTED);
+        sPhoneLookupProjectionMap.put(PhoneLookup.STARRED,
+                ContactsColumns.CONCRETE_STARRED + " AS " + PhoneLookup.STARRED);
+        sPhoneLookupProjectionMap.put(PhoneLookup.IN_VISIBLE_GROUP,
+                Contacts.IN_VISIBLE_GROUP + " AS " + PhoneLookup.IN_VISIBLE_GROUP);
+        sPhoneLookupProjectionMap.put(PhoneLookup.PHOTO_ID,
+                Contacts.PHOTO_ID + " AS " + PhoneLookup.PHOTO_ID);
+        sPhoneLookupProjectionMap.put(PhoneLookup.CUSTOM_RINGTONE,
+                ContactsColumns.CONCRETE_CUSTOM_RINGTONE + " AS " + PhoneLookup.CUSTOM_RINGTONE);
+        sPhoneLookupProjectionMap.put(PhoneLookup.HAS_PHONE_NUMBER,
+                Contacts.HAS_PHONE_NUMBER + " AS " + PhoneLookup.HAS_PHONE_NUMBER);
+        sPhoneLookupProjectionMap.put(PhoneLookup.SEND_TO_VOICEMAIL,
+                ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
+                        + " AS " + PhoneLookup.SEND_TO_VOICEMAIL);
+        sPhoneLookupProjectionMap.put(PhoneLookup.NUMBER,
+                Phone.NUMBER + " AS " + PhoneLookup.NUMBER);
+        sPhoneLookupProjectionMap.put(PhoneLookup.TYPE,
+                Phone.TYPE + " AS " + PhoneLookup.TYPE);
+        sPhoneLookupProjectionMap.put(PhoneLookup.LABEL,
+                Phone.LABEL + " AS " + PhoneLookup.LABEL);
 
-        // Data and contacts projection map for joins. _id comes from the data table
-        columns = new HashMap<String, String>();
-        columns.putAll(sDataRawContactsGroupsProjectionMap);
-        columns.remove(GroupMembership.GROUP_SOURCE_ID);
-        sDataRawContactsProjectionMap = columns;
+        HashMap<String, String> columns;
 
         // Groups projection map
         columns = new HashMap<String, String>();
@@ -2382,17 +2259,19 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case PHONE_LOOKUP: {
 
-                // TODO: optimize this query returning fewer fields and using an int mimetype
-                // TODO: filter query based on callingUid
                 if (TextUtils.isEmpty(sortOrder)) {
                     // Default the sort order to something reasonable so we get consistent
                     // results when callers don't request an ordering
-                    sortOrder = Data.RAW_CONTACT_ID;
+                    sortOrder = RawContactsColumns.CONCRETE_ID;
                 }
 
-                final String number = uri.getLastPathSegment();
-                OpenHelper.buildPhoneLookupQuery(qb, number, true /* join mimetype */);
-                qb.setProjectionMap(sDataRawContactsProjectionMap);
+                String number = uri.getPathSegments().size() > 1 ? uri.getLastPathSegment() : "";
+                mOpenHelper.buildPhoneLookupAndContactQuery(qb, number);
+                qb.setProjectionMap(sPhoneLookupProjectionMap);
+
+                // Phone lookup cannot be combined with a selection
+                selection = null;
+                selectionArgs = null;
                 break;
             }
 

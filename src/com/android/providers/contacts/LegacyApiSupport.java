@@ -1248,10 +1248,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 applyRawContactsAccount(qb, uri);
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(" AND person =");
-                    mOpenHelper.appendRawContactsByPhoneNumberAsNestedQuery(sb, filterParam);
-                    qb.appendWhere(sb.toString());
+                    qb.appendWhere(" AND person =");
+                    qb.appendWhere(mOpenHelper.buildPhoneLookupAsNestedQuery(filterParam));
                 }
                 break;
 
