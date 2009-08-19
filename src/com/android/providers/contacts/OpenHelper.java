@@ -1257,40 +1257,57 @@ import java.util.HashMap;
         mNameLookupInsert.executeInsert();
     }
 
-    @Deprecated
-    public static void buildPhoneLookupQuery(SQLiteQueryBuilder qb, String number,
-            boolean joinWithMimetypes) {
-        final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
-        final StringBuilder tables = new StringBuilder();
-        tables.append(Tables.RAW_CONTACTS + ", (SELECT data_id FROM phone_lookup "
-                + "WHERE (phone_lookup.normalized_number GLOB '");
-        tables.append(normalizedNumber);
-        tables.append("*')) AS lookup, ");
-        if (joinWithMimetypes) {
-            tables.append(Tables.DATA_JOIN_MIMETYPES);
-        } else {
-            tables.append(Tables.DATA);
-        }
-        qb.setTables(tables.toString());
-        qb.appendWhere("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id AND ");
-        qb.appendWhere("PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
-        qb.appendWhereEscapeString(number);
-        qb.appendWhere(")");
+    public void buildPhoneLookupAndRawContactQuery(SQLiteQueryBuilder qb, String number) {
+        String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        StringBuilder sb = new StringBuilder();
+        appendPhoneLookupTables(sb, normalizedNumber, false);
+        qb.setTables(sb.toString());
+
+        sb = new StringBuilder();
+        appendPhoneLookupSelection(sb, number);
+        qb.appendWhere(sb.toString());
     }
 
-    public void appendRawContactsByPhoneNumberAsNestedQuery(StringBuilder sb, String number) {
+    public void buildPhoneLookupAndContactQuery(SQLiteQueryBuilder qb, String number) {
+        String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        StringBuilder sb = new StringBuilder();
+        appendPhoneLookupTables(sb, normalizedNumber, true);
+        qb.setTables(sb.toString());
+
+        sb = new StringBuilder();
+        appendPhoneLookupSelection(sb, number);
+        qb.appendWhere(sb.toString());
+    }
+
+    public String buildPhoneLookupAsNestedQuery(String number) {
+        StringBuilder sb = new StringBuilder();
         final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
-        sb.append("(SELECT DISTINCT raw_contact_id"
-                + " FROM " + Tables.RAW_CONTACTS
-                + ", (SELECT data_id FROM phone_lookup "
+        sb.append("(SELECT DISTINCT raw_contact_id" + " FROM ");
+        appendPhoneLookupTables(sb, normalizedNumber, false);
+        sb.append(" WHERE ");
+        appendPhoneLookupSelection(sb, number);
+        sb.append(")");
+        return sb.toString();
+    }
+
+    private void appendPhoneLookupTables(StringBuilder sb, final String normalizedNumber,
+            boolean joinContacts) {
+        sb.append(Tables.RAW_CONTACTS);
+        if (joinContacts) {
+            sb.append(" JOIN " + getContactView() + " contacts"
+                    + " ON (contacts._id = raw_contacts.contact_id)");
+        }
+        sb.append(", (SELECT data_id FROM phone_lookup "
                 + "WHERE (phone_lookup.normalized_number GLOB '");
         sb.append(normalizedNumber);
-        sb.append("*')) AS lookup, " + Tables.DATA
-                + " WHERE lookup.data_id=data._id"
-                + " AND data.raw_contact_id=raw_contacts._id"
+        sb.append("*')) AS lookup, " + Tables.DATA);
+    }
+
+    private void appendPhoneLookupSelection(StringBuilder sb, String number) {
+        sb.append("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id"
                 + " AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
         DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append("))");
+        sb.append(")");
     }
 
     /**

@@ -156,21 +156,30 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(filterUri2, null, null));
     }
 
-    // TODO fix and reenable the test
-    public void _testPhoneLookup() {
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
+    public void testPhoneLookup() {
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "18004664411");
 
         Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664411");
-        ContentValues values = new ContentValues();
-        values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
-        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
-        values.put(Phone.NUMBER, "18004664411");
-        values.put(Phone.TYPE, Phone.TYPE_HOME);
-        values.putNull(Phone.LABEL);
+
+        values.clear();
+        values.put(PhoneLookup._ID, queryContactId(rawContactId));
+        values.put(PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        values.put(PhoneLookup.NUMBER, "18004664411");
+        values.put(PhoneLookup.TYPE, Phone.TYPE_HOME);
+        values.putNull(PhoneLookup.LABEL);
+        values.put(PhoneLookup.CUSTOM_RINGTONE, "d");
+        values.put(PhoneLookup.SEND_TO_VOICEMAIL, 1);
         assertStoredValues(lookupUri1, values);
 
-        Uri lookupUri2 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "4664411");
+        Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "4664411");
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 

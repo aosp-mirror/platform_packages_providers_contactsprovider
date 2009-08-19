@@ -719,9 +719,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        OpenHelper.buildPhoneLookupQuery(qb, phoneNumber, false /* join mimetypes */);
-        Cursor c = qb.query(db, CONTACT_ID_COLUMNS,
-                RawContacts.CONTACT_ID + " NOT NULL", null, null, null, null);
+        mOpenHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
+        Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContacts.CONTACT_ID + " NOT NULL", null,
+                null, null, null);
         try {
             while (c.moveToNext()) {
                 long contactId = c.getLong(COL_CONTACT_ID);
