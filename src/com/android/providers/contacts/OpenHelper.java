@@ -1445,7 +1445,7 @@ import java.util.HashMap;
      */
     static final String[] sAllowedPackages = new String[] {
         "com.android.contacts",
-        "com.facebook",
+        "com.facebook.katana",
     };
 
     /**
