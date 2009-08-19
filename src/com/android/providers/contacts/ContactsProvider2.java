@@ -1691,8 +1691,28 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 return mDb.delete(Tables.CONTACTS, BaseColumns._ID + "=" + contactId, null);
             }
 
+            case RAW_CONTACTS: {
+                final boolean permanently =
+                        readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
+                int numDeletes = 0;
+                Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
+                        selection, selectionArgs, null, null, null);
+                try {
+                    while (c.moveToNext()) {
+                        final long rawContactId = c.getLong(0);
+                        numDeletes += deleteRawContact(rawContactId, permanently);
+                    }
+                } finally {
+                    c.close();
+                }
+                return numDeletes;
+            }
+
             case RAW_CONTACTS_ID: {
-                return deleteRawContact(uri);
+                final boolean permanently =
+                        readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
+                final long rawContactId = ContentUris.parseId(uri);
+                return deleteRawContact(rawContactId, permanently);
             }
 
             case DATA: {
@@ -1705,7 +1725,27 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case GROUPS_ID: {
-                return deleteGroup(uri);
+                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
+                final boolean deletePermanently =
+                        readBooleanQueryParameter(uri, Groups.DELETE_PERMANENTLY, false);
+                return deleteGroup(ContentUris.parseId(uri), markAsDirty, deletePermanently);
+            }
+
+            case GROUPS: {
+                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
+                final boolean permanently = 
+                        readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
+                int numDeletes = 0;
+                Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups._ID},
+                        selection, selectionArgs, null, null, null);
+                try {
+                    while (c.moveToNext()) {
+                        numDeletes += deleteGroup(c.getLong(0), markAsDirty, permanently);
+                    }
+                } finally {
+                    c.close();
+                }
+                return numDeletes;
             }
 
             case SETTINGS: {
@@ -1721,11 +1761,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
     }
 
-    private int deleteGroup(Uri uri) {
-        final String flag = uri.getQueryParameter(Groups.DELETE_PERMANENTLY);
-        final boolean permanently = flag != null && "true".equals(flag.toLowerCase());
-        boolean markAsDirty = shouldMarkGroupAsDirty(uri);
-        return deleteGroup(ContentUris.parseId(uri), markAsDirty, permanently);
+    private boolean readBooleanQueryParameter(Uri uri, String name, boolean defaultValue) {
+        final String flag = uri.getQueryParameter(name);
+        return flag == null
+                ? defaultValue
+                : (!"false".equals(flag.toLowerCase()) && !"0".equals(flag.toLowerCase()));
     }
 
     private int deleteGroup(long groupId, boolean markAsDirty, boolean permanently) {
@@ -1749,13 +1789,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         } finally {
             mOpenHelper.updateAllVisible();
         }
-    }
-
-    private int deleteRawContact(Uri uri) {
-        final String flag = uri.getQueryParameter(RawContacts.DELETE_PERMANENTLY);
-        final boolean permanently = flag != null && "true".equals(flag.toLowerCase());
-        final long rawContactId = ContentUris.parseId(uri);
-        return deleteRawContact(rawContactId, permanently);
     }
 
     public int deleteRawContact(long rawContactId, boolean permanently) {
@@ -2922,8 +2955,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             return false;
         }
 
-        String param = uri.getQueryParameter(Groups.MARK_AS_DIRTY);
-        return param == null || (!param.equalsIgnoreCase("false") && !param.equals("0"));
+        return readBooleanQueryParameter(uri, Groups.MARK_AS_DIRTY, true);
     }
 
     /*
