@@ -798,6 +798,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(version, getVersion(uri));
     }
 
+    public void testGetPhotoUri() {
+        ContentValues values = new ContentValues();
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+        insertStructuredName(rawContactId, "John", "Doe");
+        Uri photoUri = insertPhoto(rawContactId);
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId));
+
+        assertEquals(photoUri, Contacts.getPhotoUri(mResolver, contactUri));
+    }
+
     private long createContact(ContentValues values, String firstName, String givenName,
             String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
             long groupId) {
