@@ -159,6 +159,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final int SEARCH_SUGGESTIONS = 12001;
     private static final int SEARCH_SHORTCUT = 12002;
 
+    private static final int PHONES_WITH_PRESENCE = 13000;
+
     private interface ContactsQuery {
         public static final String TABLE = Tables.RAW_CONTACTS;
 
@@ -299,6 +301,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final HashMap<String, String> sSettingsProjectionMap;
     /** Contains Presence columns */
     private static final HashMap<String, String> sPresenceProjectionMap;
+    /** Contains Presence columns */
+    private static final HashMap<String, String> sPhonesWithPresenceProjectionMap;
 
     /** Sql select statement that returns the contact id associated with a data record. */
     private static final String sNestedRawContactIdSelect;
@@ -316,6 +320,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final String sSetSuperPrimaryWhere;
     /** Sql where statement for filtering on groups. */
     private static final String sContactsInGroupSelect;
+
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
     /** Precompiled sql statement for setting a data record to the super primary. */
@@ -381,6 +386,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
                 SEARCH_SHORTCUT);
 
+        // Private API
+        matcher.addURI(ContactsContract.AUTHORITY, "phones_with_presence", PHONES_WITH_PRESENCE);
+    }
+
+    static {
         sContactsProjectionMap = new HashMap<String, String>();
         sContactsProjectionMap.put(Contacts._ID, Contacts._ID);
         sContactsProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
@@ -552,7 +562,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         columns.put(Settings.SHOULD_SYNC, Settings.SHOULD_SYNC);
         sSettingsProjectionMap = columns;
 
-
         columns = new HashMap<String, String>();
         columns.put(Presence._ID, Presence._ID);
         columns.put(Presence.RAW_CONTACT_ID, Presence.RAW_CONTACT_ID);
@@ -563,6 +572,23 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
         columns.put(Presence.PRESENCE_CUSTOM_STATUS, Presence.PRESENCE_CUSTOM_STATUS);
         sPresenceProjectionMap = columns;
+
+        sPhonesWithPresenceProjectionMap = new HashMap<String, String>();
+        sPhonesWithPresenceProjectionMap.put(Phone.NUMBER, Phone.NUMBER);
+        sPhonesWithPresenceProjectionMap.put(Phone.TYPE, Phone.TYPE);
+        sPhonesWithPresenceProjectionMap.put(Phone.LABEL, Phone.LABEL);
+        sPhonesWithPresenceProjectionMap.put(Contacts.DISPLAY_NAME,
+                ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME);
+        sPhonesWithPresenceProjectionMap.put(Contacts._ID,
+                ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID);
+        sPhonesWithPresenceProjectionMap.put(RawContacts.CONTACT_ID,
+                ContactsColumns.CONCRETE_ID + " AS " + RawContacts.CONTACT_ID);
+        sPhonesWithPresenceProjectionMap.put(Presence.PRESENCE_STATUS,
+                "MAX(" + Presence.PRESENCE_STATUS + ") AS " + Presence.PRESENCE_STATUS);
+
+        // TODO implement support for latest custom status
+        sPhonesWithPresenceProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
+                "NULL AS " + Presence.PRESENCE_CUSTOM_STATUS);
 
         sNestedRawContactIdSelect = "SELECT " + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
                 + Data._ID + "=?";
@@ -2340,6 +2366,25 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case SEARCH_SHORTCUT: {
                 // TODO
+                break;
+            }
+
+            case PHONES_WITH_PRESENCE: {
+                long phoneMimeType = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+                qb.setTables(Tables.PRESENCE
+                        + " JOIN " + mOpenHelper.getRawContactView() + " raw_contacts"
+                                + " ON (" + Presence.RAW_CONTACT_ID
+                                        + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                        + " JOIN " + Tables.CONTACTS
+                                + " ON (" + ContactsColumns.CONCRETE_ID
+                                        + "=" + RawContacts.CONTACT_ID + ")"
+                        + " JOIN " + Tables.DATA
+                                + " ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID
+                                        + "=" + Presence.RAW_CONTACT_ID
+                                        + " AND " + DataColumns.MIMETYPE_ID + "=" + phoneMimeType
+                                        + " AND " + Phone.DATA + " NOT NULL" + ")");
+                qb.setProjectionMap(sPhonesWithPresenceProjectionMap);
+                groupBy = RawContacts.CONTACT_ID + "," + DataColumns.CONCRETE_ID;
                 break;
             }
 

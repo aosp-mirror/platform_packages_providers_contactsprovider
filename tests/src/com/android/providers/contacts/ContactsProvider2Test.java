@@ -346,6 +346,53 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    public void testPhonesWithPresence() {
+
+        ContentValues values = new ContentValues();
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+        insertStructuredName(rawContactId, "John", "Doe");
+        Uri photoUri = insertPhoto(rawContactId);
+        long photoId = ContentUris.parseId(photoUri);
+        values.put(Contacts.PHOTO_ID, photoId);
+        insertPhoneNumber(rawContactId, "18004664411");
+        insertPhoneNumber(rawContactId, "18004664412");
+        insertEmail(rawContactId, "goog411@acme.com");
+        insertEmail(rawContactId, "goog412@acme.com");
+
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog411@acme.com", Presence.INVISIBLE);
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog412@acme.com", Presence.AVAILABLE);
+        long contactId = queryContactId(rawContactId);
+
+        Uri uri = Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "phones_with_presence");
+
+        Cursor c = mResolver.query(uri, null,
+                RawContacts.CONTACT_ID + "=" + contactId, null, Phone.NUMBER);
+        assertEquals(2, c.getCount());
+
+        c.moveToFirst();
+
+        values.clear();
+        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
+        values.put(Contacts.DISPLAY_NAME, "John Doe");
+        values.put(Phone.NUMBER, "18004664411");
+        values.putNull(Phone.LABEL);
+        values.put(Contacts._ID, contactId);
+        assertCursorValues(c, values);
+
+        c.moveToNext();
+
+        values.clear();
+        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
+        values.put(Contacts.DISPLAY_NAME, "John Doe");
+        values.put(Phone.NUMBER, "18004664412");
+        values.putNull(Phone.LABEL);
+        values.put(Contacts._ID, contactId);
+        assertCursorValues(c, values);
+
+        c.close();
+    }
+
     public void testGroupInsert() {
         ContentValues values = new ContentValues();
 
