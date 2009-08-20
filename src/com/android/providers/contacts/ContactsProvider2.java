@@ -548,18 +548,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         // RawContacts and groups projection map
         columns = new HashMap<String, String>();
         columns.putAll(sGroupsProjectionMap);
-
         columns.put(Groups.SUMMARY_COUNT, "(SELECT COUNT(DISTINCT " + ContactsColumns.CONCRETE_ID
                 + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS + " WHERE "
                 + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
                 + ") AS " + Groups.SUMMARY_COUNT);
-
         columns.put(Groups.SUMMARY_WITH_PHONES, "(SELECT COUNT(DISTINCT "
                 + ContactsColumns.CONCRETE_ID + ") FROM "
                 + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS + " WHERE "
                 + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
                 + " AND " + Contacts.HAS_PHONE_NUMBER + ") AS " + Groups.SUMMARY_WITH_PHONES);
-
         sGroupsSummaryProjectionMap = columns;
 
         // Aggregate exception projection map
@@ -574,12 +571,20 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // Settings projection map
         columns = new HashMap<String, String>();
-        columns.put(Settings._ID, Settings._ID);
         columns.put(Settings.ACCOUNT_NAME, Settings.ACCOUNT_NAME);
         columns.put(Settings.ACCOUNT_TYPE, Settings.ACCOUNT_TYPE);
         columns.put(Settings.UNGROUPED_VISIBLE, Settings.UNGROUPED_VISIBLE);
         columns.put(Settings.SHOULD_SYNC_MODE, Settings.SHOULD_SYNC_MODE);
         columns.put(Settings.SHOULD_SYNC, Settings.SHOULD_SYNC);
+        columns.put(Settings.UNGROUPED_COUNT, "(SELECT COUNT(DISTINCT " + RawContacts.CONTACT_ID
+                + ") FROM " + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " WHERE "
+                + Clauses.UNGROUPED + " GROUP BY " + Clauses.GROUP_BY_ACCOUNT + ") AS "
+                + Settings.UNGROUPED_COUNT);
+        columns.put(Settings.UNGROUPED_WITH_PHONES, "(SELECT COUNT(DISTINCT "
+                + RawContacts.CONTACT_ID + ") FROM "
+                + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " WHERE "
+                + Clauses.UNGROUPED + " AND " + Contacts.HAS_PHONE_NUMBER + " GROUP BY "
+                + Clauses.GROUP_BY_ACCOUNT + ") AS " + Settings.UNGROUPED_WITH_PHONES);
         sSettingsProjectionMap = columns;
 
         columns = new HashMap<String, String>();
@@ -1255,7 +1260,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case SETTINGS: {
-                id = mDb.insert(Tables.SETTINGS, null, values);
+                id = insertSettings(values);
                 break;
             }
 
@@ -1537,6 +1542,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         return mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
     }
 
+    private long insertSettings(ContentValues values) {
+        final long id = mDb.insert(Tables.SETTINGS, null, values);
+        if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
+            mOpenHelper.updateAllVisible();
+        }
+        return id;
+    }
+
     /**
      * Inserts a presence update.
      */
@@ -1717,7 +1730,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case SETTINGS: {
-                return mDb.delete(Tables.SETTINGS, selection, selectionArgs);
+                return deleteSettings(selection, selectionArgs);
             }
 
             case PRESENCE: {
@@ -1757,6 +1770,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         } finally {
             mOpenHelper.updateAllVisible();
         }
+    }
+
+    private int deleteSettings(String selection, String[] selectionArgs) {
+        final int count = mDb.delete(Tables.SETTINGS, selection, selectionArgs);
+        if (count > 0) {
+            mOpenHelper.updateAllVisible();
+        }
+        return count;
     }
 
     public int deleteRawContact(long rawContactId, boolean permanently) {
@@ -1856,7 +1877,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case SETTINGS: {
-                count = mDb.update(Tables.SETTINGS, values, selection, selectionArgs);
+                count = updateSettings(values, selection, selectionArgs);
                 break;
             }
 
@@ -1884,6 +1905,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // If changing visibility, then update contacts
         if (values.containsKey(Groups.GROUP_VISIBLE)) {
+            mOpenHelper.updateAllVisible();
+        }
+        return count;
+    }
+
+    private int updateSettings(ContentValues values, String selection, String[] selectionArgs) {
+        final int count = mDb.update(Tables.SETTINGS, values, selection, selectionArgs);
+        if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mOpenHelper.updateAllVisible();
         }
         return count;
@@ -2426,6 +2455,18 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             case SETTINGS: {
                 qb.setTables(Tables.SETTINGS);
                 qb.setProjectionMap(sSettingsProjectionMap);
+
+                // When requesting specific columns, this query requires
+                // late-binding of the GroupMembership MIME-type.
+                final String groupMembershipMimetypeId = Long.toString(mOpenHelper
+                        .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
+                if (isContained(projection, Settings.UNGROUPED_COUNT)) {
+                    selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
+                }
+                if (isContained(projection, Settings.UNGROUPED_WITH_PHONES)) {
+                    selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
+                }
+
                 break;
             }
 
