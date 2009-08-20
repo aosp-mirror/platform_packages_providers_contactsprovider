@@ -1610,7 +1610,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case GROUPS: {
                 boolean markAsDirty = shouldMarkGroupAsDirty(uri);
-                final boolean permanently = 
+                final boolean permanently =
                         readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
                 int numDeletes = 0;
                 Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups._ID},
@@ -2904,10 +2904,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 return accounts[0];
             }
         } catch (Throwable e) {
-            throw new RuntimeException("Cannot determine the default account "
-                    + "for contacts compatibility", e);
+            Log.e(TAG, "Cannot determine the default account for contacts compatibility", e);
         }
-        throw new RuntimeException("Cannot determine the default account "
-                + "for contacts compatibility");
+        return null;
     }
 }
