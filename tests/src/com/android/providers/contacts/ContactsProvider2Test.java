@@ -22,6 +22,7 @@ import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
@@ -364,10 +365,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog412@acme.com", Presence.AVAILABLE);
         long contactId = queryContactId(rawContactId);
 
-        Uri uri = Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "phones_with_presence");
+        Uri uri = Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "data_with_presence");
 
-        Cursor c = mResolver.query(uri, null,
-                RawContacts.CONTACT_ID + "=" + contactId, null, Phone.NUMBER);
+        Cursor c = mResolver.query(uri, null, RawContacts.CONTACT_ID + "=" + contactId + " AND "
+                + Data.MIMETYPE + "='" + Phone.CONTENT_ITEM_TYPE + "'", null, Phone.NUMBER);
         assertEquals(2, c.getCount());
 
         c.moveToFirst();
@@ -377,7 +378,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664411");
         values.putNull(Phone.LABEL);
-        values.put(Contacts._ID, contactId);
+        values.put(RawContacts.CONTACT_ID, contactId);
         assertCursorValues(c, values);
 
         c.moveToNext();
@@ -387,7 +388,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664412");
         values.putNull(Phone.LABEL);
-        values.put(Contacts._ID, contactId);
+        values.put(RawContacts.CONTACT_ID, contactId);
         assertCursorValues(c, values);
 
         c.close();
