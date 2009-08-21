@@ -351,9 +351,14 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 "Some other way", "foo@acme.com", null, true);
     }
 
-    public void testImInsert() {
+    public void testImInsertStandard() {
         assertContactMethodInsert(Contacts.KIND_IM, ContactMethods.TYPE_CUSTOM, "Some other way",
-                "Foo", "Bar", true);
+                "pre:3", "Bar", true);
+    }
+
+    public void testImInsertCustom() {
+        assertContactMethodInsert(Contacts.KIND_IM, ContactMethods.TYPE_CUSTOM, "Some other way",
+                "custom:my_proto", "Bar", true);
     }
 
     public void testPostalInsert() {
@@ -469,92 +474,6 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri personsGroupsUri = Uri.withAppendedPath(personUri, GroupMembership.CONTENT_DIRECTORY);
         assertStoredValues(personsGroupsUri, values);
-    }
-
-    // TODO fix and reenable test
-    public void __testPresenceInsertMatchOnHandle() {
-        ContentValues values = new ContentValues();
-        putContactValues(values);
-        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
-        long personId = ContentUris.parseId(personUri);
-
-        String encodedProtocol =
-                ContactMethods.encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
-
-        values.clear();
-        values.put(ContactMethods.PERSON_ID, personId);
-        values.put(ContactMethods.KIND, Contacts.KIND_IM);
-        values.put(ContactMethods.TYPE, ContactMethods.TYPE_HOME);
-        values.put(ContactMethods.DATA, "Android");
-        values.put(ContactMethods.AUX_DATA, encodedProtocol);
-        mResolver.insert(ContactMethods.CONTENT_URI, values);
-
-        values.clear();
-        values.put(Presence.IM_PROTOCOL, encodedProtocol);
-        values.put(Presence.IM_HANDLE, "Android");
-        values.put(Presence.IM_ACCOUNT, "foo");
-        values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-
-        Uri presenceUri = mResolver.insert(Presence.CONTENT_URI, values);
-        assertSelection(Presence.CONTENT_URI, values,
-                Presence._ID, ContentUris.parseId(presenceUri));
-
-        values.put(Presence.PERSON_ID, personId);
-        assertStoredValues(presenceUri, values);
-
-        // Now the person should be joined with Presence
-        values.clear();
-        putContactValues(values);
-        values.put(People.IM_PROTOCOL, encodedProtocol);
-        values.put(People.IM_HANDLE, "Android");
-        values.put(People.IM_ACCOUNT, "foo");
-        values.put(People.PRESENCE_STATUS, Presence.OFFLINE);
-        values.put(People.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-        assertStoredValues(personUri, values);
-    }
-
-    // TODO fix and reenable test
-    public void __testPresenceInsertMatchOnEmail() {
-        ContentValues values = new ContentValues();
-        putContactValues(values);
-        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
-        long personId = ContentUris.parseId(personUri);
-
-        String protocol =
-            ContactMethods.encodePredefinedImProtocol(ContactMethods.PROTOCOL_GOOGLE_TALK);
-
-        values.clear();
-        values.put(ContactMethods.PERSON_ID, personId);
-        values.put(ContactMethods.KIND, Contacts.KIND_EMAIL);
-        values.put(ContactMethods.TYPE, ContactMethods.TYPE_HOME);
-        values.put(ContactMethods.DATA, "Android@android.com");
-        mResolver.insert(ContactMethods.CONTENT_URI, values);
-
-        values.clear();
-        values.put(Presence.IM_PROTOCOL, protocol);
-        values.put(Presence.IM_HANDLE, "Android@android.com");
-        values.put(Presence.IM_ACCOUNT, "foo");
-        values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-
-        Uri presenceUri = mResolver.insert(Presence.CONTENT_URI, values);
-
-        // FIXME person_id was not available in legacy ContactsProvider
-        // values.put(Presence.PERSON_ID, personId);
-        assertStoredValues(presenceUri, values);
-        assertSelection(Presence.CONTENT_URI, values,
-                Presence._ID, ContentUris.parseId(presenceUri));
-
-        // Now the person should be joined with Presence
-        values.clear();
-        putContactValues(values);
-        values.put(People.IM_PROTOCOL, protocol);
-        values.put(People.IM_HANDLE, "Android@android.com");
-        values.put(People.IM_ACCOUNT, "foo");
-        values.put(People.PRESENCE_STATUS, Presence.OFFLINE);
-        values.put(People.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-        assertStoredValues(personUri, values);
     }
 
     public void testPhotoUpdate() throws Exception {
