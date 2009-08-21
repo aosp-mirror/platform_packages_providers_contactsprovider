@@ -124,6 +124,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final int CONTACTS_SUMMARY_STREQUENT = 1007;
     private static final int CONTACTS_SUMMARY_STREQUENT_FILTER = 1008;
     private static final int CONTACTS_SUMMARY_GROUP = 1009;
+    private static final int CONTACTS_PHOTO = 1010;
+    private static final int CONTACTS_SUMMARY_PHOTO = 1011;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -343,6 +345,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions",
+                AGGREGATION_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_PHOTO);
+
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary", CONTACTS_SUMMARY);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/#", CONTACTS_SUMMARY_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/filter/*",
@@ -353,8 +359,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 CONTACTS_SUMMARY_STREQUENT_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/group/*",
                 CONTACTS_SUMMARY_GROUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions",
-                AGGREGATION_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/#/photo",
+                CONTACTS_SUMMARY_PHOTO);
+
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_DATA);
@@ -2228,6 +2235,18 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 qb.setProjectionMap(sDataProjectionMap);
                 appendAccountFromParameter(qb, uri);
                 qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
+                break;
+            }
+
+            case CONTACTS_PHOTO:
+            case CONTACTS_SUMMARY_PHOTO: {
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
+
+                qb.setTables(mOpenHelper.getDataView());
+                qb.setProjectionMap(sDataProjectionMap);
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
+                qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
                 break;
             }
 

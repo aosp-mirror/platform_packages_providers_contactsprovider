@@ -39,6 +39,7 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.ContactsContract.Contacts.Photo;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -856,10 +857,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, "John", "Doe");
         Uri photoUri = insertPhoto(rawContactId);
 
-        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                queryContactId(rawContactId));
+        Uri twigUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId)), Photo.CONTENT_DIRECTORY);
 
-        assertEquals(photoUri, Contacts.getPhotoUri(mResolver, contactUri));
+        long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
+        assertEquals(ContentUris.parseId(photoUri), twigId);
     }
 
     private long createContact(ContentValues values, String firstName, String givenName,
