@@ -281,6 +281,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
     public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
+    /** Contains just BaseColumns._COUNT */
+    private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
     /** Contains the contact columns along with primary phone */
@@ -391,6 +393,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     static {
+        sCountProjectionMap = new HashMap<String, String>();
+        sCountProjectionMap.put(BaseColumns._COUNT, "COUNT(*)");
+        
         sContactsProjectionMap = new HashMap<String, String>();
         sContactsProjectionMap.put(Contacts._ID, Contacts._ID);
         sContactsProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
@@ -2377,6 +2382,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         // Perform the query and set the notification uri
+        if (projection != null && projection.length == 1
+                && BaseColumns._COUNT.equals(projection[0])) {
+            qb.setProjectionMap(sCountProjectionMap);
+        }
         final Cursor c = qb.query(db, projection, selection, selectionArgs,
                 groupBy, null, sortOrder, limit);
         if (c != null) {
@@ -2555,6 +2564,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             mEntityCursor.moveToFirst();
         }
 
+        public void reset() throws RemoteException {
+            if (mIsClosed) {
+                throw new IllegalStateException("calling reset() when the iterator is closed");
+            }
+            mEntityCursor.moveToFirst();
+        }
+
         public void close() {
             if (mIsClosed) {
                 throw new IllegalStateException("closing when already closed");
@@ -2727,6 +2743,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             return !mEntityCursor.isAfterLast();
         }
 
+        public void reset() throws RemoteException {
+            if (mIsClosed) {
+                throw new IllegalStateException("calling reset() when the iterator is closed");
+            }
+            mEntityCursor.moveToFirst();
+        }
+        
         public Entity next() throws RemoteException {
             if (mIsClosed) {
                 throw new IllegalStateException("calling next() when the iterator is closed");
