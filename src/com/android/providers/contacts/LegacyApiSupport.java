@@ -143,6 +143,22 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " END)"
                 + " END) AS INTEGER)";
 
+    private static final String IM_PROTOCOL_SQL =
+            "(CASE WHEN " + Presence.PROTOCOL + "=" + Im.PROTOCOL_CUSTOM
+                + " THEN 'custom:'||" + Presence.CUSTOM_PROTOCOL
+                + " ELSE 'pre:'||" + Presence.PROTOCOL
+                + " END)";
+
+    private static String CONTACT_METHOD_DATA_SQL =
+            "(CASE WHEN " + Data.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
+                + " THEN (CASE WHEN " + Tables.DATA + "." + Im.PROTOCOL + "=" + Im.PROTOCOL_CUSTOM
+                    + " THEN 'custom:'||" + Tables.DATA + "." + Im.CUSTOM_PROTOCOL
+                    + " ELSE 'pre:'||" + Tables.DATA + "." + Im.PROTOCOL
+                    + " END)"
+                + " ELSE " + DataColumns.CONCRETE_DATA2
+                + " END)";
+
+
     public interface LegacyTables {
         public static final String PEOPLE = "view_v1_people";
         public static final String PEOPLE_JOIN_PRESENCE = "view_v1_people" + PRESENCE_JOINS;
@@ -304,12 +320,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         peopleProjectionMap.put(People.CUSTOM_RINGTONE, People.CUSTOM_RINGTONE);
         peopleProjectionMap.put(People.SEND_TO_VOICEMAIL, People.SEND_TO_VOICEMAIL);
         peopleProjectionMap.put(People.STARRED, People.STARRED);
-
-        String IM_PROTOCOL_SQL =
-                "(CASE WHEN " + Presence.PROTOCOL + "=" + Im.PROTOCOL_CUSTOM
-                    + " THEN 'custom:'||" + Presence.CUSTOM_PROTOCOL
-                    + " ELSE 'pre:'||" + Presence.PROTOCOL
-                    + " END)";
 
         sPeopleProjectionMap = new HashMap<String, String>(peopleProjectionMap);
         sPeopleProjectionMap.put(People._ID, People._ID);
@@ -526,14 +536,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AND " + RawContacts.IS_RESTRICTED + "=0" +
         ";");
 
-        String DATA_SQL = "(CASE WHEN " + Data.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
-                + " THEN (CASE WHEN " + Tables.DATA + "." + Im.PROTOCOL + "=" + Im.PROTOCOL_CUSTOM
-                        + " THEN 'custom:'||" + Tables.DATA + "." + Im.CUSTOM_PROTOCOL
-                        + " ELSE 'pre:'||" + Tables.DATA + "." + Im.PROTOCOL
-                        + " END)"
-                + " ELSE " + DataColumns.CONCRETE_DATA2
-                + " END)";
-
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.CONTACT_METHODS + ";");
         db.execSQL("CREATE VIEW " + LegacyTables.CONTACT_METHODS + " AS SELECT " +
                 DataColumns.CONCRETE_ID
@@ -546,7 +548,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                         + " AS " + ContactMethods.ISPRIMARY + ", " +
                 DataColumns.CONCRETE_DATA1
                         + " AS " + ContactMethods.TYPE + ", " +
-                DATA_SQL
+                CONTACT_METHOD_DATA_SQL
                         + " AS " + ContactMethods.DATA + ", " +
                 DataColumns.CONCRETE_DATA3
                         + " AS " + ContactMethods.LABEL + ", " +
