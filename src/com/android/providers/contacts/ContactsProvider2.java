@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.internal.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
@@ -49,7 +50,6 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
@@ -57,7 +57,6 @@ import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.Contacts.People;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -333,6 +332,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private SQLiteStatement mContactDisplayNameUpdate;
     /** Precompiled sql statement for marking a raw contact as dirty */
     private SQLiteStatement mRawContactDirtyUpdate;
+    /** Precompiled sql statement for setting an aggregated presence */
+    private SQLiteStatement mAggregatedPresenceReplace;
+    /** Precompiled sql statement for updating an aggregated presence status */
+    private SQLiteStatement mAggregatedPresenceStatusUpdate;
 
     static {
         // Contacts URI matching table
@@ -395,7 +398,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     static {
         sCountProjectionMap = new HashMap<String, String>();
         sCountProjectionMap.put(BaseColumns._COUNT, "COUNT(*)");
-        
+
         sContactsProjectionMap = new HashMap<String, String>();
         sContactsProjectionMap.put(Contacts._ID, Contacts._ID);
         sContactsProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
@@ -411,7 +414,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sContactsSummaryProjectionMap = new HashMap<String, String>();
         sContactsSummaryProjectionMap.putAll(sContactsProjectionMap);
         sContactsSummaryProjectionMap.put(Contacts.PRESENCE_STATUS,
-                "MAX(" + Presence.PRESENCE_STATUS + ") AS " + Contacts.PRESENCE_STATUS);
+                Presence.PRESENCE_STATUS + " AS " + Contacts.PRESENCE_STATUS);
+
+        // TODO change this from Presence.PRESENCE_CUSTOM_STATUS to Contacts.PRESENCE_CUSTOM_STATUS
+        sContactsSummaryProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
+                Presence.PRESENCE_CUSTOM_STATUS + " AS " + Presence.PRESENCE_CUSTOM_STATUS);
 
         sRawContactsProjectionMap = new HashMap<String, String>();
         sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
@@ -581,11 +588,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sDataWithPresenceProjectionMap = new HashMap<String, String>();
         sDataWithPresenceProjectionMap.putAll(sDataProjectionMap);
         sDataWithPresenceProjectionMap.put(Presence.PRESENCE_STATUS,
-                "MAX(" + Presence.PRESENCE_STATUS + ") AS " + Presence.PRESENCE_STATUS);
-
-        // TODO implement support for latest custom status
+                Presence.PRESENCE_STATUS);
         sDataWithPresenceProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
-                "NULL AS " + Presence.PRESENCE_CUSTOM_STATUS);
+                Presence.PRESENCE_CUSTOM_STATUS);
 
         sNestedRawContactIdSelect = "SELECT " + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
                 + Data._ID + "=?";
@@ -1000,6 +1005,21 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         mRawContactDirtyUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.DIRTY + "=1 WHERE " + RawContacts._ID + "=?");
+
+        mAggregatedPresenceReplace = db.compileStatement(
+                "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
+                        + AggregatedPresenceColumns.CONTACT_ID + ", "
+                        + Presence.PRESENCE_STATUS
+                + ") VALUES (?, (SELECT MAX(" + Presence.PRESENCE_STATUS + ")"
+                        + " FROM " + Tables.PRESENCE + "," + Tables.RAW_CONTACTS
+                        + " WHERE " + Presence.RAW_CONTACT_ID + "="
+                                + RawContactsColumns.CONCRETE_ID
+                        + "   AND " + RawContacts.CONTACT_ID + "=?))");
+
+        mAggregatedPresenceStatusUpdate = db.compileStatement(
+                "UPDATE " + Tables.AGGREGATED_PRESENCE
+                + " SET " + Presence.PRESENCE_CUSTOM_STATUS + "=? "
+                + " WHERE " + AggregatedPresenceColumns.CONTACT_ID + "=?");
 
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
@@ -1537,6 +1557,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     .append(values.getAsLong(Presence.DATA_ID));
         }
 
+        // TODO remove this capability
         if (values.containsKey(Presence.RAW_CONTACT_ID)) {
             selection.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + "=")
                     .append(values.getAsLong(Presence.RAW_CONTACT_ID));
@@ -1546,6 +1567,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         long dataId = -1;
         long rawContactId = -1;
+        long contactId = -1;
 
         Cursor cursor = null;
         try {
@@ -1554,6 +1576,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
                 rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
+                contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
             } else {
                 // No contact found, return a null URI
                 return -1;
@@ -1569,6 +1592,20 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // Insert the presence update
         long presenceId = mDb.replace(Tables.PRESENCE, null, values);
+
+        if (contactId != -1) {
+            if (values.containsKey(Presence.PRESENCE_STATUS)) {
+                mAggregatedPresenceReplace.bindLong(1, contactId);
+                mAggregatedPresenceReplace.bindLong(2, contactId);
+                mAggregatedPresenceReplace.execute();
+            }
+            String status = values.getAsString(Presence.PRESENCE_CUSTOM_STATUS);
+            if (status != null) {
+                mAggregatedPresenceStatusUpdate.bindString(1, status);
+                mAggregatedPresenceStatusUpdate.bindLong(2, contactId);
+                mAggregatedPresenceStatusUpdate.execute();
+            }
+        }
         return presenceId;
     }
 
@@ -2104,7 +2141,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 // TODO: join into social status tables
                 qb.setTables(mOpenHelper.getContactSummaryView());
                 qb.setProjectionMap(sContactsSummaryProjectionMap);
-                groupBy = Contacts._ID;
                 break;
             }
 
@@ -2113,7 +2149,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 long contactId = ContentUris.parseId(uri);
                 qb.setTables(mOpenHelper.getContactSummaryView());
                 qb.setProjectionMap(sContactsSummaryProjectionMap);
-                groupBy = Contacts._ID;
                 qb.appendWhere(Contacts._ID + "=" + contactId);
                 break;
             }
@@ -2121,13 +2156,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             case CONTACTS_SUMMARY_FILTER: {
                 qb.setTables(mOpenHelper.getContactSummaryView());
                 qb.setProjectionMap(sContactsSummaryProjectionMap);
-                groupBy = Contacts._ID;
 
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
-                    sb.append("raw_contact_id IN ");
-                    appendRawContactsByFilterAsNestedQuery(sb, filterParam, null);
+                    sb.append(Contacts._ID + " IN ");
+                    appendContactByFilterAsNestedQuery(sb, filterParam);
                     qb.appendWhere(sb.toString());
                 }
                 break;
@@ -2140,8 +2174,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         && uri.getPathSegments().size() > 3) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
-                    sb.append("raw_contact_id IN ");
-                    appendRawContactsByFilterAsNestedQuery(sb, filterParam, null);
+                    sb.append(Contacts._ID + " IN ");
+                    appendContactByFilterAsNestedQuery(sb, filterParam);
                     filterSql = sb.toString();
                 }
 
@@ -2184,7 +2218,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     qb.appendWhere(sContactsInGroupSelect);
                     selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 }
-                groupBy = Contacts._ID;
                 break;
             }
 
@@ -2282,11 +2315,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case DATA_WITH_PRESENCE: {
                 qb.setTables(mOpenHelper.getDataView() + " data"
-                        + " LEFT OUTER JOIN " + Tables.PRESENCE
-                        + " ON (" + Presence.RAW_CONTACT_ID + "="
-                                + DataColumns.CONCRETE_RAW_CONTACT_ID + ")");
+                        + " LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE
+                        + " ON (" + AggregatedPresenceColumns.CONTACT_ID + "="
+                                + RawContacts.CONTACT_ID + ")");
                 qb.setProjectionMap(sDataWithPresenceProjectionMap);
-                groupBy = DataColumns.CONCRETE_ID;
                 break;
             }
 
@@ -2749,7 +2781,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
             mEntityCursor.moveToFirst();
         }
-        
+
         public Entity next() throws RemoteException {
             if (mIsClosed) {
                 throw new IllegalStateException("calling next() when the iterator is closed");
@@ -2912,6 +2944,21 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mSetSuperPrimaryStatement.bindLong(2, dataId);
         mSetSuperPrimaryStatement.bindLong(3, dataId);
         mSetSuperPrimaryStatement.execute();
+    }
+
+    private String getContactByFilterAsNestedQuery(String filterParam) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Contacts._ID + " IN ");
+        appendContactByFilterAsNestedQuery(sb, filterParam);
+        return sb.toString();
+    }
+
+    private void appendContactByFilterAsNestedQuery(StringBuilder sb, String filterParam) {
+        sb.append("(SELECT DISTINCT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
+                + " JOIN name_lookup ON(" + RawContactsColumns.CONCRETE_ID + "=raw_contact_id)"
+                + " WHERE normalized_name GLOB '");
+        sb.append(NameNormalizer.normalize(filterParam));
+        sb.append("*')");
     }
 
     public String getRawContactsByFilterAsNestedQuery(String filterParam) {

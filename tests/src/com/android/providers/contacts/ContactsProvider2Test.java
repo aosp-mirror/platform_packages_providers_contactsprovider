@@ -361,8 +361,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "goog411@acme.com");
         insertEmail(rawContactId, "goog412@acme.com");
 
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog411@acme.com", Presence.INVISIBLE);
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog412@acme.com", Presence.AVAILABLE);
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog411@acme.com", Presence.INVISIBLE, "Bad");
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "goog412@acme.com", Presence.AVAILABLE, "Good");
         long contactId = queryContactId(rawContactId);
 
         Uri uri = Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "data_with_presence");
@@ -375,6 +375,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Good");
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664411");
         values.putNull(Phone.LABEL);
@@ -385,6 +386,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Good");
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664412");
         values.putNull(Phone.LABEL);
@@ -515,16 +517,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId1 = createRawContact();
         insertImHandle(rawContactId1, protocol1, handle1);
 
-        insertPresence(protocol1, handle1, Presence.AVAILABLE);
-        insertPresence(protocol1, handle1, Presence.AWAY);
-        insertPresence(protocol1, handle1, Presence.INVISIBLE);
+        insertPresence(protocol1, handle1, Presence.AVAILABLE, "Green");
+        insertPresence(protocol1, handle1, Presence.AWAY, "Yellow");
+        insertPresence(protocol1, handle1, Presence.INVISIBLE, "Red");
 
         Cursor c = queryContactSummary(queryContactId(rawContactId1),
-                new String[] {Presence.PRESENCE_STATUS});
+                new String[] {Presence.PRESENCE_STATUS, Presence.PRESENCE_CUSTOM_STATUS});
         assertEquals(1, c.getCount());
 
         c.moveToFirst();
         assertEquals(Presence.AVAILABLE, c.getInt(0));
+        assertEquals("Red", c.getString(1));    // Last inserted
 
     }
 
@@ -744,7 +747,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, "deleteme@android.com");
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "deleteme@android.com", Presence.AVAILABLE);
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, "deleteme@android.com", Presence.AVAILABLE, null);
         assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
         assertEquals(1, getCount(Presence.CONTENT_URI, Presence.RAW_CONTACT_ID + "=" + rawContactId,
@@ -876,7 +879,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, phoneNumber);
         insertEmail(rawContactId, email);
 
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, email, presenceStatus);
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, email, presenceStatus, "hacking");
 
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);

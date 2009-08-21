@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
+import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
@@ -32,10 +33,12 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteStatement;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
@@ -136,6 +139,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     // Set if the current aggregation pass should be interrupted
     private volatile boolean mCancel;
 
+    /** Precompiled sql statement for setting an aggregated presence */
+    private SQLiteStatement mAggregatedPresenceReplace;
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -187,6 +192,24 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     public ContactAggregator(Context context, OpenHelper openHelper,
             ContactAggregationScheduler scheduler) {
         mOpenHelper = openHelper;
+
+        SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+
+        // Since we have no way of determining which custom status was set last,
+        // we'll just pick one randomly.  We are using MAX as an approximation of randomness
+        mAggregatedPresenceReplace = db.compileStatement(
+                "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
+                        + AggregatedPresenceColumns.CONTACT_ID + ", "
+                        + Presence.PRESENCE_STATUS + ", "
+                        + Presence.PRESENCE_CUSTOM_STATUS
+                + ") SELECT ?, "
+                            + "MAX(" + Presence.PRESENCE_STATUS + "), "
+                            + "MAX(" + Presence.PRESENCE_CUSTOM_STATUS + ")"
+                        + " FROM " + Tables.PRESENCE + "," + Tables.RAW_CONTACTS
+                        + " WHERE " + Presence.RAW_CONTACT_ID + "="
+                                + RawContactsColumns.CONCRETE_ID
+                        + "   AND " + RawContacts.CONTACT_ID + "=?");
+
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
         mScheduler.start();
@@ -344,6 +367,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
         db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
 
+        mAggregatedPresenceReplace.bindLong(1, contactId);
+        mAggregatedPresenceReplace.bindLong(2, contactId);
+        mAggregatedPresenceReplace.execute();
     }
 
     /**

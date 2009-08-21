@@ -60,7 +60,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 71;
+    private static final int DATABASE_VERSION = 72;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -80,14 +80,10 @@ import java.util.HashMap;
         public static final String DATA = "data";
         public static final String GROUPS = "groups";
         public static final String PRESENCE = "presence";
+        public static final String AGGREGATED_PRESENCE = "agg_presence";
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
         public static final String CALLS = "calls";
         public static final String CONTACT_ENTITIES = "contact_entities_view";
-
-        public static final String CONTACTS_JOIN_PRESENCE_PRIMARY_PHONE = "contacts "
-                + "LEFT OUTER JOIN raw_contacts ON (contacts._id = raw_contacts.contact_id) "
-                + "LEFT OUTER JOIN presence ON (raw_contacts._id = presence_raw_contact_id) "
-                + "LEFT OUTER JOIN data ON (primary_phone_id = data._id)";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -386,6 +382,10 @@ import java.util.HashMap;
         public static final String CLUSTER = "cluster";
     }
 
+    public interface AggregatedPresenceColumns {
+        String CONTACT_ID = "presence_contact_id";
+    }
+
     private static final String[] NICKNAME_LOOKUP_COLUMNS = new String[] {
         NicknameLookupColumns.CLUSTER
     };
@@ -486,12 +486,8 @@ import java.util.HashMap;
         mVisibleSpecificUpdate = db.compileStatement(visibleUpdate + " WHERE "
                 + ContactsColumns.CONCRETE_ID + "=?");
 
-        // Make sure we have an in-memory presence table
-        final String tableName = DATABASE_PRESENCE + "." + Tables.PRESENCE;
-        final String indexName = DATABASE_PRESENCE + ".presenceIndex";
-
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
-        db.execSQL("CREATE TABLE IF NOT EXISTS " + tableName + " ("+
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
                 Presence._ID + " INTEGER PRIMARY KEY," +
                 Presence.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
@@ -504,8 +500,16 @@ import java.util.HashMap;
                         + Presence.IM_ACCOUNT + ")" +
         ");");
 
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + Tables.PRESENCE + " ("
-                + Presence.RAW_CONTACT_ID + ");");
+        db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex" + " ON "
+                + Tables.PRESENCE + " (" + Presence.RAW_CONTACT_ID + ");");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS "
+                        + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
+                AggregatedPresenceColumns.CONTACT_ID
+                        + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
+                Presence.PRESENCE_STATUS + " INTEGER," +
+                Presence.PRESENCE_CUSTOM_STATUS + " TEXT" +
+        ");");
     }
 
     @Override
@@ -992,19 +996,13 @@ import java.util.HashMap;
 
         String contactSummarySelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + RawContactsColumns.CONCRETE_ID + " AS raw_contact_id,"
                 + contactsColumns
-                + " FROM " + Tables.CONTACTS
-                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
-                        + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")";
+                + " FROM " + Tables.CONTACTS;
 
         String restrictedContactSummarySelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + RawContactsColumns.CONCRETE_ID + " AS raw_contact_id,"
                 + contactsColumns
                 + " FROM " + Tables.CONTACTS
-                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
-                        + ContactsColumns.CONCRETE_ID + "=" + RawContacts.CONTACT_ID + ")"
                 + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
 
         db.execSQL("CREATE VIEW " + Views.CONTACT_SUMMARY_ALL
@@ -1484,7 +1482,7 @@ import java.util.HashMap;
     public String getContactSummaryView() {
         String summaryView = hasRestrictedAccess() ? Views.CONTACT_SUMMARY_ALL
                 : Views.CONTACT_SUMMARY_RESTRICTED;
-        return summaryView + " LEFT OUTER JOIN " + Tables.PRESENCE + " ON (raw_contact_id = "
-                + Presence.RAW_CONTACT_ID + ") ";
+        return summaryView + " LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE + " ON ("
+                + Contacts._ID + " = " + AggregatedPresenceColumns.CONTACT_ID + ") ";
     }
 }
