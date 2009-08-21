@@ -249,9 +249,11 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return mResolver.insert(Data.CONTENT_URI, values);
     }
 
-    protected Uri insertPresence(int protocol, String handle, int presence, String status) {
+    protected Uri insertPresence(int protocol, String customProtocol, String handle, int presence,
+            String status) {
         ContentValues values = new ContentValues();
-        values.put(Presence.IM_PROTOCOL, protocol);
+        values.put(Presence.PROTOCOL, protocol);
+        values.put(Presence.CUSTOM_PROTOCOL, customProtocol);
         values.put(Presence.IM_HANDLE, handle);
         values.put(Presence.PRESENCE_STATUS, presence);
         values.put(Presence.PRESENCE_CUSTOM_STATUS, status);
@@ -260,11 +262,13 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected Uri insertImHandle(long rawContactId, int protocol, String handle) {
+    protected Uri insertImHandle(long rawContactId, int protocol, String customProtocol,
+            String handle) {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Im.CONTENT_ITEM_TYPE);
         values.put(Im.PROTOCOL, protocol);
+        values.put(Im.CUSTOM_PROTOCOL, customProtocol);
         values.put(Im.DATA, handle);
         values.put(Im.TYPE, Im.TYPE_HOME);
 
