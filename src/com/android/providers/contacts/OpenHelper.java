@@ -195,12 +195,6 @@ import java.util.HashMap;
     }
 
     public interface Clauses {
-        public static final String WHERE_IM_MATCHES = MimetypesColumns.MIMETYPE + "='"
-                + Im.CONTENT_ITEM_TYPE + "' AND " + Im.PROTOCOL + "=? AND " + Im.DATA + "=?";
-
-        public static final String WHERE_EMAIL_MATCHES = MimetypesColumns.MIMETYPE + "='"
-                + Email.CONTENT_ITEM_TYPE + "' AND " + Email.DATA + "=?";
-
         public static final String MIMETYPE_IS_GROUP_MEMBERSHIP = MimetypesColumns.CONCRETE_MIMETYPE
                 + "='" + GroupMembership.CONTENT_ITEM_TYPE + "'";
 
@@ -382,6 +376,10 @@ import java.util.HashMap;
         public static final String CLUSTER = "cluster";
     }
 
+    public interface PresenceColumns {
+        String RAW_CONTACT_ID = "presence_raw_contact_id";
+    }
+
     public interface AggregatedPresenceColumns {
         String CONTACT_ID = "presence_contact_id";
     }
@@ -489,19 +487,20 @@ import java.util.HashMap;
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
                 Presence._ID + " INTEGER PRIMARY KEY," +
-                Presence.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
+                PresenceColumns.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
-                Presence.IM_PROTOCOL + " TEXT," +
+                Presence.PROTOCOL + " INTEGER NOT NULL," +
+                Presence.CUSTOM_PROTOCOL + " TEXT," +
                 Presence.IM_HANDLE + " TEXT," +
                 Presence.IM_ACCOUNT + " TEXT," +
                 Presence.PRESENCE_STATUS + " INTEGER," +
                 Presence.PRESENCE_CUSTOM_STATUS + " TEXT," +
-                "UNIQUE(" + Presence.IM_PROTOCOL + ", " + Presence.IM_HANDLE + ", "
-                        + Presence.IM_ACCOUNT + ")" +
+                "UNIQUE(" + Presence.PROTOCOL + ", " + Presence.CUSTOM_PROTOCOL
+                    + ", " + Presence.IM_HANDLE + ", " + Presence.IM_ACCOUNT + ")" +
         ");");
 
         db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex" + " ON "
-                + Tables.PRESENCE + " (" + Presence.RAW_CONTACT_ID + ");");
+                + Tables.PRESENCE + " (" + PresenceColumns.RAW_CONTACT_ID + ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS "
                         + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+

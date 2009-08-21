@@ -28,6 +28,7 @@ import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.PackagesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
+import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 import com.google.android.collect.Lists;
@@ -583,11 +584,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         columns = new HashMap<String, String>();
         columns.put(Presence._ID, Presence._ID);
-        columns.put(Presence.RAW_CONTACT_ID, Presence.RAW_CONTACT_ID);
+        columns.put(PresenceColumns.RAW_CONTACT_ID, PresenceColumns.RAW_CONTACT_ID);
         columns.put(Presence.DATA_ID, Presence.DATA_ID);
         columns.put(Presence.IM_ACCOUNT, Presence.IM_ACCOUNT);
         columns.put(Presence.IM_HANDLE, Presence.IM_HANDLE);
-        columns.put(Presence.IM_PROTOCOL, Presence.IM_PROTOCOL);
+        columns.put(Presence.PROTOCOL, Presence.PROTOCOL);
+        columns.put(Presence.CUSTOM_PROTOCOL, Presence.CUSTOM_PROTOCOL);
         columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
         columns.put(Presence.PRESENCE_CUSTOM_STATUS, Presence.PRESENCE_CUSTOM_STATUS);
         sPresenceProjectionMap = columns;
@@ -1540,34 +1542,56 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      */
     public long insertPresence(ContentValues values) {
         final String handle = values.getAsString(Presence.IM_HANDLE);
-        final String protocol = values.getAsString(Presence.IM_PROTOCOL);
-        if (TextUtils.isEmpty(handle) || TextUtils.isEmpty(protocol)) {
-            throw new IllegalArgumentException("IM_PROTOCOL and IM_HANDLE are required");
+        if (TextUtils.isEmpty(handle) || !values.containsKey(Presence.PROTOCOL)) {
+            throw new IllegalArgumentException("PROTOCOL and IM_HANDLE are required");
+        }
+
+        final long protocol = values.getAsLong(Presence.PROTOCOL);
+        String customProtocol = null;
+
+        if (protocol == Im.PROTOCOL_CUSTOM) {
+            customProtocol = values.getAsString(Presence.CUSTOM_PROTOCOL);
+            if (TextUtils.isEmpty(customProtocol)) {
+                throw new IllegalArgumentException(
+                        "CUSTOM_PROTOCOL is required when PROTOCOL=PROTOCOL_CUSTOM");
+            }
         }
 
         // TODO: generalize to allow other providers to match against email
-        boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == Integer.parseInt(protocol);
+        boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == protocol;
 
         StringBuilder selection = new StringBuilder();
         String[] selectionArgs;
         if (matchEmail) {
-            selection.append("(" + Clauses.WHERE_IM_MATCHES + ") OR ("
-                    + Clauses.WHERE_EMAIL_MATCHES + ")");
-            selectionArgs = new String[] { protocol, handle, handle };
+            selection.append(
+                    "((" + MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
+                    + " AND " + Im.PROTOCOL + "=?"
+                    + " AND " + Im.DATA + "=?");
+            if (customProtocol != null) {
+                selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
+                DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
+            }
+            selection.append(") OR ("
+                    + MimetypesColumns.MIMETYPE + "='" + Email.CONTENT_ITEM_TYPE + "'"
+                    + " AND " + Email.DATA + "=?"
+                    + "))");
+            selectionArgs = new String[] { String.valueOf(protocol), handle, handle };
         } else {
-            selection.append(Clauses.WHERE_IM_MATCHES);
-            selectionArgs = new String[] { protocol, handle };
+            selection.append(
+                    MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
+                    + " AND " + Im.PROTOCOL + "=?"
+                    + " AND " + Im.DATA + "=?");
+            if (customProtocol != null) {
+                selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
+                DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
+            }
+
+            selectionArgs = new String[] { String.valueOf(protocol), handle };
         }
 
         if (values.containsKey(Presence.DATA_ID)) {
             selection.append(" AND " + DataColumns.CONCRETE_ID + "=")
                     .append(values.getAsLong(Presence.DATA_ID));
-        }
-
-        // TODO remove this capability
-        if (values.containsKey(Presence.RAW_CONTACT_ID)) {
-            selection.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + "=")
-                    .append(values.getAsLong(Presence.RAW_CONTACT_ID));
         }
 
         selection.append(" AND ").append(getContactsRestrictions());
@@ -1595,7 +1619,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         values.put(Presence.DATA_ID, dataId);
-        values.put(Presence.RAW_CONTACT_ID, rawContactId);
+        values.put(PresenceColumns.RAW_CONTACT_ID, rawContactId);
 
         // Insert the presence update
         long presenceId = mDb.replace(Tables.PRESENCE, null, values);
