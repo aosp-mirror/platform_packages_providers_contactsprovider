@@ -18,7 +18,7 @@
         android:icon="@drawable/app_icon">
 
         <provider android:name="ContactsProvider" 
-            android:authorities="contacts"
+            android:authorities="legacy_contacts"
             android:syncable="false" android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
@@ -28,7 +28,7 @@
         </provider>
 
         <provider android:name="ContactsProvider2"
-            android:authorities="com.android.contacts"
+            android:authorities="contacts;com.android.contacts"
             android:syncable="false"
             android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
