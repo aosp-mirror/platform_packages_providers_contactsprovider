@@ -59,6 +59,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final String TAG = "ContactsProviderV1";
 
     private static final String NON_EXISTENT_ACCOUNT_TYPE = "android.INVALID_ACCOUNT_TYPE";
+    private static final String NON_EXISTENT_ACCOUNT_NAME = "invalid";
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -472,7 +473,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
                 // This fall-through account will not match any data in the database, which
                 // is the expected behavior
-                mAccount = new Account("", NON_EXISTENT_ACCOUNT_TYPE);
+                mAccount = new Account(NON_EXISTENT_ACCOUNT_NAME, NON_EXISTENT_ACCOUNT_TYPE);
             }
         }
     }
