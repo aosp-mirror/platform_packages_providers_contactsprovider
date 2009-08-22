@@ -185,6 +185,38 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 
+    public void testPhoneUpdate() {
+        ContentValues values = new ContentValues();
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Hot", "Tamale");
+        Uri phoneUri = insertPhoneNumber(rawContactId, "18004664411");
+
+        Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664411");
+        assertStoredValues(lookupUri1, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+
+        values.clear();
+        values.put(Phone.NUMBER, "18004664422");
+        mResolver.update(phoneUri, values, null, null);
+
+        Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664422");
+        assertStoredValues(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+
+        // Setting number to null will remove the phone lookup record
+        values.clear();
+        values.putNull(Phone.NUMBER);
+        mResolver.update(phoneUri, values, null, null);
+
+        assertEquals(0, getCount(lookupUri2, null, null));
+
+        // Let's restore that phone lookup record
+        values.clear();
+        values.put(Phone.NUMBER, "18004664422");
+        mResolver.update(phoneUri, values, null, null);
+        assertStoredValues(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+    }
+
     public void testEmailsQuery() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.CUSTOM_RINGTONE, "d");
