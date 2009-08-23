@@ -41,9 +41,7 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
-import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.SocialContract.Activities;
 import android.telephony.PhoneNumberUtils;
@@ -60,7 +58,8 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 72;
+    private static final int DATABASE_VERSION = 73;
+
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
@@ -112,6 +111,25 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String RAW_CONTACTS_JOIN_CONTACTS = "raw_contacts "
+                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
+
+        // NOTE: This requires late binding of GroupMembership MIME-type
+        public static final String RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS = "raw_contacts "
+                + "LEFT OUTER JOIN settings ON ("
+                    + "raw_contacts.account_name = settings.account_name AND "
+                    + "raw_contacts.account_type = settings.account_type) "
+                + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
+                    + "data.raw_contact_id = raw_contacts._id) "
+                + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
+                + ")";
+
+        // NOTE: This requires late binding of GroupMembership MIME-type
+        public static final String SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS = "settings "
+                + "LEFT OUTER JOIN raw_contacts ON ("
+                    + "raw_contacts.account_name = settings.account_name AND "
+                    + "raw_contacts.account_type = settings.account_type) "
+                + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
+                    + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS = "data "
@@ -195,22 +213,31 @@ import java.util.HashMap;
     }
 
     public interface Clauses {
-        public static final String MIMETYPE_IS_GROUP_MEMBERSHIP = MimetypesColumns.CONCRETE_MIMETYPE
-                + "='" + GroupMembership.CONTENT_ITEM_TYPE + "'";
+        final String MIMETYPE_IS_GROUP_MEMBERSHIP = MimetypesColumns.CONCRETE_MIMETYPE + "='"
+                + GroupMembership.CONTENT_ITEM_TYPE + "'";
 
-        public static final String BELONGS_TO_GROUP = DataColumns.CONCRETE_GROUP_ID + "="
+        final String BELONGS_TO_GROUP = DataColumns.CONCRETE_GROUP_ID + "="
                 + GroupsColumns.CONCRETE_ID;
 
-        // TODO: add in check against package_visible
-        public static final String IN_VISIBLE_GROUP = "SELECT MIN(COUNT(" + DataColumns.CONCRETE_ID
-                + "),1) FROM " + Tables.DATA_JOIN_RAW_CONTACTS_GROUPS + " WHERE "
-                + DataColumns.MIMETYPE_ID + "=? AND " + RawContacts.CONTACT_ID + "="
-                + ContactsColumns.CONCRETE_ID + " AND " + Groups.GROUP_VISIBLE + "=1";
+        final String UNGROUPED = DataColumns.CONCRETE_GROUP_ID + " IS NULL";
 
-        public static final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID =
-                Groups.SOURCE_ID + "=? AND "
-                        + Groups.ACCOUNT_NAME + "=? AND "
-                        + Groups.ACCOUNT_TYPE + "=?";
+        final String GROUP_BY_ACCOUNT = SettingsColumns.CONCRETE_ACCOUNT_NAME + ","
+                + SettingsColumns.CONCRETE_ACCOUNT_TYPE;
+
+        final String RAW_CONTACT_IS_LOCAL = RawContactsColumns.CONCRETE_ACCOUNT_NAME
+                + " IS NULL AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL";
+
+        final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
+
+        final String CONTACT_IS_VISIBLE = "SELECT (CASE WHEN " + RAW_CONTACT_IS_LOCAL
+                + " THEN 1 WHEN " + ZERO_GROUP_MEMBERSHIPS + " THEN " + Settings.UNGROUPED_VISIBLE
+                + " ELSE MAX(" + Groups.GROUP_VISIBLE + ") END) FROM "
+                + Tables.RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS + " WHERE "
+                + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " GROUP BY "
+                + RawContacts.CONTACT_ID;
+
+        final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
+                + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=?";
     }
 
     public interface ContactsColumns {
@@ -376,6 +403,13 @@ import java.util.HashMap;
         public static final String CLUSTER = "cluster";
     }
 
+    public interface SettingsColumns {
+        public static final String CONCRETE_ACCOUNT_NAME = Tables.SETTINGS + "."
+                + Settings.ACCOUNT_NAME;
+        public static final String CONCRETE_ACCOUNT_TYPE = Tables.SETTINGS + "."
+                + Settings.ACCOUNT_TYPE;
+    }
+
     public interface PresenceColumns {
         String RAW_CONTACT_ID = "presence_raw_contact_id";
     }
@@ -414,7 +448,7 @@ import java.util.HashMap;
     private HashMap<String, String[]> mNicknameClusterCache;
 
     /** Compiled statements for updating {@link Contacts#IN_VISIBLE_GROUP}. */
-    private SQLiteStatement mVisibleAllUpdate;
+    private SQLiteStatement mVisibleUpdate;
     private SQLiteStatement mVisibleSpecificUpdate;
 
     private Delegate mDelegate;
@@ -477,10 +511,11 @@ import java.util.HashMap;
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
                 + NameLookupColumns.NORMALIZED_NAME + ") VALUES (?,?,?)");
 
+        // Compile statements for updating visibility
         final String visibleUpdate = "UPDATE " + Tables.CONTACTS + " SET "
-                + Contacts.IN_VISIBLE_GROUP + "= (" + Clauses.IN_VISIBLE_GROUP + ")";
+                + Contacts.IN_VISIBLE_GROUP + "=(" + Clauses.CONTACT_IS_VISIBLE + ")";
 
-        mVisibleAllUpdate = db.compileStatement(visibleUpdate);
+        mVisibleUpdate = db.compileStatement(visibleUpdate);
         mVisibleSpecificUpdate = db.compileStatement(visibleUpdate + " WHERE "
                 + ContactsColumns.CONCRETE_ID + "=?");
 
@@ -527,7 +562,7 @@ import java.util.HashMap;
                 Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LAST_TIME_CONTACTED + " INTEGER," +
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1," +
+                Contacts.IN_VISIBLE_GROUP + " INTEGER DEFAULT 1," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
@@ -774,15 +809,13 @@ import java.util.HashMap;
                 AggregationExceptionColumns.RAW_CONTACT_ID1 +
         ");");
 
-        // Settings uses SYNC_MODE_UNSUPPORTED as default unless specified.
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.SETTINGS + " (" +
                 Settings.ACCOUNT_NAME + " STRING NOT NULL," +
                 Settings.ACCOUNT_TYPE + " STRING NOT NULL," +
                 Settings.UNGROUPED_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
-                Settings.SHOULD_SYNC_MODE + " INTEGER NOT NULL DEFAULT 0, " +
                 Settings.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1, " +
                 "PRIMARY KEY (" + Settings.ACCOUNT_NAME + ", " +
-                Settings.ACCOUNT_TYPE + ") ON CONFLICT REPLACE" +
+                    Settings.ACCOUNT_TYPE + ") ON CONFLICT REPLACE" +
         ");");
 
         // The table for recent calls is here so we can do table joins
@@ -1194,8 +1227,8 @@ import java.util.HashMap;
      */
     public void updateAllVisible() {
         final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        mVisibleAllUpdate.bindLong(1, groupMembershipMimetypeId);
-        mVisibleAllUpdate.execute();
+        mVisibleUpdate.bindLong(1, groupMembershipMimetypeId);
+        mVisibleUpdate.execute();
     }
 
     /**
