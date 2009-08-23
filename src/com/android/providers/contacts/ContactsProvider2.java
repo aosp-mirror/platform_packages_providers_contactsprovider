@@ -574,7 +574,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         columns.put(Settings.ACCOUNT_NAME, Settings.ACCOUNT_NAME);
         columns.put(Settings.ACCOUNT_TYPE, Settings.ACCOUNT_TYPE);
         columns.put(Settings.UNGROUPED_VISIBLE, Settings.UNGROUPED_VISIBLE);
-        columns.put(Settings.SHOULD_SYNC_MODE, Settings.SHOULD_SYNC_MODE);
         columns.put(Settings.SHOULD_SYNC, Settings.SHOULD_SYNC);
         columns.put(Settings.UNGROUPED_COUNT, "(SELECT COUNT(DISTINCT " + RawContacts.CONTACT_ID
                 + ") FROM " + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " WHERE "
