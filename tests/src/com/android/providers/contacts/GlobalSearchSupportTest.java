@@ -157,7 +157,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             int protocol = Im.PROTOCOL_GOOGLE_TALK;
 
             values.clear();
-            values.put(Presence.IM_PROTOCOL, protocol);
+            values.put(Presence.PROTOCOL, protocol);
             values.put(Presence.IM_HANDLE, "foo@acme.com");
             values.put(Presence.IM_ACCOUNT, "foo");
             values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
@@ -201,6 +201,30 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contactId);
         assertCursorValues(c, values);
         c.close();
+
+        // See if the same result is returned by a shortcut refresh
+        Uri shortcutsUri = ContactsContract.AUTHORITY_URI.buildUpon()
+                .appendPath(SearchManager.SUGGEST_URI_PATH_SHORTCUT).build();
+        Uri refreshUri = ContentUris.withAppendedId(shortcutsUri, contactId);
+
+        String[] projection = new String[]{
+                SearchManager.SUGGEST_COLUMN_ICON_1,
+                SearchManager.SUGGEST_COLUMN_ICON_2,
+                SearchManager.SUGGEST_COLUMN_TEXT_1,
+                SearchManager.SUGGEST_COLUMN_TEXT_2,
+                SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
+                SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
+                "_id",
+        };
+
+        c = mResolver.query(refreshUri, projection, null, null, null);
+        try {
+            assertEquals("Record count", 1, c.getCount());
+            c.moveToFirst();
+            assertCursorValues(c, values);
+        } finally {
+            c.close();
+        }
 
         // Cleanup
         mResolver.delete(rawContactUri, null, null);

@@ -17,10 +17,10 @@
 package com.android.providers.contacts;
 
 import com.android.internal.database.ArrayListCursor;
+import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
-import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.app.SearchManager;
@@ -33,12 +33,13 @@ import android.provider.Contacts.Intents;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.Contacts.Photo;
 import android.text.TextUtils;
 
 import java.util.ArrayList;
@@ -82,14 +83,16 @@ public class GlobalSearchSupport {
                 " JOIN mimetypes ON (data.mimetype_id = mimetypes._id AND mimetypes.mimetype IN ('"
                 + StructuredName.CONTENT_ITEM_TYPE + "','" + Email.CONTENT_ITEM_TYPE + "','"
                 + Phone.CONTENT_ITEM_TYPE + "','" + Organization.CONTENT_ITEM_TYPE + "','"
-                + Photo.CONTENT_ITEM_TYPE + "','" + GroupMembership.CONTENT_ITEM_TYPE + "')) ";
+                + GroupMembership.CONTENT_ITEM_TYPE + "')) ";
 
         public static final String TABLE = "data " + JOIN_RAW_CONTACTS + JOIN_MIMETYPES
                 + JOIN_CONTACTS;
 
-        public static final String PRESENCE_SQL = "(SELECT MAX(" + Presence.PRESENCE_STATUS
-                + ") FROM " + Tables.PRESENCE + " WHERE " + Tables.PRESENCE + "."
-                + Presence.RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")";
+        public static final String PRESENCE_SQL =
+                "(SELECT " + Presence.PRESENCE_STATUS +
+                " FROM " + Tables.AGGREGATED_PRESENCE +
+                " WHERE " + AggregatedPresenceColumns.CONTACT_ID
+                        + "=" + ContactsColumns.CONCRETE_ID + ")";
 
         public static final String[] COLUMNS = {
             ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID,
@@ -99,6 +102,7 @@ public class GlobalSearchSupport {
             MimetypesColumns.MIMETYPE,
             Data.IS_SUPER_PRIMARY,
             Data.DATA2,
+            Contacts.PHOTO_ID,
         };
 
         public static final int CONTACT_ID = 0;
@@ -108,6 +112,7 @@ public class GlobalSearchSupport {
         public static final int MIMETYPE = 4;
         public static final int IS_SUPER_PRIMARY = 5;
         public static final int DATA2 = 6;
+        public static final int PHOTO_ID = 7;
     }
 
     private static class SearchSuggestion {
@@ -116,7 +121,7 @@ public class GlobalSearchSupport {
         String organization;
         String email;
         String phoneNumber;
-        String photoUri;
+        Uri photoUri;
         String normalizedName;
         int presence = -1;
         boolean processed;
@@ -152,7 +157,7 @@ public class GlobalSearchSupport {
             }
 
             if (photoUri != null) {
-                icon1 = photoUri;
+                icon1 = photoUri.toString();
             } else {
                 icon1 = String.valueOf(com.android.internal.R.drawable.ic_contact_picture);
             }
@@ -173,18 +178,44 @@ public class GlobalSearchSupport {
         }
 
         @SuppressWarnings({"unchecked"})
-        public ArrayList asList() {
+        public ArrayList asList(String[] projection) {
             process();
 
             ArrayList<Object> list = new ArrayList<Object>();
-            list.add(contactId);
-            list.add(text1);
-            list.add(text2);
-            list.add(icon1);
-            list.add(icon2);
-            list.add(contactId);
-            list.add(contactId);
+            if (projection == null) {
+                list.add(contactId);
+                list.add(text1);
+                list.add(text2);
+                list.add(icon1);
+                list.add(icon2);
+                list.add(contactId);
+                list.add(contactId);
+            } else {
+                for (int i = 0; i < projection.length; i++) {
+                    addColumnValue(list, projection[i]);
+                }
+            }
             return list;
+        }
+
+        private void addColumnValue(ArrayList<Object> list, String column) {
+            if ("_id".equals(column)) {
+                list.add(contactId);
+            } else if (SearchManager.SUGGEST_COLUMN_TEXT_1.equals(column)) {
+                list.add(text1);
+            } else if (SearchManager.SUGGEST_COLUMN_TEXT_2.equals(column)) {
+                list.add(text2);
+            } else if (SearchManager.SUGGEST_COLUMN_ICON_1.equals(column)) {
+                list.add(icon1);
+            } else if (SearchManager.SUGGEST_COLUMN_ICON_2.equals(column)) {
+                list.add(icon2);
+            } else if (SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID.equals(column)) {
+                list.add(contactId);
+            } else if (SearchManager.SUGGEST_COLUMN_SHORTCUT_ID.equals(column)) {
+                list.add(contactId);
+            } else {
+                throw new IllegalArgumentException("Invalid column name: " + column);
+            }
         }
     }
 
@@ -194,17 +225,24 @@ public class GlobalSearchSupport {
         mContactsProvider = contactsProvider;
     }
 
-    public Cursor handleSearchSuggestionsQuery(SQLiteDatabase db, Uri url, String limit) {
-        if (url.getPathSegments().size() <= 1) {
+    public Cursor handleSearchSuggestionsQuery(SQLiteDatabase db, Uri uri, String limit) {
+        if (uri.getPathSegments().size() <= 1) {
             return null;
         }
 
-        final String searchClause = url.getLastPathSegment();
+        final String searchClause = uri.getLastPathSegment();
         if (TextUtils.isDigitsOnly(searchClause)) {
             return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
         } else {
             return buildCursorForSearchSuggestionsBasedOnName(db, searchClause, limit);
         }
+    }
+
+    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, long contactId, String[] projection) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(mContactsProvider.getContactsRestrictions());
+        sb.append(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
+        return buildCursorForSearchSuggestions(db, sb.toString(), projection);
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
@@ -253,17 +291,22 @@ public class GlobalSearchSupport {
 
     private Cursor buildCursorForSearchSuggestionsBasedOnName(SQLiteDatabase db,
             String searchClause, String limit) {
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(mContactsProvider.getContactsRestrictions());
+        sb.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
+        mContactsProvider.appendRawContactsByFilterAsNestedQuery(sb, searchClause, limit);
+        sb.append(" AND " + Contacts.IN_VISIBLE_GROUP + "=1");
+
+        return buildCursorForSearchSuggestions(db, sb.toString(), null);
+    }
+
+    private Cursor buildCursorForSearchSuggestions(SQLiteDatabase db, String selection,
+            String[] projection) {
         ArrayList<SearchSuggestion> suggestionList = new ArrayList<SearchSuggestion>();
         HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
-
-        StringBuilder selection = new StringBuilder();
-        selection.append(mContactsProvider.getContactsRestrictions());
-        selection.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
-        mContactsProvider.appendRawContactsByFilterAsNestedQuery(selection, searchClause, limit);
-        selection.append(" AND " + Contacts.IN_VISIBLE_GROUP + "=1");
-
         Cursor c = db.query(true, SearchSuggestionQuery.TABLE,
-                SearchSuggestionQuery.COLUMNS, selection.toString(), null, null, null, null, null);
+                SearchSuggestionQuery.COLUMNS, selection, null, null, null, null, null);
         try {
             while (c.moveToNext()) {
 
@@ -285,14 +328,6 @@ public class GlobalSearchSupport {
                 String mimetype = c.getString(SearchSuggestionQuery.MIMETYPE);
                 if (StructuredName.CONTENT_ITEM_TYPE.equals(mimetype)) {
                     suggestion.titleIsName = true;
-                } else if (Photo.CONTENT_ITEM_TYPE.equals(mimetype)) {
-                    if (isSuperPrimary || suggestion.photoUri == null) {
-
-                        // TODO introduce a dedicated URI for contact photo: /contact/#/photo
-                        long dataId = c.getLong(SearchSuggestionQuery.DATA_ID);
-                        suggestion.photoUri =
-                                ContentUris.withAppendedId(Data.CONTENT_URI, dataId).toString();
-                    }
                 } else if (Organization.CONTENT_ITEM_TYPE.equals(mimetype)) {
                     if (isSuperPrimary || suggestion.organization == null) {
                         suggestion.organization = c.getString(SearchSuggestionQuery.DATA2);
@@ -305,6 +340,12 @@ public class GlobalSearchSupport {
                     if (isSuperPrimary || suggestion.phoneNumber == null) {
                         suggestion.phoneNumber = c.getString(SearchSuggestionQuery.DATA2);
                     }
+                }
+
+                if (!c.isNull(SearchSuggestionQuery.PHOTO_ID)) {
+                    suggestion.photoUri = Uri.withAppendedPath(
+                            ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                            Photo.CONTENT_DIRECTORY);
                 }
             }
         } finally {
@@ -319,9 +360,10 @@ public class GlobalSearchSupport {
 
         @SuppressWarnings({"unchecked"}) ArrayList<ArrayList> rows = new ArrayList<ArrayList>();
         for (int i = 0; i < suggestionList.size(); i++) {
-            rows.add(suggestionList.get(i).asList());
+            rows.add(suggestionList.get(i).asList(projection));
         }
 
-        return new ArrayListCursor(SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS, rows);
+        return new ArrayListCursor(projection != null ? projection
+                : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS, rows);
     }
 }
