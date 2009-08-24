@@ -58,7 +58,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 73;
+    private static final int DATABASE_VERSION = 74;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -689,7 +689,7 @@ import java.util.HashMap;
                 + "       AND NEW." + RawContacts.DELETED + "!= OLD." + RawContacts.DELETED + ";"
                 + " END");
 
-        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated AFTER UPDATE ON " + Tables.DATA
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated BEFORE UPDATE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.DATA
                 + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
