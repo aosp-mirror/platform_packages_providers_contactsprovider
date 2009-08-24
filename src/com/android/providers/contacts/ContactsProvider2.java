@@ -177,24 +177,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         public static final int ACCOUNT_TYPE = 2;
     }
 
-    private interface DataRawContactsQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS;
-
-        public static final String[] PROJECTION = new String[] {
-            RawContactsColumns.CONCRETE_ID,
-            DataColumns.CONCRETE_ID,
-            RawContacts.CONTACT_ID,
-            RawContacts.IS_RESTRICTED,
-            Data.MIMETYPE,
-        };
-
-        public static final int RAW_CONTACT_ID = 0;
-        public static final int DATA_ID = 1;
-        public static final int CONTACT_ID = 2;
-        public static final int IS_RESTRICTED = 3;
-        public static final int MIMETYPE = 4;
-    }
-
     private interface DataContactsQuery {
         public static final String TABLE = Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS;
 
@@ -308,20 +290,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     /** Contains Presence columns */
     private static final HashMap<String, String> sDataWithPresenceProjectionMap;
 
-    /** Sql select statement that returns the contact id associated with a data record. */
-    private static final String sNestedRawContactIdSelect;
-    /** Sql select statement that returns the mimetype id associated with a data record. */
-    private static final String sNestedMimetypeSelect;
-    /** Sql select statement that returns the contact id associated with a contact record. */
-    private static final String sNestedContactIdSelect;
-    /** Sql select statement that returns a list of contact ids associated with an contact record. */
-    private static final String sNestedContactIdListSelect;
-    /** Sql where statement used to match all the data records that need to be updated when a new
-     * "primary" is selected.*/
-    private static final String sSetPrimaryWhere;
-    /** Sql where statement used to match all the data records that need to be updated when a new
-     * "super primary" is selected.*/
-    private static final String sSetSuperPrimaryWhere;
     /** Sql where statement for filtering on groups. */
     private static final String sContactsInGroupSelect;
 
@@ -605,18 +573,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sDataWithPresenceProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
                 Presence.PRESENCE_CUSTOM_STATUS);
 
-        sNestedRawContactIdSelect = "SELECT " + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA + " WHERE "
-                + Data._ID + "=?";
-        sNestedMimetypeSelect = "SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA
-                + " WHERE " + Data._ID + "=?";
-        sNestedContactIdSelect = "SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
-                + " WHERE " + RawContacts._ID + "=(" + sNestedRawContactIdSelect + ")";
-        sNestedContactIdListSelect = "SELECT " + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS
-                + " WHERE " + RawContacts.CONTACT_ID + "=(" + sNestedContactIdSelect + ")";
-        sSetPrimaryWhere = Data.RAW_CONTACT_ID + "=(" + sNestedRawContactIdSelect + ") AND "
-                + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
-        sSetSuperPrimaryWhere = Data.RAW_CONTACT_ID + " IN (" + sNestedContactIdListSelect + ") AND "
-                + DataColumns.MIMETYPE_ID + "=(" + sNestedMimetypeSelect + ")";
         sContactsInGroupSelect = Contacts._ID + " IN "
                 + "(SELECT " + RawContacts.CONTACT_ID
                 + " FROM " + Tables.RAW_CONTACTS
@@ -636,9 +592,17 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private abstract class DataRowHandler {
 
         protected final String mMimetype;
+        protected long mMimetypeId;
 
         public DataRowHandler(String mimetype) {
             mMimetype = mimetype;
+        }
+
+        protected long getMimeTypeId() {
+            if (mMimetypeId == 0) {
+                mMimetypeId = mOpenHelper.getMimeTypeId(mMimetype);
+            }
+            return mMimetypeId;
         }
 
         /**
@@ -649,7 +613,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             Integer primary = values.getAsInteger(Data.IS_PRIMARY);
             if (primary != null && primary != 0) {
-                setIsPrimary(dataId);
+                setIsPrimary(rawContactId, dataId, getMimeTypeId());
             }
 
             fixContactDisplayName(db, rawContactId);
@@ -660,8 +624,35 @@ public class ContactsProvider2 extends SQLiteContentProvider {
          * Validates data and updates a {@link Data} row using the cursor, which contains
          * the current data.
          */
-        public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
-            throw new UnsupportedOperationException();
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long dataId = c.getLong(DataIdQuery._ID);
+            long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
+
+            if (values.containsKey(Data.IS_SUPER_PRIMARY)) {
+                long mimeTypeId = getMimeTypeId();
+                setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
+                setIsPrimary(rawContactId, dataId, mimeTypeId);
+
+                // Now that we've taken care of setting these, remove them from "values".
+                values.remove(Data.IS_SUPER_PRIMARY);
+                values.remove(Data.IS_PRIMARY);
+            } else if (values.containsKey(Data.IS_PRIMARY)) {
+                setIsPrimary(rawContactId, dataId, getMimeTypeId());
+
+                // Now that we've taken care of setting this, remove it from "values".
+                values.remove(Data.IS_PRIMARY);
+            }
+
+            if (values.size() > 0) {
+                mDb.update(Tables.DATA, values, Data._ID + " = " + dataId, null);
+            }
+
+            fixContactDisplayName(db, rawContactId);
+
+            if (markRawContactAsDirty) {
+                setRawContactDirty(rawContactId);
+            }
         }
 
         public int delete(SQLiteDatabase db, Cursor c) {
@@ -679,7 +670,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         private void fixPrimary(SQLiteDatabase db, long rawContactId) {
             long newPrimaryId = findNewPrimaryDataId(db, rawContactId);
             if (newPrimaryId != -1) {
-                ContactsProvider2.this.setIsPrimary(newPrimaryId);
+                setIsPrimary(newPrimaryId, rawContactId, getMimeTypeId());
             }
         }
 
@@ -752,7 +743,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 c.close();
             }
 
-            ContactsProvider2.this.setDisplayName(rawContactId, bestDisplayName);
+            setDisplayName(rawContactId, bestDisplayName);
         }
     }
 
@@ -776,11 +767,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             fixStructuredNameComponents(values);
             return super.insert(db, rawContactId, values);
-        }
-
-        @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
-            // TODO Parse the full name if it has changed and replace pre-existing piece parts.
         }
 
         /**
@@ -865,11 +851,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             return super.insert(db, rawContactId, values);
         }
-
-        @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor cursor) {
-            // TODO read the data and check the constraint
-        }
     }
 
     public class OrganizationDataRowHandler extends CommonDataRowHandler {
@@ -929,24 +910,48 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            ContentValues phoneValues = new ContentValues();
             String number = values.getAsString(Phone.NUMBER);
+            String normalizedNumber = computeNormalizedNumber(number, values);
+
+            long dataId = super.insert(db, rawContactId, values);
+
+            updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+            return dataId;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            String number = values.getAsString(Phone.NUMBER);
+            String normalizedNumber = computeNormalizedNumber(number, values);
+
+            super.update(db, values, c, markRawContactAsDirty);
+
+            long dataId = c.getLong(DataIdQuery._ID);
+            long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
+            updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+        }
+
+        private String computeNormalizedNumber(String number, ContentValues values) {
             String normalizedNumber = null;
             if (number != null) {
                 normalizedNumber = PhoneNumberUtils.getStrippedReversed(number);
-                values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
             }
+            values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
+            return normalizedNumber;
+        }
 
-            long id = super.insert(db, rawContactId, values);
-
+        private void updatePhoneLookup(SQLiteDatabase db, long rawContactId, long dataId,
+                String number, String normalizedNumber) {
             if (number != null) {
+                ContentValues phoneValues = new ContentValues();
                 phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactId);
-                phoneValues.put(PhoneLookupColumns.DATA_ID, id);
+                phoneValues.put(PhoneLookupColumns.DATA_ID, dataId);
                 phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
-                db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+                db.replace(Tables.PHONE_LOOKUP, null, phoneValues);
+            } else {
+                db.delete(Tables.PHONE_LOOKUP, PhoneLookupColumns.DATA_ID + "=" + dataId, null);
             }
-
-            return id;
         }
 
         @Override
@@ -961,6 +966,55 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 case Phone.TYPE_FAX_WORK: return 6;
                 case Phone.TYPE_FAX_HOME: return 7;
                 default: return 1000;
+            }
+        }
+    }
+
+    public class GroupMembershipRowHandler extends DataRowHandler {
+
+        public GroupMembershipRowHandler() {
+            super(GroupMembership.CONTENT_ITEM_TYPE);
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
+            resolveGroupSourceIdInValues(rawContactId, db, values, true);
+            return super.insert(db, rawContactId, values);
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long rawContactId = c.getLong(DataQuery.RAW_CONTACT_ID);
+            resolveGroupSourceIdInValues(rawContactId, db, values, false);
+            super.update(db, values, c, markRawContactAsDirty);
+        }
+
+        private void resolveGroupSourceIdInValues(long rawContactId, SQLiteDatabase db,
+                ContentValues values, boolean isInsert) {
+            boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
+            boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
+            if (containsGroupSourceId && containsGroupId) {
+                throw new IllegalArgumentException(
+                        "you are not allowed to set both the GroupMembership.GROUP_SOURCE_ID "
+                                + "and GroupMembership.GROUP_ROW_ID");
+            }
+
+            if (!containsGroupSourceId && !containsGroupId) {
+                if (isInsert) {
+                    throw new IllegalArgumentException(
+                            "you must set exactly one of GroupMembership.GROUP_SOURCE_ID "
+                                    + "and GroupMembership.GROUP_ROW_ID");
+                } else {
+                    return;
+                }
+            }
+
+            if (containsGroupSourceId) {
+                final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
+                final long groupId = getOrMakeGroup(db, rawContactId, sourceId);
+                values.remove(GroupMembership.GROUP_SOURCE_ID);
+                values.put(GroupMembership.GROUP_ROW_ID, groupId);
             }
         }
     }
@@ -1003,12 +1057,25 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
 
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+
         mSetPrimaryStatement = db.compileStatement(
-                "UPDATE " + Tables.DATA + " SET " + Data.IS_PRIMARY
-                + "=(_id=?) WHERE " + sSetPrimaryWhere);
+                "UPDATE " + Tables.DATA +
+                " SET " + Data.IS_PRIMARY + "=(_id=?)" +
+                " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
+                "   AND " + Data.RAW_CONTACT_ID + "=?");
+
         mSetSuperPrimaryStatement = db.compileStatement(
-                "UPDATE " + Tables.DATA + " SET " + Data.IS_SUPER_PRIMARY
-                + "=(_id=?) WHERE " + sSetSuperPrimaryWhere);
+                "UPDATE " + Tables.DATA +
+                " SET " + Data.IS_SUPER_PRIMARY + "=(" + Data._ID + "=?)" +
+                " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
+                "   AND " + Data.RAW_CONTACT_ID + " IN (" +
+                        "SELECT " + RawContacts._ID +
+                        " FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContacts.CONTACT_ID + " =(" +
+                                "SELECT " + RawContacts.CONTACT_ID +
+                                " FROM " + Tables.RAW_CONTACTS +
+                                " WHERE " + RawContacts._ID + "=?))");
+
         mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.TIMES_CONTACTED + "=" + RawContacts.TIMES_CONTACTED + "+1,"
                 + RawContacts.LAST_TIME_CONTACTED + "=? WHERE " + RawContacts.CONTACT_ID + "=?");
@@ -1053,6 +1120,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL));
         mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
                 new StructuredNameRowHandler(mNameSplitter));
+        mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
+                new GroupMembershipRowHandler());
 
         if (isLegacyContactImportNeeded()) {
             importLegacyContactsAsync();
@@ -1371,9 +1440,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
         mValues.remove(Data.MIMETYPE);
-
-        // TODO create GroupMembershipRowHandler and move this code there
-        resolveGroupSourceIdInValues(rawContactId, mimeType, mDb, mValues, true /* isInsert */);
 
         id = getDataRowHandler(mimeType).insert(mDb, rawContactId, mValues);
         if (markRawContactAsDirty) {
@@ -1928,28 +1994,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
     private int updateData(Uri uri, ContentValues values, String selection,
             String[] selectionArgs, boolean markRawContactAsDirty) {
-        int count = 0;
-
-        // Note that the query will return data according to the access restrictions,
-        // so we don't need to worry about updating data we don't have permission to read.
-        Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
-        try {
-            while(c.moveToNext()) {
-                final long dataId = c.getLong(DataIdQuery._ID);
-                final long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
-                final String mimetype = c.getString(DataIdQuery.MIMETYPE);
-                count += updateData(dataId, rawContactId, mimetype, values,
-                        markRawContactAsDirty);
-            }
-        } finally {
-            c.close();
-        }
-
-        return count;
-    }
-
-    private int updateData(long dataId, long rawContactId, String mimeType, ContentValues values,
-            boolean markRawContactAsDirty) {
         mValues.clear();
         mValues.putAll(values);
         mValues.remove(Data._ID);
@@ -1976,64 +2020,30 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             mValues.remove(Data.IS_PRIMARY);
         }
 
-        if (containsIsSuperPrimary) {
-            setIsSuperPrimary(dataId);
-            setIsPrimary(dataId);
+        int count = 0;
 
-            // Now that we've taken care of setting these, remove them from "values".
-            mValues.remove(Data.IS_SUPER_PRIMARY);
-            if (containsIsPrimary) {
-                mValues.remove(Data.IS_PRIMARY);
+        // Note that the query will return data according to the access restrictions,
+        // so we don't need to worry about updating data we don't have permission to read.
+        Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+        try {
+            while(c.moveToNext()) {
+                count += updateData(mValues, c, markRawContactAsDirty);
             }
-        } else if (containsIsPrimary) {
-            setIsPrimary(dataId);
-
-            // Now that we've taken care of setting this, remove it from "values".
-            mValues.remove(Data.IS_PRIMARY);
+        } finally {
+            c.close();
         }
 
-        // TODO create GroupMembershipRowHandler and move this code there
-        resolveGroupSourceIdInValues(rawContactId, mimeType, mDb, mValues, false /* isInsert */);
-
-        if (mValues.size() > 0) {
-            mDb.update(Tables.DATA, mValues, Data._ID + " = " + dataId, null);
-            if (markRawContactAsDirty) {
-                setRawContactDirty(rawContactId);
-            }
-
-            return 1;
-        }
-        return 0;
+        return count;
     }
 
-    private void resolveGroupSourceIdInValues(long rawContactId, String mimeType, SQLiteDatabase db,
-            ContentValues values, boolean isInsert) {
-        if (GroupMembership.CONTENT_ITEM_TYPE.equals(mimeType)) {
-            boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
-            boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
-            if (containsGroupSourceId && containsGroupId) {
-                throw new IllegalArgumentException(
-                        "you are not allowed to set both the GroupMembership.GROUP_SOURCE_ID "
-                                + "and GroupMembership.GROUP_ROW_ID");
-            }
-
-            if (!containsGroupSourceId && !containsGroupId) {
-                if (isInsert) {
-                    throw new IllegalArgumentException(
-                            "you must set exactly one of GroupMembership.GROUP_SOURCE_ID "
-                                    + "and GroupMembership.GROUP_ROW_ID");
-                } else {
-                    return;
-                }
-            }
-
-            if (containsGroupSourceId) {
-                final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
-                final long groupId = getOrMakeGroup(db, rawContactId, sourceId);
-                values.remove(GroupMembership.GROUP_SOURCE_ID);
-                values.put(GroupMembership.GROUP_ROW_ID, groupId);
-            }
+    private int updateData(ContentValues values, Cursor c, boolean markRawContactAsDirty) {
+        if (values.size() == 0) {
+            return 0;
         }
+
+        final String mimeType = c.getString(DataIdQuery.MIMETYPE);
+        getDataRowHandler(mimeType).update(mDb, values, c, markRawContactAsDirty);
+        return 1;
     }
 
     private int updateContactData(long contactId, ContentValues values) {
@@ -3009,10 +3019,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      *
      * @param dataId the id of the data record to be set to primary.
      */
-    private void setIsPrimary(long dataId) {
+    private void setIsPrimary(long rawContactId, long dataId, long mimeTypeId) {
         mSetPrimaryStatement.bindLong(1, dataId);
-        mSetPrimaryStatement.bindLong(2, dataId);
-        mSetPrimaryStatement.bindLong(3, dataId);
+        mSetPrimaryStatement.bindLong(2, mimeTypeId);
+        mSetPrimaryStatement.bindLong(3, rawContactId);
         mSetPrimaryStatement.execute();
     }
 
@@ -3022,18 +3032,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      *
      * @param dataId the id of the data record to be set to primary.
      */
-    private void setIsSuperPrimary(long dataId) {
+    private void setIsSuperPrimary(long rawContactId, long dataId, long mimeTypeId) {
         mSetSuperPrimaryStatement.bindLong(1, dataId);
-        mSetSuperPrimaryStatement.bindLong(2, dataId);
-        mSetSuperPrimaryStatement.bindLong(3, dataId);
+        mSetSuperPrimaryStatement.bindLong(2, mimeTypeId);
+        mSetSuperPrimaryStatement.bindLong(3, rawContactId);
         mSetSuperPrimaryStatement.execute();
-    }
-
-    private String getContactByFilterAsNestedQuery(String filterParam) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(Contacts._ID + " IN ");
-        appendContactByFilterAsNestedQuery(sb, filterParam);
-        return sb.toString();
     }
 
     private void appendContactByFilterAsNestedQuery(StringBuilder sb, String filterParam) {
