@@ -1604,7 +1604,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             overriddenValues.put(Groups.DIRTY, 1);
         }
 
-        return mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
+        long result = mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
+
+        if (overriddenValues.containsKey(Groups.GROUP_VISIBLE)) {
+            mOpenHelper.updateAllVisible();
+        }
+
+        return result;
     }
 
     private long insertSettings(ContentValues values) {
@@ -1966,10 +1972,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             updatedValues = values;
         }
 
-        int count = mDb.update(Tables.GROUPS, values, selectionWithId, selectionArgs);
+        int count = mDb.update(Tables.GROUPS, updatedValues, selectionWithId, selectionArgs);
 
         // If changing visibility, then update contacts
-        if (values.containsKey(Groups.GROUP_VISIBLE)) {
+        if (updatedValues.containsKey(Groups.GROUP_VISIBLE)) {
             mOpenHelper.updateAllVisible();
         }
         return count;
