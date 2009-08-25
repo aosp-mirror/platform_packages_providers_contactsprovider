@@ -64,6 +64,7 @@ public class LegacyContactImporter {
 
     private final Context mContext;
     private final ContactsProvider2 mContactsProvider;
+    private OpenHelper mOpenHelper;
     private ContentValues mValues = new ContentValues();
     private ContentResolver mResolver;
     private boolean mPhoneticNameAvailable = true;
@@ -85,6 +86,7 @@ public class LegacyContactImporter {
     private long mPostalMimetypeId;
     private long mPhotoMimetypeId;
     private long mGroupMembershipMimetypeId;
+
 
     public LegacyContactImporter(Context context, ContactsProvider2 contactsProvider) {
         mContext = context;
@@ -137,8 +139,8 @@ public class LegacyContactImporter {
             mPhoneticNameAvailable = false;
         }
 
-        OpenHelper openHelper = (OpenHelper)mContactsProvider.getOpenHelper();
-        mTargetDb = openHelper.getWritableDatabase();
+        mOpenHelper = (OpenHelper)mContactsProvider.getOpenHelper();
+        mTargetDb = mOpenHelper.getWritableDatabase();
 
         /*
          * At this point there should be no data in the contacts provider, but in case
@@ -148,16 +150,16 @@ public class LegacyContactImporter {
          */
         mContactsProvider.wipeData();
 
-        mStructuredNameMimetypeId = openHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
-        mNoteMimetypeId = openHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
-        mOrganizationMimetypeId = openHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
-        mPhoneMimetypeId = openHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-        mEmailMimetypeId = openHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        mImMimetypeId = openHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
-        mPostalMimetypeId = openHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
-        mPhotoMimetypeId = openHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        mStructuredNameMimetypeId = mOpenHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+        mNoteMimetypeId = mOpenHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
+        mOrganizationMimetypeId = mOpenHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+        mPhoneMimetypeId = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+        mEmailMimetypeId = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mImMimetypeId = mOpenHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mPostalMimetypeId = mOpenHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
+        mPhotoMimetypeId = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
         mGroupMembershipMimetypeId =
-                openHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+                mOpenHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
 
         mNameSplitter = mContactsProvider.getNameSplitter();
 
@@ -487,10 +489,13 @@ public class LegacyContactImporter {
         NameSplitter.Name splitName = new NameSplitter.Name();
         mNameSplitter.split(splitName, name);
 
+        String givenNames = splitName.getGivenNames();
+        String familyName = splitName.getFamilyName();
+
         bindString(insert, StructuredNameInsert.PREFIX, splitName.getPrefix());
-        bindString(insert, StructuredNameInsert.GIVEN_NAME, splitName.getGivenNames());
+        bindString(insert, StructuredNameInsert.GIVEN_NAME, givenNames);
         bindString(insert, StructuredNameInsert.MIDDLE_NAME, splitName.getMiddleName());
-        bindString(insert, StructuredNameInsert.FAMILY_NAME, splitName.getFamilyName());
+        bindString(insert, StructuredNameInsert.FAMILY_NAME, familyName);
         bindString(insert, StructuredNameInsert.SUFFIX, splitName.getSuffix());
 
         if (mPhoneticNameAvailable) {
@@ -498,7 +503,9 @@ public class LegacyContactImporter {
             String phoneticName = c.getString(PeopleQuery.PHONETIC_NAME);
         }
 
-        insert(insert);
+        long dataId = insert(insert);
+
+        mOpenHelper.insertNameLookupForStructuredName(id, dataId, givenNames, familyName);
     }
 
     private void insertNote(Cursor c, SQLiteStatement insert) {
@@ -682,15 +689,18 @@ public class LegacyContactImporter {
 
     private void insertEmail(Cursor c, SQLiteStatement insert) {
         long personId = c.getLong(ContactMethodsQuery.PERSON);
+        String email = c.getString(ContactMethodsQuery.DATA);
 
         insert.bindLong(EmailInsert.RAW_CONTACT_ID, personId);
         insert.bindLong(EmailInsert.MIMETYPE_ID, mEmailMimetypeId);
         bindString(insert, EmailInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
-        bindString(insert, EmailInsert.DATA, c.getString(ContactMethodsQuery.DATA));
+        bindString(insert, EmailInsert.DATA, email);
         bindString(insert, EmailInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
         bindString(insert, EmailInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
         bindString(insert, EmailInsert.LABEL, c.getString(ContactMethodsQuery.LABEL));
-        insert(insert);
+
+        long dataId = insert(insert);
+        mOpenHelper.insertNameLookupForEmail(personId, dataId, email);
     }
 
     private void insertIm(Cursor c, SQLiteStatement insert) {
