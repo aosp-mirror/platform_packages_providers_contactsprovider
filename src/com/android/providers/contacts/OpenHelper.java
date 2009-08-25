@@ -1380,6 +1380,10 @@ import java.util.HashMap;
     }
 
     public void insertNameLookupForEmail(long rawContactId, long dataId, String email) {
+        if (TextUtils.isEmpty(email)) {
+            return;
+        }
+
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
             return;
@@ -1399,6 +1403,10 @@ import java.util.HashMap;
      * Normalizes the nickname and inserts it in the name lookup table.
      */
     public void insertNameLookupForNickname(long rawContactId, long dataId, String nickname) {
+        if (TextUtils.isEmpty(nickname)) {
+            return;
+        }
+
         insertNameLookup(rawContactId, dataId,
                 NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
     }
