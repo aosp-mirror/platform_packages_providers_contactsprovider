@@ -343,12 +343,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         mOpenHelper.removeContactIfSingleton(rawContactId);
 
-        // TODO compiled statements
-
-        // Clear out data used for aggregation - we will recreate it during aggregation
-        db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
-                + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId);
-
         // Clear out the contact ID field on the contact
         ContentValues values = new ContentValues();
         values.putNull(RawContacts.CONTACT_ID);
@@ -400,7 +394,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         mOpenHelper.updateContactVisible(contactId);
-        updateContactAggregationData(db, rawContactId, candidates, values);
     }
 
     /**
@@ -606,6 +599,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private void addMatchCandidatesSingleName(String name, MatchCandidateList candidates) {
         String nameN = NameNormalizer.normalize(name);
         candidates.add(nameN, NameLookupType.NAME_EXACT);
+        candidates.add(nameN, NameLookupType.NAME_COLLATION_KEY);
 
         // Take care of first and last names swapped
         String[] clusters = mOpenHelper.getCommonNicknameClusters(nameN);
@@ -614,8 +608,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 candidates.add(clusters[i], NameLookupType.NAME_VARIANT);
             }
         }
-
-        candidates.add(nameN, NameLookupType.NAME_COLLATION_KEY);
     }
 
     private void addMatchCandidatesFullName(String givenName, String familyName, int mode,
@@ -625,9 +617,13 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         final String familyNameN = NameNormalizer.normalize(familyName);
         final String[] familyNameNicknames = mOpenHelper.getCommonNicknameClusters(familyNameN);
         candidates.add(givenNameN + "." + familyNameN, NameLookupType.NAME_EXACT);
+        candidates.add(givenNameN + familyNameN, NameLookupType.NAME_COLLATION_KEY);
+        candidates.add(familyNameN + givenNameN, NameLookupType.NAME_COLLATION_KEY);
         if (givenNameNicknames != null) {
             for (int i = 0; i < givenNameNicknames.length; i++) {
                 candidates.add(givenNameNicknames[i] + "." + familyNameN,
+                        NameLookupType.NAME_VARIANT);
+                candidates.add(familyNameN + "." + givenNameNicknames[i],
                         NameLookupType.NAME_VARIANT);
             }
         }
@@ -636,10 +632,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             for (int i = 0; i < familyNameNicknames.length; i++) {
                 candidates.add(familyNameNicknames[i] + "." + givenNameN,
                         NameLookupType.NAME_VARIANT);
+                candidates.add(givenNameN + "." + familyNameNicknames[i],
+                        NameLookupType.NAME_VARIANT);
             }
         }
-        candidates.add(givenNameN + familyNameN, NameLookupType.NAME_COLLATION_KEY);
-        candidates.add(familyNameN + givenNameN, NameLookupType.NAME_COLLATION_KEY);
     }
 
     /**
@@ -681,6 +677,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         StringBuilder selection = new StringBuilder();
+        selection.append(RawContacts.CONTACT_ID + " NOT NULL AND ");
         selection.append(NameLookupColumns.NORMALIZED_NAME);
         selection.append(" IN (");
         for (int i = 0; i < candidates.mCount; i++) {
@@ -795,46 +792,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             }
         } finally {
             c.close();
-        }
-    }
-
-    /**
-     * Prepares the supplied contact for aggregation with other contacts by (re)computing
-     * match lookup keys.
-     */
-    private void updateContactAggregationData(SQLiteDatabase db, long rawContactId,
-            MatchCandidateList candidates, ContentValues values) {
-        candidates.clear();
-
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPES,
-                DATA_JOIN_MIMETYPE_COLUMNS,
-                DatabaseUtils.concatenateWhere(Data.RAW_CONTACT_ID + "=" + rawContactId,
-                        MIMETYPE_SELECTION_IN_CLAUSE),
-                null, null, null, null);
-
-        try {
-            while (c.moveToNext()) {
-                String mimeType = c.getString(COL_MIMETYPE);
-                String data1 = c.getString(COL_DATA1);
-                String data2 = c.getString(COL_DATA2);
-                if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesStructuredName(data1, data2, MODE_INSERT_LOOKUP_DATA,
-                            candidates);
-                } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesEmail(data2, MODE_INSERT_LOOKUP_DATA, candidates);
-                } else if (mimeType.equals(CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesNickname(data2, MODE_INSERT_LOOKUP_DATA, candidates);
-                }
-            }
-        } finally {
-            c.close();
-        }
-
-        db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
-                + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId + ";");
-        for (int i = 0; i < candidates.mCount; i++) {
-            NameMatchCandidate candidate = candidates.mList.get(i);
-            mOpenHelper.insertNameLookup(rawContactId, candidate.mLookupType, candidate.mName);
         }
     }
 

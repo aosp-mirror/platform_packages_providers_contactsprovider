@@ -209,7 +209,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         public static final int DISPLAY_NAME = 3;
     }
 
-    private interface DataQuery {
+    private interface DataDeleteQuery {
         public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
 
         public static final String[] CONCRETE_COLUMNS = new String[] {
@@ -228,14 +228,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             Data.DATA2,
         };
 
-        public static final int ID = 0;
+        public static final int _ID = 0;
         public static final int MIMETYPE = 1;
         public static final int RAW_CONTACT_ID = 2;
         public static final int IS_PRIMARY = 3;
         public static final int DATA2 = 4;
     }
 
-    private interface DataIdQuery {
+    private interface DataUpdateQuery {
         String[] COLUMNS = { Data._ID, Data.RAW_CONTACT_ID, Data.MIMETYPE };
 
         int _ID = 0;
@@ -616,7 +616,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 setIsPrimary(rawContactId, dataId, getMimeTypeId());
             }
 
-            fixContactDisplayName(db, rawContactId);
             return dataId;
         }
 
@@ -626,8 +625,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
          */
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean markRawContactAsDirty) {
-            long dataId = c.getLong(DataIdQuery._ID);
-            long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
+            long dataId = c.getLong(DataUpdateQuery._ID);
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
             if (values.containsKey(Data.IS_SUPER_PRIMARY)) {
                 long mimeTypeId = getMimeTypeId();
@@ -648,21 +647,18 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 mDb.update(Tables.DATA, values, Data._ID + " = " + dataId, null);
             }
 
-            fixContactDisplayName(db, rawContactId);
-
             if (markRawContactAsDirty) {
                 setRawContactDirty(rawContactId);
             }
         }
 
         public int delete(SQLiteDatabase db, Cursor c) {
-            long dataId = c.getLong(DataQuery.ID);
-            long rawContactId = c.getLong(DataQuery.RAW_CONTACT_ID);
-            boolean primary = c.getInt(DataQuery.IS_PRIMARY) != 0;
+            long dataId = c.getLong(DataDeleteQuery._ID);
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+            boolean primary = c.getInt(DataDeleteQuery.IS_PRIMARY) != 0;
             int count = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
             if (count != 0 && primary) {
                 fixPrimary(db, rawContactId);
-                fixContactDisplayName(db, rawContactId);
             }
             return count;
         }
@@ -670,7 +666,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         private void fixPrimary(SQLiteDatabase db, long rawContactId) {
             long newPrimaryId = findNewPrimaryDataId(db, rawContactId);
             if (newPrimaryId != -1) {
-                setIsPrimary(newPrimaryId, rawContactId, getMimeTypeId());
+                setIsPrimary(rawContactId, newPrimaryId, getMimeTypeId());
             }
         }
 
@@ -680,8 +676,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             Cursor c = queryData(db, rawContactId);
             try {
                 while (c.moveToNext()) {
-                    long dataId = c.getLong(DataQuery.ID);
-                    int type = c.getInt(DataQuery.DATA2);
+                    long dataId = c.getLong(DataDeleteQuery._ID);
+                    int type = c.getInt(DataDeleteQuery.DATA2);
                     if (primaryType == -1 || getTypeRank(type) < getTypeRank(primaryType)) {
                         primaryId = dataId;
                         primaryType = type;
@@ -702,16 +698,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         protected Cursor queryData(SQLiteDatabase db, long rawContactId) {
-            return db.query(DataQuery.TABLE, DataQuery.CONCRETE_COLUMNS, Data.RAW_CONTACT_ID + "="
-                    + rawContactId + " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
+            return db.query(DataDeleteQuery.TABLE, DataDeleteQuery.CONCRETE_COLUMNS,
+                    Data.RAW_CONTACT_ID + "=" + rawContactId +
+                    " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
                     null, null, null, null);
         }
 
         protected void fixContactDisplayName(SQLiteDatabase db, long rawContactId) {
-            if (!sDisplayNamePriorities.containsKey(mMimetype)) {
-                return;
-            }
-
             String bestDisplayName = null;
             Cursor c = db.query(DisplayNameQuery.TABLE, DisplayNameQuery.COLUMNS,
                     Data.RAW_CONTACT_ID + "=" + rawContactId, null, null, null, null);
@@ -744,6 +737,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             setDisplayName(rawContactId, bestDisplayName);
+
+            // TODO also fix the aggregate contact display name right away
         }
     }
 
@@ -766,7 +761,68 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             fixStructuredNameComponents(values);
-            return super.insert(db, rawContactId, values);
+
+            long dataId = super.insert(db, rawContactId, values);
+
+            String givenName = values.getAsString(StructuredName.GIVEN_NAME);
+            String familyName = values.getAsString(StructuredName.FAMILY_NAME);
+            mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
+                    familyName);
+            fixContactDisplayName(db, rawContactId);
+            return dataId;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long dataId = c.getLong(DataUpdateQuery._ID);
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+
+            super.update(db, values, c, markRawContactAsDirty);
+
+            boolean hasGivenName = values.containsKey(StructuredName.GIVEN_NAME);
+            boolean hasFamilyName = values.containsKey(StructuredName.FAMILY_NAME);
+            if  (hasGivenName || hasFamilyName) {
+                String givenName;
+                String familyName;// = values.getAsString(StructuredName.FAMILY_NAME);
+                if (hasGivenName) {
+                    givenName = values.getAsString(StructuredName.GIVEN_NAME);
+                } else {
+
+                    // TODO compiled statement
+                    givenName = DatabaseUtils.stringForQuery(db,
+                            "SELECT " + StructuredName.GIVEN_NAME +
+                            " FROM " + Tables.DATA +
+                            " WHERE " + Data._ID + "=" + dataId, null);
+                }
+                if (hasFamilyName) {
+                    familyName = values.getAsString(StructuredName.FAMILY_NAME);
+                } else {
+
+                    // TODO compiled statement
+                    familyName = DatabaseUtils.stringForQuery(db,
+                            "SELECT " + StructuredName.FAMILY_NAME +
+                            " FROM " + Tables.DATA +
+                            " WHERE " + Data._ID + "=" + dataId, null);
+                }
+
+                mOpenHelper.deleteNameLookup(dataId);
+                mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
+                        familyName);
+            }
+            fixContactDisplayName(db, rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long dataId = c.getLong(DataDeleteQuery._ID);
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+
+            int count = super.delete(db, c);
+
+            mOpenHelper.deleteNameLookup(dataId);
+            fixContactDisplayName(db, rawContactId);
+            return count;
         }
 
         /**
@@ -867,6 +923,25 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+
+            super.update(db, values, c, markRawContactAsDirty);
+
+            fixContactDisplayName(db, rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+
+            int count = super.delete(db, c);
+            fixContactDisplayName(db, rawContactId);
+            return count;
+        }
+
+        @Override
         protected int getTypeRank(int type) {
             switch (type) {
                 case Organization.TYPE_WORK: return 0;
@@ -885,9 +960,39 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            long id = super.insert(db, rawContactId, values);
+            String address = values.getAsString(Email.DATA);
+
+            long dataId = super.insert(db, rawContactId, values);
+
             fixContactDisplayName(db, rawContactId);
-            return id;
+            mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
+            return dataId;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long dataId = c.getLong(DataUpdateQuery._ID);
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+            String address = values.getAsString(Email.DATA);
+
+            super.update(db, values, c, markRawContactAsDirty);
+
+            mOpenHelper.deleteNameLookup(dataId);
+            mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
+            fixContactDisplayName(db, rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long dataId = c.getLong(DataDeleteQuery._ID);
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+
+            int count = super.delete(db, c);
+
+            mOpenHelper.deleteNameLookup(dataId);
+            fixContactDisplayName(db, rawContactId);
+            return count;
         }
 
         @Override
@@ -899,6 +1004,50 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 case Email.TYPE_OTHER: return 3;
                 default: return 1000;
             }
+        }
+    }
+
+    public class NicknameDataRowHandler extends CommonDataRowHandler {
+
+        public NicknameDataRowHandler() {
+            super(Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL);
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
+            String nickname = values.getAsString(Nickname.NAME);
+
+            long dataId = super.insert(db, rawContactId, values);
+
+            fixContactDisplayName(db, rawContactId);
+            mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
+            return dataId;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long dataId = c.getLong(DataUpdateQuery._ID);
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+            String nickname = values.getAsString(Nickname.NAME);
+
+            super.update(db, values, c, markRawContactAsDirty);
+
+            mOpenHelper.deleteNameLookup(dataId);
+            mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
+            fixContactDisplayName(db, rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long dataId = c.getLong(DataDeleteQuery._ID);
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+
+            int count = super.delete(db, c);
+
+            mOpenHelper.deleteNameLookup(dataId);
+            fixContactDisplayName(db, rawContactId);
+            return count;
         }
     }
 
@@ -916,20 +1065,34 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             long dataId = super.insert(db, rawContactId, values);
 
             updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+            fixContactDisplayName(db, rawContactId);
             return dataId;
         }
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean markRawContactAsDirty) {
+            long dataId = c.getLong(DataUpdateQuery._ID);
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             String number = values.getAsString(Phone.NUMBER);
             String normalizedNumber = computeNormalizedNumber(number, values);
 
             super.update(db, values, c, markRawContactAsDirty);
 
-            long dataId = c.getLong(DataIdQuery._ID);
-            long rawContactId = c.getLong(DataIdQuery.RAW_CONTACT_ID);
             updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+            fixContactDisplayName(db, rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long dataId = c.getLong(DataDeleteQuery._ID);
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+
+            int count = super.delete(db, c);
+
+            updatePhoneLookup(db, rawContactId, dataId, null, null);
+            fixContactDisplayName(db, rawContactId);
+            return count;
         }
 
         private String computeNormalizedNumber(String number, ContentValues values) {
@@ -985,7 +1148,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean markRawContactAsDirty) {
-            long rawContactId = c.getLong(DataQuery.RAW_CONTACT_ID);
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             resolveGroupSourceIdInValues(rawContactId, db, values, false);
             super.update(db, values, c, markRawContactAsDirty);
         }
@@ -1116,8 +1279,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE, StructuredPostal.LABEL));
         mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE, new OrganizationDataRowHandler());
         mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE, new PhoneDataRowHandler());
-        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new CommonDataRowHandler(
-                Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL));
+        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new NicknameDataRowHandler());
         mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
                 new StructuredNameRowHandler(mNameSplitter));
         mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
@@ -1533,11 +1695,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about deleting data we don't have permission to read.
-        Cursor c = query(Data.CONTENT_URI, DataQuery.COLUMNS, selection, selectionArgs, null);
+        Cursor c = query(Data.CONTENT_URI, DataDeleteQuery.COLUMNS, selection, selectionArgs, null);
         try {
             while(c.moveToNext()) {
-                long rawContactId = c.getLong(DataQuery.RAW_CONTACT_ID);
-                String mimeType = c.getString(DataQuery.MIMETYPE);
+                long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+                String mimeType = c.getString(DataDeleteQuery.MIMETYPE);
                 count += getDataRowHandler(mimeType).delete(mDb, c);
                 if (markRawContactAsDirty) {
                     setRawContactDirty(rawContactId);
@@ -1557,14 +1719,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about deleting data we don't have permission to read.
-        Cursor c = query(Data.CONTENT_URI, DataQuery.COLUMNS, Data._ID + "=" + dataId, null, null);
+        Cursor c = query(Data.CONTENT_URI, DataDeleteQuery.COLUMNS, Data._ID + "=" + dataId, null,
+                null);
 
         try {
             if (!c.moveToFirst()) {
                 return 0;
             }
 
-            String mimeType = c.getString(DataQuery.MIMETYPE);
+            String mimeType = c.getString(DataDeleteQuery.MIMETYPE);
             boolean valid = false;
             for (int i = 0; i < allowedMimeTypes.length; i++) {
                 if (TextUtils.equals(mimeType, allowedMimeTypes[i])) {
@@ -1855,7 +2018,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         // TODO delete aggregation exceptions
         mOpenHelper.removeContactIfSingleton(rawContactId);
         if (permanently) {
-            mDb.delete(Tables.PRESENCE, Presence.RAW_CONTACT_ID + "=" + rawContactId, null);
+            mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
 
@@ -2030,7 +2193,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about updating data we don't have permission to read.
-        Cursor c = query(uri, DataIdQuery.COLUMNS, selection, selectionArgs, null);
+        Cursor c = query(uri, DataUpdateQuery.COLUMNS, selection, selectionArgs, null);
         try {
             while(c.moveToNext()) {
                 count += updateData(mValues, c, markRawContactAsDirty);
@@ -2047,7 +2210,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             return 0;
         }
 
-        final String mimeType = c.getString(DataIdQuery.MIMETYPE);
+        final String mimeType = c.getString(DataUpdateQuery.MIMETYPE);
         getDataRowHandler(mimeType).update(mDb, values, c, markRawContactAsDirty);
         return 1;
     }

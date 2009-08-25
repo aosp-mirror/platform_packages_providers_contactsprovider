@@ -45,6 +45,9 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.SocialContract.Activities;
 import android.telephony.PhoneNumberUtils;
+import android.text.TextUtils;
+import android.text.util.Rfc822Token;
+import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -354,8 +357,8 @@ import java.util.HashMap;
     }
 
     public interface NameLookupColumns {
-        public static final String _ID = BaseColumns._ID;
         public static final String RAW_CONTACT_ID = "raw_contact_id";
+        public static final String DATA_ID = "data_id";
         public static final String NORMALIZED_NAME = "normalized_name";
         public static final String NAME_TYPE = "name_type";
     }
@@ -439,6 +442,7 @@ import java.util.HashMap;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
     private SQLiteStatement mNameLookupInsert;
+    private SQLiteStatement mNameLookupDelete;
 
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
@@ -508,8 +512,11 @@ import java.util.HashMap;
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
         mNameLookupInsert = db.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
-                + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.NAME_TYPE + ","
-                + NameLookupColumns.NORMALIZED_NAME + ") VALUES (?,?,?)");
+                + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
+                + NameLookupColumns.NAME_TYPE + "," + NameLookupColumns.NORMALIZED_NAME
+                + ") VALUES (?,?,?,?)");
+        mNameLookupDelete = db.compileStatement("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+                + NameLookupColumns.DATA_ID + "=?");
 
         // Compile statements for updating visibility
         final String visibleUpdate = "UPDATE " + Tables.CONTACTS + " SET "
@@ -732,11 +739,14 @@ import java.util.HashMap;
 
         // Private name/nickname table used for lookup
         db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
+                NameLookupColumns.DATA_ID
+                        + " INTEGER REFERENCES data(_id) NOT NULL," +
                 NameLookupColumns.RAW_CONTACT_ID
                         + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
                 NameLookupColumns.NORMALIZED_NAME + " TEXT NOT NULL," +
                 NameLookupColumns.NAME_TYPE + " INTEGER NOT NULL," +
-                "PRIMARY KEY (" + NameLookupColumns.RAW_CONTACT_ID + ", "
+                "PRIMARY KEY ("
+                        + NameLookupColumns.DATA_ID + ", "
                         + NameLookupColumns.NORMALIZED_NAME + ", "
                         + NameLookupColumns.NAME_TYPE + ")" +
         ");");
@@ -744,6 +754,10 @@ import java.util.HashMap;
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.NORMALIZED_NAME + " ASC, " +
                 NameLookupColumns.NAME_TYPE + " ASC, " +
+                NameLookupColumns.RAW_CONTACT_ID +
+        ");");
+
+        db.execSQL("CREATE INDEX name_lookup_raw_contact_id_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.RAW_CONTACT_ID +
         ");");
 
@@ -1277,14 +1291,116 @@ import java.util.HashMap;
     }
 
     /**
+     * Deletes all {@link Tables#NAME_LOOKUP} table rows associated with the specified data element.
+     */
+    public void deleteNameLookup(long dataId) {
+        getWritableDatabase();
+        DatabaseUtils.bindObjectToProgram(mNameLookupDelete, 1, dataId);
+        mNameLookupInsert.execute();
+    }
+
+    /**
      * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
      */
-    public void insertNameLookup(long rawContactId, int lookupType, String name) {
+    public void insertNameLookup(long rawContactId, long dataId, int lookupType, String name) {
         getWritableDatabase();
         DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 1, rawContactId);
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 2, lookupType);
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, name);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 2, dataId);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, lookupType);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 4, name);
         mNameLookupInsert.executeInsert();
+    }
+
+
+    /**
+     * Inserts name lookup records for the given structured name.
+     */
+    public void insertNameLookupForStructuredName(long rawContactId, long dataId,
+            String givenName, String familyName) {
+        if (TextUtils.isEmpty(givenName)) {
+
+            // If neither the first nor last name are specified, nothing to insert
+            if (TextUtils.isEmpty(familyName)) {
+                return;
+            }
+
+            insertNameLookupForSingleName(rawContactId, dataId, familyName);
+        } else if (TextUtils.isEmpty(familyName)) {
+            insertNameLookupForSingleName(rawContactId, dataId, givenName);
+        } else {
+            insertNameLookupForFullName(rawContactId, dataId, givenName, familyName);
+        }
+    }
+
+    private void insertNameLookupForSingleName(long rawContactId, long dataId, String name) {
+        String nameN = NameNormalizer.normalize(name);
+        insertNameLookup(rawContactId, dataId, NameLookupType.NAME_EXACT, nameN);
+        insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY, nameN);
+
+        // Take care of first and last names swapped
+        String[] clusters = getCommonNicknameClusters(nameN);
+        if (clusters != null) {
+            for (int i = 0; i < clusters.length; i++) {
+                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_VARIANT, clusters[i]);
+            }
+        }
+    }
+
+    private void insertNameLookupForFullName(long rawContactId, long dataId, String givenName,
+            String familyName) {
+        final String givenNameN = NameNormalizer.normalize(givenName);
+        final String[] givenNameNicknames = getCommonNicknameClusters(givenNameN);
+        final String familyNameN = NameNormalizer.normalize(familyName);
+        final String[] familyNameNicknames = getCommonNicknameClusters(familyNameN);
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NAME_EXACT, givenNameN + "." + familyNameN);
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NAME_VARIANT, familyNameN + "." + givenNameN);
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NAME_COLLATION_KEY, givenNameN + familyNameN);
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NAME_COLLATION_KEY, familyNameN + givenNameN);
+
+        if (givenNameNicknames != null) {
+            for (int i = 0; i < givenNameNicknames.length; i++) {
+                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_VARIANT,
+                        givenNameNicknames[i] + "." + familyNameN);
+                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_VARIANT,
+                        familyNameN + "." + givenNameNicknames[i]);
+            }
+        }
+        if (familyNameNicknames != null) {
+            for (int i = 0; i < familyNameNicknames.length; i++) {
+                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_VARIANT,
+                        familyNameNicknames[i] + "." + givenNameN);
+                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_VARIANT,
+                        givenNameN + "." + familyNameNicknames[i]);
+            }
+        }
+    }
+
+    public void insertNameLookupForEmail(long rawContactId, long dataId, String email) {
+        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
+        if (tokens.length == 0) {
+            return;
+        }
+
+        String address = tokens[0].getAddress();
+        int at = address.indexOf('@');
+        if (at != -1) {
+            address = address.substring(0, at);
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.EMAIL_BASED_NICKNAME, NameNormalizer.normalize(address));
+    }
+
+    /**
+     * Normalizes the nickname and inserts it in the name lookup table.
+     */
+    public void insertNameLookupForNickname(long rawContactId, long dataId, String nickname) {
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
     }
 
     public void buildPhoneLookupAndRawContactQuery(SQLiteQueryBuilder qb, String number) {
