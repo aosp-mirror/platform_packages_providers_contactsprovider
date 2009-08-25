@@ -94,7 +94,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int DELETED_PEOPLE = 30;
     private static final int DELETED_GROUPS = 31;
     private static final int SEARCH_SUGGESTIONS = 32;
-    private static final int PHONES_FILTER = 33;
+    private static final int SEARCH_SHORTCUT = 33;
+    private static final int PHONES_FILTER = 34;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -225,6 +226,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sGroupMembershipProjectionMap;
     private static final HashMap<String, String> sPhotoProjectionMap;
 
+
     static {
 
         // Contacts URI matching table
@@ -297,8 +299,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 SEARCH_SUGGESTIONS);
         matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
                 SEARCH_SUGGESTIONS);
-//        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
-//                SEARCH_SHORTCUT);
+        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
+                SEARCH_SHORTCUT);
 //        matcher.addURI(authority, "settings", SETTINGS);
 //
 //        matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
@@ -1335,6 +1337,11 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
                 // No legacy compatibility for search suggestions
                 return mGlobalSearchSupport.handleSearchSuggestionsQuery(db, uri, limit);
+
+            case SEARCH_SHORTCUT: {
+                long contactId = ContentUris.parseId(uri);
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, contactId, projection);
+            }
 
             case DELETED_PEOPLE:
             case DELETED_GROUPS:

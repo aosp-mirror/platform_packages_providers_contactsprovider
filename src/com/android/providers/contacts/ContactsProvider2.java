@@ -47,8 +47,10 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteContentHelper;
 import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -58,6 +60,7 @@ import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
+import android.provider.Contacts.Photos;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -74,12 +77,14 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
@@ -2666,8 +2671,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case SEARCH_SHORTCUT: {
-                // TODO
-                break;
+                long contactId = ContentUris.parseId(uri);
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, contactId, projection);
             }
 
             default:
@@ -2742,6 +2747,32 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     + " WHERE " + RawContactsColumns.CONCRETE_ID + "=" + contactIdColumn + ")=0";
         }
     }
+
+    @Override
+    public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
+        int match = sUriMatcher.match(uri);
+        switch (match) {
+            case CONTACTS_PHOTO:
+            case CONTACTS_SUMMARY_PHOTO:
+                if (!"r".equals(mode)) {
+                    throw new FileNotFoundException("Mode " + mode + " not supported.");
+                }
+
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
+
+                String sql =
+                        "SELECT " + Photo.PHOTO + " FROM " + mOpenHelper.getDataView() +
+                        " WHERE " + Data._ID + "=" + Contacts.PHOTO_ID
+                                + " AND " + RawContacts.CONTACT_ID + "=" + contactId;
+                SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+                return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql, null);
+
+            default:
+                throw new FileNotFoundException("No file at: " + uri);
+        }
+    }
+
+
 
     /**
      * An implementation of EntityIterator that joins the contacts and data tables
