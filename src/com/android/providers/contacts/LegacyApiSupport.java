@@ -36,8 +36,10 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.provider.Contacts;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
+import android.provider.Contacts.Extensions;
 import android.provider.Contacts.People;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
@@ -1385,5 +1387,84 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
      */
     private void onChange(Uri uri) {
         mContext.getContentResolver().notifyChange(android.provider.Contacts.CONTENT_URI, null);
+    }
+
+    public String getType(Uri uri) {
+        int match = sUriMatcher.match(uri);
+        switch (match) {
+            case EXTENSIONS:
+            case PEOPLE_EXTENSIONS:
+                return Extensions.CONTENT_TYPE;
+            case EXTENSIONS_ID:
+            case PEOPLE_EXTENSIONS_ID:
+                return Extensions.CONTENT_ITEM_TYPE;
+            case PEOPLE:
+                return "vnd.android.cursor.dir/person";
+            case PEOPLE_ID:
+                return "vnd.android.cursor.item/person";
+            case PEOPLE_PHONES:
+                return "vnd.android.cursor.dir/phone";
+            case PEOPLE_PHONES_ID:
+                return "vnd.android.cursor.item/phone";
+            case PEOPLE_CONTACTMETHODS:
+                return "vnd.android.cursor.dir/contact-methods";
+            case PEOPLE_CONTACTMETHODS_ID:
+                return getContactMethodType(uri);
+            case PHONES:
+                return "vnd.android.cursor.dir/phone";
+            case PHONES_ID:
+                return "vnd.android.cursor.item/phone";
+            case PHONES_FILTER:
+                return "vnd.android.cursor.dir/phone";
+            case PHOTOS_ID:
+                return "vnd.android.cursor.item/photo";
+            case PHOTOS:
+                return "vnd.android.cursor.dir/photo";
+            case PEOPLE_PHOTO:
+                return "vnd.android.cursor.item/photo";
+            case CONTACTMETHODS:
+                return "vnd.android.cursor.dir/contact-methods";
+            case CONTACTMETHODS_ID:
+                return getContactMethodType(uri);
+            case ORGANIZATIONS:
+                return "vnd.android.cursor.dir/organizations";
+            case ORGANIZATIONS_ID:
+                return "vnd.android.cursor.item/organization";
+            case SEARCH_SUGGESTIONS:
+                return SearchManager.SUGGEST_MIME_TYPE;
+            case SEARCH_SHORTCUT:
+                return SearchManager.SHORTCUT_MIME_TYPE;
+            default:
+                throw new IllegalArgumentException("Unknown URI");
+        }
+    }
+
+    private String getContactMethodType(Uri url) {
+        String mime = null;
+
+        Cursor c = query(url, new String[] {ContactMethods.KIND}, null, null, null, null);
+        if (c != null) {
+            try {
+                if (c.moveToFirst()) {
+                    int kind = c.getInt(0);
+                    switch (kind) {
+                    case Contacts.KIND_EMAIL:
+                        mime = "vnd.android.cursor.item/email";
+                        break;
+
+                    case Contacts.KIND_IM:
+                        mime = "vnd.android.cursor.item/jabber-im";
+                        break;
+
+                    case Contacts.KIND_POSTAL:
+                        mime = "vnd.android.cursor.item/postal-address";
+                        break;
+                    }
+                }
+            } finally {
+                c.close();
+            }
+        }
+        return mime;
     }
 }

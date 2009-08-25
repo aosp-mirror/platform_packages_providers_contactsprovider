@@ -3164,8 +3164,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 return SearchManager.SUGGEST_MIME_TYPE;
             case SEARCH_SHORTCUT:
                 return SearchManager.SHORTCUT_MIME_TYPE;
+            default:
+                return mLegacyApiSupport.getType(uri);
         }
-        throw new UnsupportedOperationException("Unknown uri: " + uri);
     }
 
     private void setDisplayName(long rawContactId, String displayName) {

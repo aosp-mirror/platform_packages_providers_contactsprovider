@@ -205,6 +205,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(ContactMethods.ISPRIMARY, 1);
         Uri emailUri1 = mResolver.insert(ContactMethods.CONTENT_URI, values);
 
+        assertEquals(ContactMethods.CONTENT_EMAIL_ITEM_TYPE, mResolver.getType(emailUri1));
+
         // Non-primary
         values.clear();
         values.put(ContactMethods.PERSON_ID, personId);
