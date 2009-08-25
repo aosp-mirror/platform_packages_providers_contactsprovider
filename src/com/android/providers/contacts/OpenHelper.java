@@ -219,10 +219,10 @@ import java.util.HashMap;
         final String BELONGS_TO_GROUP = DataColumns.CONCRETE_GROUP_ID + "="
                 + GroupsColumns.CONCRETE_ID;
 
-        final String UNGROUPED = DataColumns.CONCRETE_GROUP_ID + " IS NULL";
+        final String HAVING_NO_GROUPS = "COUNT(" + DataColumns.CONCRETE_GROUP_ID + ") == 0";
 
-        final String GROUP_BY_ACCOUNT = SettingsColumns.CONCRETE_ACCOUNT_NAME + ","
-                + SettingsColumns.CONCRETE_ACCOUNT_TYPE;
+        final String GROUP_BY_ACCOUNT_CONTACT_ID = SettingsColumns.CONCRETE_ACCOUNT_NAME + ","
+                + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "," + RawContacts.CONTACT_ID;
 
         final String RAW_CONTACT_IS_LOCAL = RawContactsColumns.CONCRETE_ACCOUNT_NAME
                 + " IS NULL AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL";

@@ -543,15 +543,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         columns.put(Settings.ACCOUNT_TYPE, Settings.ACCOUNT_TYPE);
         columns.put(Settings.UNGROUPED_VISIBLE, Settings.UNGROUPED_VISIBLE);
         columns.put(Settings.SHOULD_SYNC, Settings.SHOULD_SYNC);
-        columns.put(Settings.UNGROUPED_COUNT, "(SELECT COUNT(DISTINCT " + RawContacts.CONTACT_ID
-                + ") FROM " + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " WHERE "
-                + Clauses.UNGROUPED + " GROUP BY " + Clauses.GROUP_BY_ACCOUNT + ") AS "
-                + Settings.UNGROUPED_COUNT);
-        columns.put(Settings.UNGROUPED_WITH_PHONES, "(SELECT COUNT(DISTINCT "
-                + RawContacts.CONTACT_ID + ") FROM "
+        columns.put(Settings.UNGROUPED_COUNT, "(SELECT COUNT(*) FROM (SELECT 1 FROM "
+                + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " GROUP BY "
+                + Clauses.GROUP_BY_ACCOUNT_CONTACT_ID + " HAVING " + Clauses.HAVING_NO_GROUPS
+                + ")) AS " + Settings.UNGROUPED_COUNT);
+        columns.put(Settings.UNGROUPED_WITH_PHONES, "(SELECT COUNT(*) FROM (SELECT 1 FROM "
                 + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " WHERE "
-                + Clauses.UNGROUPED + " AND " + Contacts.HAS_PHONE_NUMBER + " GROUP BY "
-                + Clauses.GROUP_BY_ACCOUNT + ") AS " + Settings.UNGROUPED_WITH_PHONES);
+                + Contacts.HAS_PHONE_NUMBER + " GROUP BY " + Clauses.GROUP_BY_ACCOUNT_CONTACT_ID
+                + " HAVING " + Clauses.HAVING_NO_GROUPS + ")) AS "
+                + Settings.UNGROUPED_WITH_PHONES);
         sSettingsProjectionMap = columns;
 
         columns = new HashMap<String, String>();
