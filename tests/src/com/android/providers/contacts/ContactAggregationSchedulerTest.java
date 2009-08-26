@@ -34,18 +34,36 @@ public class ContactAggregationSchedulerTest extends TestCase {
 
     public void testScheduleInitial() {
         mScheduler.schedule();
-        assertEquals(1, mScheduler.mRunDelayed);
+        assertEquals(1, mScheduler.mRunNow);
+        assertEquals(0, mScheduler.mRunDelayed);
     }
 
     public void testScheduleTwiceRapidly() {
         mScheduler.schedule();
 
+        mScheduler.mTime += ContactAggregationScheduler.DELAYED_EXECUTION_TIMEOUT / 2;
+        mScheduler.schedule();
+        assertEquals(1, mScheduler.mRunNow);
+        assertEquals(1, mScheduler.mRunDelayed);
+    }
+
+    public void testScheduleThriceRapidly() {
+        mScheduler.schedule();
+
+        mScheduler.mTime += ContactAggregationScheduler.DELAYED_EXECUTION_TIMEOUT / 2;
+        mScheduler.schedule();
+
         mScheduler.mTime += ContactAggregationScheduler.AGGREGATION_DELAY / 2;
         mScheduler.schedule();
+
+        assertEquals(1, mScheduler.mRunNow);
         assertEquals(2, mScheduler.mRunDelayed);
     }
 
-    public void testScheduleTwiceExceedingMaxDelay() {
+    public void testScheduleThriceExceedingMaxDelay() {
+        mScheduler.schedule();
+
+        mScheduler.mTime += ContactAggregationScheduler.DELAYED_EXECUTION_TIMEOUT / 2;
         mScheduler.schedule();
 
         mScheduler.mTime += ContactAggregationScheduler.MAX_AGGREGATION_DELAY + 100;
@@ -108,6 +126,9 @@ public class ContactAggregationSchedulerTest extends TestCase {
     public void testScheduleWhileRunningExceedingMaxDelay() {
         mScheduler.schedule();
 
+        mScheduler.mTime += ContactAggregationScheduler.DELAYED_EXECUTION_TIMEOUT / 2;
+        mScheduler.schedule();
+
         mScheduler.mTime += ContactAggregationScheduler.MAX_AGGREGATION_DELAY + 100;
 
         mScheduler.setAggregator(new ContactAggregationScheduler.Aggregator() {
@@ -124,6 +145,7 @@ public class ContactAggregationSchedulerTest extends TestCase {
         });
 
         mScheduler.run();
+        assertEquals(1, mScheduler.mRunNow);
         assertEquals(2, mScheduler.mRunDelayed);
     }
 
@@ -131,6 +153,7 @@ public class ContactAggregationSchedulerTest extends TestCase {
 
         long mTime = 1000;
         int mRunDelayed;
+        int mRunNow;
 
         @Override
         public void start() {
@@ -143,6 +166,11 @@ public class ContactAggregationSchedulerTest extends TestCase {
         @Override
         long currentTime() {
             return mTime;
+        }
+
+        @Override
+        void runNow() {
+            mRunNow++;
         }
 
         @Override

@@ -37,9 +37,9 @@ import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.provider.ContactsContract.Contacts.Photo;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -934,10 +934,36 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = insertPhoto(rawContactId);
 
         Uri twigUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                queryContactId(rawContactId)), Photo.CONTENT_DIRECTORY);
+                queryContactId(rawContactId)), Contacts.Photo.CONTENT_DIRECTORY);
 
         long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
         assertEquals(ContentUris.parseId(photoUri), twigId);
+    }
+
+    public void testUpdatePhoto() {
+        ContentValues values = new ContentValues();
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+        insertStructuredName(rawContactId, "John", "Doe");
+
+        Uri twigUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId)), Contacts.Photo.CONTENT_DIRECTORY);
+
+        values.clear();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.putNull(Photo.PHOTO);
+        Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
+        long photoId = ContentUris.parseId(dataUri);
+
+        assertNull(getStoredValue(twigUri, Data._ID));
+
+        values.clear();
+        values.put(Photo.PHOTO, loadTestPhoto());
+        mResolver.update(dataUri, values, null, null);
+
+        long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
+        assertEquals(photoId, twigId);
     }
 
     private long createContact(ContentValues values, String firstName, String givenName,

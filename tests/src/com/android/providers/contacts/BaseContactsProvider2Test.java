@@ -527,11 +527,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected String getStoredValue(Uri rowUri, String column) {
-        String value;
+        String value = null;
         Cursor c = mResolver.query(rowUri, new String[] { column }, null, null, null);
         try {
-            c.moveToFirst();
-            value = c.getString(c.getColumnIndex(column));
+            if (c.moveToFirst()) {
+                value = c.getString(c.getColumnIndex(column));
+            }
         } finally {
             c.close();
         }

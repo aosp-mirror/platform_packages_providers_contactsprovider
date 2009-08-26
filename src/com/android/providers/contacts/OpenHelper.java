@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 75;
+    private static final int DATABASE_VERSION = 76;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -91,7 +91,7 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
 
         public static final String DATA_JOIN_RAW_CONTACTS = "data "
-            + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
+                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
 
         public static final String DATA_JOIN_MIMETYPE_RAW_CONTACTS = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
@@ -192,13 +192,6 @@ import java.util.HashMap;
         public static final String AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS = "agg_exceptions "
                 + "INNER JOIN raw_contacts raw_contacts1 "
                 + "ON (agg_exceptions.raw_contact_id1 = raw_contacts1._id) ";
-
-        public static final String AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS_TWICE =
-                "agg_exceptions "
-                + "INNER JOIN raw_contacts raw_contacts1 "
-                + "ON (agg_exceptions.raw_contact_id1 = raw_contacts1._id) "
-                + "INNER JOIN raw_contacts raw_contacts2 "
-                + "ON (agg_exceptions.raw_contact_id2 = raw_contacts2._id) ";
     }
 
     public interface Views {
@@ -289,6 +282,8 @@ import java.util.HashMap;
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC3;
         public static final String CONCRETE_SYNC4 =
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC4;
+
+        public static final String AGGREGATION_NEEDED = "aggregation_needed";
     }
 
     public interface DataColumns {
@@ -497,8 +492,11 @@ import java.util.HashMap;
                 + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
         mContactIdQuery = db.compileStatement("SELECT " + RawContacts.CONTACT_ID + " FROM "
                 + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
-        mContactIdUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
-                + RawContacts.CONTACT_ID + "=?" + " WHERE " + RawContacts._ID + "=?");
+        mContactIdUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.CONTACT_ID + "=?, "
+                        + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
+                " WHERE " + RawContacts._ID + "=?");
         mAggregationModeQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATION_MODE
                 + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
@@ -599,6 +597,7 @@ import java.util.HashMap;
                 RawContacts.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 RawContacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
                         RawContacts.AGGREGATION_MODE_DEFAULT + "," +
+                RawContactsColumns.AGGREGATION_NEEDED + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.CUSTOM_RINGTONE + " TEXT," +
                 RawContacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
@@ -613,6 +612,10 @@ import java.util.HashMap;
 
         db.execSQL("CREATE INDEX raw_contacts_contact_id_index ON " + Tables.RAW_CONTACTS + " (" +
                 RawContacts.CONTACT_ID +
+        ");");
+
+        db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContactsColumns.AGGREGATION_NEEDED +
         ");");
 
         // Package name mapping table

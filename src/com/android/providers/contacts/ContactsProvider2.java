@@ -60,7 +60,6 @@ import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.Contacts.Photos;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -312,6 +311,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private SQLiteStatement mAggregatedPresenceReplace;
     /** Precompiled sql statement for updating an aggregated presence status */
     private SQLiteStatement mAggregatedPresenceStatusUpdate;
+
+    private SQLiteStatement mMarkForAggregation;
 
     static {
         // Contacts URI matching table
@@ -1269,6 +1270,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + " SET " + Presence.PRESENCE_CUSTOM_STATUS + "=? "
                 + " WHERE " + AggregatedPresenceColumns.CONTACT_ID + "=?");
 
+        mMarkForAggregation = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=1" +
+                " WHERE " + RawContacts._ID + "=?");
+
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
                 context.getString(com.android.internal.R.string.common_last_name_prefixes),
@@ -1613,26 +1619,47 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             setRawContactDirty(rawContactId);
         }
 
-        aggregationMode = mContactAggregator.markContactForAggregation(mDb, rawContactId);
-
-        triggerAggregation(id, aggregationMode);
+        triggerAggregation(rawContactId);
         return id;
     }
 
-    private void triggerAggregation(long rawContactId, int aggregationMode) {
+    private void triggerAggregation(long rawContactId) {
+        if (!mContactAggregator.isEnabled()) {
+            return;
+        }
+
+        int aggregationMode = mOpenHelper.getAggregationMode(rawContactId);
         switch (aggregationMode) {
-            case RawContacts.AGGREGATION_MODE_DEFAULT:
+            case RawContacts.AGGREGATION_MODE_DISABLED:
+                break;
+
+            case RawContacts.AGGREGATION_MODE_DEFAULT: {
+                markForAggregation(rawContactId);
                 mScheduleAggregation = true;
                 break;
+            }
 
-            case RawContacts.AGGREGATION_MODE_IMMEDITATE:
-                mContactAggregator.aggregateContact(mDb, rawContactId);
-                break;
+            case RawContacts.AGGREGATION_MODE_SUSPENDED: {
+                long contactId = mOpenHelper.getContactId(rawContactId);
 
-            case RawContacts.AGGREGATION_MODE_DISABLED:
-                // Do nothing
+                if (contactId != 0) {
+                    mContactAggregator.updateAggregateData(contactId);
+                }
                 break;
+            }
+
+            case RawContacts.AGGREGATION_MODE_IMMEDITATE: {
+                long contactId = mOpenHelper.getContactId(rawContactId);
+                markForAggregation(rawContactId);
+                mContactAggregator.aggregateContact(mDb, rawContactId, contactId);
+                break;
+            }
         }
+    }
+
+    private void markForAggregation(long rawContactId) {
+        mMarkForAggregation.bindLong(1, rawContactId);
+        mMarkForAggregation.execute();
     }
 
     /**
@@ -1708,6 +1735,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 count += getDataRowHandler(mimeType).delete(mDb, c);
                 if (markRawContactAsDirty) {
                     setRawContactDirty(rawContactId);
+                    triggerAggregation(rawContactId);
                 }
             }
         } finally {
@@ -1746,7 +1774,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         + Lists.newArrayList(allowedMimeTypes));
             }
 
-            return getDataRowHandler(mimeType).delete(mDb, c);
+            int count = getDataRowHandler(mimeType).delete(mDb, c);
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+            triggerAggregation(rawContactId);
+            return count;
         } finally {
             c.close();
         }
@@ -2217,6 +2248,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         final String mimeType = c.getString(DataUpdateQuery.MIMETYPE);
         getDataRowHandler(mimeType).update(mDb, values, c, markRawContactAsDirty);
+        long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+        triggerAggregation(rawContactId);
+
         return 1;
     }
 
@@ -2307,13 +2341,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
         }
 
-        int aggregationMode = mContactAggregator.markContactForAggregation(mDb, rawContactId);
-        if (aggregationMode != RawContacts.AGGREGATION_MODE_DISABLED) {
-            mContactAggregator.aggregateContact(db, rawContactId);
-            if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
-                    || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
-                mContactAggregator.updateAggregateData(contactId);
-            }
+        markForAggregation(rawContactId);
+        mContactAggregator.aggregateContact(db, rawContactId,
+                mOpenHelper.getContactId(rawContactId));
+        if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
+                || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
+            mContactAggregator.updateAggregateData(contactId);
         }
 
         // The return value is fake - we just confirm that we made a change, not count actual
