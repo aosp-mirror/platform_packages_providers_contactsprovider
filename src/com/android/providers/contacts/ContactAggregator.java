@@ -24,6 +24,7 @@ import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupType;
+import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
@@ -101,18 +102,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int COL_NORMALIZED_NAME = 1;
     private static final int COL_NAME_TYPE = 2;
 
-    private static final String[] AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS = new String[]{
-            AggregationExceptions.TYPE,
-            AggregationExceptionColumns.RAW_CONTACT_ID1,
-            "raw_contacts1." + RawContacts.CONTACT_ID,
-            "raw_contacts2." + RawContacts.CONTACT_ID
-    };
-
-    private static final int COL_TYPE = 0;
-    private static final int COL_RAW_CONTACT_ID1 = 1;
-    private static final int COL_CONTACT_ID1 = 2;
-    private static final int COL_CONTACT_ID2 = 3;
-
     private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
 
     private interface EmailLookupQuery {
@@ -141,6 +130,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     /** Precompiled sql statement for setting an aggregated presence */
     private SQLiteStatement mAggregatedPresenceReplace;
+    private SQLiteStatement mRawContactCountQuery;
+    private SQLiteStatement mContactDelete;
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -206,9 +197,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                             + "MAX(" + Presence.PRESENCE_STATUS + "), "
                             + "MAX(" + Presence.PRESENCE_CUSTOM_STATUS + ")"
                         + " FROM " + Tables.PRESENCE + "," + Tables.RAW_CONTACTS
-                        + " WHERE " + Presence.RAW_CONTACT_ID + "="
+                        + " WHERE " + PresenceColumns.RAW_CONTACT_ID + "="
                                 + RawContactsColumns.CONCRETE_ID
                         + "   AND " + RawContacts.CONTACT_ID + "=?");
+
+        mRawContactCountQuery = db.compileStatement(
+                "SELECT COUNT(" + RawContacts._ID + ")" +
+                " FROM " + Tables.RAW_CONTACTS +
+                " WHERE " + RawContacts.CONTACT_ID + "=?"
+                        + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0");
+
+        mContactDelete = db.compileStatement(
+                "DELETE FROM " + Tables.CONTACTS +
+                " WHERE " + Contacts._ID + "=?");
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -222,6 +223,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     public void setEnabled(boolean enabled) {
         mEnabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return mEnabled;
     }
 
     /**
@@ -248,6 +253,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mCancel = true;
     }
 
+    private interface AggregationQuery {
+        String TABLE = Tables.RAW_CONTACTS;
+
+        String[] COLUMNS = {
+                RawContacts._ID, RawContacts.CONTACT_ID
+        };
+
+        int _ID = 0;
+        int CONTACT_ID = 1;
+
+        String SELECTION = RawContactsColumns.AGGREGATION_NEEDED + "=1 AND "
+                + RawContacts.AGGREGATION_MODE + "=" + RawContacts.AGGREGATION_MODE_DEFAULT;
+    }
     /**
      * Find all contacts that require aggregation and pass them through aggregation one by one.
      * Do not call directly.  It is invoked by the scheduler.
@@ -258,21 +276,24 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         mCancel = false;
-        Log.i(TAG, "Contact aggregation");
 
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        final Cursor c = db.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
-                RawContacts.CONTACT_ID + " IS NULL AND "
-                        + RawContacts.AGGREGATION_MODE + "=" + RawContacts.AGGREGATION_MODE_DEFAULT,
-                null, null, null, null);
+        final Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS,
+                AggregationQuery.SELECTION, null, null, null, null);
 
         int totalCount = c.getCount();
+        if (totalCount == 0) {
+            c.close();
+            return;
+        }
+
         int count = 0;
         try {
+            Log.i(TAG, "Contact aggregation: " + totalCount);
             if (c.moveToFirst()) {
                 db.beginTransaction();
                 try {
@@ -280,7 +301,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                         if (mCancel) {
                             break;
                         }
-                        aggregateContact(db, c.getInt(0), candidates, matcher, values);
+                        aggregateContact(db, c.getLong(AggregationQuery._ID),
+                                c.getLong(AggregationQuery.CONTACT_ID),
+                                candidates, matcher, values);
                         count++;
                         db.yieldIfContendedSafely();
                     } while (c.moveToNext());
@@ -305,7 +328,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     /**
      * Synchronously aggregate the specified contact assuming an open transaction.
      */
-    public void aggregateContact(SQLiteDatabase db, long rawContactId) {
+    public void aggregateContact(SQLiteDatabase db, long rawContactId, long currentContactId) {
         if (!mEnabled) {
             return;
         }
@@ -313,42 +336,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
-        aggregateContact(db, rawContactId, candidates, matcher, values);
-    }
-
-    /**
-     * Marks the specified contact for (re)aggregation.
-     *
-     * @param rawContactId contact ID that needs to be (re)aggregated
-     * @return The contact aggregation mode:
-     *         {@link RawContacts#AGGREGATION_MODE_DEFAULT},
-     *         {@link RawContacts#AGGREGATION_MODE_IMMEDIATE} or
-     *         {@link RawContacts#AGGREGATION_MODE_DISABLED}.
-     */
-    public int markContactForAggregation(SQLiteDatabase db, long rawContactId) {
-        if (!mEnabled) {
-            return RawContacts.AGGREGATION_MODE_DISABLED;
-        }
-
-        int aggregationMode = mOpenHelper.getAggregationMode(rawContactId);
-        if (aggregationMode == RawContacts.AGGREGATION_MODE_DISABLED) {
-            return aggregationMode;
-        }
-
-        long contactId = mOpenHelper.getContactId(rawContactId);
-        if (contactId == 0) {
-            // Not aggregated
-            return aggregationMode;
-        }
-
-        mOpenHelper.removeContactIfSingleton(rawContactId);
-
-        // Clear out the contact ID field on the contact
-        ContentValues values = new ContentValues();
-        values.putNull(RawContacts.CONTACT_ID);
-        db.update(Tables.RAW_CONTACTS, values, RawContacts._ID + "=" + rawContactId, null);
-
-        return aggregationMode;
+        aggregateContact(db, rawContactId, currentContactId, candidates, matcher, values);
     }
 
     public void updateAggregateData(long contactId) {
@@ -371,7 +359,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * with the highest match score.  If no such contact is found, creates a new contact.
      */
     private synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
-            MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
+            long currentContactId, MatchCandidateList candidates, ContactMatcher matcher,
+            ContentValues values) {
         candidates.clear();
         matcher.clear();
 
@@ -380,7 +369,31 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
         }
 
-        if (contactId == -1) {
+        long currentContactContentsCount = 0;
+
+        if (currentContactId != 0) {
+            mRawContactCountQuery.bindLong(1, currentContactId);
+            currentContactContentsCount = mRawContactCountQuery.simpleQueryForLong();
+        }
+
+        // If there are no other raw contacts in the current aggregate, we might as well reuse it.
+        if (contactId == -1 && currentContactId != 0 && currentContactContentsCount == 0) {
+            contactId = currentContactId;
+        }
+
+        if (contactId != currentContactId && currentContactContentsCount == 0) {
+            mContactDelete.bindLong(1, currentContactId);
+            mContactDelete.execute();
+        }
+
+        if (contactId == currentContactId) {
+
+            // Clear out the AGGREGATION_NEEDED flag
+            mOpenHelper.setContactId(rawContactId, contactId);
+            computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
+            db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+
+        } else if (contactId == -1) {
             ContentValues contactValues = new ContentValues();
             contactValues.put(RawContactsColumns.DISPLAY_NAME, "");
             computeAggregateData(db,
@@ -394,6 +407,31 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         mOpenHelper.updateContactVisible(contactId);
+
+    }
+
+    interface AggregateExceptionQuery {
+        String TABLE = Tables.AGGREGATION_EXCEPTIONS
+            + " JOIN raw_contacts raw_contacts1 "
+                    + " ON (agg_exceptions.raw_contact_id1 = raw_contacts1._id) "
+            + " JOIN raw_contacts raw_contacts2 "
+                    + " ON (agg_exceptions.raw_contact_id2 = raw_contacts2._id) ";
+
+        String[] COLUMNS = {
+            AggregationExceptions.TYPE,
+            AggregationExceptionColumns.RAW_CONTACT_ID1,
+            "raw_contacts1." + RawContacts.CONTACT_ID,
+            "raw_contacts1." + RawContactsColumns.AGGREGATION_NEEDED,
+            "raw_contacts2." + RawContacts.CONTACT_ID,
+            "raw_contacts2." + RawContactsColumns.AGGREGATION_NEEDED,
+        };
+
+        int TYPE = 0;
+        int RAW_CONTACT_ID1 = 1;
+        int CONTACT_ID1 = 2;
+        int AGGREGATION_NEEDED_1 = 3;
+        int CONTACT_ID2 = 4;
+        int AGGREGATION_NEEDED_2 = 5;
     }
 
     /**
@@ -402,24 +440,26 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private long pickBestMatchBasedOnExceptions(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
-        final Cursor c = db.query(Tables.AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS_TWICE,
-                AGGREGATE_EXCEPTION_JOIN_CONTACT_TWICE_COLUMNS,
+        final Cursor c = db.query(AggregateExceptionQuery.TABLE,
+                AggregateExceptionQuery.COLUMNS,
                 AggregationExceptionColumns.RAW_CONTACT_ID1 + "=" + rawContactId
                         + " OR " + AggregationExceptionColumns.RAW_CONTACT_ID2 + "=" + rawContactId,
                 null, null, null, null);
 
         try {
             while (c.moveToNext()) {
-                int type = c.getInt(COL_TYPE);
-                long rawContactId1 = c.getLong(COL_RAW_CONTACT_ID1);
+                int type = c.getInt(AggregateExceptionQuery.TYPE);
+                long rawContactId1 = c.getLong(AggregateExceptionQuery.RAW_CONTACT_ID1);
                 long contactId = -1;
                 if (rawContactId == rawContactId1) {
-                    if (!c.isNull(COL_CONTACT_ID2)) {
-                        contactId = c.getLong(COL_CONTACT_ID2);
+                    if (c.getInt(AggregateExceptionQuery.AGGREGATION_NEEDED_2) == 0
+                            && !c.isNull(AggregateExceptionQuery.CONTACT_ID2)) {
+                        contactId = c.getLong(AggregateExceptionQuery.CONTACT_ID2);
                     }
                 } else {
-                    if (!c.isNull(COL_CONTACT_ID1)) {
-                        contactId = c.getLong(COL_CONTACT_ID1);
+                    if (c.getInt(AggregateExceptionQuery.AGGREGATION_NEEDED_1) == 0
+                            && !c.isNull(AggregateExceptionQuery.CONTACT_ID1)) {
+                        contactId = c.getLong(AggregateExceptionQuery.CONTACT_ID1);
                     }
                 }
                 if (contactId != -1) {
@@ -677,7 +717,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         StringBuilder selection = new StringBuilder();
-        selection.append(RawContacts.CONTACT_ID + " NOT NULL AND ");
+        selection.append(RawContactsColumns.AGGREGATION_NEEDED + "=0 AND ");
         selection.append(NameLookupColumns.NORMALIZED_NAME);
         selection.append(" IN (");
         for (int i = 0; i < candidates.mCount; i++) {
@@ -743,8 +783,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         mOpenHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
-        Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContacts.CONTACT_ID + " NOT NULL", null,
-                null, null, null);
+        Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContactsColumns.AGGREGATION_NEEDED + "=0",
+                null, null, null, null);
         try {
             while (c.moveToNext()) {
                 long contactId = c.getLong(COL_CONTACT_ID);
@@ -763,7 +803,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         Cursor c = db.query(EmailLookupQuery.TABLE, EmailLookupQuery.COLUMNS,
                 DataColumns.MIMETYPE_ID + "=" + mimetypeId
                         + " AND " + Email.DATA + "=?"
-                        + " AND " + RawContacts.CONTACT_ID + " NOT NULL",
+                        + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0",
                 new String[] {address}, null, null, null);
         try {
             while (c.moveToNext()) {
@@ -783,7 +823,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         Cursor c = db.query(true, Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, CONTACT_ID_COLUMNS,
                 NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + " AND "
                         + NameLookupColumns.NORMALIZED_NAME + "='" + normalized + "' AND "
-                        + RawContacts.CONTACT_ID + " NOT NULL",
+                        + RawContactsColumns.AGGREGATION_NEEDED + "=0",
                 null, null, null, null, null);
         try {
             while (c.moveToNext()) {
@@ -1057,24 +1097,5 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         // TODO: remove the debug logging
         Log.i(TAG, "MATCHES: " + matches);
         return matches;
-    }
-
-    /**
-     * Various database projections used internally.
-     */
-    private interface Projections {
-        static final String[] PROJ_DATA = new String[] {
-                Tables.DATA + "." + Data._ID,
-                Data.MIMETYPE,
-                RawContacts.IS_RESTRICTED,
-        };
-
-        static final int COL_DATA_ID = 0;
-        static final int COL_DATA_MIMETYPE = 1;
-        static final int COL_IS_RESTRICTED = 2;
-
-        static final String PRIMARY_MIME_CLAUSE = "(" + Data.MIMETYPE + "=\""
-                + CommonDataKinds.Phone.CONTENT_ITEM_TYPE + "\" OR " + Data.MIMETYPE + "=\""
-                + CommonDataKinds.Email.CONTENT_ITEM_TYPE + "\")";
     }
 }

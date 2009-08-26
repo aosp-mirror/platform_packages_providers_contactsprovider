@@ -51,6 +51,9 @@ public class ContactAggregationScheduler {
     // Maximum delay of aggregation from the initial aggregation request
     public static final int MAX_AGGREGATION_DELAY = 10000;
 
+    // Minimum gap between requests that should cause a delay of aggregation
+    public static final int DELAYED_EXECUTION_TIMEOUT = 500;
+
     public static final int STATUS_STAND_BY = 0;
     public static final int STATUS_SCHEDULED = 1;
     public static final int STATUS_RUNNING = 2;
@@ -64,8 +67,12 @@ public class ContactAggregationScheduler {
     // If true, we need to automatically reschedule aggregation after the current pass is done
     private boolean mRescheduleWhenComplete;
 
-    // The time when aggregation was request for the first time. Reset when aggregation is completed
+    // The time when aggregation was requested for the first time.
+    // Reset when aggregation is completed
     private long mInitialRequestTimestamp;
+
+    // Last time aggregation was requested
+    private long mLastAggregationEndedTimestamp;
 
     private HandlerThread mHandlerThread;
     private Handler mMessageHandler;
@@ -111,7 +118,12 @@ public class ContactAggregationScheduler {
 
                 mInitialRequestTimestamp = currentTime();
                 mStatus = STATUS_SCHEDULED;
-                runDelayed();
+                if (mInitialRequestTimestamp - mLastAggregationEndedTimestamp <
+                        DELAYED_EXECUTION_TIMEOUT) {
+                    runDelayed();
+                } else {
+                    runNow();
+                }
                 break;
             }
 
@@ -161,6 +173,7 @@ public class ContactAggregationScheduler {
         try {
             mAggregator.run();
         } finally {
+            mLastAggregationEndedTimestamp = currentTime();
             synchronized (this) {
                 if (mStatus == STATUS_RUNNING) {
                     mStatus = STATUS_STAND_BY;
@@ -171,6 +184,15 @@ public class ContactAggregationScheduler {
                 }
             }
         }
+    }
+
+    /* package */ void runNow() {
+
+        // If aggregation has already been requested, cancel the previous request
+        mMessageHandler.removeMessages(START_AGGREGATION_MESSAGE_ID);
+
+        // Schedule aggregation for right now
+        mMessageHandler.sendEmptyMessage(START_AGGREGATION_MESSAGE_ID);
     }
 
     /* package */ void runDelayed() {
