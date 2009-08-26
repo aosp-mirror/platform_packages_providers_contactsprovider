@@ -20,44 +20,47 @@ import android.test.suitebuilder.annotation.SmallTest;
 import junit.framework.TestCase;
 
 @SmallTest
-public class JaroWinklerDistanceTest extends TestCase {
+public class NameDistanceTest extends TestCase {
 
-    private JaroWinklerDistance mJaroWinklerDistance;
+    private NameDistance mNameDistance;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
-        mJaroWinklerDistance = new JaroWinklerDistance(10);
+        mNameDistance = new NameDistance(30);
     }
 
     public void testExactMatch() {
         assertFloat(1, "Dwayne", "Dwayne");
     }
 
-    public void testWinklerBonus() {
-        assertFloat(0.961f, "Martha", "Marhta");
-        assertFloat(0.840f, "Dwayne", "Duane");
-        assertFloat(0.813f, "DIXON", "DICKSONX");
+    public void testMismatches() {
+        assertFloat(0.8f, "Abcdef", "Abcdex");
+        assertFloat(0.6f, "Abcdef", "Abcxex");
+        assertFloat(0.0f, "Abcdef", "Abxxex");
     }
 
-    public void testJaroDistance() {
-        assertFloat(0.600f, "Donny", "Duane");
-    }
-
-    public void testPoorMatch() {
-        assertFloat(0.467f, "Johny", "Duane");
+    public void testTranspositions() {
+        assertFloat(0.8f, "Abcdef", "Cbadef");
+        assertFloat(0.6f, "Abcdef", "Abfdec");
+        assertFloat(0.6f, "Abcdef", "Cbafed");
+        assertFloat(0.0f, "Abcdef", "Fedcba");
     }
 
     public void testNoMatches() {
         assertFloat(0, "Abcd", "Efgh");
     }
 
+    public void testSimilarNames() {
+        assertFloat(0.3f, "SallyCarrera", "SallieCarerra");
+    }
+
     private void assertFloat(float expected, String name1, String name2) {
         byte[] s1 = Hex.decodeHex(NameNormalizer.normalize(name1));
         byte[] s2 = Hex.decodeHex(NameNormalizer.normalize(name2));
 
-        float actual = mJaroWinklerDistance.getDistance(s1, s2);
+        float actual = mNameDistance.getDistance(s1, s2);
         assertTrue("Expected Jaro-Winkler distance: " + expected + ", actual: " + actual,
                 Math.abs(actual - expected) < 0.001);
     }

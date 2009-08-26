@@ -204,14 +204,26 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testAggregationBasedOnPhoneNumberWithSimilarNames() {
         long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Ogre", "Hunter");
+        insertStructuredName(rawContactId1, "Figophi", "Nockdeimer");
         insertPhoneNumber(rawContactId1, "(888)555-1234");
 
         long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Opra", "Humper");
+        insertStructuredName(rawContactId2, "Figopi", "Nockdeimer");
         insertPhoneNumber(rawContactId2, "1(888)555-1234");
 
         assertAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationBasedOnPhoneNumberWithLessSimilarNames() {
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Figophi", "Nockdeimer");
+        insertPhoneNumber(rawContactId1, "(888)555-1234");
+
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Erica", "Nockdeimer");
+        insertPhoneNumber(rawContactId2, "1(888)555-1234");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWithDifferentNames() {
@@ -330,7 +342,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertNickname(rawContactId1, "Syndrome");
 
         long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Body", "Pane");
+        insertStructuredName(rawContactId2, "Boddy", "Pane");
         insertNickname(rawContactId2, "Syndrome");
 
         assertAggregated(rawContactId1, rawContactId2);

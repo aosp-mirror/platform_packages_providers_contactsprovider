@@ -52,11 +52,11 @@ public class ContactMatcher {
     // Score for matching nickname
     private static final int NICKNAME_MATCH_SCORE = 71;
 
-    // Minimum edit distance between two names to be considered an approximate match
-    public static final float APPROXIMATE_MATCH_THRESHOLD = 0.7f;
+    // Maximum number of characters in a name prefix to be considered by the matching algorithm.
+    private static final int MAX_MATCHED_PREFIX_LENGTH = 6;
 
     // Maximum number of characters in a name to be considered by the matching algorithm.
-    private static final int MAX_MATCHED_NAME_LENGTH = 12;
+    private static final int MAX_MATCHED_NAME_LENGTH = 30;
 
     // Scores a multiplied by this number to allow room for "fractional" scores
     private static final int SCORE_SCALE = 1000;
@@ -74,8 +74,8 @@ public class ContactMatcher {
      * match producing the score of 70.  The score may also be 0 if the similarity (distance)
      * between the strings is below the threshold.
      * <p>
-     * We use the Jaro-Winkler algorithm, which is particularly suited for
-     * name matching. See {@link JaroWinklerDistance}.
+     * We use a string matching algorithm, which is particularly suited for
+     * name matching. See {@link NameDistance}.
      */
     private static int[] sMinScore =
             new int[NameLookupType.TYPE_COUNT * NameLookupType.TYPE_COUNT];
@@ -96,26 +96,26 @@ public class ContactMatcher {
         setScoreRange(NameLookupType.NAME_VARIANT,
                 NameLookupType.NAME_VARIANT, 90, 90);
         setScoreRange(NameLookupType.NAME_COLLATION_KEY,
-                NameLookupType.NAME_COLLATION_KEY, 40, 80);
+                NameLookupType.NAME_COLLATION_KEY, 50, 80);
 
         setScoreRange(NameLookupType.NAME_COLLATION_KEY,
                 NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
         setScoreRange(NameLookupType.NAME_COLLATION_KEY,
-                NameLookupType.NICKNAME, 30, 60);
+                NameLookupType.NICKNAME, 50, 60);
 
         setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
+                NameLookupType.EMAIL_BASED_NICKNAME, 50, 60);
         setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.NAME_COLLATION_KEY, 30, 60);
+                NameLookupType.NAME_COLLATION_KEY, 50, 60);
         setScoreRange(NameLookupType.EMAIL_BASED_NICKNAME,
-                NameLookupType.NICKNAME, 30, 60);
+                NameLookupType.NICKNAME, 50, 60);
 
         setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.NICKNAME, 30, 60);
+                NameLookupType.NICKNAME, 50, 60);
         setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.NAME_COLLATION_KEY, 30, 60);
+                NameLookupType.NAME_COLLATION_KEY, 50, 60);
         setScoreRange(NameLookupType.NICKNAME,
-                NameLookupType.EMAIL_BASED_NICKNAME, 30, 60);
+                NameLookupType.EMAIL_BASED_NICKNAME, 50, 60);
     }
 
     /**
@@ -231,8 +231,8 @@ public class ContactMatcher {
     private final ArrayList<MatchScore> mScoreList = new ArrayList<MatchScore>();
     private int mScoreCount = 0;
 
-    private final JaroWinklerDistance mJaroWinklerDistance =
-            new JaroWinklerDistance(MAX_MATCHED_NAME_LENGTH);
+    private final NameDistance mNamePrefixDistance = new NameDistance(MAX_MATCHED_PREFIX_LENGTH);
+    private final NameDistance mNameDistance = new NameDistance(MAX_MATCHED_NAME_LENGTH);
 
     private MatchScore getMatchingScore(long contactId) {
         MatchScore matchingScore = mScores.get(contactId);
@@ -278,14 +278,17 @@ public class ContactMatcher {
             return;
         }
 
-        float distance = mJaroWinklerDistance.getDistance(
-                Hex.decodeHex(candidateName), Hex.decodeHex(name));
+        byte[] decodedCandidateName = Hex.decodeHex(candidateName);
+        byte[] decodedName = Hex.decodeHex(name);
 
+        // First - a quick check. If prefixes don't match, don't bother with the rest
+        float distance = mNamePrefixDistance.getDistance(decodedCandidateName, decodedName);
+        if (distance > 0) {
+            distance = mNameDistance.getDistance(decodedCandidateName, decodedName);
+        }
         int score;
-        if (distance > APPROXIMATE_MATCH_THRESHOLD) {
-            float adjustedDistance = (distance - APPROXIMATE_MATCH_THRESHOLD)
-                    / (1f - APPROXIMATE_MATCH_THRESHOLD);
-            score = (int)(minScore +  (maxScore - minScore) * adjustedDistance);
+        if (distance > 0) {
+            score = (int)(minScore +  (maxScore - minScore) * (1.0f - distance));
         } else {
             score = 0;
         }
