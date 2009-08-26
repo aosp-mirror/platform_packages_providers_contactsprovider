@@ -1353,7 +1353,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         final Cursor c = qb.query(db, projection, selection, selectionArgs,
                 groupBy, null, sortOrder, limit);
         if (c != null) {
-            c.setNotificationUri(mContext.getContentResolver(), RawContacts.CONTENT_URI);
+            c.setNotificationUri(mContext.getContentResolver(),
+                    android.provider.Contacts.CONTENT_URI);
         }
         return c;
     }
