@@ -19,17 +19,13 @@ import java.util.Arrays;
 
 /**
  * A string distance calculator, particularly suited for name matching.
- * <p>
- * A detailed discussion of the topic of record linkage in general and name matching
- * in particular can be found in this article:
- * <blockquote>
- * Winkler, W. E. (2006). "Overview of Record Linkage and Current Research Directions".
- * Research Report Series, RRS.
- * </blockquote>
+ * We are calculating the number of mismatched characters and the number of transpositions
+ * there should be fewer than 4 mismatched characters between the two strings and no more
+ * than 5 total differences between the strings to yield a non-zero score.
  */
-public class JaroWinklerDistance {
+public class NameDistance {
 
-    private static final float WINKLER_BONUS_THRESHOLD = 0.7f;
+    private static final int MIN_EXACT_PREFIX_LENGTH = 3;
 
     private final int mMaxLength;
     private final boolean[] mMatchFlags1;
@@ -40,7 +36,7 @@ public class JaroWinklerDistance {
      *
      * @param maxLength byte arrays are truncate if longer than this number
      */
-    public JaroWinklerDistance(int maxLength) {
+    public NameDistance(int maxLength) {
         mMaxLength = maxLength;
         mMatchFlags1 = new boolean[maxLength];
         mMatchFlags2 = new boolean[maxLength];
@@ -61,6 +57,19 @@ public class JaroWinklerDistance {
         }
 
         int length1 = array1.length;
+        if (length1 >= MIN_EXACT_PREFIX_LENGTH) {
+            boolean prefix = true;
+            for (int i = 0; i < array1.length; i++) {
+                if (array1[i] != array2[i]) {
+                    prefix = false;
+                    break;
+                }
+            }
+            if (prefix) {
+                return 1.0f;
+            }
+        }
+
         if (length1 > mMaxLength) {
             length1 = mMaxLength;
         }
@@ -101,7 +110,8 @@ public class JaroWinklerDistance {
             }
         }
 
-        if (matches == 0) {
+        int mismatches = (length1 - matches) + (length2 - matches);
+        if (mismatches > 4) {
             return 0f;
         }
 
@@ -119,22 +129,12 @@ public class JaroWinklerDistance {
             }
         }
 
-        float m = matches;
-        float jaro = ((m / length1 + m / length2 + (m - (transpositions / 2)) / m)) / 3;
+        float differences = (mismatches + transpositions)/2.0f;
 
-        if (jaro < WINKLER_BONUS_THRESHOLD) {
-            return jaro;
+        float score = (1.0f - differences/5.0f);
+        if (score < 0) {
+            score = 0;
         }
-
-        // Add Winkler bonus
-        int prefix = 0;
-        for (int i = 0; i < length1; i++) {
-            if (bytes1[i] != bytes2[i]) {
-                break;
-            }
-            prefix++;
-        }
-
-        return jaro + Math.min(0.1f, 1f / length2) * prefix * (1 - jaro);
+        return score;
     }
 }
