@@ -61,7 +61,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri uri = mResolver.insert(People.CONTENT_URI, values);
         assertStoredValues(uri, values);
-        assertSelection(People.CONTENT_URI, values, People._ID, ContentUris.parseId(uri));
+        assertSelection(People.CONTENT_URI, values, "people", People._ID, ContentUris.parseId(uri));
     }
 
     public void testPeopleDelete() {
@@ -273,7 +273,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         Uri uri = mResolver.insert(Organizations.CONTENT_URI, values);
         assertStoredValues(uri, values);
         assertSelection(Organizations.CONTENT_URI, values,
-                Organizations._ID, ContentUris.parseId(uri));
+                "organizations", Organizations._ID, ContentUris.parseId(uri));
 
         assertPersonIdConstraint(Organizations.CONTENT_URI, Organizations.TYPE,
                 Organizations.TYPE_WORK);
@@ -304,7 +304,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         // The result is joined with People
         putContactValues(values);
         assertStoredValues(uri, values);
-        assertSelection(Phones.CONTENT_URI, values,
+        assertSelection(Phones.CONTENT_URI, values, "phones",
                 Phones._ID, ContentUris.parseId(uri));
 
         // Access the phone through People
@@ -389,7 +389,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         // The result is joined with People
         putContactValues(values);
         assertStoredValues(uri, values);
-        assertSelection(ContactMethods.CONTENT_URI, values,
+        assertSelection(ContactMethods.CONTENT_URI, values, "contact_methods",
                 ContactMethods._ID, ContentUris.parseId(uri));
 
         // Access the contact method through People
@@ -416,7 +416,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri uri = mResolver.insert(Extensions.CONTENT_URI, values);
         assertStoredValues(uri, values);
-        assertSelection(Extensions.CONTENT_URI, values,
+        assertSelection(Extensions.CONTENT_URI, values, "extensions",
                 Extensions._ID, ContentUris.parseId(uri));
 
         // Access the extensions through People
@@ -452,7 +452,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(GroupMembership.PERSON_ID, personId);
         Uri membershipUri = mResolver.insert(GroupMembership.CONTENT_URI, values);
         assertStoredValues(membershipUri, values);
-        assertSelection(GroupMembership.CONTENT_URI, values,
+        assertSelection(GroupMembership.CONTENT_URI, values, "groupmembership",
                 GroupMembership._ID, ContentUris.parseId(membershipUri));
 
         Uri personsGroupsUri = Uri.withAppendedPath(personUri, GroupMembership.CONTENT_DIRECTORY);
@@ -779,15 +779,16 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         }
     }
 
-    @Override
-    protected void assertSelection(Uri uri, ContentValues values, String idColumn, long id) {
+    protected void assertSelection(Uri uri, ContentValues values, String legacyTable,
+            String idColumn, long id) {
         if (USE_LEGACY_PROVIDER) {
             // A bug in the legacy ContactsProvider prevents us from using the
             // _id column in selection.
             super.assertSelection(uri, values, null, 0);
         } else {
             values.put(idColumn, id);
-            super.assertSelection(uri, values, idColumn, id);
+            String qualified = legacyTable + "." + idColumn;
+            super.assertSelection(uri, values, qualified, id);
         }
     }
 }

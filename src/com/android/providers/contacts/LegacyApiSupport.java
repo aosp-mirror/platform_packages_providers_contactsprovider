@@ -124,7 +124,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     public static final String PRESENCE_JOINS =
             " LEFT OUTER JOIN presence ON ("
             + " presence.presence_id = (SELECT max(presence_id) FROM presence"
-            + " WHERE view_v1_people._id = presence_raw_contact_id))";
+            + " WHERE people._id = presence_raw_contact_id))";
 
     private static final String PHONETIC_NAME_SQL = "trim(trim("
             + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
@@ -164,7 +164,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
 
     public interface LegacyTables {
         public static final String PEOPLE = "view_v1_people";
-        public static final String PEOPLE_JOIN_PRESENCE = "view_v1_people" + PRESENCE_JOINS;
+        public static final String PEOPLE_JOIN_PRESENCE = "view_v1_people people " + PRESENCE_JOINS;
         public static final String GROUPS = "view_v1_groups";
         public static final String ORGANIZATIONS = "view_v1_organizations";
         public static final String CONTACT_METHODS = "view_v1_contact_methods";
@@ -172,10 +172,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         public static final String EXTENSIONS = "view_v1_extensions";
         public static final String GROUP_MEMBERSHIP = "view_v1_group_membership";
         public static final String PHOTOS = "view_v1_photos";
-        public static final String PRESENCE_JOIN_CONTACTS = Tables.PRESENCE +
-                " LEFT OUTER JOIN " + Tables.RAW_CONTACTS
-                + " ON (" + Tables.PRESENCE + "." + PresenceColumns.RAW_CONTACT_ID + "="
-                + RawContactsColumns.CONCRETE_ID + ")";
     }
 
     private static final String[] ORGANIZATION_MIME_TYPES = new String[] {
@@ -1158,13 +1154,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
             }
 
             case ORGANIZATIONS:
-                qb.setTables(LegacyTables.ORGANIZATIONS);
+                qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
                 qb.setProjectionMap(sOrganizationProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 break;
 
             case ORGANIZATIONS_ID:
-                qb.setTables(LegacyTables.ORGANIZATIONS);
+                qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
                 qb.setProjectionMap(sOrganizationProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Organizations._ID + "=");
@@ -1172,13 +1168,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case CONTACTMETHODS:
-                qb.setTables(LegacyTables.CONTACT_METHODS);
+                qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 break;
 
             case CONTACTMETHODS_ID:
-                qb.setTables(LegacyTables.CONTACT_METHODS);
+                qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + ContactMethods._ID + "=");
@@ -1186,7 +1182,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_CONTACTMETHODS:
-                qb.setTables(LegacyTables.CONTACT_METHODS);
+                qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + ContactMethods.PERSON_ID + "=");
@@ -1195,7 +1191,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_CONTACTMETHODS_ID:
-                qb.setTables(LegacyTables.CONTACT_METHODS);
+                qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + ContactMethods.PERSON_ID + "=");
@@ -1206,13 +1202,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PHONES:
-                qb.setTables(LegacyTables.PHONES);
+                qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 break;
 
             case PHONES_ID:
-                qb.setTables(LegacyTables.PHONES);
+                qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones._ID + "=");
@@ -1220,7 +1216,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PHONES_FILTER:
-                qb.setTables(LegacyTables.PHONES);
+                qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 if (uri.getPathSegments().size() > 2) {
@@ -1231,7 +1227,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_PHONES:
-                qb.setTables(LegacyTables.PHONES);
+                qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones.PERSON_ID + "=");
@@ -1239,7 +1235,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_PHONES_ID:
-                qb.setTables(LegacyTables.PHONES);
+                qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones.PERSON_ID + "=");
@@ -1249,13 +1245,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case EXTENSIONS:
-                qb.setTables(LegacyTables.EXTENSIONS);
+                qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 break;
 
             case EXTENSIONS_ID:
-                qb.setTables(LegacyTables.EXTENSIONS);
+                qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions._ID + "=");
@@ -1263,7 +1259,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_EXTENSIONS:
-                qb.setTables(LegacyTables.EXTENSIONS);
+                qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions.PERSON_ID + "=");
@@ -1271,7 +1267,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_EXTENSIONS_ID:
-                qb.setTables(LegacyTables.EXTENSIONS);
+                qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions.PERSON_ID + "=");
@@ -1281,13 +1277,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case GROUPS:
-                qb.setTables(LegacyTables.GROUPS);
+                qb.setTables(LegacyTables.GROUPS + " groups");
                 qb.setProjectionMap(sGroupProjectionMap);
                 applyGroupAccount(qb, uri);
                 break;
 
             case GROUPS_ID:
-                qb.setTables(LegacyTables.GROUPS);
+                qb.setTables(LegacyTables.GROUPS + " groups");
                 qb.setProjectionMap(sGroupProjectionMap);
                 applyGroupAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Groups._ID + "=");
@@ -1295,13 +1291,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case GROUPMEMBERSHIP:
-                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 break;
 
             case GROUPMEMBERSHIP_ID:
-                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership._ID + "=");
@@ -1309,7 +1305,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_GROUPMEMBERSHIP:
-                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership.PERSON_ID + "=");
@@ -1317,7 +1313,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_GROUPMEMBERSHIP_ID:
-                qb.setTables(LegacyTables.GROUP_MEMBERSHIP);
+                qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership.PERSON_ID + "=");
@@ -1327,7 +1323,7 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
 
             case PEOPLE_PHOTO:
-                qb.setTables(LegacyTables.PHOTOS);
+                qb.setTables(LegacyTables.PHOTOS + " photos");
                 qb.setProjectionMap(sPhotoProjectionMap);
                 applyRawContactsAccount(qb, uri);
                 qb.appendWhere(" AND " + android.provider.Contacts.Photos.PERSON_ID + "=");
