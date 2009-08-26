@@ -1065,13 +1065,18 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            String number = values.getAsString(Phone.NUMBER);
-            String normalizedNumber = computeNormalizedNumber(number, values);
+            long dataId;
+            if (values.containsKey(Phone.NUMBER)) {
+                String number = values.getAsString(Phone.NUMBER);
+                String normalizedNumber = computeNormalizedNumber(number, values);
 
-            long dataId = super.insert(db, rawContactId, values);
+                dataId = super.insert(db, rawContactId, values);
 
-            updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
-            fixContactDisplayName(db, rawContactId);
+                updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+                fixContactDisplayName(db, rawContactId);
+            } else {
+                dataId = super.insert(db, rawContactId, values);
+            }
             return dataId;
         }
 
@@ -1080,13 +1085,17 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 boolean markRawContactAsDirty) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-            String number = values.getAsString(Phone.NUMBER);
-            String normalizedNumber = computeNormalizedNumber(number, values);
+            if (values.containsKey(Phone.NUMBER)) {
+                String number = values.getAsString(Phone.NUMBER);
+                String normalizedNumber = computeNormalizedNumber(number, values);
 
-            super.update(db, values, c, markRawContactAsDirty);
+                super.update(db, values, c, markRawContactAsDirty);
 
-            updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
-            fixContactDisplayName(db, rawContactId);
+                updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+                fixContactDisplayName(db, rawContactId);
+            } else {
+                super.update(db, values, c, markRawContactAsDirty);
+            }
         }
 
         @Override
@@ -1591,7 +1600,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      * @return the row ID of the newly created row
      */
     private long insertData(ContentValues values, boolean markRawContactAsDirty) {
-        int aggregationMode = RawContacts.AGGREGATION_MODE_DISABLED;
         long id = 0;
         mValues.clear();
         mValues.putAll(values);
@@ -2385,6 +2393,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
