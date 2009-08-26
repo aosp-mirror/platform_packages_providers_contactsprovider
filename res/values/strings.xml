@@ -20,4 +20,6 @@
     <!-- This is the label for the application that stores contacts data -->
     <string name="app_label">Contacts Storage</string>
 
+    <!-- What to show in messaging that refers to this provider, e.g. AccountSyncSettings -->
+    <string name="provider_label">Contacts</string>
 </resources>
