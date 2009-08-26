@@ -19,7 +19,7 @@
 
         <provider android:name="ContactsProvider2"
             android:authorities="contacts;com.android.contacts"
-            android:syncable="false"
+            android:label="@string/provider_label"
             android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
