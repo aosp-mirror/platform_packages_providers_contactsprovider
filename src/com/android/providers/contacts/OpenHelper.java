@@ -203,9 +203,6 @@ import java.util.HashMap;
 
         public static final String CONTACTS_ALL = "view_contacts";
         public static final String CONTACTS_RESTRICTED = "view_contacts_restricted";
-
-        public static final String CONTACT_SUMMARY_ALL = "view_contact_summaries";
-        public static final String CONTACT_SUMMARY_RESTRICTED = "view_contact_summaries_restricted";
     }
 
     public interface Clauses {
@@ -1043,22 +1040,6 @@ import java.util.HashMap;
         db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
         db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + restrictedContactsSelect);
 
-        String contactSummarySelect = "SELECT "
-                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + contactsColumns
-                + " FROM " + Tables.CONTACTS;
-
-        String restrictedContactSummarySelect = "SELECT "
-                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + contactsColumns
-                + " FROM " + Tables.CONTACTS
-                + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
-
-        db.execSQL("CREATE VIEW " + Views.CONTACT_SUMMARY_ALL
-                + " AS " + contactSummarySelect);
-        db.execSQL("CREATE VIEW " + Views.CONTACT_SUMMARY_RESTRICTED
-                + " AS " + restrictedContactSummarySelect);
-
         loadNicknameLookupTable(db);
 
         if (mDelegate != null) {
@@ -1087,8 +1068,6 @@ import java.util.HashMap;
         db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACT_SUMMARY_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACT_SUMMARY_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
@@ -1634,14 +1613,34 @@ import java.util.HashMap;
     }
 
     public String getContactView() {
-        return hasRestrictedAccess() ? Views.CONTACTS_ALL
-                : Views.CONTACTS_RESTRICTED;
+        return hasRestrictedAccess() ? Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
     }
 
-    public String getContactSummaryView() {
-        String summaryView = hasRestrictedAccess() ? Views.CONTACT_SUMMARY_ALL
-                : Views.CONTACT_SUMMARY_RESTRICTED;
-        return summaryView + " LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE + " ON ("
-                + Contacts._ID + " = " + AggregatedPresenceColumns.CONTACT_ID + ") ";
+    /**
+     * Test if any of the columns appear in the given projection.
+     */
+    public boolean isInProjection(String[] projection, String... columns) {
+        if (projection != null) {
+
+            // Optimized for a single-column test
+            if (columns.length == 1) {
+                String column = columns[0];
+                for (String test : projection) {
+                    if (column.equals(test)) {
+                        return true;
+                    }
+                }
+            } else {
+                for (String test : projection) {
+                    for (String column : columns) {
+                        if (column.equals(test)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
+
 }
