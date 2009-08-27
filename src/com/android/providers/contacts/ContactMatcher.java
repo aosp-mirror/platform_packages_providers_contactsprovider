@@ -410,4 +410,9 @@ public class ContactMatcher {
 
         return matches.subList(0, count);
     }
+
+    @Override
+    public String toString() {
+        return mScoreList.toString();
+    }
 }
