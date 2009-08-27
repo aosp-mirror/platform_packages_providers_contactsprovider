@@ -71,7 +71,7 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
             return;
         }
 
-        provider.prepareForFullAggregation(50);
+        provider.prepareForFullAggregation(500);
         rawContactCount = provider.getRawContactCount();
         long start = System.currentTimeMillis();
         if (TRACE) {

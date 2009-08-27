@@ -78,7 +78,8 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     public void prepareForFullAggregation(int maxContact) {
         SQLiteDatabase db = getOpenHelper().getWritableDatabase();
-        db.execSQL("UPDATE raw_contacts SET contact_id = NULL, aggregation_mode=0;");
+        db.execSQL("UPDATE raw_contacts " +
+        		"SET contact_id = NULL, aggregation_mode=0,aggregation_needed=1;");
         db.execSQL("DELETE FROM contacts;");
         db.execSQL("DELETE FROM name_lookup;");
         long rowId =
