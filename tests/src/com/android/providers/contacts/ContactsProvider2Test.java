@@ -295,29 +295,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
     }
 
-    public void testQueryContactSummaryData() {
+    public void testQueryContactWithPresence() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
                 "18004664411", "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
         values.put(Contacts.PRESENCE_STATUS, Presence.INVISIBLE);
-        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_SUMMARY_URI, contactId);
-        assertStoredValues(contactUri, values);
-        assertSelection(Contacts.CONTENT_SUMMARY_URI, values, Contacts._ID, contactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertStoredValuesWithProjection(contactUri, values);
+        assertSelectionWithProjection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
     }
 
-    public void testQueryContactSummaryFilterData() {
+    public void testQueryContactFilterData() {
         ContentValues values = new ContentValues();
         createContact(values, "Stu", "Goulash", "18004664411",
                 "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
         values.put(Contacts.PRESENCE_STATUS, Presence.INVISIBLE);
-        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_FILTER_URI, "goulash");
-        assertStoredValues(filterUri1, values);
+        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goulash");
+        assertStoredValuesWithProjection(filterUri1, values);
 
-        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_FILTER_URI, "goolish");
+        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goolish");
         assertEquals(0, getCount(filterUri2, null, null));
     }
 
-    public void testQueryContactSummaryStrequent() {
+    public void testQueryContactStrequent() {
         ContentValues values1 = new ContentValues();
         createContact(values1, "Noah", "Tever", "18004664411",
                 "a@acme.com", Presence.OFFLINE, 0, 0, 0);
@@ -331,7 +331,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         createContact(values4, "Fay", "Veritt", "18004664414",
                 "d@acme.com", Presence.AVAILABLE, 0, 1, 0);
 
-        Cursor c = mResolver.query(Contacts.CONTENT_SUMMARY_STREQUENT_URI, null, null, null,
+        Cursor c = mResolver.query(Contacts.CONTENT_STREQUENT_URI, null, null, null,
                 Contacts._ID);
         assertEquals(3, c.getCount());
         c.moveToFirst();
@@ -342,7 +342,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertCursorValues(c, values2);
         c.close();
 
-        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_STREQUENT_FILTER_URI, "fay");
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_STREQUENT_FILTER_URI, "fay");
         c = mResolver.query(filterUri, null, null, null, Contacts._ID);
         assertEquals(1, c.getCount());
         c.moveToFirst();
@@ -350,7 +350,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
-    public void testQueryContactSummaryGroup() {
+    public void testQueryContactGroup() {
         long groupId = createGroup(null, "testGroup", "Test Group");
 
         ContentValues values1 = new ContentValues();
@@ -361,20 +361,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         createContact(values2, "Rest", "East", "18004664422",
                 "east@acme.com", Presence.AVAILABLE, 0, 0, 0);
 
-        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_GROUP_URI, "Test Group");
+        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_GROUP_URI, "Test Group");
         Cursor c = mResolver.query(filterUri1, null, null, null, Contacts._ID);
         assertEquals(1, c.getCount());
         c.moveToFirst();
         assertCursorValues(c, values1);
         c.close();
 
-        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_GROUP_URI, "Test Group");
+        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_GROUP_URI, "Test Group");
         c = mResolver.query(filterUri2, null, Contacts.DISPLAY_NAME + "=?",
                 new String[] { "Best West" }, Contacts._ID);
         assertEquals(1, c.getCount());
         c.close();
 
-        Uri filterUri3 = Uri.withAppendedPath(Contacts.CONTENT_SUMMARY_GROUP_URI, "Next Group");
+        Uri filterUri3 = Uri.withAppendedPath(Contacts.CONTENT_GROUP_URI, "Next Group");
         c = mResolver.query(filterUri3, null, null, null, Contacts._ID);
         assertEquals(0, c.getCount());
         c.close();

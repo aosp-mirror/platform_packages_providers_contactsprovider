@@ -53,8 +53,10 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.Map.Entry;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -550,12 +552,33 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
+    protected void assertStoredValuesWithProjection(Uri rowUri, ContentValues expectedValues) {
+        Cursor c = mResolver.query(rowUri, buildProjection(expectedValues), null, null, null);
+        try {
+            assertEquals("Record count", 1, c.getCount());
+            c.moveToFirst();
+            assertCursorValues(c, expectedValues);
+        } finally {
+            c.close();
+        }
+    }
+
     /**
      * Constructs a selection (where clause) out of all supplied values, uses it
      * to query the provider and verifies that a single row is returned and it
      * has the same values as requested.
      */
     protected void assertSelection(Uri uri, ContentValues values, String idColumn, long id) {
+        assertSelection(uri, values, idColumn, id, null);
+    }
+
+    public void assertSelectionWithProjection(Uri uri, ContentValues values, String idColumn,
+            long id) {
+        assertSelection(uri, values, idColumn, id, buildProjection(values));
+    }
+
+    private void assertSelection(Uri uri, ContentValues values, String idColumn, long id,
+            String[] projection) {
         StringBuilder sb = new StringBuilder();
         ArrayList<String> selectionArgs = new ArrayList<String>(values.size());
         if (idColumn != null) {
@@ -577,7 +600,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             }
         }
 
-        Cursor c = mResolver.query(uri, null, sb.toString(), selectionArgs.toArray(new String[0]),
+        Cursor c = mResolver.query(uri, projection, sb.toString(), selectionArgs.toArray(new String[0]),
                 null);
         try {
             assertEquals("Record count", 1, c.getCount());
@@ -605,6 +628,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             }
             assertEquals("Column value " + column, expectedValue, value);
         }
+    }
+
+    private String[] buildProjection(ContentValues values) {
+        String[] projection = new String[values.size()];
+        Iterator<Entry<String, Object>> iter = values.valueSet().iterator();
+        for (int i = 0; i < projection.length; i++) {
+            projection[i] = iter.next().getKey();
+        }
+        return projection;
     }
 
     protected int getCount(Uri uri, String selection, String[] selectionArgs) {

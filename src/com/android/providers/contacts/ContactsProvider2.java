@@ -123,14 +123,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final int CONTACTS = 1000;
     private static final int CONTACTS_ID = 1001;
     private static final int CONTACTS_DATA = 1002;
-    private static final int CONTACTS_SUMMARY = 1003;
-    private static final int CONTACTS_SUMMARY_ID = 1005;
-    private static final int CONTACTS_SUMMARY_FILTER = 1006;
-    private static final int CONTACTS_SUMMARY_STREQUENT = 1007;
-    private static final int CONTACTS_SUMMARY_STREQUENT_FILTER = 1008;
-    private static final int CONTACTS_SUMMARY_GROUP = 1009;
-    private static final int CONTACTS_PHOTO = 1010;
-    private static final int CONTACTS_SUMMARY_PHOTO = 1011;
+    private static final int CONTACTS_FILTER = 1003;
+    private static final int CONTACTS_STREQUENT = 1004;
+    private static final int CONTACTS_STREQUENT_FILTER = 1005;
+    private static final int CONTACTS_GROUP = 1006;
+    private static final int CONTACTS_PHOTO = 1007;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -273,9 +270,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
-    /** Contains the contact columns along with primary phone */
-    private static final HashMap<String, String> sContactsSummaryProjectionMap;
-    /** Contains just the contacts columns */
+    /** Contains contacts and presence columns */
+    private static final HashMap<String, String> sContactsWithPresenceProjectionMap;
+    /** Contains just the raw contacts columns */
     private static final HashMap<String, String> sRawContactsProjectionMap;
     /** Contains columns from the data view */
     private static final HashMap<String, String> sDataProjectionMap;
@@ -323,19 +320,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_PHOTO);
-
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary", CONTACTS_SUMMARY);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/#", CONTACTS_SUMMARY_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/filter/*",
-                CONTACTS_SUMMARY_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/strequent/",
-                CONTACTS_SUMMARY_STREQUENT);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/strequent/filter/*",
-                CONTACTS_SUMMARY_STREQUENT_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/group/*",
-                CONTACTS_SUMMARY_GROUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts_summary/#/photo",
-                CONTACTS_SUMMARY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*",
+                CONTACTS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/",
+                CONTACTS_STREQUENT);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/filter/*",
+                CONTACTS_STREQUENT_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*",
+                CONTACTS_GROUP);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
@@ -393,14 +385,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sContactsProjectionMap.put(Contacts.HAS_PHONE_NUMBER, Contacts.HAS_PHONE_NUMBER);
         sContactsProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
 
-        sContactsSummaryProjectionMap = new HashMap<String, String>();
-        sContactsSummaryProjectionMap.putAll(sContactsProjectionMap);
-        sContactsSummaryProjectionMap.put(Contacts.PRESENCE_STATUS,
+        sContactsWithPresenceProjectionMap = new HashMap<String, String>();
+        sContactsWithPresenceProjectionMap.putAll(sContactsProjectionMap);
+        sContactsWithPresenceProjectionMap.put(Contacts.PRESENCE_STATUS,
                 Presence.PRESENCE_STATUS + " AS " + Contacts.PRESENCE_STATUS);
-
-        // TODO change this from Presence.PRESENCE_CUSTOM_STATUS to Contacts.PRESENCE_CUSTOM_STATUS
-        sContactsSummaryProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
-                Presence.PRESENCE_CUSTOM_STATUS + " AS " + Presence.PRESENCE_CUSTOM_STATUS);
+        sContactsWithPresenceProjectionMap.put(Contacts.PRESENCE_CUSTOM_STATUS,
+                Presence.PRESENCE_CUSTOM_STATUS + " AS " + Contacts.PRESENCE_CUSTOM_STATUS);
 
         sRawContactsProjectionMap = new HashMap<String, String>();
         sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
@@ -2365,26 +2355,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         return 1;
     }
 
-    /**
-     * Test if a {@link String} value appears in the given list.
-     */
-    private boolean isContained(String[] array, String value) {
-        if (array != null) {
-            for (String test : array) {
-                if (value.equals(test)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     /**
      * Test if a {@link String} value appears in the given list, and add to the
      * array if the value doesn't already appear.
      */
     private String[] assertContained(String[] array, String value) {
-        if (array != null && !isContained(array, value)) {
+        if (array != null && !mOpenHelper.isInProjection(array, value)) {
             String[] newArray = new String[array.length + 1];
             System.arraycopy(array, 0, newArray, 0, array.length);
             newArray[array.length] = value;
@@ -2412,39 +2389,19 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         sortOrder);
 
             case CONTACTS: {
-                qb.setTables(mOpenHelper.getContactView());
-                qb.setProjectionMap(sContactsProjectionMap);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 break;
             }
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                qb.setTables(mOpenHelper.getContactView());
-                qb.setProjectionMap(sContactsProjectionMap);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 qb.appendWhere(Contacts._ID + "=" + contactId);
                 break;
             }
 
-            case CONTACTS_SUMMARY: {
-                // TODO: join into social status tables
-                qb.setTables(mOpenHelper.getContactSummaryView());
-                qb.setProjectionMap(sContactsSummaryProjectionMap);
-                break;
-            }
-
-            case CONTACTS_SUMMARY_ID: {
-                // TODO: join into social status tables
-                long contactId = ContentUris.parseId(uri);
-                qb.setTables(mOpenHelper.getContactSummaryView());
-                qb.setProjectionMap(sContactsSummaryProjectionMap);
-                qb.appendWhere(Contacts._ID + "=" + contactId);
-                break;
-            }
-
-            case CONTACTS_SUMMARY_FILTER: {
-                qb.setTables(mOpenHelper.getContactSummaryView());
-                qb.setProjectionMap(sContactsSummaryProjectionMap);
-
+            case CONTACTS_FILTER: {
+                setTablesAndProjectionMapForContacts(qb, projection);
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
@@ -2455,10 +2412,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 break;
             }
 
-            case CONTACTS_SUMMARY_STREQUENT_FILTER:
-            case CONTACTS_SUMMARY_STREQUENT: {
+            case CONTACTS_STREQUENT_FILTER:
+            case CONTACTS_STREQUENT: {
                 String filterSql = null;
-                if (match == CONTACTS_SUMMARY_STREQUENT_FILTER
+                if (match == CONTACTS_STREQUENT_FILTER
                         && uri.getPathSegments().size() > 3) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
@@ -2467,9 +2424,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     filterSql = sb.toString();
                 }
 
+                setTablesAndProjectionMapForContacts(qb, projection);
+
                 // Build the first query for starred
-                qb.setTables(mOpenHelper.getContactSummaryView());
-                qb.setProjectionMap(sContactsSummaryProjectionMap);
                 if (filterSql != null) {
                     qb.appendWhere(filterSql);
                 }
@@ -2478,8 +2435,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
                 // Build the second query for frequent
                 qb = new SQLiteQueryBuilder();
-                qb.setTables(mOpenHelper.getContactSummaryView());
-                qb.setProjectionMap(sContactsSummaryProjectionMap);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 if (filterSql != null) {
                     qb.appendWhere(filterSql);
                 }
@@ -2499,9 +2455,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 return c;
             }
 
-            case CONTACTS_SUMMARY_GROUP: {
-                qb.setTables(mOpenHelper.getContactSummaryView());
-                qb.setProjectionMap(sContactsSummaryProjectionMap);
+            case CONTACTS_GROUP: {
+                setTablesAndProjectionMapForContacts(qb, projection);
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(sContactsInGroupSelect);
                     selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
@@ -2519,8 +2474,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 break;
             }
 
-            case CONTACTS_PHOTO:
-            case CONTACTS_SUMMARY_PHOTO: {
+            case CONTACTS_PHOTO: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
 
                 qb.setTables(mOpenHelper.getDataView());
@@ -2688,10 +2642,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 // late-binding of the GroupMembership MIME-type.
                 final String groupMembershipMimetypeId = Long.toString(mOpenHelper
                         .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
-                if (isContained(projection, Settings.UNGROUPED_COUNT)) {
+                if (mOpenHelper.isInProjection(projection, Settings.UNGROUPED_COUNT)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
-                if (isContained(projection, Settings.UNGROUPED_WITH_PHONES)) {
+                if (mOpenHelper.isInProjection(projection, Settings.UNGROUPED_WITH_PHONES)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
 
@@ -2736,6 +2690,21 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
         return c;
+    }
+
+    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, String[] projection) {
+        String contactView = mOpenHelper.getContactView();
+        boolean needsPresence = mOpenHelper.isInProjection(projection, Contacts.PRESENCE_STATUS,
+                Contacts.PRESENCE_CUSTOM_STATUS);
+        if (!needsPresence) {
+            qb.setTables(contactView);
+            qb.setProjectionMap(sContactsProjectionMap);
+        } else {
+            qb.setTables(contactView + " LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE + " ON ("
+                    + Contacts._ID + " = " + AggregatedPresenceColumns.CONTACT_ID + ") ");
+            qb.setProjectionMap(sContactsWithPresenceProjectionMap);
+
+        }
     }
 
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
@@ -2798,7 +2767,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS_PHOTO:
-            case CONTACTS_SUMMARY_PHOTO:
                 if (!"r".equals(mode)) {
                     throw new FileNotFoundException("Mode " + mode + " not supported.");
                 }
