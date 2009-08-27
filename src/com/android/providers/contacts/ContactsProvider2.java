@@ -781,6 +781,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean markRawContactAsDirty) {
+
+            fixStructuredNameComponents(values);
+
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
