@@ -2266,6 +2266,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             return 0;
         }
 
+        if (optionValues.containsKey(RawContacts.STARRED)) {
+            // Mark dirty when changing starred to trigger sync
+            optionValues.put(RawContacts.DIRTY, 1);
+        }
+
         mDb.update(Tables.RAW_CONTACTS, optionValues,
                 RawContacts.CONTACT_ID + "=" + contactId, null);
         return mDb.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
@@ -2844,7 +2849,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 RawContacts.SYNC3,
                 RawContacts.SYNC4,
                 RawContacts.DELETED,
-                RawContacts.CONTACT_ID};
+                RawContacts.CONTACT_ID,
+                RawContacts.STARRED};
 
         private static final int COLUMN_ACCOUNT_NAME = 0;
         private static final int COLUMN_ACCOUNT_TYPE = 1;
@@ -2865,6 +2871,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         private static final int COLUMN_SYNC4 = 34;
         private static final int COLUMN_DELETED = 35;
         private static final int COLUMN_CONTACT_ID = 36;
+        private static final int COLUMN_STARRED = 37;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -2942,6 +2949,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             contactValues.put(RawContacts.SYNC4, c.getString(COLUMN_SYNC4));
             contactValues.put(RawContacts.DELETED, c.getLong(COLUMN_DELETED));
             contactValues.put(RawContacts.CONTACT_ID, c.getLong(COLUMN_CONTACT_ID));
+            contactValues.put(RawContacts.STARRED, c.getLong(COLUMN_STARRED));
             Entity contact = new Entity(contactValues);
 
             // read data rows until the contact id changes
