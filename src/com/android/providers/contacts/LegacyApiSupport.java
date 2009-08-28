@@ -735,6 +735,12 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 break;
             }
 
+            case PEOPLE_PHONES: {
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                id = insertPhone(rawContactId, values);
+                break;
+            }
+
             case EXTENSIONS: {
                 long rawContactId = getRequiredValue(values,
                         android.provider.Contacts.Extensions.PERSON_ID);
