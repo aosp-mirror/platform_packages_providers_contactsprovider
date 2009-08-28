@@ -121,6 +121,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int MODE_AGGREGATION = 1;
     private static final int MODE_SUGGESTIONS = 2;
 
+    /*
+     * When yielding the transaction to another thread, sleep for this many milliseconds
+     * to allow the other thread to build up a transaction before yielding back.
+     */
+    private static final int SLEEP_AFTER_YIELD_DELAY = 10000;
+
     private final OpenHelper mOpenHelper;
     private final ContactAggregationScheduler mScheduler;
     private boolean mEnabled = true;
@@ -295,7 +301,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 AggregationQuery.SELECTION, null, null, null, null);
 
         int totalCount = c.getCount();
-        if (totalCount == 0) {
+        if (mCancel || totalCount == 0) {
             c.close();
             return;
         }
@@ -310,11 +316,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                         if (mCancel) {
                             break;
                         }
+
                         aggregateContact(db, c.getLong(AggregationQuery._ID),
                                 c.getLong(AggregationQuery.CONTACT_ID),
                                 candidates, matcher, values);
                         count++;
-                        db.yieldIfContendedSafely();
+                        db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
                     } while (c.moveToNext());
 
                     db.setTransactionSuccessful();
