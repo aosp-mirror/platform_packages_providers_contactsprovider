@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 78;
+    private static final int DATABASE_VERSION = 79;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -613,6 +613,12 @@ import java.util.HashMap;
                 RawContacts.CONTACT_ID +
         ");");
 
+        db.execSQL("CREATE INDEX raw_contacts_source_id_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContacts.SOURCE_ID + ", " +
+                RawContacts.ACCOUNT_TYPE + ", " +
+                RawContacts.ACCOUNT_NAME +
+        ");");
+
         db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
                 RawContactsColumns.AGGREGATION_NEEDED +
         ");");
@@ -793,6 +799,12 @@ import java.util.HashMap;
                 Groups.SYNC2 + " TEXT, " +
                 Groups.SYNC3 + " TEXT, " +
                 Groups.SYNC4 + " TEXT " +
+        ");");
+
+        db.execSQL("CREATE INDEX groups_source_id_index ON " + Tables.GROUPS + " (" +
+                Groups.SOURCE_ID + ", " +
+                Groups.ACCOUNT_TYPE + ", " +
+                Groups.ACCOUNT_NAME +
         ");");
 
         db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_updated1 "
