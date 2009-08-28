@@ -341,6 +341,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
     }
 
+    public void markNewForAggregation(long rawContactId) {
+        mRawContactsMarkedForAggregation.add(rawContactId);
+    }
+
     public void markForAggregation(long rawContactId) {
         if (!mRawContactsMarkedForAggregation.contains(rawContactId)) {
             mRawContactsMarkedForAggregation.add(rawContactId);
