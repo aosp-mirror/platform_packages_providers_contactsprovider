@@ -1576,7 +1576,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
-        return mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);
+        long rawContactId =
+                mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);
+        mContactAggregator.markNewForAggregation(rawContactId);
+        return rawContactId;
     }
 
     /**
