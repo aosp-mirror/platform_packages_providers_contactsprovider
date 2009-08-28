@@ -309,8 +309,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     /** Precompiled sql statement for updating an aggregated presence status */
     private SQLiteStatement mAggregatedPresenceStatusUpdate;
 
-    private SQLiteStatement mMarkForAggregation;
-
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
@@ -1272,11 +1270,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + " SET " + Presence.PRESENCE_CUSTOM_STATUS + "=? "
                 + " WHERE " + AggregatedPresenceColumns.CONTACT_ID + "=?");
 
-        mMarkForAggregation = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=1" +
-                " WHERE " + RawContacts._ID + "=?");
-
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
                 context.getString(com.android.internal.R.string.common_last_name_prefixes),
@@ -1635,7 +1628,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 break;
 
             case RawContacts.AGGREGATION_MODE_DEFAULT: {
-                markForAggregation(rawContactId);
+                mContactAggregator.markForAggregation(rawContactId);
                 mScheduleAggregation = true;
                 break;
             }
@@ -1651,16 +1644,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             case RawContacts.AGGREGATION_MODE_IMMEDITATE: {
                 long contactId = mOpenHelper.getContactId(rawContactId);
-                markForAggregation(rawContactId);
+                mContactAggregator.markForAggregation(rawContactId);
                 mContactAggregator.aggregateContact(mDb, rawContactId, contactId);
                 break;
             }
         }
-    }
-
-    private void markForAggregation(long rawContactId) {
-        mMarkForAggregation.bindLong(1, rawContactId);
-        mMarkForAggregation.execute();
     }
 
     /**
@@ -2342,7 +2330,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
         }
 
-        markForAggregation(rawContactId);
+        mContactAggregator.markForAggregation(rawContactId);
         mContactAggregator.aggregateContact(db, rawContactId,
                 mOpenHelper.getContactId(rawContactId));
         if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
