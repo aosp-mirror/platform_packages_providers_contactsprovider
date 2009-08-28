@@ -1939,7 +1939,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
                 int numDeletes = 0;
                 Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
-                        selection, selectionArgs, null, null, null);
+                        appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
                         final long rawContactId = c.getLong(0);
@@ -1980,7 +1980,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
                 int numDeletes = 0;
                 Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups._ID},
-                        selection, selectionArgs, null, null, null);
+                        appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
                         numDeletes += deleteGroup(c.getLong(0), markAsDirty, permanently);
@@ -2106,9 +2106,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case RAW_CONTACTS: {
-
                 // TODO: security checks
-                count = mDb.update(Tables.RAW_CONTACTS, values, selection, selectionArgs);
+                count = mDb.update(Tables.RAW_CONTACTS, values,
+                        appendAccountToSelection(uri, selection), selectionArgs);
                 break;
             }
 
@@ -2119,8 +2119,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case GROUPS: {
-                count = updateGroups(values, selection, selectionArgs,
-                        shouldMarkGroupAsDirty(uri));
+                count = updateGroups(values, appendAccountToSelection(uri, selection),
+                        selectionArgs, shouldMarkGroupAsDirty(uri));
                 break;
             }
 
@@ -2713,6 +2713,25 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     + DatabaseUtils.sqlEscapeString(accountType));
         } else {
             qb.appendWhere("1");
+        }
+    }
+
+    private String appendAccountToSelection(Uri uri, String selection) {
+        final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
+        final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
+        if (!TextUtils.isEmpty(accountName)) {
+            StringBuilder selectionSb = new StringBuilder(RawContacts.ACCOUNT_NAME + "="
+                    + DatabaseUtils.sqlEscapeString(accountName) + " AND "
+                    + RawContacts.ACCOUNT_TYPE + "="
+                    + DatabaseUtils.sqlEscapeString(accountType));
+            if (!TextUtils.isEmpty(selection)) {
+                selectionSb.append(" AND (");
+                selectionSb.append(selection);
+                selectionSb.append(')');
+            }
+            return selectionSb.toString();
+        } else {
+            return selection;
         }
     }
 
