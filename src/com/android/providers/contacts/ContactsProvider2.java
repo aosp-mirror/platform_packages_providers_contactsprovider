@@ -1959,7 +1959,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case DATA: {
-                return deleteData(selection, selectionArgs, shouldMarkRawContactAsDirty(uri));
+                return deleteData(appendAccountToSelection(uri, selection), selectionArgs,
+                        shouldMarkRawContactAsDirty(uri));
             }
 
             case DATA_ID: {
@@ -2084,7 +2085,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             // TODO(emillar): We will want to disallow editing the contacts table at some point.
             case CONTACTS: {
-                count = mDb.update(Tables.CONTACTS, values, selection, selectionArgs);
+                count = mDb.update(Tables.CONTACTS, values,
+                        appendAccountToSelection(uri, selection), selectionArgs);
                 break;
             }
 
@@ -2094,8 +2096,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             case DATA: {
-                count = updateData(uri, values, selection, selectionArgs,
-                        shouldMarkRawContactAsDirty(uri));
+                count = updateData(uri, values, appendAccountToSelection(uri, selection),
+                        selectionArgs, shouldMarkRawContactAsDirty(uri));
                 break;
             }
 
