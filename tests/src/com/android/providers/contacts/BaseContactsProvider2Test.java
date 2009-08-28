@@ -69,6 +69,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected ContactsActor mActor;
     protected MockContentResolver mResolver;
     protected Account mAccount = new Account("account1", "account type1");
+    protected Account mAccountTwo = new Account("account2", "account type2");
 
     private byte[] mTestPhoto;
 

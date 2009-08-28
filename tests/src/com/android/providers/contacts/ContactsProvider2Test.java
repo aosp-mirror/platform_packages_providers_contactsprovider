@@ -844,6 +844,39 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 + rawContactId, null));
     }
 
+    public void testRawContactDeletionWithAccounts() {
+        long rawContactId = createRawContact(mAccount);
+        Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+
+        insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com", Presence.AVAILABLE,
+            null);
+        assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
+                null, null));
+        assertEquals(1, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
+                + rawContactId, null));
+
+        // Do not delete if we are deleting with wrong account.
+        Uri deleteWithWrongAccountUri =
+            RawContacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, mAccountTwo.name)
+                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccountTwo.type)
+                .build();
+        mResolver.delete(deleteWithWrongAccountUri, null, null);
+
+        assertStoredValues(uri, RawContacts.DELETED, "0");
+
+        // Delete if we are deleting with correct account.
+        Uri deleteWithCorrectAccountUri =
+            RawContacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, mAccount.name)
+                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccount.type)
+                .build();
+        mResolver.delete(deleteWithCorrectAccountUri, null, null);
+
+        assertStoredValues(uri, RawContacts.DELETED, "1");
+    }
+
     public void testMarkAsDirtyParameter() {
         long rawContactId = createRawContact(mAccount);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
