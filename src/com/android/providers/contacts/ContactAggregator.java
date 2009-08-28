@@ -132,6 +132,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private SQLiteStatement mAggregatedPresenceReplace;
     private SQLiteStatement mRawContactCountQuery;
     private SQLiteStatement mContactDelete;
+    private SQLiteStatement mMarkForAggregation;
+
+    private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -210,6 +213,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mContactDelete = db.compileStatement(
                 "DELETE FROM " + Tables.CONTACTS +
                 " WHERE " + Contacts._ID + "=?");
+
+        mMarkForAggregation = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=1" +
+                " WHERE " + RawContacts._ID + "=?"
+                        + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0");
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -325,6 +334,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
     }
 
+    public void markForAggregation(long rawContactId) {
+        if (!mRawContactsMarkedForAggregation.contains(rawContactId)) {
+            mRawContactsMarkedForAggregation.add(rawContactId);
+            mMarkForAggregation.bindLong(1, rawContactId);
+            mMarkForAggregation.execute();
+        }
+    }
+
     /**
      * Synchronously aggregate the specified contact assuming an open transaction.
      */
@@ -361,6 +378,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
             long currentContactId, MatchCandidateList candidates, ContactMatcher matcher,
             ContentValues values) {
+
+        mRawContactsMarkedForAggregation.remove(rawContactId);
+
         candidates.clear();
         matcher.clear();
 
