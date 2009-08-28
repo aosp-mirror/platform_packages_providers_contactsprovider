@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 76;
+    private static final int DATABASE_VERSION = 78;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -279,6 +279,8 @@ import java.util.HashMap;
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC3;
         public static final String CONCRETE_SYNC4 =
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC4;
+        public static final String CONCRETE_STARRED =
+                Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
 
         public static final String AGGREGATION_NEEDED = "aggregation_needed";
     }
@@ -900,6 +902,7 @@ import java.util.HashMap;
                 + Data.IS_PRIMARY + ", "
                 + Data.DATA_VERSION + ", "
                 + DataColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
+                + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
                 + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
