@@ -41,6 +41,7 @@ public abstract class SQLiteContentProvider extends ContentProvider {
     protected SQLiteDatabase mDb;
 
     private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<Boolean>();
+    private static final int SLEEP_AFTER_YIELD_DELAY = 4000;
 
     @Override
     public boolean onCreate() {
@@ -181,20 +182,26 @@ public abstract class SQLiteContentProvider extends ContentProvider {
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
-        ContentProviderResult[] results = null;
         mDb = mOpenHelper.getWritableDatabase();
         mDb.beginTransaction();
         try {
             mApplyingBatch.set(true);
-            results = super.applyBatch(operations);
+            final int numOperations = operations.size();
+            final ContentProviderResult[] results = new ContentProviderResult[numOperations];
+            for (int i = 0; i < numOperations; i++) {
+                final ContentProviderOperation operation = operations.get(i);
+                if (i > 0 && operation.isYieldAllowed()) {
+                    mDb.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
+                }
+                results[i] = operation.apply(this, results, i);
+            }
             mDb.setTransactionSuccessful();
+            return results;
         } finally {
             mApplyingBatch.set(false);
             mDb.endTransaction();
+            onTransactionComplete();
         }
-
-        onTransactionComplete();
-        return results;
     }
 
     protected void onTransactionComplete() {
