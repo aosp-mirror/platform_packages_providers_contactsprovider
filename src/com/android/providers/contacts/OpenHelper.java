@@ -1560,8 +1560,10 @@ import java.util.HashMap;
                 } else {
                     longValue = 0;
                 }
+            } else if (value instanceof String) {
+                longValue = Long.parseLong((String)value);
             } else {
-                longValue = ((Number) value).longValue();
+                longValue = ((Number)value).longValue();
             }
             toValues.put(toKey, longValue);
         }
