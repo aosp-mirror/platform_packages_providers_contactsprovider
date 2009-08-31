@@ -176,7 +176,7 @@ public class GroupsTest extends BaseContactsProvider2Test {
         assertEquals(1, getCount(uri, null, null));
         mResolver.delete(uri, null, null);
         assertEquals(1, getCount(uri, null, null));
-        assertStoredValues(uri, Groups.DELETED, "1");
+        assertStoredValue(uri, Groups.DELETED, "1");
 
         Uri permanentDeletionUri =
                 uri.buildUpon().appendQueryParameter(Groups.DELETE_PERMANENTLY, "true").build();

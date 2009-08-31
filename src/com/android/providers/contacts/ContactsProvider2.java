@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.internal.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
@@ -25,6 +26,7 @@ import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
+import com.android.providers.contacts.OpenHelper.NameLookupType;
 import com.android.providers.contacts.OpenHelper.PackagesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
@@ -85,7 +87,9 @@ import android.util.Log;
 
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -122,12 +126,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
     private static final int CONTACTS = 1000;
     private static final int CONTACTS_ID = 1001;
-    private static final int CONTACTS_DATA = 1002;
-    private static final int CONTACTS_FILTER = 1003;
-    private static final int CONTACTS_STREQUENT = 1004;
-    private static final int CONTACTS_STREQUENT_FILTER = 1005;
-    private static final int CONTACTS_GROUP = 1006;
-    private static final int CONTACTS_PHOTO = 1007;
+    private static final int CONTACTS_LOOKUP = 1002;
+    private static final int CONTACTS_LOOKUP_ID = 1003;
+    private static final int CONTACTS_DATA = 1004;
+    private static final int CONTACTS_FILTER = 1005;
+    private static final int CONTACTS_STREQUENT = 1006;
+    private static final int CONTACTS_STREQUENT_FILTER = 1007;
+    private static final int CONTACTS_GROUP = 1008;
+    private static final int CONTACTS_PHOTO = 1009;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -318,14 +324,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*",
-                CONTACTS_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/",
-                CONTACTS_STREQUENT);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/", CONTACTS_STREQUENT);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/filter/*",
                 CONTACTS_STREQUENT_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*",
-                CONTACTS_GROUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*", CONTACTS_GROUP);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
@@ -382,6 +387,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         sContactsProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
         sContactsProjectionMap.put(Contacts.HAS_PHONE_NUMBER, Contacts.HAS_PHONE_NUMBER);
         sContactsProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
+        sContactsProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
 
         sContactsWithPresenceProjectionMap = new HashMap<String, String>();
         sContactsWithPresenceProjectionMap.putAll(sContactsProjectionMap);
@@ -2188,7 +2194,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         // TODO: security checks
         String selectionWithId = (RawContacts._ID + " = " + rawContactId + " ")
                 + (selection == null ? "" : " AND " + selection);
-        return mDb.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
+        int count = mDb.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
+        if (count != 0) {
+            if (values.containsKey(RawContacts.ACCOUNT_TYPE)
+                    || values.containsKey(RawContacts.ACCOUNT_NAME)
+                    || values.containsKey(RawContacts.SOURCE_ID)) {
+                triggerAggregation(rawContactId);
+            }
+        }
+        return count;
     }
 
     private int updateData(Uri uri, ContentValues values, String selection,
@@ -2395,6 +2409,35 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 long contactId = ContentUris.parseId(uri);
                 setTablesAndProjectionMapForContacts(qb, projection);
                 qb.appendWhere(Contacts._ID + "=" + contactId);
+                break;
+            }
+
+            case CONTACTS_LOOKUP:
+            case CONTACTS_LOOKUP_ID: {
+                List<String> pathSegments = uri.getPathSegments();
+                int segmentCount = pathSegments.size();
+                if (segmentCount < 3) {
+                    throw new IllegalArgumentException("URI " + uri + " is missing a lookup key");
+                }
+                String lookupKey = pathSegments.get(2);
+                if (segmentCount == 4) {
+                    long contactId = Long.parseLong(pathSegments.get(3));
+                    SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
+                    setTablesAndProjectionMapForContacts(lookupQb, projection);
+                    lookupQb.appendWhere(Contacts._ID + "=" + contactId + " AND " +
+                            Contacts.LOOKUP_KEY + "=");
+                    lookupQb.appendWhereEscapeString(lookupKey);
+                    Cursor c = query(db, lookupQb, projection, selection, selectionArgs, sortOrder,
+                            groupBy, limit);
+                    if (c.getCount() != 0) {
+                        return c;
+                    }
+
+                    c.close();
+                }
+
+                setTablesAndProjectionMapForContacts(qb, projection);
+                qb.appendWhere(Contacts._ID + "=" + lookupContactIdByLookupKey(db, lookupKey));
                 break;
             }
 
@@ -2677,17 +2720,206 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         sortOrder, limit);
         }
 
-        // Perform the query and set the notification uri
+        return query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
+    }
+
+    private Cursor query(final SQLiteDatabase db, SQLiteQueryBuilder qb, String[] projection,
+            String selection, String[] selectionArgs, String sortOrder, String groupBy,
+            String limit) {
         if (projection != null && projection.length == 1
                 && BaseColumns._COUNT.equals(projection[0])) {
             qb.setProjectionMap(sCountProjectionMap);
         }
-        final Cursor c = qb.query(db, projection, selection, selectionArgs,
-                groupBy, null, sortOrder, limit);
+        final Cursor c = qb.query(db, projection, selection, selectionArgs, groupBy, null,
+                sortOrder, limit);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
         return c;
+    }
+
+    private long lookupContactIdByLookupKey(SQLiteDatabase db, String lookupKey) {
+        ContactLookupKey key = new ContactLookupKey();
+        ArrayList<LookupKeySegment> segments = key.parse(lookupKey);
+
+        long contactId = lookupContactIdBySourceIds(db, segments);
+        if (contactId == -1) {
+            contactId = lookupContactIdByDisplayNames(db, segments);
+        }
+
+        return contactId;
+    }
+
+    private interface LookupBySourceIdQuery {
+        String TABLE = Tables.RAW_CONTACTS;
+
+        String COLUMNS[] = {
+                RawContacts.CONTACT_ID,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_NAME,
+                RawContacts.SOURCE_ID
+        };
+
+        int CONTACT_ID = 0;
+        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_NAME = 2;
+        int SOURCE_ID = 3;
+    }
+
+    private long lookupContactIdBySourceIds(SQLiteDatabase db,
+                ArrayList<LookupKeySegment> segments) {
+        int sourceIdCount = 0;
+        for (int i = 0; i < segments.size(); i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (segment.sourceIdLookup) {
+                sourceIdCount++;
+            }
+        }
+
+        if (sourceIdCount == 0) {
+            return -1;
+        }
+
+        // First try sync ids
+        StringBuilder sb = new StringBuilder();
+        sb.append(RawContacts.SOURCE_ID + " IN (");
+        for (int i = 0; i < segments.size(); i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (segment.sourceIdLookup) {
+                DatabaseUtils.appendEscapedSQLString(sb, segment.key);
+                sb.append(",");
+            }
+        }
+        sb.setLength(sb.length() - 1);      // Last comma
+        sb.append(") AND " + RawContacts.CONTACT_ID + " NOT NULL");
+
+        Cursor c = db.query(LookupBySourceIdQuery.TABLE, LookupBySourceIdQuery.COLUMNS,
+                 sb.toString(), null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                String accountType = c.getString(LookupBySourceIdQuery.ACCOUNT_TYPE);
+                String accountName = c.getString(LookupBySourceIdQuery.ACCOUNT_NAME);
+                int accountHashCode =
+                        ContactLookupKey.getAccountHashCode(accountType, accountName);
+                String sourceId = c.getString(LookupBySourceIdQuery.SOURCE_ID);
+                for (int i = 0; i < segments.size(); i++) {
+                    LookupKeySegment segment = segments.get(i);
+                    if (segment.sourceIdLookup && accountHashCode == segment.accountHashCode
+                            && segment.key.equals(sourceId)) {
+                        segment.contactId = c.getLong(LookupBySourceIdQuery.CONTACT_ID);
+                        break;
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        return getMostReferencedContactId(segments);
+    }
+
+    private interface LookupByDisplayNameQuery {
+        String TABLE = Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS;
+
+        String COLUMNS[] = {
+                RawContacts.CONTACT_ID,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_NAME,
+                NameLookupColumns.NORMALIZED_NAME
+        };
+
+        int CONTACT_ID = 0;
+        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_NAME = 2;
+        int NORMALIZED_NAME = 3;
+    }
+
+    private long lookupContactIdByDisplayNames(SQLiteDatabase db,
+                ArrayList<LookupKeySegment> segments) {
+        int displayNameCount = 0;
+        for (int i = 0; i < segments.size(); i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (!segment.sourceIdLookup) {
+                displayNameCount++;
+            }
+        }
+
+        if (displayNameCount == 0) {
+            return -1;
+        }
+
+        // First try sync ids
+        StringBuilder sb = new StringBuilder();
+        sb.append(NameLookupColumns.NORMALIZED_NAME + " IN (");
+        for (int i = 0; i < segments.size(); i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (!segment.sourceIdLookup) {
+                DatabaseUtils.appendEscapedSQLString(sb, segment.key);
+                sb.append(",");
+            }
+        }
+        sb.setLength(sb.length() - 1);      // Last comma
+        sb.append(") AND " + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NAME_COLLATION_KEY
+                + " AND " + RawContacts.CONTACT_ID + " NOT NULL");
+
+        Cursor c = db.query(LookupByDisplayNameQuery.TABLE, LookupByDisplayNameQuery.COLUMNS,
+                 sb.toString(), null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                String accountType = c.getString(LookupByDisplayNameQuery.ACCOUNT_TYPE);
+                String accountName = c.getString(LookupByDisplayNameQuery.ACCOUNT_NAME);
+                int accountHashCode =
+                        ContactLookupKey.getAccountHashCode(accountType, accountName);
+                String name = c.getString(LookupByDisplayNameQuery.NORMALIZED_NAME);
+                for (int i = 0; i < segments.size(); i++) {
+                    LookupKeySegment segment = segments.get(i);
+                    if (!segment.sourceIdLookup && accountHashCode == segment.accountHashCode
+                            && segment.key.equals(name)) {
+                        segment.contactId = c.getLong(LookupByDisplayNameQuery.CONTACT_ID);
+                        break;
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        return getMostReferencedContactId(segments);
+    }
+
+    /**
+     * Returns the contact ID that is mentioned the highest number of times.
+     */
+    private long getMostReferencedContactId(ArrayList<LookupKeySegment> segments) {
+        Collections.sort(segments);
+
+        long bestContactId = -1;
+        int bestRefCount = 0;
+
+        long contactId = -1;
+        int count = 0;
+
+        int segmentCount = segments.size();
+        for (int i = 0; i < segmentCount; i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (segment.contactId != -1) {
+                if (segment.contactId == contactId) {
+                    count++;
+                } else {
+                    if (count > bestRefCount) {
+                        bestContactId = contactId;
+                        bestRefCount = count;
+                    }
+                    contactId = segment.contactId;
+                    count = 1;
+                }
+            }
+        }
+        if (count > bestRefCount) {
+            return contactId;
+        } else {
+            return bestContactId;
+        }
     }
 
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, String[] projection) {

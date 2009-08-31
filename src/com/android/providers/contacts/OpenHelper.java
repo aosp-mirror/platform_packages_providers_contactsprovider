@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 79;
+    private static final int DATABASE_VERSION = 80;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -568,6 +568,7 @@ import java.util.HashMap;
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.IN_VISIBLE_GROUP + " INTEGER DEFAULT 1," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.LOOKUP_KEY + " TEXT," +
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
@@ -985,6 +986,7 @@ import java.util.HashMap;
                 + dataColumns + ", "
                 + contactOptionColumns + ", "
                 + ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME + ", "
+                + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
@@ -1031,9 +1033,10 @@ import java.util.HashMap;
                         + " AS " + Contacts.DISPLAY_NAME + ", "
                 + Contacts.IN_VISIBLE_GROUP + ", "
                 + Contacts.HAS_PHONE_NUMBER + ", "
+                + Contacts.LOOKUP_KEY + ", "
+                + Contacts.PHOTO_ID + ", "
                 + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
                         + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
-                + Contacts.PHOTO_ID + ", "
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
                         + " AS " + Contacts.SEND_TO_VOICEMAIL + ", "
                 + ContactsColumns.CONCRETE_STARRED
@@ -1657,5 +1660,4 @@ import java.util.HashMap;
         }
         return false;
     }
-
 }
