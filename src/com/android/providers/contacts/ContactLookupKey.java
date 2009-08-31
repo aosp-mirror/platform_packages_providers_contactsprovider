@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import android.net.Uri;
+import android.text.TextUtils;
 
 import java.util.ArrayList;
 
@@ -57,6 +58,10 @@ public class ContactLookupKey {
 
     public static void appendToLookupKey(StringBuffer lookupKey, String accountType,
             String accountName, String sourceId, String displayName) {
+        if (TextUtils.isEmpty(sourceId) && TextUtils.isEmpty(displayName)) {
+            return;
+        }
+
         if (lookupKey.length() != 0) {
             lookupKey.append(".");
         }
