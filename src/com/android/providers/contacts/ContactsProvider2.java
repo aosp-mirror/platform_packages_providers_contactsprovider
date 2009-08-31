@@ -62,6 +62,8 @@ import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
+import android.provider.LiveFolders;
+import android.provider.Contacts.People;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -169,6 +171,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final int SEARCH_SHORTCUT = 12002;
 
     private static final int DATA_WITH_PRESENCE = 13000;
+
+    private static final int LIVE_FOLDERS_CONTACTS = 14000;
+    private static final int LIVE_FOLDERS_CONTACTS_WITH_PHONES = 14001;
+    private static final int LIVE_FOLDERS_CONTACTS_FAVORITES = 14002;
+    private static final int LIVE_FOLDERS_CONTACTS_GROUP_NAME = 14003;
 
     private interface ContactsQuery {
         public static final String TABLE = Tables.RAW_CONTACTS;
@@ -296,6 +303,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private static final HashMap<String, String> sPresenceProjectionMap;
     /** Contains Presence columns */
     private static final HashMap<String, String> sDataWithPresenceProjectionMap;
+    /** Contains Live Folders columns */
+    private static final HashMap<String, String> sLiveFoldersProjectionMap;
 
     /** Sql where statement for filtering on groups. */
     private static final String sContactsInGroupSelect;
@@ -367,6 +376,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 SEARCH_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
                 SEARCH_SHORTCUT);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts",
+                LIVE_FOLDERS_CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts/*",
+                LIVE_FOLDERS_CONTACTS_GROUP_NAME);
+        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts_with_phones",
+                LIVE_FOLDERS_CONTACTS_WITH_PHONES);
+        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/favorites",
+                LIVE_FOLDERS_CONTACTS_FAVORITES);
 
         // Private API
         matcher.addURI(ContactsContract.AUTHORITY, "data_with_presence", DATA_WITH_PRESENCE);
@@ -572,6 +590,18 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 Presence.PRESENCE_STATUS);
         sDataWithPresenceProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
                 Presence.PRESENCE_CUSTOM_STATUS);
+
+        // Live folder projection
+        sLiveFoldersProjectionMap = new HashMap<String, String>();
+        sLiveFoldersProjectionMap.put(LiveFolders._ID,
+                Contacts._ID + " AS " + LiveFolders._ID);
+        sLiveFoldersProjectionMap.put(LiveFolders.NAME,
+                Contacts.DISPLAY_NAME + " AS " + LiveFolders.NAME);
+
+        // TODO: Put contact photo back when we have a way to display a default icon
+        // for contacts without a photo
+        // sLiveFoldersProjectionMap.put(LiveFolders.ICON_BITMAP,
+        //      Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
 
         sContactsInGroupSelect = Contacts._ID + " IN "
                 + "(SELECT " + RawContacts.CONTACT_ID
@@ -2714,6 +2744,30 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 long contactId = ContentUris.parseId(uri);
                 return mGlobalSearchSupport.handleSearchShortcutRefresh(db, contactId, projection);
             }
+
+            case LIVE_FOLDERS_CONTACTS:
+                qb.setTables(mOpenHelper.getContactView());
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                break;
+
+            case LIVE_FOLDERS_CONTACTS_WITH_PHONES:
+                qb.setTables(mOpenHelper.getContactView());
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                qb.appendWhere(Contacts.HAS_PHONE_NUMBER + "=1");
+                break;
+
+            case LIVE_FOLDERS_CONTACTS_FAVORITES:
+                qb.setTables(mOpenHelper.getContactView());
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                qb.appendWhere(Contacts.STARRED + "=1");
+                break;
+
+            case LIVE_FOLDERS_CONTACTS_GROUP_NAME:
+                qb.setTables(mOpenHelper.getContactView());
+                qb.setProjectionMap(sLiveFoldersProjectionMap);
+                qb.appendWhere(sContactsInGroupSelect);
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                break;
 
             default:
                 return mLegacyApiSupport.query(uri, projection, selection, selectionArgs,

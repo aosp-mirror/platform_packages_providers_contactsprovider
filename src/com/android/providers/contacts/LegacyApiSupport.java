@@ -20,7 +20,6 @@ import com.android.providers.contacts.OpenHelper.ExtensionsColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
-import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
@@ -36,7 +35,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
-import android.provider.Contacts;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
@@ -98,6 +96,10 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final int SEARCH_SUGGESTIONS = 32;
     private static final int SEARCH_SHORTCUT = 33;
     private static final int PHONES_FILTER = 34;
+    private static final int LIVE_FOLDERS_PEOPLE = 35;
+    private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = 36;
+    private static final int LIVE_FOLDERS_PEOPLE_WITH_PHONES = 37;
+    private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -161,6 +163,14 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 + " ELSE " + DataColumns.CONCRETE_DATA2
                 + " END)";
 
+    private static final Uri LIVE_FOLDERS_CONTACTS_URI = Uri.withAppendedPath(
+            ContactsContract.AUTHORITY_URI, "live_folders/contacts");
+
+    private static final Uri LIVE_FOLDERS_CONTACTS_WITH_PHONES_URI = Uri.withAppendedPath(
+            ContactsContract.AUTHORITY_URI, "live_folders/contacts_with_phones");
+
+    private static final Uri LIVE_FOLDERS_CONTACTS_FAVORITES_URI = Uri.withAppendedPath(
+            ContactsContract.AUTHORITY_URI, "live_folders/favorites");
 
     public interface LegacyTables {
         public static final String PEOPLE = "view_v1_people";
@@ -223,7 +233,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
     private static final HashMap<String, String> sGroupProjectionMap;
     private static final HashMap<String, String> sGroupMembershipProjectionMap;
     private static final HashMap<String, String> sPhotoProjectionMap;
-
 
     static {
 
@@ -301,13 +310,13 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 SEARCH_SHORTCUT);
 //        matcher.addURI(authority, "settings", SETTINGS);
 //
-//        matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
-//        matcher.addURI(authority, "live_folders/people/*",
-//                LIVE_FOLDERS_PEOPLE_GROUP_NAME);
-//        matcher.addURI(authority, "live_folders/people_with_phones",
-//                LIVE_FOLDERS_PEOPLE_WITH_PHONES);
-//        matcher.addURI(authority, "live_folders/favorites",
-//                LIVE_FOLDERS_PEOPLE_FAVORITES);
+        matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
+        matcher.addURI(authority, "live_folders/people/*",
+                LIVE_FOLDERS_PEOPLE_GROUP_NAME);
+        matcher.addURI(authority, "live_folders/people_with_phones",
+                LIVE_FOLDERS_PEOPLE_WITH_PHONES);
+        matcher.addURI(authority, "live_folders/favorites",
+                LIVE_FOLDERS_PEOPLE_FAVORITES);
 
 
         HashMap<String, String> peopleProjectionMap = new HashMap<String, String>();
@@ -1347,6 +1356,23 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 return mGlobalSearchSupport.handleSearchShortcutRefresh(db, contactId, projection);
             }
 
+            case LIVE_FOLDERS_PEOPLE:
+                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_URI,
+                        projection, selection, selectionArgs, sortOrder);
+
+            case LIVE_FOLDERS_PEOPLE_WITH_PHONES:
+                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_WITH_PHONES_URI,
+                        projection, selection, selectionArgs, sortOrder);
+
+            case LIVE_FOLDERS_PEOPLE_FAVORITES:
+                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_FAVORITES_URI,
+                        projection, selection, selectionArgs, sortOrder);
+
+            case LIVE_FOLDERS_PEOPLE_GROUP_NAME:
+                return mContactsProvider.query(Uri.withAppendedPath(LIVE_FOLDERS_CONTACTS_URI,
+                        Uri.encode(uri.getLastPathSegment())),
+                        projection, selection, selectionArgs, sortOrder);
+
             case DELETED_PEOPLE:
             case DELETED_GROUPS:
                 throw new UnsupportedOperationException();
@@ -1451,15 +1477,15 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
                 if (c.moveToFirst()) {
                     int kind = c.getInt(0);
                     switch (kind) {
-                    case Contacts.KIND_EMAIL:
+                    case android.provider.Contacts.KIND_EMAIL:
                         mime = "vnd.android.cursor.item/email";
                         break;
 
-                    case Contacts.KIND_IM:
+                    case android.provider.Contacts.KIND_IM:
                         mime = "vnd.android.cursor.item/jabber-im";
                         break;
 
-                    case Contacts.KIND_POSTAL:
+                    case android.provider.Contacts.KIND_POSTAL:
                         mime = "vnd.android.cursor.item/postal-address";
                         break;
                     }
