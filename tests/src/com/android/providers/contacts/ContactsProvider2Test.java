@@ -194,14 +194,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri phoneUri = insertPhoneNumber(rawContactId, "18004664411");
 
         Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664411");
-        assertStoredValues(lookupUri1, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        assertStoredValue(lookupUri1, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
 
         values.clear();
         values.put(Phone.NUMBER, "18004664422");
         mResolver.update(phoneUri, values, null, null);
 
         Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664422");
-        assertStoredValues(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        assertStoredValue(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
 
         // Setting number to null will remove the phone lookup record
         values.clear();
@@ -214,7 +214,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.clear();
         values.put(Phone.NUMBER, "18004664422");
         mResolver.update(phoneUri, values, null, null);
-        assertStoredValues(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        assertStoredValue(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
     }
 
     public void testEmailsQuery() {
@@ -832,7 +832,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         mResolver.delete(uri, null, null);
 
-        assertStoredValues(uri, RawContacts.DELETED, "1");
+        assertStoredValue(uri, RawContacts.DELETED, "1");
 
         Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
                 RawContacts.DELETE_PERMANENTLY, "true").build();
@@ -864,7 +864,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .build();
         mResolver.delete(deleteWithWrongAccountUri, null, null);
 
-        assertStoredValues(uri, RawContacts.DELETED, "0");
+        assertStoredValue(uri, RawContacts.DELETED, "0");
 
         // Delete if we are deleting with correct account.
         Uri deleteWithCorrectAccountUri =
@@ -874,7 +874,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .build();
         mResolver.delete(deleteWithCorrectAccountUri, null, null);
 
-        assertStoredValues(uri, RawContacts.DELETED, "1");
+        assertStoredValue(uri, RawContacts.DELETED, "1");
     }
 
     public void testMarkAsDirtyParameter() {
@@ -888,7 +888,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(StructuredName.FAMILY_NAME, "Dough");
         mResolver.update(updateUri, values, null, null);
-        assertStoredValues(uri, StructuredName.FAMILY_NAME, "Dough");
+        assertStoredValue(uri, StructuredName.FAMILY_NAME, "Dough");
         assertDirty(rawContactUri, false);
     }
 
@@ -953,7 +953,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDirty(uri, false);
 
         mResolver.delete(uri, null, null);
-        assertStoredValues(uri, RawContacts.DELETED, "1");
+        assertStoredValue(uri, RawContacts.DELETED, "1");
         assertDirty(uri, true);
         version++;
         assertEquals(version, getVersion(uri));

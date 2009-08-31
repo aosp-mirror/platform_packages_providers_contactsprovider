@@ -35,6 +35,7 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -870,7 +871,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         String[] COLUMNS = new String[] {
             RawContactsColumns.CONCRETE_ID,
             RawContactsColumns.DISPLAY_NAME,
+            RawContacts.ACCOUNT_TYPE,
             RawContacts.ACCOUNT_NAME,
+            RawContacts.SOURCE_ID,
             RawContacts.CUSTOM_RINGTONE,
             RawContacts.SEND_TO_VOICEMAIL,
             RawContacts.LAST_TIME_CONTACTED,
@@ -883,15 +886,17 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         int RAW_CONTACT_ID = 0;
         int DISPLAY_NAME = 1;
-        int ACCOUNT_NAME = 2;
-        int CUSTOM_RINGTONE = 3;
-        int SEND_TO_VOICEMAIL = 4;
-        int LAST_TIME_CONTACTED = 5;
-        int TIMES_CONTACTED = 6;
-        int STARRED = 7;
-        int IS_RESTRICTED = 8;
-        int DATA_ID = 9;
-        int MIMETYPE_ID = 10;
+        int ACCOUNT_TYPE = 2;
+        int ACCOUNT_NAME = 3;
+        int SOURCE_ID = 4;
+        int CUSTOM_RINGTONE = 5;
+        int SEND_TO_VOICEMAIL = 6;
+        int LAST_TIME_CONTACTED = 7;
+        int TIMES_CONTACTED = 8;
+        int STARRED = 9;
+        int IS_RESTRICTED = 10;
+        int DATA_ID = 11;
+        int MIMETYPE_ID = 12;
     }
 
     /**
@@ -912,6 +917,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         boolean contactStarred = false;
         int singleIsRestricted = 1;
         int hasPhoneNumber = 0;
+        StringBuffer lookupKey = new StringBuffer();
 
         long photoMimeType = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
         long phoneMimeType = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
@@ -983,6 +989,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                             singleIsRestricted = 0;
                         }
                     }
+
+                    ContactLookupKey.appendToLookupKey(lookupKey,
+                            c.getString(RawContactsQuery.ACCOUNT_TYPE),
+                            c.getString(RawContactsQuery.ACCOUNT_NAME),
+                            c.getString(RawContactsQuery.SOURCE_ID),
+                            displayName);
                 }
 
                 if (!c.isNull(RawContactsQuery.DATA_ID)) {
@@ -1030,6 +1042,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         values.put(Contacts.STARRED, contactStarred);
         values.put(Contacts.HAS_PHONE_NUMBER, hasPhoneNumber);
         values.put(ContactsColumns.SINGLE_IS_RESTRICTED, singleIsRestricted);
+        values.put(Contacts.LOOKUP_KEY, Uri.encode(lookupKey.toString()));
     }
 
     /**

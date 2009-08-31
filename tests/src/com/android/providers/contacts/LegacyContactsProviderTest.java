@@ -104,7 +104,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(People.NAME, "John Doe");
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
-        assertStoredValues(personUri, People.DISPLAY_NAME, "John Doe");
+        assertStoredValue(personUri, People.DISPLAY_NAME, "John Doe");
     }
 
     public void testPrimaryOrganization() {
