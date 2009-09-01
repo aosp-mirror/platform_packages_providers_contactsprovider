@@ -3532,18 +3532,24 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     public String getType(Uri uri) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
-            case CONTACTS: return Contacts.CONTENT_TYPE;
-            case CONTACTS_ID: return Contacts.CONTENT_ITEM_TYPE;
-            case RAW_CONTACTS: return RawContacts.CONTENT_TYPE;
-            case RAW_CONTACTS_ID: return RawContacts.CONTENT_ITEM_TYPE;
+            case CONTACTS:
+            case CONTACTS_LOOKUP:
+            case CONTACTS_ID:
+            case CONTACTS_LOOKUP_ID:
+                return Contacts.CONTENT_ITEM_TYPE;
+            case RAW_CONTACTS:
+            case RAW_CONTACTS_ID:
+                return RawContacts.CONTENT_ITEM_TYPE;
             case DATA_ID:
-                final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
-                long dataId = ContentUris.parseId(uri);
-                return mOpenHelper.getDataMimeType(dataId);
-            case AGGREGATION_EXCEPTIONS: return AggregationExceptions.CONTENT_TYPE;
-            case AGGREGATION_EXCEPTION_ID: return AggregationExceptions.CONTENT_ITEM_TYPE;
-            case SETTINGS: return Settings.CONTENT_TYPE;
-            case AGGREGATION_SUGGESTIONS: return Contacts.CONTENT_TYPE;
+                return mOpenHelper.getDataMimeType(ContentUris.parseId(uri));
+            case AGGREGATION_EXCEPTIONS:
+                return AggregationExceptions.CONTENT_TYPE;
+            case AGGREGATION_EXCEPTION_ID:
+                return AggregationExceptions.CONTENT_ITEM_TYPE;
+            case SETTINGS:
+                return Settings.CONTENT_TYPE;
+            case AGGREGATION_SUGGESTIONS:
+                return Contacts.CONTENT_TYPE;
             case SEARCH_SUGGESTIONS:
                 return SearchManager.SUGGEST_MIME_TYPE;
             case SEARCH_SHORTCUT:
