@@ -63,7 +63,6 @@ import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
-import android.provider.Contacts.People;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -770,6 +769,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             // TODO also fix the aggregate contact display name right away
         }
+
+        public boolean isAggregationRequired() {
+            return true;
+        }
     }
 
     public class CustomDataRowHandler extends DataRowHandler {
@@ -982,6 +985,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 case Organization.TYPE_OTHER: return 2;
                 default: return 1000;
             }
+        }
+
+        @Override
+        public boolean isAggregationRequired() {
+            return false;
         }
     }
 
@@ -1222,7 +1230,48 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 values.put(GroupMembership.GROUP_ROW_ID, groupId);
             }
         }
+
+        @Override
+        public boolean isAggregationRequired() {
+            return false;
+        }
     }
+
+    public class PhotoDataRowHandler extends DataRowHandler {
+
+        public PhotoDataRowHandler() {
+            super(Photo.CONTENT_ITEM_TYPE);
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
+            long dataId = super.insert(db, rawContactId, values);
+            triggerAggregation(rawContactId);
+            return dataId;
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+            super.update(db, values, c, markRawContactAsDirty);
+            mContactAggregator.updatePhotoId(db, rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+            int count = super.delete(db, c);
+            mContactAggregator.updatePhotoId(db, rawContactId);
+            return count;
+        }
+
+        @Override
+        public boolean isAggregationRequired() {
+            return false;
+        }
+    }
+
 
     private HashMap<String, DataRowHandler> mDataRowHandlers;
     private final ContactAggregationScheduler mAggregationScheduler;
@@ -1297,7 +1346,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         + Presence.PRESENCE_STATUS
                 + ") VALUES (?, (SELECT MAX(" + Presence.PRESENCE_STATUS + ")"
                         + " FROM " + Tables.PRESENCE + "," + Tables.RAW_CONTACTS
-                        + " WHERE " + Presence.RAW_CONTACT_ID + "="
+                        + " WHERE " + PresenceColumns.RAW_CONTACT_ID + "="
                                 + RawContactsColumns.CONCRETE_ID
                         + "   AND " + RawContacts.CONTACT_ID + "=?))");
 
@@ -1324,8 +1373,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new NicknameDataRowHandler());
         mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
                 new StructuredNameRowHandler(mNameSplitter));
-        mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
-                new GroupMembershipRowHandler());
+        mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
+        mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
 
         if (isLegacyContactImportNeeded()) {
             importLegacyContactsAsync();
@@ -1651,12 +1700,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mValues.put(DataColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
         mValues.remove(Data.MIMETYPE);
 
-        id = getDataRowHandler(mimeType).insert(mDb, rawContactId, mValues);
+        DataRowHandler rowHandler = getDataRowHandler(mimeType);
+        id = rowHandler.insert(mDb, rawContactId, mValues);
         if (markRawContactAsDirty) {
             setRawContactDirty(rawContactId);
         }
 
-        triggerAggregation(rawContactId);
+        if (rowHandler.isAggregationRequired()) {
+            triggerAggregation(rawContactId);
+        }
         return id;
     }
 
@@ -1764,10 +1816,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             while(c.moveToNext()) {
                 long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
                 String mimeType = c.getString(DataDeleteQuery.MIMETYPE);
-                count += getDataRowHandler(mimeType).delete(mDb, c);
+                DataRowHandler rowHandler = getDataRowHandler(mimeType);
+                count += rowHandler.delete(mDb, c);
                 if (markRawContactAsDirty) {
                     setRawContactDirty(rawContactId);
-                    triggerAggregation(rawContactId);
+                    if (rowHandler.isAggregationRequired()) {
+                        triggerAggregation(rawContactId);
+                    }
                 }
             }
         } finally {
@@ -1806,9 +1861,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                         + Lists.newArrayList(allowedMimeTypes));
             }
 
-            int count = getDataRowHandler(mimeType).delete(mDb, c);
+            DataRowHandler rowHandler = getDataRowHandler(mimeType);
+            int count = rowHandler.delete(mDb, c);
             long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
-            triggerAggregation(rawContactId);
+            if (rowHandler.isAggregationRequired()) {
+                triggerAggregation(rawContactId);
+            }
             return count;
         } finally {
             c.close();
@@ -2289,9 +2347,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         final String mimeType = c.getString(DataUpdateQuery.MIMETYPE);
-        getDataRowHandler(mimeType).update(mDb, values, c, markRawContactAsDirty);
+        DataRowHandler rowHandler = getDataRowHandler(mimeType);
+        rowHandler.update(mDb, values, c, markRawContactAsDirty);
         long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-        triggerAggregation(rawContactId);
+        if (rowHandler.isAggregationRequired()) {
+            triggerAggregation(rawContactId);
+        }
 
         return 1;
     }

@@ -147,9 +147,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private SQLiteStatement mRawContactCountQuery;
     private SQLiteStatement mContactDelete;
     private SQLiteStatement mMarkForAggregation;
+    private SQLiteStatement mPhotoIdUpdate;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
-
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -235,6 +235,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=1" +
                 " WHERE " + RawContacts._ID + "=?"
                         + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0");
+
+        mPhotoIdUpdate = db.compileStatement(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.PHOTO_ID + "=? " +
+                " WHERE " + Contacts._ID + "=?");
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -354,26 +359,31 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             ContactMatcher matcher, ContentValues values, long[] rawContactIds, long[] contactIds,
             int count) {
         Log.i(TAG, "Contact aggregation: " + count);
+        long elapsedTime = 0;
 
         int aggregatedCount = 0;
         db.beginTransaction();
         try {
             for (int i = 0; i < count; i++) {
+                long start = System.currentTimeMillis();
                 aggregateContact(db, rawContactIds[i], contactIds[i], candidates, matcher, values);
+                long end = System.currentTimeMillis();
+                elapsedTime += (end - start);
                 aggregatedCount++;
-                if (db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
-                    mContactsProvider.notifyChange();
-                }
+                db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
             }
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
         }
 
+        String performance = aggregatedCount == 0 ? "" : ", " + (elapsedTime / aggregatedCount)
+                + " ms per contact";
         if (aggregatedCount == count) {
-            Log.i(TAG, "Contact aggregation complete: " + count);
+            Log.i(TAG, "Contact aggregation complete: " + count + performance);
         } else {
-            Log.i(TAG, "Contact aggregation interrupted: " + aggregatedCount + "/" + count);
+            Log.i(TAG, "Contact aggregation interrupted: " + aggregatedCount + "/" + count
+                    + performance);
         }
         mContactsProvider.notifyChange();
         return aggregatedCount;
@@ -1070,6 +1080,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         if (bestPhotoId != -1) {
             values.put(Contacts.PHOTO_ID, bestPhotoId);
+        } else {
+            values.putNull(Contacts.PHOTO_ID);
         }
 
         values.put(Contacts.SEND_TO_VOICEMAIL, totalRowCount == contactSendToVoicemail);
@@ -1080,6 +1092,54 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         values.put(Contacts.HAS_PHONE_NUMBER, hasPhoneNumber);
         values.put(ContactsColumns.SINGLE_IS_RESTRICTED, singleIsRestricted);
         values.put(Contacts.LOOKUP_KEY, Uri.encode(lookupKey.toString()));
+    }
+
+    public void updatePhotoId(SQLiteDatabase db, long rawContactId) {
+
+        long contactId = mOpenHelper.getContactId(rawContactId);
+        if (contactId == 0) {
+            return;
+        }
+
+        long bestPhotoId = -1;
+        String photoAccount = null;
+
+        long photoMimeType = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+
+        String tables = Tables.RAW_CONTACTS + " JOIN " + Tables.DATA + " ON("
+                + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                + " AND (" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
+                        + Photo.PHOTO + " NOT NULL))";
+
+        final Cursor c = db.query(tables, RawContactsQuery.COLUMNS,
+                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long dataId = c.getLong(RawContactsQuery.DATA_ID);
+
+                // For now, just choose the first photo in a list sorted by account name.
+                String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
+                if (photoAccount == null) {
+                    photoAccount = account;
+                    bestPhotoId = dataId;
+                } else {
+                    if (account.compareToIgnoreCase(photoAccount) < 0) {
+                        photoAccount = account;
+                        bestPhotoId = dataId;
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        if (bestPhotoId == -1) {
+            mPhotoIdUpdate.bindNull(1);
+        } else {
+            mPhotoIdUpdate.bindLong(1, bestPhotoId);
+        }
+        mPhotoIdUpdate.bindLong(2, contactId);
+        mPhotoIdUpdate.execute();
     }
 
     /**
