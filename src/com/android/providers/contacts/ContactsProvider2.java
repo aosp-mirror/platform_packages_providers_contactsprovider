@@ -1259,7 +1259,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mOpenHelper = (OpenHelper)getOpenHelper();
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mOpenHelper, this, mGlobalSearchSupport);
-        mContactAggregator = new ContactAggregator(context, mOpenHelper, mAggregationScheduler);
+        mContactAggregator = new ContactAggregator(this, mOpenHelper, mAggregationScheduler);
 
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
@@ -1479,6 +1479,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         super.onTransactionComplete();
     }
 
+    @Override
+    protected void notifyChange() {
+        getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null);
+    }
 
     protected void scheduleContactAggregation() {
         mContactAggregator.schedule();
