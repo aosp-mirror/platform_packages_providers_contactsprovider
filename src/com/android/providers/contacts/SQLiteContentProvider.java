@@ -25,7 +25,6 @@ import android.content.OperationApplicationException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
-import android.provider.ContactsContract;
 
 import java.util.ArrayList;
 
@@ -67,6 +66,8 @@ public abstract class SQLiteContentProvider extends ContentProvider {
      * The equivalent of the {@link #delete} method, but invoked within a transaction.
      */
     protected abstract int deleteInTransaction(Uri uri, String selection, String[] selectionArgs);
+
+    protected abstract void notifyChange();
 
     protected SQLiteOpenHelper getOpenHelper() {
         return mOpenHelper;
@@ -207,7 +208,7 @@ public abstract class SQLiteContentProvider extends ContentProvider {
     protected void onTransactionComplete() {
         if (mNotifyChange) {
             mNotifyChange = false;
-            getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null);
+            notifyChange();
         }
     }
 }

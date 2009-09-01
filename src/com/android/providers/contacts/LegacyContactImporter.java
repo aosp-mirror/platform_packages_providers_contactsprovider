@@ -32,6 +32,7 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.CallLog.Calls;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
@@ -108,6 +109,7 @@ public class LegacyContactImporter {
                 mSourceDb = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
                 importContactsFromLegacyDb();
                 Log.i(TAG, "Imported legacy contacts: " + mContactCount);
+                mContactsProvider.notifyChange();
                 return;
 
             } catch (SQLiteException e) {
@@ -176,6 +178,8 @@ public class LegacyContactImporter {
         // the legacy table does not provide an _ID field - the _ID field
         // will be autoincremented
         importDeletedPeople();
+
+        mOpenHelper.updateAllVisible();
 
         mTargetDb.setTransactionSuccessful();
         mTargetDb.endTransaction();
@@ -340,6 +344,7 @@ public class LegacyContactImporter {
     private interface RawContactsInsert {
         String INSERT_SQL = "INSERT INTO " + Tables.RAW_CONTACTS + "(" +
                 RawContacts._ID + "," +
+                RawContacts.CONTACT_ID + "," +
                 RawContacts.CUSTOM_RINGTONE + "," +
                 RawContacts.DIRTY + "," +
                 RawContacts.LAST_TIME_CONTACTED + "," +
@@ -352,21 +357,42 @@ public class LegacyContactImporter {
                 RawContacts.ACCOUNT_TYPE + "," +
                 RawContacts.SOURCE_ID + "," +
                 RawContactsColumns.DISPLAY_NAME +
-         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+
+        int ID = 1;
+        int CONTACT_ID = 2;
+        int CUSTOM_RINGTONE = 3;
+        int DIRTY = 4;
+        int LAST_TIME_CONTACTED = 5;
+        int SEND_TO_VOICEMAIL = 6;
+        int STARRED = 7;
+        int TIMES_CONTACTED = 8;
+        int SYNC1 = 9;
+        int SYNC2 = 10;
+        int ACCOUNT_NAME = 11;
+        int ACCOUNT_TYPE = 12;
+        int SOURCE_ID = 13;
+        int DISPLAY_NAME = 14;
+    }
+
+    private interface ContactsInsert {
+        String INSERT_SQL = "INSERT INTO " + Tables.CONTACTS + "(" +
+                Contacts._ID + "," +
+                Contacts.CUSTOM_RINGTONE + "," +
+                Contacts.LAST_TIME_CONTACTED + "," +
+                Contacts.SEND_TO_VOICEMAIL + "," +
+                Contacts.STARRED + "," +
+                Contacts.TIMES_CONTACTED + "," +
+                Contacts.DISPLAY_NAME +
+         ") VALUES (?,?,?,?,?,?,?)";
 
         int ID = 1;
         int CUSTOM_RINGTONE = 2;
-        int DIRTY = 3;
-        int LAST_TIME_CONTACTED = 4;
-        int SEND_TO_VOICEMAIL = 5;
-        int STARRED = 6;
-        int TIMES_CONTACTED = 7;
-        int SYNC1 = 8;
-        int SYNC2 = 9;
-        int ACCOUNT_NAME = 10;
-        int ACCOUNT_TYPE = 11;
-        int SOURCE_ID = 12;
-        int DISPLAY_NAME = 13;
+        int LAST_TIME_CONTACTED = 3;
+        int SEND_TO_VOICEMAIL = 4;
+        int STARRED = 5;
+        int TIMES_CONTACTED = 6;
+        int DISPLAY_NAME = 7;
     }
 
     private interface StructuredNameInsert {
@@ -405,6 +431,7 @@ public class LegacyContactImporter {
 
     private void importPeople() {
         SQLiteStatement rawContactInsert = mTargetDb.compileStatement(RawContactsInsert.INSERT_SQL);
+        SQLiteStatement contactInsert = mTargetDb.compileStatement(ContactsInsert.INSERT_SQL);
         SQLiteStatement structuredNameInsert =
                 mTargetDb.compileStatement(StructuredNameInsert.INSERT_SQL);
         SQLiteStatement noteInsert = mTargetDb.compileStatement(NoteInsert.INSERT_SQL);
@@ -417,7 +444,9 @@ public class LegacyContactImporter {
         try {
             while (c.moveToNext()) {
                 insertRawContact(c, rawContactInsert);
+                insertContact(c, contactInsert);
                 insertNote(c, noteInsert);
+                mContactCount++;
             }
         } finally {
             c.close();
@@ -430,6 +459,7 @@ public class LegacyContactImporter {
         try {
             while (c.moveToNext()) {
                 insertRawContact(c, rawContactInsert);
+                insertContact(c, contactInsert);
                 insertStructuredName(c, structuredNameInsert);
                 insertNote(c, noteInsert);
                 mContactCount++;
@@ -442,6 +472,7 @@ public class LegacyContactImporter {
     private void insertRawContact(Cursor c, SQLiteStatement insert) {
         long id = c.getLong(PeopleQuery._ID);
         insert.bindLong(RawContactsInsert.ID, id);
+        insert.bindLong(RawContactsInsert.CONTACT_ID, id);
         bindString(insert, RawContactsInsert.CUSTOM_RINGTONE,
                 c.getString(PeopleQuery.CUSTOM_RINGTONE));
         bindString(insert, RawContactsInsert.DIRTY,
@@ -471,6 +502,25 @@ public class LegacyContactImporter {
             insert.bindNull(RawContactsInsert.ACCOUNT_TYPE);
             insert.bindNull(RawContactsInsert.SOURCE_ID);
         }
+        insert(insert);
+    }
+
+    private void insertContact(Cursor c, SQLiteStatement insert) {
+        long id = c.getLong(PeopleQuery._ID);
+        insert.bindLong(ContactsInsert.ID, id);
+        bindString(insert, ContactsInsert.CUSTOM_RINGTONE,
+                c.getString(PeopleQuery.CUSTOM_RINGTONE));
+        insert.bindLong(ContactsInsert.LAST_TIME_CONTACTED,
+                c.getLong(PeopleQuery.LAST_TIME_CONTACTED));
+        insert.bindLong(ContactsInsert.SEND_TO_VOICEMAIL,
+                c.getLong(PeopleQuery.SEND_TO_VOICEMAIL));
+        insert.bindLong(ContactsInsert.STARRED,
+                c.getLong(PeopleQuery.STARRED));
+        insert.bindLong(ContactsInsert.TIMES_CONTACTED,
+                c.getLong(PeopleQuery.TIMES_CONTACTED));
+        bindString(insert, ContactsInsert.DISPLAY_NAME,
+                c.getString(PeopleQuery.NAME));
+
         insert(insert);
     }
 
@@ -775,14 +825,24 @@ public class LegacyContactImporter {
         int NORMALIZED_NUMBER = 3;
     }
 
+    private interface HasPhoneNumberUpdate {
+        String UPDATE_SQL = "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.HAS_PHONE_NUMBER + "=1 WHERE " + Contacts._ID + "=?";
+
+        int CONTACT_ID = 1;
+    }
+
     private void importPhones() {
         SQLiteStatement phoneInsert = mTargetDb.compileStatement(PhoneInsert.INSERT_SQL);
-        SQLiteStatement phoneLookupInsert = mTargetDb.compileStatement(PhoneLookupInsert.INSERT_SQL);
+        SQLiteStatement phoneLookupInsert =
+                mTargetDb.compileStatement(PhoneLookupInsert.INSERT_SQL);
+        SQLiteStatement hasPhoneUpdate =
+                mTargetDb.compileStatement(HasPhoneNumberUpdate.UPDATE_SQL);
         Cursor c = mSourceDb.query(PhonesQuery.TABLE, PhonesQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertPhone(c, phoneInsert, phoneLookupInsert);
+                insertPhone(c, phoneInsert, phoneLookupInsert, hasPhoneUpdate);
             }
         } finally {
             c.close();
@@ -790,7 +850,8 @@ public class LegacyContactImporter {
     }
 
     private void insertPhone(Cursor c, SQLiteStatement phoneInsert,
-            SQLiteStatement phoneLookupInsert) {
+            SQLiteStatement phoneLookupInsert, SQLiteStatement hasPhoneUpdate) {
+        long lastUpdatedContact = -1;
         long id = c.getLong(PhonesQuery.PERSON);
         String number = c.getString(PhonesQuery.NUMBER);
         String normalizedNumber = null;
@@ -811,6 +872,12 @@ public class LegacyContactImporter {
             phoneLookupInsert.bindLong(PhoneLookupInsert.DATA_ID, dataId);
             phoneLookupInsert.bindString(PhoneLookupInsert.NORMALIZED_NUMBER, normalizedNumber);
             insert(phoneLookupInsert);
+
+            if (lastUpdatedContact != id) {
+                lastUpdatedContact = id;
+                hasPhoneUpdate.bindLong(HasPhoneNumberUpdate.CONTACT_ID, id);
+                hasPhoneUpdate.execute();
+            }
         }
     }
 
@@ -841,20 +908,29 @@ public class LegacyContactImporter {
         int SYNC1 = 4;
     }
 
+    private interface PhotoIdUpdate {
+        String UPDATE_SQL = "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.PHOTO_ID + "=? WHERE " + Contacts._ID + "=?";
+
+        int PHOTO_ID = 1;
+        int CONTACT_ID = 2;
+    }
+
     private void importPhotos() {
         SQLiteStatement insert = mTargetDb.compileStatement(PhotoInsert.INSERT_SQL);
+        SQLiteStatement photoIdUpdate = mTargetDb.compileStatement(PhotoIdUpdate.UPDATE_SQL);
         Cursor c = mSourceDb.query(PhotosQuery.TABLE, PhotosQuery.COLUMNS, null, null,
                 null, null, null);
         try {
             while (c.moveToNext()) {
-                insertPhoto(c, insert);
+                insertPhoto(c, insert, photoIdUpdate);
             }
         } finally {
             c.close();
         }
     }
 
-    private void insertPhoto(Cursor c, SQLiteStatement insert) {
+    private void insertPhoto(Cursor c, SQLiteStatement insert, SQLiteStatement photoIdUpdate) {
         if (c.isNull(PhotosQuery.DATA)) {
             return;
         }
@@ -872,7 +948,10 @@ public class LegacyContactImporter {
             insert.bindNull(PhotoInsert.SYNC1);
         }
 
-        insert(insert);
+        long rowId = insert(insert);
+        photoIdUpdate.bindLong(PhotoIdUpdate.PHOTO_ID, rowId);
+        photoIdUpdate.bindLong(PhotoIdUpdate.CONTACT_ID, personId);
+        photoIdUpdate.execute();
     }
 
     private interface GroupMembershipQuery {

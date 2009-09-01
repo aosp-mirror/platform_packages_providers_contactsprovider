@@ -222,9 +222,9 @@ import java.util.HashMap;
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
-        final String CONTACT_IS_VISIBLE = "SELECT (CASE WHEN " + RAW_CONTACT_IS_LOCAL
+        final String CONTACT_IS_VISIBLE = "SELECT (CASE WHEN (CASE WHEN " + RAW_CONTACT_IS_LOCAL
                 + " THEN 1 WHEN " + ZERO_GROUP_MEMBERSHIPS + " THEN " + Settings.UNGROUPED_VISIBLE
-                + " ELSE MAX(" + Groups.GROUP_VISIBLE + ") END) FROM "
+                + " ELSE MAX(" + Groups.GROUP_VISIBLE + ") END)=1 THEN 1 ELSE 0 END) FROM "
                 + Tables.RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS + " WHERE "
                 + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " GROUP BY "
                 + RawContacts.CONTACT_ID;
@@ -566,7 +566,7 @@ import java.util.HashMap;
                 Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LAST_TIME_CONTACTED + " INTEGER," +
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.IN_VISIBLE_GROUP + " INTEGER DEFAULT 1," +
+                Contacts.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LOOKUP_KEY + " TEXT," +
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +

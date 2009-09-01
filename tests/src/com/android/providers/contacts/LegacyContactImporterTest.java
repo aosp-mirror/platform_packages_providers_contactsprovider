@@ -90,7 +90,6 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
         LegacyContactImporter importer =
                 new LegacyContactImporter(createLegacyMockContext(), provider);
         provider.importLegacyContacts(importer);
-        provider.scheduleContactAggregation();
 
         assertQueryResults("expected_groups.txt", Groups.CONTENT_URI, new String[]{
                 Groups._ID,
@@ -165,6 +164,21 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Calls.CACHED_NAME,
                 Calls.CACHED_NUMBER_LABEL,
                 Calls.CACHED_NUMBER_TYPE,
+        });
+
+        // Performing an aggregation pass should not change anything.
+        provider.scheduleContactAggregation();
+        assertQueryResults("expected_contacts.txt", Contacts.CONTENT_URI, new String[]{
+                Contacts._ID,
+                Contacts.DISPLAY_NAME,
+                Contacts.PHOTO_ID,
+                Contacts.TIMES_CONTACTED,
+                Contacts.LAST_TIME_CONTACTED,
+                Contacts.CUSTOM_RINGTONE,
+                Contacts.SEND_TO_VOICEMAIL,
+                Contacts.STARRED,
+                Contacts.IN_VISIBLE_GROUP,
+                Contacts.HAS_PHONE_NUMBER,
         });
     }
 

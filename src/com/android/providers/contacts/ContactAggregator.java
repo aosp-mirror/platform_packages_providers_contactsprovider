@@ -36,6 +36,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -126,8 +127,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * When yielding the transaction to another thread, sleep for this many milliseconds
      * to allow the other thread to build up a transaction before yielding back.
      */
-    private static final int SLEEP_AFTER_YIELD_DELAY = 10000;
+    private static final int SLEEP_AFTER_YIELD_DELAY = 4000;
 
+    private final ContactsProvider2 mContactsProvider;
     private final OpenHelper mOpenHelper;
     private final ContactAggregationScheduler mScheduler;
     private boolean mEnabled = true;
@@ -142,6 +144,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private SQLiteStatement mMarkForAggregation;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
+
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -190,8 +193,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
      * a delay of {@link #AGGREGATION_DELAY} milliseconds.
      */
-    public ContactAggregator(Context context, OpenHelper openHelper,
+    public ContactAggregator(ContactsProvider2 contactsProvider, OpenHelper openHelper,
             ContactAggregationScheduler scheduler) {
+        mContactsProvider = contactsProvider;
         mOpenHelper = openHelper;
 
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
@@ -322,7 +326,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                                 c.getLong(AggregationQuery.CONTACT_ID),
                                 candidates, matcher, values);
                         count++;
-                        db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
+                        if (db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
+                            mContactsProvider.notifyChange();
+                        }
+
                     } while (c.moveToNext());
 
                     db.setTransactionSuccessful();
@@ -340,6 +347,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 Log.i(TAG, "Contact aggregation interrupted: " + count + "/" + totalCount);
             }
         }
+        mContactsProvider.notifyChange();
     }
 
     public void markNewForAggregation(long rawContactId) {
