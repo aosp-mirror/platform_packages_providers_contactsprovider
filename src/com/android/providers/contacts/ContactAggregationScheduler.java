@@ -20,6 +20,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Process;
+import android.util.Log;
 
 /**
  * A scheduler for asynchronous aggregation of contacts. Aggregation will start after
@@ -28,6 +29,8 @@ import android.os.Process;
  * be delayed.
  */
 public class ContactAggregationScheduler {
+
+    private static final String TAG = "ContactAggregator";
 
     public interface Aggregator {
 
@@ -58,6 +61,7 @@ public class ContactAggregationScheduler {
     public static final int STATUS_SCHEDULED = 1;
     public static final int STATUS_RUNNING = 2;
     public static final int STATUS_INTERRUPTED = 3;
+
 
     private Aggregator mAggregator;
 
@@ -181,6 +185,8 @@ public class ContactAggregationScheduler {
                 if (mRescheduleWhenComplete) {
                     mRescheduleWhenComplete = false;
                     schedule();
+                } else {
+                    Log.w(TAG, "No more aggregation requests");
                 }
             }
         }
