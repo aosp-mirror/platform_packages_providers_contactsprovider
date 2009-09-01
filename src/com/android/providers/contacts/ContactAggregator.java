@@ -148,6 +148,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private SQLiteStatement mContactDelete;
     private SQLiteStatement mMarkForAggregation;
     private SQLiteStatement mPhotoIdUpdate;
+    private SQLiteStatement mStarredUpdate;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
 
@@ -240,6 +241,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 "UPDATE " + Tables.CONTACTS +
                 " SET " + Contacts.PHOTO_ID + "=? " +
                 " WHERE " + Contacts._ID + "=?");
+
+        mStarredUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + Contacts.STARRED + "=(SELECT (CASE WHEN COUNT(" + RawContacts.STARRED
+                + ")=0 THEN 0 ELSE 1 END) FROM " + Tables.RAW_CONTACTS + " WHERE "
+                + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " AND "
+                + RawContacts.STARRED + "=1)" + " WHERE " + Contacts._ID + "=?");
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -1140,6 +1147,34 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
         mPhotoIdUpdate.bindLong(2, contactId);
         mPhotoIdUpdate.execute();
+    }
+
+    /**
+     * Update {@link Contacts#STARRED} for all {@link RawContacts} matched by
+     * the given query, usually after changing {@link RawContacts#STARRED}.
+     */
+    public void updateStarred(SQLiteDatabase db, String selection, String[] selectionArgs) {
+        // Update each matching RawContact
+        final Cursor cursor = db.query(Tables.RAW_CONTACTS,
+                new String[] { RawContacts.CONTACT_ID }, selection,
+                selectionArgs, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                final long contactId = cursor.getLong(0);
+                updateStarred(contactId);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    /**
+     * Execute {@link SQLiteStatement} that will update the
+     * {@link Contacts#STARRED} flag for the given {@link Contacts#_ID}.
+     */
+    protected void updateStarred(long contactId) {
+        mStarredUpdate.bindLong(1, contactId);
+        mStarredUpdate.execute();
     }
 
     /**
