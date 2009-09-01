@@ -35,9 +35,11 @@ import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 import com.google.android.collect.Lists;
+import com.google.android.collect.Sets;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.accounts.OnAccountsUpdatedListener;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -94,13 +96,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
  * Contacts content provider. The contract between this provider and applications
  * is defined in {@link ContactsContract}.
  */
-public class ContactsProvider2 extends SQLiteContentProvider {
+public class ContactsProvider2 extends SQLiteContentProvider implements OnAccountsUpdatedListener {
 
     // TODO: clean up debug tag and rename this class
     private static final String TAG = "ContactsProvider ~~~~";
@@ -1466,6 +1469,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             importLegacyContactsAsync();
         }
 
+        AccountManager.get(context).addOnAccountsUpdatedListener(this, null, false);
+        onAccountsUpdated(AccountManager.get(context).getAccounts());
+
         return (db != null);
     }
 
@@ -2576,6 +2582,48 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         return 1;
     }
 
+    public void onAccountsUpdated(Account[] accounts) {
+        mDb = mOpenHelper.getWritableDatabase();
+        if (mDb == null) return;
+
+        Set<Account> validAccounts = Sets.newHashSet();
+        for (Account account : accounts) {
+            validAccounts.add(new Account(account.name, account.type));
+        }
+        ArrayList<Account> accountsToDelete = new ArrayList<Account>();
+
+        mDb.beginTransaction();
+        try {
+            // Find all the accounts the contacts DB knows about, mark the ones that aren't in the
+            // valid set for deletion.
+            Cursor c = mDb.rawQuery("SELECT DISTINCT account_name, account_type from "
+                    + Tables.RAW_CONTACTS, null);
+            while (c.moveToNext()) {
+                if (c.getString(0) != null && c.getString(1) != null) {
+                    Account currAccount = new Account(c.getString(0), c.getString(1));
+                    if (!validAccounts.contains(currAccount)) {
+                        accountsToDelete.add(currAccount);
+                    }
+                }
+            }
+            c.close();
+
+            for (Account account : accountsToDelete) {
+                String[] params = new String[]{account.name, account.type};
+                mDb.execSQL("DELETE FROM " + Tables.GROUPS
+                        + " WHERE account_name = ? AND account_type = ?", params);
+                mDb.execSQL("DELETE FROM " + Tables.PRESENCE
+                        + " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (SELECT "
+                        + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS
+                        + " WHERE account_name = ? AND account_type = ?)", params);
+                mDb.execSQL("DELETE FROM " + Tables.RAW_CONTACTS
+                        + " WHERE account_name = ? AND account_type = ?", params);
+            }
+            mDb.setTransactionSuccessful();
+        } finally {
+            mDb.endTransaction();
+        }
+    }
 
     /**
      * Test if a {@link String} value appears in the given list, and add to the
