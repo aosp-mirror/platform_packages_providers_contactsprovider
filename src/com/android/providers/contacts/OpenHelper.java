@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 81;
+    private static final int DATABASE_VERSION = 82;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -270,7 +270,6 @@ import java.util.HashMap;
                 Tables.RAW_CONTACTS + "." + RawContacts.DIRTY;
         public static final String CONCRETE_DELETED =
                 Tables.RAW_CONTACTS + "." + RawContacts.DELETED;
-        public static final String DISPLAY_NAME = "display_name";
         public static final String CONCRETE_SYNC1 =
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC1;
         public static final String CONCRETE_SYNC2 =
@@ -282,7 +281,21 @@ import java.util.HashMap;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
 
+        public static final String DISPLAY_NAME = "display_name";
+        public static final String DISPLAY_NAME_SOURCE = "display_name_source";
         public static final String AGGREGATION_NEEDED = "aggregation_needed";
+    }
+
+    /**
+     * Types of data used to produce the display name for a contact. Listed in the order
+     * of increasing priority.
+     */
+    public interface DisplayNameSources {
+        int UNDEFINED = 0;
+        int EMAIL = 10;
+        int PHONE = 20;
+        int ORGANIZATION = 30;
+        int STRUCTURED_NAME = 40;
     }
 
     public interface DataColumns {
@@ -604,6 +617,8 @@ import java.util.HashMap;
                 RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
                 RawContacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContactsColumns.DISPLAY_NAME + " TEXT," +
+                RawContactsColumns.DISPLAY_NAME_SOURCE + " INTEGER NOT NULL DEFAULT " +
+                        DisplayNameSources.UNDEFINED + "," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
                 RawContacts.SYNC3 + " TEXT, " +

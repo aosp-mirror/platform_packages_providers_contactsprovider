@@ -21,6 +21,7 @@ import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
+import com.android.providers.contacts.OpenHelper.DisplayNameSources;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupType;
@@ -29,14 +30,12 @@ import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.content.ContentValues;
-import android.content.Context;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
-import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -148,6 +147,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private SQLiteStatement mContactDelete;
     private SQLiteStatement mMarkForAggregation;
     private SQLiteStatement mPhotoIdUpdate;
+    private SQLiteStatement mDisplayNameUpdate;
     private SQLiteStatement mStarredUpdate;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
@@ -240,6 +240,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mPhotoIdUpdate = db.compileStatement(
                 "UPDATE " + Tables.CONTACTS +
                 " SET " + Contacts.PHOTO_ID + "=? " +
+                " WHERE " + Contacts._ID + "=?");
+
+        mDisplayNameUpdate = db.compileStatement(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.DISPLAY_NAME + "=? " +
                 " WHERE " + Contacts._ID + "=?");
 
         mStarredUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
@@ -925,6 +930,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         String[] COLUMNS = new String[] {
             RawContactsColumns.CONCRETE_ID,
             RawContactsColumns.DISPLAY_NAME,
+            RawContactsColumns.DISPLAY_NAME_SOURCE,
             RawContacts.ACCOUNT_TYPE,
             RawContacts.ACCOUNT_NAME,
             RawContacts.SOURCE_ID,
@@ -940,17 +946,18 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         int RAW_CONTACT_ID = 0;
         int DISPLAY_NAME = 1;
-        int ACCOUNT_TYPE = 2;
-        int ACCOUNT_NAME = 3;
-        int SOURCE_ID = 4;
-        int CUSTOM_RINGTONE = 5;
-        int SEND_TO_VOICEMAIL = 6;
-        int LAST_TIME_CONTACTED = 7;
-        int TIMES_CONTACTED = 8;
-        int STARRED = 9;
-        int IS_RESTRICTED = 10;
-        int DATA_ID = 11;
-        int MIMETYPE_ID = 12;
+        int DISPLAY_NAME_SOURCE = 2;
+        int ACCOUNT_TYPE = 3;
+        int ACCOUNT_NAME = 4;
+        int SOURCE_ID = 5;
+        int CUSTOM_RINGTONE = 6;
+        int SEND_TO_VOICEMAIL = 7;
+        int LAST_TIME_CONTACTED = 8;
+        int TIMES_CONTACTED = 9;
+        int STARRED = 10;
+        int IS_RESTRICTED = 11;
+        int DATA_ID = 12;
+        int MIMETYPE_ID = 13;
     }
 
     /**
@@ -960,6 +967,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             final ContentValues values) {
 
         long currentRawContactId = -1;
+        int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
         String bestDisplayName = null;
         long bestPhotoId = -1;
         String photoAccount = null;
@@ -996,9 +1004,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
                     // Display name
                     String displayName = c.getString(RawContactsQuery.DISPLAY_NAME);
+                    int displayNameSource = c.getInt(RawContactsQuery.DISPLAY_NAME_SOURCE);
                     if (!TextUtils.isEmpty(displayName)) {
                         if (bestDisplayName == null) {
                             bestDisplayName = displayName;
+                            bestDisplayNameSource = displayNameSource;
+                        } else if (bestDisplayNameSource != displayNameSource) {
+                            if (bestDisplayNameSource < displayNameSource) {
+                                bestDisplayName = displayName;
+                                bestDisplayNameSource = displayNameSource;
+                            }
                         } else if (NameNormalizer.compareComplexity(displayName,
                                 bestDisplayName) > 0) {
                             bestDisplayName = displayName;
@@ -1101,6 +1116,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         values.put(Contacts.LOOKUP_KEY, Uri.encode(lookupKey.toString()));
     }
 
+    private interface PhotoIdQuery {
+        String[] COLUMNS = new String[] {
+            RawContacts.ACCOUNT_NAME,
+            DataColumns.CONCRETE_ID,
+        };
+
+        int ACCOUNT_NAME = 0;
+        int DATA_ID = 1;
+    }
+
     public void updatePhotoId(SQLiteDatabase db, long rawContactId) {
 
         long contactId = mOpenHelper.getContactId(rawContactId);
@@ -1118,14 +1143,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 + " AND (" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
                         + Photo.PHOTO + " NOT NULL))";
 
-        final Cursor c = db.query(tables, RawContactsQuery.COLUMNS,
+        final Cursor c = db.query(tables, PhotoIdQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long dataId = c.getLong(RawContactsQuery.DATA_ID);
+                long dataId = c.getLong(PhotoIdQuery.DATA_ID);
 
                 // For now, just choose the first photo in a list sorted by account name.
-                String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
+                String account = c.getString(PhotoIdQuery.ACCOUNT_NAME);
                 if (photoAccount == null) {
                     photoAccount = account;
                     bestPhotoId = dataId;
@@ -1147,6 +1172,61 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
         mPhotoIdUpdate.bindLong(2, contactId);
         mPhotoIdUpdate.execute();
+    }
+
+    private interface DisplayNameQuery {
+        String[] COLUMNS = new String[] {
+            RawContactsColumns.DISPLAY_NAME,
+            RawContactsColumns.DISPLAY_NAME_SOURCE,
+        };
+
+        int DISPLAY_NAME = 0;
+        int DISPLAY_NAME_SOURCE = 1;
+    }
+
+    public void updateDisplayName(SQLiteDatabase db, long rawContactId) {
+
+        long contactId = mOpenHelper.getContactId(rawContactId);
+        if (contactId == 0) {
+            return;
+        }
+
+        int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
+        String bestDisplayName = null;
+
+
+        final Cursor c = db.query(Tables.RAW_CONTACTS, DisplayNameQuery.COLUMNS,
+                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                String displayName = c.getString(DisplayNameQuery.DISPLAY_NAME);
+                int displayNameSource = c.getInt(DisplayNameQuery.DISPLAY_NAME_SOURCE);
+                if (!TextUtils.isEmpty(displayName)) {
+                    if (bestDisplayName == null) {
+                        bestDisplayName = displayName;
+                        bestDisplayNameSource = displayNameSource;
+                    } else if (bestDisplayNameSource != displayNameSource) {
+                        if (bestDisplayNameSource < displayNameSource) {
+                            bestDisplayName = displayName;
+                            bestDisplayNameSource = displayNameSource;
+                        }
+                    } else if (NameNormalizer.compareComplexity(displayName,
+                            bestDisplayName) > 0) {
+                        bestDisplayName = displayName;
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        if (bestDisplayName == null) {
+            mDisplayNameUpdate.bindNull(1);
+        } else {
+            mDisplayNameUpdate.bindString(1, bestDisplayName);
+        }
+        mDisplayNameUpdate.bindLong(2, contactId);
+        mDisplayNameUpdate.execute();
     }
 
     /**

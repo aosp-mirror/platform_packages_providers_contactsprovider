@@ -477,6 +477,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStructuredName(rawContactId, null, null, null, "Johnson", null);
     }
 
+    public void testDisplayNameUpdate() {
+        long rawContactId1 = createRawContact();
+        insertEmail(rawContactId1, "potato@acme.com", true);
+
+        long rawContactId2 = createRawContact();
+        insertPhoneNumber(rawContactId2, "123456789", true);
+
+        long contactId = queryContactId(rawContactId1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
+
+        assertAggregated(rawContactId1, rawContactId2, "123456789");
+
+        insertStructuredName(rawContactId2, "Potato", "Head");
+
+        assertAggregated(rawContactId1, rawContactId2, "Potato Head");
+    }
+
     public void testSendToVoicemailDefault() {
         long rawContactId = createRawContactWithName();
         long contactId = queryContactId(rawContactId);

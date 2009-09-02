@@ -23,6 +23,7 @@ import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.Clauses;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
+import com.android.providers.contacts.OpenHelper.DisplayNameSources;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
@@ -256,23 +257,17 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         int MIMETYPE = 2;
     }
 
-    // Higher number represents higher priority in choosing what data to use for the display name
-    private static final int DISPLAY_NAME_PRIORITY_EMAIL = 1;
-    private static final int DISPLAY_NAME_PRIORITY_PHONE = 2;
-    private static final int DISPLAY_NAME_PRIORITY_ORGANIZATION = 3;
-    private static final int DISPLAY_NAME_PRIORITY_STRUCTURED_NAME = 4;
-
-    private static final HashMap<String, Integer> sDisplayNamePriorities;
+    private static final HashMap<String, Integer> sDisplayNameSources;
     static {
-        sDisplayNamePriorities = new HashMap<String, Integer>();
-        sDisplayNamePriorities.put(StructuredName.CONTENT_ITEM_TYPE,
-                DISPLAY_NAME_PRIORITY_STRUCTURED_NAME);
-        sDisplayNamePriorities.put(Organization.CONTENT_ITEM_TYPE,
-                DISPLAY_NAME_PRIORITY_ORGANIZATION);
-        sDisplayNamePriorities.put(Phone.CONTENT_ITEM_TYPE,
-                DISPLAY_NAME_PRIORITY_PHONE);
-        sDisplayNamePriorities.put(Email.CONTENT_ITEM_TYPE,
-                DISPLAY_NAME_PRIORITY_EMAIL);
+        sDisplayNameSources = new HashMap<String, Integer>();
+        sDisplayNameSources.put(StructuredName.CONTENT_ITEM_TYPE,
+                DisplayNameSources.STRUCTURED_NAME);
+        sDisplayNameSources.put(Organization.CONTENT_ITEM_TYPE,
+                DisplayNameSources.ORGANIZATION);
+        sDisplayNameSources.put(Phone.CONTENT_ITEM_TYPE,
+                DisplayNameSources.PHONE);
+        sDisplayNameSources.put(Email.CONTENT_ITEM_TYPE,
+                DisplayNameSources.EMAIL);
     }
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
@@ -315,7 +310,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     /** Precompiled sql statement for incrementing times contacted for an contact */
     private SQLiteStatement mLastTimeContactedUpdate;
     /** Precompiled sql statement for updating a contact display name */
-    private SQLiteStatement mContactDisplayNameUpdate;
+    private SQLiteStatement mRawContactDisplayNameUpdate;
     /** Precompiled sql statement for marking a raw contact as dirty */
     private SQLiteStatement mRawContactDirtyUpdate;
     /** Precompiled sql statement for setting an aggregated presence */
@@ -733,12 +728,13 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     null, null, null, null);
         }
 
-        protected void fixContactDisplayName(SQLiteDatabase db, long rawContactId) {
+        protected void fixRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
             String bestDisplayName = null;
+            int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
+
             Cursor c = db.query(DisplayNameQuery.TABLE, DisplayNameQuery.COLUMNS,
                     Data.RAW_CONTACT_ID + "=" + rawContactId, null, null, null, null);
             try {
-                int maxPriority = -1;
                 while (c.moveToNext()) {
                     String mimeType = c.getString(DisplayNameQuery.MIMETYPE);
                     boolean primary;
@@ -753,9 +749,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     }
 
                     if (primary && name != null) {
-                        Integer priority = sDisplayNamePriorities.get(mimeType);
-                        if (priority != null && priority > maxPriority) {
-                            maxPriority = priority;
+                        Integer source = sDisplayNameSources.get(mimeType);
+                        if (source != null && source > bestDisplayNameSource) {
+                            bestDisplayNameSource = source;
                             bestDisplayName = name;
                         }
                     }
@@ -765,9 +761,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 c.close();
             }
 
-            setDisplayName(rawContactId, bestDisplayName);
-
-            // TODO also fix the aggregate contact display name right away
+            setDisplayName(rawContactId, bestDisplayName, bestDisplayNameSource);
+            mContactAggregator.updateDisplayName(db, rawContactId);
         }
 
         public boolean isAggregationRequired() {
@@ -801,7 +796,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             String familyName = values.getAsString(StructuredName.FAMILY_NAME);
             mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
                     familyName);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return dataId;
         }
 
@@ -846,7 +841,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
                         familyName);
             }
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
         }
 
         @Override
@@ -857,7 +852,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             int count = super.delete(db, c);
 
             mOpenHelper.deleteNameLookup(dataId);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return count;
         }
 
@@ -954,7 +949,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             long id = super.insert(db, rawContactId, values);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return id;
         }
 
@@ -965,7 +960,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             super.update(db, values, c, markRawContactAsDirty);
 
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
         }
 
         @Override
@@ -973,7 +968,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
 
             int count = super.delete(db, c);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return count;
         }
 
@@ -1005,7 +1000,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             long dataId = super.insert(db, rawContactId, values);
 
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
             return dataId;
         }
@@ -1021,7 +1016,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             mOpenHelper.deleteNameLookup(dataId);
             mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
         }
 
         @Override
@@ -1032,7 +1027,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             int count = super.delete(db, c);
 
             mOpenHelper.deleteNameLookup(dataId);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return count;
         }
 
@@ -1060,7 +1055,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             long dataId = super.insert(db, rawContactId, values);
 
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
             return dataId;
         }
@@ -1076,7 +1071,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             mOpenHelper.deleteNameLookup(dataId);
             mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
         }
 
         @Override
@@ -1087,7 +1082,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             int count = super.delete(db, c);
 
             mOpenHelper.deleteNameLookup(dataId);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return count;
         }
     }
@@ -1108,7 +1103,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 dataId = super.insert(db, rawContactId, values);
 
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
-                fixContactDisplayName(db, rawContactId);
+                fixRawContactDisplayName(db, rawContactId);
             } else {
                 dataId = super.insert(db, rawContactId, values);
             }
@@ -1127,7 +1122,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 super.update(db, values, c, markRawContactAsDirty);
 
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
-                fixContactDisplayName(db, rawContactId);
+                fixRawContactDisplayName(db, rawContactId);
             } else {
                 super.update(db, values, c, markRawContactAsDirty);
             }
@@ -1141,7 +1136,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             int count = super.delete(db, c);
 
             updatePhoneLookup(db, rawContactId, dataId, null, null);
-            fixContactDisplayName(db, rawContactId);
+            fixRawContactDisplayName(db, rawContactId);
             return count;
         }
 
@@ -1334,8 +1329,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + RawContacts.TIMES_CONTACTED + "=" + RawContacts.TIMES_CONTACTED + "+1,"
                 + RawContacts.LAST_TIME_CONTACTED + "=? WHERE " + RawContacts.CONTACT_ID + "=?");
 
-        mContactDisplayNameUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
-                + RawContactsColumns.DISPLAY_NAME + "=? WHERE " + RawContacts._ID + "=?");
+        mRawContactDisplayNameUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.DISPLAY_NAME + "=?,"
+                        + RawContactsColumns.DISPLAY_NAME_SOURCE + "=?" +
+                " WHERE " + RawContacts._ID + "=?");
 
         mRawContactDirtyUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.DIRTY + "=1 WHERE " + RawContacts._ID + "=?");
@@ -3569,14 +3567,15 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
     }
 
-    private void setDisplayName(long rawContactId, String displayName) {
+    private void setDisplayName(long rawContactId, String displayName, int bestDisplayNameSource) {
         if (displayName != null) {
-            mContactDisplayNameUpdate.bindString(1, displayName);
+            mRawContactDisplayNameUpdate.bindString(1, displayName);
         } else {
-            mContactDisplayNameUpdate.bindNull(1);
+            mRawContactDisplayNameUpdate.bindNull(1);
         }
-        mContactDisplayNameUpdate.bindLong(2, rawContactId);
-        mContactDisplayNameUpdate.execute();
+        mRawContactDisplayNameUpdate.bindLong(2, bestDisplayNameSource);
+        mRawContactDisplayNameUpdate.bindLong(3, rawContactId);
+        mRawContactDisplayNameUpdate.execute();
     }
 
     /**
