@@ -3534,10 +3534,12 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         switch (match) {
             case CONTACTS:
             case CONTACTS_LOOKUP:
+                return Contacts.CONTENT_TYPE;
             case CONTACTS_ID:
             case CONTACTS_LOOKUP_ID:
                 return Contacts.CONTENT_ITEM_TYPE;
             case RAW_CONTACTS:
+                return RawContacts.CONTENT_TYPE;
             case RAW_CONTACTS_ID:
                 return RawContacts.CONTENT_ITEM_TYPE;
             case DATA_ID:
