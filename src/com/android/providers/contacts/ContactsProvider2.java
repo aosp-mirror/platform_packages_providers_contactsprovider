@@ -3252,6 +3252,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 Data.SYNC4,
                 Data.RAW_CONTACT_ID,
                 Data.IS_PRIMARY,
+                Data.IS_SUPER_PRIMARY,
                 Data.DATA_VERSION,
                 GroupMembership.GROUP_SOURCE_ID,
                 RawContacts.SYNC1,
@@ -3273,15 +3274,16 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         private static final int COLUMN_DATA1 = 8;
         private static final int COLUMN_RAW_CONTACT_ID = 27;
         private static final int COLUMN_IS_PRIMARY = 28;
-        private static final int COLUMN_DATA_VERSION = 29;
-        private static final int COLUMN_GROUP_SOURCE_ID = 30;
-        private static final int COLUMN_SYNC1 = 31;
-        private static final int COLUMN_SYNC2 = 32;
-        private static final int COLUMN_SYNC3 = 33;
-        private static final int COLUMN_SYNC4 = 34;
-        private static final int COLUMN_DELETED = 35;
-        private static final int COLUMN_CONTACT_ID = 36;
-        private static final int COLUMN_STARRED = 37;
+        private static final int COLUMN_IS_SUPER_PRIMARY = 29;
+        private static final int COLUMN_DATA_VERSION = 30;
+        private static final int COLUMN_GROUP_SOURCE_ID = 31;
+        private static final int COLUMN_SYNC1 = 32;
+        private static final int COLUMN_SYNC2 = 33;
+        private static final int COLUMN_SYNC3 = 34;
+        private static final int COLUMN_SYNC4 = 35;
+        private static final int COLUMN_DELETED = 36;
+        private static final int COLUMN_CONTACT_ID = 37;
+        private static final int COLUMN_STARRED = 38;
 
         public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -3373,6 +3375,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 dataValues.put(Data.RES_PACKAGE, c.getString(COLUMN_RES_PACKAGE));
                 dataValues.put(Data.MIMETYPE, c.getString(COLUMN_MIMETYPE));
                 dataValues.put(Data.IS_PRIMARY, c.getString(COLUMN_IS_PRIMARY));
+                dataValues.put(Data.IS_SUPER_PRIMARY, c.getString(COLUMN_IS_SUPER_PRIMARY));
                 dataValues.put(Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
                 if (!c.isNull(COLUMN_GROUP_SOURCE_ID)) {
                     dataValues.put(GroupMembership.GROUP_SOURCE_ID,
