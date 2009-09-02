@@ -105,6 +105,11 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return false;
     }
 
+    public void aggregate() {
+        ContactAggregationScheduler scheduler = getContactAggregationScheduler();
+        scheduler.run();
+    }
+
     private static class SynchronousAggregationScheduler extends ContactAggregationScheduler {
 
         @Override
@@ -122,7 +127,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
         @Override
         void runDelayed() {
-            super.run();
+//            super.run();
         }
 
     }

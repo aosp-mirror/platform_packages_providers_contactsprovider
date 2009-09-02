@@ -569,6 +569,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     private void assertSuggestions(long contactId, long... suggestions) {
+        forceAggregation();
+
         final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,
                 Contacts.AggregationSuggestions.CONTENT_DIRECTORY);

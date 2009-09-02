@@ -446,6 +446,8 @@ import java.util.HashMap;
     private SQLiteStatement mContactIdQuery;
     private SQLiteStatement mAggregationModeQuery;
     private SQLiteStatement mContactIdUpdate;
+    private SQLiteStatement mMarkAggregatedUpdate;
+    private SQLiteStatement mContactIdAndMarkAggregatedUpdate;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
     private SQLiteStatement mNameLookupInsert;
@@ -504,11 +506,23 @@ import java.util.HashMap;
                 + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
         mContactIdQuery = db.compileStatement("SELECT " + RawContacts.CONTACT_ID + " FROM "
                 + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
+
         mContactIdUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.CONTACT_ID + "=?" +
+                " WHERE " + RawContacts._ID + "=?");
+
+        mMarkAggregatedUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
+                " WHERE " + RawContacts._ID + "=?");
+
+        mContactIdAndMarkAggregatedUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
                 " SET " + RawContacts.CONTACT_ID + "=?, "
                         + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
                 " WHERE " + RawContacts._ID + "=?");
+
         mAggregationModeQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATION_MODE
                 + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
@@ -1278,6 +1292,25 @@ import java.util.HashMap;
         DatabaseUtils.bindObjectToProgram(mContactIdUpdate, 1, contactId);
         DatabaseUtils.bindObjectToProgram(mContactIdUpdate, 2, rawContactId);
         mContactIdUpdate.execute();
+    }
+
+    /**
+     * Marks the specified raw contact ID as aggregated
+     */
+    public void markAggregated(long rawContactId) {
+        getWritableDatabase();
+        DatabaseUtils.bindObjectToProgram(mMarkAggregatedUpdate, 1, rawContactId);
+        mMarkAggregatedUpdate.execute();
+    }
+
+    /**
+     * Updates the contact ID for the specified contact and marks the raw contact as aggregated.
+     */
+    public void setContactIdAndMarkAggregated(long rawContactId, long contactId) {
+        getWritableDatabase();
+        DatabaseUtils.bindObjectToProgram(mContactIdAndMarkAggregatedUpdate, 1, contactId);
+        DatabaseUtils.bindObjectToProgram(mContactIdAndMarkAggregatedUpdate, 2, rawContactId);
+        mContactIdAndMarkAggregatedUpdate.execute();
     }
 
     /**

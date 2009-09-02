@@ -85,16 +85,18 @@ public abstract class SQLiteContentProvider extends ContentProvider {
             mDb = mOpenHelper.getWritableDatabase();
             mDb.beginTransaction();
             try {
+                onBeginTransaction();
                 result = insertInTransaction(uri, values);
                 if (result != null) {
                     mNotifyChange = true;
                 }
+                beforeTransactionCommit();
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
             }
 
-            onTransactionComplete();
+            onEndTransaction();
         } else {
             result = insertInTransaction(uri, values);
             if (result != null) {
@@ -110,18 +112,20 @@ public abstract class SQLiteContentProvider extends ContentProvider {
         mDb = mOpenHelper.getWritableDatabase();
         mDb.beginTransaction();
         try {
+            onBeginTransaction();
             for (int i = 0; i < numValues; i++) {
                 Uri result = insertInTransaction(uri, values[i]);
                 if (result != null) {
                     mNotifyChange = true;
                 }
             }
+            beforeTransactionCommit();
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
         }
 
-        onTransactionComplete();
+        onEndTransaction();
         return numValues;
     }
 
@@ -133,16 +137,18 @@ public abstract class SQLiteContentProvider extends ContentProvider {
             mDb = mOpenHelper.getWritableDatabase();
             mDb.beginTransaction();
             try {
+                onBeginTransaction();
                 count = updateInTransaction(uri, values, selection, selectionArgs);
                 if (count > 0) {
                     mNotifyChange = true;
                 }
+                beforeTransactionCommit();
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
             }
 
-            onTransactionComplete();
+            onEndTransaction();
         } else {
             count = updateInTransaction(uri, values, selection, selectionArgs);
             if (count > 0) {
@@ -161,16 +167,18 @@ public abstract class SQLiteContentProvider extends ContentProvider {
             mDb = mOpenHelper.getWritableDatabase();
             mDb.beginTransaction();
             try {
+                onBeginTransaction();
                 count = deleteInTransaction(uri, selection, selectionArgs);
                 if (count > 0) {
                     mNotifyChange = true;
                 }
+                beforeTransactionCommit();
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
             }
 
-            onTransactionComplete();
+            onEndTransaction();
         } else {
             count = deleteInTransaction(uri, selection, selectionArgs);
             if (count > 0) {
@@ -187,6 +195,7 @@ public abstract class SQLiteContentProvider extends ContentProvider {
         mDb.beginTransaction();
         try {
             mApplyingBatch.set(true);
+            onBeginTransaction();
             final int numOperations = operations.size();
             final ContentProviderResult[] results = new ContentProviderResult[numOperations];
             for (int i = 0; i < numOperations; i++) {
@@ -196,16 +205,23 @@ public abstract class SQLiteContentProvider extends ContentProvider {
                 }
                 results[i] = operation.apply(this, results, i);
             }
+            beforeTransactionCommit();
             mDb.setTransactionSuccessful();
             return results;
         } finally {
             mApplyingBatch.set(false);
             mDb.endTransaction();
-            onTransactionComplete();
+            onEndTransaction();
         }
     }
 
-    protected void onTransactionComplete() {
+    protected void onBeginTransaction() {
+    }
+
+    protected void beforeTransactionCommit() {
+    }
+
+    protected void onEndTransaction() {
         if (mNotifyChange) {
             mNotifyChange = false;
             notifyChange();
