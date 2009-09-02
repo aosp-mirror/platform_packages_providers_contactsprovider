@@ -56,7 +56,7 @@ public class ContactLookupKey {
         return (accountType.hashCode() ^ accountName.hashCode()) & 0xFFF;
     }
 
-    public static void appendToLookupKey(StringBuffer lookupKey, String accountType,
+    public static void appendToLookupKey(StringBuilder lookupKey, String accountType,
             String accountName, String sourceId, String displayName) {
         if (TextUtils.isEmpty(sourceId) && TextUtils.isEmpty(displayName)) {
             return;
@@ -78,7 +78,7 @@ public class ContactLookupKey {
         }
     }
 
-    private static boolean appendEscapedSourceId(StringBuffer sb, String sourceId) {
+    private static boolean appendEscapedSourceId(StringBuilder sb, String sourceId) {
         boolean escaped = false;
         int start = 0;
         while (true) {

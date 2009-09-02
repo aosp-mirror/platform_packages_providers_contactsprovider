@@ -302,6 +302,11 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void setAggregationException(int type, long contactId, long rawContactId) {
+
+        // Aggregation exceptions only work between contacts that have already passed
+        // automatic aggregation
+        forceAggregation();
+
         ContentValues values = new ContentValues();
         values.put(AggregationExceptions.CONTACT_ID, contactId);
         values.put(AggregationExceptions.RAW_CONTACT_ID, rawContactId);
@@ -353,6 +358,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void assertAggregated(long rawContactId1, long rawContactId2) {
+        forceAggregation();
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
         assertTrue(contactId1 == contactId2);
@@ -360,6 +366,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected void assertAggregated(long rawContactId1, long rawContactId2,
             String expectedDisplayName) {
+        forceAggregation();
+
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
         assertTrue(contactId1 == contactId2);
@@ -369,6 +377,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void assertNotAggregated(long rawContactId1, long rawContactId2) {
+        forceAggregation();
+
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
         assertTrue(contactId1 != contactId2);
@@ -747,5 +757,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             }
         }
         c.close();
+    }
+
+    protected void forceAggregation() {
+        ((SynchronousContactsProvider2) mActor.provider).aggregate();
     }
 }

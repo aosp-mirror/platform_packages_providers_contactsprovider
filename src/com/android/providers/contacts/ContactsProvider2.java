@@ -762,7 +762,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             }
 
             setDisplayName(rawContactId, bestDisplayName, bestDisplayNameSource);
-            mContactAggregator.updateDisplayName(db, rawContactId);
+            if (!isNewRawContact(rawContactId)) {
+                mContactAggregator.updateDisplayName(db, rawContactId);
+            }
         }
 
         public boolean isAggregationRequired() {
@@ -1103,6 +1105,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 dataId = super.insert(db, rawContactId, values);
 
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+                mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
             } else {
                 dataId = super.insert(db, rawContactId, values);
@@ -1122,6 +1125,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 super.update(db, values, c, markRawContactAsDirty);
 
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+                mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
             } else {
                 super.update(db, values, c, markRawContactAsDirty);
@@ -1136,6 +1140,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             int count = super.delete(db, c);
 
             updatePhoneLookup(db, rawContactId, dataId, null, null);
+            mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, rawContactId);
             return count;
         }
@@ -1241,7 +1246,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             long dataId = super.insert(db, rawContactId, values);
-            triggerAggregation(rawContactId);
+            if (!isNewRawContact(rawContactId)) {
+                mContactAggregator.updatePhotoId(db, rawContactId);
+            }
             return dataId;
         }
 
@@ -1283,6 +1290,7 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private boolean mImportMode;
 
     private boolean mScheduleAggregation;
+    private ArrayList<Long> mInsertedRawContacts = new ArrayList<Long>();
 
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
@@ -1385,6 +1393,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     @Override
     protected OpenHelper getOpenHelper(final Context context) {
         return OpenHelper.getInstance(context);
+    }
+
+    /* package */ ContactAggregationScheduler getContactAggregationScheduler() {
+        return mAggregationScheduler;
     }
 
     /* package */ NameSplitter getNameSplitter() {
@@ -1518,12 +1530,27 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     @Override
-    protected void onTransactionComplete() {
+    protected void onBeginTransaction() {
+        super.onBeginTransaction();
+        mInsertedRawContacts.clear();
+    }
+
+    @Override
+    protected void beforeTransactionCommit() {
+        super.beforeTransactionCommit();
+        int count = mInsertedRawContacts.size();
+        for (int i = 0; i < count; i++) {
+            mContactAggregator.insertContact(mDb, mInsertedRawContacts.get(i));
+        }
+    }
+
+    @Override
+    protected void onEndTransaction() {
         if (mScheduleAggregation) {
             mScheduleAggregation = false;
             scheduleContactAggregation();
         }
-        super.onTransactionComplete();
+        super.onEndTransaction();
     }
 
     @Override
@@ -1533,6 +1560,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
     protected void scheduleContactAggregation() {
         mContactAggregator.schedule();
+    }
+
+    private boolean isNewRawContact(long rawContactId) {
+        return mInsertedRawContacts.contains(rawContactId);
     }
 
     private DataRowHandler getDataRowHandler(final String mimeType) {
@@ -1646,11 +1677,6 @@ public class ContactsProvider2 extends SQLiteContentProvider {
      * @return the row ID of the newly created row
      */
     private long insertRawContact(ContentValues values, Account account) {
-        /*
-         * The contact record is inserted in the contacts table, but it needs to
-         * be processed by the aggregator before it will be returned by the
-         * "aggregates" queries.
-         */
         ContentValues overriddenValues = new ContentValues(values);
         overriddenValues.putNull(RawContacts.CONTACT_ID);
         if (!resolveAccount(overriddenValues, account)) {
@@ -1666,6 +1692,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         long rawContactId =
                 mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);
         mContactAggregator.markNewForAggregation(rawContactId);
+
+        // Trigger creation of a Contact based on this RawContact at the end of transaction
+        mInsertedRawContacts.add(rawContactId);
         return rawContactId;
     }
 
@@ -2298,6 +2327,9 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
             if (values.containsKey(RawContacts.STARRED)) {
                 mContactAggregator.updateStarred(mDb, selectionWithId, selectionArgs);
+            }
+            if (values.containsKey(RawContacts.SOURCE_ID)) {
+                mContactAggregator.updateLookupKey(mDb, rawContactId);
             }
         }
         return count;
