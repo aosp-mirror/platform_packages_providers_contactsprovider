@@ -750,30 +750,11 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
             String typeColumn, int defaultType, int otherType, String labelColumn) {
         ContentValues values = new ContentValues();
         values.put(personIdColumn, personId);
-        values.put(typeColumn, defaultType);
-        try {
-            mResolver.insert(uri, values);
-            fail("Inserted row with custom type but without label");
-        } catch (Exception e) {
-            // Exception expected
-        }
-
-        values.clear();
-        values.put(personIdColumn, personId);
-        try {
-            mResolver.insert(uri, values);
-            fail("Inserted row without either type or label");
-        } catch (Exception e) {
-            // Exception expected
-        }
-
-        values.clear();
-        values.put(personIdColumn, personId);
-        values.put(typeColumn, otherType);
         values.put(labelColumn, "Foo");
+
         try {
             mResolver.insert(uri, values);
-            fail("Inserted row with both type and label");
+            fail("Inserted row with label without defining type");
         } catch (Exception e) {
             // Exception expected
         }

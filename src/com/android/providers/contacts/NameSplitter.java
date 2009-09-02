@@ -15,8 +15,14 @@
  */
 package com.android.providers.contacts;
 
+import android.content.ContentValues;
+
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.StringTokenizer;
+
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.text.TextUtils;
 
 /**
  * The purpose of this class is to split a full name into given names and last
@@ -40,6 +46,7 @@ public class NameSplitter {
     private final int mMaxSuffixLength;
     private final HashSet<String> mLastNamePrefixesSet;
     private final HashSet<String> mConjuctions;
+    private final Locale mLocale;
 
     public static class Name {
         private String prefix;
@@ -47,6 +54,18 @@ public class NameSplitter {
         private String middleName;
         private String familyName;
         private String suffix;
+
+        public Name() {
+        }
+
+        public Name(String prefix, String givenNames, String middleName, String familyName,
+                String suffix) {
+            this.prefix = prefix;
+            this.givenNames = givenNames;
+            this.middleName = middleName;
+            this.familyName = familyName;
+            this.suffix = suffix;
+        }
 
         public String getPrefix() {
             return prefix;
@@ -66,6 +85,22 @@ public class NameSplitter {
 
         public String getSuffix() {
             return suffix;
+        }
+
+        public void fromValues(ContentValues values) {
+            prefix = values.getAsString(StructuredName.PREFIX);
+            givenNames = values.getAsString(StructuredName.GIVEN_NAME);
+            middleName = values.getAsString(StructuredName.MIDDLE_NAME);
+            familyName = values.getAsString(StructuredName.FAMILY_NAME);
+            suffix = values.getAsString(StructuredName.SUFFIX);
+        }
+
+        public void toValues(ContentValues values) {
+            values.put(StructuredName.PREFIX, prefix);
+            values.put(StructuredName.GIVEN_NAME, givenNames);
+            values.put(StructuredName.MIDDLE_NAME, middleName);
+            values.put(StructuredName.FAMILY_NAME, familyName);
+            values.put(StructuredName.SUFFIX, suffix);
         }
     }
 
@@ -122,11 +157,13 @@ public class NameSplitter {
      *            e.g. "AND, Or"
      */
     public NameSplitter(String commonPrefixes, String commonLastNamePrefixes,
-            String commonSuffixes, String commonConjunctions) {
+            String commonSuffixes, String commonConjunctions, Locale locale) {
+        // TODO: refactor this to use <string-array> resources
         mPrefixesSet = convertToSet(commonPrefixes);
         mLastNamePrefixesSet = convertToSet(commonLastNamePrefixes);
         mSuffixesSet = convertToSet(commonSuffixes);
         mConjuctions = convertToSet(commonConjunctions);
+        mLocale = locale;
 
         int maxLength = 0;
         for (String suffix : mSuffixesSet) {
@@ -173,6 +210,26 @@ public class NameSplitter {
         parseLastName(name, tokens);
         parseMiddleName(name, tokens);
         parseGivenNames(name, tokens);
+    }
+
+    /**
+     * Flattens the given {@link Name} into a single field, usually for storage
+     * in {@link StructuredName#DISPLAY_NAME}.
+     */
+    public String join(Name name) {
+        final boolean hasGiven = !TextUtils.isEmpty(name.givenNames);
+        final boolean hasFamily = !TextUtils.isEmpty(name.familyName);
+
+        // TODO: write locale-specific blending logic here
+        if (hasGiven && hasFamily) {
+            return name.givenNames + " " + name.familyName;
+        } else if (hasFamily) {
+            return name.familyName;
+        } else if (hasGiven) {
+            return name.givenNames;
+        } else {
+            return null;
+        }
     }
 
     /**
