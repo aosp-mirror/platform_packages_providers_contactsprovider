@@ -2209,6 +2209,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 // TODO: security checks
                 count = mDb.update(Tables.RAW_CONTACTS, values,
                         appendAccountToSelection(uri, selection), selectionArgs);
+
+                if (values.containsKey(RawContacts.STARRED)) {
+                    mContactAggregator.updateStarred(mDb, selection, selectionArgs);
+                }
                 break;
             }
 
@@ -2292,6 +2296,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                     || values.containsKey(RawContacts.ACCOUNT_NAME)
                     || values.containsKey(RawContacts.SOURCE_ID)) {
                 triggerAggregation(rawContactId);
+            }
+
+            if (values.containsKey(RawContacts.STARRED)) {
+                mContactAggregator.updateStarred(mDb, selectionWithId, selectionArgs);
             }
         }
         return count;
