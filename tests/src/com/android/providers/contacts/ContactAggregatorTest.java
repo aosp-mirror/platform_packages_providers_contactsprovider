@@ -268,7 +268,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "Lightning", "McQueen");
         insertEmail(rawContactId2, "mcqueen@android.com");
 
-        assertAggregated(rawContactId1, rawContactId2);
+        assertAggregated(rawContactId1, rawContactId2, "Lightning McQueen");
     }
 
     public void testAggregationBasedOnEmailWhenNewContactHasNoName() {
