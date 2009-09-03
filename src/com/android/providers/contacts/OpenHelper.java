@@ -942,6 +942,7 @@ import java.util.HashMap;
                 + Data.SYNC4 + ", "
                 + Data.RAW_CONTACT_ID + ", "
                 + Data.IS_PRIMARY + ", "
+                + Data.IS_SUPER_PRIMARY + ", "
                 + Data.DATA_VERSION + ", "
                 + DataColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
                 + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
