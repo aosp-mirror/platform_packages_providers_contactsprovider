@@ -103,7 +103,7 @@
 103 6 {
 104    _id=7
 105    raw_contact_id=2
-106    mimetype=vnd.android.cursor.item/phone
+106    mimetype=vnd.android.cursor.item/phone_v2
 107    data1=1
 108    data2=1-800-466-4411
 109    data3=null
@@ -120,7 +120,7 @@
 120 7 {
 121    _id=8
 122    raw_contact_id=2
-123    mimetype=vnd.android.cursor.item/phone
+123    mimetype=vnd.android.cursor.item/phone_v2
 124    data1=3
 125    data2=2345678901
 126    data3=null
@@ -137,7 +137,7 @@
 137 8 {
 138    _id=9
 139    raw_contact_id=2
-140    mimetype=vnd.android.cursor.item/phone
+140    mimetype=vnd.android.cursor.item/phone_v2
 141    data1=2
 142    data2=3456789012
 143    data3=null
@@ -154,7 +154,7 @@
 154 9 {
 155    _id=10
 156    raw_contact_id=2
-157    mimetype=vnd.android.cursor.item/phone
+157    mimetype=vnd.android.cursor.item/phone_v2
 158    data1=5
 159    data2=4567890123
 160    data3=null
@@ -171,7 +171,7 @@
 171 10 {
 172    _id=11
 173    raw_contact_id=2
-174    mimetype=vnd.android.cursor.item/phone
+174    mimetype=vnd.android.cursor.item/phone_v2
 175    data1=4
 176    data2=5678901234
 177    data3=null
@@ -188,7 +188,7 @@
 188 11 {
 189    _id=12
 190    raw_contact_id=2
-191    mimetype=vnd.android.cursor.item/phone
+191    mimetype=vnd.android.cursor.item/phone_v2
 192    data1=6
 193    data2=6789012345
 194    data3=null
@@ -205,7 +205,7 @@
 205 12 {
 206    _id=13
 207    raw_contact_id=2
-208    mimetype=vnd.android.cursor.item/phone
+208    mimetype=vnd.android.cursor.item/phone_v2
 209    data1=7
 210    data2=7890123456
 211    data3=null
@@ -222,7 +222,7 @@
 222 13 {
 223    _id=14
 224    raw_contact_id=3
-225    mimetype=vnd.android.cursor.item/phone
+225    mimetype=vnd.android.cursor.item/phone_v2
 226    data1=2
 227    data2=555-555-5555
 228    data3=null
@@ -239,7 +239,7 @@
 239 14 {
 240    _id=15
 241    raw_contact_id=2
-242    mimetype=vnd.android.cursor.item/phone
+242    mimetype=vnd.android.cursor.item/phone_v2
 243    data1=1
 244    data2=1234567890
 245    data3=null
@@ -256,7 +256,7 @@
 256 15 {
 257    _id=16
 258    raw_contact_id=11
-259    mimetype=vnd.android.cursor.item/phone
+259    mimetype=vnd.android.cursor.item/phone_v2
 260    data1=2
 261    data2=1-987-4563
 262    data3=null
@@ -273,7 +273,7 @@
 273 16 {
 274    _id=17
 275    raw_contact_id=2
-276    mimetype=vnd.android.cursor.item/email
+276    mimetype=vnd.android.cursor.item/email_v2
 277    data1=1
 278    data2=a@acme.com
 279    data3=null
@@ -290,7 +290,7 @@
 290 17 {
 291    _id=18
 292    raw_contact_id=2
-293    mimetype=vnd.android.cursor.item/email
+293    mimetype=vnd.android.cursor.item/email_v2
 294    data1=2
 295    data2=b@acme.com
 296    data3=null
@@ -307,7 +307,7 @@
 307 18 {
 308    _id=19
 309    raw_contact_id=2
-310    mimetype=vnd.android.cursor.item/email
+310    mimetype=vnd.android.cursor.item/email_v2
 311    data1=3
 312    data2=c@acme.com
 313    data3=null
@@ -324,7 +324,7 @@
 324 19 {
 325    _id=20
 326    raw_contact_id=2
-327    mimetype=vnd.android.cursor.item/email
+327    mimetype=vnd.android.cursor.item/email_v2
 328    data1=3
 329    data2=d@acme.com
 330    data3=null
@@ -477,7 +477,7 @@
 477 28 {
 478    _id=29
 479    raw_contact_id=3
-480    mimetype=vnd.android.cursor.item/email
+480    mimetype=vnd.android.cursor.item/email_v2
 481    data1=2
 482    data2=deer@acme.com
 483    data3=null
@@ -494,7 +494,7 @@
 494 29 {
 495    _id=30
 496    raw_contact_id=3
-497    mimetype=vnd.android.cursor.item/postal-address
+497    mimetype=vnd.android.cursor.item/postal-address_v2
 498    data1=2
 499    data2=12345 Main Street
 500 Main Town, CA 95000
