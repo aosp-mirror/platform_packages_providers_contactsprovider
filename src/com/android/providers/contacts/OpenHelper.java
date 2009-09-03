@@ -222,12 +222,19 @@ import java.util.HashMap;
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
-        final String CONTACT_IS_VISIBLE = "SELECT (CASE WHEN (CASE WHEN " + RAW_CONTACT_IS_LOCAL
-                + " THEN 1 WHEN " + ZERO_GROUP_MEMBERSHIPS + " THEN " + Settings.UNGROUPED_VISIBLE
-                + " ELSE MAX(" + Groups.GROUP_VISIBLE + ") END)=1 THEN 1 ELSE 0 END) FROM "
-                + Tables.RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS + " WHERE "
-                + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " GROUP BY "
-                + RawContacts.CONTACT_ID;
+        final String CONTACT_IS_VISIBLE =
+                "SELECT " +
+                    "(CASE WHEN " +
+                        "(CASE" +
+                            " WHEN " + RAW_CONTACT_IS_LOCAL +
+                            " THEN 1 " +
+                            " WHEN " + ZERO_GROUP_MEMBERSHIPS +
+                            " THEN " + Settings.UNGROUPED_VISIBLE +
+                            " ELSE MAX(" + Groups.GROUP_VISIBLE + ")" +
+                         "END)=1 THEN 1 ELSE 0 END)" +
+                " FROM " + Tables.RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS +
+                " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
+                " GROUP BY " + RawContacts.CONTACT_ID;
 
         final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
                 + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=?";
