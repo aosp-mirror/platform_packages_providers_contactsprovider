@@ -150,7 +150,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
     /**
      * Create an aggregate that has multiple contacts with various levels of
-     * protected data, and ensure that {@link Contacts#CONTENT_SUMMARY_URI}
+     * protected data, and ensure that {@link Contacts#CONTENT_URI}
      * details don't expose {@link Contacts#IS_RESTRICTED} data.
      */
     public void __testAggregateSummary() {
@@ -270,7 +270,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         cursor.close();
 
         // AGGREGATES_SUMMARY
-        cursor = mRed.resolver.query(Contacts.CONTENT_SUMMARY_URI, Projections.PROJ_ID, null,
+        cursor = mRed.resolver.query(Contacts.CONTENT_URI, Projections.PROJ_ID, null,
                 null, null);
         while (cursor.moveToNext()) {
             assertTrue("Discovered restricted contact",
@@ -279,7 +279,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         cursor.close();
 
         // AGGREGATES_SUMMARY_ID
-        cursor = mRed.resolver.query(ContentUris.withAppendedId(Contacts.CONTENT_SUMMARY_URI,
+        cursor = mRed.resolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 greenAgg), Projections.PROJ_ID, null, null, null);
         assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
         cursor.close();

@@ -324,13 +324,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 null, null, null, null);
     }
 
-    protected Cursor queryContactSummary(long contactId, String[] projection) {
-        return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_SUMMARY_URI,
-                contactId), projection, null, null, null);
-    }
-
-    protected Cursor queryContactSummary() {
-        return mResolver.query(Contacts.CONTENT_SUMMARY_URI, null, null, null, null);
+    protected Cursor queryContact(long contactId, String[] projection) {
+        return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                projection, null, null, null);
     }
 
     protected long queryContactId(long rawContactId) {
