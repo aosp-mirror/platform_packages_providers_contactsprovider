@@ -51,6 +51,7 @@ import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
 import android.content.res.AssetFileDescriptor;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteContentHelper;
@@ -92,6 +93,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -770,6 +772,29 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         public boolean isAggregationRequired() {
             return true;
         }
+
+        /**
+         * Return set of values, using current values at given {@link Data#_ID}
+         * as baseline, but augmented with any updates.
+         */
+        public ContentValues getAugmentedValues(SQLiteDatabase db, long dataId,
+                ContentValues update) {
+            final ContentValues values = new ContentValues();
+            final Cursor cursor = db.query(Tables.DATA, null, Data._ID + "=" + dataId,
+                    null, null, null, null);
+            try {
+                if (cursor.moveToFirst()) {
+                    for (int i = 0; i < cursor.getColumnCount(); i++) {
+                        final String key = cursor.getColumnName(i);
+                        values.put(key, cursor.getString(i));
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+            values.putAll(update);
+            return values;
+        }
     }
 
     public class CustomDataRowHandler extends DataRowHandler {
@@ -780,17 +805,16 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     public class StructuredNameRowHandler extends DataRowHandler {
+        private final NameSplitter mSplitter;
 
-        private final NameSplitter mNameSplitter;
-
-        public StructuredNameRowHandler(NameSplitter nameSplitter) {
+        public StructuredNameRowHandler(NameSplitter splitter) {
             super(StructuredName.CONTENT_ITEM_TYPE);
-            mNameSplitter = nameSplitter;
+            mSplitter = splitter;
         }
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            fixStructuredNameComponents(values);
+            fixStructuredNameComponents(values, values);
 
             long dataId = super.insert(db, rawContactId, values);
 
@@ -805,11 +829,11 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean markRawContactAsDirty) {
+            final long dataId = c.getLong(DataUpdateQuery._ID);
+            final long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
-            fixStructuredNameComponents(values);
-
-            long dataId = c.getLong(DataUpdateQuery._ID);
-            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+            final ContentValues augmented = getAugmentedValues(db, dataId, values);
+            fixStructuredNameComponents(augmented, values);
 
             super.update(db, values, c, markRawContactAsDirty);
 
@@ -859,45 +883,91 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         }
 
         /**
-         * Parses the supplied display name, but only if the incoming values do not already contain
-         * structured name parts.  Also, if the display name is not provided, generate one by
-         * concatenating first name and last name
-         *
-         * TODO see if the order of first and last names needs to be conditionally reversed for
-         * some locales, e.g. China.
+         * Specific list of structured fields.
          */
-        private void fixStructuredNameComponents(ContentValues values) {
-            String fullName = values.getAsString(StructuredName.DISPLAY_NAME);
-            if (!TextUtils.isEmpty(fullName)
-                    && TextUtils.isEmpty(values.getAsString(StructuredName.PREFIX))
-                    && TextUtils.isEmpty(values.getAsString(StructuredName.GIVEN_NAME))
-                    && TextUtils.isEmpty(values.getAsString(StructuredName.MIDDLE_NAME))
-                    && TextUtils.isEmpty(values.getAsString(StructuredName.FAMILY_NAME))
-                    && TextUtils.isEmpty(values.getAsString(StructuredName.SUFFIX))) {
-                NameSplitter.Name name = new NameSplitter.Name();
-                mNameSplitter.split(name, fullName);
+        private final String[] STRUCTURED_FIELDS = new String[] {
+                StructuredName.PREFIX, StructuredName.GIVEN_NAME, StructuredName.MIDDLE_NAME,
+                StructuredName.FAMILY_NAME, StructuredName.SUFFIX
+        };
 
-                values.put(StructuredName.PREFIX, name.getPrefix());
-                values.put(StructuredName.GIVEN_NAME, name.getGivenNames());
-                values.put(StructuredName.MIDDLE_NAME, name.getMiddleName());
-                values.put(StructuredName.FAMILY_NAME, name.getFamilyName());
-                values.put(StructuredName.SUFFIX, name.getSuffix());
+        /**
+         * Parses the supplied display name, but only if the incoming values do
+         * not already contain structured name parts. Also, if the display name
+         * is not provided, generate one by concatenating first name and last
+         * name.
+         */
+        private void fixStructuredNameComponents(ContentValues augmented, ContentValues update) {
+            final String unstruct = update.getAsString(StructuredName.DISPLAY_NAME);
+
+            final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
+            final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
+
+            final NameSplitter.Name name = new NameSplitter.Name();
+
+            if (touchedUnstruct && !touchedStruct) {
+                mSplitter.split(name, unstruct);
+                name.toValues(update);
+            } else if (!touchedUnstruct && touchedStruct) {
+                name.fromValues(augmented);
+                final String joined = mSplitter.join(name);
+                update.put(StructuredName.DISPLAY_NAME, joined);
             }
+        }
+    }
 
-            if (TextUtils.isEmpty(fullName)) {
-                String givenName = values.getAsString(StructuredName.GIVEN_NAME);
-                String familyName = values.getAsString(StructuredName.FAMILY_NAME);
-                if (TextUtils.isEmpty(givenName)) {
-                    fullName = familyName;
-                } else if (TextUtils.isEmpty(familyName)) {
-                    fullName = givenName;
-                } else {
-                    fullName = givenName + " " + familyName;
-                }
+    public class StructuredPostalRowHandler extends DataRowHandler {
+        private PostalSplitter mSplitter;
 
-                if (!TextUtils.isEmpty(fullName)) {
-                    values.put(StructuredName.DISPLAY_NAME, fullName);
-                }
+        public StructuredPostalRowHandler(PostalSplitter splitter) {
+            super(StructuredPostal.CONTENT_ITEM_TYPE);
+            mSplitter = splitter;
+        }
+
+        @Override
+        public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
+            fixStructuredPostalComponents(values, values);
+            return super.insert(db, rawContactId, values);
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            final long dataId = c.getLong(DataUpdateQuery._ID);
+            final ContentValues augmented = getAugmentedValues(db, dataId, values);
+            fixStructuredPostalComponents(augmented, values);
+            super.update(db, values, c, markRawContactAsDirty);
+        }
+
+        /**
+         * Specific list of structured fields.
+         */
+        private final String[] STRUCTURED_FIELDS = new String[] {
+                StructuredPostal.STREET, StructuredPostal.POBOX, StructuredPostal.NEIGHBORHOOD,
+                StructuredPostal.CITY, StructuredPostal.REGION, StructuredPostal.POSTCODE,
+                StructuredPostal.COUNTRY,
+        };
+
+        /**
+         * Prepares the given {@link StructuredPostal} row, building
+         * {@link StructuredPostal#FORMATTED_ADDRESS} to match the structured
+         * values when missing. When structured components are missing, the
+         * unstructured value is assigned to {@link StructuredPostal#STREET}.
+         */
+        private void fixStructuredPostalComponents(ContentValues augmented, ContentValues update) {
+            final String unstruct = update.getAsString(StructuredPostal.FORMATTED_ADDRESS);
+
+            final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
+            final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
+
+            final PostalSplitter.Postal postal = new PostalSplitter.Postal();
+
+            if (touchedUnstruct && !touchedStruct) {
+                mSplitter.split(postal, unstruct);
+                postal.toValues(update);
+            } else if (!touchedUnstruct && touchedStruct) {
+                postal.fromValues(augmented);
+                final String joined = mSplitter.join(postal);
+                update.put(StructuredPostal.FORMATTED_ADDRESS, joined);
             }
         }
     }
@@ -915,30 +985,33 @@ public class ContactsProvider2 extends SQLiteContentProvider {
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            int type;
-            String label;
-            if (values.containsKey(mTypeColumn)) {
-                type = values.getAsInteger(mTypeColumn);
-            } else {
-                type = BaseTypes.TYPE_CUSTOM;
-            }
-            if (values.containsKey(mLabelColumn)) {
-                label = values.getAsString(mLabelColumn);
-            } else {
-                label = null;
-            }
-
-            if (type != BaseTypes.TYPE_CUSTOM && label != null) {
-                throw new IllegalArgumentException(mLabelColumn + " value can only be specified with "
-                        + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
-            }
-
-            if (type == BaseTypes.TYPE_CUSTOM && label == null) {
-                throw new IllegalArgumentException(mLabelColumn + " value must be specified when "
-                        + mTypeColumn + "=" + BaseTypes.TYPE_CUSTOM + "(custom)");
-            }
-
+            enforceTypeAndLabel(values, values);
             return super.insert(db, rawContactId, values);
+        }
+
+        @Override
+        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+                boolean markRawContactAsDirty) {
+            final long dataId = c.getLong(DataUpdateQuery._ID);
+            final ContentValues augmented = getAugmentedValues(db, dataId, values);
+            enforceTypeAndLabel(augmented, values);
+            super.update(db, values, c, markRawContactAsDirty);
+        }
+
+        /**
+         * If the given {@link ContentValues} defines {@link #mTypeColumn},
+         * enforce that {@link #mLabelColumn} only appears when type is
+         * {@link BaseTypes#TYPE_CUSTOM}. Exception is thrown otherwise.
+         */
+        private void enforceTypeAndLabel(ContentValues augmented, ContentValues update) {
+            final boolean hasType = !TextUtils.isEmpty(augmented.getAsString(mTypeColumn));
+            final boolean hasLabel = !TextUtils.isEmpty(augmented.getAsString(mLabelColumn));
+
+            if (hasLabel && !hasType) {
+                // When label exists, assert that some type is defined
+                throw new IllegalArgumentException(mTypeColumn + " must be specified when "
+                        + mLabelColumn + " is defined.");
+            }
         }
     }
 
@@ -1279,8 +1352,10 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     private final ContactAggregationScheduler mAggregationScheduler;
     private OpenHelper mOpenHelper;
 
-    private ContactAggregator mContactAggregator;
     private NameSplitter mNameSplitter;
+    private PostalSplitter mPostalSplitter;
+
+    private ContactAggregator mContactAggregator;
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
 
@@ -1361,11 +1436,14 @@ public class ContactsProvider2 extends SQLiteContentProvider {
                 + " SET " + Presence.PRESENCE_CUSTOM_STATUS + "=? "
                 + " WHERE " + AggregatedPresenceColumns.CONTACT_ID + "=?");
 
+        final Locale locale = Locale.getDefault();
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
                 context.getString(com.android.internal.R.string.common_last_name_prefixes),
                 context.getString(com.android.internal.R.string.common_name_suffixes),
-                context.getString(com.android.internal.R.string.common_name_conjunctions));
+                context.getString(com.android.internal.R.string.common_name_conjunctions),
+                locale);
+        mPostalSplitter = new PostalSplitter(locale);
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
@@ -1379,6 +1457,8 @@ public class ContactsProvider2 extends SQLiteContentProvider {
         mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new NicknameDataRowHandler());
         mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
                 new StructuredNameRowHandler(mNameSplitter));
+        mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
+                new StructuredPostalRowHandler(mPostalSplitter));
         mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
         mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
 
@@ -2513,6 +2593,18 @@ public class ContactsProvider2 extends SQLiteContentProvider {
             array = newArray;
         }
         return array;
+    }
+
+    /**
+     * Test all against {@link TextUtils#isEmpty(CharSequence)}.
+     */
+    private static boolean areAllEmpty(ContentValues values, String[] keys) {
+        for (String key : keys) {
+            if (!TextUtils.isEmpty(values.getAsString(key))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

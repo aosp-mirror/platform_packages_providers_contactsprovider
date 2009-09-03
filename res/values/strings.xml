@@ -22,4 +22,5 @@
 
     <!-- What to show in messaging that refers to this provider, e.g. AccountSyncSettings -->
     <string name="provider_label">Contacts</string>
+
 </resources>

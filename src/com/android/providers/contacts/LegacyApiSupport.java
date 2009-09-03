@@ -54,6 +54,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 
 import java.util.HashMap;
+import java.util.Locale;
 
 public class LegacyApiSupport implements OpenHelper.Delegate {
 
@@ -452,8 +453,9 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         mGlobalSearchSupport = globalSearchSupport;
         mOpenHelper.setDelegate(this);
 
-        mPhoneticNameSplitter = new NameSplitter("", "", "",
-                context.getString(com.android.internal.R.string.common_name_conjunctions));
+        mPhoneticNameSplitter = new NameSplitter("", "", "", context
+                .getString(com.android.internal.R.string.common_name_conjunctions), Locale
+                .getDefault());
 
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
         mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
