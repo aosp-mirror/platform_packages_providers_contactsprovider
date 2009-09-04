@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.OpenHelper.PresenceColumns;
 
+import android.accounts.Account;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
@@ -914,6 +915,30 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(deleteWithCorrectAccountUri, null, null);
 
         assertStoredValue(uri, RawContacts.DELETED, "1");
+    }
+
+    public void testContactDeletionAccountsUpdated() {
+        long rawContactId1 = createRawContact(mAccount);
+        insertEmail(rawContactId1, "account1@email.com");
+        long rawContactId2 = createRawContact(mAccountTwo);
+        insertEmail(rawContactId2, "account2@email.com");
+        insertImHandle(rawContactId2, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com", Presence.AVAILABLE,
+            null);
+
+        // This is to ensure we do not delete contacts with null, null (account name, type)
+        // accidentally.
+        long rawContactId3 = createRawContactWithName("James", "Sullivan");
+        insertPhoneNumber(rawContactId3, "5234567890");
+
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+
+        Account accountRemaining = new Account("account1", "account type1");
+        cp.onAccountsUpdated(new Account[]{accountRemaining});
+        Cursor c = mResolver.query(RawContacts.CONTENT_URI, null, null, null, null);
+        assertEquals(2, c.getCount());
+        assertEquals(0, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
+                + rawContactId2, null));
     }
 
     public void testMarkAsDirtyParameter() {
