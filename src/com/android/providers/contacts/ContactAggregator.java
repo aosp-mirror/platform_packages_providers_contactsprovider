@@ -51,6 +51,7 @@ import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
+import android.util.EventLog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -133,6 +134,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private static final int MAX_TRANSACTION_SIZE = 50;
 
+    // From system/core/logcat/event-log-tags
+    // aggregator [time, count] will be logged for each aggregator cycle.
+    // For the query (as opposed to the merge), count will be negative
+    public static final int LOG_SYNC_CONTACTS_AGGREGATION = 2747;
+
     private final ContactsProvider2 mContactsProvider;
     private final OpenHelper mOpenHelper;
     private final ContactAggregationScheduler mScheduler;
@@ -199,7 +205,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     /**
      * Constructor.  Starts a contact aggregation thread.  Call {@link #quit} to kill the
      * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
-     * a delay of {@link #AGGREGATION_DELAY} milliseconds.
+     * a delay of {@link ContactAggregationScheduler#AGGREGATION_DELAY} milliseconds.
      */
     public ContactAggregator(ContactsProvider2 contactsProvider, OpenHelper openHelper,
             ContactAggregationScheduler scheduler) {
@@ -346,7 +352,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         long contactIds[] = new long[MAX_TRANSACTION_SIZE];
 
         while (!mCancel) {
+            long start = System.currentTimeMillis();
             int count = findContactsToAggregate(db, rawContactIds, contactIds);
+            EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, System.currentTimeMillis() - start, -count);
             if (mCancel || count == 0) {
                 break;
             }
@@ -409,6 +417,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             db.endTransaction();
         }
 
+        EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, elapsedTime, aggregatedCount);
         String performance = aggregatedCount == 0 ? "" : ", " + (elapsedTime / aggregatedCount)
                 + " ms per contact";
         if (aggregatedCount == count) {
