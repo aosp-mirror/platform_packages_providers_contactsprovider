@@ -617,7 +617,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPresence(protocol1, null, handle1, Presence.AWAY, "Yellow");
         insertPresence(protocol1, null, handle1, Presence.INVISIBLE, "Red");
 
-        Cursor c = queryContactSummary(queryContactId(rawContactId1),
+        Cursor c = queryContact(queryContactId(rawContactId1),
                 new String[] {Presence.PRESENCE_STATUS, Presence.PRESENCE_CUSTOM_STATUS});
         assertEquals(1, c.getCount());
 
