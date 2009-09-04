@@ -844,6 +844,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
         insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com", Presence.AVAILABLE, null);
+        long contactId = queryContactId(rawContactId);
+
         assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
         assertEquals(1, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
@@ -861,6 +863,24 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null, null));
         assertEquals(0, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId, null));
+        assertEquals(0, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
+    }
+
+    public void testRawContactDeletionKeepingAggregateContact() {
+        long rawContactId1 = createRawContactWithName();
+        long rawContactId2 = createRawContactWithName();
+
+        // Same name - should be aggregated
+        assertAggregated(rawContactId1, rawContactId2);
+
+        long contactId = queryContactId(rawContactId1);
+
+        Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
+        Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
+                RawContacts.DELETE_PERMANENTLY, "true").build();
+        mResolver.delete(permanentDeletionUri, null, null);
+        assertEquals(0, getCount(uri, null, null));
+        assertEquals(1, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
     }
 
     public void testRawContactDeletionWithAccounts() {

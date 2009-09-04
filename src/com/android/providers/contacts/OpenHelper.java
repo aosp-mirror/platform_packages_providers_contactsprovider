@@ -721,9 +721,24 @@ import java.util.HashMap;
                 + "   BEFORE DELETE ON " + Tables.RAW_CONTACTS
                 + " BEGIN "
                 + "   DELETE FROM " + Tables.DATA
-                + "     WHERE " + Data.RAW_CONTACT_ID + "=OLD." + RawContacts._ID + ";"
+                + "     WHERE " + Data.RAW_CONTACT_ID
+                                + "=OLD." + RawContacts._ID + ";"
                 + "   DELETE FROM " + Tables.PHONE_LOOKUP
-                + "     WHERE " + PhoneLookupColumns.RAW_CONTACT_ID + "=OLD." + RawContacts._ID + ";"
+                + "     WHERE " + PhoneLookupColumns.RAW_CONTACT_ID
+                                + "=OLD." + RawContacts._ID + ";"
+                + "   DELETE FROM " + Tables.NAME_LOOKUP
+                + "     WHERE " + NameLookupColumns.RAW_CONTACT_ID
+                                + "=OLD." + RawContacts._ID + ";"
+                + "   DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS
+                + "     WHERE " + AggregationExceptionColumns.RAW_CONTACT_ID1
+                                + "=OLD." + RawContacts._ID
+                + "        OR " + AggregationExceptionColumns.RAW_CONTACT_ID2
+                                + "=OLD." + RawContacts._ID + ";"
+                + "   DELETE FROM " + Tables.CONTACTS
+                + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
+                + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
+                + "            WHERE " + RawContacts.CONTACT_ID + "=OLD." + RawContacts.CONTACT_ID
+                + "           )=1;"
                 + " END");
 
         /**

@@ -2249,20 +2249,16 @@ public class ContactsProvider2 extends SQLiteContentProvider {
     }
 
     public int deleteRawContact(long rawContactId, boolean permanently) {
-        // TODO delete aggregation exceptions
-        mOpenHelper.removeContactIfSingleton(rawContactId);
         if (permanently) {
             mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
-
-            // Clear out data used for aggregation - this deleted contact should not be aggregated
-            mDb.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
-                    + NameLookupColumns.RAW_CONTACT_ID + "=" + rawContactId);
+            mOpenHelper.removeContactIfSingleton(rawContactId);
 
             mValues.clear();
             mValues.put(RawContacts.DELETED, 1);
             mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
+            mValues.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
             mValues.putNull(RawContacts.CONTACT_ID);
             mValues.put(RawContacts.DIRTY, 1);
             return updateRawContact(rawContactId, mValues, null, null);
