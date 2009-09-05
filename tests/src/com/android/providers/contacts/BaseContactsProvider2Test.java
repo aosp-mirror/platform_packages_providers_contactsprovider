@@ -301,22 +301,17 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 RawContacts.CONTENT_URI, rawContactId), values, null, null);
     }
 
-    protected void setAggregationException(int type, long contactId, long rawContactId) {
-
-        // Aggregation exceptions only work between contacts that have already passed
-        // automatic aggregation
-        forceAggregation();
-
+    protected void setAggregationException(int type, long rawContactId1, long rawContactId2) {
         ContentValues values = new ContentValues();
-        values.put(AggregationExceptions.CONTACT_ID, contactId);
-        values.put(AggregationExceptions.RAW_CONTACT_ID, rawContactId);
+        values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
+        values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
         values.put(AggregationExceptions.TYPE, type);
         assertEquals(1, mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null));
     }
 
     protected Cursor queryRawContact(long rawContactId) {
-        return mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), null,
-                null, null, null);
+        return mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                null, null, null, null);
     }
 
     protected Cursor queryContact(long contactId) {

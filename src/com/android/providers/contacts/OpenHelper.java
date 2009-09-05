@@ -188,10 +188,6 @@ import java.util.HashMap;
 
         public static final String NAME_LOOKUP_JOIN_RAW_CONTACTS = "name_lookup "
                 + "INNER JOIN raw_contacts ON (name_lookup.raw_contact_id = raw_contacts._id)";
-
-        public static final String AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS = "agg_exceptions "
-                + "INNER JOIN raw_contacts raw_contacts1 "
-                + "ON (agg_exceptions.raw_contact_id1 = raw_contacts1._id) ";
     }
 
     public interface Views {
@@ -411,8 +407,6 @@ import java.util.HashMap;
 
     public interface AggregationExceptionColumns {
         public static final String _ID = BaseColumns._ID;
-        public static final String RAW_CONTACT_ID1 = "raw_contact_id1";
-        public static final String RAW_CONTACT_ID2 = "raw_contact_id2";
     }
 
     public interface NicknameLookupColumns {
@@ -730,9 +724,9 @@ import java.util.HashMap;
                 + "     WHERE " + NameLookupColumns.RAW_CONTACT_ID
                                 + "=OLD." + RawContacts._ID + ";"
                 + "   DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS
-                + "     WHERE " + AggregationExceptionColumns.RAW_CONTACT_ID1
+                + "     WHERE " + AggregationExceptions.RAW_CONTACT_ID1
                                 + "=OLD." + RawContacts._ID
-                + "        OR " + AggregationExceptionColumns.RAW_CONTACT_ID2
+                + "        OR " + AggregationExceptions.RAW_CONTACT_ID2
                                 + "=OLD." + RawContacts._ID + ";"
                 + "   DELETE FROM " + Tables.CONTACTS
                 + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
@@ -871,22 +865,22 @@ import java.util.HashMap;
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
-                AggregationExceptionColumns.RAW_CONTACT_ID1
+                AggregationExceptions.RAW_CONTACT_ID1
                         + " INTEGER REFERENCES raw_contacts(_id), " +
-                AggregationExceptionColumns.RAW_CONTACT_ID2
+                AggregationExceptions.RAW_CONTACT_ID2
                         + " INTEGER REFERENCES raw_contacts(_id)" +
         ");");
 
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index1 ON " +
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
-                AggregationExceptionColumns.RAW_CONTACT_ID1 + ", " +
-                AggregationExceptionColumns.RAW_CONTACT_ID2 +
+                AggregationExceptions.RAW_CONTACT_ID1 + ", " +
+                AggregationExceptions.RAW_CONTACT_ID2 +
         ");");
 
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS aggregation_exception_index2 ON " +
                 Tables.AGGREGATION_EXCEPTIONS + " (" +
-                AggregationExceptionColumns.RAW_CONTACT_ID2 + ", " +
-                AggregationExceptionColumns.RAW_CONTACT_ID1 +
+                AggregationExceptions.RAW_CONTACT_ID2 + ", " +
+                AggregationExceptions.RAW_CONTACT_ID1 +
         ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.SETTINGS + " (" +

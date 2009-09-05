@@ -53,7 +53,6 @@ import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
 import android.content.res.AssetFileDescriptor;
-import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteContentHelper;
@@ -548,10 +547,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         columns = new HashMap<String, String>();
         columns.put(AggregationExceptionColumns._ID, Tables.AGGREGATION_EXCEPTIONS + "._id AS _id");
         columns.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE);
-        columns.put(AggregationExceptions.CONTACT_ID,
-                "raw_contacts1." + RawContacts.CONTACT_ID
-                + " AS " + AggregationExceptions.CONTACT_ID);
-        columns.put(AggregationExceptions.RAW_CONTACT_ID, AggregationExceptionColumns.RAW_CONTACT_ID2);
+        columns.put(AggregationExceptions.RAW_CONTACT_ID1, AggregationExceptions.RAW_CONTACT_ID1);
+        columns.put(AggregationExceptions.RAW_CONTACT_ID2, AggregationExceptions.RAW_CONTACT_ID2);
         sAggregationExceptionsProjectionMap = columns;
 
         // Settings projection map
@@ -1852,7 +1849,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RawContacts.AGGREGATION_MODE_IMMEDITATE: {
                 long contactId = mOpenHelper.getContactId(rawContactId);
-                mContactAggregator.markForAggregation(rawContactId);
                 mContactAggregator.aggregateContact(mDb, rawContactId, contactId);
                 break;
             }
@@ -2513,69 +2509,38 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mLastTimeContactedUpdate.execute();
     }
 
-    private static class RawContactPair {
-        final long rawContactId1;
-        final long rawContactId2;
-
-        /**
-         * Constructor that ensures that this.rawContactId1 &lt; this.rawContactId2
-         */
-        public RawContactPair(long rawContactId1, long rawContactId2) {
-            if (rawContactId1 < rawContactId2) {
-                this.rawContactId1 = rawContactId1;
-                this.rawContactId2 = rawContactId2;
-            } else {
-                this.rawContactId2 = rawContactId1;
-                this.rawContactId1 = rawContactId2;
-            }
-        }
-    }
-
     private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
         int exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
-        long contactId = values.getAsInteger(AggregationExceptions.CONTACT_ID);
-        long rawContactId = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID);
+        long rcId1 = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID1);
+        long rcId2 = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID2);
 
-        // First, we build a list of rawContactID-rawContactID pairs for the given contact.
-        ArrayList<RawContactPair> pairs = new ArrayList<RawContactPair>();
-        Cursor c = db.query(ContactsQuery.TABLE, ContactsQuery.PROJECTION, RawContacts.CONTACT_ID
-                + "=" + contactId, null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                long aggregatedContactId = c.getLong(ContactsQuery.RAW_CONTACT_ID);
-                if (aggregatedContactId != rawContactId) {
-                    pairs.add(new RawContactPair(aggregatedContactId, rawContactId));
-                }
-            }
-        } finally {
-            c.close();
+        long rawContactId1, rawContactId2;
+        if (rcId1 < rcId2) {
+            rawContactId1 = rcId1;
+            rawContactId2 = rcId2;
+        } else {
+            rawContactId2 = rcId1;
+            rawContactId1 = rcId2;
         }
 
-        // Now we iterate through all contact pairs to see if we need to insert/delete/update
-        // the corresponding exception
         ContentValues exceptionValues = new ContentValues(3);
         exceptionValues.put(AggregationExceptions.TYPE, exceptionType);
-        for (RawContactPair pair : pairs) {
-            final String whereClause =
-                    AggregationExceptionColumns.RAW_CONTACT_ID1 + "=" + pair.rawContactId1 + " AND "
-                    + AggregationExceptionColumns.RAW_CONTACT_ID2 + "=" + pair.rawContactId2;
-            if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC) {
-                db.delete(Tables.AGGREGATION_EXCEPTIONS, whereClause, null);
-            } else {
-                exceptionValues.put(AggregationExceptionColumns.RAW_CONTACT_ID1, pair.rawContactId1);
-                exceptionValues.put(AggregationExceptionColumns.RAW_CONTACT_ID2, pair.rawContactId2);
-                db.replace(Tables.AGGREGATION_EXCEPTIONS, AggregationExceptions._ID,
-                        exceptionValues);
-            }
+        if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC) {
+            db.delete(Tables.AGGREGATION_EXCEPTIONS,
+                    AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId1 + " AND "
+                    + AggregationExceptions.RAW_CONTACT_ID2 + "=" + rawContactId2, null);
+        } else {
+            exceptionValues.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
+            exceptionValues.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
+            db.replace(Tables.AGGREGATION_EXCEPTIONS, AggregationExceptions._ID,
+                    exceptionValues);
         }
 
-        mContactAggregator.markForAggregation(rawContactId);
-        mContactAggregator.aggregateContact(db, rawContactId,
-                mOpenHelper.getContactId(rawContactId));
-        if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC
-                || exceptionType == AggregationExceptions.TYPE_KEEP_OUT) {
-            mContactAggregator.updateAggregateData(contactId);
-        }
+        long contactId1 = mOpenHelper.getContactId(rawContactId1);
+        mContactAggregator.aggregateContact(db, rawContactId1, contactId1);
+
+        long contactId2 = mOpenHelper.getContactId(rawContactId2);
+        mContactAggregator.aggregateContact(db, rawContactId2, contactId2);
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
@@ -2926,7 +2891,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                qb.setTables(Tables.AGGREGATION_EXCEPTIONS_JOIN_RAW_CONTACTS);
+                qb.setTables(Tables.AGGREGATION_EXCEPTIONS);
                 qb.setProjectionMap(sAggregationExceptionsProjectionMap);
                 break;
             }

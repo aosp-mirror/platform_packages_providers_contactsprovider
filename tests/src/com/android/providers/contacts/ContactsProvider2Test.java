@@ -25,7 +25,6 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.database.Cursor;
 import android.net.Uri;
-import android.net.Uri.Builder;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
@@ -485,8 +484,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertPhoneNumber(rawContactId2, "123456789", true);
 
-        long contactId = queryContactId(rawContactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
 
         assertAggregated(rawContactId1, rawContactId2, "123456789");
 
@@ -524,7 +523,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         updateSendToVoicemailAndRingtone(contactId2, true, "bar");
 
         // Aggregate them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
 
         // Both contacts had "send to VM", the contact now has the same value
         assertSendToVoicemailAndRingtone(contactId1, true, "foo,bar"); // Either foo or bar
@@ -540,10 +540,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         updateSendToVoicemailAndRingtone(contactId2, false, null);
 
         // Aggregate them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
 
         // Since one of the contacts had "don't send to VM" that setting wins for the aggregate
-        assertSendToVoicemailAndRingtone(contactId1, false, null);
+        assertSendToVoicemailAndRingtone(queryContactId(rawContactId1), false, null);
     }
 
     public void testSetSendToVoicemailAndRingtonePreservedAfterJoinAndSplit() {
@@ -556,10 +557,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         updateSendToVoicemailAndRingtone(contactId2, false, "bar");
 
         // Aggregate them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
 
         // Split them
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId1), true, "foo");
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
