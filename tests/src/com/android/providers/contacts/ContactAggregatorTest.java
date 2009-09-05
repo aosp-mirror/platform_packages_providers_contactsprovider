@@ -36,50 +36,54 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
-            AggregationExceptions.CONTACT_ID,
-            AggregationExceptions.RAW_CONTACT_ID
+            AggregationExceptions.RAW_CONTACT_ID1,
+            AggregationExceptions.RAW_CONTACT_ID2
     };
 
     public void testCrudAggregationExceptions() throws Exception {
         long rawContactId1 = createRawContactWithName("zz", "top");
-        long contactId = queryContactId(rawContactId1);
         long rawContactId2 = createRawContactWithName("aa", "bottom");
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        String selection = "(" + AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId1
+                + " AND " + AggregationExceptions.RAW_CONTACT_ID2 + "=" + rawContactId2
+                + ") OR (" + AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId2
+                + " AND " + AggregationExceptions.RAW_CONTACT_ID2 + "=" + rawContactId1 + ")";
 
         // Refetch the row we have just inserted
         Cursor c = mResolver.query(AggregationExceptions.CONTENT_URI,
-                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.CONTACT_ID + "="
-                        + contactId, null, null);
+                AGGREGATION_EXCEPTION_PROJECTION, selection, null, null);
 
         assertTrue(c.moveToFirst());
-        assertEquals(AggregationExceptions.TYPE_KEEP_IN, c.getInt(0));
-        assertEquals(contactId, c.getLong(1));
-        assertEquals(rawContactId2, c.getLong(2));
+        assertEquals(AggregationExceptions.TYPE_KEEP_TOGETHER, c.getInt(0));
+        assertTrue((rawContactId1 == c.getLong(1) && rawContactId2 == c.getLong(2))
+                || (rawContactId2 == c.getLong(1) && rawContactId1 == c.getLong(2)));
         assertFalse(c.moveToNext());
         c.close();
 
         // Change from TYPE_KEEP_IN to TYPE_KEEP_OUT
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
-        c = mResolver.query(AggregationExceptions.CONTENT_URI,
-                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.CONTACT_ID + "="
-                        + contactId, null, null);
+        c = mResolver.query(AggregationExceptions.CONTENT_URI, AGGREGATION_EXCEPTION_PROJECTION,
+                selection, null, null);
 
         assertTrue(c.moveToFirst());
-        assertEquals(AggregationExceptions.TYPE_KEEP_OUT, c.getInt(0));
-        assertEquals(contactId, c.getLong(1));
-        assertEquals(rawContactId2, c.getLong(2));
+        assertEquals(AggregationExceptions.TYPE_KEEP_SEPARATE, c.getInt(0));
+        assertTrue((rawContactId1 == c.getLong(1) && rawContactId2 == c.getLong(2))
+                || (rawContactId2 == c.getLong(1) && rawContactId1 == c.getLong(2)));
         assertFalse(c.moveToNext());
         c.close();
 
         // Delete the rule
-        setAggregationException(AggregationExceptions.TYPE_AUTOMATIC, contactId, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_AUTOMATIC,
+                rawContactId1, rawContactId2);
 
         // Verify that the row is gone
-        c = mResolver.query(AggregationExceptions.CONTENT_URI,
-                AGGREGATION_EXCEPTION_PROJECTION, AggregationExceptions.CONTACT_ID + "="
-                        + contactId, null, null);
+        c = mResolver.query(AggregationExceptions.CONTENT_URI, AGGREGATION_EXCEPTION_PROJECTION,
+                selection, null, null);
         assertFalse(c.moveToFirst());
         c.close();
     }
@@ -370,8 +374,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
-                queryContactId(rawContactId1), rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
 
         assertAggregated(rawContactId1, rawContactId2, "Johnkx Smithkx");
 
@@ -395,8 +399,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Johnh", "Smithh");
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryContactId(rawContactId1), rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
@@ -408,13 +412,13 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Johnj", "Smithj");
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN,
-                queryContactId(rawContactId1), rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
 
         assertAggregated(rawContactId1, rawContactId2, "Johnj Smithj");
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryContactId(rawContactId1), rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         assertNotAggregated(rawContactId1, rawContactId2);
 
@@ -432,8 +436,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         // Exact name match
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Duane", null);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT,
-                queryContactId(rawContactId1), rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         // Edit distance == 0.84
         long rawContactId3 = createRawContact();
@@ -513,7 +517,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "Manny", "Spider");
 
         long contactId1 = queryContactId(rawContactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         long contactId2 = queryContactId(rawContactId2);
         assertSuggestions(contactId1, contactId2);
@@ -529,7 +534,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertNickname(rawContactId2, "superman");
 
         long contactId1 = queryContactId(rawContactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         long contactId2 = queryContactId(rawContactId2);
         assertSuggestions(contactId1, contactId2);
@@ -543,7 +549,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "Richard", "Cherry");
 
         long contactId1 = queryContactId(rawContactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
 
         long contactId2 = queryContactId(rawContactId2);
         assertSuggestions(contactId1, contactId2);
@@ -552,18 +559,19 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testChoosePhoto() {
         long rawContactId1 = createRawContact();
         setContactAccountName(rawContactId1, "donut");
-        long donutId = ContentUris.parseId(insertPhoto(rawContactId1));
-        long contactId = queryContactId(rawContactId1);
+        insertPhoto(rawContactId1);
 
         long rawContactId2 = createRawContact();
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
         setContactAccountName(rawContactId2, "cupcake");
         long cupcakeId = ContentUris.parseId(insertPhoto(rawContactId2));
 
         long rawContactId3 = createRawContact();
-        setAggregationException(AggregationExceptions.TYPE_KEEP_IN, contactId, rawContactId3);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId3);
         setContactAccountName(rawContactId3, "flan");
-        long flanId = ContentUris.parseId(insertPhoto(rawContactId3));
+        insertPhoto(rawContactId3);
 
         assertEquals(cupcakeId, queryPhotoId(queryContactId(rawContactId2)));
     }
