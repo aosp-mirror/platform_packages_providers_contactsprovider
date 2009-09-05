@@ -133,17 +133,15 @@ public class GroupsTest extends BaseContactsProvider2Test {
         Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
                 createGroup(mAccount, "gsid1", "title1"));
         assertDirty(uri, true);
-        final Uri updateUri = uri.buildUpon().appendQueryParameter(Groups.MARK_AS_DIRTY, "0").build();
-        clearDirty(updateUri);
+        clearDirty(uri);
         assertDirty(uri, false);
     }
 
     public void testMarkAsDirtyParameter() {
         Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
                 createGroup(mAccount, "gsid1", "title1"));
-
-        final Uri updateUri = uri.buildUpon().appendQueryParameter(Groups.MARK_AS_DIRTY, "0").build();
-        clearDirty(updateUri);
+        clearDirty(uri);
+        Uri updateUri = uri.buildUpon().appendQueryParameter(Groups.MARK_AS_DIRTY, "0").build();
 
         ContentValues values = new ContentValues();
         values.put(Groups.NOTES, "New notes");
@@ -156,11 +154,10 @@ public class GroupsTest extends BaseContactsProvider2Test {
                 createGroup(mAccount, "gsid1", "title1"));
         assertDirty(uri, true);
 
-        final Uri updateUri = uri.buildUpon().appendQueryParameter(Groups.MARK_AS_DIRTY, "0").build();
         ContentValues values = new ContentValues();
         values.put(Groups.DIRTY, 0);
         values.put(Groups.NOTES, "other notes");
-        assertEquals(1, mResolver.update(updateUri, values, null, null));
+        assertEquals(1, mResolver.update(uri, values, null, null));
 
         assertDirty(uri, false);
     }
