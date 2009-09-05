@@ -61,14 +61,10 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 84;
+    private static final int DATABASE_VERSION = 85;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
-
-    public interface Delegate {
-        void createDatabase(SQLiteDatabase db);
-    }
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -465,8 +461,6 @@ import java.util.HashMap;
     private SQLiteStatement mVisibleUpdate;
     private SQLiteStatement mVisibleSpecificUpdate;
 
-    private Delegate mDelegate;
-
     private static OpenHelper sSingleton = null;
 
     public static synchronized OpenHelper getInstance(Context context) {
@@ -486,14 +480,6 @@ import java.util.HashMap;
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
-    }
-
-    public Delegate getDelegate() {
-        return mDelegate;
-    }
-
-    public void setDelegate(Delegate delegate) {
-        mDelegate = delegate;
     }
 
     @Override
@@ -1106,9 +1092,8 @@ import java.util.HashMap;
 
         loadNicknameLookupTable(db);
 
-        if (mDelegate != null) {
-            mDelegate.createDatabase(db);
-        }
+        // Add the legacy API support views, etc
+        LegacyApiSupport.createDatabase(db);
     }
 
     @Override
