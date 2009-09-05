@@ -469,6 +469,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
+
+        markForAggregation(rawContactId);
         aggregateContact(db, rawContactId, currentContactId, candidates, matcher, values);
     }
 
@@ -561,7 +563,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         String[] COLUMNS = {
             AggregationExceptions.TYPE,
-            AggregationExceptionColumns.RAW_CONTACT_ID1,
+            AggregationExceptions.RAW_CONTACT_ID1,
             "raw_contacts1." + RawContacts.CONTACT_ID,
             "raw_contacts1." + RawContactsColumns.AGGREGATION_NEEDED,
             "raw_contacts2." + RawContacts.CONTACT_ID,
@@ -584,8 +586,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             ContactMatcher matcher) {
         final Cursor c = db.query(AggregateExceptionQuery.TABLE,
                 AggregateExceptionQuery.COLUMNS,
-                AggregationExceptionColumns.RAW_CONTACT_ID1 + "=" + rawContactId
-                        + " OR " + AggregationExceptionColumns.RAW_CONTACT_ID2 + "=" + rawContactId,
+                AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId
+                        + " OR " + AggregationExceptions.RAW_CONTACT_ID2 + "=" + rawContactId,
                 null, null, null, null);
 
         try {
@@ -605,7 +607,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                     }
                 }
                 if (contactId != -1) {
-                    if (type == AggregationExceptions.TYPE_KEEP_IN) {
+                    if (type == AggregationExceptions.TYPE_KEEP_TOGETHER) {
                         return contactId;
                     } else {
                         matcher.keepOut(contactId);
