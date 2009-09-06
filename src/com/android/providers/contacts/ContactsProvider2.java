@@ -150,8 +150,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PHONES = 3002;
     private static final int PHONES_FILTER = 3003;
     private static final int EMAILS = 3004;
-    private static final int EMAILS_FILTER = 3005;
-    private static final int POSTALS = 3006;
+    private static final int EMAILS_LOOKUP = 3005;
+    private static final int EMAILS_FILTER = 3006;
+    private static final int POSTALS = 3007;
 
     private static final int PHONE_LOOKUP = 4000;
 
@@ -287,6 +288,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sRawContactsProjectionMap;
     /** Contains columns from the data view */
     private static final HashMap<String, String> sDataProjectionMap;
+    /** Contains columns from the data view */
+    private static final HashMap<String, String> sDistinctDataProjectionMap;
     /** Contains the data and contacts columns, for joined tables */
     private static final HashMap<String, String> sPhoneLookupProjectionMap;
     /** Contains the just the {@link Groups} columns */
@@ -346,8 +349,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones", PHONES);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails", EMAILS);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup/*", EMAILS_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
 
@@ -474,6 +480,45 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
         sDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
+
+        // Projection map for data grouped by contact (not raw contact) and some data field(s)
+        sDistinctDataProjectionMap = new HashMap<String, String>();
+        sDistinctDataProjectionMap.put(Data._ID,
+                "MIN(" + Data._ID + ") AS " + Data._ID);
+        sDistinctDataProjectionMap.put(Data.DATA_VERSION, Data.DATA_VERSION);
+        sDistinctDataProjectionMap.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
+        sDistinctDataProjectionMap.put(Data.IS_SUPER_PRIMARY, Data.IS_SUPER_PRIMARY);
+        sDistinctDataProjectionMap.put(Data.RES_PACKAGE, Data.RES_PACKAGE);
+        sDistinctDataProjectionMap.put(Data.MIMETYPE, Data.MIMETYPE);
+        sDistinctDataProjectionMap.put(Data.DATA1, Data.DATA1);
+        sDistinctDataProjectionMap.put(Data.DATA2, Data.DATA2);
+        sDistinctDataProjectionMap.put(Data.DATA3, Data.DATA3);
+        sDistinctDataProjectionMap.put(Data.DATA4, Data.DATA4);
+        sDistinctDataProjectionMap.put(Data.DATA5, Data.DATA5);
+        sDistinctDataProjectionMap.put(Data.DATA6, Data.DATA6);
+        sDistinctDataProjectionMap.put(Data.DATA7, Data.DATA7);
+        sDistinctDataProjectionMap.put(Data.DATA8, Data.DATA8);
+        sDistinctDataProjectionMap.put(Data.DATA9, Data.DATA9);
+        sDistinctDataProjectionMap.put(Data.DATA10, Data.DATA10);
+        sDistinctDataProjectionMap.put(Data.DATA11, Data.DATA11);
+        sDistinctDataProjectionMap.put(Data.DATA12, Data.DATA12);
+        sDistinctDataProjectionMap.put(Data.DATA13, Data.DATA13);
+        sDistinctDataProjectionMap.put(Data.DATA14, Data.DATA14);
+        sDistinctDataProjectionMap.put(Data.DATA15, Data.DATA15);
+        sDistinctDataProjectionMap.put(Data.SYNC1, Data.SYNC1);
+        sDistinctDataProjectionMap.put(Data.SYNC2, Data.SYNC2);
+        sDistinctDataProjectionMap.put(Data.SYNC3, Data.SYNC3);
+        sDistinctDataProjectionMap.put(Data.SYNC4, Data.SYNC4);
+        sDistinctDataProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
+        sDistinctDataProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
+        sDistinctDataProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
+        sDistinctDataProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
+        sDistinctDataProjectionMap.put(Contacts.LAST_TIME_CONTACTED, Contacts.LAST_TIME_CONTACTED);
+        sDistinctDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
+        sDistinctDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
+        sDistinctDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
+        sDistinctDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID,
+                GroupMembership.GROUP_SOURCE_ID);
 
         sPhoneLookupProjectionMap = new HashMap<String, String>();
         sPhoneLookupProjectionMap.put(PhoneLookup._ID,
@@ -2591,20 +2636,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Test if a {@link String} value appears in the given list, and add to the
-     * array if the value doesn't already appear.
-     */
-    private String[] assertContained(String[] array, String value) {
-        if (array != null && !mOpenHelper.isInProjection(array, value)) {
-            String[] newArray = new String[array.length + 1];
-            System.arraycopy(array, 0, newArray, 0, array.length);
-            newArray[array.length] = value;
-            array = newArray;
-        }
-        return array;
-    }
-
-    /**
      * Test all against {@link TextUtils#isEmpty(CharSequence)}.
      */
     private static boolean areAllEmpty(ContentValues values, String[] keys) {
@@ -2681,7 +2712,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
                     sb.append(Contacts._ID + " IN ");
-                    appendContactByFilterAsNestedQuery(sb, filterParam);
+                    appendContactFilterAsNestedQuery(sb, filterParam);
                     qb.appendWhere(sb.toString());
                 }
                 break;
@@ -2695,7 +2726,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
                     sb.append(Contacts._ID + " IN ");
-                    appendContactByFilterAsNestedQuery(sb, filterParam);
+                    appendContactFilterAsNestedQuery(sb, filterParam);
                     filterSql = sb.toString();
                 }
 
@@ -2769,15 +2800,38 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case PHONES_FILTER: {
                 qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
+                qb.setProjectionMap(sDistinctDataProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
-                    sb.append(Data.RAW_CONTACT_ID + " IN ");
-                    appendRawContactsByFilterAsNestedQuery(sb, filterParam, null);
+                    sb.append("(");
+
+                    boolean orNeeded = false;
+                    String normalizedName = NameNormalizer.normalize(filterParam);
+                    if (normalizedName.length() > 0) {
+                        sb.append(Data.RAW_CONTACT_ID + " IN ");
+                        appendRawContactsByNormalizedNameFilter(sb, normalizedName, null);
+                        orNeeded = true;
+                    }
+
+                    if (isPhoneNumber(filterParam)) {
+                        if (orNeeded) {
+                            sb.append(" OR ");
+                        }
+                        String number = PhoneNumberUtils.convertKeypadLettersToDigits(filterParam);
+                        String reversed = PhoneNumberUtils.getStrippedReversed(number);
+                        sb.append(Data._ID +
+                                " IN (SELECT " + PhoneLookupColumns.DATA_ID
+                                  + " FROM " + Tables.PHONE_LOOKUP
+                                  + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '%");
+                        sb.append(reversed);
+                        sb.append("')");
+                    }
+                    sb.append(")");
                     qb.appendWhere(" AND " + sb);
                 }
+                groupBy = PhoneColumns.NORMALIZED_NUMBER + "," + RawContacts.CONTACT_ID;
                 break;
             }
 
@@ -2788,14 +2842,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case EMAILS_FILTER: {
+            case EMAILS_LOOKUP: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDataProjectionMap);
                 qb.appendWhere(Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
-                    qb.appendWhere(" AND " + CommonDataKinds.Email.DATA + "=");
+                    qb.appendWhere(" AND " + Email.DATA + "=");
                     qb.appendWhereEscapeString(uri.getLastPathSegment());
                 }
+                break;
+            }
+
+            case EMAILS_FILTER: {
+                qb.setTables(mOpenHelper.getDataView());
+                qb.setProjectionMap(sDistinctDataProjectionMap);
+                qb.appendWhere(Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                if (uri.getPathSegments().size() > 2) {
+                    String filterParam = uri.getLastPathSegment();
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("(");
+
+                    String normalizedName = NameNormalizer.normalize(filterParam);
+                    if (normalizedName.length() > 0) {
+                        sb.append(Data.RAW_CONTACT_ID + " IN ");
+                        appendRawContactsByNormalizedNameFilter(sb, normalizedName, null);
+                        sb.append(" OR ");
+                    }
+
+                    sb.append(Email.DATA + " LIKE ");
+                    sb.append(DatabaseUtils.sqlEscapeString(filterParam));
+                    sb.append(")");
+                    qb.appendWhere(" AND " + sb);
+                }
+                groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
                 break;
             }
 
@@ -2848,6 +2927,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + " ON (" + AggregatedPresenceColumns.CONTACT_ID + "="
                                 + RawContacts.CONTACT_ID + ")");
                 qb.setProjectionMap(sDataWithPresenceProjectionMap);
+                appendAccountFromParameter(qb, uri);
                 break;
             }
 
@@ -3250,6 +3330,36 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.w(TAG, "Invalid limit parameter: " + limitParam);
             return null;
         }
+    }
+
+    /**
+     * Returns true if all the characters are meaningful as digits
+     * in a phone number -- letters, digits, and a few punctuation marks.
+     */
+    private boolean isPhoneNumber(CharSequence cons) {
+        int len = cons.length();
+
+        for (int i = 0; i < len; i++) {
+            char c = cons.charAt(i);
+
+            if ((c >= '0') && (c <= '9')) {
+                continue;
+            }
+            if ((c == ' ') || (c == '-') || (c == '(') || (c == ')') || (c == '.') || (c == '+')
+                    || (c == '#') || (c == '*')) {
+                continue;
+            }
+            if ((c >= 'A') && (c <= 'Z')) {
+                continue;
+            }
+            if ((c >= 'a') && (c <= 'z')) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     String getContactsRestrictions() {
@@ -3775,7 +3885,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mSetSuperPrimaryStatement.execute();
     }
 
-    private void appendContactByFilterAsNestedQuery(StringBuilder sb, String filterParam) {
+    private void appendContactFilterAsNestedQuery(StringBuilder sb, String filterParam) {
         sb.append("(SELECT DISTINCT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
                 + " JOIN name_lookup ON(" + RawContactsColumns.CONCRETE_ID + "=raw_contact_id)"
                 + " WHERE normalized_name GLOB '");
@@ -3791,8 +3901,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public void appendRawContactsByFilterAsNestedQuery(StringBuilder sb, String filterParam,
             String limit) {
+        appendRawContactsByNormalizedNameFilter(sb, NameNormalizer.normalize(filterParam), limit);
+    }
+
+    private void appendRawContactsByNormalizedNameFilter(StringBuilder sb, String normalizedName,
+            String limit) {
         sb.append("(SELECT DISTINCT raw_contact_id FROM name_lookup WHERE normalized_name GLOB '");
-        sb.append(NameNormalizer.normalize(filterParam));
+        sb.append(normalizedName);
         sb.append("*'");
         if (limit != null) {
             sb.append(" LIMIT ").append(limit);

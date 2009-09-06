@@ -144,20 +144,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testPhonesFilterQuery() {
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
-        insertPhoneNumber(rawContactId, "18004664411");
+        long rawContactId1 = createRawContactWithName("Hot", "Tamale");
+        insertPhoneNumber(rawContactId1, "18004664411");
+        insertPhoneNumber(rawContactId1, "1-800-466-4411");
+
+        long rawContactId2 = createRawContactWithName("Hot", "Tamale");
+        insertPhoneNumber(rawContactId2, "1-800-466-4411");
+
+        forceAggregation();
 
         Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
         ContentValues values = new ContentValues();
         values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
-        values.put(Phone.NUMBER, "18004664411");
+        values.put(Phone.NUMBER, "1-800-466-4411");
         values.put(Phone.TYPE, Phone.TYPE_HOME);
         values.putNull(Phone.LABEL);
-        assertStoredValues(filterUri1, values);
+        assertStoredValuesWithProjection(filterUri1, values);
 
-        Uri filterUri2 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "encilada");
-        assertEquals(0, getCount(filterUri2, null, null));
+        Uri filterUri2 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1-800-GOOG-411");
+        assertStoredValues(filterUri2, values);
+
+        Uri filterUri3 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "18004664");
+        assertStoredValues(filterUri3, values);
+
+        Uri filterUri4 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "encilada");
+        assertEquals(0, getCount(filterUri4, null, null));
     }
 
     public void testPhoneLookup() {
@@ -253,11 +265,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelection(Email.CONTENT_URI, values, Data._ID, emailId);
     }
 
-    public void testEmailsFilterQuery() {
+    public void testEmailsLookupQuery() {
         long rawContactId = createRawContactWithName("Hot", "Tamale");
         insertEmail(rawContactId, "tamale@acme.com");
 
-        Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_FILTER_EMAIL_URI, "tamale@acme.com");
+        Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, "tamale@acme.com");
         ContentValues values = new ContentValues();
         values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
         values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
@@ -266,8 +278,39 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(Email.LABEL);
         assertStoredValues(filterUri1, values);
 
-        Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_FILTER_EMAIL_URI, "encilada@acme.com");
+        Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, "encilada@acme.com");
         assertEquals(0, getCount(filterUri2, null, null));
+    }
+
+    public void testEmailsFilterQuery() {
+        long rawContactId1 = createRawContactWithName("Hot", "Tamale");
+        insertEmail(rawContactId1, "tamale@acme.com");
+        insertEmail(rawContactId1, "tamale@acme.com");
+
+        long rawContactId2 = createRawContactWithName("Hot", "Tamale");
+        insertEmail(rawContactId2, "tamale@acme.com");
+        forceAggregation();
+
+        Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tam");
+        ContentValues values = new ContentValues();
+        values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        values.put(Email.DATA, "tamale@acme.com");
+        values.put(Email.TYPE, Email.TYPE_HOME);
+        values.putNull(Email.LABEL);
+        assertStoredValuesWithProjection(filterUri1, values);
+
+        Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "hot");
+        assertStoredValuesWithProjection(filterUri2, values);
+
+        Uri filterUri3 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "hottamale");
+        assertStoredValuesWithProjection(filterUri3, values);
+
+        Uri filterUri4 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tamale@");
+        assertStoredValuesWithProjection(filterUri4, values);
+
+        Uri filterUri5 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "encilada");
+        assertEquals(0, getCount(filterUri5, null, null));
     }
 
     public void testPostalsQuery() {
