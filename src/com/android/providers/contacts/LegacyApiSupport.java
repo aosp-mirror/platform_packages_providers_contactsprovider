@@ -52,11 +52,12 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.util.Log;
 
 import java.util.HashMap;
 import java.util.Locale;
 
-public class LegacyApiSupport implements OpenHelper.Delegate {
+public class LegacyApiSupport {
 
     private static final String TAG = "ContactsProviderV1";
 
@@ -451,7 +452,6 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         mContactsProvider = contactsProvider;
         mOpenHelper = openHelper;
         mGlobalSearchSupport = globalSearchSupport;
-        mOpenHelper.setDelegate(this);
 
         mPhoneticNameSplitter = new NameSplitter("", "", "", context
                 .getString(com.android.internal.R.string.common_name_conjunctions), Locale
@@ -477,7 +477,8 @@ public class LegacyApiSupport implements OpenHelper.Delegate {
         }
     }
 
-    public void createDatabase(SQLiteDatabase db) {
+    public static void createDatabase(SQLiteDatabase db) {
+        Log.i(TAG, "Bootstrapping database legacy support");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PEOPLE + ";");
         db.execSQL("CREATE VIEW " + LegacyTables.PEOPLE + " AS SELECT " +
