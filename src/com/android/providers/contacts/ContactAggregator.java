@@ -469,7 +469,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
 
-        markForAggregation(rawContactId);
         aggregateContact(db, rawContactId, currentContactId, candidates, matcher, values);
     }
 
@@ -524,13 +523,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             mContactDelete.execute();
         }
 
-        if (contactId == currentContactId) {
-
-            // No change
-            mOpenHelper.markAggregated(rawContactId);
-            return false;
-
-        } else if (contactId == -1) {
+        if (contactId == -1) {
 
             // Splitting an aggregate
             ContentValues contactValues = new ContentValues();
