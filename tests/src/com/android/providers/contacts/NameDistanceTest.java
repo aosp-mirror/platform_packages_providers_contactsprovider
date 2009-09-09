@@ -35,25 +35,22 @@ public class NameDistanceTest extends TestCase {
         assertFloat(1, "Dwayne", "Dwayne");
     }
 
-    public void testMismatches() {
-        assertFloat(0.8f, "Abcdef", "Abcdex");
-        assertFloat(0.6f, "Abcdef", "Abcxex");
-        assertFloat(0.0f, "Abcdef", "Abxxex");
+    public void testWinklerBonus() {
+        assertFloat(0.961f, "Martha", "Marhta");
+        assertFloat(0.840f, "Dwayne", "Duane");
+        assertFloat(0.813f, "DIXON", "DICKSONX");
     }
 
-    public void testTranspositions() {
-        assertFloat(0.8f, "Abcdef", "Cbadef");
-        assertFloat(0.6f, "Abcdef", "Abfdec");
-        assertFloat(0.6f, "Abcdef", "Cbafed");
-        assertFloat(0.0f, "Abcdef", "Fedcba");
+    public void testJaroDistance() {
+        assertFloat(0.600f, "Donny", "Duane");
+    }
+
+    public void testPoorMatch() {
+        assertFloat(0.467f, "Johny", "Duane");
     }
 
     public void testNoMatches() {
         assertFloat(0, "Abcd", "Efgh");
-    }
-
-    public void testSimilarNames() {
-        assertFloat(0.3f, "SallyCarrera", "SallieCarerra");
     }
 
     private void assertFloat(float expected, String name1, String name2) {

@@ -52,15 +52,18 @@ public class ContactMatcher {
     // Score for matching nickname
     private static final int NICKNAME_MATCH_SCORE = 71;
 
-    // Maximum number of characters in a name prefix to be considered by the matching algorithm.
-    private static final int MAX_MATCHED_PREFIX_LENGTH = 6;
-
     // Maximum number of characters in a name to be considered by the matching algorithm.
     private static final int MAX_MATCHED_NAME_LENGTH = 30;
 
     // Scores a multiplied by this number to allow room for "fractional" scores
     private static final int SCORE_SCALE = 1000;
 
+    public static final int MATCHING_ALGORITHM_EXACT = 0;
+    public static final int MATCHING_ALGORITHM_CONSERVATIVE = 1;
+    public static final int MATCHING_ALGORITHM_APPROXIMATE = 2;
+
+    // Minimum edit distance between two names to be considered an approximate match
+    public static final float APPROXIMATE_MATCH_THRESHOLD = 0.82f;
 
     /**
      * Name matching scores: a matrix by name type vs. candidate lookup type.
@@ -231,8 +234,8 @@ public class ContactMatcher {
     private final ArrayList<MatchScore> mScoreList = new ArrayList<MatchScore>();
     private int mScoreCount = 0;
 
-    private final NameDistance mNamePrefixDistance = new NameDistance(MAX_MATCHED_PREFIX_LENGTH);
-    private final NameDistance mNameDistance = new NameDistance(MAX_MATCHED_NAME_LENGTH);
+    private final NameDistance mNameDistanceConservative = new NameDistance();
+    private final NameDistance mNameDistanceApproximate = new NameDistance(MAX_MATCHED_NAME_LENGTH);
 
     private MatchScore getMatchingScore(long contactId) {
         MatchScore matchingScore = mScores.get(contactId);
@@ -258,7 +261,7 @@ public class ContactMatcher {
      * actual name.
      */
     public void matchName(long contactId, int candidateNameType, String candidateName,
-            int nameType, String name, boolean approximate) {
+            int nameType, String name, int algorithm) {
         int maxScore = getMaxScore(candidateNameType, nameType);
         if (maxScore == 0) {
             return;
@@ -269,7 +272,7 @@ public class ContactMatcher {
             return;
         }
 
-        if (!approximate) {
+        if (algorithm == MATCHING_ALGORITHM_EXACT) {
             return;
         }
 
@@ -281,13 +284,12 @@ public class ContactMatcher {
         byte[] decodedCandidateName = Hex.decodeHex(candidateName);
         byte[] decodedName = Hex.decodeHex(name);
 
-        // First - a quick check. If prefixes don't match, don't bother with the rest
-        float distance = mNamePrefixDistance.getDistance(decodedCandidateName, decodedName);
-        if (distance > 0) {
-            distance = mNameDistance.getDistance(decodedCandidateName, decodedName);
-        }
+        NameDistance nameDistance = algorithm == MATCHING_ALGORITHM_CONSERVATIVE ?
+                mNameDistanceConservative : mNameDistanceApproximate;
+
         int score;
-        if (distance > 0) {
+        float distance = nameDistance.getDistance(decodedCandidateName, decodedName);
+        if (distance > APPROXIMATE_MATCH_THRESHOLD) {
             score = (int)(minScore +  (maxScore - minScore) * (1.0f - distance));
         } else {
             score = 0;
@@ -332,7 +334,7 @@ public class ContactMatcher {
     /**
      * Returns a list of IDs for contacts that are matched on secondary data elements
      * (phone number, email address, nickname). We still need to obtain the approximate
-     * primary score for those contacts to determine if any of them should be contactd.
+     * primary score for those contacts to determine if any of them should be aggregated.
      * <p>
      * May return null.
      */
