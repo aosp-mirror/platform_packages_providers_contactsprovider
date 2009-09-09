@@ -27,7 +27,7 @@ import android.net.Uri;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
-import android.provider.Contacts.ContactMethods;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -83,7 +83,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
         values.put(Calls.CACHED_NAME, "1-800-GOOG-411");
-        values.put(Calls.CACHED_NUMBER_TYPE, ContactMethods.TYPE_CUSTOM);
+        values.put(Calls.CACHED_NUMBER_TYPE, Phone.TYPE_CUSTOM);
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
 
         int count = mResolver.update(uri, values, null, null);
@@ -129,7 +129,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     public void testAddCall() {
         CallerInfo ci = new CallerInfo();
         ci.name = "1-800-GOOG-411";
-        ci.numberType = ContactMethods.TYPE_CUSTOM;
+        ci.numberType = Phone.TYPE_CUSTOM;
         ci.numberLabel = "Directory";
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 Connection.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 2000, 40);
@@ -140,7 +140,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
         values.put(Calls.CACHED_NAME, "1-800-GOOG-411");
-        values.put(Calls.CACHED_NUMBER_TYPE, ContactMethods.TYPE_CUSTOM);
+        values.put(Calls.CACHED_NUMBER_TYPE, Phone.TYPE_CUSTOM);
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
         assertStoredValues(uri, values);
     }
