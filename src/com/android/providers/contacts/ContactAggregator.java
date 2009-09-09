@@ -1346,25 +1346,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Update {@link Contacts#STARRED} for all {@link RawContacts} matched by
-     * the given query, usually after changing {@link RawContacts#STARRED}.
-     */
-    public void updateStarred(SQLiteDatabase db, String selection, String[] selectionArgs) {
-        // Update each matching RawContact
-        final Cursor cursor = db.query(Tables.RAW_CONTACTS,
-                new String[] { RawContacts.CONTACT_ID }, selection,
-                selectionArgs, null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                final long contactId = cursor.getLong(0);
-                updateStarred(contactId);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    /**
      * Execute {@link SQLiteStatement} that will update the
      * {@link Contacts#STARRED} flag for the given {@link Contacts#_ID}.
      */
