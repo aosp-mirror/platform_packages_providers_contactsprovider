@@ -795,9 +795,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         primary = (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
                     }
 
-                    if (primary && name != null) {
+                    if (name != null) {
                         Integer source = sDisplayNameSources.get(mimeType);
-                        if (source != null && source > bestDisplayNameSource) {
+                        if (source != null
+                                && (source > bestDisplayNameSource
+                                        || (source == bestDisplayNameSource && primary))) {
                             bestDisplayNameSource = source;
                             bestDisplayName = name;
                         }
