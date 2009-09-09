@@ -537,6 +537,27 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertAggregated(rawContactId1, rawContactId2, "Potato Head");
     }
 
+    public void testDisplayNameFromData() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+
+        Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, null);
+        insertEmail(rawContactId, "mike@monstersinc.com");
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "mike@monstersinc.com");
+
+        insertEmail(rawContactId, "james@monstersinc.com", true);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "james@monstersinc.com");
+
+        insertPhoneNumber(rawContactId, "1-800-466-4411");
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "1-800-466-4411");
+
+        insertOrganization(rawContactId, "Monsters Inc");
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Monsters Inc");
+
+    }
+
     public void testSendToVoicemailDefault() {
         long rawContactId = createRawContactWithName();
         long contactId = queryContactId(rawContactId);
