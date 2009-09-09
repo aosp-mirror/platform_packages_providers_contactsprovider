@@ -1953,7 +1953,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case RawContacts.AGGREGATION_MODE_IMMEDITATE: {
+            case RawContacts.AGGREGATION_MODE_IMMEDIATE: {
                 long contactId = mOpenHelper.getContactId(rawContactId);
                 mContactAggregator.aggregateContact(mDb, rawContactId, contactId);
                 break;
