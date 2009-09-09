@@ -38,6 +38,7 @@ import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -180,6 +181,24 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected Uri insertStructuredName(long rawContactId, ContentValues values) {
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertOrganization(long rawContactId, String organization) {
+        return insertOrganization(rawContactId, organization, false);
+    }
+
+    protected Uri insertOrganization(long rawContactId, String organization, boolean primary) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
+        values.put(Organization.DATA, organization);
+        values.put(Organization.TYPE, Organization.TYPE_WORK);
+        if (primary) {
+            values.put(Data.IS_PRIMARY, true);
+        }
+
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }
@@ -548,7 +567,11 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected void assertStoredValue(Uri rowUri, String column, Object expectedValue) {
         String value = getStoredValue(rowUri, column);
-        assertEquals("Column value " + column, String.valueOf(expectedValue), value);
+        if (expectedValue == null) {
+            assertNull("Column value " + column, value);
+        } else {
+            assertEquals("Column value " + column, String.valueOf(expectedValue), value);
+        }
     }
 
     protected String getStoredValue(Uri rowUri, String column) {
