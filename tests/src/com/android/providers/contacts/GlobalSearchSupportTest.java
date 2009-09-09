@@ -23,7 +23,7 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.provider.Contacts.Intents;
+import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;

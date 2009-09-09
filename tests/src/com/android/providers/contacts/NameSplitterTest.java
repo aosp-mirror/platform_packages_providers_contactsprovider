@@ -16,14 +16,13 @@
 
 package com.android.providers.contacts;
 
-import junit.framework.TestCase;
-
 import com.android.providers.contacts.NameSplitter.Name;
 
-import android.content.ContentValues;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import java.util.Locale;
+
+import junit.framework.TestCase;
 
 /**
  * Tests for {@link NameSplitter}.
