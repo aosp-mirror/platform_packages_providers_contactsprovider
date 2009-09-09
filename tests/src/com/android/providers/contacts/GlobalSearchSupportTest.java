@@ -15,6 +15,7 @@
  */
 package com.android.providers.contacts;
 
+import android.accounts.Account;
 import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -47,7 +48,8 @@ import java.io.IOException;
 @LargeTest
 public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
     public void testSearchSuggestionsNotInVisibleGroup() throws Exception {
-        long rawContactId = createRawContact();
+        Account account = new Account("actname", "acttype");
+        long rawContactId = createRawContact(account);
         insertStructuredName(rawContactId, "Deer", "Dough");
 
         Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)

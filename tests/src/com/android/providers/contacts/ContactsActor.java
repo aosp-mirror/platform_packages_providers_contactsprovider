@@ -29,11 +29,11 @@ import android.net.Uri;
 import android.os.Binder;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.Contacts.Phones;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
@@ -211,7 +211,7 @@ public class ContactsActor {
         values.put(Data.RAW_CONTACT_ID, contactId);
         values.put(Data.IS_PRIMARY, 1);
         values.put(Data.IS_SUPER_PRIMARY, 1);
-        values.put(Data.MIMETYPE, Phones.CONTENT_ITEM_TYPE);
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
         values.put(ContactsContract.CommonDataKinds.Phone.TYPE,
                 ContactsContract.CommonDataKinds.Phone.TYPE_HOME);
         values.put(ContactsContract.CommonDataKinds.Phone.NUMBER, phoneNumber);

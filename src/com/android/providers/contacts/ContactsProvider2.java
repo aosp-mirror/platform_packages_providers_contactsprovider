@@ -2678,13 +2678,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             rawContactId1 = rcId2;
         }
 
-        ContentValues exceptionValues = new ContentValues(3);
-        exceptionValues.put(AggregationExceptions.TYPE, exceptionType);
         if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC) {
             db.delete(Tables.AGGREGATION_EXCEPTIONS,
                     AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId1 + " AND "
                     + AggregationExceptions.RAW_CONTACT_ID2 + "=" + rawContactId2, null);
         } else {
+            ContentValues exceptionValues = new ContentValues(3);
+            exceptionValues.put(AggregationExceptions.TYPE, exceptionType);
             exceptionValues.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
             exceptionValues.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
             db.replace(Tables.AGGREGATION_EXCEPTIONS, AggregationExceptions._ID,

@@ -133,18 +133,24 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
         assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                 Contacts.LOOKUP_KEY, lookupKey);
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_OUT, contactId, rawContactId3);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE, rawContactId1,
+                rawContactId3);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE, rawContactId2,
+                rawContactId3);
         assertAggregated(rawContactId1, rawContactId2);
         assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
 
-        assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+        long largerContactId = queryContactId(rawContactId1);
+        assertStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, largerContactId),
                 Contacts.LOOKUP_KEY, "0i1.0i2");
         assertStoredValue(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId3)),
                 Contacts.LOOKUP_KEY, "0i3");
 
         Uri lookupUri = Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey);
-        assertStoredValue(lookupUri, Contacts._ID, contactId);
+        assertStoredValue(lookupUri, Contacts._ID, largerContactId);
     }
 
     public void testGetLookupUri() {
