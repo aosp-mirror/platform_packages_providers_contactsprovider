@@ -36,6 +36,7 @@ import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
+import com.google.android.collect.Maps;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -66,6 +67,7 @@ import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
+import android.provider.SyncStateContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
@@ -96,6 +98,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -171,6 +175,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int GROUPS_SUMMARY = 10003;
 
     private static final int SYNCSTATE = 11000;
+    private static final int SYNCSTATE_ID = 11001;
 
     private static final int SEARCH_SUGGESTIONS = 12001;
     private static final int SEARCH_SHORTCUT = 12002;
@@ -362,6 +367,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "groups_summary", GROUPS_SUMMARY);
 
         matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH, SYNCSTATE);
+        matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH + "/#",
+                SYNCSTATE_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
@@ -1412,7 +1419,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean mImportMode;
 
     private boolean mScheduleAggregation;
-    private ArrayList<Long> mInsertedRawContacts = new ArrayList<Long>();
+    private HashSet<Long> mInsertedRawContacts = Sets.newHashSet();
+    private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
+    private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
@@ -1661,17 +1670,63 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected void onBeginTransaction() {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "onBeginTransaction");
+        }
         super.onBeginTransaction();
+        clearTransactionalChanges();
+    }
+
+    private void clearTransactionalChanges() {
         mInsertedRawContacts.clear();
+        mUpdatedRawContacts.clear();
     }
 
     @Override
     protected void beforeTransactionCommit() {
-        super.beforeTransactionCommit();
-        int count = mInsertedRawContacts.size();
-        for (int i = 0; i < count; i++) {
-            mContactAggregator.insertContact(mDb, mInsertedRawContacts.get(i));
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "beforeTransactionCommit");
         }
+        super.beforeTransactionCommit();
+        flushTransactionalChanges();
+    }
+
+    private void flushTransactionalChanges() {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "flushTransactionChanges");
+        }
+        for (long rawContactId : mInsertedRawContacts) {
+            mContactAggregator.insertContact(mDb, rawContactId);
+        }
+
+        String ids;
+        if (!mUpdatedRawContacts.isEmpty()) {
+            ids = buildIdsString(mUpdatedRawContacts);
+            mDb.execSQL("UPDATE raw_contacts SET version = version + 1 WHERE _id in " + ids,
+                    new Object[]{});
+        }
+
+        for (Map.Entry<Long, Object> entry : mUpdatedSyncStates.entrySet()) {
+            long id = entry.getKey();
+            mOpenHelper.getSyncState().update(mDb, id, entry.getValue());
+        }
+
+        clearTransactionalChanges();
+    }
+
+    private String buildIdsString(HashSet<Long> ids) {
+        StringBuilder idsBuilder = null;
+        for (long id : ids) {
+            if (idsBuilder == null) {
+                idsBuilder = new StringBuilder();
+                idsBuilder.append("(");
+            } else {
+                idsBuilder.append(",");
+            }
+            idsBuilder.append(id);
+        }
+        idsBuilder.append(")");
+        return idsBuilder.toString();
     }
 
     @Override
@@ -1707,6 +1762,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "insertInTransaction: " + uri);
+        }
         final int match = sUriMatcher.match(uri);
         long id = 0;
 
@@ -1862,6 +1920,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (markRawContactAsDirty) {
             setRawContactDirty(rawContactId);
         }
+        mUpdatedRawContacts.add(rawContactId);
 
         if (rowHandler.isAggregationRequired()) {
             triggerAggregation(rawContactId);
@@ -2171,10 +2230,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "deleteInTransaction: " + uri);
+        }
+        flushTransactionalChanges();
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
                 return mOpenHelper.getSyncState().delete(mDb, selection, selectionArgs);
+
+            case SYNCSTATE_ID:
+                String selectionWithId =
+                        (SyncStateContract.Columns._ID + "=" + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND (" + selection + ")");
+                return mOpenHelper.getSyncState().delete(mDb, selectionWithId, selectionArgs);
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
@@ -2326,12 +2395,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     protected int updateInTransaction(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "updateInTransaction: " + uri);
+        }
+
         int count = 0;
 
         final int match = sUriMatcher.match(uri);
+        if (match == SYNCSTATE_ID && selection == null) {
+            long rowId = ContentUris.parseId(uri);
+            Object data = values.get(ContactsContract.SyncStateColumns.DATA);
+            mUpdatedSyncStates.put(rowId, data);
+            return 1;
+        }
+        flushTransactionalChanges();
         switch(match) {
             case SYNCSTATE:
-                return mOpenHelper.getSyncState().update(mDb, values, selection, selectionArgs);
+                return mOpenHelper.getSyncState().update(mDb, values,
+                        appendAccountToSelection(uri, selection), selectionArgs);
+
+            case SYNCSTATE_ID: {
+                selection = appendAccountToSelection(uri, selection);
+                String selectionWithId =
+                        (SyncStateContract.Columns._ID + "=" + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND (" + selection + ")");
+                return mOpenHelper.getSyncState().update(mDb, values,
+                        selectionWithId, selectionArgs);
+            }
 
             // TODO(emillar): We will want to disallow editing the contacts table at some point.
             case CONTACTS: {
@@ -2410,7 +2500,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String[] selectionArgs, boolean markAsDirty) {
 
         ContentValues updatedValues;
-        if (markAsDirty) {
+        if (markAsDirty && !values.containsKey(Groups.DIRTY)) {
             updatedValues = mValues;
             updatedValues.clear();
             updatedValues.putAll(values);

@@ -24,6 +24,7 @@ import android.content.Context;
 import android.content.OperationApplicationException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteTransactionListener;
 import android.net.Uri;
 
 import java.util.ArrayList;
@@ -31,7 +32,8 @@ import java.util.ArrayList;
 /**
  * General purpose {@link ContentProvider} base class that uses SQLiteDatabase for storage.
  */
-public abstract class SQLiteContentProvider extends ContentProvider {
+public abstract class SQLiteContentProvider extends ContentProvider
+        implements SQLiteTransactionListener {
 
     private static final String TAG = "SQLiteContentProvider";
 
@@ -83,20 +85,16 @@ public abstract class SQLiteContentProvider extends ContentProvider {
         boolean applyingBatch = applyingBatch();
         if (!applyingBatch) {
             mDb = mOpenHelper.getWritableDatabase();
-            mDb.beginTransaction();
+            mDb.beginTransactionWithListener(this);
             try {
-                onBeginTransaction();
                 result = insertInTransaction(uri, values);
                 if (result != null) {
                     mNotifyChange = true;
                 }
-                beforeTransactionCommit();
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
             }
-
-            onEndTransaction();
         } else {
             result = insertInTransaction(uri, values);
             if (result != null) {
@@ -110,16 +108,14 @@ public abstract class SQLiteContentProvider extends ContentProvider {
     public int bulkInsert(Uri uri, ContentValues[] values) {
         int numValues = values.length;
         mDb = mOpenHelper.getWritableDatabase();
-        mDb.beginTransaction();
+        mDb.beginTransactionWithListener(this);
         try {
-            onBeginTransaction();
             for (int i = 0; i < numValues; i++) {
                 Uri result = insertInTransaction(uri, values[i]);
                 if (result != null) {
                     mNotifyChange = true;
                 }
             }
-            beforeTransactionCommit();
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
@@ -135,14 +131,12 @@ public abstract class SQLiteContentProvider extends ContentProvider {
         boolean applyingBatch = applyingBatch();
         if (!applyingBatch) {
             mDb = mOpenHelper.getWritableDatabase();
-            mDb.beginTransaction();
+            mDb.beginTransactionWithListener(this);
             try {
-                onBeginTransaction();
                 count = updateInTransaction(uri, values, selection, selectionArgs);
                 if (count > 0) {
                     mNotifyChange = true;
                 }
-                beforeTransactionCommit();
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
@@ -165,14 +159,12 @@ public abstract class SQLiteContentProvider extends ContentProvider {
         boolean applyingBatch = applyingBatch();
         if (!applyingBatch) {
             mDb = mOpenHelper.getWritableDatabase();
-            mDb.beginTransaction();
+            mDb.beginTransactionWithListener(this);
             try {
-                onBeginTransaction();
                 count = deleteInTransaction(uri, selection, selectionArgs);
                 if (count > 0) {
                     mNotifyChange = true;
                 }
-                beforeTransactionCommit();
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
@@ -192,10 +184,9 @@ public abstract class SQLiteContentProvider extends ContentProvider {
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
         mDb = mOpenHelper.getWritableDatabase();
-        mDb.beginTransaction();
+        mDb.beginTransactionWithListener(this);
         try {
             mApplyingBatch.set(true);
-            onBeginTransaction();
             final int numOperations = operations.size();
             final ContentProviderResult[] results = new ContentProviderResult[numOperations];
             for (int i = 0; i < numOperations; i++) {
@@ -205,7 +196,6 @@ public abstract class SQLiteContentProvider extends ContentProvider {
                 }
                 results[i] = operation.apply(this, results, i);
             }
-            beforeTransactionCommit();
             mDb.setTransactionSuccessful();
             return results;
         } finally {
@@ -213,6 +203,18 @@ public abstract class SQLiteContentProvider extends ContentProvider {
             mDb.endTransaction();
             onEndTransaction();
         }
+    }
+
+    public void onBegin() {
+        onBeginTransaction();
+    }
+
+    public void onCommit() {
+        beforeTransactionCommit();
+    }
+
+    public void onRollback() {
+        // not used
     }
 
     protected void onBeginTransaction() {
