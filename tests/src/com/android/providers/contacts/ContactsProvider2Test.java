@@ -1033,7 +1033,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(ContactsContract.RawContacts.DIRTY, 0);
         values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
-                RawContacts.AGGREGATION_MODE_IMMEDITATE);
+                RawContacts.AGGREGATION_MODE_IMMEDIATE);
         values.put(ContactsContract.RawContacts.STARRED, 1);
         assertEquals(1, mResolver.update(uri, values, null, null));
         assertEquals(version, getVersion(uri));
