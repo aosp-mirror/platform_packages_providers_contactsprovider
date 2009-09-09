@@ -5,7 +5,7 @@
 5    deleted=0
 6    dirty=1
 7    sourceid=null
-8    version=2
+8    version=1
 9    sync1=null
 10    sync2=null
 11    sync3=null
@@ -18,7 +18,7 @@
 18    deleted=0
 19    dirty=1
 20    sourceid=3d09f37e0f0dbc6f
-21    version=25
+21    version=1
 22    sync1=1249441106583000
 23    sync2=null
 24    sync3=null
@@ -31,7 +31,7 @@
 31    deleted=0
 32    dirty=1
 33    sourceid=5c9ae978b346ac9
-34    version=12
+34    version=1
 35    sync1=1249441067558000
 36    sync2=null
 37    sync3=null
@@ -44,7 +44,7 @@
 44    deleted=0
 45    dirty=1
 46    sourceid=null
-47    version=4
+47    version=1
 48    sync1=null
 49    sync2=null
 50    sync3=null

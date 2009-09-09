@@ -20,10 +20,8 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -73,13 +71,7 @@ public class GroupsTest extends BaseContactsProvider2Test {
         long contactCharlieDupe = mActor.createContact(false, PERSON_CHARLIE);
         long contactDelta = mActor.createContact(false, PERSON_DELTA);
 
-        // Make sure that Charlie was aggregated
-        {
-            long aggCharlie = mActor.getContactForRawContact(contactCharlie);
-            long aggCharlieDupe = mActor.getContactForRawContact(contactCharlieDupe);
-            assertTrue("Didn't aggregate two contacts with identical names",
-                    (aggCharlie == aggCharlieDupe));
-        }
+        assertAggregated(contactCharlie, contactCharlieDupe);
 
         // Add phone numbers to specific contacts
         mActor.createPhone(contactAlpha, PHONE_ALPHA);
@@ -116,20 +108,20 @@ public class GroupsTest extends BaseContactsProvider2Test {
 
             if (groupId == groupGrey) {
                 // Grey should have four aggregates, three with phones.
-                assertTrue("Incorrect Grey count", (summaryCount == 4));
-                assertTrue("Incorrect Grey with phones count", (summaryWithPhones == 3));
+                assertEquals("Incorrect Grey count", 4, summaryCount);
+                assertEquals("Incorrect Grey with phones count", 3, summaryWithPhones);
             } else if (groupId == groupRed) {
                 // Red should have 3 aggregates, all with phones.
-                assertTrue("Incorrect Red count", (summaryCount == 3));
-                assertTrue("Incorrect Red with phones count", (summaryWithPhones == 3));
+                assertEquals("Incorrect Red count", 3, summaryCount);
+                assertEquals("Incorrect Red with phones count", 3, summaryWithPhones);
             } else if (groupId == groupGreen) {
                 // Green should have 1 aggregate, none with phones.
-                assertTrue("Incorrect Green count", (summaryCount == 1));
-                assertTrue("Incorrect Green with phones count", (summaryWithPhones == 0));
+                assertEquals("Incorrect Green count", 1, summaryCount);
+                assertEquals("Incorrect Green with phones count", 0, summaryWithPhones);
             } else if (groupId == groupBlue) {
                 // Blue should have no contacts.
-                assertTrue("Incorrect Blue count", (summaryCount == 0));
-                assertTrue("Incorrect Blue with phones count", (summaryWithPhones == 0));
+                assertEquals("Incorrect Blue count", 0, summaryCount);
+                assertEquals("Incorrect Blue with phones count", 0, summaryWithPhones);
             } else {
                 fail("Unrecognized group in summary cursor");
             }
