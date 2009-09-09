@@ -2379,7 +2379,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mValues.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
             mValues.putNull(RawContacts.CONTACT_ID);
             mValues.put(RawContacts.DIRTY, 1);
-            return updateRawContact(rawContactId, mValues, null, null);
+            return updateRawContact(rawContactId, mValues);
         }
     }
 
@@ -2448,19 +2448,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS: {
-                // TODO: security checks
-                count = mDb.update(Tables.RAW_CONTACTS, values,
-                        appendAccountToSelection(uri, selection), selectionArgs);
-
-                if (values.containsKey(RawContacts.STARRED)) {
-                    mContactAggregator.updateStarred(mDb, selection, selectionArgs);
-                }
+                count = updateRawContacts(values, selection, selectionArgs);
                 break;
             }
 
             case RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
-                count = updateRawContact(rawContactId, values, selection, selectionArgs);
+                if (selection != null) {
+                    count = updateRawContacts(values, RawContacts._ID + "=" + rawContactId
+                                    + " AND(" + selection + ")", selectionArgs);
+                } else {
+                    count = updateRawContact(rawContactId, values);
+                }
                 break;
             }
 
@@ -2526,13 +2525,32 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return count;
     }
 
-    private int updateRawContact(long rawContactId, ContentValues values, String selection,
-            String[] selectionArgs) {
+    private int updateRawContacts(ContentValues values, String selection, String[] selectionArgs) {
+        if (values.containsKey(RawContacts.CONTACT_ID)) {
+            throw new IllegalArgumentException(RawContacts.CONTACT_ID + " should not be included " +
+                    "in content values. Contact IDs are assigned automatically");
+        }
 
-        // TODO: security checks
-        String selectionWithId = (RawContacts._ID + " = " + rawContactId + " ")
-                + (selection == null ? "" : " AND " + selection);
-        int count = mDb.update(Tables.RAW_CONTACTS, values, selectionWithId, selectionArgs);
+        int count = 0;
+        Cursor cursor = mDb.query(mOpenHelper.getRawContactView(),
+                new String[] { RawContacts.CONTACT_ID }, selection,
+                selectionArgs, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long rawContactId = cursor.getLong(0);
+                updateRawContact(rawContactId, values);
+                count++;
+            }
+        } finally {
+            cursor.close();
+        }
+
+        return count;
+    }
+
+    private int updateRawContact(long rawContactId, ContentValues values) {
+        int count = mDb.update(Tables.RAW_CONTACTS, values, RawContacts._ID + " = " + rawContactId,
+                null);
         if (count != 0) {
             if (values.containsKey(RawContacts.ACCOUNT_TYPE)
                     || values.containsKey(RawContacts.ACCOUNT_NAME)
@@ -2541,7 +2559,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             if (values.containsKey(RawContacts.STARRED)) {
-                mContactAggregator.updateStarred(mDb, selectionWithId, selectionArgs);
+                mContactAggregator.updateStarred(rawContactId);
             }
             if (values.containsKey(RawContacts.SOURCE_ID)) {
                 mContactAggregator.updateLookupKey(mDb, rawContactId);
