@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
 import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
-import com.android.providers.contacts.OpenHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.OpenHelper.ContactsColumns;
 import com.android.providers.contacts.OpenHelper.DataColumns;
 import com.android.providers.contacts.OpenHelper.DisplayNameSources;
@@ -50,8 +49,8 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
-import android.util.Log;
 import android.util.EventLog;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -702,7 +701,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                             NameMatchCandidate nameCandidate = nameCandidates.mList.get(j);
                             matcher.matchName(contactId,
                                     nameCandidate.mLookupType, nameCandidate.mName,
-                                    candidate.mLookupType, candidate.mName, true);
+                                    candidate.mLookupType, candidate.mName,
+                                    ContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE);
                         }
                     }
                 }
@@ -873,7 +873,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         selection.setLength(selection.length() - 1);
         selection.append(")");
 
-        matchAllCandidates(db, selection.toString(), candidates, matcher, false);
+        matchAllCandidates(db, selection.toString(), candidates, matcher,
+                ContactMatcher.MATCHING_ALGORITHM_EXACT);
     }
 
     /**
@@ -891,7 +892,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                     firstLetters.add(firstLetter);
                     final String selection = "(" + NameLookupColumns.NORMALIZED_NAME + " GLOB '"
                             + firstLetter + "*')";
-                    matchAllCandidates(db, selection, candidates, matcher, true);
+                    matchAllCandidates(db, selection, candidates, matcher,
+                            ContactMatcher.MATCHING_ALGORITHM_APPROXIMATE);
                 }
             }
         }
@@ -902,7 +904,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * on that data.
      */
     private void matchAllCandidates(SQLiteDatabase db, String selection,
-            MatchCandidateList candidates, ContactMatcher matcher, boolean approximate) {
+            MatchCandidateList candidates, ContactMatcher matcher, int algorithm) {
         final Cursor c = db.query(Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, NAME_LOOKUP_COLUMNS,
                 selection, null, null, null, null);
 
@@ -916,7 +918,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 for (int i = 0; i < candidates.mCount; i++) {
                     NameMatchCandidate candidate = candidates.mList.get(i);
                     matcher.matchName(contactId, candidate.mLookupType, candidate.mName,
-                            nameType, name, approximate);
+                            nameType, name, algorithm);
                 }
             }
         } finally {
