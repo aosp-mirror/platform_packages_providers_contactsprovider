@@ -1531,10 +1531,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             importLegacyContactsAsync();
         }
 
-        AccountManager.get(context).addOnAccountsUpdatedListener(this, null, false);
-        onAccountsUpdated(AccountManager.get(context).getAccounts());
+        verifyAccounts();
 
         return (db != null);
+    }
+
+    protected void verifyAccounts() {
+        AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
+        onAccountsUpdated(AccountManager.get(getContext()).getAccounts());
     }
 
     /* Visible for testing */

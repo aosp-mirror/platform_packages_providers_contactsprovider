@@ -57,8 +57,7 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
                 new RenamingDelegatingContext(context, targetContext, "perf.");
         targetContextWrapper.makeExistingFilesAndDbsAccessible();
         IsolatedContext providerContext = new IsolatedContext(resolver, targetContextWrapper);
-        TestAggregationScheduler scheduler = new TestAggregationScheduler();
-        SynchronousContactsProvider2 provider = new SynchronousContactsProvider2(scheduler);
+        SynchronousContactsProvider2 provider = new SynchronousContactsProvider2();
         provider.setDataWipeEnabled(false);
         provider.attachInfo(providerContext, null);
         resolver.addProvider(ContactsContract.AUTHORITY, provider);
@@ -77,7 +76,7 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
         if (TRACE) {
             Debug.startMethodTracing("aggregation");
         }
-        scheduler.trigger();
+        provider.aggregate();
         if (TRACE) {
             Debug.stopMethodTracing();
         }
@@ -92,30 +91,6 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
                 rawContactCount,
                 contactCount,
                 ((double)(end-start)/rawContactCount)));
-    }
-
-    private static class TestAggregationScheduler extends ContactAggregationScheduler {
-
-        @Override
-        public void start() {
-        }
-
-        @Override
-        public void stop() {
-        }
-
-        @Override
-        long currentTime() {
-            return 0;
-        }
-
-        @Override
-        void runDelayed() {
-        }
-
-        void trigger() {
-            run();
-        }
     }
 }
 
