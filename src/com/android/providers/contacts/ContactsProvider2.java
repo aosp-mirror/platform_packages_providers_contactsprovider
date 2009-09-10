@@ -2563,7 +2563,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         int count = 0;
         Cursor cursor = mDb.query(mOpenHelper.getRawContactView(),
-                new String[] { RawContacts.CONTACT_ID }, selection,
+                new String[] { RawContacts._ID }, selection,
                 selectionArgs, null, null, null);
         try {
             while (cursor.moveToNext()) {
