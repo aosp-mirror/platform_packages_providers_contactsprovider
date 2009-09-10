@@ -1680,6 +1680,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void clearTransactionalChanges() {
         mInsertedRawContacts.clear();
         mUpdatedRawContacts.clear();
+        mUpdatedSyncStates.clear();
     }
 
     @Override
