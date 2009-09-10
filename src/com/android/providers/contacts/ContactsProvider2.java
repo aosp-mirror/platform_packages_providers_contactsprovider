@@ -62,11 +62,14 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.os.MemoryFile;
 import android.os.RemoteException;
+import android.pim.vcard.VCardComposer;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
+import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -91,7 +94,10 @@ import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -417,6 +423,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sContactsProjectionMap.put(Contacts.HAS_PHONE_NUMBER, Contacts.HAS_PHONE_NUMBER);
         sContactsProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sContactsProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
+        sContactsProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
+                + " || '.vcf' AS " + OpenableColumns.DISPLAY_NAME);
+        sContactsProjectionMap.put(OpenableColumns.SIZE, "0 AS " + OpenableColumns.SIZE);
 
         sContactsWithPresenceProjectionMap = new HashMap<String, String>();
         sContactsWithPresenceProjectionMap.putAll(sContactsProjectionMap);
@@ -3513,7 +3522,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
         int match = sUriMatcher.match(uri);
         switch (match) {
-            case CONTACTS_PHOTO:
+            case CONTACTS_PHOTO: {
                 if (!"r".equals(mode)) {
                     throw new FileNotFoundException("Mode " + mode + " not supported.");
                 }
@@ -3526,19 +3535,82 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 + " AND " + RawContacts.CONTACT_ID + "=" + contactId;
                 SQLiteDatabase db = mOpenHelper.getReadableDatabase();
                 return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql, null);
+            }
+
+            case CONTACTS_LOOKUP:
+            case CONTACTS_LOOKUP_ID: {
+                // TODO: optimize lookup when direct id provided
+                final String lookupKey = uri.getPathSegments().get(2);
+                final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
+                final String selection = RawContacts.CONTACT_ID + "=" + contactId;
+
+                // When opening a contact as file, we pass back contents as a
+                // vCard-encoded stream. We build into a local buffer first,
+                // then pipe into MemoryFile once the exact size is known.
+                final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
+                outputRawContactsAsVCard(localStream, selection, null);
+                return buildAssetFileDescriptor(localStream);
+            }
 
             default:
                 throw new FileNotFoundException("No file at: " + uri);
         }
     }
 
+    private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";
+    private static final String VCARD_TYPE_DEFAULT = "default";
 
+    /**
+     * Build a {@link AssetFileDescriptor} through a {@link MemoryFile} with the
+     * contents of the given {@link ByteArrayOutputStream}.
+     */
+    private AssetFileDescriptor buildAssetFileDescriptor(ByteArrayOutputStream stream) {
+        AssetFileDescriptor fd = null;
+        try {
+            stream.flush();
+
+            final byte[] byteData = stream.toByteArray();
+            final int size = byteData.length;
+
+            final MemoryFile memoryFile = new MemoryFile(CONTACT_MEMORY_FILE_NAME, size);
+            memoryFile.writeBytes(byteData, 0, 0, size);
+            memoryFile.deactivate();
+
+            fd = AssetFileDescriptor.fromMemoryFile(memoryFile);
+        } catch (IOException e) {
+            Log.w(TAG, "Problem writing stream into an AssetFileDescriptor: " + e.toString());
+        }
+        return fd;
+    }
+
+    /**
+     * Output {@link RawContacts} matching the requested selection in the vCard
+     * format to the given {@link OutputStream}. This method returns silently if
+     * any errors encountered.
+     */
+    private void outputRawContactsAsVCard(OutputStream stream, String selection,
+            String[] selectionArgs) {
+        final Context context = this.getContext();
+        final VCardComposer composer = new VCardComposer(context, VCARD_TYPE_DEFAULT, false);
+        composer.addHandler(composer.new HandlerForOutputStream(stream));
+
+        // TODO: enforce the callers security clause is used
+        if (!composer.init(selection, selectionArgs))
+            return;
+
+        while (!composer.isAfterLast()) {
+            if (!composer.createOneEntry()) {
+                Log.w(TAG, "Failed to output a contact.");
+            }
+        }
+        composer.terminate();
+    }
 
     /**
      * An implementation of EntityIterator that joins the contacts and data tables
      * and consumes all the data rows for a contact in order to build the Entity for a contact.
      */
-    private static class ContactsEntityIterator implements EntityIterator {
+    private static class RawContactsEntityIterator implements EntityIterator {
         private final Cursor mEntityCursor;
         private volatile boolean mIsClosed;
 
@@ -3626,7 +3698,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         private static final int COLUMN_CONTACT_ID = 37;
         private static final int COLUMN_STARRED = 38;
 
-        public ContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
+        public RawContactsEntityIterator(ContactsProvider2 provider, String contactsIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
             mIsClosed = false;
 
@@ -3894,7 +3966,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     contactsIdString = uri.getPathSegments().get(1);
                 }
 
-                return new ContactsEntityIterator(this, contactsIdString,
+                return new RawContactsEntityIterator(this, contactsIdString,
                         uri, selection, selectionArgs, sortOrder);
             case GROUPS:
             case GROUPS_ID:
