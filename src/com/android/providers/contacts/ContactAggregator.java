@@ -1365,8 +1365,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     /**
      * Finds matching contacts and returns a cursor on those.
      */
-    public Cursor queryAggregationSuggestions(long contactId, String[] projection,
-            HashMap<String, String> projectionMap, int maxSuggestions) {
+    public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb, String[] projection,
+            long contactId, int maxSuggestions) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
         Cursor c;
@@ -1376,7 +1376,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         db.beginTransaction();
         try {
             List<MatchScore> bestMatches = findMatchingContacts(db, contactId, maxSuggestions);
-            c = queryMatchingContacts(db, contactId, projection, projectionMap, bestMatches);
+            c = queryMatchingContacts(qb, db, contactId, projection, bestMatches);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -1388,9 +1388,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Loads contacts with specified IDs and returns them in the order of IDs in the
      * supplied list.
      */
-    private Cursor queryMatchingContacts(final SQLiteDatabase db, long contactId,
-            String[] projection, HashMap<String, String> projectionMap,
-            List<MatchScore> bestMatches) {
+    private Cursor queryMatchingContacts(SQLiteQueryBuilder qb, SQLiteDatabase db, long contactId,
+            String[] projection, List<MatchScore> bestMatches) {
 
         StringBuilder selection = new StringBuilder();
         selection.append(Contacts._ID);
@@ -1403,10 +1402,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             selection.append(matchScore.getContactId());
         }
         selection.append(")");
-
-        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        qb.setTables(mOpenHelper.getContactView());
-        qb.setProjectionMap(projectionMap);
 
         final Cursor cursor = qb.query(db, projection, selection.toString(), null, null, null,
                 Contacts._ID);
