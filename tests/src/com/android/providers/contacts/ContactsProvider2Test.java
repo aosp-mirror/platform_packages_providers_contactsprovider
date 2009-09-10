@@ -1008,6 +1008,21 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 + rawContactId2, null));
     }
 
+    public void testContactDeletion() {
+        long rawContactId1 = createRawContactWithName("John", "Doe");
+        long rawContactId2 = createRawContactWithName("John", "Doe");
+        forceAggregation();
+
+        long contactId = queryContactId(rawContactId1);
+
+        mResolver.delete(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), null, null);
+
+        assertStoredValue(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1),
+                RawContacts.DELETED, "1");
+        assertStoredValue(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2),
+                RawContacts.DELETED, "1");
+    }
+
     public void testMarkAsDirtyParameter() {
         long rawContactId = createRawContact(mAccount);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
