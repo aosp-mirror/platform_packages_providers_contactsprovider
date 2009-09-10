@@ -2269,6 +2269,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return deleteContact(contactId);
             }
 
+            case CONTACTS_LOOKUP:
+            case CONTACTS_LOOKUP_ID: {
+                final List<String> pathSegments = uri.getPathSegments();
+                final int segmentCount = pathSegments.size();
+                if (segmentCount < 3) {
+                    throw new IllegalArgumentException("URI " + uri + " is missing a lookup key");
+                }
+                final String lookupKey = pathSegments.get(2);
+                final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
+                return deleteContact(contactId);
+            }
+
             case RAW_CONTACTS: {
                 final boolean permanently =
                         readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
@@ -2454,6 +2466,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             // TODO(emillar): We will want to disallow editing the contacts table at some point.
+            // TODO: however, note that updating should be allowed for starred
             case CONTACTS: {
                 count = mDb.update(Tables.CONTACTS, values,
                         appendAccountToSelection(uri, selection), selectionArgs);
@@ -2462,6 +2475,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_ID: {
                 count = updateContactData(ContentUris.parseId(uri), values);
+                break;
+            }
+
+            case CONTACTS_LOOKUP:
+            case CONTACTS_LOOKUP_ID: {
+                final List<String> pathSegments = uri.getPathSegments();
+                final int segmentCount = pathSegments.size();
+                if (segmentCount < 3) {
+                    throw new IllegalArgumentException("URI " + uri + " is missing a lookup key");
+                }
+                final String lookupKey = pathSegments.get(2);
+                final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
+                count = updateContactData(contactId, values);
                 break;
             }
 
