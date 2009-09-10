@@ -2708,6 +2708,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     exceptionValues);
         }
 
+        mContactAggregator.markForAggregation(rawContactId1);
+        mContactAggregator.markForAggregation(rawContactId2);
+
         long contactId1 = mOpenHelper.getContactId(rawContactId1);
         mContactAggregator.aggregateContact(db, rawContactId1, contactId1);
 

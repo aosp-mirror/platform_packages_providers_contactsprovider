@@ -481,7 +481,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         final ContentValues values = new ContentValues();
-        computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
+        computeAggregateData(db, contactId, values);
         db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
 
         mAggregatedPresenceReplace.bindLong(1, contactId);
@@ -540,7 +540,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
             // Joining with an aggregate
             mOpenHelper.setContactIdAndMarkAggregated(rawContactId, contactId);
-            computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
+            computeAggregateData(db, contactId, values);
             db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
             mOpenHelper.updateContactVisible(contactId);
         }
@@ -1009,11 +1009,18 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
+     * Computes aggregate-level data for the specified aggregate contact ID.
+     */
+    private void computeAggregateData(SQLiteDatabase db, long contactId, ContentValues values) {
+        computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0", values);
+    }
+
+    /**
      * Computes aggregate-level data from constituent raw contacts.
      */
     private void computeAggregateData(final SQLiteDatabase db, String selection,
             final ContentValues values) {
-
         long currentRawContactId = -1;
         int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
         String bestDisplayName = null;

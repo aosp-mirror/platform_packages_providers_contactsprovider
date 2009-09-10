@@ -364,21 +364,46 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Johnj", "Smithj");
 
+        long rawContactId3 = createRawContact();
+        insertStructuredName(rawContactId3, "Johnm", "Smithm");
+
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId3);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId2, rawContactId3);
 
-        assertAggregated(rawContactId1, rawContactId2, "Johnj Smithj");
+        assertAggregated(rawContactId1, rawContactId2, "Johnm Smithm");
+        assertAggregated(rawContactId1, rawContactId3);
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId3);
 
         assertNotAggregated(rawContactId1, rawContactId2);
+        assertNotAggregated(rawContactId1, rawContactId3);
 
         String displayName1 = queryDisplayName(queryContactId(rawContactId1));
         assertEquals("Johni Smithi", displayName1);
 
-        String displayName2 = queryDisplayName(queryContactId(rawContactId2));
-        assertEquals("Johnj Smithj", displayName2);
+        assertAggregated(rawContactId2, rawContactId3, "Johnm Smithm");
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId2, rawContactId3);
+        assertNotAggregated(rawContactId1, rawContactId2);
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+
+        String displayName2 = queryDisplayName(queryContactId(rawContactId1));
+        assertEquals("Johni Smithi", displayName2);
+
+        String displayName3 = queryDisplayName(queryContactId(rawContactId2));
+        assertEquals("Johnj Smithj", displayName3);
+
+        String displayName4 = queryDisplayName(queryContactId(rawContactId3));
+        assertEquals("Johnm Smithm", displayName4);
     }
 
     public void testAggregationSuggestionsBasedOnName() {
