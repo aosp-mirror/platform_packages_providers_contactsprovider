@@ -69,6 +69,10 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
+    protected void verifyAccounts() {
+    }
+
+    @Override
     protected Account getDefaultAccount() {
         if (mAccount == null) {
             mAccount = new Account("androidtest@gmail.com", "com.google.GAIA");
@@ -78,10 +82,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     public void prepareForFullAggregation(int maxContact) {
         SQLiteDatabase db = getOpenHelper().getWritableDatabase();
-        db.execSQL("UPDATE raw_contacts " +
-        		"SET contact_id = NULL, aggregation_mode=0,aggregation_needed=1;");
-        db.execSQL("DELETE FROM contacts;");
-        db.execSQL("DELETE FROM name_lookup;");
+        db.execSQL("UPDATE raw_contacts SET aggregation_mode=0,aggregation_needed=1;");
         long rowId =
             db.compileStatement("SELECT _id FROM raw_contacts LIMIT 1 OFFSET " + maxContact)
                 .simpleQueryForLong();
