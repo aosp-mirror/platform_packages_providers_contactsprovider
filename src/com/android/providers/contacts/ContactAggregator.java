@@ -349,32 +349,76 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         ContentValues values = new ContentValues();
         long rawContactIds[] = new long[MAX_TRANSACTION_SIZE];
         long contactIds[] = new long[MAX_TRANSACTION_SIZE];
+        aggregateBatch(db, candidates, matcher, values, rawContactIds, contactIds);
+    }
 
-        while (!mCancel) {
-            long start = System.currentTimeMillis();
-            int count = findContactsToAggregate(db, rawContactIds, contactIds);
-            EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, System.currentTimeMillis() - start, -count);
-            if (mCancel || count == 0) {
-                break;
-            }
+    /**
+     * Takes a batch of contacts and aggregates them. Returns the number of successfully
+     * processed raw contacts.
+     */
+    private int aggregateBatch(SQLiteDatabase db, MatchCandidateList candidates,
+            ContactMatcher matcher, ContentValues values, long[] rawContactIds, long[] contactIds) {
+        long elapsedTime = 0;
+        int aggregatedCount = 0;
+        while (!mCancel && aggregatedCount < MAX_TRANSACTION_SIZE) {
+            db.beginTransaction();
+            try {
 
-            int aggregatedCount = aggregateBatch(db, candidates, matcher, values, rawContactIds,
-                    contactIds, count);
-            if (aggregatedCount != count) {
-                break;
+                long start = System.currentTimeMillis();
+                int count = findContactsToAggregate(db, rawContactIds, contactIds,
+                        MAX_TRANSACTION_SIZE - aggregatedCount);
+                if (mCancel || count == 0) {
+                    break;
+                }
+
+                Log.i(TAG, "Contact aggregation: " + count);
+                EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION,
+                        System.currentTimeMillis() - start, -count);
+
+                for (int i = 0; i < count; i++) {
+                    start = System.currentTimeMillis();
+                    aggregateContact(db, rawContactIds[i], contactIds[i], candidates, matcher,
+                            values);
+                    long end = System.currentTimeMillis();
+                    elapsedTime += (end - start);
+                    aggregatedCount++;
+                    if (db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
+
+                        // We have yielded the database, so the rawContactIds and contactIds
+                        // arrays are no longer current - we need to refetch them
+                        break;
+                    }
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
             }
         }
+
+        EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, elapsedTime, aggregatedCount);
+        String performance = aggregatedCount == 0 ? "" : ", " + (elapsedTime / aggregatedCount)
+                + " ms per contact";
+        if (aggregatedCount != 0) {
+            Log.i(TAG, "Contact aggregation complete: " + aggregatedCount + performance);
+        }
+
+        if (aggregatedCount > 0) {
+            mContactsProvider.notifyChange();
+        }
+
+        return aggregatedCount;
     }
 
     /**
      * Finds a batch of contacts marked for aggregation. The maximum batch size
      * is {@link #MAX_TRANSACTION_SIZE} contacts.
+     * @param limit
      */
     private int findContactsToAggregate(SQLiteDatabase db, long[] rawContactIds,
-            long[] contactIds) {
+            long[] contactIds, int limit) {
         Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS,
                 AggregationQuery.SELECTION, null, null, null, null,
-                String.valueOf(MAX_TRANSACTION_SIZE));
+                String.valueOf(limit));
 
         int count = 0;
         try {
@@ -387,48 +431,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
         return count;
-    }
-
-    /**
-     * Takes a batch of contacts and aggregates them. Returns the number of successfully
-     * processed raw contacts.
-     */
-    private int aggregateBatch(SQLiteDatabase db, MatchCandidateList candidates,
-            ContactMatcher matcher, ContentValues values, long[] rawContactIds, long[] contactIds,
-            int count) {
-        Log.i(TAG, "Contact aggregation: " + count);
-        long elapsedTime = 0;
-        boolean aggregationsChanged = false;
-        int aggregatedCount = 0;
-        db.beginTransaction();
-        try {
-            for (int i = 0; i < count; i++) {
-                long start = System.currentTimeMillis();
-                aggregationsChanged |= aggregateContact(db, rawContactIds[i], contactIds[i],
-                        candidates, matcher, values);
-                long end = System.currentTimeMillis();
-                elapsedTime += (end - start);
-                aggregatedCount++;
-                db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
-            }
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-        }
-
-        EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, elapsedTime, aggregatedCount);
-        String performance = aggregatedCount == 0 ? "" : ", " + (elapsedTime / aggregatedCount)
-                + " ms per contact";
-        if (aggregatedCount == count) {
-            Log.i(TAG, "Contact aggregation complete: " + count + performance);
-        } else {
-            Log.i(TAG, "Contact aggregation interrupted: " + aggregatedCount + "/" + count
-                    + performance);
-        }
-        if (aggregationsChanged) {
-            mContactsProvider.notifyChange();
-        }
-        return aggregatedCount;
     }
 
     public void markNewForAggregation(long rawContactId) {
@@ -491,7 +493,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Given a specific raw contact, finds all matching aggregate contacts and chooses the one
      * with the highest match score.  If no such contact is found, creates a new contact.
      */
-    private synchronized boolean aggregateContact(SQLiteDatabase db, long rawContactId,
+    private synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
             long currentContactId, MatchCandidateList candidates, ContactMatcher matcher,
             ContentValues values) {
 
@@ -533,7 +535,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
             mOpenHelper.setContactIdAndMarkAggregated(rawContactId, contactId);
             mOpenHelper.updateContactVisible(contactId);
-            return true;
 
         } else {
 
@@ -542,7 +543,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId, values);
             db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
             mOpenHelper.updateContactVisible(contactId);
-            return true;
         }
     }
 
