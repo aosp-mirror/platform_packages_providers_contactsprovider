@@ -3128,8 +3128,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     maxSuggestions = DEFAULT_MAX_SUGGESTIONS;
                 }
 
-                return mContactAggregator.queryAggregationSuggestions(contactId, projection,
-                        sContactsProjectionMap, maxSuggestions);
+                setTablesAndProjectionMapForContacts(qb, projection);
+
+                return mContactAggregator.queryAggregationSuggestions(qb, projection, contactId,
+                        maxSuggestions);
             }
 
             case SETTINGS: {
