@@ -3039,7 +3039,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     }
 
                     sb.append(Email.DATA + " LIKE ");
-                    sb.append(DatabaseUtils.sqlEscapeString(filterParam));
+                    sb.append(DatabaseUtils.sqlEscapeString(filterParam + '%'));
                     sb.append(")");
                     qb.appendWhere(" AND " + sb);
                 }
