@@ -559,7 +559,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,
                 Contacts.AggregationSuggestions.CONTENT_DIRECTORY);
-        final Cursor cursor = mResolver.query(uri, new String[] { Contacts._ID },
+        final Cursor cursor = mResolver.query(uri,
+                new String[] { Contacts._ID, Contacts.PRESENCE_STATUS },
                 null, null, null);
 
         assertEquals(suggestions.length, cursor.getCount());
