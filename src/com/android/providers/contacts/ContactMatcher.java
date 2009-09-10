@@ -353,8 +353,8 @@ public class ContactMatcher {
                     contactIds = new ArrayList<Long>();
                 }
                 contactIds.add(score.mContactId);
-                score.mPrimaryScore = NO_DATA_SCORE;
             }
+            score.mPrimaryScore = NO_DATA_SCORE;
         }
         return contactIds;
     }
