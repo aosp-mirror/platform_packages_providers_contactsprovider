@@ -349,15 +349,22 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         ContentValues values = new ContentValues();
         long rawContactIds[] = new long[MAX_TRANSACTION_SIZE];
         long contactIds[] = new long[MAX_TRANSACTION_SIZE];
-        aggregateBatch(db, candidates, matcher, values, rawContactIds, contactIds);
+        while (!mCancel) {
+            if (!aggregateBatch(db, candidates, matcher, values, rawContactIds, contactIds)) {
+                break;
+            }
+        }
     }
 
     /**
      * Takes a batch of contacts and aggregates them. Returns the number of successfully
      * processed raw contacts.
+     *
+     * @return true if there are possibly more contacts to aggregate
      */
-    private int aggregateBatch(SQLiteDatabase db, MatchCandidateList candidates,
+    private boolean aggregateBatch(SQLiteDatabase db, MatchCandidateList candidates,
             ContactMatcher matcher, ContentValues values, long[] rawContactIds, long[] contactIds) {
+        boolean lastBatch = false;
         long elapsedTime = 0;
         int aggregatedCount = 0;
         while (!mCancel && aggregatedCount < MAX_TRANSACTION_SIZE) {
@@ -368,6 +375,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 int count = findContactsToAggregate(db, rawContactIds, contactIds,
                         MAX_TRANSACTION_SIZE - aggregatedCount);
                 if (mCancel || count == 0) {
+                    lastBatch = true;
                     break;
                 }
 
@@ -406,7 +414,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             mContactsProvider.notifyChange();
         }
 
-        return aggregatedCount;
+        return !lastBatch;
     }
 
     /**
