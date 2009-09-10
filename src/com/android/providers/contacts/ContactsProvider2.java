@@ -2246,16 +2246,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + (selection == null ? "" : " AND (" + selection + ")");
                 return mOpenHelper.getSyncState().delete(mDb, selectionWithId, selectionArgs);
 
+            case CONTACTS: {
+                // TODO
+                return 0;
+            }
+
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-
-                // Remove references to the contact first
-                ContentValues values = new ContentValues();
-                values.putNull(RawContacts.CONTACT_ID);
-                mDb.update(Tables.RAW_CONTACTS, values,
-                        RawContacts.CONTACT_ID + "=" + contactId, null);
-
-                return mDb.delete(Tables.CONTACTS, BaseColumns._ID + "=" + contactId, null);
+                return deleteContact(contactId);
             }
 
             case RAW_CONTACTS: {
@@ -2367,21 +2365,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return count;
     }
 
+    private int deleteContact(long contactId) {
+        Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
+                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long rawContactId = c.getLong(0);
+                markRawContactAsDeleted(rawContactId);
+            }
+        } finally {
+            c.close();
+        }
+
+        return mDb.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
+    }
+
     public int deleteRawContact(long rawContactId, boolean permanently) {
         if (permanently) {
             mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
             mOpenHelper.removeContactIfSingleton(rawContactId);
-
-            mValues.clear();
-            mValues.put(RawContacts.DELETED, 1);
-            mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
-            mValues.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
-            mValues.putNull(RawContacts.CONTACT_ID);
-            mValues.put(RawContacts.DIRTY, 1);
-            return updateRawContact(rawContactId, mValues);
+            return markRawContactAsDeleted(rawContactId);
         }
+    }
+
+    private int markRawContactAsDeleted(long rawContactId) {
+        mValues.clear();
+        mValues.put(RawContacts.DELETED, 1);
+        mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
+        mValues.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
+        mValues.putNull(RawContacts.CONTACT_ID);
+        mValues.put(RawContacts.DIRTY, 1);
+        return updateRawContact(rawContactId, mValues);
     }
 
     private static Account readAccountFromQueryParams(Uri uri) {
