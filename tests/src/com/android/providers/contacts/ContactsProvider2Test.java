@@ -306,7 +306,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri filterUri3 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "hottamale");
         assertStoredValuesWithProjection(filterUri3, values);
 
-        Uri filterUri4 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tamale@");
+        Uri filterUri4 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tamale@acme");
         assertStoredValuesWithProjection(filterUri4, values);
 
         Uri filterUri5 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "encilada");
