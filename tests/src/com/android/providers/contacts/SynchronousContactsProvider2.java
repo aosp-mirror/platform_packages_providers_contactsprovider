@@ -29,6 +29,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private static OpenHelper mOpenHelper;
     private boolean mDataWipeEnabled = true;
     private Account mAccount;
+    private boolean mNetworkNotified;
 
     public SynchronousContactsProvider2() {
         this(new SynchronousAggregationScheduler());
@@ -52,6 +53,21 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     public void setDataWipeEnabled(boolean flag) {
         mDataWipeEnabled = flag;
+    }
+
+    @Override
+    protected void onBeginTransaction() {
+        super.onBeginTransaction();
+        mNetworkNotified = false;
+    }
+
+    @Override
+    protected void notifyChange(boolean syncToNetwork) {
+        mNetworkNotified |= syncToNetwork;
+    }
+
+    public boolean isNetworkNotified() {
+        return mNetworkNotified;
     }
 
     @Override

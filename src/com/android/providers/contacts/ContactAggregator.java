@@ -411,7 +411,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         if (aggregatedCount > 0) {
-            mContactsProvider.notifyChange();
+
+            // Aggregation does not affect raw contacts and therefore there is no reason
+            // to send a notification to sync adapters.  We do need to notify every one else though.
+            mContactsProvider.notifyChange(false);
         }
 
         return !lastBatch;

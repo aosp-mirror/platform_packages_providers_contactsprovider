@@ -80,6 +80,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertStoredValues(rowUri, values);
         assertSelection(RawContacts.CONTENT_URI, values, RawContacts._ID, rawContactId);
+        assertNetworkNotified(true);
     }
 
     public void testDataInsert() {
@@ -106,6 +107,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri contactDataUri = Uri.withAppendedPath(contactUri, Contacts.Data.CONTENT_DIRECTORY);
         assertSelection(contactDataUri, values, Data._ID, dataId);
+        assertNetworkNotified(true);
     }
 
     public void testPhonesQuery() {
@@ -229,6 +231,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Phone.NUMBER, "18004664422");
         mResolver.update(phoneUri, values, null, null);
         assertStoredValue(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        assertNetworkNotified(true);
     }
 
     public void testEmailsQuery() {
@@ -535,6 +538,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "Potato", "Head");
 
         assertAggregated(rawContactId1, rawContactId2, "Potato Head");
+        assertNetworkNotified(true);
     }
 
     public void testDisplayNameFromData() {
@@ -575,6 +579,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         updateSendToVoicemailAndRingtone(contactId, true, "foo");
         assertSendToVoicemailAndRingtone(contactId, true, "foo");
+        assertNetworkNotified(false);
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
@@ -871,6 +876,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA15, "old15");
         Uri uri = mResolver.insert(Data.CONTENT_URI, values);
         assertStoredValues(uri, values);
+        assertNetworkNotified(true);
 
         values.clear();
         values.put(Data.RES_PACKAGE, "newpackage");
@@ -893,6 +899,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA15, "new15");
         mResolver.update(Data.CONTENT_URI, values, Data.RAW_CONTACT_ID + "=" + rawContactId +
                 " AND " + Data.MIMETYPE + "='testmimetype'", null);
+        assertNetworkNotified(true);
 
         // Should not be able to change IS_PRIMARY and IS_SUPER_PRIMARY by the above update
         values.put(Data.IS_PRIMARY, 1);
@@ -904,6 +911,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, count);
         assertEquals(0, getCount(Data.CONTENT_URI, Data.RAW_CONTACT_ID + "=" + rawContactId
                         + " AND " + Data.MIMETYPE + "='testmimetype'", null));
+        assertNetworkNotified(true);
     }
 
     public void testRawContactDeletion() {
@@ -922,6 +930,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(uri, null, null);
 
         assertStoredValue(uri, RawContacts.DELETED, "1");
+        assertNetworkNotified(true);
 
         Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
                 RawContacts.DELETE_PERMANENTLY, "true").build();
@@ -932,6 +941,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId, null));
         assertEquals(0, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
+        assertNetworkNotified(false);
     }
 
     public void testRawContactDeletionKeepingAggregateContact() {
@@ -1036,6 +1046,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(updateUri, values, null, null);
         assertStoredValue(uri, StructuredName.FAMILY_NAME, "Dough");
         assertDirty(rawContactUri, false);
+        assertNetworkNotified(false);
     }
 
     public void testRawContactDirtyAndVersion() {
@@ -1054,9 +1065,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(version, getVersion(uri));
 
         assertDirty(uri, false);
+        assertNetworkNotified(false);
 
         Uri emailUri = insertEmail(rawContactId, "goo@woo.com");
         assertDirty(uri, true);
+        assertNetworkNotified(true);
         ++version;
         assertEquals(version, getVersion(uri));
         clearDirty(uri);
@@ -1065,12 +1078,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Email.DATA, "goo@hoo.com");
         mResolver.update(emailUri, values, null, null);
         assertDirty(uri, true);
+        assertNetworkNotified(true);
         ++version;
         assertEquals(version, getVersion(uri));
         clearDirty(uri);
 
         mResolver.delete(emailUri, null, null);
         assertDirty(uri, true);
+        assertNetworkNotified(true);
         ++version;
         assertEquals(version, getVersion(uri));
     }
@@ -1101,6 +1116,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(uri, null, null);
         assertStoredValue(uri, RawContacts.DELETED, "1");
         assertDirty(uri, true);
+        assertNetworkNotified(true);
         version++;
         assertEquals(version, getVersion(uri));
     }
@@ -1140,6 +1156,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.clear();
         values.put(Photo.PHOTO, loadTestPhoto());
         mResolver.update(dataUri, values, null, null);
+        assertNetworkNotified(true);
 
         long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
         assertEquals(photoId, twigId);
