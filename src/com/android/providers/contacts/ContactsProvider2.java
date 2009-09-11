@@ -2608,12 +2608,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int count = mDb.update(Tables.RAW_CONTACTS, values, RawContacts._ID + " = " + rawContactId,
                 null);
         if (count != 0) {
-            if (values.containsKey(RawContacts.ACCOUNT_TYPE)
-                    || values.containsKey(RawContacts.ACCOUNT_NAME)
-                    || values.containsKey(RawContacts.SOURCE_ID)) {
-                triggerAggregation(rawContactId);
-            }
-
             if (values.containsKey(RawContacts.STARRED)) {
                 mContactAggregator.updateStarred(rawContactId);
             }
