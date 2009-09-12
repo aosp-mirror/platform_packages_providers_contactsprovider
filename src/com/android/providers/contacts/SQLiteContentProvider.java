@@ -95,6 +95,8 @@ public abstract class SQLiteContentProvider extends ContentProvider
             } finally {
                 mDb.endTransaction();
             }
+
+            onEndTransaction();
         } else {
             result = insertInTransaction(uri, values);
             if (result != null) {

@@ -1432,6 +1432,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
+    private boolean mSyncToNetwork;
+
     public ContactsProvider2() {
         this(new ContactAggregationScheduler());
     }
@@ -1651,6 +1653,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     mAccessLatch = null;
                     return;
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
             }
         }
@@ -1754,7 +1757,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected void notifyChange() {
-        getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null);
+        notifyChange(mSyncToNetwork);
+        mSyncToNetwork = false;
+    }
+
+    protected void notifyChange(boolean syncToNetwork) {
+        getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
+                syncToNetwork);
     }
 
     protected void scheduleContactAggregation() {
@@ -1795,23 +1804,30 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACTS: {
                 final Account account = readAccountFromQueryParams(uri);
                 id = insertRawContact(values, account);
+                mSyncToNetwork = true;
                 break;
             }
 
             case RAW_CONTACTS_DATA: {
                 values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(1));
-                id = insertData(values, shouldMarkRawContactAsDirty(uri));
+                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
+                id = insertData(values, markAsDirty);
+                mSyncToNetwork |= markAsDirty;
                 break;
             }
 
             case DATA: {
-                id = insertData(values, shouldMarkRawContactAsDirty(uri));
+                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
+                id = insertData(values, markAsDirty);
+                mSyncToNetwork |= markAsDirty;
                 break;
             }
 
             case GROUPS: {
                 final Account account = readAccountFromQueryParams(uri);
-                id = insertGroup(values, account, shouldMarkGroupAsDirty(uri));
+                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
+                id = insertGroup(values, account, markAsDirty);
+                mSyncToNetwork |= markAsDirty;
                 break;
             }
 
@@ -1826,6 +1842,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             default:
+                mSyncToNetwork = true;
                 return mLegacyApiSupport.insert(uri, values);
         }
 
@@ -2306,17 +2323,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case DATA: {
+                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
+                mSyncToNetwork |= markAsDirty;
                 return deleteData(appendAccountToSelection(uri, selection), selectionArgs,
-                        shouldMarkRawContactAsDirty(uri));
+                        markAsDirty);
             }
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                return deleteData(Data._ID + "=" + dataId, null, shouldMarkRawContactAsDirty(uri));
+                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
+                mSyncToNetwork |= markAsDirty;
+                return deleteData(Data._ID + "=" + dataId, null, markAsDirty);
             }
 
             case GROUPS_ID: {
                 boolean markAsDirty = shouldMarkGroupAsDirty(uri);
+                mSyncToNetwork |= markAsDirty;
                 final boolean deletePermanently =
                         readBooleanQueryParameter(uri, Groups.DELETE_PERMANENTLY, false);
                 return deleteGroup(ContentUris.parseId(uri), markAsDirty, deletePermanently);
@@ -2336,6 +2358,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 } finally {
                     c.close();
                 }
+                if (numDeletes > 0) {
+                    mSyncToNetwork |= markAsDirty;
+                }
                 return numDeletes;
             }
 
@@ -2347,8 +2372,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
             }
 
-            default:
+            default: {
+                mSyncToNetwork = true;
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
+            }
         }
     }
 
@@ -2416,6 +2443,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int markRawContactAsDeleted(long rawContactId) {
+        mSyncToNetwork = true;
+
         mValues.clear();
         mValues.put(RawContacts.DELETED, 1);
         mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
@@ -2492,14 +2521,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case DATA: {
+                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
                 count = updateData(uri, values, appendAccountToSelection(uri, selection),
-                        selectionArgs, shouldMarkRawContactAsDirty(uri));
+                        selectionArgs, markAsDirty);
+                if (count > 0) {
+                    mSyncToNetwork |= markAsDirty;
+                }
                 break;
             }
 
             case DATA_ID: {
-                count = updateData(uri, values, selection, selectionArgs,
-                        shouldMarkRawContactAsDirty(uri));
+                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
+                count = updateData(uri, values, selection, selectionArgs, markAsDirty);
+                if (count > 0) {
+                    mSyncToNetwork |= markAsDirty;
+                }
                 break;
             }
 
@@ -2520,8 +2556,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS: {
+                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
                 count = updateGroups(values, appendAccountToSelection(uri, selection),
-                        selectionArgs, shouldMarkGroupAsDirty(uri));
+                        selectionArgs, markAsDirty);
+                if (count > 0) {
+                    mSyncToNetwork |= markAsDirty;
+                }
                 break;
             }
 
@@ -2529,8 +2569,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long groupId = ContentUris.parseId(uri);
                 String selectionWithId = (Groups._ID + "=" + groupId + " ")
                         + (selection == null ? "" : " AND " + selection);
-                count = updateGroups(values, selectionWithId, selectionArgs,
-                        shouldMarkGroupAsDirty(uri));
+                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
+                count = updateGroups(values, selectionWithId, selectionArgs, markAsDirty);
+                if (count > 0) {
+                    mSyncToNetwork |= markAsDirty;
+                }
                 break;
             }
 
@@ -2544,8 +2587,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            default:
+            default: {
+                mSyncToNetwork = true;
                 return mLegacyApiSupport.update(uri, values, selection, selectionArgs);
+            }
         }
 
         return count;
