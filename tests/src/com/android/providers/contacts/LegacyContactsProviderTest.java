@@ -64,6 +64,26 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertSelection(People.CONTENT_URI, values, "people", People._ID, ContentUris.parseId(uri));
     }
 
+    public void testPeopleUpdate() {
+        ContentValues values = new ContentValues();
+        putContactValues(values);
+
+        Uri uri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(uri);
+        assertStoredValues(uri, values);
+        assertSelection(People.CONTENT_URI, values, "people", People._ID, personId);
+
+        values.clear();
+        putContactValues2(values);
+        mResolver.update(uri, values, null, null);
+        assertStoredValues(uri, values);
+
+        values.clear();
+        putContactValues(values);
+        mResolver.update(People.CONTENT_URI, values, People._ID + "=" + personId, null);
+        assertStoredValues(uri, values);
+    }
+
     public void testPeopleDelete() {
         ContentValues values = new ContentValues();
         values.put(People.NAME, "John Doe");
@@ -720,6 +740,18 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(People.STARRED, 1);
     }
 
+    private void putContactValues2(ContentValues values) {
+        // Populating only unhidden columns
+        values.put(People.NAME, "John Doe");
+        values.put(People.PHONETIC_NAME, "jon dawe");
+        values.put(People.NOTES, "Poor Johnny");
+        values.put(People.TIMES_CONTACTED, 4);
+        values.put(People.LAST_TIME_CONTACTED, 11);
+        values.put(People.CUSTOM_RINGTONE, "rangtone");
+        values.put(People.SEND_TO_VOICEMAIL, 0);
+        values.put(People.STARRED, 0);
+    }
+
     private void assertFilteredContacts(String filter, String... expectedNames) {
         Uri filterUri = Uri.withAppendedPath(People.CONTENT_FILTER_URI, filter);
         Cursor c = mResolver.query(filterUri, null, null, null, null);
@@ -762,14 +794,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     protected void assertSelection(Uri uri, ContentValues values, String legacyTable,
             String idColumn, long id) {
-        if (USE_LEGACY_PROVIDER) {
-            // A bug in the legacy ContactsProvider prevents us from using the
-            // _id column in selection.
-            super.assertSelection(uri, values, null, 0);
-        } else {
-            values.put(idColumn, id);
-            String qualified = legacyTable + "." + idColumn;
-            super.assertSelection(uri, values, qualified, id);
-        }
+        values.put(idColumn, id);
+        String qualified = legacyTable + "." + idColumn;
+        super.assertSelection(uri, values, qualified, id);
     }
 }
