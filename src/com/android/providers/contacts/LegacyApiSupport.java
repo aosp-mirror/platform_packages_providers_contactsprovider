@@ -35,6 +35,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
@@ -200,8 +201,8 @@ public class LegacyApiSupport {
         Phone.CONTENT_ITEM_TYPE
     };
 
-    private interface PhotoQuery {
-        String[] COLUMNS = { Data._ID };
+    private interface IdQuery {
+        String[] COLUMNS = { BaseColumns._ID };
 
         int _ID = 0;
     }
@@ -444,6 +445,8 @@ public class LegacyApiSupport {
     private final SQLiteStatement mLastTimeContactedUpdate;
 
     private final ContentValues mValues = new ContentValues();
+    private final ContentValues mValues2 = new ContentValues();
+    private final ContentValues mValues3 = new ContentValues();
     private Account mAccount;
 
     public LegacyApiSupport(Context context, OpenHelper openHelper,
@@ -717,6 +720,7 @@ public class LegacyApiSupport {
     }
 
     public Uri insert(Uri uri, ContentValues values) {
+        ensureDefaultAccount();
         final int match = sUriMatcher.match(uri);
         long id = 0;
         switch (match) {
@@ -795,53 +799,61 @@ public class LegacyApiSupport {
     }
 
     private long insertPeople(ContentValues values) {
-        ensureDefaultAccount();
+        parsePeopleValues(values, mValues, mValues2, mValues3);
 
-        mValues.clear();
-
-        OpenHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
-                values, People.CUSTOM_RINGTONE);
-        OpenHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
-                values, People.SEND_TO_VOICEMAIL);
-        OpenHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
-                values, People.LAST_TIME_CONTACTED);
-        OpenHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
-                values, People.TIMES_CONTACTED);
-        OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
-                values, People.STARRED);
-        mValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
-        mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
-        Uri contactUri = mContactsProvider.insert(RawContacts.CONTENT_URI, mValues);
+        Uri contactUri = mContactsProvider.insertInTransaction(RawContacts.CONTENT_URI, mValues);
         long rawContactId = ContentUris.parseId(contactUri);
 
+        if (mValues2.size() != 0) {
+            mValues2.put(Data.RAW_CONTACT_ID, rawContactId);
+            mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues2);
+        }
+        if (mValues3.size() != 0) {
+            mValues3.put(Data.RAW_CONTACT_ID, rawContactId);
+            mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues3);
+        }
+
+        // TODO instant aggregation
+        return rawContactId;
+    }
+
+    private void parsePeopleValues(ContentValues values, ContentValues peopleValues,
+            ContentValues nameValues, ContentValues noteValues) {
+        peopleValues.clear();
+        nameValues.clear();
+        noteValues.clear();
+
+        OpenHelper.copyStringValue(peopleValues, RawContacts.CUSTOM_RINGTONE,
+                values, People.CUSTOM_RINGTONE);
+        OpenHelper.copyLongValue(peopleValues, RawContacts.SEND_TO_VOICEMAIL,
+                values, People.SEND_TO_VOICEMAIL);
+        OpenHelper.copyLongValue(peopleValues, RawContacts.LAST_TIME_CONTACTED,
+                values, People.LAST_TIME_CONTACTED);
+        OpenHelper.copyLongValue(peopleValues, RawContacts.TIMES_CONTACTED,
+                values, People.TIMES_CONTACTED);
+        OpenHelper.copyLongValue(peopleValues, RawContacts.STARRED,
+                values, People.STARRED);
+        peopleValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
+        peopleValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
+
         if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
-            mValues.clear();
-            mValues.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
-            mValues.put(ContactsContract.Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(mValues, StructuredName.DISPLAY_NAME,
+            nameValues.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
+            OpenHelper.copyStringValue(nameValues, StructuredName.DISPLAY_NAME,
                     values, People.NAME);
             if (values.containsKey(People.PHONETIC_NAME)) {
                 String phoneticName = values.getAsString(People.PHONETIC_NAME);
                 NameSplitter.Name parsedName = new NameSplitter.Name();
                 mPhoneticNameSplitter.split(parsedName, phoneticName);
-                mValues.put(StructuredName.PHONETIC_GIVEN_NAME, parsedName.getGivenNames());
-                mValues.put(StructuredName.PHONETIC_MIDDLE_NAME, parsedName.getMiddleName());
-                mValues.put(StructuredName.PHONETIC_FAMILY_NAME, parsedName.getFamilyName());
+                nameValues.put(StructuredName.PHONETIC_GIVEN_NAME, parsedName.getGivenNames());
+                nameValues.put(StructuredName.PHONETIC_MIDDLE_NAME, parsedName.getMiddleName());
+                nameValues.put(StructuredName.PHONETIC_FAMILY_NAME, parsedName.getFamilyName());
             }
-
-            mContactsProvider.insert(ContactsContract.Data.CONTENT_URI, mValues);
         }
 
         if (values.containsKey(People.NOTES)) {
-            mValues.clear();
-            mValues.put(Data.RAW_CONTACT_ID, rawContactId);
-            mValues.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(mValues, Note.NOTE, values, People.NOTES);
-            mContactsProvider.insert(Data.CONTENT_URI, mValues);
+            noteValues.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
+            OpenHelper.copyStringValue(noteValues, Note.NOTE, values, People.NOTES);
         }
-
-        // TODO instant aggregation
-        return rawContactId;
     }
 
     private long insertOrganization(ContentValues values) {
@@ -866,7 +878,7 @@ public class LegacyApiSupport {
         OpenHelper.copyStringValue(mValues, Organization.TITLE,
                 values, android.provider.Contacts.Organizations.TITLE);
 
-        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
 
         return ContentUris.parseId(uri);
     }
@@ -890,7 +902,7 @@ public class LegacyApiSupport {
         OpenHelper.copyStringValue(mValues, Phone.LABEL,
                 values, android.provider.Contacts.Phones.LABEL);
 
-        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
 
         return ContentUris.parseId(uri);
     }
@@ -936,7 +948,7 @@ public class LegacyApiSupport {
             }
         }
 
-        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
     }
 
@@ -959,12 +971,11 @@ public class LegacyApiSupport {
         OpenHelper.copyStringValue(mValues, ExtensionsColumns.VALUE,
                 values, android.provider.Contacts.People.Extensions.VALUE);
 
-        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
     }
 
     private long insertGroup(ContentValues values) {
-        ensureDefaultAccount();
         mValues.clear();
 
         OpenHelper.copyStringValue(mValues, Groups.TITLE,
@@ -977,7 +988,7 @@ public class LegacyApiSupport {
         mValues.put(Groups.ACCOUNT_NAME, mAccount.name);
         mValues.put(Groups.ACCOUNT_TYPE, mAccount.type);
 
-        Uri uri = mContactsProvider.insert(Groups.CONTENT_URI, mValues);
+        Uri uri = mContactsProvider.insertInTransaction(Groups.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
     }
 
@@ -988,21 +999,69 @@ public class LegacyApiSupport {
         mValues.put(GroupMembership.RAW_CONTACT_ID, rawContactId);
         mValues.put(GroupMembership.GROUP_ROW_ID, groupId);
 
-        Uri uri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+        Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
     }
 
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        final int match = sUriMatcher.match(uri);
+        ensureDefaultAccount();
+
+        int match = sUriMatcher.match(uri);
         int count = 0;
         switch(match) {
-            case PEOPLE_UPDATE_CONTACT_TIME:
+            case PEOPLE_UPDATE_CONTACT_TIME: {
                 count = updateContactTime(uri, values);
                 break;
+            }
 
             case PEOPLE_PHOTO: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 return updatePhoto(rawContactId, values);
+            }
+
+            case -1: {
+                throw new UnsupportedOperationException("Unknown uri: " + uri);
+            }
+
+            default: {
+                count = updateAll(uri, match, values, selection, selectionArgs);
+            }
+        }
+
+        if (count > 0) {
+            mContext.getContentResolver().notifyChange(uri, null);
+        }
+
+        return count;
+    }
+
+    private int updateAll(Uri uri, final int match, ContentValues values, String selection,
+            String[] selectionArgs) {
+        Cursor c = query(uri, IdQuery.COLUMNS, selection, selectionArgs, null, null);
+        if (c == null) {
+            return 0;
+        }
+
+        int count = 0;
+        try {
+            while (c.moveToNext()) {
+                long id = c.getLong(IdQuery._ID);
+                count += update(match, id, values);
+            }
+        } finally {
+            c.close();
+        }
+
+        return count;
+    }
+
+    public int update(int match, long id, ContentValues values) {
+        int count = 0;
+        switch(match) {
+            case PEOPLE:
+            case PEOPLE_ID: {
+                count = updatePeople(id, values);
+                break;
             }
 
             case PHOTOS:
@@ -1012,18 +1071,44 @@ public class LegacyApiSupport {
             case PHOTOS_ID:
                 // TODO
                 break;
-
-
-            default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
 
-        if (count > 0) {
-            mContext.getContentResolver().notifyChange(uri, null);
-        }
         return count;
     }
 
+    private int updatePeople(long rawContactId, ContentValues values) {
+        parsePeopleValues(values, mValues, mValues2, mValues3);
+
+        int count = mContactsProvider.update(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                mValues, null, null);
+
+        if (count == 0) {
+            return 0;
+        }
+
+        if (mValues2.size() != 0) {
+            Uri dataUri = findFirstDataRow(rawContactId, StructuredName.CONTENT_ITEM_TYPE);
+            if (dataUri != null) {
+                mContactsProvider.update(dataUri, mValues2, null, null);
+            } else {
+                mValues2.put(Data.RAW_CONTACT_ID, rawContactId);
+                mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues2);
+            }
+        }
+
+        if (mValues3.size() != 0) {
+            Uri dataUri = findFirstDataRow(rawContactId, Note.CONTENT_ITEM_TYPE);
+            if (dataUri != null) {
+                mContactsProvider.update(dataUri, mValues3, null, null);
+            } else {
+                mValues3.put(Data.RAW_CONTACT_ID, rawContactId);
+                mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues3);
+            }
+        }
+
+        return count;
+    }
 
     private int updateContactTime(Uri uri, ContentValues values) {
 
@@ -1054,18 +1139,7 @@ public class LegacyApiSupport {
 
         int count;
 
-        long dataId = -1;
-        Cursor c = mContactsProvider.query(Data.CONTENT_URI, PhotoQuery.COLUMNS,
-                Data.RAW_CONTACT_ID + "=" + rawContactId + " AND "
-                        + Data.MIMETYPE + "=" + mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE),
-                null, null);
-        try {
-            if (c.moveToFirst()) {
-                dataId = c.getLong(PhotoQuery._ID);
-            }
-        } finally {
-            c.close();
-        }
+        long dataId = findFirstDataId(rawContactId, Photo.CONTENT_ITEM_TYPE);
 
         mValues.clear();
         byte[] bytes = values.getAsByteArray(android.provider.Contacts.Photos.DATA);
@@ -1074,12 +1148,12 @@ public class LegacyApiSupport {
         if (dataId == -1) {
             mValues.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
             mValues.put(Data.RAW_CONTACT_ID, rawContactId);
-            Uri dataUri = mContactsProvider.insert(Data.CONTENT_URI, mValues);
+            Uri dataUri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
             dataId = ContentUris.parseId(dataUri);
             count = 1;
         } else {
             Uri dataUri = ContentUris.withAppendedId(Data.CONTENT_URI, dataId);
-            count = mContactsProvider.update(dataUri, mValues, null, null);
+            count = mContactsProvider.updateInTransaction(dataUri, mValues, null, null);
         }
 
         mValues.clear();
@@ -1092,7 +1166,7 @@ public class LegacyApiSupport {
         OpenHelper.copyStringValue(mValues, LegacyPhotoData.SYNC_ERROR,
                 values, android.provider.Contacts.Photos.SYNC_ERROR);
 
-        int updated = mContactsProvider.update(Data.CONTENT_URI, mValues,
+        int updated = mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
                 Data.MIMETYPE + "='" + LegacyPhotoData.CONTENT_ITEM_TYPE + "'"
                         + " AND " + Data.RAW_CONTACT_ID + "=" + rawContactId
                         + " AND " + LegacyPhotoData.PHOTO_DATA_ID + "=" + dataId, null);
@@ -1100,10 +1174,35 @@ public class LegacyApiSupport {
             mValues.put(Data.RAW_CONTACT_ID, rawContactId);
             mValues.put(Data.MIMETYPE, LegacyPhotoData.CONTENT_ITEM_TYPE);
             mValues.put(LegacyPhotoData.PHOTO_DATA_ID, dataId);
-            mContactsProvider.insert(Data.CONTENT_URI, mValues);
+            mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         }
 
         return count;
+    }
+
+    private Uri findFirstDataRow(long rawContactId, String contentItemType) {
+        long dataId = findFirstDataId(rawContactId, contentItemType);
+        if (dataId == -1) {
+            return null;
+        }
+
+        return ContentUris.withAppendedId(Data.CONTENT_URI, dataId);
+    }
+
+    private long findFirstDataId(long rawContactId, String mimeType) {
+        long dataId = -1;
+        Cursor c = mContactsProvider.query(Data.CONTENT_URI, IdQuery.COLUMNS,
+                Data.RAW_CONTACT_ID + "=" + rawContactId + " AND "
+                        + Data.MIMETYPE + "='" + mimeType + "'",
+                null, null);
+        try {
+            if (c.moveToFirst()) {
+                dataId = c.getLong(IdQuery._ID);
+            }
+        } finally {
+            c.close();
+        }
+        return dataId;
     }
 
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -1149,14 +1248,14 @@ public class LegacyApiSupport {
             case PEOPLE: {
                 qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
                 qb.setProjectionMap(sPeopleProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 break;
             }
 
             case PEOPLE_ID:
                 qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
                 qb.setProjectionMap(sPeopleProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + People._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1164,7 +1263,7 @@ public class LegacyApiSupport {
             case PEOPLE_FILTER: {
                 qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
                 qb.setProjectionMap(sPeopleProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 String filterParam = uri.getPathSegments().get(2);
                 qb.appendWhere(" AND " + People._ID + " IN "
                         + mContactsProvider.getRawContactsByFilterAsNestedQuery(filterParam));
@@ -1174,13 +1273,13 @@ public class LegacyApiSupport {
             case ORGANIZATIONS:
                 qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
                 qb.setProjectionMap(sOrganizationProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 break;
 
             case ORGANIZATIONS_ID:
                 qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
                 qb.setProjectionMap(sOrganizationProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Organizations._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1188,13 +1287,13 @@ public class LegacyApiSupport {
             case CONTACTMETHODS:
                 qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 break;
 
             case CONTACTMETHODS_ID:
                 qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + ContactMethods._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1202,7 +1301,7 @@ public class LegacyApiSupport {
             case PEOPLE_CONTACTMETHODS:
                 qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + ContactMethods.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + ContactMethods.KIND + " IS NOT NULL");
@@ -1211,7 +1310,7 @@ public class LegacyApiSupport {
             case PEOPLE_CONTACTMETHODS_ID:
                 qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
                 qb.setProjectionMap(sContactMethodProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + ContactMethods.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + ContactMethods._ID + "=");
@@ -1222,13 +1321,13 @@ public class LegacyApiSupport {
             case PHONES:
                 qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 break;
 
             case PHONES_ID:
                 qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1236,7 +1335,7 @@ public class LegacyApiSupport {
             case PHONES_FILTER:
                 qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     qb.appendWhere(" AND person =");
@@ -1247,7 +1346,7 @@ public class LegacyApiSupport {
             case PEOPLE_PHONES:
                 qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1255,7 +1354,7 @@ public class LegacyApiSupport {
             case PEOPLE_PHONES_ID:
                 qb.setTables(LegacyTables.PHONES + " phones");
                 qb.setProjectionMap(sPhoneProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + android.provider.Contacts.Phones._ID + "=");
@@ -1265,13 +1364,13 @@ public class LegacyApiSupport {
             case EXTENSIONS:
                 qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 break;
 
             case EXTENSIONS_ID:
                 qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1279,7 +1378,7 @@ public class LegacyApiSupport {
             case PEOPLE_EXTENSIONS:
                 qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1287,7 +1386,7 @@ public class LegacyApiSupport {
             case PEOPLE_EXTENSIONS_ID:
                 qb.setTables(LegacyTables.EXTENSIONS + " extensions");
                 qb.setProjectionMap(sExtensionProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + android.provider.Contacts.Extensions._ID + "=");
@@ -1297,13 +1396,13 @@ public class LegacyApiSupport {
             case GROUPS:
                 qb.setTables(LegacyTables.GROUPS + " groups");
                 qb.setProjectionMap(sGroupProjectionMap);
-                applyGroupAccount(qb, uri);
+                applyGroupAccount(qb);
                 break;
 
             case GROUPS_ID:
                 qb.setTables(LegacyTables.GROUPS + " groups");
                 qb.setProjectionMap(sGroupProjectionMap);
-                applyGroupAccount(qb, uri);
+                applyGroupAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Groups._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1311,13 +1410,13 @@ public class LegacyApiSupport {
             case GROUPMEMBERSHIP:
                 qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 break;
 
             case GROUPMEMBERSHIP_ID:
                 qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1325,7 +1424,7 @@ public class LegacyApiSupport {
             case PEOPLE_GROUPMEMBERSHIP:
                 qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
@@ -1333,7 +1432,7 @@ public class LegacyApiSupport {
             case PEOPLE_GROUPMEMBERSHIP_ID:
                 qb.setTables(LegacyTables.GROUP_MEMBERSHIP + " groupmembership");
                 qb.setProjectionMap(sGroupMembershipProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 qb.appendWhere(" AND " + android.provider.Contacts.GroupMembership._ID + "=");
@@ -1343,7 +1442,7 @@ public class LegacyApiSupport {
             case PEOPLE_PHOTO:
                 qb.setTables(LegacyTables.PHOTOS + " photos");
                 qb.setProjectionMap(sPhotoProjectionMap);
-                applyRawContactsAccount(qb, uri);
+                applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Photos.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 limit = "1";
@@ -1394,22 +1493,30 @@ public class LegacyApiSupport {
         return c;
     }
 
-    private void applyRawContactsAccount(SQLiteQueryBuilder qb, Uri uri) {
+    private void applyRawContactsAccount(SQLiteQueryBuilder qb) {
         StringBuilder sb = new StringBuilder();
+        appendRawContactsAccount(sb);
+        qb.appendWhere(sb.toString());
+    }
+
+    private void appendRawContactsAccount(StringBuilder sb) {
         sb.append(RawContacts.ACCOUNT_NAME + "=");
         DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
         sb.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
         DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
+    }
+
+    private void applyGroupAccount(SQLiteQueryBuilder qb) {
+        StringBuilder sb = new StringBuilder();
+        appendGroupAccount(sb);
         qb.appendWhere(sb.toString());
     }
 
-    private void applyGroupAccount(SQLiteQueryBuilder qb, Uri uri) {
-        StringBuilder sb = new StringBuilder();
+    private void appendGroupAccount(StringBuilder sb) {
         sb.append(Groups.ACCOUNT_NAME + "=");
         DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
         sb.append(" AND " + Groups.ACCOUNT_TYPE + "=");
         DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
-        qb.appendWhere(sb.toString());
     }
 
     /**
