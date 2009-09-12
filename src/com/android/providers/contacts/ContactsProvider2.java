@@ -2837,6 +2837,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mDb.execSQL("DELETE FROM " + Tables.RAW_CONTACTS
                         + " WHERE account_name = ? AND account_type = ?", params);
             }
+            mOpenHelper.getSyncState().onAccountsChanged(mDb, accounts);
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
