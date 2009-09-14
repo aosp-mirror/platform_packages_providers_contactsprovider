@@ -580,6 +580,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         updateSendToVoicemailAndRingtone(contactId, true, "foo");
         assertSendToVoicemailAndRingtone(contactId, true, "foo");
         assertNetworkNotified(false);
+
+        updateSendToVoicemailAndRingtoneWithSelection(contactId, false, "bar");
+        assertSendToVoicemailAndRingtone(contactId, false, "bar");
+        assertNetworkNotified(false);
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
@@ -710,6 +714,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         final Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         int count = mResolver.update(uri, values, null, null);
+        assertEquals(1, count);
+    }
+
+    private void updateSendToVoicemailAndRingtoneWithSelection(long contactId,
+            boolean sendToVoicemail, String ringtone) {
+        ContentValues values = new ContentValues();
+        values.put(Contacts.SEND_TO_VOICEMAIL, sendToVoicemail);
+        if (ringtone != null) {
+            values.put(Contacts.CUSTOM_RINGTONE, ringtone);
+        }
+
+        int count = mResolver.update(Contacts.CONTENT_URI, values, Contacts._ID + "=" + contactId,
+                null);
         assertEquals(1, count);
     }
 
