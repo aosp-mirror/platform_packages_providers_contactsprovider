@@ -588,7 +588,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void assertStoredValues(Uri rowUri, ContentValues expectedValues) {
-        Cursor c = mResolver.query(rowUri, null, null, null, null);
+        assertStoredValues(rowUri, null, null, expectedValues);
+    }
+
+    protected void assertStoredValues(Uri rowUri, String selection, String[] selectionArgs,
+            ContentValues expectedValues) {
+        Cursor c = mResolver.query(rowUri, null, selection, selectionArgs, null);
         try {
             assertEquals("Record count", 1, c.getCount());
             c.moveToFirst();

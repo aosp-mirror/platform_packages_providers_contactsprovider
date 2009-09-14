@@ -114,8 +114,9 @@ import java.util.concurrent.CountDownLatch;
  */
 public class ContactsProvider2 extends SQLiteContentProvider implements OnAccountsUpdatedListener {
 
-    // TODO: clean up debug tag and rename this class
-    private static final String TAG = "ContactsProvider ~~~~";
+    private static final String TAG = "ContactsProvider";
+
+    private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
     // TODO: carefully prevent all incoming nested queries; they can be gaping security holes
     // TODO: check for restricted flag during insert(), update(), and delete() calls
@@ -1665,7 +1666,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected void onBeginTransaction() {
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+        if (VERBOSE_LOGGING) {
             Log.v(TAG, "onBeginTransaction");
         }
         super.onBeginTransaction();
@@ -1680,7 +1681,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected void beforeTransactionCommit() {
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+        if (VERBOSE_LOGGING) {
             Log.v(TAG, "beforeTransactionCommit");
         }
         super.beforeTransactionCommit();
@@ -1688,7 +1689,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void flushTransactionalChanges() {
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+        if (VERBOSE_LOGGING) {
             Log.v(TAG, "flushTransactionChanges");
         }
         for (long rawContactId : mInsertedRawContacts) {
@@ -1764,7 +1765,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+        if (VERBOSE_LOGGING) {
             Log.v(TAG, "insertInTransaction: " + uri);
         }
         final int match = sUriMatcher.match(uri);
@@ -2240,7 +2241,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+        if (VERBOSE_LOGGING) {
             Log.v(TAG, "deleteInTransaction: " + uri);
         }
         flushTransactionalChanges();
@@ -2445,7 +2446,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     protected int updateInTransaction(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+        if (VERBOSE_LOGGING) {
             Log.v(TAG, "updateInTransaction: " + uri);
         }
 
@@ -2867,6 +2868,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "query: " + uri);
+        }
 
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
