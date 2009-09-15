@@ -776,4 +776,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected void forceAggregation() {
         ((SynchronousContactsProvider2) mActor.provider).aggregate();
     }
+
+    protected void assertNetworkNotified(boolean expected) {
+        assertEquals(expected, ((SynchronousContactsProvider2)mActor.provider).isNetworkNotified());
+    }
 }
