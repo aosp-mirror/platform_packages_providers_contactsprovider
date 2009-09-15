@@ -1339,7 +1339,7 @@ import java.util.HashMap;
     public void deleteNameLookup(long dataId) {
         getWritableDatabase();
         DatabaseUtils.bindObjectToProgram(mNameLookupDelete, 1, dataId);
-        mNameLookupInsert.execute();
+        mNameLookupDelete.execute();
     }
 
     /**
