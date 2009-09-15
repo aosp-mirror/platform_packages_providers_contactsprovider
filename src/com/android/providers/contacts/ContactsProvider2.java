@@ -488,6 +488,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(RawContacts.SOURCE_ID, RawContacts.SOURCE_ID);
         sDataProjectionMap.put(RawContacts.VERSION, RawContacts.VERSION);
         sDataProjectionMap.put(RawContacts.DIRTY, RawContacts.DIRTY);
+        sDataProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
         sDataProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
         sDataProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
         sDataProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
@@ -539,6 +540,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sPhoneLookupProjectionMap = new HashMap<String, String>();
         sPhoneLookupProjectionMap.put(PhoneLookup._ID,
                 ContactsColumns.CONCRETE_ID + " AS " + PhoneLookup._ID);
+        sPhoneLookupProjectionMap.put(PhoneLookup.LOOKUP_KEY,
+                Contacts.LOOKUP_KEY + " AS " + PhoneLookup.LOOKUP_KEY);
         sPhoneLookupProjectionMap.put(PhoneLookup.DISPLAY_NAME,
                 ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + PhoneLookup.DISPLAY_NAME);
         sPhoneLookupProjectionMap.put(PhoneLookup.LAST_TIME_CONTACTED,
