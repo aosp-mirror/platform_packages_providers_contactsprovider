@@ -72,7 +72,6 @@ import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
@@ -712,7 +711,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          * the current data.
          */
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
@@ -735,7 +734,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mDb.update(Tables.DATA, values, Data._ID + " = " + dataId, null);
             }
 
-            if (markRawContactAsDirty) {
+            if (!callerIsSyncAdapter) {
                 setRawContactDirty(rawContactId);
             }
         }
@@ -892,14 +891,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             final long dataId = c.getLong(DataUpdateQuery._ID);
             final long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
             final ContentValues augmented = getAugmentedValues(db, dataId, values);
             fixStructuredNameComponents(augmented, values);
 
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
 
             boolean hasGivenName = values.containsKey(StructuredName.GIVEN_NAME);
             boolean hasFamilyName = values.containsKey(StructuredName.FAMILY_NAME);
@@ -974,11 +973,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             final long dataId = c.getLong(DataUpdateQuery._ID);
             final ContentValues augmented = getAugmentedValues(db, dataId, values);
             fixStructuredPostalComponents(augmented, values);
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
         }
 
         /**
@@ -1034,11 +1033,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             final long dataId = c.getLong(DataUpdateQuery._ID);
             final ContentValues augmented = getAugmentedValues(db, dataId, values);
             enforceTypeAndLabel(augmented, values);
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
         }
 
         /**
@@ -1073,10 +1072,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
 
             fixRawContactDisplayName(db, rawContactId);
         }
@@ -1125,12 +1124,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             String address = values.getAsString(Email.DATA);
 
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
 
             mOpenHelper.deleteNameLookup(dataId);
             mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
@@ -1180,12 +1179,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             String nickname = values.getAsString(Nickname.NAME);
 
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
 
             mOpenHelper.deleteNameLookup(dataId);
             mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
@@ -1231,20 +1230,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             if (values.containsKey(Phone.NUMBER)) {
                 String number = values.getAsString(Phone.NUMBER);
                 String normalizedNumber = computeNormalizedNumber(number, values);
 
-                super.update(db, values, c, markRawContactAsDirty);
+                super.update(db, values, c, callerIsSyncAdapter);
 
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
                 mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
             } else {
-                super.update(db, values, c, markRawContactAsDirty);
+                super.update(db, values, c, callerIsSyncAdapter);
             }
         }
 
@@ -1313,10 +1312,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             resolveGroupSourceIdInValues(rawContactId, db, values, false);
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
         }
 
         private void resolveGroupSourceIdInValues(long rawContactId, SQLiteDatabase db,
@@ -1370,9 +1369,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
-                boolean markRawContactAsDirty) {
+                boolean callerIsSyncAdapter) {
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-            super.update(db, values, c, markRawContactAsDirty);
+            super.update(db, values, c, callerIsSyncAdapter);
             mContactAggregator.updatePhotoId(db, rawContactId);
         }
 
@@ -1768,6 +1767,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insertInTransaction: " + uri);
         }
+
+        final boolean callerIsSyncAdapter =
+                readBooleanQueryParameter(uri, ContactsContract.CALLER_IS_SYNCADAPTER, false);
+
         final int match = sUriMatcher.match(uri);
         long id = 0;
 
@@ -1784,30 +1787,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACTS: {
                 final Account account = readAccountFromQueryParams(uri);
                 id = insertRawContact(values, account);
-                mSyncToNetwork = true;
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
             case RAW_CONTACTS_DATA: {
                 values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(1));
-                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
-                id = insertData(values, markAsDirty);
-                mSyncToNetwork |= markAsDirty;
+                id = insertData(values, callerIsSyncAdapter);
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
             case DATA: {
-                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
-                id = insertData(values, markAsDirty);
-                mSyncToNetwork |= markAsDirty;
+                id = insertData(values, callerIsSyncAdapter);
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
             case GROUPS: {
                 final Account account = readAccountFromQueryParams(uri);
-                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
-                id = insertGroup(values, account, markAsDirty);
-                mSyncToNetwork |= markAsDirty;
+                id = insertGroup(values, account, callerIsSyncAdapter);
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
@@ -1903,7 +1903,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * @param values the values for the new row
      * @return the row ID of the newly created row
      */
-    private long insertData(ContentValues values, boolean markRawContactAsDirty) {
+    private long insertData(ContentValues values, boolean callerIsSyncAdapter) {
         long id = 0;
         mValues.clear();
         mValues.putAll(values);
@@ -1928,7 +1928,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
         id = rowHandler.insert(mDb, rawContactId, mValues);
-        if (markRawContactAsDirty) {
+        if (!callerIsSyncAdapter) {
             setRawContactDirty(rawContactId);
         }
         mUpdatedRawContacts.add(rawContactId);
@@ -2031,8 +2031,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Delete data row by row so that fixing of primaries etc work correctly.
      */
-    private int deleteData(String selection, String[] selectionArgs,
-            boolean markRawContactAsDirty) {
+    private int deleteData(String selection, String[] selectionArgs, boolean callerIsSyncAdapter) {
         int count = 0;
 
         // Note that the query will return data according to the access restrictions,
@@ -2044,7 +2043,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String mimeType = c.getString(DataDeleteQuery.MIMETYPE);
                 DataRowHandler rowHandler = getDataRowHandler(mimeType);
                 count += rowHandler.delete(mDb, c);
-                if (markRawContactAsDirty) {
+                if (!callerIsSyncAdapter) {
                     setRawContactDirty(rawContactId);
                     if (rowHandler.isAggregationRequired()) {
                         triggerAggregation(rawContactId);
@@ -2102,7 +2101,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Inserts an item in the groups table
      */
-    private long insertGroup(ContentValues values, Account account, boolean markAsDirty) {
+    private long insertGroup(ContentValues values, Account account, boolean callerIsSyncAdapter) {
         ContentValues overriddenValues = new ContentValues(values);
         if (!resolveAccount(overriddenValues, account)) {
             return -1;
@@ -2115,7 +2114,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         overriddenValues.remove(Groups.RES_PACKAGE);
 
-        if (markAsDirty) {
+        if (!callerIsSyncAdapter) {
             overriddenValues.put(Groups.DIRTY, 1);
         }
 
@@ -2245,6 +2244,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "deleteInTransaction: " + uri);
         }
         flushTransactionalChanges();
+        final boolean callerIsSyncAdapter =
+                readBooleanQueryParameter(uri, ContactsContract.CALLER_IS_SYNCADAPTER, false);
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
@@ -2279,15 +2280,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS: {
-                final boolean permanently =
-                        readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
                 int numDeletes = 0;
                 Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
                         appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
                         final long rawContactId = c.getLong(0);
-                        numDeletes += deleteRawContact(rawContactId, permanently);
+                        numDeletes += deleteRawContact(rawContactId, callerIsSyncAdapter);
                     }
                 } finally {
                     c.close();
@@ -2296,50 +2295,40 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS_ID: {
-                final boolean permanently =
-                        readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
                 final long rawContactId = ContentUris.parseId(uri);
-                return deleteRawContact(rawContactId, permanently);
+                return deleteRawContact(rawContactId, callerIsSyncAdapter);
             }
 
             case DATA: {
-                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
-                mSyncToNetwork |= markAsDirty;
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 return deleteData(appendAccountToSelection(uri, selection), selectionArgs,
-                        markAsDirty);
+                        callerIsSyncAdapter);
             }
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
-                mSyncToNetwork |= markAsDirty;
-                return deleteData(Data._ID + "=" + dataId, null, markAsDirty);
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                return deleteData(Data._ID + "=" + dataId, null, callerIsSyncAdapter);
             }
 
             case GROUPS_ID: {
-                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
-                mSyncToNetwork |= markAsDirty;
-                final boolean deletePermanently =
-                        readBooleanQueryParameter(uri, Groups.DELETE_PERMANENTLY, false);
-                return deleteGroup(ContentUris.parseId(uri), markAsDirty, deletePermanently);
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                return deleteGroup(ContentUris.parseId(uri), callerIsSyncAdapter);
             }
 
             case GROUPS: {
-                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
-                final boolean permanently =
-                        readBooleanQueryParameter(uri, RawContacts.DELETE_PERMANENTLY, false);
                 int numDeletes = 0;
                 Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups._ID},
                         appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
-                        numDeletes += deleteGroup(c.getLong(0), markAsDirty, permanently);
+                        numDeletes += deleteGroup(c.getLong(0), callerIsSyncAdapter);
                     }
                 } finally {
                     c.close();
                 }
                 if (numDeletes > 0) {
-                    mSyncToNetwork |= markAsDirty;
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 return numDeletes;
             }
@@ -2366,7 +2355,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 : (!"false".equals(flag.toLowerCase()) && !"0".equals(flag.toLowerCase()));
     }
 
-    private int deleteGroup(long groupId, boolean markAsDirty, boolean permanently) {
+    private int deleteGroup(long groupId, boolean callerIsSyncAdapter) {
         final long groupMembershipMimetypeId = mOpenHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         mDb.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
@@ -2374,14 +2363,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + groupId, null);
 
         try {
-            if (permanently) {
+            if (callerIsSyncAdapter) {
                 return mDb.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
             } else {
                 mValues.clear();
                 mValues.put(Groups.DELETED, 1);
-                if (markAsDirty) {
-                    mValues.put(Groups.DIRTY, 1);
-                }
+                mValues.put(Groups.DIRTY, 1);
                 return mDb.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
             }
         } finally {
@@ -2412,8 +2399,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return mDb.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
     }
 
-    public int deleteRawContact(long rawContactId, boolean permanently) {
-        if (permanently) {
+    public int deleteRawContact(long rawContactId, boolean callerIsSyncAdapter) {
+        if (callerIsSyncAdapter) {
             mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
         } else {
@@ -2460,6 +2447,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return 1;
         }
         flushTransactionalChanges();
+        final boolean callerIsSyncAdapter =
+                readBooleanQueryParameter(uri, ContactsContract.CALLER_IS_SYNCADAPTER, false);
         switch(match) {
             case SYNCSTATE:
                 return mOpenHelper.getSyncState().update(mDb, values,
@@ -2498,20 +2487,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case DATA: {
-                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
                 count = updateData(uri, values, appendAccountToSelection(uri, selection),
-                        selectionArgs, markAsDirty);
+                        selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
-                    mSyncToNetwork |= markAsDirty;
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 break;
             }
 
             case DATA_ID: {
-                boolean markAsDirty = shouldMarkRawContactAsDirty(uri);
-                count = updateData(uri, values, selection, selectionArgs, markAsDirty);
+                count = updateData(uri, values, selection, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
-                    mSyncToNetwork |= markAsDirty;
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 break;
             }
@@ -2533,11 +2520,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS: {
-                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
                 count = updateGroups(values, appendAccountToSelection(uri, selection),
-                        selectionArgs, markAsDirty);
+                        selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
-                    mSyncToNetwork |= markAsDirty;
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 break;
             }
@@ -2546,10 +2532,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long groupId = ContentUris.parseId(uri);
                 String selectionWithId = (Groups._ID + "=" + groupId + " ")
                         + (selection == null ? "" : " AND " + selection);
-                boolean markAsDirty = shouldMarkGroupAsDirty(uri);
-                count = updateGroups(values, selectionWithId, selectionArgs, markAsDirty);
+                count = updateGroups(values, selectionWithId, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
-                    mSyncToNetwork |= markAsDirty;
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 break;
             }
@@ -2574,10 +2559,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int updateGroups(ContentValues values, String selectionWithId,
-            String[] selectionArgs, boolean markAsDirty) {
+            String[] selectionArgs, boolean callerIsSyncAdapter) {
 
         ContentValues updatedValues;
-        if (markAsDirty && !values.containsKey(Groups.DIRTY)) {
+        if (!callerIsSyncAdapter && !values.containsKey(Groups.DIRTY)) {
             updatedValues = mValues;
             updatedValues.clear();
             updatedValues.putAll(values);
@@ -2641,7 +2626,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int updateData(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs, boolean markRawContactAsDirty) {
+            String[] selectionArgs, boolean callerIsSyncAdapter) {
         mValues.clear();
         mValues.putAll(values);
         mValues.remove(Data._ID);
@@ -2675,7 +2660,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Cursor c = query(uri, DataUpdateQuery.COLUMNS, selection, selectionArgs, null);
         try {
             while(c.moveToNext()) {
-                count += updateData(mValues, c, markRawContactAsDirty);
+                count += updateData(mValues, c, callerIsSyncAdapter);
             }
         } finally {
             c.close();
@@ -2684,14 +2669,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return count;
     }
 
-    private int updateData(ContentValues values, Cursor c, boolean markRawContactAsDirty) {
+    private int updateData(ContentValues values, Cursor c, boolean callerIsSyncAdapter) {
         if (values.size() == 0) {
             return 0;
         }
 
         final String mimeType = c.getString(DataUpdateQuery.MIMETYPE);
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
-        rowHandler.update(mDb, values, c, markRawContactAsDirty);
+        rowHandler.update(mDb, values, c, callerIsSyncAdapter);
         long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
         if (rowHandler.isAggregationRequired()) {
             triggerAggregation(rawContactId);
@@ -4111,38 +4096,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Checks the {@link Data#MARK_AS_DIRTY} query parameter.
-     *
-     * Returns true if the parameter is missing or is either "true" or "1".
-     */
-    private boolean shouldMarkRawContactAsDirty(Uri uri) {
-        if (mImportMode) {
-            return false;
-        }
-
-        String param = uri.getQueryParameter(Data.MARK_AS_DIRTY);
-        return param == null || (!param.equalsIgnoreCase("false") && !param.equals("0"));
-    }
-
-    /**
      * Sets the {@link RawContacts#DIRTY} for the specified raw contact.
      */
     private void setRawContactDirty(long rawContactId) {
         mRawContactDirtyUpdate.bindLong(1, rawContactId);
         mRawContactDirtyUpdate.execute();
-    }
-
-    /**
-     * Checks the {@link Groups#MARK_AS_DIRTY} query parameter.
-     *
-     * Returns true if the parameter is missing or is either "true" or "1".
-     */
-    private boolean shouldMarkGroupAsDirty(Uri uri) {
-        if (mImportMode) {
-            return false;
-        }
-
-        return readBooleanQueryParameter(uri, Groups.MARK_AS_DIRTY, true);
     }
 
     /*

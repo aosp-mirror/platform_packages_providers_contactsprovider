@@ -22,6 +22,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -141,7 +142,8 @@ public class GroupsTest extends BaseContactsProvider2Test {
         Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI,
                 createGroup(mAccount, "gsid1", "title1"));
         clearDirty(uri);
-        Uri updateUri = uri.buildUpon().appendQueryParameter(Groups.MARK_AS_DIRTY, "0").build();
+        Uri updateUri = uri.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
 
         ContentValues values = new ContentValues();
         values.put(Groups.NOTES, "New notes");
@@ -171,8 +173,8 @@ public class GroupsTest extends BaseContactsProvider2Test {
         assertEquals(1, getCount(uri, null, null));
         assertStoredValue(uri, Groups.DELETED, "1");
 
-        Uri permanentDeletionUri =
-                uri.buildUpon().appendQueryParameter(Groups.DELETE_PERMANENTLY, "true").build();
+        Uri permanentDeletionUri = uri.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
         mResolver.delete(permanentDeletionUri, null, null);
         assertEquals(0, getCount(uri, null, null));
     }
@@ -182,8 +184,8 @@ public class GroupsTest extends BaseContactsProvider2Test {
         Uri uri = ContentUris.withAppendedId(Groups.CONTENT_URI, groupId);
 
         assertEquals(1, getCount(uri, null, null));
-        Uri permanentDeletionUri =
-                uri.buildUpon().appendQueryParameter(Groups.DELETE_PERMANENTLY, "true").build();
+        Uri permanentDeletionUri = uri.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
         mResolver.delete(permanentDeletionUri, null, null);
         assertEquals(0, getCount(uri, null, null));
     }
