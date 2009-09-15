@@ -25,6 +25,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteException;
@@ -61,7 +62,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 85;
+    private static final int DATABASE_VERSION = 87;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -461,6 +462,8 @@ import java.util.HashMap;
     private SQLiteStatement mVisibleUpdate;
     private SQLiteStatement mVisibleSpecificUpdate;
 
+    private boolean mReopenDatabase = false;
+
     private static OpenHelper sSingleton = null;
 
     public static synchronized OpenHelper getInstance(Context context) {
@@ -636,9 +639,10 @@ import java.util.HashMap;
                 RawContacts.ACCOUNT_NAME +
         ");");
 
-        db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.AGGREGATION_NEEDED +
-        ");");
+        // TODO readd the index and investigate a controlled use of it
+//        db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
+//                RawContactsColumns.AGGREGATION_NEEDED +
+//        ");");
 
         // Package name mapping table
         db.execSQL("CREATE TABLE " + Tables.PACKAGES + " (" +
@@ -757,16 +761,16 @@ import java.util.HashMap;
 
         // Private phone numbers table used for lookup
         db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
-                PhoneLookupColumns._ID + " INTEGER PRIMARY KEY," +
-                PhoneLookupColumns.DATA_ID + " INTEGER REFERENCES data(_id) NOT NULL," +
+                PhoneLookupColumns.DATA_ID
+                        + " INTEGER PRIMARY KEY REFERENCES data(_id) NOT NULL," +
                 PhoneLookupColumns.RAW_CONTACT_ID
                         + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
                 PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL" +
         ");");
 
         db.execSQL("CREATE INDEX phone_lookup_index ON " + Tables.PHONE_LOOKUP + " (" +
-                PhoneLookupColumns.NORMALIZED_NUMBER + " ASC, " +
-                PhoneLookupColumns.RAW_CONTACT_ID + ", " +
+                PhoneLookupColumns.NORMALIZED_NUMBER + "," +
+                PhoneLookupColumns.RAW_CONTACT_ID + "," +
                 PhoneLookupColumns.DATA_ID +
         ");");
 
@@ -785,8 +789,8 @@ import java.util.HashMap;
         ");");
 
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
-                NameLookupColumns.NORMALIZED_NAME + " ASC, " +
-                NameLookupColumns.NAME_TYPE + " ASC, " +
+                NameLookupColumns.NORMALIZED_NAME + "," +
+                NameLookupColumns.NAME_TYPE + ", " +
                 NameLookupColumns.RAW_CONTACT_ID +
         ");");
 
@@ -1087,10 +1091,21 @@ import java.util.HashMap;
 
         // Add the legacy API support views, etc
         LegacyApiSupport.createDatabase(db);
+
+        // This will create a sqlite_stat1 table that is used for query optimization
+        db.execSQL("ANALYZE;");
+
+        updateSqliteStats(db);
+
+        // We need to close and reopen the database connection so that the stats are
+        // taken into account. Make a note of it and do the actual reopening in the
+        // getWritableDatabase method.
+        mReopenDatabase = true;
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+
         Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
                 + ", data will be lost!");
 
@@ -1121,13 +1136,57 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
 
         onCreate(db);
-
         // TODO: eventually when this supports upgrades we should do something like the following:
 //        if (!upgradeDatabase(db, oldVersion, newVersion)) {
 //            mSyncState.discardSyncData(db, null /* all accounts */);
 //            ContentResolver.requestSync(null /* all accounts */,
 //                    mContentUri.getAuthority(), new Bundle());
 //        }
+    }
+
+    /**
+     * Adds index stats into the SQLite database to force it to always use the lookup indexes.
+     */
+    private void updateSqliteStats(SQLiteDatabase db) {
+
+        // Specific stats strings are based on an actual large database after running ANALYZE
+        try {
+            updateIndexStats(db, Tables.RAW_CONTACTS, "raw_contacts_source_id_index", "10000 1 1 1");
+            updateIndexStats(db, Tables.RAW_CONTACTS, "raw_contacts_contact_id_index", "10000 2");
+            updateIndexStats(db, Tables.NAME_LOOKUP, "name_lookup_raw_contact_id_index", "10000 3");
+            updateIndexStats(db, Tables.NAME_LOOKUP, "name_lookup_index", "10000 3 2 2");
+            updateIndexStats(db, Tables.NAME_LOOKUP, "sqlite_autoindex_name_lookup_1", "10000 3 2 1");
+            updateIndexStats(db, Tables.PHONE_LOOKUP, "phone_lookup_index", "10000 2 2 1");
+            updateIndexStats(db, Tables.DATA, "data_mimetype_data2_index", "10000 1000 2");
+            updateIndexStats(db, Tables.DATA, "data_raw_contact_id", "10000 10");
+            updateIndexStats(db, Tables.GROUPS, "groups_source_id_index", "50 1 1 1");
+        } catch (SQLException e) {
+            Log.e(TAG, "Could not update index stats", e);
+        }
+    }
+
+    /**
+     * Stores statistics for a given index.
+     *
+     * @param stats has the following structure: the first index is the expected size of
+     * the table.  The following integer(s) are the expected number of records selected with the
+     * index.  There should be one integer per indexed column.
+     */
+    private void updateIndexStats(SQLiteDatabase db, String table, String index, String stats) {
+        db.execSQL("DELETE FROM sqlite_stat1 WHERE tbl='" + table + "' AND idx='" + index + "';");
+        db.execSQL("INSERT INTO sqlite_stat1 (tbl,idx,stat)"
+                + " VALUES ('" + table + "','" + index + "','" + stats + "');");
+    }
+
+    @Override
+    public synchronized SQLiteDatabase getWritableDatabase() {
+        SQLiteDatabase db = super.getWritableDatabase();
+        if (mReopenDatabase) {
+            mReopenDatabase = false;
+            close();
+            db = super.getWritableDatabase();
+        }
+        return db;
     }
 
     /**
@@ -1456,12 +1515,17 @@ import java.util.HashMap;
 
     public void buildPhoneLookupAndRawContactQuery(SQLiteQueryBuilder qb, String number) {
         String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
-        StringBuilder sb = new StringBuilder();
-        appendPhoneLookupTables(sb, normalizedNumber, false);
-        qb.setTables(sb.toString());
+        qb.setTables(Tables.DATA_JOIN_RAW_CONTACTS +
+                " JOIN " + Tables.PHONE_LOOKUP
+                + " ON(" + DataColumns.CONCRETE_ID + "=" + PhoneLookupColumns.DATA_ID + ")");
 
-        sb = new StringBuilder();
-        appendPhoneLookupSelection(sb, number);
+        StringBuilder sb = new StringBuilder();
+        sb.append(PhoneLookupColumns.NORMALIZED_NUMBER + " GLOB '");
+        sb.append(normalizedNumber);
+        sb.append("*' AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
+        DatabaseUtils.appendEscapedSQLString(sb, number);
+        sb.append(")");
+
         qb.appendWhere(sb.toString());
     }
 
