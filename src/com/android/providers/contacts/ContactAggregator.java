@@ -495,6 +495,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         computeAggregateData(db, contactId, values);
         db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
 
+        mOpenHelper.updateContactVisible(contactId);
+
         mAggregatedPresenceReplace.bindLong(1, contactId);
         mAggregatedPresenceReplace.bindLong(2, contactId);
         mAggregatedPresenceReplace.execute();
@@ -531,13 +533,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             contactId = currentContactId;
         }
 
-        if (contactId != currentContactId && currentContactContentsCount == 0) {
-            mContactDelete.bindLong(1, currentContactId);
-            mContactDelete.execute();
-        }
-
-        if (contactId == -1) {
-
+        if (contactId == currentContactId) {
+            // Aggregation unchanged
+            mOpenHelper.markAggregated(rawContactId);
+        } else if (contactId == -1) {
             // Splitting an aggregate
             ContentValues contactValues = new ContentValues();
             contactValues.put(RawContactsColumns.DISPLAY_NAME, "");
@@ -546,10 +545,17 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
             mOpenHelper.setContactIdAndMarkAggregated(rawContactId, contactId);
             mOpenHelper.updateContactVisible(contactId);
-
+            if (currentContactContentsCount > 0) {
+                updateAggregateData(currentContactId);
+            }
         } else {
+            // Joining with an existing aggregate
+            if (currentContactContentsCount == 0) {
+                // Delete a previous aggregate if it only contained this raw contact
+                mContactDelete.bindLong(1, currentContactId);
+                mContactDelete.execute();
+            }
 
-            // Joining with an aggregate
             mOpenHelper.setContactIdAndMarkAggregated(rawContactId, contactId);
             computeAggregateData(db, contactId, values);
             db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
@@ -611,7 +617,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 }
                 if (contactId != -1) {
                     if (type == AggregationExceptions.TYPE_KEEP_TOGETHER) {
-                        return contactId;
+                        matcher.keepIn(contactId);
                     } else {
                         matcher.keepOut(contactId);
                     }
@@ -621,7 +627,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
 
-        return -1;
+        return matcher.pickBestMatch(ContactMatcher.MAX_SCORE);
     }
 
     /**
@@ -1024,7 +1030,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private void computeAggregateData(SQLiteDatabase db, long contactId, ContentValues values) {
         computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId
-                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0", values);
+                + " AND " + RawContacts.DELETED + "=0", values);
     }
 
     /**
