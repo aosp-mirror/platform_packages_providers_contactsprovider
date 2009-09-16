@@ -368,12 +368,12 @@ public class ContactMatcher {
         int maxScore = 0;
         for (int i = 0; i < mScoreCount; i++) {
             MatchScore score = mScoreList.get(i);
-            if (score.mKeepIn) {
-                return score.mContactId;
-            }
-
             if (score.mKeepOut) {
                 continue;
+            }
+
+            if (score.mKeepIn) {
+                return score.mContactId;
             }
 
             int s = score.mPrimaryScore;
