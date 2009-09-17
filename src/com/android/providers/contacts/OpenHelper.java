@@ -62,7 +62,9 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 88;
+    private static final int DATABASE_VERSION = 89;
+to allow it to return a row for raw_contacts that have no data and to
+use the raw_contacts indicies when querying:src/com/android/providers/contacts/OpenHelper.java
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -941,20 +943,20 @@ import java.util.HashMap;
                 + Data.SYNC2 + ", "
                 + Data.SYNC3 + ", "
                 + Data.SYNC4 + ", "
-                + Data.RAW_CONTACT_ID + ", "
+                + RawContactsColumns.CONCRETE_ID + " AS " + Data.RAW_CONTACT_ID + ", "
                 + Data.IS_PRIMARY + ", "
                 + Data.IS_SUPER_PRIMARY + ", "
                 + Data.DATA_VERSION + ", "
                 + DataColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
                 + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
-                + " FROM " + Tables.DATA
+                + " FROM " + Tables.RAW_CONTACTS
+                + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
                 + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
                 +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
                 + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
                 +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
-                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
                 + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
                 +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
                 +   "' AND " + GroupsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_DATA1 + ")");
