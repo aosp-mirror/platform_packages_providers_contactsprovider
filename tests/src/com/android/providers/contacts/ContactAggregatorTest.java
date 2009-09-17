@@ -18,8 +18,8 @@ package com.android.providers.contacts;
 import android.content.ContentUris;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.Contacts;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -525,10 +525,10 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Richard", "Cherry");
 
-        long contactId1 = queryContactId(rawContactId1);
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
 
+        long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
         assertSuggestions(contactId1, contactId2);
     }
