@@ -16,6 +16,5 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_label" msgid="3389954322874982620">"Kişi Deposu"</string>
-    <!-- no translation found for provider_label (6012150850819899907) -->
-    <skip />
+    <string name="provider_label" msgid="6012150850819899907">"Kişiler"</string>
 </resources>
