@@ -1696,6 +1696,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         super.beforeTransactionCommit();
         flushTransactionalChanges();
+        if (mScheduleAggregation) {
+            mScheduleAggregation = false;
+            mContactAggregator.aggregateInTransaction(mDb);
+        }
     }
 
     private void flushTransactionalChanges() {
@@ -1737,15 +1741,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     @Override
-    protected void onEndTransaction() {
-        if (mScheduleAggregation) {
-            mScheduleAggregation = false;
-            scheduleContactAggregation();
-        }
-        super.onEndTransaction();
-    }
-
-    @Override
     protected void notifyChange() {
         notifyChange(mSyncToNetwork);
         mSyncToNetwork = false;
@@ -1757,7 +1752,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     protected void scheduleContactAggregation() {
-        mContactAggregator.run();
+        mContactAggregator.schedule();
     }
 
     private boolean isNewRawContact(long rawContactId) {
