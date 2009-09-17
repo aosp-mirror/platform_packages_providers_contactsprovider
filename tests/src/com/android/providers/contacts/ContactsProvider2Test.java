@@ -26,6 +26,7 @@ import android.content.EntityIterator;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.RemoteException;
+import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -35,6 +36,7 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -108,6 +110,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactDataUri = Uri.withAppendedPath(contactUri, Contacts.Data.CONTENT_DIRECTORY);
         assertSelection(contactDataUri, values, Data._ID, dataId);
         assertNetworkNotified(true);
+    }
+
+    public void testRawContactDataQuery() {
+        Account account1 = new Account("a", "b");
+        Account account2 = new Account("c", "d");
+        long rawContactId1 = createRawContact(account1);
+        Uri dataUri1 = insertStructuredName(rawContactId1, "John", "Doe");
+        long rawContactId2 = createRawContact(account2);
+        Uri dataUri2 = insertStructuredName(rawContactId2, "Jane", "Doe");
+
+        Uri uri1 = maybeAddAccountQueryParameters(dataUri1, account1);
+        Uri uri2 = maybeAddAccountQueryParameters(dataUri2, account2);
+        assertStoredValue(uri1, Data._ID, ContentUris.parseId(dataUri1)) ;
+        assertStoredValue(uri2, Data._ID, ContentUris.parseId(dataUri2)) ;
     }
 
     public void testPhonesQuery() {
@@ -479,6 +495,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    public void testGroupQuery() {
+        Account account1 = new Account("a", "b");
+        Account account2 = new Account("c", "d");
+        long groupId1 = createGroup(account1, "e", "f");
+        long groupId2 = createGroup(account2, "g", "h");
+        Uri uri1 = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account1);
+        Uri uri2 = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account2);
+        assertEquals(1, getCount(uri1, null, null));
+        assertEquals(1, getCount(uri2, null, null));
+        assertStoredValue(uri1, Groups._ID + "=" + groupId1, null, Groups._ID, groupId1) ;
+        assertStoredValue(uri2, Groups._ID + "=" + groupId2, null, Groups._ID, groupId2) ;
+    }
+
     public void testGroupInsert() {
         ContentValues values = new ContentValues();
 
@@ -502,6 +531,21 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.put(Groups.DIRTY, 1);
         assertStoredValues(rowUri, values);
+    }
+
+    public void testSettingsQuery() {
+        Account account1 = new Account("a", "b");
+        Account account2 = new Account("c", "d");
+        createSettings(account1, "0", "0");
+        createSettings(account2, "1", "1");
+        Uri uri1 = maybeAddAccountQueryParameters(Settings.CONTENT_URI, account1);
+        Uri uri2 = maybeAddAccountQueryParameters(Settings.CONTENT_URI, account2);
+        assertEquals(1, getCount(uri1, null, null));
+        assertEquals(1, getCount(uri2, null, null));
+        assertStoredValue(uri1, Settings.SHOULD_SYNC, "0") ;
+        assertStoredValue(uri1, Settings.UNGROUPED_VISIBLE, "0") ;
+        assertStoredValue(uri2, Settings.SHOULD_SYNC, "1") ;
+        assertStoredValue(uri2, Settings.UNGROUPED_VISIBLE, "1") ;
     }
 
     public void testDisplayNameParsingWhenPartsUnspecified() {
@@ -929,6 +973,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(Data.CONTENT_URI, Data.RAW_CONTACT_ID + "=" + rawContactId
                         + " AND " + Data.MIMETYPE + "='testmimetype'", null));
         assertNetworkNotified(true);
+    }
+
+    public void testRawContactQuery() {
+        Account account1 = new Account("a", "b");
+        Account account2 = new Account("c", "d");
+        long rawContactId1 = createRawContact(account1);
+        long rawContactId2 = createRawContact(account2);
+
+        Uri uri1 = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, account1);
+        Uri uri2 = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, account2);
+        assertEquals(1, getCount(uri1, null, null));
+        assertEquals(1, getCount(uri2, null, null));
+        assertStoredValue(uri1, RawContacts._ID, rawContactId1) ;
+        assertStoredValue(uri2, RawContacts._ID, rawContactId2) ;
+
+        Uri rowUri1 = ContentUris.withAppendedId(uri1, rawContactId1);
+        Uri rowUri2 = ContentUris.withAppendedId(uri2, rawContactId2);
+        assertStoredValue(rowUri1, RawContacts._ID, rawContactId1) ;
+        assertStoredValue(rowUri2, RawContacts._ID, rawContactId2) ;
     }
 
     public void testRawContactDeletion() {
