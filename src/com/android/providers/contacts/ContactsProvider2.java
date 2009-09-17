@@ -574,13 +574,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Groups projection map
         columns = new HashMap<String, String>();
-        columns.put(Groups._ID, "groups._id AS _id");
+        columns.put(Groups._ID, Groups._ID);
         columns.put(Groups.ACCOUNT_NAME, Groups.ACCOUNT_NAME);
         columns.put(Groups.ACCOUNT_TYPE, Groups.ACCOUNT_TYPE);
         columns.put(Groups.SOURCE_ID, Groups.SOURCE_ID);
         columns.put(Groups.DIRTY, Groups.DIRTY);
         columns.put(Groups.VERSION, Groups.VERSION);
-        columns.put(Groups.RES_PACKAGE, PackagesColumns.PACKAGE + " AS " + Groups.RES_PACKAGE);
+        columns.put(Groups.RES_PACKAGE, Groups.RES_PACKAGE);
         columns.put(Groups.TITLE, Groups.TITLE);
         columns.put(Groups.TITLE_RES, Groups.TITLE_RES);
         columns.put(Groups.GROUP_VISIBLE, Groups.GROUP_VISIBLE);
@@ -588,10 +588,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         columns.put(Groups.DELETED, Groups.DELETED);
         columns.put(Groups.NOTES, Groups.NOTES);
         columns.put(Groups.SHOULD_SYNC, Groups.SHOULD_SYNC);
-        columns.put(Groups.SYNC1, Tables.GROUPS + "." + Groups.SYNC1 + " AS " + Groups.SYNC1);
-        columns.put(Groups.SYNC2, Tables.GROUPS + "." + Groups.SYNC2 + " AS " + Groups.SYNC2);
-        columns.put(Groups.SYNC3, Tables.GROUPS + "." + Groups.SYNC3 + " AS " + Groups.SYNC3);
-        columns.put(Groups.SYNC4, Tables.GROUPS + "." + Groups.SYNC4 + " AS " + Groups.SYNC4);
+        columns.put(Groups.SYNC1, Groups.SYNC1);
+        columns.put(Groups.SYNC2, Groups.SYNC2);
+        columns.put(Groups.SYNC3, Groups.SYNC3);
+        columns.put(Groups.SYNC4, Groups.SYNC4);
         sGroupsProjectionMap = columns;
 
         // RawContacts and groups projection map
@@ -3006,14 +3006,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PHONES: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 break;
             }
 
             case PHONES_FILTER: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDistinctDataProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
@@ -3050,14 +3052,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case EMAILS: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 break;
             }
 
             case EMAILS_LOOKUP: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(" AND " + Email.DATA + "=");
                     qb.appendWhereEscapeString(uri.getLastPathSegment());
@@ -3068,7 +3072,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case EMAILS_FILTER: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDistinctDataProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
@@ -3093,13 +3098,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case POSTALS: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere(Data.MIMETYPE + " = '" + StructuredPostal.CONTENT_ITEM_TYPE + "'");
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
+                        + StructuredPostal.CONTENT_ITEM_TYPE + "'");
                 break;
             }
 
             case RAW_CONTACTS: {
                 qb.setTables(mOpenHelper.getRawContactView());
                 qb.setProjectionMap(sRawContactsProjectionMap);
+                appendAccountFromParameter(qb, uri);
                 break;
             }
 
@@ -3107,7 +3115,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long rawContactId = ContentUris.parseId(uri);
                 qb.setTables(mOpenHelper.getRawContactView());
                 qb.setProjectionMap(sRawContactsProjectionMap);
-                qb.appendWhere(RawContacts._ID + "=" + rawContactId);
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + RawContacts._ID + "=" + rawContactId);
                 break;
             }
 
@@ -3115,7 +3124,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere(Data.RAW_CONTACT_ID + "=" + rawContactId);
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=" + rawContactId);
                 break;
             }
 
@@ -3162,23 +3172,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS: {
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setTables(mOpenHelper.getGroupView());
                 qb.setProjectionMap(sGroupsProjectionMap);
+                appendAccountFromParameter(qb, uri);
                 break;
             }
 
             case GROUPS_ID: {
                 long groupId = ContentUris.parseId(uri);
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setTables(mOpenHelper.getGroupView());
                 qb.setProjectionMap(sGroupsProjectionMap);
-                qb.appendWhere(GroupsColumns.CONCRETE_ID + "=" + groupId);
+                qb.appendWhere(Groups._ID + "=" + groupId);
                 break;
             }
 
             case GROUPS_SUMMARY: {
-                qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+                qb.setTables(mOpenHelper.getGroupView() + " AS groups");
                 qb.setProjectionMap(sGroupsSummaryProjectionMap);
-                groupBy = GroupsColumns.CONCRETE_ID;
+                appendAccountFromParameter(qb, uri);
+                groupBy = Groups._ID;
                 break;
             }
 
@@ -3206,6 +3218,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case SETTINGS: {
                 qb.setTables(Tables.SETTINGS);
                 qb.setProjectionMap(sSettingsProjectionMap);
+                appendAccountFromParameter(qb, uri);
 
                 // When requesting specific columns, this query requires
                 // late-binding of the GroupMembership MIME-type.
@@ -3947,7 +3960,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            qb.setTables(Tables.GROUPS_JOIN_PACKAGES);
+            qb.setTables(provider.mOpenHelper.getGroupView());
             qb.setProjectionMap(sGroupsProjectionMap);
             if (groupIdString != null) {
                 qb.appendWhere(Groups._ID + "=" + groupIdString);

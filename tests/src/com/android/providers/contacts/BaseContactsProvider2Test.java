@@ -34,6 +34,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -157,6 +158,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Groups.GROUP_VISIBLE, 1);
         final Uri uri = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account);
         return ContentUris.parseId(mResolver.insert(uri, values));
+    }
+
+    protected void createSettings(Account account, String shouldSync, String ungroupedVisible) {
+        ContentValues values = new ContentValues();
+        values.put(Settings.ACCOUNT_NAME, account.name);
+        values.put(Settings.ACCOUNT_TYPE, account.type);
+        values.put(Settings.SHOULD_SYNC, shouldSync);
+        values.put(Settings.UNGROUPED_VISIBLE, ungroupedVisible);
+        mResolver.insert(Settings.CONTENT_URI, values);
     }
 
     protected Uri insertStructuredName(long rawContactId, String givenName, String familyName) {
@@ -574,9 +584,24 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
+    protected void assertStoredValue(Uri rowUri, String selection, String[] selectionArgs,
+            String column, Object expectedValue) {
+        String value = getStoredValue(rowUri, selection, selectionArgs, column);
+        if (expectedValue == null) {
+            assertNull("Column value " + column, value);
+        } else {
+            assertEquals("Column value " + column, String.valueOf(expectedValue), value);
+        }
+    }
+
     protected String getStoredValue(Uri rowUri, String column) {
+        return getStoredValue(rowUri, null, null, column);
+    }
+
+    protected String getStoredValue(Uri uri, String selection, String[] selectionArgs,
+            String column) {
         String value = null;
-        Cursor c = mResolver.query(rowUri, new String[] { column }, null, null, null);
+        Cursor c = mResolver.query(uri, new String[] { column }, selection, selectionArgs, null);
         try {
             if (c.moveToFirst()) {
                 value = c.getString(c.getColumnIndex(column));
