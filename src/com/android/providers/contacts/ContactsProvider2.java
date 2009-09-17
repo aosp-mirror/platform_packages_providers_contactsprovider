@@ -1418,7 +1418,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private volatile CountDownLatch mAccessLatch;
     private boolean mImportMode;
 
-    private boolean mScheduleAggregation;
     private HashSet<Long> mInsertedRawContacts = Sets.newHashSet();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
@@ -1683,6 +1682,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "onBeginTransaction");
         }
         super.onBeginTransaction();
+        mContactAggregator.clearPendingAggregations();
         clearTransactionalChanges();
     }
 
@@ -1699,10 +1699,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         super.beforeTransactionCommit();
         flushTransactionalChanges();
-        if (mScheduleAggregation) {
-            mScheduleAggregation = false;
-            mContactAggregator.aggregateInTransaction(mDb);
-        }
+        mContactAggregator.aggregateInTransaction(mDb);
     }
 
     private void flushTransactionalChanges() {
@@ -1961,7 +1958,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RawContacts.AGGREGATION_MODE_DEFAULT: {
                 mContactAggregator.markForAggregation(rawContactId);
-                mScheduleAggregation = true;
                 break;
             }
 
