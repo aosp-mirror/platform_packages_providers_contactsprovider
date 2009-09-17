@@ -62,7 +62,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 89;
+    private static final int DATABASE_VERSION = 90;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -196,6 +196,8 @@ import java.util.HashMap;
 
         public static final String CONTACTS_ALL = "view_contacts";
         public static final String CONTACTS_RESTRICTED = "view_contacts_restricted";
+
+        public static final String GROUPS_ALL = "view_groups";
     }
 
     public interface Clauses {
@@ -1089,6 +1091,32 @@ import java.util.HashMap;
         db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
         db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + restrictedContactsSelect);
 
+        String groupsColumns =
+                Groups.ACCOUNT_NAME + ","
+                + Groups.ACCOUNT_TYPE + ","
+                + Groups.SOURCE_ID + ","
+                + Groups.VERSION + ","
+                + Groups.DIRTY + ","
+                + Groups.TITLE + ","
+                + Groups.TITLE_RES + ","
+                + Groups.NOTES + ","
+                + Groups.SYSTEM_ID + ","
+                + Groups.DELETED + ","
+                + Groups.GROUP_VISIBLE + ","
+                + Groups.SHOULD_SYNC + ","
+                + Groups.SYNC1 + ","
+                + Groups.SYNC2 + ","
+                + Groups.SYNC3 + ","
+                + Groups.SYNC4 + ","
+                + PackagesColumns.PACKAGE + " AS " + Groups.RES_PACKAGE;
+
+        String groupsSelect = "SELECT "
+                + GroupsColumns.CONCRETE_ID + " AS " + Groups._ID + ","
+                + groupsColumns
+                + " FROM " + Tables.GROUPS_JOIN_PACKAGES;
+
+        db.execSQL("CREATE VIEW " + Views.GROUPS_ALL + " AS " + groupsSelect);
+
         loadNicknameLookupTable(db);
 
         // Add the legacy API support views, etc
@@ -1743,6 +1771,10 @@ import java.util.HashMap;
 
     public String getContactView() {
         return hasRestrictedAccess() ? Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
+    }
+
+    public String getGroupView() {
+        return Views.GROUPS_ALL;
     }
 
     /**
