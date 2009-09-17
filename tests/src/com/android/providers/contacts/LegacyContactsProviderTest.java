@@ -211,7 +211,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(personUri, values);
     }
 
-    public void testPrimaryEmail() {
+    public void testEmailCrud() {
         ContentValues values = new ContentValues();
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
@@ -226,6 +226,26 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         Uri emailUri1 = mResolver.insert(ContactMethods.CONTENT_URI, values);
 
         assertEquals(ContactMethods.CONTENT_EMAIL_ITEM_TYPE, mResolver.getType(emailUri1));
+
+        assertStoredValues(ContactMethods.CONTENT_URI,
+                ContactMethods._ID + "=" + ContentUris.parseId(emailUri1), null, values);
+        assertStoredValues(ContactMethods.CONTENT_EMAIL_URI,
+                ContactMethods._ID + "=" + ContentUris.parseId(emailUri1), null, values);
+    }
+
+    public void testPrimaryEmail() {
+        ContentValues values = new ContentValues();
+        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        // Primary
+        values.clear();
+        values.put(ContactMethods.PERSON_ID, personId);
+        values.put(ContactMethods.KIND, Contacts.KIND_EMAIL);
+        values.put(ContactMethods.TYPE, ContactMethods.TYPE_HOME);
+        values.put(ContactMethods.DATA, "foo@acme.com");
+        values.put(ContactMethods.ISPRIMARY, 1);
+        Uri emailUri1 = mResolver.insert(ContactMethods.CONTENT_URI, values);
 
         // Non-primary
         values.clear();

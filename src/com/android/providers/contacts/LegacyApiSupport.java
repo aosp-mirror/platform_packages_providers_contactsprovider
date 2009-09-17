@@ -103,6 +103,7 @@ public class LegacyApiSupport {
     private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = 36;
     private static final int LIVE_FOLDERS_PEOPLE_WITH_PHONES = 37;
     private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
+    private static final int CONTACTMETHODS_EMAIL = 39;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -297,7 +298,7 @@ public class LegacyApiSupport {
         matcher.addURI(authority, "photos", PHOTOS);
         matcher.addURI(authority, "photos/#", PHOTOS_ID);
         matcher.addURI(authority, "contact_methods", CONTACTMETHODS);
-//        matcher.addURI(authority, "contact_methods/email", CONTACTMETHODS_EMAIL);
+        matcher.addURI(authority, "contact_methods/email", CONTACTMETHODS_EMAIL);
 //        matcher.addURI(authority, "contact_methods/email/*", CONTACTMETHODS_EMAIL_FILTER);
         matcher.addURI(authority, "contact_methods/#", CONTACTMETHODS_ID);
 //        matcher.addURI(authority, "contact_methods/with_presence",
@@ -1296,6 +1297,14 @@ public class LegacyApiSupport {
                 applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + ContactMethods._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case CONTACTMETHODS_EMAIL:
+                qb.setTables(LegacyTables.CONTACT_METHODS + " contact_methods");
+                qb.setProjectionMap(sContactMethodProjectionMap);
+                applyRawContactsAccount(qb);
+                qb.appendWhere(" AND " + ContactMethods.KIND + "="
+                        + android.provider.Contacts.KIND_EMAIL);
                 break;
 
             case PEOPLE_CONTACTMETHODS:
