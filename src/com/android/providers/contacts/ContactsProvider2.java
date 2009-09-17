@@ -902,30 +902,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             boolean hasGivenName = values.containsKey(StructuredName.GIVEN_NAME);
             boolean hasFamilyName = values.containsKey(StructuredName.FAMILY_NAME);
-            if  (hasGivenName || hasFamilyName) {
-                String givenName;
-                String familyName;// = values.getAsString(StructuredName.FAMILY_NAME);
-                if (hasGivenName) {
-                    givenName = values.getAsString(StructuredName.GIVEN_NAME);
-                } else {
-
-                    // TODO compiled statement
-                    givenName = DatabaseUtils.stringForQuery(db,
-                            "SELECT " + StructuredName.GIVEN_NAME +
-                            " FROM " + Tables.DATA +
-                            " WHERE " + Data._ID + "=" + dataId, null);
-                }
-                if (hasFamilyName) {
-                    familyName = values.getAsString(StructuredName.FAMILY_NAME);
-                } else {
-
-                    // TODO compiled statement
-                    familyName = DatabaseUtils.stringForQuery(db,
-                            "SELECT " + StructuredName.FAMILY_NAME +
-                            " FROM " + Tables.DATA +
-                            " WHERE " + Data._ID + "=" + dataId, null);
-                }
-
+            if (hasGivenName || hasFamilyName) {
+                String givenName = augmented.getAsString(StructuredName.GIVEN_NAME);
+                String familyName = augmented.getAsString(StructuredName.FAMILY_NAME);
                 mOpenHelper.deleteNameLookup(dataId);
                 mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
                         familyName);
@@ -965,12 +944,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
             final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
 
-            final NameSplitter.Name name = new NameSplitter.Name();
-
             if (touchedUnstruct && !touchedStruct) {
+                NameSplitter.Name name = new NameSplitter.Name();
                 mSplitter.split(name, unstruct);
                 name.toValues(update);
             } else if (!touchedUnstruct && touchedStruct) {
+                NameSplitter.Name name = new NameSplitter.Name();
                 name.fromValues(augmented);
                 final String joined = mSplitter.join(name);
                 update.put(StructuredName.DISPLAY_NAME, joined);
@@ -2494,16 +2473,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         selectionWithId, selectionArgs);
             }
 
-            // TODO(emillar): We will want to disallow editing the contacts table at some point.
-            // TODO: however, note that updating should be allowed for starred
             case CONTACTS: {
-                count = mDb.update(Tables.CONTACTS, values,
-                        appendAccountToSelection(uri, selection), selectionArgs);
+                count = updateContactOptions(values, selection, selectionArgs);
                 break;
             }
 
             case CONTACTS_ID: {
-                count = updateContactData(ContentUris.parseId(uri), values);
+                count = updateContactOptions(ContentUris.parseId(uri), values);
                 break;
             }
 
@@ -2516,7 +2492,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 final String lookupKey = pathSegments.get(2);
                 final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
-                count = updateContactData(contactId, values);
+                count = updateContactOptions(contactId, values);
                 break;
             }
 
@@ -2723,34 +2699,66 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return 1;
     }
 
-    private int updateContactData(long contactId, ContentValues values) {
+    private int updateContactOptions(ContentValues values, String selection,
+            String[] selectionArgs) {
+        int count = 0;
+        Cursor cursor = mDb.query(mOpenHelper.getContactView(),
+                new String[] { Contacts._ID }, selection,
+                selectionArgs, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long contactId = cursor.getLong(0);
+                updateContactOptions(contactId, values);
+                count++;
+            }
+        } finally {
+            cursor.close();
+        }
 
-        // First update all constituent contacts
-        ContentValues optionValues = new ContentValues(5);
-        OpenHelper.copyStringValue(optionValues, RawContacts.CUSTOM_RINGTONE,
+        return count;
+    }
+
+    private int updateContactOptions(long contactId, ContentValues values) {
+
+        mValues.clear();
+        OpenHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
                 values, Contacts.CUSTOM_RINGTONE);
-        OpenHelper.copyLongValue(optionValues, RawContacts.SEND_TO_VOICEMAIL,
+        OpenHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
                 values, Contacts.SEND_TO_VOICEMAIL);
-        OpenHelper.copyLongValue(optionValues, RawContacts.LAST_TIME_CONTACTED,
+        OpenHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
                 values, Contacts.LAST_TIME_CONTACTED);
-        OpenHelper.copyLongValue(optionValues, RawContacts.TIMES_CONTACTED,
+        OpenHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
                 values, Contacts.TIMES_CONTACTED);
-        OpenHelper.copyLongValue(optionValues, RawContacts.STARRED,
+        OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
 
         // Nothing to update - just return
-        if (optionValues.size() == 0) {
+        if (mValues.size() == 0) {
             return 0;
         }
 
-        if (optionValues.containsKey(RawContacts.STARRED)) {
+        if (mValues.containsKey(RawContacts.STARRED)) {
             // Mark dirty when changing starred to trigger sync
-            optionValues.put(RawContacts.DIRTY, 1);
+            mValues.put(RawContacts.DIRTY, 1);
         }
 
-        mDb.update(Tables.RAW_CONTACTS, optionValues,
-                RawContacts.CONTACT_ID + "=" + contactId, null);
-        return mDb.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+        mDb.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=" + contactId, null);
+
+        // Copy changeable values to prevent automatically managed fields from
+        // being explicitly updated by clients.
+        mValues.clear();
+        OpenHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
+                values, Contacts.CUSTOM_RINGTONE);
+        OpenHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
+                values, Contacts.SEND_TO_VOICEMAIL);
+        OpenHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
+                values, Contacts.LAST_TIME_CONTACTED);
+        OpenHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
+                values, Contacts.TIMES_CONTACTED);
+        OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
+                values, Contacts.STARRED);
+
+        return mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=" + contactId, null);
     }
 
     public void updateContactTime(long contactId, long lastTimeContacted) {
