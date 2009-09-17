@@ -509,6 +509,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         Log.i(TAG, "Contact aggregation complete: " + count + performance);
     }
 
+    public void clearPendingAggregations() {
+        mRawContactsMarkedForAggregation.clear();
+    }
+
     public void markNewForAggregation(long rawContactId) {
         mRawContactsMarkedForAggregation.add(rawContactId);
     }
