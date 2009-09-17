@@ -332,6 +332,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                         + "=" + RawContacts.AGGREGATION_MODE_DEFAULT
                 + " AND " + RawContacts.CONTACT_ID + " NOT NULL";
     }
+
     /**
      * Find all contacts that require aggregation and pass them through aggregation one by one.
      * Do not call directly.  It is invoked by the scheduler.
@@ -442,6 +443,62 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
         return count;
+    }
+
+
+    /**
+     * Aggregate all raw contacts that were marked for aggregation in the current transaction.
+     * Call just before committing the transaction.
+     */
+    public void aggregateInTransaction(SQLiteDatabase db) {
+        int count = mRawContactsMarkedForAggregation.size();
+        if (count == 0) {
+            return;
+        }
+
+        long start = System.currentTimeMillis();
+        Log.i(TAG, "Contact aggregation: " + count);
+        EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, start, -count);
+
+        long rawContactIds[] = new long[count];
+        long contactIds[] = new long[count];
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(RawContacts._ID + " IN(");
+        for (long rawContactId : mRawContactsMarkedForAggregation) {
+            sb.append(rawContactId);
+            sb.append(',');
+        }
+
+        sb.setLength(sb.length() - 1);
+        sb.append(')');
+
+        Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS, sb.toString(), null,
+                null, null, null);
+
+        int index = 0;
+        try {
+            while (c.moveToNext()) {
+                rawContactIds[index] = c.getLong(AggregationQuery._ID);
+                contactIds[index] = c.getLong(AggregationQuery.CONTACT_ID);
+                index++;
+            }
+        } finally {
+            c.close();
+        }
+
+        MatchCandidateList candidates = new MatchCandidateList();
+        ContactMatcher matcher = new ContactMatcher();
+        ContentValues values = new ContentValues();
+
+        for (int i = 0; i < count; i++) {
+            aggregateContact(db, rawContactIds[i], contactIds[i], candidates, matcher, values);
+        }
+
+        long elapsedTime = System.currentTimeMillis() - start;
+        EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, elapsedTime, count);
+        String performance = count == 0 ? "" : ", " + (elapsedTime / count) + " ms per contact";
+        Log.i(TAG, "Contact aggregation complete: " + count + performance);
     }
 
     public void markNewForAggregation(long rawContactId) {
