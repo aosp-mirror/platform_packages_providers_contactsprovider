@@ -138,6 +138,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     // For the query (as opposed to the merge), count will be negative
     public static final int LOG_SYNC_CONTACTS_AGGREGATION = 2747;
 
+    // If we encounter more than this many contacts with matching names, aggregate only this many
+    private static final int PRIMARY_HIT_LIMIT = 15;
+
+    // If we encounter more than this many contacts with matching phone number or email,
+    // don't attempt to aggregate - this is likely an error or a shared corporate data element.
+    private static final int SECONDARY_HIT_LIMIT = 20;
+
+
     private final ContactsProvider2 mContactsProvider;
     private final OpenHelper mOpenHelper;
     private final ContactAggregationScheduler mScheduler;
@@ -725,7 +733,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             MatchCandidateList candidates, ContactMatcher matcher) {
         List<Long> secondaryContactIds = matcher.prepareSecondaryMatchCandidates(
                 ContactMatcher.SCORE_THRESHOLD_PRIMARY);
-        if (secondaryContactIds == null) {
+        if (secondaryContactIds == null || secondaryContactIds.size() > SECONDARY_HIT_LIMIT) {
             return -1;
         }
 
@@ -973,7 +981,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private void matchAllCandidates(SQLiteDatabase db, String selection,
             MatchCandidateList candidates, ContactMatcher matcher, int algorithm) {
         final Cursor c = db.query(Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, NAME_LOOKUP_COLUMNS,
-                selection, null, null, null, null);
+                selection, null, null, null, null, String.valueOf(PRIMARY_HIT_LIMIT));
 
         try {
             while (c.moveToNext()) {
@@ -997,7 +1005,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         mOpenHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
         Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContactsColumns.AGGREGATION_NEEDED + "=0",
-                null, null, null, null);
+                null, null, null, null, String.valueOf(SECONDARY_HIT_LIMIT));
         try {
             while (c.moveToNext()) {
                 long contactId = c.getLong(COL_CONTACT_ID);
@@ -1017,7 +1025,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 DataColumns.MIMETYPE_ID + "=" + mimetypeId
                         + " AND " + Email.DATA + "=?"
                         + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0",
-                new String[] {address}, null, null, null);
+                new String[] {address}, null, null, null, String.valueOf(SECONDARY_HIT_LIMIT));
         try {
             while (c.moveToNext()) {
                 long contactId = c.getLong(EmailLookupQuery.CONTACT_ID);
