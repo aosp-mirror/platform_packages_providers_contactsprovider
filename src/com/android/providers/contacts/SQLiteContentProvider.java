@@ -117,6 +117,7 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 if (result != null) {
                     mNotifyChange = true;
                 }
+                mDb.yieldIfContendedSafely();
             }
             mDb.setTransactionSuccessful();
         } finally {
