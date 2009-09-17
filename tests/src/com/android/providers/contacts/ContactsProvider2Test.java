@@ -950,7 +950,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
 
         Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
-                RawContacts.DELETE_PERMANENTLY, "true").build();
+                ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
         mResolver.delete(permanentDeletionUri, null, null);
         assertEquals(0, getCount(uri, null, null));
         assertEquals(0, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
@@ -972,7 +972,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
         Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
-                RawContacts.DELETE_PERMANENTLY, "true").build();
+                ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
         mResolver.delete(permanentDeletionUri, null, null);
         assertEquals(0, getCount(uri, null, null));
         assertEquals(1, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
@@ -1056,7 +1056,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri uri = insertStructuredName(rawContactId, "John", "Doe");
         clearDirty(rawContactUri);
-        Uri updateUri = uri.buildUpon().appendQueryParameter(Data.MARK_AS_DIRTY, "0").build();
+        Uri updateUri = uri.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
 
         ContentValues values = new ContentValues();
         values.put(StructuredName.FAMILY_NAME, "Dough");
