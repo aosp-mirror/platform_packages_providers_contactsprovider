@@ -83,11 +83,11 @@ import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupType;
-import com.android.providers.contacts.OpenHelper.PackagesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
+import com.android.providers.contacts.OpenHelper.SettingsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
@@ -626,7 +626,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         columns.put(Settings.ANY_UNSYNCED, "(CASE WHEN MIN(" + Settings.SHOULD_SYNC
                 + ",(SELECT (CASE WHEN MIN(" + Groups.SHOULD_SYNC + ") IS NULL THEN 1 ELSE MIN("
                 + Groups.SHOULD_SYNC + ") END) FROM " + Tables.GROUPS + " WHERE "
-                + GroupsColumns.CONCRETE_ACCOUNT_NAME + "=" + OpenHelper.SettingsColumns.CONCRETE_ACCOUNT_NAME
+                + GroupsColumns.CONCRETE_ACCOUNT_NAME + "=" + SettingsColumns.CONCRETE_ACCOUNT_NAME
                 + " AND " + GroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
                 + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "))=0 THEN 1 ELSE 0 END) AS "
                 + Settings.ANY_UNSYNCED);
