@@ -1159,6 +1159,7 @@ import java.util.HashMap;
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS_ALL + ";");
 
         // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
         // schema changes, we should try to preserve the data, because it was entered by the user
