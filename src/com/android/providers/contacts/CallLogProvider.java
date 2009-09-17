@@ -147,6 +147,7 @@ public class CallLogProvider extends ContentProvider {
     public Uri insert(Uri uri, ContentValues values) {
         long rowId = mCallsInserter.insert(values);
         if (rowId > 0) {
+            notifyChange();
             return ContentUris.withAppendedId(uri, rowId);
         }
         return null;
@@ -171,7 +172,9 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + url);
         }
 
-        return db.update(Tables.CALLS, values, where, selectionArgs);
+        int count = db.update(Tables.CALLS, values, where, selectionArgs);
+        notifyChange();
+        return count;
     }
 
     @Override
@@ -181,10 +184,17 @@ public class CallLogProvider extends ContentProvider {
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                return db.delete(Tables.CALLS, selection, selectionArgs);
+                int count = db.delete(Tables.CALLS, selection, selectionArgs);
+                notifyChange();
+                return count;
 
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }
+    }
+
+    protected void notifyChange() {
+        getContext().getContentResolver().notifyChange(CallLog.CONTENT_URI, null,
+                false /* wake up sync adapters */);
     }
 }
