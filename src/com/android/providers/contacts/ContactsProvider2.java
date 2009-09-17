@@ -1819,6 +1819,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case SETTINGS: {
                 id = insertSettings(values);
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
@@ -2340,6 +2341,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case SETTINGS: {
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 return deleteSettings(selection, selectionArgs);
             }
 
@@ -2552,6 +2554,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case SETTINGS: {
                 count = updateSettings(values, selection, selectionArgs);
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
