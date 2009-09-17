@@ -63,8 +63,6 @@ import java.util.HashMap;
     private static final String TAG = "OpenHelper";
 
     private static final int DATABASE_VERSION = 89;
-to allow it to return a row for raw_contacts that have no data and to
-use the raw_contacts indicies when querying:src/com/android/providers/contacts/OpenHelper.java
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
