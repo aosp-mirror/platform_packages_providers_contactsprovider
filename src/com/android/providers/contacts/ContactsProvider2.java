@@ -1757,7 +1757,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     protected void scheduleContactAggregation() {
-        mContactAggregator.schedule();
+        mContactAggregator.run();
     }
 
     private boolean isNewRawContact(long rawContactId) {
