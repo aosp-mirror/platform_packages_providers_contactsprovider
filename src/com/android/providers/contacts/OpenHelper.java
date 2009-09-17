@@ -349,7 +349,9 @@ import java.util.HashMap;
 
         public static final String CONCRETE_ID = Tables.GROUPS + "." + BaseColumns._ID;
         public static final String CONCRETE_SOURCE_ID = Tables.GROUPS + "." + Groups.SOURCE_ID;
-}
+        public static final String CONCRETE_ACCOUNT_NAME = Tables.GROUPS + "." + Groups.ACCOUNT_NAME;
+        public static final String CONCRETE_ACCOUNT_TYPE = Tables.GROUPS + "." + Groups.ACCOUNT_TYPE;
+    }
 
     public interface ActivitiesColumns {
         public static final String PACKAGE_ID = "package_id";
