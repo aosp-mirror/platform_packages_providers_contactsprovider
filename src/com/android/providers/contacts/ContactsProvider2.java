@@ -16,61 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.accounts.Account;
-import android.accounts.AccountManager;
-import android.accounts.OnAccountsUpdatedListener;
-import android.app.SearchManager;
-import android.content.ContentProviderOperation;
-import android.content.ContentProviderResult;
-import android.content.ContentUris;
-import android.content.ContentValues;
-import android.content.Context;
-import android.content.Entity;
-import android.content.EntityIterator;
-import android.content.OperationApplicationException;
-import android.content.SharedPreferences.Editor;
-import android.content.SharedPreferences;
-import android.content.UriMatcher;
-import android.content.res.AssetFileDescriptor;
-import android.database.Cursor;
-import android.database.DatabaseUtils;
-import android.database.sqlite.SQLiteContentHelper;
-import android.database.sqlite.SQLiteCursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteQueryBuilder;
-import android.database.sqlite.SQLiteStatement;
-import android.net.Uri;
-import android.os.MemoryFile;
-import android.os.RemoteException;
-import android.os.SystemProperties;
-import android.pim.vcard.VCardComposer;
-import android.preference.PreferenceManager;
-import android.provider.BaseColumns;
-import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.PhoneLookup;
-import android.provider.ContactsContract.Presence;
-import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.Settings;
-import android.provider.ContactsContract;
-import android.provider.LiveFolders;
-import android.provider.OpenableColumns;
-import android.provider.SyncStateContract;
-import android.telephony.PhoneNumberUtils;
-import android.text.TextUtils;
-import android.util.Log;
 import com.android.internal.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
@@ -92,6 +37,62 @@ import com.android.providers.contacts.OpenHelper.Tables;
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
+
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.accounts.OnAccountsUpdatedListener;
+import android.app.SearchManager;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
+import android.content.ContentUris;
+import android.content.ContentValues;
+import android.content.Context;
+import android.content.Entity;
+import android.content.EntityIterator;
+import android.content.OperationApplicationException;
+import android.content.SharedPreferences;
+import android.content.UriMatcher;
+import android.content.SharedPreferences.Editor;
+import android.content.res.AssetFileDescriptor;
+import android.database.Cursor;
+import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteContentHelper;
+import android.database.sqlite.SQLiteCursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteStatement;
+import android.net.Uri;
+import android.os.MemoryFile;
+import android.os.RemoteException;
+import android.os.SystemProperties;
+import android.pim.vcard.VCardComposer;
+import android.preference.PreferenceManager;
+import android.provider.BaseColumns;
+import android.provider.ContactsContract;
+import android.provider.LiveFolders;
+import android.provider.OpenableColumns;
+import android.provider.SyncStateContract;
+import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.PhoneLookup;
+import android.provider.ContactsContract.Presence;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.telephony.PhoneNumberUtils;
+import android.text.TextUtils;
+import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -4161,7 +4162,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + " JOIN name_lookup ON(" + RawContactsColumns.CONCRETE_ID + "=raw_contact_id)"
                 + " WHERE normalized_name GLOB '");
         sb.append(NameNormalizer.normalize(filterParam));
-        sb.append("*')");
+        sb.append("*' AND ("
+                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NAME_COLLATION_KEY
+                + " OR "
+                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + "))");
     }
 
     public String getRawContactsByFilterAsNestedQuery(String filterParam) {
@@ -4179,7 +4183,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String limit) {
         sb.append("(SELECT DISTINCT raw_contact_id FROM name_lookup WHERE normalized_name GLOB '");
         sb.append(normalizedName);
-        sb.append("*'");
+        sb.append("*' AND ("
+                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NAME_COLLATION_KEY
+                + " OR "
+                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + ")");
+
         if (limit != null) {
             sb.append(" LIMIT ").append(limit);
         }
