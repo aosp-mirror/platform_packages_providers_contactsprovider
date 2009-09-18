@@ -333,12 +333,12 @@ public class LegacyApiSupport {
         peopleProjectionMap.put(People.CUSTOM_RINGTONE, People.CUSTOM_RINGTONE);
         peopleProjectionMap.put(People.SEND_TO_VOICEMAIL, People.SEND_TO_VOICEMAIL);
         peopleProjectionMap.put(People.STARRED, People.STARRED);
+        peopleProjectionMap.put(People.PRIMARY_ORGANIZATION_ID, People.PRIMARY_ORGANIZATION_ID);
+        peopleProjectionMap.put(People.PRIMARY_EMAIL_ID, People.PRIMARY_EMAIL_ID);
+        peopleProjectionMap.put(People.PRIMARY_PHONE_ID, People.PRIMARY_PHONE_ID);
 
         sPeopleProjectionMap = new HashMap<String, String>(peopleProjectionMap);
         sPeopleProjectionMap.put(People._ID, People._ID);
-        sPeopleProjectionMap.put(People.PRIMARY_ORGANIZATION_ID, People.PRIMARY_ORGANIZATION_ID);
-        sPeopleProjectionMap.put(People.PRIMARY_EMAIL_ID, People.PRIMARY_EMAIL_ID);
-        sPeopleProjectionMap.put(People.PRIMARY_PHONE_ID, People.PRIMARY_PHONE_ID);
         sPeopleProjectionMap.put(People.NUMBER, People.NUMBER);
         sPeopleProjectionMap.put(People.TYPE, People.TYPE);
         sPeopleProjectionMap.put(People.LABEL, People.LABEL);
@@ -484,11 +484,7 @@ public class LegacyApiSupport {
     public static void createDatabase(SQLiteDatabase db) {
         Log.i(TAG, "Bootstrapping database legacy support");
 
-        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PEOPLE + ";");
-        db.execSQL("CREATE VIEW " + LegacyTables.PEOPLE + " AS SELECT " +
-                RawContactsColumns.CONCRETE_ID
-                        + " AS " + android.provider.Contacts.People._ID + ", " +
-                "name." + StructuredName.DISPLAY_NAME
+        String peopleColumns = "name." + StructuredName.DISPLAY_NAME
                         + " AS " + People.NAME + ", " +
                 Tables.RAW_CONTACTS + "." + RawContactsColumns.DISPLAY_NAME
                         + " AS " + People.DISPLAY_NAME + ", " +
@@ -521,11 +517,16 @@ public class LegacyApiSupport {
                 "phone." + Phone.LABEL
                         + " AS " + People.LABEL + ", " +
                 "phone." + PhoneColumns.NORMALIZED_NUMBER
-                        + " AS " + People.NUMBER_KEY +
+                        + " AS " + People.NUMBER_KEY;
+
+        db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PEOPLE + ";");
+        db.execSQL("CREATE VIEW " + LegacyTables.PEOPLE + " AS SELECT " +
+                RawContactsColumns.CONCRETE_ID
+                        + " AS " + android.provider.Contacts.People._ID + ", " +
+                peopleColumns +
                 " FROM " + Tables.RAW_CONTACTS + PEOPLE_JOINS +
-                " WHERE " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
-                        + " AND " + RawContacts.IS_RESTRICTED + "=0" +
-        ";");
+                " WHERE " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
+                " AND " + RawContacts.IS_RESTRICTED + "=0" + ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.ORGANIZATIONS + ";");
         db.execSQL("CREATE VIEW " + LegacyTables.ORGANIZATIONS + " AS SELECT " +
@@ -570,26 +571,7 @@ public class LegacyApiSupport {
                         + " AS " + ContactMethods.LABEL + ", " +
                 DataColumns.CONCRETE_DATA14
                         + " AS " + ContactMethods.AUX_DATA + ", " +
-                "name." + StructuredName.DISPLAY_NAME
-                        + " AS " + ContactMethods.NAME + ", " +
-                Tables.RAW_CONTACTS + "." + RawContactsColumns.DISPLAY_NAME
-                        + " AS " + ContactMethods.DISPLAY_NAME + ", " +
-                RawContacts.ACCOUNT_NAME + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
-                PHONETIC_NAME_SQL
-                        + " AS " + ContactMethods.PHONETIC_NAME + " , " +
-                "note." + Note.NOTE
-                        + " AS " + ContactMethods.NOTES + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED
-                        + " AS " + ContactMethods.TIMES_CONTACTED + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
-                        + " AS " + ContactMethods.LAST_TIME_CONTACTED + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
-                        + " AS " + ContactMethods.CUSTOM_RINGTONE + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
-                        + " AS " + ContactMethods.SEND_TO_VOICEMAIL + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.STARRED
-                        + " AS " + ContactMethods.STARRED +
+                peopleColumns +
                 " FROM " + Tables.DATA + DATA_JOINS +
                 " WHERE " + ContactMethods.KIND + " IS NOT NULL"
                     + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
@@ -613,26 +595,7 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.Phones.LABEL + ", " +
                 PhoneColumns.CONCRETE_NORMALIZED_NUMBER
                         + " AS " + android.provider.Contacts.Phones.NUMBER_KEY + ", " +
-                "name." + StructuredName.DISPLAY_NAME
-                        + " AS " + android.provider.Contacts.Phones.NAME + ", " +
-                Tables.RAW_CONTACTS + "." + RawContactsColumns.DISPLAY_NAME
-                        + " AS " + android.provider.Contacts.Phones.DISPLAY_NAME + ", " +
-                RawContacts.ACCOUNT_NAME + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
-                PHONETIC_NAME_SQL
-                        + " AS " + android.provider.Contacts.Phones.PHONETIC_NAME + " , " +
-                "note." + Note.NOTE
-                        + " AS " + android.provider.Contacts.Phones.NOTES + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED
-                        + " AS " + android.provider.Contacts.Phones.TIMES_CONTACTED + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
-                        + " AS " + android.provider.Contacts.Phones.LAST_TIME_CONTACTED + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
-                        + " AS " + android.provider.Contacts.Phones.CUSTOM_RINGTONE + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
-                        + " AS " + android.provider.Contacts.Phones.SEND_TO_VOICEMAIL + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.STARRED
-                        + " AS " + android.provider.Contacts.Phones.STARRED +
+                peopleColumns +
                 " FROM " + Tables.DATA + DATA_JOINS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Phone.CONTENT_ITEM_TYPE + "'"
