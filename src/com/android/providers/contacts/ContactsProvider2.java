@@ -529,6 +529,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDistinctDataProjectionMap.put(Data.SYNC3, Data.SYNC3);
         sDistinctDataProjectionMap.put(Data.SYNC4, Data.SYNC4);
         sDistinctDataProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
+        sDistinctDataProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
         sDistinctDataProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
         sDistinctDataProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
         sDistinctDataProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
