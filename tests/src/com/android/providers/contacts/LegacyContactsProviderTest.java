@@ -336,6 +336,34 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 Organizations.LABEL);
     }
 
+    public void testOrganizationsUpdate() {
+        ContentValues values = new ContentValues();
+        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        values.clear();
+        values.put(Organizations.COMPANY, "Sierra");
+        values.put(Organizations.PERSON_ID, personId);
+        values.put(Organizations.TYPE, Organizations.TYPE_CUSTOM);
+        values.put(Organizations.LABEL, "Club");
+        values.put(Organizations.TITLE, "Member");
+        values.put(Organizations.ISPRIMARY, 0);
+
+        Uri uri = mResolver.insert(Organizations.CONTENT_URI, values);
+
+        values.clear();
+        values.put(Organizations.COMPANY, "Planetary");
+        values.put(Organizations.PERSON_ID, personId);
+        values.put(Organizations.TYPE, Organizations.TYPE_CUSTOM);
+        values.put(Organizations.LABEL, "Society");
+        values.put(Organizations.TITLE, "Chair");
+        values.put(Organizations.ISPRIMARY, 1);
+
+        mResolver.update(uri, values, null, null);
+
+        assertStoredValues(uri, values);
+    }
+
     public void testPhonesInsert() {
         ContentValues values = new ContentValues();
         putContactValues(values);
@@ -378,6 +406,32 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 Phones.TYPE_CUSTOM, Phones.TYPE_OTHER, Phones.LABEL);
     }
 
+    public void testPhonesUpdate() {
+        ContentValues values = new ContentValues();
+        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        values.clear();
+        values.put(Phones.PERSON_ID, personId);
+        values.put(Phones.TYPE, Phones.TYPE_CUSTOM);
+        values.put(Phones.LABEL, "Directory");
+        values.put(Phones.NUMBER, "1-800-4664-411");
+        values.put(Phones.ISPRIMARY, 0);
+
+        Uri uri = mResolver.insert(Phones.CONTENT_URI, values);
+
+        values.clear();
+        values.put(Phones.PERSON_ID, personId);
+        values.put(Phones.TYPE, Phones.TYPE_FAX_HOME);
+        values.putNull(Phones.LABEL);
+        values.put(Phones.NUMBER, "1-800-555-4663");
+        values.put(Phones.ISPRIMARY, 1);
+
+        mResolver.update(uri, values, null, null);
+
+        assertStoredValues(uri, values);
+    }
+
     public void testPhonesFilterQuery() {
         ContentValues values = new ContentValues();
         putContactValues(values);
@@ -400,25 +454,48 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertEquals(0, getCount(filterUri2, null, null));
     }
 
-
     public void testEmailInsert() {
-        assertContactMethodInsert(Contacts.KIND_EMAIL, ContactMethods.TYPE_CUSTOM,
-                "Some other way", "foo@acme.com", null, true);
+        assertContactMethodInsert(Contacts.KIND_EMAIL,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "foo@acme.com", null, true);
+    }
+
+    public void testEmailUpdate() {
+        assertContactMethodUpdate(Contacts.KIND_EMAIL,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "foo@acme.com", null, false,
+                ContactMethods.TYPE_HOME, null, "bar@acme.com", "aux", true);
     }
 
     public void testImInsertStandard() {
-        assertContactMethodInsert(Contacts.KIND_IM, ContactMethods.TYPE_CUSTOM, "Some other way",
-                "pre:3", "Bar", true);
+        assertContactMethodInsert(Contacts.KIND_IM,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "pre:3", "Bar", true);
+    }
+
+    public void testImUpdateStandard() {
+        assertContactMethodUpdate(Contacts.KIND_IM,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "pre:3", "Bar", false,
+                ContactMethods.TYPE_WORK, null, "pre:4", "Buz", true);
     }
 
     public void testImInsertCustom() {
-        assertContactMethodInsert(Contacts.KIND_IM, ContactMethods.TYPE_CUSTOM, "Some other way",
-                "custom:my_proto", "Bar", true);
+        assertContactMethodInsert(Contacts.KIND_IM,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "custom:my_proto", "Bar", true);
+    }
+
+    public void testImUpdateCustom() {
+        assertContactMethodUpdate(Contacts.KIND_IM,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "custom:my_proto", "Bar", false,
+                ContactMethods.TYPE_HOME, null, "custom:my_other_proto", "Buz", true);
     }
 
     public void testPostalInsert() {
-        assertContactMethodInsert(Contacts.KIND_POSTAL, ContactMethods.TYPE_CUSTOM,
-                "Some other way", "Foo", "Bar", true);
+        assertContactMethodInsert(Contacts.KIND_POSTAL,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "Foo", "Bar", true);
+    }
+
+    public void testPostalUpdate() {
+        assertContactMethodUpdate(Contacts.KIND_POSTAL,
+                ContactMethods.TYPE_CUSTOM, "Some other way", "Foo", "Bar", false,
+                ContactMethods.TYPE_WORK, null, "Biz", "Baz", true);
     }
 
     private void assertContactMethodInsert(int kind, int type, String label, String data,
@@ -457,6 +534,36 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 ContactMethods.TYPE_OTHER, ContactMethods.LABEL);
     }
 
+    private void assertContactMethodUpdate(int kind,
+            int type1, String label1, String data1, String auxData1, boolean primary1,
+            int type2, String label2, String data2, String auxData2, boolean primary2) {
+        ContentValues values = new ContentValues();
+        putContactValues(values);
+        final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        values.clear();
+        values.put(ContactMethods.PERSON_ID, personId);
+        values.put(ContactMethods.KIND, kind);
+        values.put(ContactMethods.TYPE, type1);
+        values.put(ContactMethods.LABEL, label1);
+        values.put(ContactMethods.DATA, data1);
+        values.put(ContactMethods.AUX_DATA, auxData1);
+        values.put(ContactMethods.ISPRIMARY, primary1 ? 1 : 0);
+
+        Uri uri = mResolver.insert(ContactMethods.CONTENT_URI, values);
+
+        values.clear();
+        values.put(ContactMethods.TYPE, type2);
+        values.put(ContactMethods.LABEL, label2);
+        values.put(ContactMethods.DATA, data2);
+        values.put(ContactMethods.AUX_DATA, auxData2);
+        values.put(ContactMethods.ISPRIMARY, primary2 ? 1 : 0);
+        mResolver.update(uri, values, null, null);
+
+        assertStoredValues(uri, values);
+    }
+
     public void testExtensionsInsert() {
         ContentValues values = new ContentValues();
         final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -477,6 +584,26 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(twigUri, values);
     }
 
+    public void testExtensionsUpdate() {
+        ContentValues values = new ContentValues();
+        final Uri personUri = mResolver.insert(People.CONTENT_URI, values);
+        long personId = ContentUris.parseId(personUri);
+
+        values.clear();
+        values.put(Extensions.PERSON_ID, personId);
+        values.put(Extensions.NAME, "Foo");
+        values.put(Extensions.VALUE, "Bar");
+
+        Uri uri = mResolver.insert(Extensions.CONTENT_URI, values);
+
+        values.clear();
+        values.put(Extensions.NAME, "Biz");
+        values.put(Extensions.VALUE, "Baz");
+        mResolver.update(uri, values, null, null);
+
+        assertStoredValues(uri, values);
+    }
+
     public void testGroupsInsert() {
         ContentValues values = new ContentValues();
         values.put(Groups.NAME, "Galois");
@@ -484,6 +611,22 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(Groups.SYSTEM_ID, "12345");
 
         Uri groupUri = mResolver.insert(Groups.CONTENT_URI, values);
+        assertStoredValues(groupUri, values);
+    }
+
+    public void testGroupsUpdate() {
+        ContentValues values = new ContentValues();
+        values.put(Groups.NAME, "Galois");
+        values.put(Groups.NOTES, "Abel");
+        values.put(Groups.SYSTEM_ID, "12345");
+
+        Uri groupUri = mResolver.insert(Groups.CONTENT_URI, values);
+
+        values.clear();
+        values.put(Groups.NAME, "Klein");
+        values.put(Groups.NOTES, "Vierergruppe");
+        values.put(Groups.SYSTEM_ID, "1234");
+        mResolver.update(groupUri, values, null, null);
         assertStoredValues(groupUri, values);
     }
 
@@ -547,6 +690,14 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri photoUri = Uri.withAppendedPath(personUri, Photos.CONTENT_DIRECTORY);
         mResolver.update(photoUri, values, null, null);
+        assertStoredValues(photoUri, values);
+
+        long photoId = Long.parseLong(getStoredValue(photoUri, Photos._ID));
+
+        values.put(Photos.LOCAL_VERSION, "11");
+        Uri contentUri = ContentUris.withAppendedId(Photos.CONTENT_URI, photoId);
+        mResolver.update(contentUri, values, null, null);
+        assertStoredValues(contentUri, values);
         assertStoredValues(photoUri, values);
     }
 
