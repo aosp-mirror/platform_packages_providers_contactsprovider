@@ -32,6 +32,7 @@ import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
@@ -200,6 +201,14 @@ public class LegacyApiSupport {
 
     private static final String[] PHONE_MIME_TYPES = new String[] {
         Phone.CONTENT_ITEM_TYPE
+    };
+
+    private static final String[] PHOTO_MIME_TYPES = new String[] {
+        Photo.CONTENT_ITEM_TYPE
+    };
+
+    private static final String[] EXTENSION_MIME_TYPES = new String[] {
+        android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE
     };
 
     private interface IdQuery {
@@ -444,11 +453,17 @@ public class LegacyApiSupport {
 
     /** Precompiled sql statement for incrementing times contacted for a contact */
     private final SQLiteStatement mLastTimeContactedUpdate;
+    private final SQLiteStatement mDataMimetypeQuery;
+    private final SQLiteStatement mDataRawContactIdQuery;
 
     private final ContentValues mValues = new ContentValues();
     private final ContentValues mValues2 = new ContentValues();
     private final ContentValues mValues3 = new ContentValues();
     private Account mAccount;
+
+    private long mMimetypeEmail;
+    private long mMimetypeIm;
+    private long mMimetypePostal;
 
     public LegacyApiSupport(Context context, OpenHelper openHelper,
             ContactsProvider2 contactsProvider, GlobalSearchSupport globalSearchSupport) {
@@ -467,6 +482,20 @@ public class LegacyApiSupport {
                 + RawContacts.TIMES_CONTACTED + "+1,"
                 + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
                 + RawContacts._ID + "=?");
+
+        mDataMimetypeQuery = db.compileStatement(
+                "SELECT " + DataColumns.MIMETYPE_ID +
+                " FROM " + Tables.DATA +
+                " WHERE " + Data._ID + "=?");
+
+        mDataRawContactIdQuery = db.compileStatement(
+                "SELECT " + Data.RAW_CONTACT_ID +
+                " FROM " + Tables.DATA +
+                " WHERE " + Data._ID + "=?");
+
+        mMimetypeEmail = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimetypeIm = mOpenHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mMimetypePostal = mOpenHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
     }
 
     private void ensureDefaultAccount() {
@@ -763,7 +792,7 @@ public class LegacyApiSupport {
     }
 
     private long insertPeople(ContentValues values) {
-        parsePeopleValues(values, mValues, mValues2, mValues3);
+        parsePeopleValues(values);
 
         Uri contactUri = mContactsProvider.insertInTransaction(RawContacts.CONTENT_URI, mValues);
         long rawContactId = ContentUris.parseId(contactUri);
@@ -777,70 +806,13 @@ public class LegacyApiSupport {
             mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues3);
         }
 
-        // TODO instant aggregation
         return rawContactId;
     }
 
-    private void parsePeopleValues(ContentValues values, ContentValues peopleValues,
-            ContentValues nameValues, ContentValues noteValues) {
-        peopleValues.clear();
-        nameValues.clear();
-        noteValues.clear();
-
-        OpenHelper.copyStringValue(peopleValues, RawContacts.CUSTOM_RINGTONE,
-                values, People.CUSTOM_RINGTONE);
-        OpenHelper.copyLongValue(peopleValues, RawContacts.SEND_TO_VOICEMAIL,
-                values, People.SEND_TO_VOICEMAIL);
-        OpenHelper.copyLongValue(peopleValues, RawContacts.LAST_TIME_CONTACTED,
-                values, People.LAST_TIME_CONTACTED);
-        OpenHelper.copyLongValue(peopleValues, RawContacts.TIMES_CONTACTED,
-                values, People.TIMES_CONTACTED);
-        OpenHelper.copyLongValue(peopleValues, RawContacts.STARRED,
-                values, People.STARRED);
-        peopleValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
-        peopleValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
-
-        if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
-            nameValues.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(nameValues, StructuredName.DISPLAY_NAME,
-                    values, People.NAME);
-            if (values.containsKey(People.PHONETIC_NAME)) {
-                String phoneticName = values.getAsString(People.PHONETIC_NAME);
-                NameSplitter.Name parsedName = new NameSplitter.Name();
-                mPhoneticNameSplitter.split(parsedName, phoneticName);
-                nameValues.put(StructuredName.PHONETIC_GIVEN_NAME, parsedName.getGivenNames());
-                nameValues.put(StructuredName.PHONETIC_MIDDLE_NAME, parsedName.getMiddleName());
-                nameValues.put(StructuredName.PHONETIC_FAMILY_NAME, parsedName.getFamilyName());
-            }
-        }
-
-        if (values.containsKey(People.NOTES)) {
-            noteValues.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(noteValues, Note.NOTE, values, People.NOTES);
-        }
-    }
-
     private long insertOrganization(ContentValues values) {
-        mValues.clear();
-
+        parseOrganizationValues(values);
         OpenHelper.copyLongValue(mValues, Data.RAW_CONTACT_ID,
                 values, android.provider.Contacts.Organizations.PERSON_ID);
-        mValues.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
-
-        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
-                values, android.provider.Contacts.Organizations.ISPRIMARY);
-
-        OpenHelper.copyStringValue(mValues, Organization.COMPANY,
-                values, android.provider.Contacts.Organizations.COMPANY);
-
-        // TYPE values happen to remain the same between V1 and V2 - can just copy the value
-        OpenHelper.copyLongValue(mValues, Organization.TYPE,
-                values, android.provider.Contacts.Organizations.TYPE);
-
-        OpenHelper.copyStringValue(mValues, Organization.LABEL,
-                values, android.provider.Contacts.Organizations.LABEL);
-        OpenHelper.copyStringValue(mValues, Organization.TITLE,
-                values, android.provider.Contacts.Organizations.TITLE);
 
         Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
 
@@ -848,23 +820,8 @@ public class LegacyApiSupport {
     }
 
     private long insertPhone(long rawContactId, ContentValues values) {
-        mValues.clear();
-
+        parsePhoneValues(values);
         mValues.put(Data.RAW_CONTACT_ID, rawContactId);
-        mValues.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
-
-        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
-                values, android.provider.Contacts.Phones.ISPRIMARY);
-
-        OpenHelper.copyStringValue(mValues, Phone.NUMBER,
-                values, android.provider.Contacts.Phones.NUMBER);
-
-        // TYPE values happen to remain the same between V1 and V2 - can just copy the value
-        OpenHelper.copyLongValue(mValues, Phone.TYPE,
-                values, android.provider.Contacts.Phones.TYPE);
-
-        OpenHelper.copyStringValue(mValues, Phone.LABEL,
-                values, android.provider.Contacts.Phones.LABEL);
 
         Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
 
@@ -877,51 +834,11 @@ public class LegacyApiSupport {
             throw new RuntimeException("Required value: " + ContactMethods.KIND);
         }
 
-        mValues.clear();
+        parseContactMethodValues(kind, values);
+
         mValues.put(Data.RAW_CONTACT_ID, rawContactId);
-
-        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY, values, ContactMethods.ISPRIMARY);
-
-        switch (kind) {
-            case android.provider.Contacts.KIND_EMAIL: {
-                copyCommonFields(values, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL,
-                        Data.DATA14);
-                OpenHelper.copyStringValue(mValues, Email.DATA, values, ContactMethods.DATA);
-                break;
-            }
-
-            case android.provider.Contacts.KIND_IM: {
-                String protocol = values.getAsString(ContactMethods.DATA);
-                if (protocol.startsWith("pre:")) {
-                    mValues.put(Im.PROTOCOL, Integer.parseInt(protocol.substring(4)));
-                } else if (protocol.startsWith("custom:")) {
-                    mValues.put(Im.PROTOCOL, Im.PROTOCOL_CUSTOM);
-                    mValues.put(Im.CUSTOM_PROTOCOL, protocol.substring(7));
-                }
-
-                copyCommonFields(values, Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL, Data.DATA14);
-                break;
-            }
-
-            case android.provider.Contacts.KIND_POSTAL: {
-                copyCommonFields(values, StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
-                        StructuredPostal.LABEL, Data.DATA14);
-                OpenHelper.copyStringValue(mValues, StructuredPostal.FORMATTED_ADDRESS, values,
-                        ContactMethods.DATA);
-                break;
-            }
-        }
-
         Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
-    }
-
-    private void copyCommonFields(ContentValues values, String mimeType, String typeColumn,
-            String labelColumn, String auxDataColumn) {
-        mValues.put(Data.MIMETYPE, mimeType);
-        OpenHelper.copyLongValue(mValues, typeColumn, values, ContactMethods.TYPE);
-        OpenHelper.copyStringValue(mValues, labelColumn, values, ContactMethods.LABEL);
-        OpenHelper.copyStringValue(mValues, auxDataColumn, values, ContactMethods.AUX_DATA);
     }
 
     private long insertExtension(long rawContactId, ContentValues values) {
@@ -930,24 +847,14 @@ public class LegacyApiSupport {
         mValues.put(Data.RAW_CONTACT_ID, rawContactId);
         mValues.put(Data.MIMETYPE, android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE);
 
-        OpenHelper.copyStringValue(mValues, ExtensionsColumns.NAME,
-                values, android.provider.Contacts.People.Extensions.NAME);
-        OpenHelper.copyStringValue(mValues, ExtensionsColumns.VALUE,
-                values, android.provider.Contacts.People.Extensions.VALUE);
+        parseExtensionValues(values);
 
         Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
     }
 
     private long insertGroup(ContentValues values) {
-        mValues.clear();
-
-        OpenHelper.copyStringValue(mValues, Groups.TITLE,
-                values, android.provider.Contacts.Groups.NAME);
-        OpenHelper.copyStringValue(mValues, Groups.NOTES,
-                values, android.provider.Contacts.Groups.NOTES);
-        OpenHelper.copyStringValue(mValues, Groups.SYSTEM_ID,
-                values, android.provider.Contacts.Groups.SYSTEM_ID);
+        parseGroupValues(values);
 
         mValues.put(Groups.ACCOUNT_NAME, mAccount.name);
         mValues.put(Groups.ACCOUNT_TYPE, mAccount.type);
@@ -1028,12 +935,39 @@ public class LegacyApiSupport {
                 break;
             }
 
-            case PHOTOS:
-                // TODO
+            case ORGANIZATIONS:
+            case ORGANIZATIONS_ID: {
+                count = updateOrganizations(id, values);
                 break;
+            }
 
+            case PHONES:
+            case PHONES_ID: {
+                count = updatePhones(id, values);
+                break;
+            }
+
+            case CONTACTMETHODS:
+            case CONTACTMETHODS_ID: {
+                count = updateContactMethods(id, values);
+                break;
+            }
+
+            case EXTENSIONS:
+            case EXTENSIONS_ID: {
+                count = updateExtensions(id, values);
+                break;
+            }
+
+            case GROUPS:
+            case GROUPS_ID: {
+                count = updateGroups(id, values);
+                break;
+            }
+
+            case PHOTOS:
             case PHOTOS_ID:
-                // TODO
+                count = updatePhotoByDataId(id, values);
                 break;
         }
 
@@ -1041,11 +975,10 @@ public class LegacyApiSupport {
     }
 
     private int updatePeople(long rawContactId, ContentValues values) {
-        parsePeopleValues(values, mValues, mValues2, mValues3);
+        parsePeopleValues(values);
 
-        int count = mContactsProvider.update(
-                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
-                mValues, null, null);
+        int count = mContactsProvider.update(RawContacts.CONTENT_URI,
+                mValues, RawContacts._ID + "=" + rawContactId, null);
 
         if (count == 0) {
             return 0;
@@ -1072,6 +1005,64 @@ public class LegacyApiSupport {
         }
 
         return count;
+    }
+
+    private int updateOrganizations(long dataId, ContentValues values) {
+        parseOrganizationValues(values);
+
+        return mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
+                Data._ID + "=" + dataId, null);
+    }
+
+    private int updatePhones(long dataId, ContentValues values) {
+        parsePhoneValues(values);
+
+        return mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
+                Data._ID + "=" + dataId, null);
+    }
+
+    private int updateContactMethods(long dataId, ContentValues values) {
+        int kind;
+
+        mDataMimetypeQuery.bindLong(1, dataId);
+        long mimetype_id;
+        try {
+            mimetype_id = mDataMimetypeQuery.simpleQueryForLong();
+        } catch (SQLiteDoneException e) {
+            // Data row not found
+            return 0;
+        }
+
+        if (mimetype_id == mMimetypeEmail) {
+            kind = android.provider.Contacts.KIND_EMAIL;
+        } else if (mimetype_id == mMimetypeIm) {
+            kind = android.provider.Contacts.KIND_IM;
+        } else if (mimetype_id == mMimetypePostal) {
+            kind = android.provider.Contacts.KIND_POSTAL;
+        } else {
+
+            // Non-legacy kind: return "Not found"
+            return 0;
+        }
+
+        parseContactMethodValues(kind, values);
+
+        return mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
+                Data._ID + "=" + dataId, null);
+    }
+
+    private int updateExtensions(long dataId, ContentValues values) {
+        parseExtensionValues(values);
+
+        return mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
+                Data._ID + "=" + dataId, null);
+    }
+
+    private int updateGroups(long groupId, ContentValues values) {
+        parseGroupValues(values);
+
+        return mContactsProvider.updateInTransaction(Groups.CONTENT_URI, mValues,
+                Groups._ID + "=" + groupId, null);
     }
 
     private int updateContactTime(Uri uri, ContentValues values) {
@@ -1120,6 +1111,37 @@ public class LegacyApiSupport {
             count = mContactsProvider.updateInTransaction(dataUri, mValues, null, null);
         }
 
+        updateLegacyPhotoData(rawContactId, dataId, values);
+
+        return count;
+    }
+
+    private int updatePhotoByDataId(long dataId, ContentValues values) {
+
+        mDataRawContactIdQuery.bindLong(1, dataId);
+        long rawContactId;
+
+        try {
+            rawContactId = mDataRawContactIdQuery.simpleQueryForLong();
+        } catch (SQLiteDoneException e) {
+            // Data row not found
+            return 0;
+        }
+
+        if (values.containsKey(android.provider.Contacts.Photos.DATA)) {
+            byte[] bytes = values.getAsByteArray(android.provider.Contacts.Photos.DATA);
+            mValues.clear();
+            mValues.put(Photo.PHOTO, bytes);
+            mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
+                    Data._ID + "=" + dataId, null);
+        }
+
+        updateLegacyPhotoData(rawContactId, dataId, values);
+
+        return 1;
+    }
+
+    private void updateLegacyPhotoData(long rawContactId, long dataId, ContentValues values) {
         mValues.clear();
         OpenHelper.copyStringValue(mValues, LegacyPhotoData.LOCAL_VERSION,
                 values, android.provider.Contacts.Photos.LOCAL_VERSION);
@@ -1140,8 +1162,146 @@ public class LegacyApiSupport {
             mValues.put(LegacyPhotoData.PHOTO_DATA_ID, dataId);
             mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
         }
+    }
 
-        return count;
+    private void parsePeopleValues(ContentValues values) {
+        mValues.clear();
+        mValues2.clear();
+        mValues3.clear();
+
+        OpenHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
+                values, People.CUSTOM_RINGTONE);
+        OpenHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
+                values, People.SEND_TO_VOICEMAIL);
+        OpenHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
+                values, People.LAST_TIME_CONTACTED);
+        OpenHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
+                values, People.TIMES_CONTACTED);
+        OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
+                values, People.STARRED);
+        mValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
+        mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
+
+        if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
+            mValues2.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
+            OpenHelper.copyStringValue(mValues2, StructuredName.DISPLAY_NAME,
+                    values, People.NAME);
+            if (values.containsKey(People.PHONETIC_NAME)) {
+                String phoneticName = values.getAsString(People.PHONETIC_NAME);
+                NameSplitter.Name parsedName = new NameSplitter.Name();
+                mPhoneticNameSplitter.split(parsedName, phoneticName);
+                mValues2.put(StructuredName.PHONETIC_GIVEN_NAME, parsedName.getGivenNames());
+                mValues2.put(StructuredName.PHONETIC_MIDDLE_NAME, parsedName.getMiddleName());
+                mValues2.put(StructuredName.PHONETIC_FAMILY_NAME, parsedName.getFamilyName());
+            }
+        }
+
+        if (values.containsKey(People.NOTES)) {
+            mValues3.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
+            OpenHelper.copyStringValue(mValues3, Note.NOTE, values, People.NOTES);
+        }
+    }
+
+    private void parseOrganizationValues(ContentValues values) {
+        mValues.clear();
+
+        mValues.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
+
+        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
+                values, android.provider.Contacts.Organizations.ISPRIMARY);
+
+        OpenHelper.copyStringValue(mValues, Organization.COMPANY,
+                values, android.provider.Contacts.Organizations.COMPANY);
+
+        // TYPE values happen to remain the same between V1 and V2 - can just copy the value
+        OpenHelper.copyLongValue(mValues, Organization.TYPE,
+                values, android.provider.Contacts.Organizations.TYPE);
+
+        OpenHelper.copyStringValue(mValues, Organization.LABEL,
+                values, android.provider.Contacts.Organizations.LABEL);
+        OpenHelper.copyStringValue(mValues, Organization.TITLE,
+                values, android.provider.Contacts.Organizations.TITLE);
+    }
+
+    private void parsePhoneValues(ContentValues values) {
+        mValues.clear();
+
+        mValues.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+
+        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
+                values, android.provider.Contacts.Phones.ISPRIMARY);
+
+        OpenHelper.copyStringValue(mValues, Phone.NUMBER,
+                values, android.provider.Contacts.Phones.NUMBER);
+
+        // TYPE values happen to remain the same between V1 and V2 - can just copy the value
+        OpenHelper.copyLongValue(mValues, Phone.TYPE,
+                values, android.provider.Contacts.Phones.TYPE);
+
+        OpenHelper.copyStringValue(mValues, Phone.LABEL,
+                values, android.provider.Contacts.Phones.LABEL);
+    }
+
+    private void parseContactMethodValues(int kind, ContentValues values) {
+        mValues.clear();
+
+        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY, values, ContactMethods.ISPRIMARY);
+
+        switch (kind) {
+            case android.provider.Contacts.KIND_EMAIL: {
+                copyCommonFields(values, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL,
+                        Data.DATA14);
+                OpenHelper.copyStringValue(mValues, Email.DATA, values, ContactMethods.DATA);
+                break;
+            }
+
+            case android.provider.Contacts.KIND_IM: {
+                String protocol = values.getAsString(ContactMethods.DATA);
+                if (protocol.startsWith("pre:")) {
+                    mValues.put(Im.PROTOCOL, Integer.parseInt(protocol.substring(4)));
+                } else if (protocol.startsWith("custom:")) {
+                    mValues.put(Im.PROTOCOL, Im.PROTOCOL_CUSTOM);
+                    mValues.put(Im.CUSTOM_PROTOCOL, protocol.substring(7));
+                }
+
+                copyCommonFields(values, Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL, Data.DATA14);
+                break;
+            }
+
+            case android.provider.Contacts.KIND_POSTAL: {
+                copyCommonFields(values, StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
+                        StructuredPostal.LABEL, Data.DATA14);
+                OpenHelper.copyStringValue(mValues, StructuredPostal.FORMATTED_ADDRESS, values,
+                        ContactMethods.DATA);
+                break;
+            }
+        }
+    }
+
+    private void copyCommonFields(ContentValues values, String mimeType, String typeColumn,
+            String labelColumn, String auxDataColumn) {
+        mValues.put(Data.MIMETYPE, mimeType);
+        OpenHelper.copyLongValue(mValues, typeColumn, values, ContactMethods.TYPE);
+        OpenHelper.copyStringValue(mValues, labelColumn, values, ContactMethods.LABEL);
+        OpenHelper.copyStringValue(mValues, auxDataColumn, values, ContactMethods.AUX_DATA);
+    }
+
+    private void parseGroupValues(ContentValues values) {
+        mValues.clear();
+
+        OpenHelper.copyStringValue(mValues, Groups.TITLE,
+                values, android.provider.Contacts.Groups.NAME);
+        OpenHelper.copyStringValue(mValues, Groups.NOTES,
+                values, android.provider.Contacts.Groups.NOTES);
+        OpenHelper.copyStringValue(mValues, Groups.SYSTEM_ID,
+                values, android.provider.Contacts.Groups.SYSTEM_ID);
+    }
+
+    private void parseExtensionValues(ContentValues values) {
+        OpenHelper.copyStringValue(mValues, ExtensionsColumns.NAME,
+                values, android.provider.Contacts.People.Extensions.NAME);
+        OpenHelper.copyStringValue(mValues, ExtensionsColumns.VALUE,
+                values, android.provider.Contacts.People.Extensions.VALUE);
     }
 
     private Uri findFirstDataRow(long rawContactId, String contentItemType) {
@@ -1169,27 +1329,71 @@ public class LegacyApiSupport {
         return dataId;
     }
 
+
     public int delete(Uri uri, String selection, String[] selectionArgs) {
+        Cursor c = query(uri, IdQuery.COLUMNS, selection, selectionArgs, null, null);
+        if (c == null) {
+            return 0;
+        }
+
+        int count = 0;
+        try {
+            while (c.moveToNext()) {
+                long id = c.getLong(IdQuery._ID);
+                count += delete(uri, id);
+            }
+        } finally {
+            c.close();
+        }
+
+        return count;
+    }
+
+    public int delete(Uri uri, long id) {
         final int match = sUriMatcher.match(uri);
         int count = 0;
         switch (match) {
+            case PEOPLE:
             case PEOPLE_ID:
                 count = mContactsProvider.deleteRawContact(ContentUris.parseId(uri), false);
                 break;
 
+            case PEOPLE_PHOTO:
+                mValues.clear();
+                mValues.putNull(android.provider.Contacts.Photos.DATA);
+                updatePhoto(id, mValues);
+                break;
+
+            case ORGANIZATIONS:
             case ORGANIZATIONS_ID:
                 count = mContactsProvider.deleteData(ContentUris.parseId(uri),
                         ORGANIZATION_MIME_TYPES);
                 break;
 
+            case CONTACTMETHODS:
             case CONTACTMETHODS_ID:
                 count = mContactsProvider.deleteData(ContentUris.parseId(uri),
                         CONTACT_METHOD_MIME_TYPES);
                 break;
 
+
+            case PHONES:
             case PHONES_ID:
                 count = mContactsProvider.deleteData(ContentUris.parseId(uri),
                         PHONE_MIME_TYPES);
+                break;
+
+            case EXTENSIONS:
+            case EXTENSIONS_ID:
+                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
+                        EXTENSION_MIME_TYPES);
+                break;
+
+            case PHOTOS:
+            case PHOTOS_ID:
+                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
+                        PHOTO_MIME_TYPES);
+
                 break;
 
             default:
@@ -1418,6 +1622,20 @@ public class LegacyApiSupport {
                 qb.appendWhere(" AND " + android.provider.Contacts.Photos.PERSON_ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
                 limit = "1";
+                break;
+
+            case PHOTOS:
+                qb.setTables(LegacyTables.PHOTOS + " photos");
+                qb.setProjectionMap(sPhotoProjectionMap);
+                applyRawContactsAccount(qb);
+                break;
+
+            case PHOTOS_ID:
+                qb.setTables(LegacyTables.PHOTOS + " photos");
+                qb.setProjectionMap(sPhotoProjectionMap);
+                applyRawContactsAccount(qb);
+                qb.appendWhere(" AND " + android.provider.Contacts.Photos._ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
             case SEARCH_SUGGESTIONS:
