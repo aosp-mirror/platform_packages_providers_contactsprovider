@@ -2814,21 +2814,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         mDb.beginTransaction();
         try {
-            // Find all the accounts the contacts DB knows about, mark the ones that aren't in the
-            // valid set for deletion.
-            Cursor c = mDb.rawQuery("SELECT DISTINCT account_name, account_type from "
-                    + Tables.RAW_CONTACTS, null);
-            while (c.moveToNext()) {
-                if (c.getString(0) != null && c.getString(1) != null) {
-                    Account currAccount = new Account(c.getString(0), c.getString(1));
-                    if (!validAccounts.contains(currAccount)) {
-                        accountsToDelete.add(currAccount);
+            for (String table : new String[]{Tables.RAW_CONTACTS, Tables.GROUPS, Tables.SETTINGS}) {
+                // Find all the accounts the contacts DB knows about, mark the ones that aren't
+                // in the valid set for deletion.
+                Cursor c = mDb.rawQuery("SELECT DISTINCT account_name, account_type from "
+                        + table, null);
+                while (c.moveToNext()) {
+                    if (c.getString(0) != null && c.getString(1) != null) {
+                        Account currAccount = new Account(c.getString(0), c.getString(1));
+                        if (!validAccounts.contains(currAccount)) {
+                            accountsToDelete.add(currAccount);
+                        }
                     }
                 }
+                c.close();
             }
-            c.close();
 
             for (Account account : accountsToDelete) {
+                Log.d(TAG, "removing data for removed account " + account);
                 String[] params = new String[]{account.name, account.type};
                 mDb.execSQL("DELETE FROM " + Tables.GROUPS
                         + " WHERE account_name = ? AND account_type = ?", params);
@@ -2837,6 +2840,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS
                         + " WHERE account_name = ? AND account_type = ?)", params);
                 mDb.execSQL("DELETE FROM " + Tables.RAW_CONTACTS
+                        + " WHERE account_name = ? AND account_type = ?", params);
+                mDb.execSQL("DELETE FROM " + Tables.SETTINGS
                         + " WHERE account_name = ? AND account_type = ?", params);
             }
             mOpenHelper.getSyncState().onAccountsChanged(mDb, accounts);
