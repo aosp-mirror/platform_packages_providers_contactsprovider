@@ -1001,9 +1001,9 @@ public class LegacyContactImporter {
             if (!TextUtils.isEmpty(account)) {
                 String syncId = c.getString(GroupMembershipQuery.GROUP_SYNC_ID);
 
-                Cursor cursor = mContactsProvider.query(Groups.CONTENT_URI,
+                Cursor cursor = mTargetDb.query(Tables.GROUPS,
                         new String[]{Groups._ID}, Groups.SOURCE_ID + "=?", new String[]{syncId},
-                        null);
+                        null, null, null);
                 try {
                     if (cursor.moveToFirst()) {
                         groupId = cursor.getLong(0);
@@ -1018,8 +1018,7 @@ public class LegacyContactImporter {
                     values.put(Groups.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
                     values.put(Groups.GROUP_VISIBLE, true);
                     values.put(Groups.SOURCE_ID, syncId);
-                    Uri groupUri = mContactsProvider.insert(Groups.CONTENT_URI, values);
-                    groupId = ContentUris.parseId(groupUri);
+                    groupId = mTargetDb.insert(Tables.GROUPS, null, values);
                 }
             }
         } else {
