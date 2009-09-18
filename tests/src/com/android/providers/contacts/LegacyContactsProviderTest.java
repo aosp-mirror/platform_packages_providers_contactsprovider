@@ -171,6 +171,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     public void testPrimaryPhone() {
         ContentValues values = new ContentValues();
+        putContactValuesExceptName(values);
+
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
 
@@ -193,6 +195,11 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(People.PRIMARY_PHONE_ID, ContentUris.parseId(phoneUri1));
         values.put(People.DISPLAY_NAME, "12345");
         assertStoredValues(personUri, values);
+
+        values.clear();
+        putContactValuesExceptName(values);
+        values.put(People.PRIMARY_PHONE_ID, ContentUris.parseId(phoneUri1));
+        assertStoredValues(phoneUri2, values);
 
         // Remove the primary phone number
         mResolver.delete(phoneUri1, null, null);
@@ -235,6 +242,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     public void testPrimaryEmail() {
         ContentValues values = new ContentValues();
+        putContactValuesExceptName(values);
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
         long personId = ContentUris.parseId(personUri);
 
@@ -259,6 +267,11 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(People.PRIMARY_EMAIL_ID, ContentUris.parseId(emailUri1));
         values.put(People.DISPLAY_NAME, "foo@acme.com");
         assertStoredValues(personUri, values);
+
+        values.clear();
+        putContactValuesExceptName(values);
+        values.put(People.PRIMARY_EMAIL_ID, ContentUris.parseId(emailUri1));
+        assertStoredValues(emailUri2, values);
 
         // Remove the primary email
         mResolver.delete(emailUri1, null, null);
@@ -749,8 +762,12 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
     }
 
     private void putContactValues(ContentValues values) {
-        // Populating only unhidden columns
+        putContactValuesExceptName(values);
         values.put(People.NAME, "Deer Dough");
+    }
+
+    private void putContactValuesExceptName(ContentValues values) {
+        // Populating only unhidden columns
         values.put(People.PHONETIC_NAME, "Dear Doe");
         values.put(People.NOTES, "Cash Cow");
         values.put(People.TIMES_CONTACTED, 3);
