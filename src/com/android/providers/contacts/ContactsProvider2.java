@@ -138,7 +138,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final String STREQUENT_ORDER_BY = Contacts.STARRED + " DESC, "
             + Contacts.TIMES_CONTACTED + " DESC, "
-            + Contacts.DISPLAY_NAME + " ASC";
+            + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
     private static final String STREQUENT_LIMIT =
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
             + Contacts.STARRED + "=1) + 25";
