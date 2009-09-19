@@ -158,6 +158,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.TIMES_CONTACTED, 54321);
         values.put(Contacts.STARRED, 1);
 
+        assertStoredValues(ContentUris.withAppendedId(Phone.CONTENT_URI, phoneId), values);
         assertSelection(Phone.CONTENT_URI, values, Data._ID, phoneId);
     }
 
@@ -281,6 +282,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.TIMES_CONTACTED, 54321);
         values.put(Contacts.STARRED, 1);
 
+        assertStoredValues(ContentUris.withAppendedId(Email.CONTENT_URI, emailId), values);
         assertSelection(Email.CONTENT_URI, values, Data._ID, emailId);
     }
 
@@ -346,6 +348,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(StructuredPostal.FORMATTED_ADDRESS, "1600 Amphiteatre Ave, Mountain View");
         values.put(Contacts.DISPLAY_NAME, "Alice Nextore");
 
+        assertStoredValues(ContentUris.withAppendedId(StructuredPostal.CONTENT_URI, dataId),
+                values);
         assertSelection(StructuredPostal.CONTENT_URI, values, Data._ID, dataId);
     }
 
