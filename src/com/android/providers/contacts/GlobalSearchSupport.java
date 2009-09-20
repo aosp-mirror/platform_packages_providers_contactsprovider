@@ -101,7 +101,9 @@ public class GlobalSearchSupport {
             DataColumns.CONCRETE_ID + " AS data_id",
             MimetypesColumns.MIMETYPE,
             Data.IS_SUPER_PRIMARY,
-            Data.DATA2,
+            Organization.COMPANY,
+            Email.DATA,
+            Phone.NUMBER,
             Contacts.PHOTO_ID,
         };
 
@@ -111,8 +113,10 @@ public class GlobalSearchSupport {
         public static final int DATA_ID = 3;
         public static final int MIMETYPE = 4;
         public static final int IS_SUPER_PRIMARY = 5;
-        public static final int DATA2 = 6;
-        public static final int PHOTO_ID = 7;
+        public static final int ORGANIZATION = 6;
+        public static final int EMAIL = 7;
+        public static final int PHONE = 8;
+        public static final int PHOTO_ID = 9;
     }
 
     private static class SearchSuggestion {
@@ -330,15 +334,15 @@ public class GlobalSearchSupport {
                     suggestion.titleIsName = true;
                 } else if (Organization.CONTENT_ITEM_TYPE.equals(mimetype)) {
                     if (isSuperPrimary || suggestion.organization == null) {
-                        suggestion.organization = c.getString(SearchSuggestionQuery.DATA2);
+                        suggestion.organization = c.getString(SearchSuggestionQuery.ORGANIZATION);
                     }
                 } else if (Email.CONTENT_ITEM_TYPE.equals(mimetype)) {
                     if (isSuperPrimary || suggestion.email == null) {
-                        suggestion.email = c.getString(SearchSuggestionQuery.DATA2);
+                        suggestion.email = c.getString(SearchSuggestionQuery.EMAIL);
                     }
                 } else if (Phone.CONTENT_ITEM_TYPE.equals(mimetype)) {
                     if (isSuperPrimary || suggestion.phoneNumber == null) {
-                        suggestion.phoneNumber = c.getString(SearchSuggestionQuery.DATA2);
+                        suggestion.phoneNumber = c.getString(SearchSuggestionQuery.PHONE);
                     }
                 }
 

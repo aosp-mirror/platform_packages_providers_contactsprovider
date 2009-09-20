@@ -16,10 +16,12 @@
 package com.android.providers.contacts;
 
 import android.content.ContentUris;
+import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -172,6 +174,55 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "helene bjorn", null);
 
         assertAggregated(rawContactId1, rawContactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
+    }
+
+    public void testAggregationOfNumericNames() {
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "123", null);
+
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "1-2-3", null);
+
+        assertAggregated(rawContactId1, rawContactId2, "1-2-3");
+    }
+
+    public void testAggregationOfInconsistentlyParsedNames() {
+        long rawContactId1 = createRawContact();
+
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "604 Arizona Ave");
+        values.put(StructuredName.GIVEN_NAME, "604");
+        values.put(StructuredName.MIDDLE_NAME, "Arizona");
+        values.put(StructuredName.FAMILY_NAME, "Ave");
+        insertStructuredName(rawContactId1, values);
+
+        long rawContactId2 = createRawContact();
+        values.clear();
+        values.put(StructuredName.DISPLAY_NAME, "604 Arizona Ave");
+        values.put(StructuredName.GIVEN_NAME, "604");
+        values.put(StructuredName.FAMILY_NAME, "Arizona Ave");
+        insertStructuredName(rawContactId2, values);
+
+        assertAggregated(rawContactId1, rawContactId2, "604 Arizona Ave");
+    }
+
+    public void testAggregationBasedOnMiddleName() {
+        ContentValues values = new ContentValues();
+        long rawContactId1 = createRawContact();
+        values.put(StructuredName.GIVEN_NAME, "John");
+        values.put(StructuredName.GIVEN_NAME, "Abigale");
+        values.put(StructuredName.FAMILY_NAME, "James");
+
+        insertStructuredName(rawContactId1, values);
+
+        long rawContactId2 = createRawContact();
+        values.clear();
+        values.put(StructuredName.GIVEN_NAME, "John");
+        values.put(StructuredName.GIVEN_NAME, "Marie");
+        values.put(StructuredName.FAMILY_NAME, "James");
+        insertStructuredName(rawContactId2, values);
+
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberNoNameData() {
