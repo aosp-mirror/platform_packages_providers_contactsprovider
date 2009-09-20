@@ -470,6 +470,8 @@ import java.util.HashMap;
 
     private static OpenHelper sSingleton = null;
 
+    private boolean mUseStrictPhoneNumberComparation;
+
     public static synchronized OpenHelper getInstance(Context context) {
         if (sSingleton == null) {
             sSingleton = new OpenHelper(context);
@@ -487,6 +489,9 @@ import java.util.HashMap;
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
+        mUseStrictPhoneNumberComparation =
+            context.getResources().getBoolean(
+                    com.android.internal.R.bool.config_use_strict_phone_number_comparation);
     }
 
     @Override
@@ -1555,7 +1560,7 @@ import java.util.HashMap;
         sb.append(normalizedNumber);
         sb.append("*' AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
         DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(")");
+        sb.append(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
 
         qb.appendWhere(sb.toString());
     }
@@ -1599,7 +1604,7 @@ import java.util.HashMap;
         sb.append("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id"
                 + " AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
         DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(")");
+        sb.append(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
     }
 
     /**

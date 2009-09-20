@@ -69,6 +69,7 @@ public class CallLogProvider extends ContentProvider {
 
     private OpenHelper mOpenHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
+    private boolean mUseStrictPhoneNumberComparation;
 
     @Override
     public boolean onCreate() {
@@ -77,6 +78,10 @@ public class CallLogProvider extends ContentProvider {
         mOpenHelper = getOpenHelper(context);
         SQLiteDatabase db = mOpenHelper.getWritableDatabase();
         mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
+
+        mUseStrictPhoneNumberComparation =
+            context.getResources().getBoolean(
+                    com.android.internal.R.bool.config_use_strict_phone_number_comparation);
 
         return true;
     }
@@ -112,7 +117,7 @@ public class CallLogProvider extends ContentProvider {
                 String phoneNumber = uri.getPathSegments().get(2);
                 qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ");
                 qb.appendWhereEscapeString(phoneNumber);
-                qb.appendWhere(")");
+                qb.appendWhere(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
                 break;
             }
 
