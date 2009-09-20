@@ -183,9 +183,13 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
     private int mIndexPhonesNumber;
     private int mIndexPhonesNumberKey;
     private int mIndexPhonesIsPrimary;
+    private boolean mUseStrictPhoneNumberComparation;
 
     public ContactsProvider() {
         super(DATABASE_NAME, DATABASE_VERSION, Contacts.CONTENT_URI);
+        mUseStrictPhoneNumberComparation =
+            getContext().getResources().getBoolean(
+                    com.android.internal.R.bool.config_use_strict_phone_number_comparation);
     }
 
     @Override
@@ -1237,7 +1241,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 qb.setTables(subQuery.toString());
                 qb.appendWhere("phones.person=people._id AND PHONE_NUMBERS_EQUAL(phones.number, ");
                 qb.appendWhereEscapeString(phoneNumber);
-                qb.appendWhere(")");
+                qb.appendWhere(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
                 qb.setProjectionMap(sPhonesProjectionMap);
                 break;
             }
@@ -1322,7 +1326,7 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 String phoneNumber = url.getPathSegments().get(2);
                 qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ");
                 qb.appendWhereEscapeString(phoneNumber);
-                qb.appendWhere(")");
+                qb.appendWhere(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
                 notificationUri = CallLog.CONTENT_URI;
                 break;
             }
