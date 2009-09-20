@@ -161,11 +161,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
     private static final int PHONES = 3002;
-    private static final int PHONES_FILTER = 3003;
-    private static final int EMAILS = 3004;
-    private static final int EMAILS_LOOKUP = 3005;
-    private static final int EMAILS_FILTER = 3006;
-    private static final int POSTALS = 3007;
+    private static final int PHONES_ID = 3003;
+    private static final int PHONES_FILTER = 3004;
+    private static final int EMAILS = 3005;
+    private static final int EMAILS_ID = 3006;
+    private static final int EMAILS_LOOKUP = 3007;
+    private static final int EMAILS_FILTER = 3008;
+    private static final int POSTALS = 3009;
+    private static final int POSTALS_ID = 3010;
 
     private static final int PHONE_LOOKUP = 4000;
 
@@ -363,13 +366,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones", PHONES);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/#", PHONES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails", EMAILS);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/#", EMAILS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup/*", EMAILS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
         matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
@@ -2313,7 +2319,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         callerIsSyncAdapter);
             }
 
-            case DATA_ID: {
+            case DATA_ID:
+            case PHONES_ID:
+            case EMAILS_ID:
+            case POSTALS_ID: {
                 long dataId = ContentUris.parseId(uri);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 return deleteData(Data._ID + "=" + dataId, null, callerIsSyncAdapter);
@@ -2504,7 +2513,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case DATA_ID: {
+            case DATA_ID:
+            case PHONES_ID:
+            case EMAILS_ID:
+            case POSTALS_ID: {
                 count = updateData(uri, values, selection, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
@@ -2816,6 +2828,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         mDb.beginTransaction();
         try {
+
             for (String table : new String[]{Tables.RAW_CONTACTS, Tables.GROUPS, Tables.SETTINGS}) {
                 // Find all the accounts the contacts DB knows about, mark the ones that aren't
                 // in the valid set for deletion.
@@ -3020,6 +3033,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case PHONES_ID: {
+                qb.setTables(mOpenHelper.getDataView());
+                qb.setProjectionMap(sDataProjectionMap);
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
+                break;
+            }
+
             case PHONES_FILTER: {
                 qb.setTables(mOpenHelper.getDataView());
                 qb.setProjectionMap(sDistinctDataProjectionMap);
@@ -3063,6 +3085,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.setProjectionMap(sDataProjectionMap);
                 appendAccountFromParameter(qb, uri);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                break;
+            }
+
+            case EMAILS_ID: {
+                qb.setTables(mOpenHelper.getDataView());
+                qb.setProjectionMap(sDataProjectionMap);
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
                 break;
             }
 
@@ -3110,6 +3141,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 appendAccountFromParameter(qb, uri);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
                         + StructuredPostal.CONTENT_ITEM_TYPE + "'");
+                break;
+            }
+
+            case POSTALS_ID: {
+                qb.setTables(mOpenHelper.getDataView());
+                qb.setProjectionMap(sDataProjectionMap);
+                appendAccountFromParameter(qb, uri);
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
+                        + StructuredPostal.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
                 break;
             }
 
@@ -4095,6 +4136,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return RawContacts.CONTENT_ITEM_TYPE;
             case DATA_ID:
                 return mOpenHelper.getDataMimeType(ContentUris.parseId(uri));
+            case PHONES:
+                return Phone.CONTENT_TYPE;
+            case PHONES_ID:
+                return Phone.CONTENT_ITEM_TYPE;
+            case EMAILS:
+                return Email.CONTENT_TYPE;
+            case EMAILS_ID:
+                return Email.CONTENT_ITEM_TYPE;
+            case POSTALS:
+                return StructuredPostal.CONTENT_TYPE;
+            case POSTALS_ID:
+                return StructuredPostal.CONTENT_ITEM_TYPE;
             case AGGREGATION_EXCEPTIONS:
                 return AggregationExceptions.CONTENT_TYPE;
             case AGGREGATION_EXCEPTION_ID:
