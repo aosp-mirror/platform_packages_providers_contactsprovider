@@ -829,6 +829,34 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testContactVisibilityUpdateOnMembershipChange() {
+        long rawContactId = createRawContact(mAccount);
+        assertVisibility(rawContactId, "0");
+
+        long visibleGroupId = createGroup(mAccount, "123", "Visible", 1);
+        long invisibleGroupId = createGroup(mAccount, "567", "Invisible", 0);
+
+        Uri membership1 = insertGroupMembership(rawContactId, visibleGroupId);
+        assertVisibility(rawContactId, "1");
+
+        Uri membership2 = insertGroupMembership(rawContactId, invisibleGroupId);
+        assertVisibility(rawContactId, "1");
+
+        mResolver.delete(membership1, null, null);
+        assertVisibility(rawContactId, "0");
+
+        ContentValues values = new ContentValues();
+        values.put(GroupMembership.GROUP_ROW_ID, visibleGroupId);
+
+        mResolver.update(membership2, values, null, null);
+        assertVisibility(rawContactId, "1");
+    }
+
+    private void assertVisibility(long rawContactId, String expectedValue) {
+        assertStoredValue(Contacts.CONTENT_URI, Contacts._ID + "=" + queryContactId(rawContactId),
+                null, Contacts.IN_VISIBLE_GROUP, expectedValue);
+    }
+
     public void testContentEntityIterator() throws RemoteException {
         // create multiple contacts and check that the selected ones are returned
         long id;

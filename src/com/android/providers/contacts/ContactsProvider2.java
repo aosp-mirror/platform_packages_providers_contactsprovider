@@ -1338,7 +1338,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             resolveGroupSourceIdInValues(rawContactId, db, values, true);
-            return super.insert(db, rawContactId, values);
+            long dataId = super.insert(db, rawContactId, values);
+            updateVisibility(rawContactId);
+            return dataId;
         }
 
         @Override
@@ -1347,6 +1349,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             resolveGroupSourceIdInValues(rawContactId, db, values, false);
             super.update(db, values, c, callerIsSyncAdapter);
+            updateVisibility(rawContactId);
+        }
+
+        @Override
+        public int delete(SQLiteDatabase db, Cursor c) {
+            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
+            int count = super.delete(db, c);
+            updateVisibility(rawContactId);
+            return count;
+        }
+
+        private void updateVisibility(long rawContactId) {
+            long contactId = mOpenHelper.getContactId(rawContactId);
+            if (contactId != 0) {
+                mOpenHelper.updateContactVisible(contactId);
+            }
         }
 
         private void resolveGroupSourceIdInValues(long rawContactId, SQLiteDatabase db,
