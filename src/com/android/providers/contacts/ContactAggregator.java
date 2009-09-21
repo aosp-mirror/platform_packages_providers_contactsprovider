@@ -55,6 +55,7 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 
 
@@ -118,6 +119,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         };
 
         int CONTACT_ID = 0;
+    }
+
+    private interface ContactIdQuery {
+        String TABLE = Tables.CONTACTS;
+
+        String[] COLUMNS = new String[] {
+            Contacts._ID
+        };
+
+        int _ID = 0;
     }
 
     private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
@@ -1415,22 +1426,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Finds matching contacts and returns a cursor on those.
      */
     public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb, String[] projection,
-            long contactId, int maxSuggestions) {
+            long contactId, int maxSuggestions, String filter) {
         final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
-        Cursor c;
-
-        // If this method is called in the middle of aggregation pass, we want to pause the
-        // aggregation, but not kill it.
-        db.beginTransaction();
-        try {
-            List<MatchScore> bestMatches = findMatchingContacts(db, contactId, maxSuggestions);
-            c = queryMatchingContacts(qb, db, contactId, projection, bestMatches);
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-        }
-        return c;
+        List<MatchScore> bestMatches = findMatchingContacts(db, contactId);
+        return queryMatchingContacts(qb, db, contactId, projection, bestMatches, maxSuggestions,
+                filter);
     }
 
     /**
@@ -1438,23 +1439,68 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * supplied list.
      */
     private Cursor queryMatchingContacts(SQLiteQueryBuilder qb, SQLiteDatabase db, long contactId,
-            String[] projection, List<MatchScore> bestMatches) {
+            String[] projection, List<MatchScore> bestMatches, int maxSuggestions, String filter) {
 
-        StringBuilder selection = new StringBuilder();
-        selection.append(Contacts._ID);
-        selection.append(" IN (");
+        StringBuilder sb = new StringBuilder();
+        sb.append(Contacts._ID);
+        sb.append(" IN (");
         for (int i = 0; i < bestMatches.size(); i++) {
             MatchScore matchScore = bestMatches.get(i);
             if (i != 0) {
-                selection.append(",");
+                sb.append(",");
             }
-            selection.append(matchScore.getContactId());
+            sb.append(matchScore.getContactId());
         }
-        selection.append(")");
+        sb.append(")");
 
-        final Cursor cursor = qb.query(db, projection, selection.toString(), null, null, null,
-                Contacts._ID);
+        if (!TextUtils.isEmpty(filter)) {
+            sb.append(" AND " + Contacts._ID + " IN ");
+            mContactsProvider.appendContactFilterAsNestedQuery(sb, filter);
+        }
 
+        // Run a query and find ids of best matching contacts satisfying the filter (if any)
+        HashSet<Long> foundIds = new HashSet<Long>();
+        Cursor cursor = db.query(ContactIdQuery.TABLE, ContactIdQuery.COLUMNS, sb.toString(),
+                null, null, null, null);
+        try {
+            while(cursor.moveToNext()) {
+                foundIds.add(cursor.getLong(ContactIdQuery._ID));
+            }
+        } finally {
+            cursor.close();
+        }
+
+        // Exclude all contacts that did not match the filter
+        Iterator<MatchScore> iter = bestMatches.iterator();
+        while (iter.hasNext()) {
+            long id = iter.next().getContactId();
+            if (!foundIds.contains(id)) {
+                iter.remove();
+            }
+        }
+
+        // Limit the number of returned suggestions
+        if (bestMatches.size() > maxSuggestions) {
+            bestMatches = bestMatches.subList(0, maxSuggestions);
+        }
+
+        // Build an in-clause with the remaining contact IDs
+        sb.setLength(0);
+        sb.append(Contacts._ID);
+        sb.append(" IN (");
+        for (int i = 0; i < bestMatches.size(); i++) {
+            MatchScore matchScore = bestMatches.get(i);
+            if (i != 0) {
+                sb.append(",");
+            }
+            sb.append(matchScore.getContactId());
+        }
+        sb.append(")");
+
+        // Run the final query with the required projection and contact IDs found by the first query
+        cursor = qb.query(db, projection, sb.toString(), null, null, null, Contacts._ID);
+
+        // Build a sorted list of discovered IDs
         ArrayList<Long> sortedContactIds = new ArrayList<Long>(bestMatches.size());
         for (MatchScore matchScore : bestMatches) {
             sortedContactIds.add(matchScore.getContactId());
@@ -1462,6 +1508,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         Collections.sort(sortedContactIds);
 
+        // Map cursor indexes according to the descending order of match scores
         int[] positionMap = new int[bestMatches.size()];
         for (int i = 0; i < positionMap.length; i++) {
             long id = bestMatches.get(i).getContactId();
@@ -1475,8 +1522,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Finds contacts with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
      */
-    private List<MatchScore> findMatchingContacts(final SQLiteDatabase db,
-            long contactId, int maxSuggestions) {
+    private List<MatchScore> findMatchingContacts(final SQLiteDatabase db, long contactId) {
 
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
@@ -1496,11 +1542,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
 
-        List<MatchScore> matches = matcher.pickBestMatches(maxSuggestions,
-                ContactMatcher.SCORE_THRESHOLD_SUGGEST);
-
-        // TODO: remove the debug logging
-        Log.i(TAG, "MATCHES: " + matches);
-        return matches;
+        return matcher.pickBestMatches(ContactMatcher.SCORE_THRESHOLD_SUGGEST);
     }
 }

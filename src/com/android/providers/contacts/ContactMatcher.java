@@ -390,9 +390,9 @@ public class ContactMatcher {
     }
 
     /**
-     * Returns up to {@code maxSuggestions} best scoring matches.
+     * Returns matches in the order of descending score.
      */
-    public List<MatchScore> pickBestMatches(int maxSuggestions, int threshold) {
+    public List<MatchScore> pickBestMatches(int threshold) {
         int scaledThreshold = threshold * SCORE_SCALE;
         List<MatchScore> matches = mScoreList.subList(0, mScoreCount);
         Collections.sort(matches);
@@ -404,10 +404,6 @@ public class ContactMatcher {
             } else {
                 break;
             }
-        }
-
-        if (count > maxSuggestions) {
-            count = maxSuggestions;
         }
 
         return matches.subList(0, count);
