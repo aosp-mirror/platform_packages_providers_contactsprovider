@@ -16,13 +16,12 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.text.TextUtils;
 
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.StringTokenizer;
-
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-import android.text.TextUtils;
 
 /**
  * The purpose of this class is to split a full name into given names and last
@@ -40,6 +39,8 @@ import android.text.TextUtils;
  * </ol>
  */
 public class NameSplitter {
+
+    public static final int MAX_TOKENS = 10;
 
     private final HashSet<String> mPrefixesSet;
     private final HashSet<String> mSuffixesSet;
@@ -105,7 +106,6 @@ public class NameSplitter {
     }
 
     private static class NameTokenizer extends StringTokenizer {
-        private static final int MAX_TOKENS = 10;
         private final String[] mTokens;
         private int mDotBitmask;
         private int mStartPointer;
@@ -189,6 +189,33 @@ public class NameSplitter {
         }
         return set;
     }
+
+    /**
+     * Parses a full name and returns components as a list of tokens.
+     */
+    public int tokenize(String[] tokens, String fullName) {
+        if (fullName == null) {
+            return 0;
+        }
+
+        NameTokenizer tokenizer = new NameTokenizer(fullName);
+
+        if (tokenizer.mStartPointer == tokenizer.mEndPointer) {
+            return 0;
+        }
+
+        String firstToken = tokenizer.mTokens[tokenizer.mStartPointer];
+        if (mPrefixesSet.contains(firstToken.toUpperCase())) {
+           tokenizer.mStartPointer++;
+        }
+        int count = 0;
+        for (int i = tokenizer.mStartPointer; i < tokenizer.mEndPointer; i++) {
+            tokens[count++] = tokenizer.mTokens[i];
+        }
+
+        return count;
+    }
+
 
     /**
      * Parses a full name and returns parsed components in the Name object.

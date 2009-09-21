@@ -45,7 +45,7 @@ public class NameNormalizer {
      * of names.  It ignores non-letter characters and removes accents.
      */
     public static String normalize(String name) {
-        return Hex.encodeHex(sCompressingCollator.getSortKey(lettersOnly(name)), true);
+        return Hex.encodeHex(sCompressingCollator.getSortKey(lettersAndDigitsOnly(name)), true);
     }
 
     /**
@@ -53,7 +53,8 @@ public class NameNormalizer {
      * of mixed case characters, accents and, if all else is equal, length.
      */
     public static int compareComplexity(String name1, String name2) {
-        int diff = sComplexityCollator.compare(lettersOnly(name1), lettersOnly(name2));
+        int diff = sComplexityCollator.compare(lettersAndDigitsOnly(name1),
+                lettersAndDigitsOnly(name2));
         if (diff != 0) {
             return diff;
         }
@@ -64,12 +65,12 @@ public class NameNormalizer {
     /**
      * Returns a string containing just the letters from the original string.
      */
-    private static String lettersOnly(String name) {
+    private static String lettersAndDigitsOnly(String name) {
         char[] letters = name.toCharArray();
         int length = 0;
         for (int i = 0; i < letters.length; i++) {
             final char c = letters[i];
-            if (Character.isLetter(c)) {
+            if (Character.isLetterOrDigit(c)) {
                 letters[length++] = c;
             }
         }

@@ -28,6 +28,7 @@ import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupColumns;
 import com.android.providers.contacts.OpenHelper.NameLookupType;
+import com.android.providers.contacts.OpenHelper.NicknameLookupColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
 import com.android.providers.contacts.OpenHelper.PresenceColumns;
@@ -92,12 +93,15 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
+import android.text.util.Rfc822Token;
+import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.ref.SoftReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -235,13 +239,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public static final String[] COLUMNS = new String[] {
             MimetypesColumns.MIMETYPE,
             Data.IS_PRIMARY,
-            Data.DATA2,
+            Data.DATA1,
             StructuredName.DISPLAY_NAME,
         };
 
         public static final int MIMETYPE = 0;
         public static final int IS_PRIMARY = 1;
-        public static final int DATA2 = 2;
+        public static final int DATA1 = 2;
         public static final int DISPLAY_NAME = 3;
     }
 
@@ -253,7 +257,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             MimetypesColumns.MIMETYPE,
             Data.RAW_CONTACT_ID,
             Data.IS_PRIMARY,
-            Data.DATA2,
+            Data.DATA1,
         };
 
         public static final String[] COLUMNS = new String[] {
@@ -261,14 +265,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             MimetypesColumns.MIMETYPE,
             Data.RAW_CONTACT_ID,
             Data.IS_PRIMARY,
-            Data.DATA2,
+            Data.DATA1,
         };
 
         public static final int _ID = 0;
         public static final int MIMETYPE = 1;
         public static final int RAW_CONTACT_ID = 2;
         public static final int IS_PRIMARY = 3;
-        public static final int DATA2 = 4;
+        public static final int DATA1 = 4;
     }
 
     private interface DataUpdateQuery {
@@ -277,6 +281,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int _ID = 0;
         int RAW_CONTACT_ID = 1;
         int MIMETYPE = 2;
+    }
+
+
+    private interface NicknameLookupQuery {
+        String TABLE = Tables.NICKNAME_LOOKUP;
+
+        String[] COLUMNS = new String[] {
+            NicknameLookupColumns.CLUSTER
+        };
+
+        int CLUSTER = 0;
     }
 
     private static final HashMap<String, Integer> sDisplayNameSources;
@@ -341,6 +356,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mAggregatedPresenceReplace;
     /** Precompiled sql statement for updating an aggregated presence status */
     private SQLiteStatement mAggregatedPresenceStatusUpdate;
+    private SQLiteStatement mNameLookupInsert;
+    private SQLiteStatement mNameLookupDelete;
 
     static {
         // Contacts URI matching table
@@ -784,7 +801,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             try {
                 while (c.moveToNext()) {
                     long dataId = c.getLong(DataDeleteQuery._ID);
-                    int type = c.getInt(DataDeleteQuery.DATA2);
+                    int type = c.getInt(DataDeleteQuery.DATA1);
                     if (primaryType == -1 || getTypeRank(type) < getTypeRank(primaryType)) {
                         primaryId = dataId;
                         primaryType = type;
@@ -827,7 +844,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         name = c.getString(DisplayNameQuery.DISPLAY_NAME);
                         primary = true;
                     } else {
-                        name = c.getString(DisplayNameQuery.DATA2);
+                        name = c.getString(DisplayNameQuery.DATA1);
                         primary = (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
                     }
 
@@ -901,10 +918,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             long dataId = super.insert(db, rawContactId, values);
 
-            String givenName = values.getAsString(StructuredName.GIVEN_NAME);
-            String familyName = values.getAsString(StructuredName.FAMILY_NAME);
-            mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
-                    familyName);
+            String name = values.getAsString(StructuredName.DISPLAY_NAME);
+            insertNameLookupForStructuredName(rawContactId, dataId, name);
             fixRawContactDisplayName(db, rawContactId);
             return dataId;
         }
@@ -920,14 +935,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             super.update(db, values, c, callerIsSyncAdapter);
 
-            boolean hasGivenName = values.containsKey(StructuredName.GIVEN_NAME);
-            boolean hasFamilyName = values.containsKey(StructuredName.FAMILY_NAME);
-            if (hasGivenName || hasFamilyName) {
-                String givenName = augmented.getAsString(StructuredName.GIVEN_NAME);
-                String familyName = augmented.getAsString(StructuredName.FAMILY_NAME);
-                mOpenHelper.deleteNameLookup(dataId);
-                mOpenHelper.insertNameLookupForStructuredName(rawContactId, dataId, givenName,
-                        familyName);
+            if (values.containsKey(StructuredName.DISPLAY_NAME)) {
+                String name = values.getAsString(StructuredName.DISPLAY_NAME);
+                deleteNameLookup(dataId);
+                insertNameLookupForStructuredName(rawContactId, dataId, name);
             }
             fixRawContactDisplayName(db, rawContactId);
         }
@@ -939,7 +950,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             int count = super.delete(db, c);
 
-            mOpenHelper.deleteNameLookup(dataId);
+            deleteNameLookup(dataId);
             fixRawContactDisplayName(db, rawContactId);
             return count;
         }
@@ -1138,7 +1149,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = super.insert(db, rawContactId, values);
 
             fixRawContactDisplayName(db, rawContactId);
-            mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
+            insertNameLookupForEmail(rawContactId, dataId, address);
             return dataId;
         }
 
@@ -1151,8 +1162,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             super.update(db, values, c, callerIsSyncAdapter);
 
-            mOpenHelper.deleteNameLookup(dataId);
-            mOpenHelper.insertNameLookupForEmail(rawContactId, dataId, address);
+            deleteNameLookup(dataId);
+            insertNameLookupForEmail(rawContactId, dataId, address);
             fixRawContactDisplayName(db, rawContactId);
         }
 
@@ -1163,7 +1174,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             int count = super.delete(db, c);
 
-            mOpenHelper.deleteNameLookup(dataId);
+            deleteNameLookup(dataId);
             fixRawContactDisplayName(db, rawContactId);
             return count;
         }
@@ -1193,7 +1204,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = super.insert(db, rawContactId, values);
 
             fixRawContactDisplayName(db, rawContactId);
-            mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
+            insertNameLookupForNickname(rawContactId, dataId, nickname);
             return dataId;
         }
 
@@ -1206,8 +1217,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             super.update(db, values, c, callerIsSyncAdapter);
 
-            mOpenHelper.deleteNameLookup(dataId);
-            mOpenHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
+            deleteNameLookup(dataId);
+            insertNameLookupForNickname(rawContactId, dataId, nickname);
             fixRawContactDisplayName(db, rawContactId);
         }
 
@@ -1218,7 +1229,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             int count = super.delete(db, c);
 
-            mOpenHelper.deleteNameLookup(dataId);
+            deleteNameLookup(dataId);
             fixRawContactDisplayName(db, rawContactId);
             return count;
         }
@@ -1415,6 +1426,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private OpenHelper mOpenHelper;
 
     private NameSplitter mNameSplitter;
+    private NameLookupBuilder mNameLookupBuilder;
+    private HashMap<String, SoftReference<String[]>> mNicknameClusterCache =
+            new HashMap<String, SoftReference<String[]>>();
     private PostalSplitter mPostalSplitter;
 
     private ContactAggregator mContactAggregator;
@@ -1509,7 +1523,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 context.getString(com.android.internal.R.string.common_name_suffixes),
                 context.getString(com.android.internal.R.string.common_name_conjunctions),
                 locale);
+        mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(locale);
+
+        mNameLookupInsert = db.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
+                + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
+                + NameLookupColumns.NAME_TYPE + "," + NameLookupColumns.NORMALIZED_NAME
+                + ") VALUES (?,?,?,?)");
+        mNameLookupDelete = db.compileStatement("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+                + NameLookupColumns.DATA_ID + "=?");
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
@@ -4208,6 +4230,127 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mSetSuperPrimaryStatement.bindLong(2, mimeTypeId);
         mSetSuperPrimaryStatement.bindLong(3, rawContactId);
         mSetSuperPrimaryStatement.execute();
+    }
+
+    public void insertNameLookupForEmail(long rawContactId, long dataId, String email) {
+        if (TextUtils.isEmpty(email)) {
+            return;
+        }
+
+        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
+        if (tokens.length == 0) {
+            return;
+        }
+
+        String address = tokens[0].getAddress();
+        int at = address.indexOf('@');
+        if (at != -1) {
+            address = address.substring(0, at);
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.EMAIL_BASED_NICKNAME, NameNormalizer.normalize(address));
+    }
+
+    /**
+     * Normalizes the nickname and inserts it in the name lookup table.
+     */
+    public void insertNameLookupForNickname(long rawContactId, long dataId, String nickname) {
+        if (TextUtils.isEmpty(nickname)) {
+            return;
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
+    }
+
+
+    public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name) {
+        mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
+    }
+
+    /**
+     * Returns nickname cluster IDs or null. Maintains cache.
+     */
+    protected String[] getCommonNicknameClusters(String normalizedName) {
+        SoftReference<String[]> ref;
+        String[] clusters = null;
+        synchronized (mNicknameClusterCache) {
+            if (mNicknameClusterCache.containsKey(normalizedName)) {
+                ref = mNicknameClusterCache.get(normalizedName);
+                if (ref == null) {
+                    return null;
+                }
+                clusters = ref.get();
+            }
+        }
+
+        if (clusters == null) {
+            clusters = loadNicknameClusters(normalizedName);
+            ref = clusters == null ? null : new SoftReference<String[]>(clusters);
+            synchronized (mNicknameClusterCache) {
+                mNicknameClusterCache.put(normalizedName, ref);
+            }
+        }
+        return clusters;
+    }
+
+    protected String[] loadNicknameClusters(String normalizedName) {
+        SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        String[] clusters = null;
+        Cursor cursor = db.query(NicknameLookupQuery.TABLE, NicknameLookupQuery.COLUMNS,
+                NicknameLookupColumns.NAME + "=?", new String[] { normalizedName },
+                null, null, null);
+        try {
+            int count = cursor.getCount();
+            if (count > 0) {
+                clusters = new String[count];
+                for (int i = 0; i < count; i++) {
+                    cursor.moveToNext();
+                    clusters[i] = cursor.getString(NicknameLookupQuery.CLUSTER);
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+        return clusters;
+    }
+
+    private class StructuredNameLookupBuilder extends NameLookupBuilder {
+
+        public StructuredNameLookupBuilder(NameSplitter splitter) {
+            super(splitter);
+        }
+
+        @Override
+        protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
+                String name) {
+            ContactsProvider2.this.insertNameLookup(rawContactId, dataId, lookupType, name);
+        }
+
+        @Override
+        protected String[] getCommonNicknameClusters(String normalizedName) {
+            return ContactsProvider2.this.getCommonNicknameClusters(normalizedName);
+        }
+    }
+
+    /**
+     * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
+     */
+    public void insertNameLookup(long rawContactId, long dataId, int lookupType, String name) {
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 1, rawContactId);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 2, dataId);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, lookupType);
+        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 4, name);
+        mNameLookupInsert.executeInsert();
+    }
+
+    /**
+     * Deletes all {@link Tables#NAME_LOOKUP} table rows associated with the specified data element.
+     */
+    public void deleteNameLookup(long dataId) {
+        DatabaseUtils.bindObjectToProgram(mNameLookupDelete, 1, dataId);
+        mNameLookupDelete.execute();
     }
 
     private void appendContactFilterAsNestedQuery(StringBuilder sb, String filterParam) {
