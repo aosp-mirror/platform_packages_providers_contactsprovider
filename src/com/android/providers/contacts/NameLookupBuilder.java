@@ -18,14 +18,18 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.OpenHelper.NameLookupType;
 
+import java.util.Arrays;
+import java.util.Comparator;
+
 /**
  * Given a full name, constructs all possible variants of the name.
  */
 public abstract class NameLookupBuilder {
 
+    private static final int MAX_NAME_TOKENS = 4;
+
     private final NameSplitter mSplitter;
-    private String[] mNormalizedNames = new String[NameSplitter.MAX_TOKENS];
-    private String[][] mNicknameClusters = new String[NameSplitter.MAX_TOKENS][];
+    private String[][] mNicknameClusters = new String[MAX_NAME_TOKENS][];
     private StringBuilder mStringBuilder1 = new StringBuilder();
     private StringBuilder mStringBuilder2 = new StringBuilder();
     private String[] mNames = new String[NameSplitter.MAX_TOKENS];
@@ -61,16 +65,30 @@ public abstract class NameLookupBuilder {
         }
 
         for (int i = 0; i < tokenCount; i++) {
-            mNormalizedNames[i] = normalizeName(mNames[i]);
+            mNames[i] = normalizeName(mNames[i]);
+        }
+
+        boolean tooManyTokens = tokenCount > MAX_NAME_TOKENS;
+        if (tooManyTokens) {
+            insertNameVariant(rawContactId, dataId, tokenCount, NameLookupType.NAME_EXACT, true);
+
+            // Favor longer parts of the name
+            Arrays.sort(mNames, 0, tokenCount, new Comparator<String>() {
+
+                public int compare(String s1, String s2) {
+                    return s2.length() - s1.length();
+                }
+            });
+
+            tokenCount = MAX_NAME_TOKENS;
         }
 
         // Phase I: insert all variants not involving nickname clusters
         for (int i = 0; i < tokenCount; i++) {
-            mNames[i] = mNormalizedNames[i];
             mNicknameClusters[i] = getCommonNicknameClusters(mNames[i]);
         }
 
-        insertNameVariants(rawContactId, dataId, 0, tokenCount, true, true);
+        insertNameVariants(rawContactId, dataId, 0, tokenCount, !tooManyTokens, true);
         insertNicknamePermutations(rawContactId, dataId, 0, tokenCount);
     }
 

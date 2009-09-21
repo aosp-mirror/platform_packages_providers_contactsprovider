@@ -171,4 +171,13 @@ public class NameLookupBuilderTest extends TestCase {
                 "(1:Bill.*Alex)(1:*Alex.Bill)" +
                 "(1:Bill.*Alice)(1:*Alice.Bill)", mBuilder.inserted());
     }
+
+    public void testMultiwordName() {
+        mBuilder.insertNameLookup(0, 0, "Jo Jeffrey John Jessy Longname");
+        String actual = mBuilder.inserted();
+        assertTrue(actual.startsWith(
+                "(0:Jo.Jeffrey.John.Jessy.Longname)" +  // Exact
+                "(2:JoJeffreyJohnJessyLongname)" +      // Full collation key
+                "(1:Longname.Jeffrey.Jessy.John)"));    // Variant: four longest parts
+    }
 }
