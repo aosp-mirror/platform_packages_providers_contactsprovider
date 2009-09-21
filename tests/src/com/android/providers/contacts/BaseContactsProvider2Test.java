@@ -199,15 +199,13 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected Uri insertOrganization(long rawContactId, String organization) {
-        return insertOrganization(rawContactId, organization, false);
+    protected Uri insertOrganization(long rawContactId, ContentValues values) {
+        return insertOrganization(rawContactId, values, false);
     }
 
-    protected Uri insertOrganization(long rawContactId, String organization, boolean primary) {
-        ContentValues values = new ContentValues();
+    protected Uri insertOrganization(long rawContactId, ContentValues values, boolean primary) {
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
-        values.put(Organization.DATA, organization);
         values.put(Organization.TYPE, Organization.TYPE_WORK);
         if (primary) {
             values.put(Data.IS_PRIMARY, true);
