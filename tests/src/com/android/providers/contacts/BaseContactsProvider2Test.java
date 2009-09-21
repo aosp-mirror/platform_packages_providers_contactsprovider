@@ -152,10 +152,14 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected long createGroup(Account account, String sourceId, String title) {
+        return createGroup(account, sourceId, title, 1);
+    }
+
+    protected long createGroup(Account account, String sourceId, String title, int visible) {
         ContentValues values = new ContentValues();
         values.put(Groups.SOURCE_ID, sourceId);
         values.put(Groups.TITLE, title);
-        values.put(Groups.GROUP_VISIBLE, 1);
+        values.put(Groups.GROUP_VISIBLE, visible);
         final Uri uri = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account);
         return ContentUris.parseId(mResolver.insert(uri, values));
     }
