@@ -54,7 +54,6 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
@@ -70,40 +69,46 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private static final String TAG = "ContactAggregator";
 
-    // Data mime types used in the contact matching algorithm
-    private static final String MIMETYPE_SELECTION_IN_CLAUSE = MimetypesColumns.MIMETYPE + " IN ('"
-            + Email.CONTENT_ITEM_TYPE + "','"
-            + Nickname.CONTENT_ITEM_TYPE + "','"
-            + Phone.CONTENT_ITEM_TYPE + "','"
-            + StructuredName.CONTENT_ITEM_TYPE + "')";
+    private interface DataMimetypeQuery {
 
-    private static final String[] DATA_JOIN_MIMETYPE_COLUMNS = new String[] {
-            MimetypesColumns.MIMETYPE,
-            Data.DATA1,
-            Data.DATA2
-    };
+        // Data mime types used in the contact matching algorithm
+        String MIMETYPE_SELECTION_IN_CLAUSE = MimetypesColumns.MIMETYPE + " IN ('"
+                + Email.CONTENT_ITEM_TYPE + "','"
+                + Nickname.CONTENT_ITEM_TYPE + "','"
+                + Phone.CONTENT_ITEM_TYPE + "','"
+                + StructuredName.CONTENT_ITEM_TYPE + "')";
 
-    private static final int COL_MIMETYPE = 0;
-    private static final int COL_DATA1 = 1;
-    private static final int COL_DATA2 = 2;
+        String[] COLUMNS = new String[] {
+                MimetypesColumns.MIMETYPE, Data.DATA1
+        };
 
-    private static final String[] DATA_JOIN_MIMETYPE_AND_CONTACT_COLUMNS = new String[] {
-            Data.DATA1, Data.DATA2, RawContacts.CONTACT_ID
-    };
+        int MIMETYPE = 0;
+        int DATA1 = 1;
+    }
 
-    private static final int COL_DATA_CONTACT_DATA1 = 0;
-    private static final int COL_DATA_CONTACT_DATA2 = 1;
-    private static final int COL_DATA_CONTACT_CONTACT_ID = 2;
+    private interface DataContactIdQuery {
+        String TABLE = Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS;
 
-    private static final String[] NAME_LOOKUP_COLUMNS = new String[] {
-            RawContacts.CONTACT_ID, NameLookupColumns.NORMALIZED_NAME, NameLookupColumns.NAME_TYPE
-    };
+        String[] COLUMNS = new String[] {
+                Data.DATA1, RawContacts.CONTACT_ID
+        };
 
-    private static final int COL_NAME_LOOKUP_CONTACT_ID = 0;
-    private static final int COL_NORMALIZED_NAME = 1;
-    private static final int COL_NAME_TYPE = 2;
+        int DATA1 = 0;
+        int CONTACT_ID = 1;
+    }
 
-    private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
+    private interface NameLookupQuery {
+        String TABLE = Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS;
+
+        String[] COLUMNS = new String[] {
+                RawContacts.CONTACT_ID, NameLookupColumns.NORMALIZED_NAME,
+                NameLookupColumns.NAME_TYPE
+        };
+
+        int CONTACT_ID = 0;
+        int NORMALIZED_NAME = 1;
+        int NAME_TYPE = 2;
+    }
 
     private interface EmailLookupQuery {
         String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
@@ -115,12 +120,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         int CONTACT_ID = 0;
     }
 
+    private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
     private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
     private static final int COL_CONTACT_ID = 0;
 
-    private static final int MODE_INSERT_LOOKUP_DATA = 0;
-    private static final int MODE_AGGREGATION = 1;
-    private static final int MODE_SUGGESTIONS = 2;
+    private static final int MODE_AGGREGATION = 0;
+    private static final int MODE_SUGGESTIONS = 1;
 
     /**
      * When yielding the transaction to another thread, sleep for this many milliseconds
@@ -206,6 +211,27 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         public void clear() {
             mCount = 0;
+        }
+    }
+
+    private class AggregationNameLookupBuilder extends NameLookupBuilder {
+
+        private final MatchCandidateList mCandidates;
+
+        public AggregationNameLookupBuilder(NameSplitter splitter, MatchCandidateList candidates) {
+            super(splitter);
+            mCandidates = candidates;
+        }
+
+        @Override
+        protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
+                String name) {
+            mCandidates.add(name, lookupType);
+        }
+
+        @Override
+        protected String[] getCommonNicknameClusters(String normalizedName) {
+            return mContactsProvider.getCommonNicknameClusters(normalizedName);
         }
     }
 
@@ -752,20 +778,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         selection.append(") AND " + MimetypesColumns.MIMETYPE + "='"
                 + StructuredName.CONTENT_ITEM_TYPE + "'");
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS,
-                DATA_JOIN_MIMETYPE_AND_CONTACT_COLUMNS,
+        final Cursor c = db.query(DataContactIdQuery.TABLE, DataContactIdQuery.COLUMNS,
                 selection.toString(), null, null, null, null);
 
         MatchCandidateList nameCandidates = new MatchCandidateList();
+        AggregationNameLookupBuilder builder =
+            new AggregationNameLookupBuilder(mContactsProvider.getNameSplitter(), nameCandidates);
         try {
             while (c.moveToNext()) {
-                String givenName = c.getString(COL_DATA_CONTACT_DATA1);
-                String familyName = c.getString(COL_DATA_CONTACT_DATA2);
-                long contactId = c.getLong(COL_DATA_CONTACT_CONTACT_ID);
+                String name = c.getString(DataContactIdQuery.DATA1);
+                long contactId = c.getLong(DataContactIdQuery.CONTACT_ID);
 
                 nameCandidates.clear();
-                addMatchCandidatesStructuredName(givenName, familyName, MODE_INSERT_LOOKUP_DATA,
-                        nameCandidates);
+                builder.insertNameLookup(0, 0, name);
 
                 // Note the N^2 complexity of the following fragment. This is not a huge concern
                 // since the number of candidates is very small and in general secondary hits
@@ -800,31 +825,30 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             int mode, MatchCandidateList candidates, ContactMatcher matcher) {
 
         final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS,
-                DATA_JOIN_MIMETYPE_COLUMNS,
+                DataMimetypeQuery.COLUMNS,
                 Data.RAW_CONTACT_ID + "=" + rawContactId + " AND ("
-                        + MIMETYPE_SELECTION_IN_CLAUSE + ")",
+                        + DataMimetypeQuery.MIMETYPE_SELECTION_IN_CLAUSE + ")",
                 null, null, null, null);
 
         try {
             while (c.moveToNext()) {
-                String mimeType = c.getString(COL_MIMETYPE);
-                String data1 = c.getString(COL_DATA1);
-                String data2 = c.getString(COL_DATA2);
+                String mimeType = c.getString(DataMimetypeQuery.MIMETYPE);
+                String data = c.getString(DataMimetypeQuery.DATA1);
                 if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesStructuredName(data1, data2, mode, candidates);
+                    addMatchCandidatesStructuredName(data, candidates);
                 } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-                    if (!TextUtils.isEmpty(data2)) {
-                        addMatchCandidatesEmail(data2, mode, candidates);
-                        lookupEmailMatches(db, data2, matcher);
+                    if (!TextUtils.isEmpty(data)) {
+                        addMatchCandidatesEmail(data, mode, candidates);
+                        lookupEmailMatches(db, data, matcher);
                     }
                 } else if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
-                    if (!TextUtils.isEmpty(data2)) {
-                        lookupPhoneMatches(db, data2, matcher);
+                    if (!TextUtils.isEmpty(data)) {
+                        lookupPhoneMatches(db, data, matcher);
                     }
                 } else if (mimeType.equals(CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
-                    if (!TextUtils.isEmpty(data2)) {
-                        addMatchCandidatesNickname(data2, mode, candidates);
-                        lookupNicknameMatches(db, data2, matcher);
+                    if (!TextUtils.isEmpty(data)) {
+                        addMatchCandidatesNickname(data, mode, candidates);
+                        lookupNicknameMatches(db, data, matcher);
                     }
                 }
             }
@@ -840,65 +864,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Looks for matches based on the full name (first + last).
+     * Looks for matches based on the full name.
      */
-    private void addMatchCandidatesStructuredName(String givenName, String familyName, int mode,
-            MatchCandidateList candidates) {
-        if (TextUtils.isEmpty(givenName)) {
-
-            // If neither the first nor last name are specified, we won't aggregate
-            if (TextUtils.isEmpty(familyName)) {
-                return;
-            }
-
-            addMatchCandidatesSingleName(familyName, candidates);
-        } else if (TextUtils.isEmpty(familyName)) {
-            addMatchCandidatesSingleName(givenName, candidates);
-        } else {
-            addMatchCandidatesFullName(givenName, familyName, mode, candidates);
-        }
-    }
-
-    private void addMatchCandidatesSingleName(String name, MatchCandidateList candidates) {
-        String nameN = NameNormalizer.normalize(name);
-        candidates.add(nameN, NameLookupType.NAME_EXACT);
-        candidates.add(nameN, NameLookupType.NAME_COLLATION_KEY);
-
-        // Take care of first and last names swapped
-        String[] clusters = mOpenHelper.getCommonNicknameClusters(nameN);
-        if (clusters != null) {
-            for (int i = 0; i < clusters.length; i++) {
-                candidates.add(clusters[i], NameLookupType.NAME_VARIANT);
-            }
-        }
-    }
-
-    private void addMatchCandidatesFullName(String givenName, String familyName, int mode,
-            MatchCandidateList candidates) {
-        final String givenNameN = NameNormalizer.normalize(givenName);
-        final String[] givenNameNicknames = mOpenHelper.getCommonNicknameClusters(givenNameN);
-        final String familyNameN = NameNormalizer.normalize(familyName);
-        final String[] familyNameNicknames = mOpenHelper.getCommonNicknameClusters(familyNameN);
-        candidates.add(givenNameN + "." + familyNameN, NameLookupType.NAME_EXACT);
-        candidates.add(givenNameN + familyNameN, NameLookupType.NAME_COLLATION_KEY);
-        candidates.add(familyNameN + givenNameN, NameLookupType.NAME_COLLATION_KEY);
-        if (givenNameNicknames != null) {
-            for (int i = 0; i < givenNameNicknames.length; i++) {
-                candidates.add(givenNameNicknames[i] + "." + familyNameN,
-                        NameLookupType.NAME_VARIANT);
-                candidates.add(familyNameN + "." + givenNameNicknames[i],
-                        NameLookupType.NAME_VARIANT);
-            }
-        }
-        candidates.add(familyNameN + "." + givenNameN, NameLookupType.NAME_VARIANT);
-        if (familyNameNicknames != null) {
-            for (int i = 0; i < familyNameNicknames.length; i++) {
-                candidates.add(familyNameNicknames[i] + "." + givenNameN,
-                        NameLookupType.NAME_VARIANT);
-                candidates.add(givenNameN + "." + familyNameNicknames[i],
-                        NameLookupType.NAME_VARIANT);
-            }
-        }
+    private void addMatchCandidatesStructuredName(String name, MatchCandidateList candidates) {
+        AggregationNameLookupBuilder builder =
+                new AggregationNameLookupBuilder(mContactsProvider.getNameSplitter(), candidates);
+        builder.insertNameLookup(0, 0, name);
     }
 
     /**
@@ -984,14 +955,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private void matchAllCandidates(SQLiteDatabase db, String selection,
             MatchCandidateList candidates, ContactMatcher matcher, int algorithm) {
-        final Cursor c = db.query(Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, NAME_LOOKUP_COLUMNS,
+        final Cursor c = db.query(NameLookupQuery.TABLE, NameLookupQuery.COLUMNS,
                 selection, null, null, null, null, String.valueOf(PRIMARY_HIT_LIMIT));
 
         try {
             while (c.moveToNext()) {
-                Long contactId = c.getLong(COL_NAME_LOOKUP_CONTACT_ID);
-                String name = c.getString(COL_NORMALIZED_NAME);
-                int nameType = c.getInt(COL_NAME_TYPE);
+                Long contactId = c.getLong(NameLookupQuery.CONTACT_ID);
+                String name = c.getString(NameLookupQuery.NORMALIZED_NAME);
+                int nameType = c.getInt(NameLookupQuery.NAME_TYPE);
 
                 // Determine which candidate produced this match
                 for (int i = 0; i < candidates.mCount; i++) {

@@ -165,7 +165,7 @@ public class LegacyApiSupport {
                     + " THEN 'custom:'||" + Tables.DATA + "." + Im.CUSTOM_PROTOCOL
                     + " ELSE 'pre:'||" + Tables.DATA + "." + Im.PROTOCOL
                     + " END)"
-                + " ELSE " + DataColumns.CONCRETE_DATA2
+                + " ELSE " + Tables.DATA + "." + Email.DATA
                 + " END)";
 
     private static final Uri LIVE_FOLDERS_CONTACTS_URI = Uri.withAppendedPath(
@@ -592,11 +592,11 @@ public class LegacyApiSupport {
                         + " AS " + ContactMethods.KIND + ", " +
                 DataColumns.CONCRETE_IS_PRIMARY
                         + " AS " + ContactMethods.ISPRIMARY + ", " +
-                DataColumns.CONCRETE_DATA1
+                Tables.DATA + "." + Email.TYPE
                         + " AS " + ContactMethods.TYPE + ", " +
                 CONTACT_METHOD_DATA_SQL
                         + " AS " + ContactMethods.DATA + ", " +
-                DataColumns.CONCRETE_DATA3
+                Tables.DATA + "." + Email.LABEL
                         + " AS " + ContactMethods.LABEL + ", " +
                 DataColumns.CONCRETE_DATA14
                         + " AS " + ContactMethods.AUX_DATA + ", " +

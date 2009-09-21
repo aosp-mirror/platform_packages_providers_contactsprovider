@@ -539,13 +539,10 @@ public class LegacyContactImporter {
         NameSplitter.Name splitName = new NameSplitter.Name();
         mNameSplitter.split(splitName, name);
 
-        String givenNames = splitName.getGivenNames();
-        String familyName = splitName.getFamilyName();
-
         bindString(insert, StructuredNameInsert.PREFIX, splitName.getPrefix());
-        bindString(insert, StructuredNameInsert.GIVEN_NAME, givenNames);
+        bindString(insert, StructuredNameInsert.GIVEN_NAME, splitName.getGivenNames());
         bindString(insert, StructuredNameInsert.MIDDLE_NAME, splitName.getMiddleName());
-        bindString(insert, StructuredNameInsert.FAMILY_NAME, familyName);
+        bindString(insert, StructuredNameInsert.FAMILY_NAME, splitName.getFamilyName());
         bindString(insert, StructuredNameInsert.SUFFIX, splitName.getSuffix());
 
         if (mPhoneticNameAvailable) {
@@ -555,7 +552,7 @@ public class LegacyContactImporter {
 
         long dataId = insert(insert);
 
-        mOpenHelper.insertNameLookupForStructuredName(id, dataId, givenNames, familyName);
+        mContactsProvider.insertNameLookupForStructuredName(id, dataId, name);
     }
 
     private void insertNote(Cursor c, SQLiteStatement insert) {
@@ -750,7 +747,7 @@ public class LegacyContactImporter {
         bindString(insert, EmailInsert.LABEL, c.getString(ContactMethodsQuery.LABEL));
 
         long dataId = insert(insert);
-        mOpenHelper.insertNameLookupForEmail(personId, dataId, email);
+        mContactsProvider.insertNameLookupForEmail(personId, dataId, email);
     }
 
     private void insertIm(Cursor c, SQLiteStatement insert) {
