@@ -2581,6 +2581,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case RAW_CONTACTS_DATA: {
+                final String rawContactId = uri.getPathSegments().get(1);
+                String selectionWithId = (Data.RAW_CONTACT_ID + "=" + rawContactId + " ")
+                    + (selection == null ? "" : " AND " + selection);
+
+                count = updateData(uri, values, selectionWithId, selectionArgs, callerIsSyncAdapter);
+
+                break;
+            }
+
             case DATA: {
                 count = updateData(uri, values, appendAccountToSelection(uri, selection),
                         selectionArgs, callerIsSyncAdapter);
