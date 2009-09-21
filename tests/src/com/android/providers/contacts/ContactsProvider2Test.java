@@ -214,8 +214,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(PhoneLookup.SEND_TO_VOICEMAIL, 1);
         assertStoredValues(lookupUri1, values);
 
+        // The strict comparation, adopted in Donut, does not allow the behavior like
+        // "8004664411 == 4664411", while the loose comparation, which had been used in Cupcake
+        // and reverted back into the default in Eclair, allows it. Hmm...
+        final boolean useStrictComparation =
+            mContext.getResources().getBoolean(
+                    com.android.internal.R.bool.config_use_strict_phone_number_comparation);
+        final int expectedResult = (useStrictComparation ? 0 : 1);
+
         Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "4664411");
-        assertEquals(0, getCount(lookupUri2, null, null));
+        assertEquals(expectedResult, getCount(lookupUri2, null, null));
     }
 
     public void testPhoneUpdate() {
