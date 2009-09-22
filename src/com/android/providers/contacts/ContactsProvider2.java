@@ -367,6 +367,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions",
                 AGGREGATION_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions/*",
+                AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
@@ -3292,6 +3294,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case AGGREGATION_SUGGESTIONS: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                String filter = null;
+                if (uri.getPathSegments().size() > 3) {
+                    filter = uri.getPathSegments().get(3);
+                }
                 final int maxSuggestions;
                 if (limit != null) {
                     maxSuggestions = Integer.parseInt(limit);
@@ -3302,7 +3308,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForContacts(qb, projection);
 
                 return mContactAggregator.queryAggregationSuggestions(qb, projection, contactId,
-                        maxSuggestions);
+                        maxSuggestions, filter);
             }
 
             case SETTINGS: {
@@ -4371,7 +4377,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mNameLookupDelete.execute();
     }
 
-    private void appendContactFilterAsNestedQuery(StringBuilder sb, String filterParam) {
+    public void appendContactFilterAsNestedQuery(StringBuilder sb, String filterParam) {
         sb.append("(SELECT DISTINCT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
                 + " JOIN name_lookup ON(" + RawContactsColumns.CONCRETE_ID + "=raw_contact_id)"
                 + " WHERE normalized_name GLOB '");
