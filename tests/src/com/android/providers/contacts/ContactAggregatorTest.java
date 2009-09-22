@@ -584,6 +584,27 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertSuggestions(contactId1, contactId2);
     }
 
+    public void testAggregationSuggestionsBasedOnPhoneNumberWithFilter() {
+
+        // Create two contacts that would not be aggregated because of name mismatch
+        long rawContactId1 = createRawContact();
+        insertStructuredName(rawContactId1, "Lord", "Farquaad");
+        insertPhoneNumber(rawContactId1, "(888)555-1236");
+
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "Talking", "Donkey");
+        insertPhoneNumber(rawContactId2, "1(888)555-1236");
+
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+        assertTrue(contactId1 != contactId2);
+
+        assertSuggestions(contactId1, "talk", contactId2);
+        assertSuggestions(contactId1, "don", contactId2);
+        assertSuggestions(contactId1, "", contactId2);
+        assertSuggestions(contactId1, "eddie");
+    }
+
     public void testChoosePhoto() {
         long rawContactId1 = createRawContact();
         setContactAccountName(rawContactId1, "donut");
@@ -610,6 +631,17 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,
                 Contacts.AggregationSuggestions.CONTENT_DIRECTORY);
+        assertSuggestions(uri, suggestions);
+    }
+
+    private void assertSuggestions(long contactId, String filter, long... suggestions) {
+        final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri uri = Uri.withAppendedPath(Uri.withAppendedPath(aggregateUri,
+                Contacts.AggregationSuggestions.CONTENT_DIRECTORY), Uri.encode(filter));
+        assertSuggestions(uri, suggestions);
+    }
+
+    private void assertSuggestions(Uri uri, long... suggestions) {
         final Cursor cursor = mResolver.query(uri,
                 new String[] { Contacts._ID, Contacts.PRESENCE_STATUS },
                 null, null, null);
