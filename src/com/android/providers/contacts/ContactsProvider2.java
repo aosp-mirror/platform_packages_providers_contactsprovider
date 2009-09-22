@@ -3899,6 +3899,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
             final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
             if (!TextUtils.isEmpty(accountName)) {
+                if (contactsIdString != null) {
+                    qb.appendWhere(" AND ");
+                }
                 qb.appendWhere(RawContacts.ACCOUNT_NAME + "="
                         + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                         + RawContacts.ACCOUNT_TYPE + "="
@@ -3966,13 +3969,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (rawContactId != c.getLong(COLUMN_RAW_CONTACT_ID)) {
                     break;
                 }
+//                if (c.isNull(COLUMN_CONTACT_ID)) {
+//                    continue;
+//                }
                 // add the data to to the contact
                 ContentValues dataValues = new ContentValues();
-                dataValues.put(Data._ID, c.getString(COLUMN_DATA_ID));
+                dataValues.put(Data._ID, c.getLong(COLUMN_DATA_ID));
                 dataValues.put(Data.RES_PACKAGE, c.getString(COLUMN_RES_PACKAGE));
                 dataValues.put(Data.MIMETYPE, c.getString(COLUMN_MIMETYPE));
-                dataValues.put(Data.IS_PRIMARY, c.getString(COLUMN_IS_PRIMARY));
-                dataValues.put(Data.IS_SUPER_PRIMARY, c.getString(COLUMN_IS_SUPER_PRIMARY));
+                dataValues.put(Data.IS_PRIMARY, c.getLong(COLUMN_IS_PRIMARY));
+                dataValues.put(Data.IS_SUPER_PRIMARY, c.getLong(COLUMN_IS_SUPER_PRIMARY));
                 dataValues.put(Data.DATA_VERSION, c.getLong(COLUMN_DATA_VERSION));
                 if (!c.isNull(COLUMN_GROUP_SOURCE_ID)) {
                     dataValues.put(GroupMembership.GROUP_SOURCE_ID,
