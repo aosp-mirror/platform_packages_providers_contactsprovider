@@ -675,7 +675,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         columns.put(Presence.IM_ACCOUNT, Presence.IM_ACCOUNT);
         columns.put(Presence.IM_HANDLE, Presence.IM_HANDLE);
         columns.put(Presence.PROTOCOL, Presence.PROTOCOL);
-        columns.put(Presence.CUSTOM_PROTOCOL, Presence.CUSTOM_PROTOCOL);
+        // We cannot allow a null in the custom protocol field, because SQLite3 does not
+        // properly enforce uniqueness of null values
+        columns.put(Presence.CUSTOM_PROTOCOL, "(CASE WHEN " + Presence.CUSTOM_PROTOCOL
+                + "='' THEN NULL ELSE " + Presence.CUSTOM_PROTOCOL + " END) AS "
+                + Presence.CUSTOM_PROTOCOL);
         columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
         columns.put(Presence.PRESENCE_CUSTOM_STATUS, Presence.PRESENCE_CUSTOM_STATUS);
         sPresenceProjectionMap = columns;
@@ -2274,6 +2278,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         values.put(Presence.DATA_ID, dataId);
         values.put(PresenceColumns.RAW_CONTACT_ID, rawContactId);
+        if (customProtocol == null) {
+            // We cannot allow a null in the custom protocol field, because SQLite3 does not
+            // properly enforce uniqueness of null values
+            values.put(Presence.CUSTOM_PROTOCOL, "");
+        }
 
         // Insert the presence update
         long presenceId = mDb.replace(Tables.PRESENCE, null, values);
