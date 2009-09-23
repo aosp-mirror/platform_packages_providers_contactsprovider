@@ -172,14 +172,19 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     /** Precompiled sql statement for setting an aggregated presence */
     private SQLiteStatement mAggregatedPresenceReplace;
+    private SQLiteStatement mPresenceContactIdUpdate;
     private SQLiteStatement mRawContactCountQuery;
     private SQLiteStatement mContactDelete;
+    private SQLiteStatement mAggregatedPresenceDelete;
     private SQLiteStatement mMarkForAggregation;
     private SQLiteStatement mPhotoIdUpdate;
     private SQLiteStatement mDisplayNameUpdate;
     private SQLiteStatement mHasPhoneNumberUpdate;
     private SQLiteStatement mLookupKeyUpdate;
     private SQLiteStatement mStarredUpdate;
+    private SQLiteStatement mContactIdAndMarkAggregatedUpdate;
+    private SQLiteStatement mContactIdUpdate;
+    private SQLiteStatement mMarkAggregatedUpdate;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
 
@@ -268,10 +273,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 + ") SELECT ?, "
                             + "MAX(" + Presence.PRESENCE_STATUS + "), "
                             + "MAX(" + Presence.PRESENCE_CUSTOM_STATUS + ")"
-                        + " FROM " + Tables.PRESENCE + "," + Tables.RAW_CONTACTS
-                        + " WHERE " + PresenceColumns.RAW_CONTACT_ID + "="
-                                + RawContactsColumns.CONCRETE_ID
-                        + "   AND " + RawContacts.CONTACT_ID + "=?");
+                        + " FROM " + Tables.PRESENCE
+                        + " WHERE " + PresenceColumns.CONTACT_ID + "=?");
 
         mRawContactCountQuery = db.compileStatement(
                 "SELECT COUNT(" + RawContacts._ID + ")" +
@@ -282,6 +285,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mContactDelete = db.compileStatement(
                 "DELETE FROM " + Tables.CONTACTS +
                 " WHERE " + Contacts._ID + "=?");
+
+        mAggregatedPresenceDelete = db.compileStatement(
+                "DELETE FROM " + Tables.AGGREGATED_PRESENCE +
+                " WHERE " + AggregatedPresenceColumns.CONTACT_ID + "=?");
 
         mMarkForAggregation = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -319,6 +326,27 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 + ")=0 THEN 0 ELSE 1 END) FROM " + Tables.RAW_CONTACTS + " WHERE "
                 + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " AND "
                 + RawContacts.STARRED + "=1)" + " WHERE " + Contacts._ID + "=?");
+
+        mContactIdAndMarkAggregatedUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.CONTACT_ID + "=?, "
+                        + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
+                " WHERE " + RawContacts._ID + "=?");
+
+        mContactIdUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.CONTACT_ID + "=?" +
+                " WHERE " + RawContacts._ID + "=?");
+
+        mMarkAggregatedUpdate = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
+                " WHERE " + RawContacts._ID + "=?");
+
+        mPresenceContactIdUpdate = db.compileStatement(
+                "UPDATE " + Tables.PRESENCE +
+                " SET " + PresenceColumns.CONTACT_ID + "=?" +
+                " WHERE " + PresenceColumns.RAW_CONTACT_ID + "=?");
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -572,7 +600,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         computeAggregateData(db,
                 RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
         long contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
-        mOpenHelper.setContactId(rawContactId, contactId);
+        setContactId(rawContactId, contactId);
         mOpenHelper.updateContactVisible(contactId);
     }
 
@@ -602,7 +630,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
 
         mOpenHelper.updateContactVisible(contactId);
+        updateAggregatedPresence(contactId);
+    }
 
+    private void updateAggregatedPresence(long contactId) {
         mAggregatedPresenceReplace.bindLong(1, contactId);
         mAggregatedPresenceReplace.bindLong(2, contactId);
         mAggregatedPresenceReplace.execute();
@@ -641,7 +672,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         if (contactId == currentContactId) {
             // Aggregation unchanged
-            mOpenHelper.markAggregated(rawContactId);
+            markAggregated(rawContactId);
         } else if (contactId == -1) {
             // Splitting an aggregate
             ContentValues contactValues = new ContentValues();
@@ -649,8 +680,13 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             computeAggregateData(db,
                     RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
             contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
-            mOpenHelper.setContactIdAndMarkAggregated(rawContactId, contactId);
+            setContactIdAndMarkAggregated(rawContactId, contactId);
             mOpenHelper.updateContactVisible(contactId);
+
+            setPresenceContactId(rawContactId, contactId);
+
+            updateAggregatedPresence(contactId);
+
             if (currentContactContentsCount > 0) {
                 updateAggregateData(currentContactId);
             }
@@ -660,13 +696,49 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 // Delete a previous aggregate if it only contained this raw contact
                 mContactDelete.bindLong(1, currentContactId);
                 mContactDelete.execute();
+
+                mAggregatedPresenceDelete.bindLong(1, currentContactId);
+                mAggregatedPresenceDelete.execute();
             }
 
-            mOpenHelper.setContactIdAndMarkAggregated(rawContactId, contactId);
+            setContactIdAndMarkAggregated(rawContactId, contactId);
             computeAggregateData(db, contactId, values);
             db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
             mOpenHelper.updateContactVisible(contactId);
+            updateAggregatedPresence(contactId);
         }
+    }
+
+    /**
+     * Updates the contact ID for the specified contact.
+     */
+    private void setContactId(long rawContactId, long contactId) {
+        mContactIdUpdate.bindLong(1, contactId);
+        mContactIdUpdate.bindLong(2, rawContactId);
+        mContactIdUpdate.execute();
+    }
+
+    /**
+     * Marks the specified raw contact ID as aggregated
+     */
+    private void markAggregated(long rawContactId) {
+        mMarkAggregatedUpdate.bindLong(1, rawContactId);
+        mMarkAggregatedUpdate.execute();
+    }
+
+    /**
+     * Updates the contact ID for the specified contact and marks the raw contact as aggregated.
+     */
+    private void setContactIdAndMarkAggregated(long rawContactId, long contactId) {
+        mContactIdAndMarkAggregatedUpdate.bindLong(1, contactId);
+        mContactIdAndMarkAggregatedUpdate.bindLong(2, rawContactId);
+        mContactIdAndMarkAggregatedUpdate.execute();
+    }
+
+    private void setPresenceContactId(long rawContactId, long contactId) {
+        mPresenceContactIdUpdate.bindLong(1, contactId);
+        mPresenceContactIdUpdate.bindLong(2, rawContactId);
+        mPresenceContactIdUpdate.execute();
     }
 
     interface AggregateExceptionQuery {
