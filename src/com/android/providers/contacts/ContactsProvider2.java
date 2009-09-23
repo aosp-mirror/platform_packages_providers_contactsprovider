@@ -16,6 +16,10 @@
 
 package com.android.providers.contacts;
 
+import com.google.android.collect.Lists;
+import com.google.android.collect.Maps;
+import com.google.android.collect.Sets;
+
 import com.android.internal.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
@@ -35,9 +39,6 @@ import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.SettingsColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
-import com.google.android.collect.Lists;
-import com.google.android.collect.Maps;
-import com.google.android.collect.Sets;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -240,13 +241,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             MimetypesColumns.MIMETYPE,
             Data.IS_PRIMARY,
             Data.DATA1,
-            StructuredName.DISPLAY_NAME,
+            Organization.TITLE,
         };
 
         public static final int MIMETYPE = 0;
         public static final int IS_PRIMARY = 1;
-        public static final int DATA1 = 2;
-        public static final int DISPLAY_NAME = 3;
+        public static final int DATA = 2;
+        public static final int TITLE = 3;
     }
 
     private interface DataDeleteQuery {
@@ -299,6 +300,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDisplayNameSources = new HashMap<String, Integer>();
         sDisplayNameSources.put(StructuredName.CONTENT_ITEM_TYPE,
                 DisplayNameSources.STRUCTURED_NAME);
+        sDisplayNameSources.put(Nickname.CONTENT_ITEM_TYPE,
+                DisplayNameSources.NICKNAME);
         sDisplayNameSources.put(Organization.CONTENT_ITEM_TYPE,
                 DisplayNameSources.ORGANIZATION);
         sDisplayNameSources.put(Phone.CONTENT_ITEM_TYPE,
@@ -726,6 +729,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         public DataRowHandler(String mimetype) {
             mMimetype = mimetype;
+
+            // To ensure the data column position. This is dead code if properly configured.
+            if (StructuredName.DISPLAY_NAME != Data.DATA1 || Nickname.NAME != Data.DATA1
+                    || Organization.COMPANY != Data.DATA1 || Phone.NUMBER != Data.DATA1
+                    || Email.DATA != Data.DATA1) {
+                throw new AssertionError("Some of ContactsContract.CommonDataKinds class primary"
+                        + " data is not in DATA1 column");
+            }
         }
 
         protected long getMimeTypeId() {
@@ -843,16 +854,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             try {
                 while (c.moveToNext()) {
                     String mimeType = c.getString(DisplayNameQuery.MIMETYPE);
-                    boolean primary;
-                    String name;
 
-                    if (StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                        name = c.getString(DisplayNameQuery.DISPLAY_NAME);
-                        primary = true;
-                    } else {
-                        name = c.getString(DisplayNameQuery.DATA1);
-                        primary = (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
+                    // Display name is at DATA1 in all type.  This is ensured in the constructor.
+                    String name = c.getString(DisplayNameQuery.DATA);
+                    if (TextUtils.isEmpty(name)
+                            && Organization.CONTENT_ITEM_TYPE.equals(mimeType)) {
+                        name = c.getString(DisplayNameQuery.TITLE);
                     }
+                    boolean primary = StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)
+                        || (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
 
                     if (name != null) {
                         Integer source = sDisplayNameSources.get(mimeType);
@@ -1102,27 +1112,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            long id = super.insert(db, rawContactId, values);
+            String company = values.getAsString(Organization.COMPANY);
+            String title = values.getAsString(Organization.TITLE);
+
+            long dataId = super.insert(db, rawContactId, values);
+
             fixRawContactDisplayName(db, rawContactId);
-            return id;
+            insertNameLookupForOrganization(rawContactId, dataId, company, title);
+            return dataId;
         }
 
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
+            String company = values.getAsString(Organization.COMPANY);
+            String title = values.getAsString(Organization.TITLE);
+            long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
             super.update(db, values, c, callerIsSyncAdapter);
 
             fixRawContactDisplayName(db, rawContactId);
+            deleteNameLookup(dataId);
+            insertNameLookupForOrganization(rawContactId, dataId, company, title);
         }
 
         @Override
         public int delete(SQLiteDatabase db, Cursor c) {
+            long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
 
             int count = super.delete(db, c);
             fixRawContactDisplayName(db, rawContactId);
+            deleteNameLookup(dataId);
             return count;
         }
 
@@ -4303,6 +4325,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
     }
 
+    public void insertNameLookupForOrganization(long rawContactId, long dataId, String company,
+            String title) {
+        if (!TextUtils.isEmpty(company)) {
+            insertNameLookup(rawContactId, dataId,
+                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(company));
+        }
+        if (!TextUtils.isEmpty(title)) {
+            insertNameLookup(rawContactId, dataId,
+                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(title));
+        }
+    }
 
     public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name) {
         mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
@@ -4418,10 +4451,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String limit) {
         sb.append("(SELECT DISTINCT raw_contact_id FROM name_lookup WHERE normalized_name GLOB '");
         sb.append(normalizedName);
-        sb.append("*' AND ("
-                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NAME_COLLATION_KEY
-                + " OR "
-                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + ")");
+        sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
+                + NameLookupType.NAME_COLLATION_KEY + ","
+                + NameLookupType.NICKNAME + ","
+                + NameLookupType.ORGANIZATION + ")");
 
         if (limit != null) {
             sb.append(" LIMIT ").append(limit);

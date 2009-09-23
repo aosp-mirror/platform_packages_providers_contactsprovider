@@ -293,6 +293,7 @@ import java.util.HashMap;
         int EMAIL = 10;
         int PHONE = 20;
         int ORGANIZATION = 30;
+        int NICKNAME = 35;
         int STRUCTURED_NAME = 40;
     }
 
@@ -376,9 +377,10 @@ import java.util.HashMap;
         public static final int NAME_COLLATION_KEY = 2;
         public static final int NICKNAME = 3;
         public static final int EMAIL_BASED_NICKNAME = 4;
+        public static final int ORGANIZATION = 5;
 
         // This is the highest name lookup type code plus one
-        public static final int TYPE_COUNT = 5;
+        public static final int TYPE_COUNT = 6;
 
         public static boolean isBasedOnStructuredName(int nameLookupType) {
             return nameLookupType == NameLookupType.NAME_EXACT

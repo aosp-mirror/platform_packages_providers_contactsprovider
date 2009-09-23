@@ -26,7 +26,6 @@ import android.content.EntityIterator;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.RemoteException;
-import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -40,6 +39,7 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -600,6 +600,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testDisplayNameFromData() {
         long rawContactId = createRawContact();
         long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
 
         Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
@@ -613,9 +614,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, "1-800-466-4411");
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "1-800-466-4411");
 
-        insertOrganization(rawContactId, "Monsters Inc");
+        // If there is title without company, the title is display name.
+        values.clear();
+        values.put(Organization.TITLE, "Protagonist");
+        Uri organizationUri = insertOrganization(rawContactId, values);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Protagonist");
+
+        // If there are title and company, the company is display name.
+        values.clear();
+        values.put(Organization.COMPANY, "Monsters Inc");
+        mResolver.update(organizationUri, values, null, null);
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "Monsters Inc");
 
+        // If there is nickname, that is display name.
+        insertNickname(rawContactId, "Sully");
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Sully");
+
+        // If there is structured name, that is display name.
+        values.clear();
+        values.put(StructuredName.GIVEN_NAME, "James");
+        values.put(StructuredName.MIDDLE_NAME, "P.");
+        values.put(StructuredName.FAMILY_NAME, "Sullivan");
+        insertStructuredName(rawContactId, values);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "James Sullivan");
     }
 
     public void testSendToVoicemailDefault() {
