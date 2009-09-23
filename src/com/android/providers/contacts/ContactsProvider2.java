@@ -355,8 +355,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mRawContactDisplayNameUpdate;
     /** Precompiled sql statement for marking a raw contact as dirty */
     private SQLiteStatement mRawContactDirtyUpdate;
-    /** Precompiled sql statement for setting an aggregated presence */
-    private SQLiteStatement mAggregatedPresenceReplace;
     /** Precompiled sql statement for updating an aggregated presence status */
     private SQLiteStatement mAggregatedPresenceStatusUpdate;
     private SQLiteStatement mNameLookupInsert;
@@ -1547,16 +1545,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mRawContactDirtyUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.DIRTY + "=1 WHERE " + RawContacts._ID + "=?");
 
-        mAggregatedPresenceReplace = db.compileStatement(
-                "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
-                        + AggregatedPresenceColumns.CONTACT_ID + ", "
-                        + Presence.PRESENCE_STATUS
-                + ") VALUES (?, (SELECT MAX(" + Presence.PRESENCE_STATUS + ")"
-                        + " FROM " + Tables.PRESENCE + "," + Tables.RAW_CONTACTS
-                        + " WHERE " + PresenceColumns.RAW_CONTACT_ID + "="
-                                + RawContactsColumns.CONCRETE_ID
-                        + "   AND " + RawContacts.CONTACT_ID + "=?))");
-
         mAggregatedPresenceStatusUpdate = db.compileStatement(
                 "UPDATE " + Tables.AGGREGATED_PRESENCE
                 + " SET " + Presence.PRESENCE_CUSTOM_STATUS + "=? "
@@ -2300,6 +2288,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         values.put(Presence.DATA_ID, dataId);
         values.put(PresenceColumns.RAW_CONTACT_ID, rawContactId);
+        values.put(PresenceColumns.CONTACT_ID, contactId);
         if (customProtocol == null) {
             // We cannot allow a null in the custom protocol field, because SQLite3 does not
             // properly enforce uniqueness of null values
@@ -2310,11 +2299,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         long presenceId = mDb.replace(Tables.PRESENCE, null, values);
 
         if (contactId != -1) {
-            if (values.containsKey(Presence.PRESENCE_STATUS)) {
-                mAggregatedPresenceReplace.bindLong(1, contactId);
-                mAggregatedPresenceReplace.bindLong(2, contactId);
-                mAggregatedPresenceReplace.execute();
-            }
             String status = values.getAsString(Presence.PRESENCE_CUSTOM_STATUS);
             if (status != null) {
                 mAggregatedPresenceStatusUpdate.bindString(1, status);
@@ -2322,6 +2306,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mAggregatedPresenceStatusUpdate.execute();
             }
         }
+
         return presenceId;
     }
 
@@ -2510,15 +2495,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.putNull(RawContacts.CONTACT_ID);
         mValues.put(RawContacts.DIRTY, 1);
         return updateRawContact(rawContactId, mValues);
-    }
-
-    private static Account readAccountFromQueryParams(Uri uri) {
-        final String name = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
-        final String type = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
-        if (TextUtils.isEmpty(name) || TextUtils.isEmpty(type)) {
-            return null;
-        }
-        return new Account(name, type);
     }
 
     @Override
@@ -3820,6 +3796,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         composer.terminate();
     }
+
+
+    private static Account readAccountFromQueryParams(Uri uri) {
+        final String name = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
+        final String type = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
+        if (TextUtils.isEmpty(name) || TextUtils.isEmpty(type)) {
+            return null;
+        }
+        return new Account(name, type);
+    }
+
 
     /**
      * An implementation of EntityIterator that joins the contacts and data tables

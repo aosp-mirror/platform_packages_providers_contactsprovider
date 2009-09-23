@@ -422,6 +422,7 @@ import java.util.HashMap;
 
     public interface PresenceColumns {
         String RAW_CONTACT_ID = "presence_raw_contact_id";
+        String CONTACT_ID = "presence_contact_id";
     }
 
     public interface AggregatedPresenceColumns {
@@ -439,9 +440,6 @@ import java.util.HashMap;
     private SQLiteStatement mPackageQuery;
     private SQLiteStatement mContactIdQuery;
     private SQLiteStatement mAggregationModeQuery;
-    private SQLiteStatement mContactIdUpdate;
-    private SQLiteStatement mMarkAggregatedUpdate;
-    private SQLiteStatement mContactIdAndMarkAggregatedUpdate;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
 
@@ -495,23 +493,6 @@ import java.util.HashMap;
                 + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
         mContactIdQuery = db.compileStatement("SELECT " + RawContacts.CONTACT_ID + " FROM "
                 + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
-
-        mContactIdUpdate = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContacts.CONTACT_ID + "=?" +
-                " WHERE " + RawContacts._ID + "=?");
-
-        mMarkAggregatedUpdate = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
-                " WHERE " + RawContacts._ID + "=?");
-
-        mContactIdAndMarkAggregatedUpdate = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContacts.CONTACT_ID + "=?, "
-                        + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
-                " WHERE " + RawContacts._ID + "=?");
-
         mAggregationModeQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATION_MODE
                 + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
         mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
@@ -537,6 +518,7 @@ import java.util.HashMap;
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
                 Presence._ID + " INTEGER PRIMARY KEY," +
                 PresenceColumns.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
+                PresenceColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
                 Presence.PROTOCOL + " INTEGER NOT NULL," +
                 Presence.CUSTOM_PROTOCOL + " TEXT," +
@@ -558,6 +540,49 @@ import java.util.HashMap;
                 Presence.PRESENCE_STATUS + " INTEGER," +
                 Presence.PRESENCE_CUSTOM_STATUS + " TEXT" +
         ");");
+
+
+        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_deleted"
+                + " BEFORE DELETE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+                + " BEGIN "
+                + "   DELETE FROM " + Tables.AGGREGATED_PRESENCE
+                + "     WHERE " + AggregatedPresenceColumns.CONTACT_ID + " = " +
+                        "(SELECT " + PresenceColumns.CONTACT_ID +
+                        " FROM " + Tables.PRESENCE +
+                        " WHERE " + PresenceColumns.RAW_CONTACT_ID
+                                + "=OLD." + PresenceColumns.RAW_CONTACT_ID +
+                        " AND NOT EXISTS" +
+                                "(SELECT " + PresenceColumns.RAW_CONTACT_ID +
+                                " FROM " + Tables.PRESENCE +
+                                " WHERE " + PresenceColumns.CONTACT_ID
+                                        + "=OLD." + PresenceColumns.CONTACT_ID +
+                                " AND " + PresenceColumns.RAW_CONTACT_ID
+                                        + "!=OLD." + PresenceColumns.RAW_CONTACT_ID + "));"
+                + " END");
+
+        String replaceAggregatePresenceSql =
+            "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
+                    + AggregatedPresenceColumns.CONTACT_ID + ", "
+                    + Presence.PRESENCE_STATUS + ", "
+                    + Presence.PRESENCE_CUSTOM_STATUS + ")" +
+            " SELECT " + PresenceColumns.CONTACT_ID + ","
+                        + "MAX(" + Presence.PRESENCE_STATUS + "), "
+                        + "MAX(" + Presence.PRESENCE_CUSTOM_STATUS + ")" +
+                    " FROM " + Tables.PRESENCE +
+                    " WHERE " + PresenceColumns.CONTACT_ID
+                        + "=NEW." + PresenceColumns.CONTACT_ID + ";";
+
+        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_inserted"
+                + " AFTER INSERT ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+                + " BEGIN "
+                + replaceAggregatePresenceSql
+                + " END");
+
+        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_updated"
+                + " AFTER UPDATE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+                + " BEGIN "
+                + replaceAggregatePresenceSql
+                + " END");
     }
 
     @Override
@@ -1358,35 +1383,6 @@ import java.util.HashMap;
         mVisibleSpecificUpdate.bindLong(1, groupMembershipMimetypeId);
         mVisibleSpecificUpdate.bindLong(2, aggId);
         mVisibleSpecificUpdate.execute();
-    }
-
-    /**
-     * Updates the contact ID for the specified contact.
-     */
-    public void setContactId(long rawContactId, long contactId) {
-        getWritableDatabase();
-        DatabaseUtils.bindObjectToProgram(mContactIdUpdate, 1, contactId);
-        DatabaseUtils.bindObjectToProgram(mContactIdUpdate, 2, rawContactId);
-        mContactIdUpdate.execute();
-    }
-
-    /**
-     * Marks the specified raw contact ID as aggregated
-     */
-    public void markAggregated(long rawContactId) {
-        getWritableDatabase();
-        DatabaseUtils.bindObjectToProgram(mMarkAggregatedUpdate, 1, rawContactId);
-        mMarkAggregatedUpdate.execute();
-    }
-
-    /**
-     * Updates the contact ID for the specified contact and marks the raw contact as aggregated.
-     */
-    public void setContactIdAndMarkAggregated(long rawContactId, long contactId) {
-        getWritableDatabase();
-        DatabaseUtils.bindObjectToProgram(mContactIdAndMarkAggregatedUpdate, 1, contactId);
-        DatabaseUtils.bindObjectToProgram(mContactIdAndMarkAggregatedUpdate, 2, rawContactId);
-        mContactIdAndMarkAggregatedUpdate.execute();
     }
 
     /**
