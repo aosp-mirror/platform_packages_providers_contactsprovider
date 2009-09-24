@@ -1213,15 +1213,39 @@ import java.util.HashMap;
 
         // Specific stats strings are based on an actual large database after running ANALYZE
         try {
-            updateIndexStats(db, Tables.RAW_CONTACTS, "raw_contacts_source_id_index", "10000 1 1 1");
-            updateIndexStats(db, Tables.RAW_CONTACTS, "raw_contacts_contact_id_index", "10000 2");
-            updateIndexStats(db, Tables.NAME_LOOKUP, "name_lookup_raw_contact_id_index", "10000 3");
-            updateIndexStats(db, Tables.NAME_LOOKUP, "name_lookup_index", "10000 3 2 2");
-            updateIndexStats(db, Tables.NAME_LOOKUP, "sqlite_autoindex_name_lookup_1", "10000 3 2 1");
-            updateIndexStats(db, Tables.PHONE_LOOKUP, "phone_lookup_index", "10000 2 2 1");
-            updateIndexStats(db, Tables.DATA, "data_mimetype_data2_index", "10000 1000 2");
-            updateIndexStats(db, Tables.DATA, "data_raw_contact_id", "10000 10");
-            updateIndexStats(db, Tables.GROUPS, "groups_source_id_index", "50 1 1 1");
+            updateIndexStats(db, Tables.CONTACTS,
+                    "contacts_restricted_index", "10000 9000");
+            updateIndexStats(db, Tables.CONTACTS,
+                    "contacts_has_phone_index", "10000 500");
+            updateIndexStats(db, Tables.CONTACTS,
+                    "contacts_visible_index", "10000 500");
+
+            updateIndexStats(db, Tables.RAW_CONTACTS,
+                    "raw_contacts_source_id_index", "10000 1 1 1");
+            updateIndexStats(db, Tables.RAW_CONTACTS,
+                    "raw_contacts_contact_id_index", "10000 2");
+
+            updateIndexStats(db, Tables.NAME_LOOKUP,
+                    "name_lookup_raw_contact_id_index", "10000 3");
+            updateIndexStats(db, Tables.NAME_LOOKUP,
+                    "name_lookup_index", "10000 3 2 2");
+            updateIndexStats(db, Tables.NAME_LOOKUP,
+                    "sqlite_autoindex_name_lookup_1", "10000 3 2 1");
+
+            updateIndexStats(db, Tables.PHONE_LOOKUP,
+                    "phone_lookup_index", "10000 2 2 1");
+
+            updateIndexStats(db, Tables.DATA,
+                    "data_mimetype_data1_index", "60000 5000 2");
+            updateIndexStats(db, Tables.DATA,
+                    "data_raw_contact_id", "60000 10");
+
+            updateIndexStats(db, Tables.GROUPS,
+                    "groups_source_id_index", "50 1 1 1");
+
+            updateIndexStats(db, Tables.NICKNAME_LOOKUP,
+                    "sqlite_autoindex_name_lookup_1", "500 2 1");
+
         } catch (SQLException e) {
             Log.e(TAG, "Could not update index stats", e);
         }
