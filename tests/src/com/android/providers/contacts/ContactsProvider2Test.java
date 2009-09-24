@@ -44,6 +44,7 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -127,6 +128,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testPhonesQuery() {
+
         ContentValues values = new ContentValues();
         values.put(RawContacts.CUSTOM_RINGTONE, "d");
         values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
@@ -1336,6 +1338,39 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
         assertEquals(photoId, twigId);
+    }
+
+    public void testUpdateRawContactData() {
+        // setup a contact with a null photo
+        ContentValues values = new ContentValues();
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        // setup a photo
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.putNull(Photo.PHOTO);
+
+        // try to do an update before insert should return count == 0
+        Uri dataUri = Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                RawContacts.Data.CONTENT_DIRECTORY);
+        assertEquals(0, mResolver.update(dataUri, values, Data.MIMETYPE + "=?",
+                new String[] {Photo.CONTENT_ITEM_TYPE}));
+
+        mResolver.insert(Data.CONTENT_URI, values);
+
+        // save a photo to the db
+        values.clear();
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.put(Photo.PHOTO, loadTestPhoto());
+        assertEquals(1, mResolver.update(dataUri, values, Data.MIMETYPE + "=?",
+                new String[] {Photo.CONTENT_ITEM_TYPE}));
+
+        // verify the photo
+        Cursor storedPhoto = mResolver.query(rawContactUri, new String[] {Photo.PHOTO},
+                Data.MIMETYPE + "=?", new String[] {Photo.CONTENT_ITEM_TYPE}, null);
+        MoreAsserts.assertEquals(loadTestPhoto(), storedPhoto.getBlob(0));
     }
 
     public void testLiveFolders() {
