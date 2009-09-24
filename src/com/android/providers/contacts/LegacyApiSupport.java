@@ -21,6 +21,7 @@ import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
+import com.android.providers.contacts.OpenHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
 
 import android.accounts.Account;
@@ -356,7 +357,15 @@ public class LegacyApiSupport {
         sPeopleProjectionMap.put(People.IM_HANDLE, People.IM_HANDLE);
         sPeopleProjectionMap.put(People.IM_ACCOUNT, People.IM_ACCOUNT);
         sPeopleProjectionMap.put(People.PRESENCE_STATUS, People.PRESENCE_STATUS);
-        sPeopleProjectionMap.put(People.PRESENCE_CUSTOM_STATUS, People.PRESENCE_CUSTOM_STATUS);
+        sPeopleProjectionMap.put(People.PRESENCE_CUSTOM_STATUS,
+                "(SELECT " + StatusUpdatesColumns.STATUS +
+                " FROM " + Tables.STATUS_UPDATES +
+                " JOIN " + Tables.DATA +
+                "   ON(" + StatusUpdatesColumns.DATA_ID + "=" + DataColumns.CONCRETE_ID + ")" +
+                " WHERE " + DataColumns.CONCRETE_RAW_CONTACT_ID + "=people." + People._ID +
+                " ORDER BY " + StatusUpdatesColumns.TIMESTAMP + " DESC " +
+                " LIMIT 1" +
+                ") AS " + People.PRESENCE_CUSTOM_STATUS);
 
         sOrganizationProjectionMap = new HashMap<String, String>();
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations._ID,
