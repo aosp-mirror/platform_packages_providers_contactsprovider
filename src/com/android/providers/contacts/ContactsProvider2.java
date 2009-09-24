@@ -1876,13 +1876,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case GROUPS: {
                 final Account account = readAccountFromQueryParams(uri);
-                id = insertGroup(values, account, callerIsSyncAdapter);
+                id = insertGroup(uri, values, account, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
             case SETTINGS: {
-                id = insertSettings(values);
+                id = insertSettings(uri, values);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2169,9 +2169,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
+     * Determine if the given {@link Uri} and {@link ContentValues} should
+     * trigger a call to {@link OpenHelper#updateAllVisible()}, usually based on
+     * query parameters like {@link Contacts#DELAY_STARRED_UPDATE} and columns
+     * like {@link Groups#GROUP_VISIBLE}.
+     */
+    private boolean shouldUpdateAllVisible(Uri uri, ContentValues values, String visibleColumn) {
+        final boolean delayUpdate = readBooleanQueryParameter(uri,
+                Contacts.DELAY_STARRED_UPDATE, false);
+        final boolean forceUpdate = readBooleanQueryParameter(uri,
+                Contacts.FORCE_STARRED_UPDATE, false);
+        final boolean touchedVisible = (values == null) ? true : values.containsKey(visibleColumn);
+
+        return forceUpdate || (!delayUpdate && touchedVisible);
+    }
+
+    /**
+     * Determine if the given {@link Uri} and {@link ContentValues} should
+     * trigger a call to {@link OpenHelper#updateAllVisible()}, usually based on
+     * query parameters like {@link Contacts#DELAY_STARRED_UPDATE}.
+     */
+    private boolean shouldUpdateAllVisible(Uri uri) {
+        return shouldUpdateAllVisible(uri, null, null);
+    }
+
+    /**
      * Inserts an item in the groups table
      */
-    private long insertGroup(ContentValues values, Account account, boolean callerIsSyncAdapter) {
+    private long insertGroup(Uri uri, ContentValues values, Account account, boolean callerIsSyncAdapter) {
         ContentValues overriddenValues = new ContentValues(values);
         if (!resolveAccount(overriddenValues, account)) {
             return -1;
@@ -2190,16 +2215,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         long result = mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
 
-        if (overriddenValues.containsKey(Groups.GROUP_VISIBLE)) {
+        if (shouldUpdateAllVisible(uri, overriddenValues, Groups.GROUP_VISIBLE)) {
             mOpenHelper.updateAllVisible();
         }
 
         return result;
     }
 
-    private long insertSettings(ContentValues values) {
+    private long insertSettings(Uri uri, ContentValues values) {
         final long id = mDb.insert(Tables.SETTINGS, null, values);
-        if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
+
+        if (shouldUpdateAllVisible(uri, values, Settings.UNGROUPED_VISIBLE)) {
             mOpenHelper.updateAllVisible();
         }
         return id;
@@ -2388,7 +2414,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case GROUPS_ID: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteGroup(ContentUris.parseId(uri), callerIsSyncAdapter);
+                return deleteGroup(uri, ContentUris.parseId(uri), callerIsSyncAdapter);
             }
 
             case GROUPS: {
@@ -2397,7 +2423,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
-                        numDeletes += deleteGroup(c.getLong(0), callerIsSyncAdapter);
+                        numDeletes += deleteGroup(uri, c.getLong(0), callerIsSyncAdapter);
                     }
                 } finally {
                     c.close();
@@ -2410,7 +2436,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case SETTINGS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteSettings(selection, selectionArgs);
+                return deleteSettings(uri, selection, selectionArgs);
             }
 
             case PRESENCE: {
@@ -2431,7 +2457,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 : (!"false".equals(flag.toLowerCase()) && !"0".equals(flag.toLowerCase()));
     }
 
-    private int deleteGroup(long groupId, boolean callerIsSyncAdapter) {
+    private int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
         final long groupMembershipMimetypeId = mOpenHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         mDb.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
@@ -2448,13 +2474,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return mDb.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
             }
         } finally {
-            mOpenHelper.updateAllVisible();
+            if (shouldUpdateAllVisible(uri)) {
+                mOpenHelper.updateAllVisible();
+            }
         }
     }
 
-    private int deleteSettings(String selection, String[] selectionArgs) {
+    private int deleteSettings(Uri uri, String selection, String[] selectionArgs) {
         final int count = mDb.delete(Tables.SETTINGS, selection, selectionArgs);
-        if (count > 0) {
+        if (count > 0 && shouldUpdateAllVisible(uri)) {
             mOpenHelper.updateAllVisible();
         }
         return count;
@@ -2591,7 +2619,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS: {
-                count = updateGroups(values, appendAccountToSelection(uri, selection),
+                count = updateGroups(uri, values, appendAccountToSelection(uri, selection),
                         selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
@@ -2603,7 +2631,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long groupId = ContentUris.parseId(uri);
                 String selectionWithId = (Groups._ID + "=" + groupId + " ")
                         + (selection == null ? "" : " AND " + selection);
-                count = updateGroups(values, selectionWithId, selectionArgs, callerIsSyncAdapter);
+                count = updateGroups(uri, values, selectionWithId, selectionArgs,
+                        callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
                 }
@@ -2616,7 +2645,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case SETTINGS: {
-                count = updateSettings(values, selection, selectionArgs);
+                count = updateSettings(uri, values, selection, selectionArgs);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2630,7 +2659,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return count;
     }
 
-    private int updateGroups(ContentValues values, String selectionWithId,
+    private int updateGroups(Uri uri, ContentValues values, String selectionWithId,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
 
         ContentValues updatedValues;
@@ -2646,15 +2675,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int count = mDb.update(Tables.GROUPS, updatedValues, selectionWithId, selectionArgs);
 
         // If changing visibility, then update contacts
-        if (updatedValues.containsKey(Groups.GROUP_VISIBLE)) {
+        if (shouldUpdateAllVisible(uri, updatedValues, Groups.GROUP_VISIBLE)) {
             mOpenHelper.updateAllVisible();
         }
         return count;
     }
 
-    private int updateSettings(ContentValues values, String selection, String[] selectionArgs) {
+    private int updateSettings(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         final int count = mDb.update(Tables.SETTINGS, values, selection, selectionArgs);
-        if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
+        if (shouldUpdateAllVisible(uri, values, Settings.UNGROUPED_VISIBLE)) {
             mOpenHelper.updateAllVisible();
         }
         return count;

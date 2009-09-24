@@ -16,11 +16,14 @@
 
 package com.android.providers.contacts;
 
+import android.accounts.Account;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -212,4 +215,50 @@ public class GroupsTest extends BaseContactsProvider2Test {
         public static final int COL_SUMMARY_WITH_PHONES = 2;
     }
 
+    private static final Account sTestAccount = new Account("user@example.com", "com.example");
+    private static final String GROUP_ID = "testgroup";
+
+    public boolean queryContactVisible(Uri contactUri) {
+        final Cursor cursor = mResolver.query(contactUri, new String[] {
+            Contacts.IN_VISIBLE_GROUP
+        }, null, null, null);
+        assertTrue("Contact not found", cursor.moveToFirst());
+        final boolean visible = (cursor.getInt(0) != 0);
+        cursor.close();
+        return visible;
+    }
+
+    public void testDelayStarredUpdate() {
+        final ContentValues values = new ContentValues();
+
+        final long groupId = this.createGroup(sTestAccount, GROUP_ID, GROUP_ID, 1);
+        final Uri groupUri = ContentUris.withAppendedId(Groups.CONTENT_URI, groupId);
+        final Uri groupUriDelay = groupUri.buildUpon().appendQueryParameter(
+                Contacts.DELAY_STARRED_UPDATE, "1").build();
+        final Uri groupUriForce = Groups.CONTENT_URI.buildUpon().appendQueryParameter(
+                Contacts.FORCE_STARRED_UPDATE, "1").build();
+
+        // Create contact with specific membership in visible group
+        final long rawContactId = this.createRawContact(sTestAccount);
+        final long contactId = this.queryContactId(rawContactId);
+        final Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        this.insertGroupMembership(rawContactId, groupId);
+
+        // Update the group visibility normally
+        assertTrue(queryContactVisible(contactUri));
+        values.put(Groups.GROUP_VISIBLE, 0);
+        mResolver.update(groupUri, values, null, null);
+        assertFalse(queryContactVisible(contactUri));
+
+        // Update visibility using delayed approach
+        values.put(Groups.GROUP_VISIBLE, 1);
+        mResolver.update(groupUriDelay, values, null, null);
+        assertFalse(queryContactVisible(contactUri));
+
+        // Force update and verify results
+        values.clear();
+        mResolver.update(groupUriForce, values, null, null);
+        assertTrue(queryContactVisible(contactUri));
+    }
 }
