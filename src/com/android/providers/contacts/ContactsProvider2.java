@@ -2574,6 +2574,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS: {
+                selection = appendAccountToSelection(uri, selection);
                 count = updateRawContacts(values, selection, selectionArgs);
                 break;
             }
