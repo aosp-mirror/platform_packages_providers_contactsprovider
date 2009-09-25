@@ -748,6 +748,40 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertPresence(c, Im.PROTOCOL_GOOGLE_TALK, null, Presence.AWAY, "Away");
         assertFalse(c.moveToNext());
         c.close();
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        ContentValues values = new ContentValues();
+        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Away");
+        assertStoredValuesWithProjection(contactUri, values);
+    }
+
+    public void testPresenceUpdateAndDelete() {
+        long rawContactId = createRawContact();
+        insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        ContentValues values = new ContentValues();
+        values.putNull(Presence.PRESENCE_STATUS);
+        values.putNull(Presence.PRESENCE_CUSTOM_STATUS);
+        assertStoredValuesWithProjection(contactUri, values);
+
+        Uri presenceUri =
+                insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AVAILABLE, "Available");
+        long presenceId = ContentUris.parseId(presenceUri);
+
+        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Available");
+        assertStoredValuesWithProjection(contactUri, values);
+
+        mResolver.delete(Presence.CONTENT_URI, Presence._ID + "=" + presenceId, null);
+        values.putNull(Presence.PRESENCE_STATUS);
+        values.putNull(Presence.PRESENCE_CUSTOM_STATUS);
+        assertStoredValuesWithProjection(contactUri, values);
     }
 
     private void assertPresence(Cursor c, int protocol, String customProtocol, int status,
