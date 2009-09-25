@@ -23,8 +23,8 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -66,8 +66,10 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         assertSearchSuggestion(groupId,
                 true,  // name
+                false, // nickname
                 true,  // photo
-                false, // organization
+                false, // company
+                false, // title
                 false, // phone
                 false, // email
                 "D",   // query
@@ -76,8 +78,10 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         assertSearchSuggestion(groupId,
                 true,  // name
+                false, // nickname
                 true,  // photo
-                true,  // organization
+                true,  // company
+                false, // title
                 false, // phone
                 false, // email
                 "D",   // query
@@ -86,8 +90,10 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         assertSearchSuggestion(groupId,
                 true,  // name
+                false, // nickname
                 true,  // photo
-                false, // organization
+                false, // company
+                false, // title
                 true,  // phone
                 false, // email
                 "D",   // query
@@ -96,8 +102,10 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         assertSearchSuggestion(groupId,
                 true,  // name
+                false, // nickname
                 true,  // photo
-                false, // organization
+                false, // company
+                false, // title
                 false, // phone
                 true,  // email
                 "D",   // query
@@ -107,19 +115,60 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         assertSearchSuggestion(groupId,
                 true,  // name
+                false, // nickname
                 false, // photo
-                true,  // organization
+                true,  // company
+                false, // title
                 false, // phone
                 false, // email
                 "D",   // query
                 false, // expect icon URI
                 null, "Deer Dough", "Google");
+
+        // Nickname is searchale
+        assertSearchSuggestion(groupId,
+                true,  // name
+                true,  // nickname
+                false, // photo
+                true,  // company
+                false, // title
+                false, // phone
+                false, // email
+                "L",   // query
+                false, // expect icon URI
+                null, "Deer Dough", "Google");
+
+        // Company is searchable
+        assertSearchSuggestion(groupId,
+                true,  // name
+                false, // nickname
+                false, // photo
+                true,  // company
+                false, // title
+                false, // phone
+                false, // email
+                "G",   // query
+                false, // expect icon URI
+                null, "Deer Dough", "Google");
+
+        // Title is searchable
+        assertSearchSuggestion(groupId,
+                true,  // name
+                false, // nickname
+                false, // photo
+                true,  // company
+                true,  // title
+                false, // phone
+                false, // email
+                "S",   // query
+                false, // expect icon URI
+                null, "Deer Dough", "Google");
     }
 
-    private void assertSearchSuggestion(long groupId, boolean name, boolean photo,
-            boolean organization, boolean phone, boolean email, String query,
-            boolean expectIcon1Uri, String expectedIcon2, String expectedText1, String expectedText2)
-            throws IOException {
+    private void assertSearchSuggestion(long groupId, boolean name, boolean nickname, boolean photo,
+            boolean company, boolean title, boolean phone, boolean email, String query,
+            boolean expectIcon1Uri, String expectedIcon2, String expectedText1,
+            String expectedText2) throws IOException {
         ContentValues values = new ContentValues();
 
         long rawContactId = createRawContact();
@@ -127,6 +176,10 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         if (name) {
             insertStructuredName(rawContactId, "Deer", "Dough");
+        }
+
+        if (nickname) {
+            insertNickname(rawContactId, "Little Fawn");
         }
 
         final Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -139,12 +192,17 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             mResolver.insert(Data.CONTENT_URI, values);
         }
 
-        if (organization) {
+        if (company || title) {
             values.clear();
             values.put(Data.RAW_CONTACT_ID, rawContactId);
             values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
             values.put(Organization.TYPE, Organization.TYPE_WORK);
-            values.put(Organization.COMPANY, "Google");
+            if (company) {
+                values.put(Organization.COMPANY, "Google");
+            }
+            if (title) {
+                values.put(Organization.TITLE, "Software Engineer");
+            }
             mResolver.insert(Data.CONTENT_URI, values);
         }
 
