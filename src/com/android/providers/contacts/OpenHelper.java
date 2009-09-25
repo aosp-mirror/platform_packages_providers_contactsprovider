@@ -58,7 +58,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 93;
+    private static final int DATABASE_VERSION = 94;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -79,6 +79,7 @@ import java.util.HashMap;
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
         public static final String CALLS = "calls";
         public static final String CONTACT_ENTITIES = "contact_entities_view";
+        public static final String STATUS_UPDATES = "status_updates";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -237,6 +238,8 @@ import java.util.HashMap;
          * it is restricted.
          */
         public static final String SINGLE_IS_RESTRICTED = "single_is_restricted";
+
+        public static final String LAST_STATUS_UPDATE_ID = "status_update_id";
 
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
         public static final String CONCRETE_DISPLAY_NAME = Tables.CONTACTS + "."
@@ -429,6 +432,12 @@ import java.util.HashMap;
         String CONTACT_ID = "presence_contact_id";
     }
 
+    public interface StatusUpdatesColumns {
+        String DATA_ID = "status_update_data_id";
+        String TIMESTAMP = "status_timestamp";
+        String STATUS = "status_update";
+    }
+
     /** In-memory cache of previously found mimetype mappings */
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
@@ -442,7 +451,6 @@ import java.util.HashMap;
     private SQLiteStatement mAggregationModeQuery;
     private SQLiteStatement mMimetypeInsert;
     private SQLiteStatement mPackageInsert;
-
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
 
@@ -516,16 +524,15 @@ import java.util.HashMap;
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
-                Presence._ID + " INTEGER PRIMARY KEY," +
-                PresenceColumns.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
-                PresenceColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
-                Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
+                Presence._ID + " INTEGER NOT NULL, " +
                 Presence.PROTOCOL + " INTEGER NOT NULL," +
                 Presence.CUSTOM_PROTOCOL + " TEXT," +
                 Presence.IM_HANDLE + " TEXT," +
                 Presence.IM_ACCOUNT + " TEXT," +
+                PresenceColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
+                PresenceColumns.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
+                Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
                 Presence.PRESENCE_STATUS + " INTEGER," +
-                Presence.PRESENCE_CUSTOM_STATUS + " TEXT," +
                 "UNIQUE(" + Presence.PROTOCOL + ", " + Presence.CUSTOM_PROTOCOL
                     + ", " + Presence.IM_HANDLE + ", " + Presence.IM_ACCOUNT + ")" +
         ");");
@@ -563,11 +570,9 @@ import java.util.HashMap;
         String replaceAggregatePresenceSql =
             "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                     + AggregatedPresenceColumns.CONTACT_ID + ", "
-                    + Presence.PRESENCE_STATUS + ", "
-                    + Presence.PRESENCE_CUSTOM_STATUS + ")" +
+                    + Presence.PRESENCE_STATUS + ")" +
             " SELECT " + PresenceColumns.CONTACT_ID + ","
-                        + "MAX(" + Presence.PRESENCE_STATUS + "), "
-                        + "MAX(" + Presence.PRESENCE_CUSTOM_STATUS + ")" +
+                        + "MAX(" + Presence.PRESENCE_STATUS + ")" +
                     " FROM " + Tables.PRESENCE +
                     " WHERE " + PresenceColumns.CONTACT_ID
                         + "=NEW." + PresenceColumns.CONTACT_ID + ";";
@@ -604,6 +609,7 @@ import java.util.HashMap;
                 Contacts.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LOOKUP_KEY + " TEXT," +
+                ContactsColumns.LAST_STATUS_UPDATE_ID + " INTEGER REFERENCES data(_id)," +
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
@@ -924,6 +930,12 @@ import java.util.HashMap;
                 Activities.THUMBNAIL + " BLOB" +
         ");");
 
+        db.execSQL("CREATE TABLE " + Tables.STATUS_UPDATES + " (" +
+                StatusUpdatesColumns.DATA_ID + " INTEGER PRIMARY KEY REFERENCES data(_id)," +
+                StatusUpdatesColumns.TIMESTAMP + " INTEGER," +
+                StatusUpdatesColumns.STATUS + " TEXT" +
+        ");");
+
         db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS SELECT "
                 + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
                 + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
@@ -1036,6 +1048,7 @@ import java.util.HashMap;
                 + ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
+                + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
                 + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
@@ -1091,7 +1104,8 @@ import java.util.HashMap;
                 + ContactsColumns.CONCRETE_STARRED
                         + " AS " + Contacts.STARRED + ", "
                 + ContactsColumns.CONCRETE_TIMES_CONTACTED
-                        + " AS " + Contacts.TIMES_CONTACTED;
+                        + " AS " + Contacts.TIMES_CONTACTED + ", "
+                + ContactsColumns.LAST_STATUS_UPDATE_ID;
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
@@ -1167,6 +1181,7 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
         db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");

@@ -268,11 +268,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mAggregatedPresenceReplace = db.compileStatement(
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                         + AggregatedPresenceColumns.CONTACT_ID + ", "
-                        + Presence.PRESENCE_STATUS + ", "
-                        + Presence.PRESENCE_CUSTOM_STATUS
-                + ") SELECT ?, "
-                            + "MAX(" + Presence.PRESENCE_STATUS + "), "
-                            + "MAX(" + Presence.PRESENCE_CUSTOM_STATUS + ")"
+                        + Presence.PRESENCE_STATUS
+                + ") SELECT ?, MAX(" + Presence.PRESENCE_STATUS + ") "
                         + " FROM " + Tables.PRESENCE
                         + " WHERE " + PresenceColumns.CONTACT_ID + "=?");
 

@@ -299,12 +299,24 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected Uri insertPresence(int protocol, String customProtocol, String handle, int presence,
             String status) {
+        return insertPresence(protocol, customProtocol, handle, presence, status, 0);
+    }
+
+    protected Uri insertPresence(int protocol, String customProtocol, String handle, int presence,
+            String status, long timestamp) {
         ContentValues values = new ContentValues();
         values.put(Presence.PROTOCOL, protocol);
         values.put(Presence.CUSTOM_PROTOCOL, customProtocol);
         values.put(Presence.IM_HANDLE, handle);
-        values.put(Presence.PRESENCE_STATUS, presence);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, status);
+        if (presence != 0) {
+            values.put(Presence.PRESENCE_STATUS, presence);
+        }
+        if (status != null) {
+            values.put(Presence.PRESENCE_CUSTOM_STATUS, status);
+        }
+        if (timestamp != 0) {
+            values.put(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP, timestamp);
+        }
 
         Uri resultUri = mResolver.insert(Presence.CONTENT_URI, values);
         return resultUri;

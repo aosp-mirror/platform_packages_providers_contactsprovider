@@ -720,7 +720,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
     }
 
-    public void testInsertPresence() {
+    public void testPresenceInsert() {
         long rawContactId = createRawContact();
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
         insertImHandle(rawContactId, Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im");
@@ -772,8 +772,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(Presence.PRESENCE_CUSTOM_STATUS);
         assertStoredValuesWithProjection(contactUri, values);
 
+        insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AWAY, "BUSY");
+        insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.DO_NOT_DISTURB, "GO AWAY");
         Uri presenceUri =
-                insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AVAILABLE, "Available");
+            insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AVAILABLE, "Available");
         long presenceId = ContentUris.parseId(presenceUri);
 
         values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
@@ -782,7 +784,27 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         mResolver.delete(Presence.CONTENT_URI, Presence._ID + "=" + presenceId, null);
         values.putNull(Presence.PRESENCE_STATUS);
-        values.putNull(Presence.PRESENCE_CUSTOM_STATUS);
+
+        // Latest custom status update stays on the phone
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Available");
+        assertStoredValuesWithProjection(contactUri, values);
+    }
+
+    public void testPresenceWithTimestamp() {
+        long rawContactId = createRawContact();
+        insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
+        insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "gtalk");
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        insertPresence(Im.PROTOCOL_AIM, null, "aim", 0, "Offline", 80);
+        insertPresence(Im.PROTOCOL_AIM, null, "aim", 0, "Available", 100);
+        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", 0, "Busy", 90);
+
+        // Should return the latest status
+        ContentValues values = new ContentValues();
+        values.put(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP, 100);
+        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Available");
         assertStoredValuesWithProjection(contactUri, values);
     }
 
