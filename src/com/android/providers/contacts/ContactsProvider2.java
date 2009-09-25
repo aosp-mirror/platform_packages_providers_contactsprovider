@@ -4553,14 +4553,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void appendContactFilterAsNestedQuery(StringBuilder sb, String filterParam) {
-        sb.append("(SELECT DISTINCT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
-                + " JOIN name_lookup ON(" + RawContactsColumns.CONCRETE_ID + "=raw_contact_id)"
-                + " WHERE normalized_name GLOB '");
+        sb.append("(" +
+                "SELECT DISTINCT " + RawContacts.CONTACT_ID +
+                " FROM " + Tables.RAW_CONTACTS +
+                " JOIN " + Tables.NAME_LOOKUP +
+                " ON(" + RawContactsColumns.CONCRETE_ID + "="
+                        + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                " WHERE normalized_name GLOB '");
         sb.append(NameNormalizer.normalize(filterParam));
-        sb.append("*' AND ("
-                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NAME_COLLATION_KEY
-                + " OR "
-                + NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + "))");
+        sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN("
+                + NameLookupType.NAME_COLLATION_KEY + ","
+                + NameLookupType.EMAIL_BASED_NICKNAME + ","
+                + NameLookupType.NICKNAME + ","
+                + NameLookupType.ORGANIZATION + "))");
     }
 
     public String getRawContactsByFilterAsNestedQuery(String filterParam) {
@@ -4576,11 +4581,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendRawContactsByNormalizedNameFilter(StringBuilder sb, String normalizedName,
             String limit) {
-        sb.append("(SELECT DISTINCT raw_contact_id FROM name_lookup WHERE normalized_name GLOB '");
+        sb.append("(" +
+                "SELECT DISTINCT " + NameLookupColumns.RAW_CONTACT_ID +
+                " FROM " + Tables.NAME_LOOKUP +
+                " WHERE " + NameLookupColumns.NORMALIZED_NAME +
+                " GLOB '");
         sb.append(normalizedName);
         sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
                 + NameLookupType.NAME_COLLATION_KEY + ","
                 + NameLookupType.NICKNAME + ","
+                + NameLookupType.EMAIL_BASED_NICKNAME + ","
                 + NameLookupType.ORGANIZATION + ")");
 
         if (limit != null) {
