@@ -431,7 +431,7 @@ public class LegacyApiSupport {
         sGroupProjectionMap.put(android.provider.Contacts.Groups.SYSTEM_ID,
                 android.provider.Contacts.Groups.SYSTEM_ID);
 
-        sGroupMembershipProjectionMap = new HashMap<String, String>();
+        sGroupMembershipProjectionMap = new HashMap<String, String>(sGroupProjectionMap);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership._ID,
                 android.provider.Contacts.GroupMembership._ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.PERSON_ID,
