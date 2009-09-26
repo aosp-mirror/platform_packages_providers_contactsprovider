@@ -1502,6 +1502,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
+    private boolean mVisibleTouched = false;
+
     private boolean mSyncToNetwork;
 
     public ContactsProvider2() {
@@ -1814,6 +1816,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         super.beforeTransactionCommit();
         flushTransactionalChanges();
         mContactAggregator.aggregateInTransaction(mDb);
+        if (mVisibleTouched) {
+            mVisibleTouched = false;
+            mOpenHelper.updateAllVisible();
+        }
     }
 
     private void flushTransactionalChanges() {
@@ -2219,31 +2225,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Determine if the given {@link Uri} and {@link ContentValues} should
-     * trigger a call to {@link OpenHelper#updateAllVisible()}, usually based on
-     * query parameters like {@link Contacts#DELAY_STARRED_UPDATE} and columns
-     * like {@link Groups#GROUP_VISIBLE}.
-     */
-    private boolean shouldUpdateAllVisible(Uri uri, ContentValues values, String visibleColumn) {
-        final boolean delayUpdate = readBooleanQueryParameter(uri,
-                Contacts.DELAY_STARRED_UPDATE, false);
-        final boolean forceUpdate = readBooleanQueryParameter(uri,
-                Contacts.FORCE_STARRED_UPDATE, false);
-        final boolean touchedVisible = (values == null) ? true : values.containsKey(visibleColumn);
-
-        return forceUpdate || (!delayUpdate && touchedVisible);
-    }
-
-    /**
-     * Determine if the given {@link Uri} and {@link ContentValues} should
-     * trigger a call to {@link OpenHelper#updateAllVisible()}, usually based on
-     * query parameters like {@link Contacts#DELAY_STARRED_UPDATE}.
-     */
-    private boolean shouldUpdateAllVisible(Uri uri) {
-        return shouldUpdateAllVisible(uri, null, null);
-    }
-
-    /**
      * Inserts an item in the groups table
      */
     private long insertGroup(Uri uri, ContentValues values, Account account, boolean callerIsSyncAdapter) {
@@ -2265,8 +2246,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         long result = mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
 
-        if (shouldUpdateAllVisible(uri, overriddenValues, Groups.GROUP_VISIBLE)) {
-            mOpenHelper.updateAllVisible();
+        if (overriddenValues.containsKey(Groups.GROUP_VISIBLE)) {
+            mVisibleTouched = true;
         }
 
         return result;
@@ -2275,9 +2256,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private long insertSettings(Uri uri, ContentValues values) {
         final long id = mDb.insert(Tables.SETTINGS, null, values);
 
-        if (shouldUpdateAllVisible(uri, values, Settings.UNGROUPED_VISIBLE)) {
-            mOpenHelper.updateAllVisible();
+        if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
+            mVisibleTouched = true;
         }
+
         return id;
     }
 
@@ -2573,17 +2555,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return mDb.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
             }
         } finally {
-            if (shouldUpdateAllVisible(uri)) {
-                mOpenHelper.updateAllVisible();
-            }
+            mVisibleTouched = true;
         }
     }
 
     private int deleteSettings(Uri uri, String selection, String[] selectionArgs) {
         final int count = mDb.delete(Tables.SETTINGS, selection, selectionArgs);
-        if (count > 0 && shouldUpdateAllVisible(uri)) {
-            mOpenHelper.updateAllVisible();
-        }
+        mVisibleTouched = true;
         return count;
     }
 
@@ -2782,18 +2760,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         int count = mDb.update(Tables.GROUPS, updatedValues, selectionWithId, selectionArgs);
-
-        // If changing visibility, then update contacts
-        if (shouldUpdateAllVisible(uri, updatedValues, Groups.GROUP_VISIBLE)) {
-            mOpenHelper.updateAllVisible();
+        if (updatedValues.containsKey(Groups.GROUP_VISIBLE)) {
+            mVisibleTouched = true;
         }
         return count;
     }
 
     private int updateSettings(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         final int count = mDb.update(Tables.SETTINGS, values, selection, selectionArgs);
-        if (shouldUpdateAllVisible(uri, values, Settings.UNGROUPED_VISIBLE)) {
-            mOpenHelper.updateAllVisible();
+        if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
+            mVisibleTouched = true;
         }
         return count;
     }
@@ -4198,7 +4174,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Groups.SYNC4,
                 Groups.SYSTEM_ID,
                 Groups.NOTES,
-                Groups.DELETED};
+                Groups.DELETED,
+                Groups.SHOULD_SYNC};
 
         private static final int COLUMN_ID = 0;
         private static final int COLUMN_ACCOUNT_NAME = 1;
@@ -4217,6 +4194,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         private static final int COLUMN_SYSTEM_ID = 14;
         private static final int COLUMN_NOTES = 15;
         private static final int COLUMN_DELETED = 16;
+        private static final int COLUMN_SHOULD_SYNC = 17;
 
         public GroupsEntityIterator(ContactsProvider2 provider, String groupIdString, Uri uri,
                 String selection, String[] selectionArgs, String sortOrder) {
@@ -4300,6 +4278,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             groupValues.put(Groups.SYSTEM_ID, c.getString(COLUMN_SYSTEM_ID));
             groupValues.put(Groups.DELETED, c.getLong(COLUMN_DELETED));
             groupValues.put(Groups.NOTES, c.getString(COLUMN_NOTES));
+            groupValues.put(Groups.SHOULD_SYNC, c.getString(COLUMN_SHOULD_SYNC));
             Entity group = new Entity(groupValues);
 
             mEntityCursor.moveToNext();
