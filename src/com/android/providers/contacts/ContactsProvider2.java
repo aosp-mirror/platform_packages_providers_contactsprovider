@@ -2302,48 +2302,57 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         }
 
-        // TODO: generalize to allow other providers to match against email
-        boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == protocol;
-
-        StringBuilder selection = new StringBuilder();
-        String[] selectionArgs;
-        if (matchEmail) {
-            selection.append(
-                    "((" + MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
-                    + " AND " + Im.PROTOCOL + "=?"
-                    + " AND " + Im.DATA + "=?");
-            if (customProtocol != null) {
-                selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
-                DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
-            }
-            selection.append(") OR ("
-                    + MimetypesColumns.MIMETYPE + "='" + Email.CONTENT_ITEM_TYPE + "'"
-                    + " AND " + Email.DATA + "=?"
-                    + "))");
-            selectionArgs = new String[] { String.valueOf(protocol), handle, handle };
-        } else {
-            selection.append(
-                    MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
-                    + " AND " + Im.PROTOCOL + "=?"
-                    + " AND " + Im.DATA + "=?");
-            if (customProtocol != null) {
-                selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
-                DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
-            }
-
-            selectionArgs = new String[] { String.valueOf(protocol), handle };
-        }
-
-        if (values.containsKey(Presence.DATA_ID)) {
-            selection.append(" AND " + DataColumns.CONCRETE_ID + "=")
-                    .append(values.getAsLong(Presence.DATA_ID));
-        }
-
-        selection.append(" AND ").append(getContactsRestrictions());
-
-        long dataId = -1;
         long rawContactId = -1;
         long contactId = -1;
+        Long dataId = values.getAsLong(Presence.DATA_ID);
+        StringBuilder selection = new StringBuilder();
+        String[] selectionArgs;
+
+        if (dataId != null) {
+            // Lookup the contact info for the given data row.
+
+            selection.append(Tables.DATA + "." + Data._ID + "=");
+            selection.append(dataId);
+            selectionArgs = null;
+        } else {
+            // Lookup the data row to attach this presence update to
+
+            // TODO: generalize to allow other providers to match against email
+            boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == protocol;
+
+            if (matchEmail) {
+                selection.append(
+                        "((" + MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Im.PROTOCOL + "=?"
+                        + " AND " + Im.DATA + "=?");
+                if (customProtocol != null) {
+                    selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
+                    DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
+                }
+                selection.append(") OR ("
+                        + MimetypesColumns.MIMETYPE + "='" + Email.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Email.DATA + "=?"
+                        + "))");
+                selectionArgs = new String[] { String.valueOf(protocol), handle, handle };
+            } else {
+                selection.append(
+                        MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Im.PROTOCOL + "=?"
+                        + " AND " + Im.DATA + "=?");
+                if (customProtocol != null) {
+                    selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
+                    DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
+                }
+
+                selectionArgs = new String[] { String.valueOf(protocol), handle };
+            }
+
+            if (values.containsKey(Presence.DATA_ID)) {
+                selection.append(" AND " + DataColumns.CONCRETE_ID + "=")
+                        .append(values.getAsLong(Presence.DATA_ID));
+            }
+        }
+        selection.append(" AND ").append(getContactsRestrictions());
 
         Cursor cursor = null;
         try {
