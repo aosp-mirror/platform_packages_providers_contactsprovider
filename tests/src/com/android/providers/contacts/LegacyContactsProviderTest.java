@@ -632,21 +632,10 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     public void testGroupMembershipsInsert() {
         ContentValues values = new ContentValues();
-        values.put(Groups.NAME, "Galois");
         values.put(Groups.NOTES, "Abel");
-        Uri groupUri = mResolver.insert(Groups.CONTENT_URI, values);
-
-        values.clear();
-        values.put(People.NAME, "Klein");
-        Uri personUri = mResolver.insert(People.CONTENT_URI, values);
-
-        long groupId = ContentUris.parseId(groupUri);
-        long personId = ContentUris.parseId(personUri);
-
-        values.clear();
-        values.put(GroupMembership.GROUP_ID, groupId);
-        values.put(GroupMembership.PERSON_ID, personId);
-        Uri membershipUri = mResolver.insert(GroupMembership.CONTENT_URI, values);
+        Uri groupUri = insertLegacyGroup("Galois", values);
+        Uri personUri = insertPerson("Klein", values);
+        Uri membershipUri = insertLegacyGroupMembership(groupUri, personUri, values);
         assertStoredValues(membershipUri, values);
         assertSelection(GroupMembership.CONTENT_URI, values, "groupmembership",
                 GroupMembership._ID, ContentUris.parseId(membershipUri));
@@ -672,6 +661,23 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri personsGroupsUri = Uri.withAppendedPath(personUri, GroupMembership.CONTENT_DIRECTORY);
         assertStoredValues(personsGroupsUri, values);
+    }
+
+    public void testGroupMembersByGroupName() {
+        ContentValues values = new ContentValues();
+        Uri groupUri1 = insertLegacyGroup("Galois", values);
+        Uri personUri1 = insertPerson("Klein", values);
+        insertLegacyGroupMembership(groupUri1, personUri1, values);
+
+        Uri groupUri2 = insertLegacyGroup("Euler", values);
+        Uri personUri2 = insertPerson("Lagrange", values);
+        insertLegacyGroupMembership(groupUri2, personUri2, values);
+
+        // NOTE: testing non-public API support
+        assertStoredValue(Uri.parse("content://contacts/groups/name/Galois/members"),
+                People.NAME, "Klein");
+        assertStoredValue(Uri.parse("content://contacts/groups/name/Euler/members"),
+                People.NAME, "Lagrange");
     }
 
     public void testPhotoUpdate() throws Exception {
@@ -910,6 +916,27 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
         assertCursorValues(c, values);
         c.close();
+    }
+
+    private Uri insertPerson(String name, ContentValues values) {
+        values.put(People.NAME, name);
+        return mResolver.insert(People.CONTENT_URI, values);
+    }
+
+    private Uri insertLegacyGroup(String name, ContentValues values) {
+        values.put(Groups.NAME, name);
+        return mResolver.insert(Groups.CONTENT_URI, values);
+    }
+
+    private Uri insertLegacyGroupMembership(Uri groupUri, Uri personUri, ContentValues values) {
+        long groupId = ContentUris.parseId(groupUri);
+        long personId = ContentUris.parseId(personUri);
+
+        values.clear();
+        values.put(GroupMembership.GROUP_ID, groupId);
+        values.put(GroupMembership.PERSON_ID, personId);
+        Uri membershipUri = mResolver.insert(GroupMembership.CONTENT_URI, values);
+        return membershipUri;
     }
 
     private void putContactValues(ContentValues values) {
