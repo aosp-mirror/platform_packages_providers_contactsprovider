@@ -42,6 +42,7 @@ import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.People;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
@@ -106,6 +107,7 @@ public class LegacyApiSupport {
     private static final int LIVE_FOLDERS_PEOPLE_WITH_PHONES = 37;
     private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
     private static final int CONTACTMETHODS_EMAIL = 39;
+    private static final int GROUP_NAME_MEMBERS = 40;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -258,7 +260,7 @@ public class LegacyApiSupport {
         matcher.addURI(authority, "extensions/#", EXTENSIONS_ID);
         matcher.addURI(authority, "groups", GROUPS);
         matcher.addURI(authority, "groups/#", GROUPS_ID);
-//        matcher.addURI(authority, "groups/name/*/members", GROUP_NAME_MEMBERS);
+        matcher.addURI(authority, "groups/name/*/members", GROUP_NAME_MEMBERS);
 //        matcher.addURI(authority, "groups/name/*/members/filter/*",
 //                GROUP_NAME_MEMBERS_FILTER);
 //        matcher.addURI(authority, "groups/system_id/*/members", GROUP_SYSTEM_ID_MEMBERS);
@@ -1447,6 +1449,14 @@ public class LegacyApiSupport {
                 break;
             }
 
+            case GROUP_NAME_MEMBERS:
+                qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
+                qb.setProjectionMap(sPeopleProjectionMap);
+                applyRawContactsAccount(qb);
+                String group = uri.getPathSegments().get(2);
+                qb.appendWhere(" AND " + buildGroupNameMatchWhereClause(group));
+                break;
+
             case ORGANIZATIONS:
                 qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
                 qb.setProjectionMap(sOrganizationProjectionMap);
@@ -1716,6 +1726,26 @@ public class LegacyApiSupport {
         DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
         sb.append(" AND " + Groups.ACCOUNT_TYPE + "=");
         DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
+    }
+
+    /**
+     * Build a WHERE clause that restricts the query to match people that are a member of
+     * a group with a particular name. The projection map of the query must include
+     * {@link People#_ID}.
+     *
+     * @param groupName The name of the group
+     * @return The where clause.
+     */
+    private String buildGroupNameMatchWhereClause(String groupName) {
+        return "people._id IN "
+                + "(SELECT " + DataColumns.CONCRETE_RAW_CONTACT_ID
+                + " FROM " + Tables.DATA_JOIN_MIMETYPES
+                + " WHERE " + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                        + "' AND " + GroupMembership.GROUP_ROW_ID + "="
+                                + "(SELECT " + Tables.GROUPS + "." + Groups._ID
+                                + " FROM " + Tables.GROUPS
+                                + " WHERE " + Groups.TITLE + "="
+                                        + DatabaseUtils.sqlEscapeString(groupName) + "))";
     }
 
     /**
