@@ -16,17 +16,25 @@
 
 package com.android.providers.contacts;
 
+import com.google.android.collect.Lists;
+
 import android.accounts.Account;
+import android.content.ContentProviderOperation;
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.RemoteException;
+import android.provider.ContactsContract;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
+
+import java.util.ArrayList;
 
 /**
  * Unit tests for {@link Groups} and {@link GroupMembership}.
@@ -216,49 +224,166 @@ public class GroupsTest extends BaseContactsProvider2Test {
     }
 
     private static final Account sTestAccount = new Account("user@example.com", "com.example");
+    private static final Account sSecondAccount = new Account("other@example.net", "net.example");
     private static final String GROUP_ID = "testgroup";
 
-    public boolean queryContactVisible(Uri contactUri) {
-        final Cursor cursor = mResolver.query(contactUri, new String[] {
-            Contacts.IN_VISIBLE_GROUP
-        }, null, null, null);
-        assertTrue("Contact not found", cursor.moveToFirst());
-        final boolean visible = (cursor.getInt(0) != 0);
-        cursor.close();
-        return visible;
+    public void assertRawContactVisible(long rawContactId, boolean expected) {
+        final long contactId = this.queryContactId(rawContactId);
+        assertContactVisible(contactId, expected);
     }
 
-    public void testDelayStarredUpdate() {
+    public void assertContactVisible(long contactId, boolean expected) {
+        final Cursor cursor = mResolver.query(Contacts.CONTENT_URI, new String[] {
+            Contacts.IN_VISIBLE_GROUP
+        }, Contacts._ID + "=" + contactId, null, null);
+        assertTrue("Contact not found", cursor.moveToFirst());
+        final boolean actual = (cursor.getInt(0) != 0);
+        cursor.close();
+        assertEquals("Unexpected visibility", expected, actual);
+    }
+
+    public ContentProviderOperation buildVisibleAssert(long contactId, boolean visible) {
+        return ContentProviderOperation.newAssertQuery(Contacts.CONTENT_URI).withSelection(
+                Contacts._ID + "=" + contactId + " AND " + Contacts.IN_VISIBLE_GROUP + "="
+                        + (visible ? 1 : 0), null).withExpectedCount(1).build();
+    }
+
+    public void testDelayVisibleTransaction() throws RemoteException, OperationApplicationException {
         final ContentValues values = new ContentValues();
 
         final long groupId = this.createGroup(sTestAccount, GROUP_ID, GROUP_ID, 1);
         final Uri groupUri = ContentUris.withAppendedId(Groups.CONTENT_URI, groupId);
-        final Uri groupUriDelay = groupUri.buildUpon().appendQueryParameter(
-                Contacts.DELAY_STARRED_UPDATE, "1").build();
-        final Uri groupUriForce = Groups.CONTENT_URI.buildUpon().appendQueryParameter(
-                Contacts.FORCE_STARRED_UPDATE, "1").build();
 
-        // Create contact with specific membership in visible group
+        // Create contact with specific membership
         final long rawContactId = this.createRawContact(sTestAccount);
         final long contactId = this.queryContactId(rawContactId);
         final Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         this.insertGroupMembership(rawContactId, groupId);
 
-        // Update the group visibility normally
-        assertTrue(queryContactVisible(contactUri));
-        values.put(Groups.GROUP_VISIBLE, 0);
-        mResolver.update(groupUri, values, null, null);
-        assertFalse(queryContactVisible(contactUri));
+        final ArrayList<ContentProviderOperation> oper = Lists.newArrayList();
 
-        // Update visibility using delayed approach
-        values.put(Groups.GROUP_VISIBLE, 1);
-        mResolver.update(groupUriDelay, values, null, null);
-        assertFalse(queryContactVisible(contactUri));
+        // Update visibility inside a transaction and assert that inside the
+        // transaction it hasn't been updated yet.
+        oper.add(buildVisibleAssert(contactId, true));
+        oper.add(ContentProviderOperation.newUpdate(groupUri).withValue(Groups.GROUP_VISIBLE, 0)
+                .build());
+        oper.add(buildVisibleAssert(contactId, true));
+        mResolver.applyBatch(ContactsContract.AUTHORITY, oper);
 
-        // Force update and verify results
+        // After previous transaction finished, visibility should be updated
+        oper.clear();
+        oper.add(buildVisibleAssert(contactId, false));
+        mResolver.applyBatch(ContactsContract.AUTHORITY, oper);
+    }
+
+    public void testLocalSingleVisible() {
+        final long rawContactId = this.createRawContact();
+
+        // Single, local contacts should always be visible
+        assertRawContactVisible(rawContactId, true);
+    }
+
+    public void testLocalMixedVisible() {
+        // Aggregate, when mixed with local, should become visible
+        final long rawContactId1 = this.createRawContact();
+        final long rawContactId2 = this.createRawContact(sTestAccount);
+
+        final long groupId = this.createGroup(sTestAccount, GROUP_ID, GROUP_ID, 0);
+        this.insertGroupMembership(rawContactId2, groupId);
+
+        // Make sure they are still apart
+        assertNotAggregated(rawContactId1, rawContactId2);
+        assertRawContactVisible(rawContactId1, true);
+        assertRawContactVisible(rawContactId2, false);
+
+        // Force together and see what happens
+        final ContentValues values = new ContentValues();
+        values.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE_KEEP_TOGETHER);
+        values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
+        values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
+        mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
+
+        assertRawContactVisible(rawContactId1, true);
+        assertRawContactVisible(rawContactId2, true);
+    }
+
+    public void testUngroupedVisible() {
+        final long rawContactId = this.createRawContact(sTestAccount);
+
+        final ContentValues values = new ContentValues();
+        values.put(Settings.ACCOUNT_NAME, sTestAccount.name);
+        values.put(Settings.ACCOUNT_TYPE, sTestAccount.type);
+        values.put(Settings.UNGROUPED_VISIBLE, 0);
+        mResolver.insert(Settings.CONTENT_URI, values);
+
+        assertRawContactVisible(rawContactId, false);
+
         values.clear();
-        mResolver.update(groupUriForce, values, null, null);
-        assertTrue(queryContactVisible(contactUri));
+        values.put(Settings.UNGROUPED_VISIBLE, 1);
+        mResolver.update(Settings.CONTENT_URI, values, Settings.ACCOUNT_NAME + "=? AND "
+                + Settings.ACCOUNT_TYPE + "=?", new String[] {
+                sTestAccount.name, sTestAccount.type
+        });
+
+        assertRawContactVisible(rawContactId, true);
+    }
+
+    public void testMultipleSourcesVisible() {
+        final long rawContactId1 = this.createRawContact(sTestAccount);
+        final long rawContactId2 = this.createRawContact(sSecondAccount);
+
+        final long groupId = this.createGroup(sTestAccount, GROUP_ID, GROUP_ID, 0);
+        this.insertGroupMembership(rawContactId1, groupId);
+
+        // Make sure still invisible
+        assertRawContactVisible(rawContactId1, false);
+        assertRawContactVisible(rawContactId2, false);
+
+        // Make group visible
+        final ContentValues values = new ContentValues();
+        values.put(Groups.GROUP_VISIBLE, 1);
+        mResolver.update(Groups.CONTENT_URI, values, Groups._ID + "=" + groupId, null);
+
+        assertRawContactVisible(rawContactId1, true);
+        assertRawContactVisible(rawContactId2, false);
+
+        // Force them together
+        values.clear();
+        values.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE_KEEP_TOGETHER);
+        values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
+        values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
+        mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
+
+        assertRawContactVisible(rawContactId1, true);
+        assertRawContactVisible(rawContactId2, true);
+
+        // Make group invisible
+        values.clear();
+        values.put(Groups.GROUP_VISIBLE, 0);
+        mResolver.update(Groups.CONTENT_URI, values, Groups._ID + "=" + groupId, null);
+
+        assertRawContactVisible(rawContactId1, false);
+        assertRawContactVisible(rawContactId2, false);
+
+        // Turn on ungrouped for first
+        values.clear();
+        values.put(Settings.ACCOUNT_NAME, sTestAccount.name);
+        values.put(Settings.ACCOUNT_TYPE, sTestAccount.type);
+        values.put(Settings.UNGROUPED_VISIBLE, 1);
+        mResolver.insert(Settings.CONTENT_URI, values);
+
+        assertRawContactVisible(rawContactId1, false);
+        assertRawContactVisible(rawContactId2, false);
+
+        // Turn on ungrouped for second account
+        values.clear();
+        values.put(Settings.ACCOUNT_NAME, sSecondAccount.name);
+        values.put(Settings.ACCOUNT_TYPE, sSecondAccount.type);
+        values.put(Settings.UNGROUPED_VISIBLE, 1);
+        mResolver.insert(Settings.CONTENT_URI, values);
+
+        assertRawContactVisible(rawContactId1, true);
+        assertRawContactVisible(rawContactId2, true);
     }
 }
