@@ -20,6 +20,7 @@ import com.android.internal.content.SyncStateContentProviderHelper;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ContentResolver;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -32,7 +33,9 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.os.Binder;
+import android.os.Bundle;
 import android.provider.BaseColumns;
+import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
@@ -1161,6 +1164,9 @@ import java.util.HashMap;
         // taken into account. Make a note of it and do the actual reopening in the
         // getWritableDatabase method.
         mReopenDatabase = true;
+
+        ContentResolver.requestSync(null /* all accounts */,
+                ContactsContract.AUTHORITY, new Bundle());
     }
 
     @Override
@@ -1198,12 +1204,6 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
 
         onCreate(db);
-        // TODO: eventually when this supports upgrades we should do something like the following:
-//        if (!upgradeDatabase(db, oldVersion, newVersion)) {
-//            mSyncState.discardSyncData(db, null /* all accounts */);
-//            ContentResolver.requestSync(null /* all accounts */,
-//                    mContentUri.getAuthority(), new Bundle());
-//        }
     }
 
     /**
@@ -1433,7 +1433,7 @@ import java.util.HashMap;
             DatabaseUtils.bindObjectToProgram(mContactIdQuery, 1, rawContactId);
             return mContactIdQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
-            // No valid mapping found, so return -1
+            // No valid mapping found, so return 0
             return 0;
         }
     }
