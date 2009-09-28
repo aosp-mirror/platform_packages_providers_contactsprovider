@@ -3714,7 +3714,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean distinct) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mOpenHelper.getDataView());
+        // Note: currently, "export only" equals to "restricted", but may not in the future.
+        boolean requireRestrictedData = readBooleanQueryParameter(uri,
+                Data.FOR_EXPORT_ONLY, false);
+        sb.append(mOpenHelper.getDataView(requireRestrictedData));
         sb.append(" data");
 
         if (mOpenHelper.isInProjection(projection, Data.CONTACT_PRESENCE)) {
@@ -4043,7 +4046,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             final SQLiteDatabase db = provider.mOpenHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            qb.setTables(Tables.CONTACT_ENTITIES);
+            final boolean requireRestrictedView =
+                provider.readBooleanQueryParameter(uri, Data.FOR_EXPORT_ONLY, false);
+            qb.setTables(provider.mOpenHelper.getContactEntitiesView(requireRestrictedView));
             if (contactsIdString != null) {
                 qb.appendWhere(Data.RAW_CONTACT_ID + "=" + contactsIdString);
             }
