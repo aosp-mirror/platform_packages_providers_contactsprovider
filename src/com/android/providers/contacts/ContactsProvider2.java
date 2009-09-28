@@ -296,6 +296,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int CLUSTER = 0;
     }
 
+    private interface RawContactsQuery {
+        String TABLE = Tables.RAW_CONTACTS;
+
+        String[] COLUMNS = new String[] {
+                ContactsContract.RawContacts.DELETED
+        };
+
+        int DELETED = 0;
+    }
+
     private static final HashMap<String, Integer> sDisplayNameSources;
     static {
         sDisplayNameSources = new HashMap<String, Integer>();
@@ -2798,14 +2808,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int updateRawContact(long rawContactId, ContentValues values) {
-        int count = mDb.update(Tables.RAW_CONTACTS, values, RawContacts._ID + " = " + rawContactId,
-                null);
+        final String selection = RawContacts._ID + " = " + rawContactId;
+        final boolean requestUndoDelete = (values.containsKey(RawContacts.DELETED)
+                && values.getAsInteger(RawContacts.DELETED) == 0);
+        int previousDeleted = 0;
+        if (requestUndoDelete) {
+            Cursor cursor = mDb.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS, selection,
+                    null, null, null, null);
+            try {
+                if (cursor.moveToFirst()) {
+                    previousDeleted = cursor.getInt(RawContactsQuery.DELETED);
+                }
+            } finally {
+                cursor.close();
+            }
+            values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
+                    ContactsContract.RawContacts.AGGREGATION_MODE_DEFAULT);
+        }
+        int count = mDb.update(Tables.RAW_CONTACTS, values, selection, null);
         if (count != 0) {
             if (values.containsKey(RawContacts.STARRED)) {
                 mContactAggregator.updateStarred(rawContactId);
             }
             if (values.containsKey(RawContacts.SOURCE_ID)) {
                 mContactAggregator.updateLookupKey(mDb, rawContactId);
+            }
+            if (requestUndoDelete && previousDeleted == 1) {
+                // undo delete, needs aggregation again.
+                mInsertedRawContacts.add(rawContactId);
             }
         }
         return count;
