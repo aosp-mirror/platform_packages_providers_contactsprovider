@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 95;
+    private static final int DATABASE_VERSION = 96;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -622,7 +622,8 @@ import java.util.HashMap;
         ");");
 
         db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
-                Contacts.IN_VISIBLE_GROUP +
+                Contacts.IN_VISIBLE_GROUP + "," +
+                Contacts.DISPLAY_NAME + " COLLATE LOCALIZED" +
         ");");
 
         db.execSQL("CREATE INDEX contacts_has_phone_index ON " + Tables.CONTACTS + " (" +
@@ -1223,7 +1224,7 @@ import java.util.HashMap;
             updateIndexStats(db, Tables.CONTACTS,
                     "contacts_has_phone_index", "10000 500");
             updateIndexStats(db, Tables.CONTACTS,
-                    "contacts_visible_index", "10000 500");
+                    "contacts_visible_index", "10000 500 1");
 
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contacts_source_id_index", "10000 1 1 1");
