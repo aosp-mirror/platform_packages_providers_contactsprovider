@@ -314,6 +314,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
     public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
+    /** Sql where statement for filtering on groups. */
+    private static final String CONTACTS_IN_GROUP_SELECT =
+            Contacts._ID + " IN "
+                    + "(SELECT " + RawContacts.CONTACT_ID
+                    + " FROM " + Tables.RAW_CONTACTS
+                    + " WHERE " + RawContactsColumns.CONCRETE_ID + " IN "
+                            + "(SELECT " + DataColumns.CONCRETE_RAW_CONTACT_ID
+                            + " FROM " + Tables.DATA_JOIN_MIMETYPES
+                            + " WHERE " + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                                    + "' AND " + GroupMembership.GROUP_ROW_ID + "="
+                                    + "(SELECT " + Tables.GROUPS + "." + Groups._ID
+                                    + " FROM " + Tables.GROUPS
+                                    + " WHERE " + Groups.TITLE + "=?)))";
+
     /** Contains just BaseColumns._COUNT */
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
@@ -342,9 +356,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sDataWithPresenceProjectionMap;
     /** Contains Live Folders columns */
     private static final HashMap<String, String> sLiveFoldersProjectionMap;
-
-    /** Sql where statement for filtering on groups. */
-    private static final String sContactsInGroupSelect;
 
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
@@ -718,18 +729,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // for contacts without a photo
         // sLiveFoldersProjectionMap.put(LiveFolders.ICON_BITMAP,
         //      Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
-
-        sContactsInGroupSelect = Contacts._ID + " IN "
-                + "(SELECT " + RawContacts.CONTACT_ID
-                + " FROM " + Tables.RAW_CONTACTS
-                + " WHERE " + RawContactsColumns.CONCRETE_ID + " IN "
-                        + "(SELECT " + DataColumns.CONCRETE_RAW_CONTACT_ID
-                        + " FROM " + Tables.DATA_JOIN_MIMETYPES
-                        + " WHERE " + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
-                                + "' AND " + GroupMembership.GROUP_ROW_ID + "="
-                                + "(SELECT " + Tables.GROUPS + "." + Groups._ID
-                                + " FROM " + Tables.GROUPS
-                                + " WHERE " + Groups.TITLE + "=?)))";
     }
 
     /**
@@ -3187,7 +3186,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_GROUP: {
                 setTablesAndProjectionMapForContacts(qb, projection);
                 if (uri.getPathSegments().size() > 2) {
-                    qb.appendWhere(sContactsInGroupSelect);
+                    qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
                     selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 }
                 break;
@@ -3524,7 +3523,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case LIVE_FOLDERS_CONTACTS_GROUP_NAME:
                 qb.setTables(mOpenHelper.getContactView());
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
-                qb.appendWhere(sContactsInGroupSelect);
+                qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 break;
 
