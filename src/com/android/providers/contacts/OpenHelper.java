@@ -37,6 +37,7 @@ import android.os.Bundle;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
+import android.provider.Contacts.People;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -620,6 +621,15 @@ import java.util.HashMap;
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
+        db.execSQL("CREATE TRIGGER contacts_times_contacted UPDATE OF " +
+                Contacts.LAST_TIME_CONTACTED + " ON " + Tables.CONTACTS + " " +
+            "BEGIN " +
+                "UPDATE " + Tables.CONTACTS + " SET "
+                    + Contacts.TIMES_CONTACTED + " = " + "" +
+                            "(new." + Contacts.TIMES_CONTACTED + " + 1)"
+                    + " WHERE _id = new._id;" +
+            "END");
+
         db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
                 Contacts.IN_VISIBLE_GROUP + "," +
                 Contacts.DISPLAY_NAME + " COLLATE LOCALIZED" +
@@ -660,6 +670,15 @@ import java.util.HashMap;
                 RawContacts.SYNC3 + " TEXT, " +
                 RawContacts.SYNC4 + " TEXT " +
         ");");
+
+        db.execSQL("CREATE TRIGGER raw_contacts_times_contacted UPDATE OF " +
+                    RawContacts.LAST_TIME_CONTACTED + " ON " + Tables.RAW_CONTACTS + " " +
+                "BEGIN " +
+                    "UPDATE " + Tables.RAW_CONTACTS + " SET "
+                        + RawContacts.TIMES_CONTACTED + " = " + "" +
+                            "(new." + RawContacts.TIMES_CONTACTED + " + 1)"
+                        + " WHERE _id = new._id;" +
+                "END");
 
         db.execSQL("CREATE INDEX raw_contacts_contact_id_index ON " + Tables.RAW_CONTACTS + " (" +
                 RawContacts.CONTACT_ID +

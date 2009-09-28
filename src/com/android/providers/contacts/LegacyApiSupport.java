@@ -490,8 +490,6 @@ public class LegacyApiSupport {
 
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
         mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
-                + RawContacts.TIMES_CONTACTED + "="
-                + RawContacts.TIMES_CONTACTED + "+1,"
                 + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
                 + RawContacts._ID + "=?");
 
@@ -1091,12 +1089,13 @@ public class LegacyApiSupport {
         long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
         long contactId = mOpenHelper.getContactId(rawContactId);
         if (contactId != 0) {
-            mContactsProvider.updateContactTime(contactId, lastTimeContacted);
-        } else {
-            mLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
-            mLastTimeContactedUpdate.bindLong(2, rawContactId);
-            mLastTimeContactedUpdate.execute();
+            mContactsProvider.updateContactLastContactedTime(contactId, lastTimeContacted);
         }
+
+        mLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
+        mLastTimeContactedUpdate.bindLong(2, rawContactId);
+        mLastTimeContactedUpdate.execute();
+
         return 1;
     }
 
