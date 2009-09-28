@@ -131,9 +131,11 @@ public class LegacyApiSupport {
             + PEOPLE_JOINS;
 
     public static final String PRESENCE_JOINS =
-            " LEFT OUTER JOIN presence ON ("
-            + " presence.presence_id = (SELECT max(presence_id) FROM presence"
-            + " WHERE people._id = presence_raw_contact_id))";
+            " LEFT OUTER JOIN presence" +
+            " ON (" + " presence." + StatusUpdates.DATA_ID
+                    + " = (SELECT max(" + StatusUpdates.DATA_ID + ")" +
+            " FROM presence" +
+            " WHERE people._id = presence_raw_contact_id))";
 
     private static final String PHONETIC_NAME_SQL = "trim(trim("
             + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
@@ -359,12 +361,12 @@ public class LegacyApiSupport {
         sPeopleProjectionMap.put(People.IM_ACCOUNT, People.IM_ACCOUNT);
         sPeopleProjectionMap.put(People.PRESENCE_STATUS, People.PRESENCE_STATUS);
         sPeopleProjectionMap.put(People.PRESENCE_CUSTOM_STATUS,
-                "(SELECT " + StatusUpdatesColumns.STATUS +
+                "(SELECT " + StatusUpdates.STATUS +
                 " FROM " + Tables.STATUS_UPDATES +
                 " JOIN " + Tables.DATA +
                 "   ON(" + StatusUpdatesColumns.DATA_ID + "=" + DataColumns.CONCRETE_ID + ")" +
                 " WHERE " + DataColumns.CONCRETE_RAW_CONTACT_ID + "=people." + People._ID +
-                " ORDER BY " + StatusUpdatesColumns.TIMESTAMP + " DESC " +
+                " ORDER BY " + StatusUpdates.STATUS_TIMESTAMP + " DESC " +
                 " LIMIT 1" +
                 ") AS " + People.PRESENCE_CUSTOM_STATUS);
 
