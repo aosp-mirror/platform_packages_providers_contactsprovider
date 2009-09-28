@@ -373,7 +373,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
     }
 
-    public void testQueryContactWithPresence() {
+    public void testQueryContactWithStatusUpdate() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
                 "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
@@ -458,7 +458,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
-    public void testPhonesWithPresence() {
+    public void testPhonesWithStatusUpdate() {
 
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -488,7 +488,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
-        values.put(Contacts.CONTACT_STATUS, "Good");
+        values.put(Contacts.CONTACT_STATUS, "Bad");
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664411");
         values.putNull(Phone.LABEL);
@@ -499,7 +499,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
-        values.put(Contacts.CONTACT_STATUS, "Good");
+        values.put(Contacts.CONTACT_STATUS, "Bad");
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664412");
         values.putNull(Phone.LABEL);
@@ -722,6 +722,80 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testStatusUpdateInsert() {
         long rawContactId = createRawContact();
+        Uri imUri = insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
+        long dataId = ContentUris.parseId(imUri);
+
+        ContentValues values = new ContentValues();
+        values.put(StatusUpdates.DATA_ID, dataId);
+        values.put(StatusUpdates.PROTOCOL, Im.PROTOCOL_AIM);
+        values.putNull(StatusUpdates.CUSTOM_PROTOCOL);
+        values.put(StatusUpdates.IM_HANDLE, "aim");
+        values.put(StatusUpdates.PRESENCE, StatusUpdates.INVISIBLE);
+        values.put(StatusUpdates.STATUS, "Hiding");
+        values.put(StatusUpdates.STATUS_TIMESTAMP, 100);
+        values.put(StatusUpdates.STATUS_RES_PACKAGE, "a.b.c");
+        values.put(StatusUpdates.STATUS_ICON, 1234);
+        values.put(StatusUpdates.STATUS_LABEL, 2345);
+
+        Uri resultUri = mResolver.insert(StatusUpdates.CONTENT_URI, values);
+
+        assertStoredValues(resultUri, values);
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        values.clear();
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
+        values.put(Contacts.CONTACT_STATUS, "Hiding");
+        values.put(Contacts.CONTACT_STATUS_TIMESTAMP, 100);
+        values.put(Contacts.CONTACT_STATUS_RES_PACKAGE, "a.b.c");
+        values.put(Contacts.CONTACT_STATUS_ICON, 1234);
+        values.put(Contacts.CONTACT_STATUS_LABEL, 2345);
+
+        assertStoredValues(contactUri, values);
+
+        values.clear();
+        values.put(StatusUpdates.DATA_ID, dataId);
+        values.put(StatusUpdates.STATUS, "Cloaked");
+        values.put(StatusUpdates.STATUS_TIMESTAMP, 200);
+        values.put(StatusUpdates.STATUS_RES_PACKAGE, "d.e.f");
+        values.put(StatusUpdates.STATUS_ICON, 4321);
+        values.put(StatusUpdates.STATUS_LABEL, 5432);
+        mResolver.insert(StatusUpdates.CONTENT_URI, values);
+
+        values.clear();
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
+        values.put(Contacts.CONTACT_STATUS, "Cloaked");
+        values.put(Contacts.CONTACT_STATUS_TIMESTAMP, 200);
+        values.put(Contacts.CONTACT_STATUS_RES_PACKAGE, "d.e.f");
+        values.put(Contacts.CONTACT_STATUS_ICON, 4321);
+        values.put(Contacts.CONTACT_STATUS_LABEL, 5432);
+        assertStoredValues(contactUri, values);
+    }
+
+    public void testStatusUpdateInferAttribution() {
+        long rawContactId = createRawContact();
+        Uri imUri = insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
+        long dataId = ContentUris.parseId(imUri);
+
+        ContentValues values = new ContentValues();
+        values.put(StatusUpdates.DATA_ID, dataId);
+        values.put(StatusUpdates.PROTOCOL, Im.PROTOCOL_AIM);
+        values.put(StatusUpdates.IM_HANDLE, "aim");
+        values.put(StatusUpdates.STATUS, "Hiding");
+
+        Uri resultUri = mResolver.insert(StatusUpdates.CONTENT_URI, values);
+
+        values.clear();
+        values.put(StatusUpdates.DATA_ID, dataId);
+        values.put(StatusUpdates.STATUS_LABEL, com.android.internal.R.string.imProtocolAim);
+        values.put(StatusUpdates.STATUS, "Hiding");
+
+        assertStoredValues(resultUri, values);
+    }
+
+    public void testStatusUpdateMatchingImOrEmail() {
+        long rawContactId = createRawContact();
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
         insertImHandle(rawContactId, Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im");
         insertEmail(rawContactId, "m@acme.com");
@@ -740,7 +814,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Cursor c = mResolver.query(StatusUpdates.CONTENT_URI, new String[] {
                 StatusUpdates.DATA_ID, StatusUpdates.PROTOCOL, StatusUpdates.CUSTOM_PROTOCOL,
-                StatusUpdates.PRESENCE_STATUS, StatusUpdates.PRESENCE_CUSTOM_STATUS},
+                StatusUpdates.PRESENCE, StatusUpdates.STATUS},
                 PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null, StatusUpdates.DATA_ID);
         assertTrue(c.moveToNext());
         assertStatusUpdate(c, Im.PROTOCOL_AIM, null, StatusUpdates.AVAILABLE, "Available");
@@ -756,7 +830,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues values = new ContentValues();
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
-        values.put(Contacts.CONTACT_STATUS, "Away");
+        values.put(Contacts.CONTACT_STATUS, "Available");
         assertStoredValuesWithProjection(contactUri, values);
     }
 
