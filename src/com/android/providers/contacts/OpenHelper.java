@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class OpenHelper extends SQLiteOpenHelper {
     private static final String TAG = "OpenHelper";
 
-    private static final int DATABASE_VERSION = 96;
+    private static final int DATABASE_VERSION = 97;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -82,6 +82,7 @@ import java.util.HashMap;
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
         public static final String CALLS = "calls";
         public static final String CONTACT_ENTITIES = "contact_entities_view";
+        public static final String CONTACT_ENTITIES_RESTRICTED = "contact_entities_view_restricted";
         public static final String STATUS_UPDATES = "status_updates";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
@@ -943,7 +944,7 @@ import java.util.HashMap;
                 StatusUpdatesColumns.STATUS + " TEXT" +
         ");");
 
-        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS SELECT "
+        String contactEntitiesSelect = "SELECT "
                 + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
                 + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
@@ -993,8 +994,12 @@ import java.util.HashMap;
                 + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
                 +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
                 +   "' AND " + GroupsColumns.CONCRETE_ID + "="
-                        + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")");
+                + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
 
+        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS "
+                + contactEntitiesSelect);
+        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES_RESTRICTED + " AS "
+                + contactEntitiesSelect + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1194,6 +1199,7 @@ import java.util.HashMap;
         db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
@@ -1625,7 +1631,12 @@ import java.util.HashMap;
     }
 
     public String getDataView() {
-        return hasRestrictedAccess() ? Views.DATA_ALL : Views.DATA_RESTRICTED;
+        return getDataView(false);
+    }
+
+    public String getDataView(boolean requireRestrictedView) {
+        return (hasRestrictedAccess() && !requireRestrictedView) ?
+                Views.DATA_ALL : Views.DATA_RESTRICTED;
     }
 
     public String getRawContactView() {
@@ -1639,6 +1650,15 @@ import java.util.HashMap;
 
     public String getGroupView() {
         return Views.GROUPS_ALL;
+    }
+
+    public String getContactEntitiesView() {
+        return getContactEntitiesView(false);
+    }
+
+    public String getContactEntitiesView(boolean requireRestrictedView) {
+        return (hasRestrictedAccess() && !requireRestrictedView) ?
+                Tables.CONTACT_ENTITIES : Tables.CONTACT_ENTITIES_RESTRICTED;
     }
 
     /**
