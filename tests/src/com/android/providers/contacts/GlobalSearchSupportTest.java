@@ -27,6 +27,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
@@ -110,7 +111,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                 true,  // email
                 "D",   // query
                 true,  // expect icon URI
-                String.valueOf(Presence.getPresenceIconResourceId(Presence.OFFLINE)),
+                String.valueOf(StatusUpdates.getPresenceIconResourceId(StatusUpdates.OFFLINE)),
                 "Deer Dough", "foo@acme.com");
 
         assertSearchSuggestion(groupId,
@@ -217,12 +218,12 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             int protocol = Im.PROTOCOL_GOOGLE_TALK;
 
             values.clear();
-            values.put(Presence.PROTOCOL, protocol);
-            values.put(Presence.IM_HANDLE, "foo@acme.com");
-            values.put(Presence.IM_ACCOUNT, "foo");
-            values.put(Presence.PRESENCE_STATUS, Presence.OFFLINE);
-            values.put(Presence.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-            mResolver.insert(Presence.CONTENT_URI, values);
+            values.put(StatusUpdates.PROTOCOL, protocol);
+            values.put(StatusUpdates.IM_HANDLE, "foo@acme.com");
+            values.put(StatusUpdates.IM_ACCOUNT, "foo");
+            values.put(StatusUpdates.PRESENCE_STATUS, StatusUpdates.OFFLINE);
+            values.put(StatusUpdates.PRESENCE_CUSTOM_STATUS, "Coding for Android");
+            mResolver.insert(StatusUpdates.CONTENT_URI, values);
         }
 
         if (phone) {

@@ -34,6 +34,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
@@ -89,7 +90,7 @@ public class GlobalSearchSupport {
                 + JOIN_CONTACTS;
 
         public static final String PRESENCE_SQL =
-                "(SELECT " + Presence.PRESENCE_STATUS +
+                "(SELECT " + StatusUpdates.PRESENCE_STATUS +
                 " FROM " + Tables.AGGREGATED_PRESENCE +
                 " WHERE " + AggregatedPresenceColumns.CONTACT_ID
                         + "=" + ContactsColumns.CONCRETE_ID + ")";
@@ -97,7 +98,7 @@ public class GlobalSearchSupport {
         public static final String[] COLUMNS = {
             ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID,
             ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME,
-            PRESENCE_SQL + " AS " + Contacts.PRESENCE_STATUS,
+            PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE,
             DataColumns.CONCRETE_ID + " AS data_id",
             MimetypesColumns.MIMETYPE,
             Data.IS_SUPER_PRIMARY,
@@ -167,7 +168,7 @@ public class GlobalSearchSupport {
             }
 
             if (presence != -1) {
-                icon2 = String.valueOf(Presence.getPresenceIconResourceId(presence));
+                icon2 = String.valueOf(StatusUpdates.getPresenceIconResourceId(presence));
             }
 
             processed = true;
