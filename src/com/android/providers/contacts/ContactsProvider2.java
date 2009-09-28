@@ -80,9 +80,9 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -181,8 +181,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int AGGREGATION_EXCEPTIONS = 6000;
     private static final int AGGREGATION_EXCEPTION_ID = 6001;
 
-    private static final int PRESENCE = 7000;
-    private static final int PRESENCE_ID = 7001;
+    private static final int STATUS_UPDATES = 7000;
+    private static final int STATUS_UPDATES_ID = 7001;
 
     private static final int AGGREGATION_SUGGESTIONS = 8000;
 
@@ -197,8 +197,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final int SEARCH_SUGGESTIONS = 12001;
     private static final int SEARCH_SHORTCUT = 12002;
-
-    private static final int DATA_WITH_PRESENCE = 13000;
 
     private static final int LIVE_FOLDERS_CONTACTS = 14000;
     private static final int LIVE_FOLDERS_CONTACTS_WITH_PHONES = 14001;
@@ -342,8 +340,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
-    /** Contains contacts and presence columns */
-    private static final HashMap<String, String> sContactsWithPresenceProjectionMap;
     /** Contains just the raw contacts columns */
     private static final HashMap<String, String> sRawContactsProjectionMap;
     /** Contains columns from the data view */
@@ -360,10 +356,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
     /** Contains the agg_exceptions columns */
     private static final HashMap<String, String> sSettingsProjectionMap;
-    /** Contains Presence columns */
-    private static final HashMap<String, String> sPresenceProjectionMap;
-    /** Contains Presence columns */
-    private static final HashMap<String, String> sDataWithPresenceProjectionMap;
+    /** Contains StatusUpdates columns */
+    private static final HashMap<String, String> sStatusUpdatesProjectionMap;
     /** Contains Live Folders columns */
     private static final HashMap<String, String> sLiveFoldersProjectionMap;
 
@@ -377,7 +371,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mRawContactDisplayNameUpdate;
     /** Precompiled sql statement for marking a raw contact as dirty */
     private SQLiteStatement mRawContactDirtyUpdate;
-    /** Precompiled sql statement for updating an aggregated presence status */
+    /** Precompiled sql statement for updating an aggregated status update */
     private SQLiteStatement mLastStatusUpdate;
     private SQLiteStatement mNameLookupInsert;
     private SQLiteStatement mNameLookupDelete;
@@ -439,8 +433,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         matcher.addURI(ContactsContract.AUTHORITY, "settings", SETTINGS);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "presence", PRESENCE);
-        matcher.addURI(ContactsContract.AUTHORITY, "presence/#", PRESENCE_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "status_updates", STATUS_UPDATES);
+        matcher.addURI(ContactsContract.AUTHORITY, "status_updates/#", STATUS_UPDATES_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY,
                 SEARCH_SUGGESTIONS);
@@ -457,9 +451,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 LIVE_FOLDERS_CONTACTS_WITH_PHONES);
         matcher.addURI(ContactsContract.AUTHORITY, "live_folders/favorites",
                 LIVE_FOLDERS_CONTACTS_FAVORITES);
-
-        // Private API
-        matcher.addURI(ContactsContract.AUTHORITY, "data_with_presence", DATA_WITH_PRESENCE);
     }
 
     static {
@@ -481,18 +472,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sContactsProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
                 + " || '.vcf' AS " + OpenableColumns.DISPLAY_NAME);
         sContactsProjectionMap.put(OpenableColumns.SIZE, "0 AS " + OpenableColumns.SIZE);
-
-        sContactsWithPresenceProjectionMap = new HashMap<String, String>();
-        sContactsWithPresenceProjectionMap.putAll(sContactsProjectionMap);
-        sContactsWithPresenceProjectionMap.put(Contacts.PRESENCE_STATUS,
-                Tables.AGGREGATED_PRESENCE + "." + Presence.PRESENCE_STATUS
-                        + " AS " + Contacts.PRESENCE_STATUS);
-        sContactsWithPresenceProjectionMap.put(Contacts.PRESENCE_CUSTOM_STATUS,
+        sContactsProjectionMap.put(Contacts.CONTACT_PRESENCE,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE
+                        + " AS " + Contacts.CONTACT_PRESENCE);
+        sContactsProjectionMap.put(Contacts.CONTACT_STATUS,
                 StatusUpdatesColumns.STATUS
-                        + " AS " + Contacts.PRESENCE_CUSTOM_STATUS);
-        sContactsWithPresenceProjectionMap.put(Contacts.PRESENCE_CUSTOM_STATUS_TIMESTAMP,
+                        + " AS " + Contacts.CONTACT_STATUS);
+        sContactsProjectionMap.put(Contacts.CONTACT_STATUS_TIMESTAMP,
                 StatusUpdatesColumns.TIMESTAMP
-                        + " AS " + Contacts.PRESENCE_CUSTOM_STATUS_TIMESTAMP);
+                        + " AS " + Contacts.CONTACT_STATUS_TIMESTAMP);
 
         sRawContactsProjectionMap = new HashMap<String, String>();
         sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
@@ -542,7 +530,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(Data.SYNC2, Data.SYNC2);
         sDataProjectionMap.put(Data.SYNC3, Data.SYNC3);
         sDataProjectionMap.put(Data.SYNC4, Data.SYNC4);
-        sDataProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
+        sDataProjectionMap.put(Data.CONTACT_ID, Data.CONTACT_ID);
         sDataProjectionMap.put(RawContacts.ACCOUNT_NAME, RawContacts.ACCOUNT_NAME);
         sDataProjectionMap.put(RawContacts.ACCOUNT_TYPE, RawContacts.ACCOUNT_TYPE);
         sDataProjectionMap.put(RawContacts.SOURCE_ID, RawContacts.SOURCE_ID);
@@ -556,6 +544,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
+        sDataProjectionMap.put(Contacts.CONTACT_PRESENCE,
+                StatusUpdates.PRESENCE + " AS " + Contacts.CONTACT_PRESENCE);
+        sDataProjectionMap.put(Contacts.CONTACT_STATUS,
+                StatusUpdatesColumns.STATUS + " AS " + Contacts.CONTACT_STATUS);
+        sDataProjectionMap.put(Contacts.CONTACT_STATUS_TIMESTAMP,
+                StatusUpdatesColumns.TIMESTAMP + " AS " + Contacts.CONTACT_STATUS_TIMESTAMP);
         sDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
 
         // Projection map for data grouped by contact (not raw contact) and some data field(s)
@@ -595,6 +589,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDistinctDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sDistinctDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDistinctDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
+        sDistinctDataProjectionMap.put(Contacts.CONTACT_PRESENCE,
+                StatusUpdates.PRESENCE + " AS " + Contacts.CONTACT_PRESENCE);
+        sDistinctDataProjectionMap.put(Contacts.CONTACT_STATUS,
+                StatusUpdatesColumns.STATUS + " AS " + Contacts.CONTACT_STATUS);
+        sDistinctDataProjectionMap.put(Contacts.CONTACT_STATUS_TIMESTAMP,
+                StatusUpdatesColumns.TIMESTAMP + " AS " + Contacts.CONTACT_STATUS_TIMESTAMP);
         sDistinctDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID,
                 GroupMembership.GROUP_SOURCE_ID);
 
@@ -701,32 +701,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sSettingsProjectionMap = columns;
 
         columns = new HashMap<String, String>();
-        columns.put(Presence._ID, Presence._ID);
         columns.put(PresenceColumns.RAW_CONTACT_ID, PresenceColumns.RAW_CONTACT_ID);
-        columns.put(Presence.DATA_ID, Presence.DATA_ID);
-        columns.put(Presence.IM_ACCOUNT, Presence.IM_ACCOUNT);
-        columns.put(Presence.IM_HANDLE, Presence.IM_HANDLE);
-        columns.put(Presence.PROTOCOL, Presence.PROTOCOL);
+        columns.put(StatusUpdates.DATA_ID, StatusUpdates.DATA_ID);
+        columns.put(StatusUpdates.IM_ACCOUNT, StatusUpdates.IM_ACCOUNT);
+        columns.put(StatusUpdates.IM_HANDLE, StatusUpdates.IM_HANDLE);
+        columns.put(StatusUpdates.PROTOCOL, StatusUpdates.PROTOCOL);
         // We cannot allow a null in the custom protocol field, because SQLite3 does not
         // properly enforce uniqueness of null values
-        columns.put(Presence.CUSTOM_PROTOCOL, "(CASE WHEN " + Presence.CUSTOM_PROTOCOL
-                + "='' THEN NULL ELSE " + Presence.CUSTOM_PROTOCOL + " END) AS "
-                + Presence.CUSTOM_PROTOCOL);
-        columns.put(Presence.PRESENCE_STATUS, Presence.PRESENCE_STATUS);
-        columns.put(Presence.PRESENCE_CUSTOM_STATUS,
-                StatusUpdatesColumns.STATUS + " AS " + Presence.PRESENCE_CUSTOM_STATUS);
-        columns.put(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP,
-                StatusUpdatesColumns.TIMESTAMP + " AS " + Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP);
-        sPresenceProjectionMap = columns;
-
-        sDataWithPresenceProjectionMap = new HashMap<String, String>();
-        sDataWithPresenceProjectionMap.putAll(sDataProjectionMap);
-        sDataWithPresenceProjectionMap.put(Presence.PRESENCE_STATUS,
-                Presence.PRESENCE_STATUS);
-        sDataWithPresenceProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS,
-                StatusUpdatesColumns.STATUS + " AS " + Presence.PRESENCE_CUSTOM_STATUS);
-        sDataWithPresenceProjectionMap.put(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP,
-                StatusUpdatesColumns.TIMESTAMP + " AS " + Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP);
+        columns.put(StatusUpdates.CUSTOM_PROTOCOL, "(CASE WHEN " + StatusUpdates.CUSTOM_PROTOCOL
+                + "='' THEN NULL ELSE " + StatusUpdates.CUSTOM_PROTOCOL + " END) AS "
+                + StatusUpdates.CUSTOM_PROTOCOL);
+        columns.put(StatusUpdates.PRESENCE, StatusUpdates.PRESENCE);
+        columns.put(StatusUpdates.STATUS,
+                StatusUpdatesColumns.STATUS + " AS " + StatusUpdates.STATUS);
+        columns.put(StatusUpdates.STATUS_TIMESTAMP,
+                StatusUpdatesColumns.TIMESTAMP + " AS " + StatusUpdates.STATUS_TIMESTAMP);
+        sStatusUpdatesProjectionMap = columns;
 
         // Live folder projection
         sLiveFoldersProjectionMap = new HashMap<String, String>();
@@ -1953,8 +1943,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case PRESENCE: {
-                id = insertPresence(values);
+            case STATUS_UPDATES: {
+                id = insertStatusUpdate(values);
                 break;
             }
 
@@ -2274,19 +2264,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Inserts a presence update.
+     * Inserts a status update.
      */
-    public long insertPresence(ContentValues values) {
-        final String handle = values.getAsString(Presence.IM_HANDLE);
-        if (TextUtils.isEmpty(handle) || !values.containsKey(Presence.PROTOCOL)) {
+    public long insertStatusUpdate(ContentValues values) {
+        final String handle = values.getAsString(StatusUpdates.IM_HANDLE);
+        if (TextUtils.isEmpty(handle) || !values.containsKey(StatusUpdates.PROTOCOL)) {
             throw new IllegalArgumentException("PROTOCOL and IM_HANDLE are required");
         }
 
-        final long protocol = values.getAsLong(Presence.PROTOCOL);
+        final long protocol = values.getAsLong(StatusUpdates.PROTOCOL);
         String customProtocol = null;
 
         if (protocol == Im.PROTOCOL_CUSTOM) {
-            customProtocol = values.getAsString(Presence.CUSTOM_PROTOCOL);
+            customProtocol = values.getAsString(StatusUpdates.CUSTOM_PROTOCOL);
             if (TextUtils.isEmpty(customProtocol)) {
                 throw new IllegalArgumentException(
                         "CUSTOM_PROTOCOL is required when PROTOCOL=PROTOCOL_CUSTOM");
@@ -2295,7 +2285,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         long rawContactId = -1;
         long contactId = -1;
-        Long dataId = values.getAsLong(Presence.DATA_ID);
+        Long dataId = values.getAsLong(StatusUpdates.DATA_ID);
         StringBuilder selection = new StringBuilder();
         String[] selectionArgs;
 
@@ -2338,9 +2328,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 selectionArgs = new String[] { String.valueOf(protocol), handle };
             }
 
-            if (values.containsKey(Presence.DATA_ID)) {
+            if (values.containsKey(StatusUpdates.DATA_ID)) {
                 selection.append(" AND " + DataColumns.CONCRETE_ID + "=")
-                        .append(values.getAsLong(Presence.DATA_ID));
+                        .append(values.getAsLong(StatusUpdates.DATA_ID));
             }
         }
         selection.append(" AND ").append(getContactsRestrictions());
@@ -2363,7 +2353,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         }
 
-        if (values.containsKey(Presence.PRESENCE_STATUS)) {
+        if (values.containsKey(StatusUpdates.PRESENCE)) {
             if (customProtocol == null) {
                 // We cannot allow a null in the custom protocol field, because SQLite3 does not
                 // properly enforce uniqueness of null values
@@ -2371,30 +2361,29 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             mValues.clear();
-            // TODO deprecate and then remove the Presence._ID column
-            mValues.put(Presence._ID, dataId);
-            mValues.put(Presence.DATA_ID, dataId);
+            mValues.put(StatusUpdates.DATA_ID, dataId);
             mValues.put(PresenceColumns.RAW_CONTACT_ID, rawContactId);
             mValues.put(PresenceColumns.CONTACT_ID, contactId);
-            mValues.put(Presence.PROTOCOL, protocol);
-            mValues.put(Presence.CUSTOM_PROTOCOL, customProtocol);
-            mValues.put(Presence.IM_HANDLE, handle);
-            if (values.containsKey(Presence.IM_ACCOUNT)) {
-                mValues.put(Presence.IM_ACCOUNT, values.getAsString(Presence.IM_ACCOUNT));
+            mValues.put(StatusUpdates.PROTOCOL, protocol);
+            mValues.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
+            mValues.put(StatusUpdates.IM_HANDLE, handle);
+            if (values.containsKey(StatusUpdates.IM_ACCOUNT)) {
+                mValues.put(StatusUpdates.IM_ACCOUNT, values.getAsString(StatusUpdates.IM_ACCOUNT));
             }
-            mValues.put(Presence.PRESENCE_STATUS, values.getAsString(Presence.PRESENCE_STATUS));
+            mValues.put(StatusUpdates.PRESENCE,
+                    values.getAsString(StatusUpdates.PRESENCE));
 
             // Insert the presence update
             mDb.replace(Tables.PRESENCE, null, mValues);
         }
 
-        if (values.containsKey(Presence.PRESENCE_CUSTOM_STATUS)) {
-            String status = values.getAsString(Presence.PRESENCE_CUSTOM_STATUS);
+        if (values.containsKey(StatusUpdates.STATUS)) {
+            String status = values.getAsString(StatusUpdates.STATUS);
             if (TextUtils.isEmpty(status)) {
                 mStatusUpdateDelete.bindLong(1, dataId);
                 mStatusUpdateDelete.execute();
-            } else if (values.containsKey(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP)) {
-                long timestamp = values.getAsLong(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP);
+            } else if (values.containsKey(StatusUpdates.STATUS_TIMESTAMP)) {
+                long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
                 mStatusUpdateReplace.bindLong(1, dataId);
                 mStatusUpdateReplace.bindLong(2, timestamp);
                 mStatusUpdateReplace.bindString(3, status);
@@ -2530,7 +2519,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return deleteSettings(uri, selection, selectionArgs);
             }
 
-            case PRESENCE: {
+            case STATUS_UPDATES: {
                 return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
             }
 
@@ -3200,46 +3189,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_DATA: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
                 break;
             }
 
             case CONTACTS_PHOTO: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
                 qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
                 break;
             }
 
             case PHONES: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 break;
             }
 
             case PHONES_ID: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
                 break;
             }
 
             case PHONES_FILTER: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDistinctDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, true);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
@@ -3275,26 +3252,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case EMAILS: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 break;
             }
 
             case EMAILS_ID: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
                 break;
             }
 
             case EMAILS_LOOKUP: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(" AND " + Email.DATA + "=");
@@ -3304,9 +3275,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case EMAILS_FILTER: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDistinctDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, true);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
@@ -3330,18 +3299,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case POSTALS: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
                         + StructuredPostal.CONTENT_ITEM_TYPE + "'");
                 break;
             }
 
             case POSTALS_ID: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
                         + StructuredPostal.CONTENT_ITEM_TYPE + "'");
                 qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
@@ -3366,37 +3331,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS_DATA: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=" + rawContactId);
                 break;
             }
 
             case DATA: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
                 break;
             }
 
             case DATA_ID: {
-                qb.setTables(mOpenHelper.getDataView());
-                qb.setProjectionMap(sDataProjectionMap);
-                qb.appendWhere(Data._ID + "=" + ContentUris.parseId(uri));
-                break;
-            }
-
-            case DATA_WITH_PRESENCE: {
-                qb.setTables(mOpenHelper.getDataView() + " data" +
-                        " LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
-                        " ON (" + AggregatedPresenceColumns.CONTACT_ID + "="
-                                + RawContacts.CONTACT_ID + ")" +
-                        " LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
-                        " ON (" + ContactsColumns.LAST_STATUS_UPDATE_ID + "="
-                                + StatusUpdatesColumns.DATA_ID + ")");
-                qb.setProjectionMap(sDataWithPresenceProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
+                qb.appendWhere(" AND " + Data._ID + "=" + ContentUris.parseId(uri));
                 break;
             }
 
@@ -3475,28 +3422,30 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // late-binding of the GroupMembership MIME-type.
                 final String groupMembershipMimetypeId = Long.toString(mOpenHelper
                         .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
-                if (mOpenHelper.isInProjection(projection, Settings.UNGROUPED_COUNT)) {
+                if (projection != null && projection.length != 0 &&
+                        mOpenHelper.isInProjection(projection, Settings.UNGROUPED_COUNT)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
-                if (mOpenHelper.isInProjection(projection, Settings.UNGROUPED_WITH_PHONES)) {
+                if (projection != null && projection.length != 0 &&
+                        mOpenHelper.isInProjection(projection, Settings.UNGROUPED_WITH_PHONES)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
 
                 break;
             }
 
-            case PRESENCE: {
+            case STATUS_UPDATES: {
                 qb.setTables(Tables.PRESENCE +
                         " LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
-                        " ON(" + Presence.DATA_ID + "=" + StatusUpdatesColumns.DATA_ID + ")");
-                qb.setProjectionMap(sPresenceProjectionMap);
+                        " ON(" + StatusUpdates.DATA_ID + "=" + StatusUpdatesColumns.DATA_ID + ")");
+                qb.setProjectionMap(sStatusUpdatesProjectionMap);
                 break;
             }
 
-            case PRESENCE_ID: {
+            case STATUS_UPDATES_ID: {
                 qb.setTables(Tables.PRESENCE);
-                qb.setProjectionMap(sPresenceProjectionMap);
-                qb.appendWhere(Presence._ID + "=" + ContentUris.parseId(uri));
+                qb.setProjectionMap(sStatusUpdatesProjectionMap);
+                qb.appendWhere(StatusUpdates.DATA_ID + "=" + ContentUris.parseId(uri));
                 break;
             }
 
@@ -3741,22 +3690,52 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, String[] projection) {
-        String contactView = mOpenHelper.getContactView();
-        boolean needsPresence = mOpenHelper.isInProjection(projection, Contacts.PRESENCE_STATUS,
-                Contacts.PRESENCE_CUSTOM_STATUS);
-        if (!needsPresence) {
-            qb.setTables(contactView);
-            qb.setProjectionMap(sContactsProjectionMap);
-        } else {
-            qb.setTables(contactView +
-                    " LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
-                    " ON (" + Contacts._ID + " = " + AggregatedPresenceColumns.CONTACT_ID + ") " +
-                    " LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
+        StringBuilder sb = new StringBuilder();
+        sb.append(mOpenHelper.getContactView());
+        if (mOpenHelper.isInProjection(projection,
+                Contacts.CONTACT_PRESENCE)) {
+            sb.append(" LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
+                    " ON (" + Contacts._ID + " = " + AggregatedPresenceColumns.CONTACT_ID + ")");
+        }
+        if (mOpenHelper.isInProjection(projection,
+                Contacts.CONTACT_STATUS,
+                Contacts.CONTACT_STATUS_RES_PACKAGE,
+                Contacts.CONTACT_STATUS_ICON,
+                Contacts.CONTACT_STATUS_LABEL,
+                Contacts.CONTACT_STATUS_TIMESTAMP)) {
+            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
                     " ON (" + ContactsColumns.LAST_STATUS_UPDATE_ID + "="
                             + StatusUpdatesColumns.DATA_ID + ")");
-            qb.setProjectionMap(sContactsWithPresenceProjectionMap);
-
         }
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(sContactsProjectionMap);
+    }
+
+    private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection, boolean distinct) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(mOpenHelper.getDataView());
+        sb.append(" data");
+
+        if (mOpenHelper.isInProjection(projection, Data.CONTACT_PRESENCE)) {
+            sb.append(" LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
+                    " ON (" + AggregatedPresenceColumns.CONTACT_ID + "="
+                    + RawContacts.CONTACT_ID + ")");
+        }
+
+        if (mOpenHelper.isInProjection(projection,
+                Data.CONTACT_STATUS,
+                Data.CONTACT_STATUS_RES_PACKAGE,
+                Data.CONTACT_STATUS_ICON,
+                Data.CONTACT_STATUS_LABEL,
+                Data.CONTACT_STATUS_TIMESTAMP)) {
+            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
+                    " ON (" + ContactsColumns.LAST_STATUS_UPDATE_ID + "="
+                            + StatusUpdatesColumns.DATA_ID + ")");
+        }
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(distinct ? sDistinctDataProjectionMap : sDataProjectionMap);
+        appendAccountFromParameter(qb, uri);
     }
 
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {

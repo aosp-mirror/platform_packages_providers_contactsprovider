@@ -643,7 +643,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     private void assertSuggestions(Uri uri, long... suggestions) {
         final Cursor cursor = mResolver.query(uri,
-                new String[] { Contacts._ID, Contacts.PRESENCE_STATUS },
+                new String[] { Contacts._ID, Contacts.CONTACT_PRESENCE },
                 null, null, null);
 
         assertEquals(suggestions.length, cursor.getCount());

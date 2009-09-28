@@ -33,9 +33,9 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -366,7 +366,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactData() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
-                "18004664411", "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         assertStoredValues(contactUri, values);
@@ -376,8 +376,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactWithPresence() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
-                "18004664411", "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
-        values.put(Contacts.PRESENCE_STATUS, Presence.INVISIBLE);
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         assertStoredValuesWithProjection(contactUri, values);
         assertSelectionWithProjection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
@@ -386,8 +386,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactFilterData() {
         ContentValues values = new ContentValues();
         createContact(values, "Stu", "Goulash", "18004664411",
-                "goog411@acme.com", Presence.INVISIBLE, 4, 1, 0);
-        values.put(Contacts.PRESENCE_STATUS, Presence.INVISIBLE);
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goulash");
         assertStoredValuesWithProjection(filterUri1, values);
 
@@ -398,16 +398,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactStrequent() {
         ContentValues values1 = new ContentValues();
         createContact(values1, "Noah", "Tever", "18004664411",
-                "a@acme.com", Presence.OFFLINE, 0, 0, 0);
+                "a@acme.com", StatusUpdates.OFFLINE, 0, 0, 0);
         ContentValues values2 = new ContentValues();
         createContact(values2, "Sam", "Times", "18004664412",
-                "b@acme.com", Presence.INVISIBLE, 3, 0, 0);
+                "b@acme.com", StatusUpdates.INVISIBLE, 3, 0, 0);
         ContentValues values3 = new ContentValues();
         createContact(values3, "Lotta", "Calling", "18004664413",
-                "c@acme.com", Presence.AWAY, 5, 0, 0);
+                "c@acme.com", StatusUpdates.AWAY, 5, 0, 0);
         ContentValues values4 = new ContentValues();
         createContact(values4, "Fay", "Veritt", "18004664414",
-                "d@acme.com", Presence.AVAILABLE, 0, 1, 0);
+                "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0);
 
         Cursor c = mResolver.query(Contacts.CONTENT_STREQUENT_URI, null, null, null,
                 Contacts._ID);
@@ -433,11 +433,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues values1 = new ContentValues();
         createContact(values1, "Best", "West", "18004664411",
-                "west@acme.com", Presence.OFFLINE, 0, 0, groupId);
+                "west@acme.com", StatusUpdates.OFFLINE, 0, 0, groupId);
 
         ContentValues values2 = new ContentValues();
         createContact(values2, "Rest", "East", "18004664422",
-                "east@acme.com", Presence.AVAILABLE, 0, 0, 0);
+                "east@acme.com", StatusUpdates.AVAILABLE, 0, 0, 0);
 
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_GROUP_URI, "Test Group");
         Cursor c = mResolver.query(filterUri1, null, null, null, Contacts._ID);
@@ -472,13 +472,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "goog411@acme.com");
         insertEmail(rawContactId, "goog412@acme.com");
 
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "goog411@acme.com",
-                Presence.INVISIBLE, "Bad");
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "goog412@acme.com",
-                Presence.AVAILABLE, "Good");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "goog411@acme.com",
+                StatusUpdates.INVISIBLE, "Bad");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "goog412@acme.com",
+                StatusUpdates.AVAILABLE, "Good");
         long contactId = queryContactId(rawContactId);
 
-        Uri uri = Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "data_with_presence");
+        Uri uri = Data.CONTENT_URI;
 
         Cursor c = mResolver.query(uri, null, RawContacts.CONTACT_ID + "=" + contactId + " AND "
                 + Data.MIMETYPE + "='" + Phone.CONTENT_ITEM_TYPE + "'", null, Phone.NUMBER);
@@ -487,8 +487,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.moveToFirst();
 
         values.clear();
-        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Good");
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
+        values.put(Contacts.CONTACT_STATUS, "Good");
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664411");
         values.putNull(Phone.LABEL);
@@ -498,8 +498,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.moveToNext();
 
         values.clear();
-        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Good");
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
+        values.put(Contacts.CONTACT_STATUS, "Good");
         values.put(Contacts.DISPLAY_NAME, "John Doe");
         values.put(Phone.NUMBER, "18004664412");
         values.putNull(Phone.LABEL);
@@ -720,34 +720,34 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
     }
 
-    public void testPresenceInsert() {
+    public void testStatusUpdateInsert() {
         long rawContactId = createRawContact();
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
         insertImHandle(rawContactId, Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im");
-        insertEmail(rawContactId, "acme123@acme.com");
+        insertEmail(rawContactId, "m@acme.com");
 
         // Match on IM (standard)
-        insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AVAILABLE, "Available");
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available");
 
         // Match on IM (custom)
-        insertPresence(Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im", Presence.IDLE, "Idle");
+        insertStatusUpdate(Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im", StatusUpdates.IDLE, "Idle");
 
         // Match on Email
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "acme123@acme.com", Presence.AWAY, "Away");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "m@acme.com", StatusUpdates.AWAY, "Away");
 
         // No match
-        insertPresence(Im.PROTOCOL_ICQ, null, "12345", Presence.DO_NOT_DISTURB, "Go away");
+        insertStatusUpdate(Im.PROTOCOL_ICQ, null, "12345", StatusUpdates.DO_NOT_DISTURB, "Go away");
 
-        Cursor c = mResolver.query(Presence.CONTENT_URI, new String[] {
-                Presence.DATA_ID, Presence.PROTOCOL, Presence.CUSTOM_PROTOCOL,
-                Presence.PRESENCE_STATUS, Presence.PRESENCE_CUSTOM_STATUS},
-                PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null, Presence.DATA_ID);
+        Cursor c = mResolver.query(StatusUpdates.CONTENT_URI, new String[] {
+                StatusUpdates.DATA_ID, StatusUpdates.PROTOCOL, StatusUpdates.CUSTOM_PROTOCOL,
+                StatusUpdates.PRESENCE_STATUS, StatusUpdates.PRESENCE_CUSTOM_STATUS},
+                PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null, StatusUpdates.DATA_ID);
         assertTrue(c.moveToNext());
-        assertPresence(c, Im.PROTOCOL_AIM, null, Presence.AVAILABLE, "Available");
+        assertStatusUpdate(c, Im.PROTOCOL_AIM, null, StatusUpdates.AVAILABLE, "Available");
         assertTrue(c.moveToNext());
-        assertPresence(c, Im.PROTOCOL_CUSTOM, "my_im_proto", Presence.IDLE, "Idle");
+        assertStatusUpdate(c, Im.PROTOCOL_CUSTOM, "my_im_proto", StatusUpdates.IDLE, "Idle");
         assertTrue(c.moveToNext());
-        assertPresence(c, Im.PROTOCOL_GOOGLE_TALK, null, Presence.AWAY, "Away");
+        assertStatusUpdate(c, Im.PROTOCOL_GOOGLE_TALK, null, StatusUpdates.AWAY, "Away");
         assertFalse(c.moveToNext());
         c.close();
 
@@ -755,12 +755,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         ContentValues values = new ContentValues();
-        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Away");
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
+        values.put(Contacts.CONTACT_STATUS, "Away");
         assertStoredValuesWithProjection(contactUri, values);
     }
 
-    public void testPresenceUpdateAndDelete() {
+    public void testStatusUpdateUpdateAndDelete() {
         long rawContactId = createRawContact();
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
 
@@ -768,75 +768,74 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         ContentValues values = new ContentValues();
-        values.putNull(Presence.PRESENCE_STATUS);
-        values.putNull(Presence.PRESENCE_CUSTOM_STATUS);
+        values.putNull(Contacts.CONTACT_PRESENCE);
+        values.putNull(Contacts.CONTACT_STATUS);
         assertStoredValuesWithProjection(contactUri, values);
 
-        insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AWAY, "BUSY");
-        insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.DO_NOT_DISTURB, "GO AWAY");
-        Uri presenceUri =
-            insertPresence(Im.PROTOCOL_AIM, null, "aim", Presence.AVAILABLE, "Available");
-        long presenceId = ContentUris.parseId(presenceUri);
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AWAY, "BUSY");
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.DO_NOT_DISTURB, "GO AWAY");
+        Uri statusUri =
+            insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available");
+        long statusId = ContentUris.parseId(statusUri);
 
-        values.put(Presence.PRESENCE_STATUS, Presence.AVAILABLE);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Available");
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
+        values.put(Contacts.CONTACT_STATUS, "Available");
         assertStoredValuesWithProjection(contactUri, values);
 
-        mResolver.delete(Presence.CONTENT_URI, Presence._ID + "=" + presenceId, null);
-        values.putNull(Presence.PRESENCE_STATUS);
+        mResolver.delete(StatusUpdates.CONTENT_URI, StatusUpdates.DATA_ID + "=" + statusId, null);
+        values.putNull(Contacts.CONTACT_PRESENCE);
 
         // Latest custom status update stays on the phone
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Available");
+        values.put(Contacts.CONTACT_STATUS, "Available");
         assertStoredValuesWithProjection(contactUri, values);
     }
 
-    public void testPresenceWithTimestamp() {
+    public void testStatusUpdateWithTimestamp() {
         long rawContactId = createRawContact();
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "gtalk");
 
         long contactId = queryContactId(rawContactId);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
-        insertPresence(Im.PROTOCOL_AIM, null, "aim", 0, "Offline", 80);
-        insertPresence(Im.PROTOCOL_AIM, null, "aim", 0, "Available", 100);
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", 0, "Busy", 90);
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Offline", 80);
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Available", 100);
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", 0, "Busy", 90);
 
         // Should return the latest status
         ContentValues values = new ContentValues();
-        values.put(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP, 100);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, "Available");
+        values.put(Contacts.CONTACT_STATUS_TIMESTAMP, 100);
+        values.put(Contacts.CONTACT_STATUS, "Available");
         assertStoredValuesWithProjection(contactUri, values);
     }
 
-    private void assertPresence(Cursor c, int protocol, String customProtocol, int status,
-            String customStatus) {
+    private void assertStatusUpdate(Cursor c, int protocol, String customProtocol, int presence,
+            String status) {
         ContentValues values = new ContentValues();
-        values.put(Presence.PROTOCOL, protocol);
-        values.put(Presence.CUSTOM_PROTOCOL, customProtocol);
-        values.put(Presence.PRESENCE_STATUS, status);
-        values.put(Presence.PRESENCE_CUSTOM_STATUS, customStatus);
+        values.put(StatusUpdates.PROTOCOL, protocol);
+        values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
+        values.put(StatusUpdates.PRESENCE_STATUS, presence);
+        values.put(StatusUpdates.STATUS, status);
         assertCursorValues(c, values);
     }
 
-    public void testSinglePresenceRowPerContact() {
+    public void testSingleStatusUpdateRowPerContact() {
         int protocol1 = Im.PROTOCOL_GOOGLE_TALK;
         String handle1 = "test@gmail.com";
 
         long rawContactId1 = createRawContact();
         insertImHandle(rawContactId1, protocol1, null, handle1);
 
-        insertPresence(protocol1, null, handle1, Presence.AVAILABLE, "Green");
-        insertPresence(protocol1, null, handle1, Presence.AWAY, "Yellow");
-        insertPresence(protocol1, null, handle1, Presence.INVISIBLE, "Red");
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AVAILABLE, "Green");
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AWAY, "Yellow");
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.INVISIBLE, "Red");
 
         Cursor c = queryContact(queryContactId(rawContactId1),
-                new String[] {Presence.PRESENCE_STATUS, Presence.PRESENCE_CUSTOM_STATUS});
+                new String[] {Contacts.CONTACT_PRESENCE, Contacts.CONTACT_STATUS});
         assertEquals(1, c.getCount());
 
         c.moveToFirst();
-        assertEquals(Presence.AVAILABLE, c.getInt(0));
-        assertEquals("Red", c.getString(1));    // Last inserted
-
+        assertEquals(StatusUpdates.INVISIBLE, c.getInt(0));
+        assertEquals("Red", c.getString(1));
     }
 
     private void updateSendToVoicemailAndRingtone(long contactId, boolean sendToVoicemail,
@@ -1118,12 +1117,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com", Presence.AVAILABLE, null);
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
+                StatusUpdates.AVAILABLE, null);
         long contactId = queryContactId(rawContactId);
 
         assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
-        assertEquals(1, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
+        assertEquals(1, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId, null));
 
         mResolver.delete(uri, null, null);
@@ -1137,7 +1137,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(uri, null, null));
         assertEquals(0, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
-        assertEquals(0, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
+        assertEquals(0, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId, null));
         assertEquals(0, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
         assertNetworkNotified(false);
@@ -1165,11 +1165,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com", Presence.AVAILABLE,
-            null);
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
+                StatusUpdates.AVAILABLE, null);
         assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
-        assertEquals(1, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
+        assertEquals(1, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId, null));
 
         // Do not delete if we are deleting with wrong account.
@@ -1199,8 +1199,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact(mAccountTwo);
         insertEmail(rawContactId2, "account2@email.com");
         insertImHandle(rawContactId2, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com", Presence.AVAILABLE,
-            null);
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
+                StatusUpdates.AVAILABLE, null);
 
         // This is to ensure we do not delete contacts with null, null (account name, type)
         // accidentally.
@@ -1213,7 +1213,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cp.onAccountsUpdated(new Account[]{accountRemaining});
         Cursor c = mResolver.query(RawContacts.CONTENT_URI, null, null, null, null);
         assertEquals(2, c.getCount());
-        assertEquals(0, getCount(Presence.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
+        assertEquals(0, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId2, null));
     }
 
@@ -1461,7 +1461,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, phoneNumber);
         insertEmail(rawContactId, email);
 
-        insertPresence(Im.PROTOCOL_GOOGLE_TALK, null, email, presenceStatus, "hacking");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, email, presenceStatus, "hacking");
 
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);
