@@ -42,11 +42,10 @@ import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.People;
-import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -157,9 +156,9 @@ public class LegacyApiSupport {
                 + " END) AS INTEGER)";
 
     private static final String IM_PROTOCOL_SQL =
-            "(CASE WHEN " + Presence.PROTOCOL + "=" + Im.PROTOCOL_CUSTOM
-                + " THEN 'custom:'||" + Presence.CUSTOM_PROTOCOL
-                + " ELSE 'pre:'||" + Presence.PROTOCOL
+            "(CASE WHEN " + StatusUpdates.PROTOCOL + "=" + Im.PROTOCOL_CUSTOM
+                + " THEN 'custom:'||" + StatusUpdates.CUSTOM_PROTOCOL
+                + " ELSE 'pre:'||" + StatusUpdates.PROTOCOL
                 + " END)";
 
     private static String CONTACT_METHOD_DATA_SQL =

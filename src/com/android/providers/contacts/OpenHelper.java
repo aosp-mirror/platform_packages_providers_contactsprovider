@@ -18,9 +18,9 @@ package com.android.providers.contacts;
 
 import com.android.internal.content.SyncStateContentProviderHelper;
 
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.ContentResolver;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -41,9 +41,9 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.SocialContract.Activities;
@@ -532,17 +532,16 @@ import java.util.HashMap;
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
-                Presence._ID + " INTEGER NOT NULL, " +
-                Presence.PROTOCOL + " INTEGER NOT NULL," +
-                Presence.CUSTOM_PROTOCOL + " TEXT," +
-                Presence.IM_HANDLE + " TEXT," +
-                Presence.IM_ACCOUNT + " TEXT," +
+                StatusUpdates.DATA_ID + " INTEGER PRIMARY KEY REFERENCES data(_id)," +
+                StatusUpdates.PROTOCOL + " INTEGER NOT NULL," +
+                StatusUpdates.CUSTOM_PROTOCOL + " TEXT," +
+                StatusUpdates.IM_HANDLE + " TEXT," +
+                StatusUpdates.IM_ACCOUNT + " TEXT," +
                 PresenceColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 PresenceColumns.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
-                Presence.DATA_ID + " INTEGER REFERENCES data(_id)," +
-                Presence.PRESENCE_STATUS + " INTEGER," +
-                "UNIQUE(" + Presence.PROTOCOL + ", " + Presence.CUSTOM_PROTOCOL
-                    + ", " + Presence.IM_HANDLE + ", " + Presence.IM_ACCOUNT + ")" +
+                StatusUpdates.PRESENCE + " INTEGER," +
+                "UNIQUE(" + StatusUpdates.PROTOCOL + ", " + StatusUpdates.CUSTOM_PROTOCOL
+                    + ", " + StatusUpdates.IM_HANDLE + ", " + StatusUpdates.IM_ACCOUNT + ")" +
         ");");
 
         db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex" + " ON "
@@ -552,8 +551,7 @@ import java.util.HashMap;
                         + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
                 AggregatedPresenceColumns.CONTACT_ID
                         + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
-                Presence.PRESENCE_STATUS + " INTEGER," +
-                Presence.PRESENCE_CUSTOM_STATUS + " TEXT" +
+                StatusUpdates.PRESENCE_STATUS + " INTEGER" +
         ");");
 
 
@@ -578,9 +576,9 @@ import java.util.HashMap;
         String replaceAggregatePresenceSql =
             "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                     + AggregatedPresenceColumns.CONTACT_ID + ", "
-                    + Presence.PRESENCE_STATUS + ")" +
+                    + StatusUpdates.PRESENCE_STATUS + ")" +
             " SELECT " + PresenceColumns.CONTACT_ID + ","
-                        + "MAX(" + Presence.PRESENCE_STATUS + ")" +
+                        + "MAX(" + StatusUpdates.PRESENCE_STATUS + ")" +
                     " FROM " + Tables.PRESENCE +
                     " WHERE " + PresenceColumns.CONTACT_ID
                         + "=NEW." + PresenceColumns.CONTACT_ID + ";";
@@ -1647,22 +1645,23 @@ import java.util.HashMap;
      * Test if any of the columns appear in the given projection.
      */
     public boolean isInProjection(String[] projection, String... columns) {
-        if (projection != null) {
+        if (projection == null) {
+            return true;
+        }
 
-            // Optimized for a single-column test
-            if (columns.length == 1) {
-                String column = columns[0];
-                for (String test : projection) {
+        // Optimized for a single-column test
+        if (columns.length == 1) {
+            String column = columns[0];
+            for (String test : projection) {
+                if (column.equals(test)) {
+                    return true;
+                }
+            }
+        } else {
+            for (String test : projection) {
+                for (String column : columns) {
                     if (column.equals(test)) {
                         return true;
-                    }
-                }
-            } else {
-                for (String test : projection) {
-                    for (String column : columns) {
-                        if (column.equals(test)) {
-                            return true;
-                        }
                     }
                 }
             }

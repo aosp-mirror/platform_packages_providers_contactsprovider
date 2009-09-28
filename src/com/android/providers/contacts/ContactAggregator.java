@@ -39,8 +39,8 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
@@ -268,8 +268,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mAggregatedPresenceReplace = db.compileStatement(
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                         + AggregatedPresenceColumns.CONTACT_ID + ", "
-                        + Presence.PRESENCE_STATUS
-                + ") SELECT ?, MAX(" + Presence.PRESENCE_STATUS + ") "
+                        + StatusUpdates.PRESENCE_STATUS
+                + ") SELECT ?, MAX(" + StatusUpdates.PRESENCE_STATUS + ") "
                         + " FROM " + Tables.PRESENCE
                         + " WHERE " + PresenceColumns.CONTACT_ID + "=?");
 

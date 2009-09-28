@@ -35,6 +35,7 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -297,28 +298,28 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return mResolver.insert(Data.CONTENT_URI, values);
     }
 
-    protected Uri insertPresence(int protocol, String customProtocol, String handle, int presence,
-            String status) {
-        return insertPresence(protocol, customProtocol, handle, presence, status, 0);
+    protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
+            int presence, String status) {
+        return insertStatusUpdate(protocol, customProtocol, handle, presence, status, 0);
     }
 
-    protected Uri insertPresence(int protocol, String customProtocol, String handle, int presence,
-            String status, long timestamp) {
+    protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
+            int presence, String status, long timestamp) {
         ContentValues values = new ContentValues();
-        values.put(Presence.PROTOCOL, protocol);
-        values.put(Presence.CUSTOM_PROTOCOL, customProtocol);
-        values.put(Presence.IM_HANDLE, handle);
+        values.put(StatusUpdates.PROTOCOL, protocol);
+        values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
+        values.put(StatusUpdates.IM_HANDLE, handle);
         if (presence != 0) {
-            values.put(Presence.PRESENCE_STATUS, presence);
+            values.put(StatusUpdates.PRESENCE, presence);
         }
         if (status != null) {
-            values.put(Presence.PRESENCE_CUSTOM_STATUS, status);
+            values.put(StatusUpdates.STATUS, status);
         }
         if (timestamp != 0) {
-            values.put(Presence.PRESENCE_CUSTOM_STATUS_TIMESTAMP, timestamp);
+            values.put(StatusUpdates.STATUS_TIMESTAMP, timestamp);
         }
 
-        Uri resultUri = mResolver.insert(Presence.CONTENT_URI, values);
+        Uri resultUri = mResolver.insert(StatusUpdates.CONTENT_URI, values);
         return resultUri;
     }
 
