@@ -217,9 +217,12 @@ import java.util.HashMap;
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
+        final String OUTER_RAW_CONTACTS = "outer_raw_contacts";
+        final String OUTER_RAW_CONTACTS_ID = OUTER_RAW_CONTACTS + "." + RawContacts._ID;
+
         final String CONTACT_IS_VISIBLE =
                 "SELECT " +
-                    "(CASE WHEN " +
+                    "MAX((SELECT (CASE WHEN " +
                         "(CASE" +
                             " WHEN " + RAW_CONTACT_IS_LOCAL +
                             " THEN 1 " +
@@ -228,6 +231,8 @@ import java.util.HashMap;
                             " ELSE MAX(" + Groups.GROUP_VISIBLE + ")" +
                          "END)=1 THEN 1 ELSE 0 END)" +
                 " FROM " + Tables.RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS +
+                " WHERE " + RawContactsColumns.CONCRETE_ID + "=" + OUTER_RAW_CONTACTS_ID + "))" +
+                " FROM " + Tables.RAW_CONTACTS + " AS " + OUTER_RAW_CONTACTS +
                 " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
                 " GROUP BY " + RawContacts.CONTACT_ID;
 
