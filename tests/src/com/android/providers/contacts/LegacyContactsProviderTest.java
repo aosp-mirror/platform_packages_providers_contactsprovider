@@ -636,6 +636,9 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         Uri groupUri = insertLegacyGroup("Galois", values);
         Uri personUri = insertPerson("Klein", values);
         Uri membershipUri = insertLegacyGroupMembership(groupUri, personUri, values);
+        values.put(Groups.NAME, "Galois");
+        values.put(Groups.NOTES, "Abel");
+
         assertStoredValues(membershipUri, values);
         assertSelection(GroupMembership.CONTENT_URI, values, "groupmembership",
                 GroupMembership._ID, ContentUris.parseId(membershipUri));
