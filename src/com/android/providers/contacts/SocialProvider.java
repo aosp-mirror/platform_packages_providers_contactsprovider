@@ -16,10 +16,10 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.ActivitiesColumns;
-import com.android.providers.contacts.OpenHelper.ContactsColumns;
-import com.android.providers.contacts.OpenHelper.PackagesColumns;
-import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.ActivitiesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PackagesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -121,16 +121,16 @@ public class SocialProvider extends ContentProvider {
 
     }
 
-    private OpenHelper mOpenHelper;
+    private ContactsDatabaseHelper mDbHelper;
 
     /** {@inheritDoc} */
     @Override
     public boolean onCreate() {
         final Context context = getContext();
-        mOpenHelper = OpenHelper.getInstance(context);
+        mDbHelper = ContactsDatabaseHelper.getInstance(context);
 
         // TODO remove this, it's here to force opening the database on boot for testing
-        mOpenHelper.getReadableDatabase();
+        mDbHelper.getReadableDatabase();
 
         return true;
     }
@@ -180,7 +180,7 @@ public class SocialProvider extends ContentProvider {
 
         // TODO verify that IN_REPLY_TO != RAW_ID
 
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         long id = 0;
         db.beginTransaction();
         try {
@@ -190,12 +190,12 @@ public class SocialProvider extends ContentProvider {
             // Replace package name and mime-type with internal mappings
             final String packageName = values.getAsString(Activities.RES_PACKAGE);
             if (packageName != null) {
-                values.put(ActivitiesColumns.PACKAGE_ID, mOpenHelper.getPackageId(packageName));
+                values.put(ActivitiesColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
             }
             values.remove(Activities.RES_PACKAGE);
 
             final String mimeType = values.getAsString(Activities.MIMETYPE);
-            values.put(ActivitiesColumns.MIMETYPE_ID, mOpenHelper.getMimeTypeId(mimeType));
+            values.put(ActivitiesColumns.MIMETYPE_ID, mDbHelper.getMimeTypeId(mimeType));
             values.remove(Activities.MIMETYPE);
 
             long published = values.getAsLong(Activities.PUBLISHED);
@@ -296,7 +296,7 @@ public class SocialProvider extends ContentProvider {
     /** {@inheritDoc} */
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
 
         final int match = sUriMatcher.match(uri);
         switch (match) {
@@ -325,7 +325,7 @@ public class SocialProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
-        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        final SQLiteDatabase db = mDbHelper.getReadableDatabase();
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String limit = null;
 
@@ -395,9 +395,9 @@ public class SocialProvider extends ContentProvider {
             case ACTIVITIES_AUTHORED_BY:
                 return Activities.CONTENT_TYPE;
             case ACTIVITIES_ID:
-                final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+                final SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 long activityId = ContentUris.parseId(uri);
-                return mOpenHelper.getActivityMimeType(activityId);
+                return mDbHelper.getActivityMimeType(activityId);
             case CONTACT_STATUS_ID:
                 return Contacts.CONTENT_ITEM_TYPE;
         }

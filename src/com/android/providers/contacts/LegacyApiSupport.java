@@ -15,15 +15,15 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.DataColumns;
-import com.android.providers.contacts.OpenHelper.ExtensionsColumns;
-import com.android.providers.contacts.OpenHelper.GroupsColumns;
-import com.android.providers.contacts.OpenHelper.MimetypesColumns;
-import com.android.providers.contacts.OpenHelper.PhoneColumns;
-import com.android.providers.contacts.OpenHelper.PresenceColumns;
-import com.android.providers.contacts.OpenHelper.RawContactsColumns;
-import com.android.providers.contacts.OpenHelper.StatusUpdatesColumns;
-import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ExtensionsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.accounts.Account;
 import android.app.SearchManager;
@@ -460,7 +460,7 @@ public class LegacyApiSupport {
     }
 
     private final Context mContext;
-    private final OpenHelper mOpenHelper;
+    private final ContactsDatabaseHelper mDbHelper;
     private final ContactsProvider2 mContactsProvider;
     private final NameSplitter mPhoneticNameSplitter;
     private final GlobalSearchSupport mGlobalSearchSupport;
@@ -479,18 +479,18 @@ public class LegacyApiSupport {
     private long mMimetypeIm;
     private long mMimetypePostal;
 
-    public LegacyApiSupport(Context context, OpenHelper openHelper,
+    public LegacyApiSupport(Context context, ContactsDatabaseHelper contactsDatabaseHelper,
             ContactsProvider2 contactsProvider, GlobalSearchSupport globalSearchSupport) {
         mContext = context;
         mContactsProvider = contactsProvider;
-        mOpenHelper = openHelper;
+        mDbHelper = contactsDatabaseHelper;
         mGlobalSearchSupport = globalSearchSupport;
 
         mPhoneticNameSplitter = new NameSplitter("", "", "", context
                 .getString(com.android.internal.R.string.common_name_conjunctions), Locale
                 .getDefault());
 
-        SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
         mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
                 + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
                 + RawContacts._ID + "=?");
@@ -505,9 +505,9 @@ public class LegacyApiSupport {
                 " FROM " + Tables.DATA +
                 " WHERE " + Data._ID + "=?");
 
-        mMimetypeEmail = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        mMimetypeIm = mOpenHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
-        mMimetypePostal = mOpenHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
+        mMimetypeEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimetypeIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mMimetypePostal = mDbHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
     }
 
     private void ensureDefaultAccount() {
@@ -823,7 +823,7 @@ public class LegacyApiSupport {
 
     private long insertOrganization(ContentValues values) {
         parseOrganizationValues(values);
-        OpenHelper.copyLongValue(mValues, Data.RAW_CONTACT_ID,
+        ContactsDatabaseHelper.copyLongValue(mValues, Data.RAW_CONTACT_ID,
                 values, android.provider.Contacts.Organizations.PERSON_ID);
 
         Uri uri = mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues);
@@ -1089,7 +1089,7 @@ public class LegacyApiSupport {
         }
 
         long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-        long contactId = mOpenHelper.getContactId(rawContactId);
+        long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId != 0) {
             mContactsProvider.updateContactLastContactedTime(contactId, lastTimeContacted);
         }
@@ -1156,13 +1156,13 @@ public class LegacyApiSupport {
 
     private void updateLegacyPhotoData(long rawContactId, long dataId, ContentValues values) {
         mValues.clear();
-        OpenHelper.copyStringValue(mValues, LegacyPhotoData.LOCAL_VERSION,
+        ContactsDatabaseHelper.copyStringValue(mValues, LegacyPhotoData.LOCAL_VERSION,
                 values, android.provider.Contacts.Photos.LOCAL_VERSION);
-        OpenHelper.copyStringValue(mValues, LegacyPhotoData.DOWNLOAD_REQUIRED,
+        ContactsDatabaseHelper.copyStringValue(mValues, LegacyPhotoData.DOWNLOAD_REQUIRED,
                 values, android.provider.Contacts.Photos.DOWNLOAD_REQUIRED);
-        OpenHelper.copyStringValue(mValues, LegacyPhotoData.EXISTS_ON_SERVER,
+        ContactsDatabaseHelper.copyStringValue(mValues, LegacyPhotoData.EXISTS_ON_SERVER,
                 values, android.provider.Contacts.Photos.EXISTS_ON_SERVER);
-        OpenHelper.copyStringValue(mValues, LegacyPhotoData.SYNC_ERROR,
+        ContactsDatabaseHelper.copyStringValue(mValues, LegacyPhotoData.SYNC_ERROR,
                 values, android.provider.Contacts.Photos.SYNC_ERROR);
 
         int updated = mContactsProvider.updateInTransaction(Data.CONTENT_URI, mValues,
@@ -1182,22 +1182,22 @@ public class LegacyApiSupport {
         mValues2.clear();
         mValues3.clear();
 
-        OpenHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
+        ContactsDatabaseHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
                 values, People.CUSTOM_RINGTONE);
-        OpenHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
+        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
                 values, People.SEND_TO_VOICEMAIL);
-        OpenHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
+        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
                 values, People.LAST_TIME_CONTACTED);
-        OpenHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
+        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
                 values, People.TIMES_CONTACTED);
-        OpenHelper.copyLongValue(mValues, RawContacts.STARRED,
+        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, People.STARRED);
         mValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
         mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
 
         if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
             mValues2.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(mValues2, StructuredName.DISPLAY_NAME,
+            ContactsDatabaseHelper.copyStringValue(mValues2, StructuredName.DISPLAY_NAME,
                     values, People.NAME);
             if (values.containsKey(People.PHONETIC_NAME)) {
                 String phoneticName = values.getAsString(People.PHONETIC_NAME);
@@ -1211,7 +1211,7 @@ public class LegacyApiSupport {
 
         if (values.containsKey(People.NOTES)) {
             mValues3.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
-            OpenHelper.copyStringValue(mValues3, Note.NOTE, values, People.NOTES);
+            ContactsDatabaseHelper.copyStringValue(mValues3, Note.NOTE, values, People.NOTES);
         }
     }
 
@@ -1220,19 +1220,19 @@ public class LegacyApiSupport {
 
         mValues.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
 
-        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
+        ContactsDatabaseHelper.copyLongValue(mValues, Data.IS_PRIMARY,
                 values, android.provider.Contacts.Organizations.ISPRIMARY);
 
-        OpenHelper.copyStringValue(mValues, Organization.COMPANY,
+        ContactsDatabaseHelper.copyStringValue(mValues, Organization.COMPANY,
                 values, android.provider.Contacts.Organizations.COMPANY);
 
         // TYPE values happen to remain the same between V1 and V2 - can just copy the value
-        OpenHelper.copyLongValue(mValues, Organization.TYPE,
+        ContactsDatabaseHelper.copyLongValue(mValues, Organization.TYPE,
                 values, android.provider.Contacts.Organizations.TYPE);
 
-        OpenHelper.copyStringValue(mValues, Organization.LABEL,
+        ContactsDatabaseHelper.copyStringValue(mValues, Organization.LABEL,
                 values, android.provider.Contacts.Organizations.LABEL);
-        OpenHelper.copyStringValue(mValues, Organization.TITLE,
+        ContactsDatabaseHelper.copyStringValue(mValues, Organization.TITLE,
                 values, android.provider.Contacts.Organizations.TITLE);
     }
 
@@ -1241,30 +1241,32 @@ public class LegacyApiSupport {
 
         mValues.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
 
-        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY,
+        ContactsDatabaseHelper.copyLongValue(mValues, Data.IS_PRIMARY,
                 values, android.provider.Contacts.Phones.ISPRIMARY);
 
-        OpenHelper.copyStringValue(mValues, Phone.NUMBER,
+        ContactsDatabaseHelper.copyStringValue(mValues, Phone.NUMBER,
                 values, android.provider.Contacts.Phones.NUMBER);
 
         // TYPE values happen to remain the same between V1 and V2 - can just copy the value
-        OpenHelper.copyLongValue(mValues, Phone.TYPE,
+        ContactsDatabaseHelper.copyLongValue(mValues, Phone.TYPE,
                 values, android.provider.Contacts.Phones.TYPE);
 
-        OpenHelper.copyStringValue(mValues, Phone.LABEL,
+        ContactsDatabaseHelper.copyStringValue(mValues, Phone.LABEL,
                 values, android.provider.Contacts.Phones.LABEL);
     }
 
     private void parseContactMethodValues(int kind, ContentValues values) {
         mValues.clear();
 
-        OpenHelper.copyLongValue(mValues, Data.IS_PRIMARY, values, ContactMethods.ISPRIMARY);
+        ContactsDatabaseHelper.copyLongValue(mValues, Data.IS_PRIMARY, values,
+                ContactMethods.ISPRIMARY);
 
         switch (kind) {
             case android.provider.Contacts.KIND_EMAIL: {
                 copyCommonFields(values, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL,
                         Data.DATA14);
-                OpenHelper.copyStringValue(mValues, Email.DATA, values, ContactMethods.DATA);
+                ContactsDatabaseHelper.copyStringValue(mValues, Email.DATA, values,
+                        ContactMethods.DATA);
                 break;
             }
 
@@ -1284,8 +1286,8 @@ public class LegacyApiSupport {
             case android.provider.Contacts.KIND_POSTAL: {
                 copyCommonFields(values, StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
                         StructuredPostal.LABEL, Data.DATA14);
-                OpenHelper.copyStringValue(mValues, StructuredPostal.FORMATTED_ADDRESS, values,
-                        ContactMethods.DATA);
+                ContactsDatabaseHelper.copyStringValue(mValues, StructuredPostal.FORMATTED_ADDRESS,
+                        values, ContactMethods.DATA);
                 break;
             }
         }
@@ -1294,26 +1296,29 @@ public class LegacyApiSupport {
     private void copyCommonFields(ContentValues values, String mimeType, String typeColumn,
             String labelColumn, String auxDataColumn) {
         mValues.put(Data.MIMETYPE, mimeType);
-        OpenHelper.copyLongValue(mValues, typeColumn, values, ContactMethods.TYPE);
-        OpenHelper.copyStringValue(mValues, labelColumn, values, ContactMethods.LABEL);
-        OpenHelper.copyStringValue(mValues, auxDataColumn, values, ContactMethods.AUX_DATA);
+        ContactsDatabaseHelper.copyLongValue(mValues, typeColumn, values,
+                ContactMethods.TYPE);
+        ContactsDatabaseHelper.copyStringValue(mValues, labelColumn, values,
+                ContactMethods.LABEL);
+        ContactsDatabaseHelper.copyStringValue(mValues, auxDataColumn, values,
+                ContactMethods.AUX_DATA);
     }
 
     private void parseGroupValues(ContentValues values) {
         mValues.clear();
 
-        OpenHelper.copyStringValue(mValues, Groups.TITLE,
+        ContactsDatabaseHelper.copyStringValue(mValues, Groups.TITLE,
                 values, android.provider.Contacts.Groups.NAME);
-        OpenHelper.copyStringValue(mValues, Groups.NOTES,
+        ContactsDatabaseHelper.copyStringValue(mValues, Groups.NOTES,
                 values, android.provider.Contacts.Groups.NOTES);
-        OpenHelper.copyStringValue(mValues, Groups.SYSTEM_ID,
+        ContactsDatabaseHelper.copyStringValue(mValues, Groups.SYSTEM_ID,
                 values, android.provider.Contacts.Groups.SYSTEM_ID);
     }
 
     private void parseExtensionValues(ContentValues values) {
-        OpenHelper.copyStringValue(mValues, ExtensionsColumns.NAME,
+        ContactsDatabaseHelper.copyStringValue(mValues, ExtensionsColumns.NAME,
                 values, android.provider.Contacts.People.Extensions.NAME);
-        OpenHelper.copyStringValue(mValues, ExtensionsColumns.VALUE,
+        ContactsDatabaseHelper.copyStringValue(mValues, ExtensionsColumns.VALUE,
                 values, android.provider.Contacts.People.Extensions.VALUE);
     }
 
@@ -1420,7 +1425,7 @@ public class LegacyApiSupport {
             String sortOrder, String limit) {
         ensureDefaultAccount();
 
-        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        final SQLiteDatabase db = mDbHelper.getReadableDatabase();
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
 
@@ -1536,7 +1541,7 @@ public class LegacyApiSupport {
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     qb.appendWhere(" AND person =");
-                    qb.appendWhere(mOpenHelper.buildPhoneLookupAsNestedQuery(filterParam));
+                    qb.appendWhere(mDbHelper.buildPhoneLookupAsNestedQuery(filterParam));
                 }
                 break;
 

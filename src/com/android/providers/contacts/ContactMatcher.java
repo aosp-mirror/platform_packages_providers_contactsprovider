@@ -15,7 +15,7 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.NameLookupType;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 
 import java.util.ArrayList;
 import java.util.Collections;

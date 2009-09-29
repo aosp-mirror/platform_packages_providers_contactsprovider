@@ -37,7 +37,6 @@ import android.os.Bundle;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
-import android.provider.Contacts.People;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -54,13 +53,12 @@ import android.util.Log;
 import java.util.HashMap;
 
 /**
- * Database open helper for contacts and social activity data. Designed as a
- * singleton to make sure that all {@link android.content.ContentProvider} users get the same
- * reference. Provides handy methods for maintaining package and mime-type
- * lookup tables.
+ * Database helper for contacts. Designed as a singleton to make sure that all
+ * {@link android.content.ContentProvider} users get the same reference.
+ * Provides handy methods for maintaining package and mime-type lookup tables.
  */
-/* package */ class OpenHelper extends SQLiteOpenHelper {
-    private static final String TAG = "OpenHelper";
+/* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
+    private static final String TAG = "ContactsDatabaseHelper";
 
     private static final int DATABASE_VERSION = 98;
 
@@ -472,13 +470,13 @@ import java.util.HashMap;
 
     private boolean mReopenDatabase = false;
 
-    private static OpenHelper sSingleton = null;
+    private static ContactsDatabaseHelper sSingleton = null;
 
     private boolean mUseStrictPhoneNumberComparation;
 
-    public static synchronized OpenHelper getInstance(Context context) {
+    public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new OpenHelper(context);
+            sSingleton = new ContactsDatabaseHelper(context);
         }
         return sSingleton;
     }
@@ -487,7 +485,7 @@ import java.util.HashMap;
      * Private constructor, callers except unit tests should obtain an instance through
      * {@link #getInstance(android.content.Context)} instead.
      */
-    /* package */ OpenHelper(Context context) {
+    ContactsDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         Log.i(TAG, "Creating OpenHelper");
 

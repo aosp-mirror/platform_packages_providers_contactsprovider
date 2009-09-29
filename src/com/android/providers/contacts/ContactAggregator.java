@@ -17,16 +17,16 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
-import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
-import com.android.providers.contacts.OpenHelper.ContactsColumns;
-import com.android.providers.contacts.OpenHelper.DataColumns;
-import com.android.providers.contacts.OpenHelper.DisplayNameSources;
-import com.android.providers.contacts.OpenHelper.MimetypesColumns;
-import com.android.providers.contacts.OpenHelper.NameLookupColumns;
-import com.android.providers.contacts.OpenHelper.NameLookupType;
-import com.android.providers.contacts.OpenHelper.PresenceColumns;
-import com.android.providers.contacts.OpenHelper.RawContactsColumns;
-import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DisplayNameSources;
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -166,7 +166,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final int FIRST_LETTER_SUGGESTION_HIT_LIMIT = 100;
 
     private final ContactsProvider2 mContactsProvider;
-    private final OpenHelper mOpenHelper;
+    private final ContactsDatabaseHelper mDbHelper;
     private final ContactAggregationScheduler mScheduler;
     private boolean mEnabled = true;
 
@@ -259,12 +259,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
      * a delay of {@link ContactAggregationScheduler#AGGREGATION_DELAY} milliseconds.
      */
-    public ContactAggregator(ContactsProvider2 contactsProvider, OpenHelper openHelper,
-            ContactAggregationScheduler scheduler) {
+    public ContactAggregator(ContactsProvider2 contactsProvider,
+            ContactsDatabaseHelper contactsDatabaseHelper, ContactAggregationScheduler scheduler) {
         mContactsProvider = contactsProvider;
-        mOpenHelper = openHelper;
+        mDbHelper = contactsDatabaseHelper;
 
-        SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
         // Since we have no way of determining which custom status was set last,
         // we'll just pick one randomly.  We are using MAX as an approximation of randomness
@@ -417,7 +417,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         mCancel = false;
 
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
         ContentValues values = new ContentValues();
@@ -601,7 +601,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
         long contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
         setContactId(rawContactId, contactId);
-        mOpenHelper.updateContactVisible(contactId);
+        mDbHelper.updateContactVisible(contactId);
     }
 
     /**
@@ -624,12 +624,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             return;
         }
 
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final ContentValues values = new ContentValues();
         computeAggregateData(db, contactId, values);
         db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
 
-        mOpenHelper.updateContactVisible(contactId);
+        mDbHelper.updateContactVisible(contactId);
         updateAggregatedPresence(contactId);
     }
 
@@ -681,7 +681,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                     RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
             contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
             setContactIdAndMarkAggregated(rawContactId, contactId);
-            mOpenHelper.updateContactVisible(contactId);
+            mDbHelper.updateContactVisible(contactId);
 
             setPresenceContactId(rawContactId, contactId);
 
@@ -704,7 +704,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             setContactIdAndMarkAggregated(rawContactId, contactId);
             computeAggregateData(db, contactId, values);
             db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
-            mOpenHelper.updateContactVisible(contactId);
+            mDbHelper.updateContactVisible(contactId);
             updateAggregatedPresence(contactId);
         }
     }
@@ -1066,7 +1066,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        mOpenHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
+        mDbHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
         Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContactsColumns.AGGREGATION_NEEDED + "=0",
                 null, null, null, null, String.valueOf(SECONDARY_HIT_LIMIT));
         try {
@@ -1083,7 +1083,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * Finds exact email matches and updates their match scores.
      */
     private void lookupEmailMatches(SQLiteDatabase db, String address, ContactMatcher matcher) {
-        long mimetypeId = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        long mimetypeId = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         Cursor c = db.query(EmailLookupQuery.TABLE, EmailLookupQuery.COLUMNS,
                 DataColumns.MIMETYPE_ID + "=" + mimetypeId
                         + " AND " + Email.DATA + "=?"
@@ -1181,8 +1181,8 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         int hasPhoneNumber = 0;
         StringBuilder lookupKey = new StringBuilder();
 
-        long photoMimeType = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
-        long phoneMimeType = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+        long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        long phoneMimeType = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
         String isPhotoSql = "(" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
                 + Photo.PHOTO + " NOT NULL)";
@@ -1328,7 +1328,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     public void updatePhotoId(SQLiteDatabase db, long rawContactId) {
 
-        long contactId = mOpenHelper.getContactId(rawContactId);
+        long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
         }
@@ -1336,7 +1336,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         long bestPhotoId = -1;
         String photoAccount = null;
 
-        long photoMimeType = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
 
         String tables = Tables.RAW_CONTACTS + " JOIN " + Tables.DATA + " ON("
                 + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
@@ -1386,7 +1386,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     public void updateDisplayName(SQLiteDatabase db, long rawContactId) {
 
-        long contactId = mOpenHelper.getContactId(rawContactId);
+        long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
         }
@@ -1435,12 +1435,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     public void updateHasPhoneNumber(SQLiteDatabase db, long rawContactId) {
 
-        long contactId = mOpenHelper.getContactId(rawContactId);
+        long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
         }
 
-        mHasPhoneNumberUpdate.bindLong(1, mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE));
+        mHasPhoneNumberUpdate.bindLong(1, mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE));
         mHasPhoneNumberUpdate.bindLong(2, contactId);
         mHasPhoneNumberUpdate.bindLong(3, contactId);
         mHasPhoneNumberUpdate.execute();
@@ -1461,7 +1461,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     public void updateLookupKey(SQLiteDatabase db, long rawContactId) {
-        long contactId = mOpenHelper.getContactId(rawContactId);
+        long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
         }
@@ -1504,7 +1504,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb, String[] projection,
             long contactId, int maxSuggestions, String filter) {
-        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        final SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
         List<MatchScore> bestMatches = findMatchingContacts(db, contactId);
         return queryMatchingContacts(qb, db, contactId, projection, bestMatches, maxSuggestions,

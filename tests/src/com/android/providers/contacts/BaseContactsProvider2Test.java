@@ -96,7 +96,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         mResolver = mActor.resolver;
         if (mActor.provider instanceof SynchronousContactsProvider2) {
             ((SynchronousContactsProvider2) mActor.provider)
-                    .getOpenHelper(mActor.context).wipeData();
+                    .getDatabaseHelper(mActor.context).wipeData();
         }
     }
 
