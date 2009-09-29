@@ -444,8 +444,6 @@ import java.util.HashMap;
 
     public interface StatusUpdatesColumns {
         String DATA_ID = "status_update_data_id";
-        String TIMESTAMP = "status_timestamp";
-        String STATUS = "status_update";
     }
 
     /** In-memory cache of previously found mimetype mappings */
@@ -959,8 +957,11 @@ import java.util.HashMap;
 
         db.execSQL("CREATE TABLE " + Tables.STATUS_UPDATES + " (" +
                 StatusUpdatesColumns.DATA_ID + " INTEGER PRIMARY KEY REFERENCES data(_id)," +
-                StatusUpdatesColumns.TIMESTAMP + " INTEGER," +
-                StatusUpdatesColumns.STATUS + " TEXT" +
+                StatusUpdates.STATUS + " TEXT," +
+                StatusUpdates.STATUS_TIMESTAMP + " INTEGER," +
+                StatusUpdates.STATUS_RES_PACKAGE + " TEXT, " +
+                StatusUpdates.STATUS_LABEL + " INTEGER, " +
+                StatusUpdates.STATUS_ICON + " INTEGER" +
         ");");
 
         String contactEntitiesSelect = "SELECT "

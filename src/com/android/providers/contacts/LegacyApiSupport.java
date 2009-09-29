@@ -20,6 +20,7 @@ import com.android.providers.contacts.OpenHelper.ExtensionsColumns;
 import com.android.providers.contacts.OpenHelper.GroupsColumns;
 import com.android.providers.contacts.OpenHelper.MimetypesColumns;
 import com.android.providers.contacts.OpenHelper.PhoneColumns;
+import com.android.providers.contacts.OpenHelper.PresenceColumns;
 import com.android.providers.contacts.OpenHelper.RawContactsColumns;
 import com.android.providers.contacts.OpenHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.OpenHelper.Tables;
@@ -131,11 +132,12 @@ public class LegacyApiSupport {
             + PEOPLE_JOINS;
 
     public static final String PRESENCE_JOINS =
-            " LEFT OUTER JOIN presence" +
-            " ON (" + " presence." + StatusUpdates.DATA_ID
-                    + " = (SELECT max(" + StatusUpdates.DATA_ID + ")" +
-            " FROM presence" +
-            " WHERE people._id = presence_raw_contact_id))";
+            " LEFT OUTER JOIN " + Tables.PRESENCE +
+            " ON (" + Tables.PRESENCE + "." + StatusUpdates.DATA_ID + "=" +
+                    "(SELECT MAX(" + StatusUpdates.DATA_ID + ")" +
+                    " FROM " + Tables.PRESENCE +
+                    " WHERE people._id = " + PresenceColumns.RAW_CONTACT_ID + ")" +
+            " )";
 
     private static final String PHONETIC_NAME_SQL = "trim(trim("
             + "ifnull(name." + StructuredName.PHONETIC_GIVEN_NAME + ",' ')||' '||"
