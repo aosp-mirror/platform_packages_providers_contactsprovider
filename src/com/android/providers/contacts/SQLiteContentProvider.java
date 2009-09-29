@@ -47,11 +47,11 @@ public abstract class SQLiteContentProvider extends ContentProvider
     @Override
     public boolean onCreate() {
         Context context = getContext();
-        mOpenHelper = getOpenHelper(context);
+        mOpenHelper = getDatabaseHelper(context);
         return true;
     }
 
-    protected abstract SQLiteOpenHelper getOpenHelper(Context context);
+    protected abstract SQLiteOpenHelper getDatabaseHelper(Context context);
 
     /**
      * The equivalent of the {@link #insert} method, but invoked within a transaction.
@@ -71,7 +71,7 @@ public abstract class SQLiteContentProvider extends ContentProvider
 
     protected abstract void notifyChange();
 
-    protected SQLiteOpenHelper getOpenHelper() {
+    protected SQLiteOpenHelper getDatabaseHelper() {
         return mOpenHelper;
     }
 

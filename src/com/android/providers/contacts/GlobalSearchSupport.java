@@ -17,11 +17,11 @@
 package com.android.providers.contacts;
 
 import com.android.internal.database.ArrayListCursor;
-import com.android.providers.contacts.OpenHelper.AggregatedPresenceColumns;
-import com.android.providers.contacts.OpenHelper.ContactsColumns;
-import com.android.providers.contacts.OpenHelper.DataColumns;
-import com.android.providers.contacts.OpenHelper.MimetypesColumns;
-import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.app.SearchManager;
 import android.content.ContentUris;

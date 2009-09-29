@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -67,7 +67,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_LABEL, Calls.CACHED_NUMBER_LABEL);
     }
 
-    private OpenHelper mOpenHelper;
+    private ContactsDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
     private boolean mUseStrictPhoneNumberComparation;
 
@@ -75,8 +75,8 @@ public class CallLogProvider extends ContentProvider {
     public boolean onCreate() {
         final Context context = getContext();
 
-        mOpenHelper = getOpenHelper(context);
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        mDbHelper = getDatabaseHelper(context);
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
         mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
 
         mUseStrictPhoneNumberComparation =
@@ -87,8 +87,8 @@ public class CallLogProvider extends ContentProvider {
     }
 
     /* Visible for testing */
-    protected OpenHelper getOpenHelper(final Context context) {
-        return OpenHelper.getInstance(context);
+    protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+        return ContactsDatabaseHelper.getInstance(context);
     }
 
     @Override
@@ -125,7 +125,7 @@ public class CallLogProvider extends ContentProvider {
                 throw new IllegalArgumentException("Unknown URL " + uri);
         }
 
-        final SQLiteDatabase db = mOpenHelper.getReadableDatabase();
+        final SQLiteDatabase db = mDbHelper.getReadableDatabase();
         Cursor c = qb.query(db, projection, selection, selectionArgs, null, null, sortOrder, null);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), CallLog.CONTENT_URI);
@@ -160,7 +160,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int update(Uri url, ContentValues values, String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         String where;
         final int matchedUriId = sURIMatcher.match(url);
         switch (matchedUriId) {
@@ -184,7 +184,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mOpenHelper.getWritableDatabase();
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
 
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
