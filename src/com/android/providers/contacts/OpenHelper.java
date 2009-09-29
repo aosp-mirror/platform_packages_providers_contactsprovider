@@ -1668,6 +1668,10 @@ import java.util.HashMap;
         return hasRestrictedAccess() ? Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
     }
 
+    public String getRestrictedContactView() {
+        return Views.CONTACTS_RESTRICTED;
+    }
+
     public String getGroupView() {
         return Views.GROUPS_ALL;
     }

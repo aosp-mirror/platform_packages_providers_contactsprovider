@@ -159,6 +159,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_STREQUENT_FILTER = 1007;
     private static final int CONTACTS_GROUP = 1008;
     private static final int CONTACTS_PHOTO = 1009;
+    private static final int CONTACTS_AS_VCARD = 1010;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -340,6 +341,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
+    /** Contains just the contacts vCard columns */
+    private static final HashMap<String, String> sContactsVCardProjectionMap;
     /** Contains just the raw contacts columns */
     private static final HashMap<String, String> sRawContactsProjectionMap;
     /** Contains columns from the data view */
@@ -395,6 +398,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_vcard/*", CONTACTS_AS_VCARD);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/", CONTACTS_STREQUENT);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/filter/*",
                 CONTACTS_STREQUENT_FILTER);
@@ -470,9 +474,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sContactsProjectionMap.put(Contacts.HAS_PHONE_NUMBER, Contacts.HAS_PHONE_NUMBER);
         sContactsProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sContactsProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
-        sContactsProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
+
+        sContactsVCardProjectionMap = Maps.newHashMap();
+        sContactsVCardProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
                 + " || '.vcf' AS " + OpenableColumns.DISPLAY_NAME);
-        sContactsProjectionMap.put(OpenableColumns.SIZE, "0 AS " + OpenableColumns.SIZE);
+        sContactsVCardProjectionMap.put(OpenableColumns.SIZE, "0 AS " + OpenableColumns.SIZE);
         sContactsProjectionMap.put(Contacts.CONTACT_PRESENCE,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE
                         + " AS " + Contacts.CONTACT_PRESENCE);
@@ -3178,6 +3184,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case CONTACTS_AS_VCARD: {
+                // When reading as vCard always use restricted view
+                final String lookupKey = uri.getPathSegments().get(2);
+                qb.setTables(mOpenHelper.getRestrictedContactView());
+                qb.setProjectionMap(sContactsVCardProjectionMap);
+                qb.appendWhere(Contacts._ID + "=" + lookupContactIdByLookupKey(db, lookupKey));
+                break;
+            }
+
             case CONTACTS_FILTER: {
                 setTablesAndProjectionMapForContacts(qb, projection);
                 if (uri.getPathSegments().size() > 2) {
@@ -3941,9 +3956,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql, null);
             }
 
-            case CONTACTS_LOOKUP:
-            case CONTACTS_LOOKUP_ID: {
-                // TODO: optimize lookup when direct id provided
+            case CONTACTS_AS_VCARD: {
                 final String lookupKey = uri.getPathSegments().get(2);
                 final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
                 final String selection = RawContacts.CONTACT_ID + "=" + contactId;
@@ -3998,7 +4011,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final VCardComposer composer = new VCardComposer(context, VCARD_TYPE_DEFAULT, false);
         composer.addHandler(composer.new HandlerForOutputStream(stream));
 
-        // TODO: enforce the callers security clause is used
+        // No extra checks since composer always uses restricted views
         if (!composer.init(selection, selectionArgs))
             return;
 
@@ -4418,6 +4431,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_ID:
             case CONTACTS_LOOKUP_ID:
                 return Contacts.CONTENT_ITEM_TYPE;
+            case CONTACTS_AS_VCARD:
+                return Contacts.CONTENT_VCARD_TYPE;
             case RAW_CONTACTS:
                 return RawContacts.CONTENT_TYPE;
             case RAW_CONTACTS_ID:
