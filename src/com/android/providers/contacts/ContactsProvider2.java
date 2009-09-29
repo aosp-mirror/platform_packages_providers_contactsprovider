@@ -3146,13 +3146,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         sortOrder);
 
             case CONTACTS: {
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
                 break;
             }
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
                 qb.appendWhere(Contacts._ID + "=" + contactId);
                 break;
             }
@@ -3168,7 +3168,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (segmentCount == 4) {
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
-                    setTablesAndProjectionMapForContacts(lookupQb, projection);
+                    setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
                     lookupQb.appendWhere(Contacts._ID + "=" + contactId + " AND " +
                             Contacts.LOOKUP_KEY + "=");
                     lookupQb.appendWhereEscapeString(lookupKey);
@@ -3181,7 +3181,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     c.close();
                 }
 
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
                 qb.appendWhere(Contacts._ID + "=" + lookupContactIdByLookupKey(db, lookupKey));
                 break;
             }
@@ -3189,14 +3189,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_AS_VCARD: {
                 // When reading as vCard always use restricted view
                 final String lookupKey = uri.getPathSegments().get(2);
-                qb.setTables(mDbHelper.getRestrictedContactView());
+                qb.setTables(mDbHelper.getContactView(true /* require restricted */));
                 qb.setProjectionMap(sContactsVCardProjectionMap);
                 qb.appendWhere(Contacts._ID + "=" + lookupContactIdByLookupKey(db, lookupKey));
                 break;
             }
 
             case CONTACTS_FILTER: {
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
@@ -3219,7 +3219,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     filterSql = sb.toString();
                 }
 
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
 
                 // Build the first query for starred
                 if (filterSql != null) {
@@ -3230,7 +3230,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 // Build the second query for frequent
                 qb = new SQLiteQueryBuilder();
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
                 if (filterSql != null) {
                     qb.appendWhere(filterSql);
                 }
@@ -3251,7 +3251,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_GROUP: {
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
                     selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
@@ -3386,17 +3386,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS: {
-                qb.setTables(mDbHelper.getRawContactView());
-                qb.setProjectionMap(sRawContactsProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForRawContacts(qb, uri);
                 break;
             }
 
             case RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
-                qb.setTables(mDbHelper.getRawContactView());
-                qb.setProjectionMap(sRawContactsProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                setTablesAndProjectionMapForRawContacts(qb, uri);
                 qb.appendWhere(" AND " + RawContacts._ID + "=" + rawContactId);
                 break;
             }
@@ -3479,7 +3475,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     maxSuggestions = DEFAULT_MAX_SUGGESTIONS;
                 }
 
-                setTablesAndProjectionMapForContacts(qb, projection);
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
 
                 return mContactAggregator.queryAggregationSuggestions(qb, projection, contactId,
                         maxSuggestions, filter);
@@ -3757,9 +3753,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, String[] projection) {
+    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getContactView());
+        boolean excludeRestrictedData = false;
+        String requestingPackage = uri.getQueryParameter(
+                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
+        if (requestingPackage != null) {
+            excludeRestrictedData = !ContactsDatabaseHelper.hasRestrictedAccess(requestingPackage);
+        }
+        sb.append(mDbHelper.getContactView(excludeRestrictedData));
         if (mDbHelper.isInProjection(projection,
                 Contacts.CONTACT_PRESENCE)) {
             sb.append(" LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
@@ -3779,13 +3782,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         qb.setProjectionMap(sContactsProjectionMap);
     }
 
+    private void setTablesAndProjectionMapForRawContacts(SQLiteQueryBuilder qb, Uri uri) {
+        StringBuilder sb = new StringBuilder();
+        boolean excludeRestrictedData = false;
+        String requestingPackage = uri.getQueryParameter(
+                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
+        if (requestingPackage != null) {
+            excludeRestrictedData = !ContactsDatabaseHelper.hasRestrictedAccess(requestingPackage);
+        }
+        sb.append(mDbHelper.getRawContactView(excludeRestrictedData));
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(sRawContactsProjectionMap);
+        appendAccountFromParameter(qb, uri);
+    }
+
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean distinct) {
         StringBuilder sb = new StringBuilder();
         // Note: currently, "export only" equals to "restricted", but may not in the future.
-        boolean requireRestrictedData = readBooleanQueryParameter(uri,
+        boolean excludeRestrictedData = readBooleanQueryParameter(uri,
                 Data.FOR_EXPORT_ONLY, false);
-        sb.append(mDbHelper.getDataView(requireRestrictedData));
+
+        String requestingPackage = uri.getQueryParameter(
+                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
+        if (requestingPackage != null) {
+            excludeRestrictedData = excludeRestrictedData
+                    || !ContactsDatabaseHelper.hasRestrictedAccess(requestingPackage);
+        }
+
+        sb.append(mDbHelper.getDataView(excludeRestrictedData));
         sb.append(" data");
 
         if (mDbHelper.isInProjection(projection, Data.CONTACT_PRESENCE)) {
@@ -4138,9 +4163,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             final SQLiteDatabase db = provider.mDbHelper.getReadableDatabase();
             final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            final boolean requireRestrictedView =
+            final boolean excludeRestrictedData =
                 provider.readBooleanQueryParameter(uri, Data.FOR_EXPORT_ONLY, false);
-            qb.setTables(provider.mDbHelper.getContactEntitiesView(requireRestrictedView));
+            qb.setTables(provider.mDbHelper.getContactEntitiesView(excludeRestrictedData));
             if (contactsIdString != null) {
                 qb.appendWhere(Data.RAW_CONTACT_ID + "=" + contactsIdString);
             }

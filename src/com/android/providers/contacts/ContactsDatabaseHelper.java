@@ -1639,10 +1639,21 @@ import java.util.HashMap;
 
         // Has restricted access if caller matches any packages
         for (String callerPackage : callerPackages) {
-            for (String allowedPackage : sAllowedPackages) {
-                if (allowedPackage.equals(callerPackage)) {
-                    return true;
-                }
+            if (hasRestrictedAccess(callerPackage)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if requestingPackage should be allowed access to
+     * {@link RawContacts#IS_RESTRICTED} data.
+     */
+    static boolean hasRestrictedAccess(String requestingPackage) {
+        for (String allowedPackage : sAllowedPackages) {
+            if (allowedPackage.equals(requestingPackage)) {
+                return true;
             }
         }
         return false;
@@ -1658,16 +1669,21 @@ import java.util.HashMap;
     }
 
     public String getRawContactView() {
-        return hasRestrictedAccess() ? Views.RAW_CONTACTS_ALL
-                : Views.RAW_CONTACTS_RESTRICTED;
+        return getRawContactView(false);
+    }
+
+    public String getRawContactView(boolean requireRestrictedView) {
+        return (hasRestrictedAccess() && !requireRestrictedView) ?
+                Views.RAW_CONTACTS_ALL : Views.RAW_CONTACTS_RESTRICTED;
     }
 
     public String getContactView() {
-        return hasRestrictedAccess() ? Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
+        return getContactView(false);
     }
 
-    public String getRestrictedContactView() {
-        return Views.CONTACTS_RESTRICTED;
+    public String getContactView(boolean requireRestrictedView) {
+        return (hasRestrictedAccess() && !requireRestrictedView) ?
+                Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
     }
 
     public String getGroupView() {
