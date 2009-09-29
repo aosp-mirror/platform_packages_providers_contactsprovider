@@ -365,8 +365,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mSetPrimaryStatement;
     /** Precompiled sql statement for setting a data record to the super primary. */
     private SQLiteStatement mSetSuperPrimaryStatement;
-    /** Precompiled sql statement for incrementing times contacted for an contact */
-    private SQLiteStatement mLastTimeContactedUpdate;
+    /** Precompiled sql statement for incrementing times contacted for a contact */
+    private SQLiteStatement mContactsLastTimeContactedUpdate;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mRawContactDisplayNameUpdate;
     /** Precompiled sql statement for marking a raw contact as dirty */
@@ -1548,9 +1548,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 " FROM " + Tables.RAW_CONTACTS +
                                 " WHERE " + RawContacts._ID + "=?))");
 
-        mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
-                + RawContacts.TIMES_CONTACTED + "=" + RawContacts.TIMES_CONTACTED + "+1,"
-                + RawContacts.LAST_TIME_CONTACTED + "=? WHERE " + RawContacts.CONTACT_ID + "=?");
+        mContactsLastTimeContactedUpdate = db.compileStatement(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.LAST_TIME_CONTACTED + "=? " +
+                "WHERE " + Contacts._ID + "=?");
 
         mRawContactDisplayNameUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -2952,10 +2953,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=" + contactId, null);
     }
 
-    public void updateContactTime(long contactId, long lastTimeContacted) {
-        mLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
-        mLastTimeContactedUpdate.bindLong(2, contactId);
-        mLastTimeContactedUpdate.execute();
+    public void updateContactLastContactedTime(long contactId, long lastTimeContacted) {
+        mContactsLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
+        mContactsLastTimeContactedUpdate.bindLong(2, contactId);
+        mContactsLastTimeContactedUpdate.execute();
     }
 
     private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
