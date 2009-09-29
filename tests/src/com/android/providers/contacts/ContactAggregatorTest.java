@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.providers.contacts;
 
 import android.content.ContentUris;
@@ -29,7 +30,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -w \
+ * adb shell am instrument -e class com.android.providers.contacts.ContactAggregatorTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */

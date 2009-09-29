@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.providers.contacts;
 
 import android.content.Context;
@@ -34,8 +35,9 @@ import android.util.Log;
  * <code>
  * adb push <large contacts2.db> \
  *         data/data/com.android.providers.contacts/databases/perf.contacts2.db
- * adb shell am instrument -w \
- *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * adb shell am instrument \
+ *         -e class com.android.providers.contacts.ContactAggregatorPerformanceTest \
+ *         -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
 @LargeTest

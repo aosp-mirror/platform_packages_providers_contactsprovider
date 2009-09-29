@@ -26,6 +26,12 @@ import junit.framework.TestCase;
 
 /**
  * Tests for {@link NameSplitter}.
+ *
+ * Run the test like this:
+ * <code>
+ * adb shell am instrument -e class com.android.providers.contacts.NameSplitterTest -w \
+ *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * </code>
  */
 @SmallTest
 public class NameSplitterTest extends TestCase {

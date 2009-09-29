@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.providers.contacts;
 
 import com.android.internal.telephony.CallerInfo;
@@ -21,18 +22,18 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 /**
  * Integration test for {@link CallerInfo} and {@link ContactsProvider2}.
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -w \
+ * adb shell am instrument -e class com.android.providers.contacts.CallerInfoIntegrationTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@MediumTest
 public class CallerInfoIntegrationTest extends BaseContactsProvider2Test {
 
     public void testCallerInfo() {

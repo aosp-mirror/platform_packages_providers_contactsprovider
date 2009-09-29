@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
@@ -47,7 +48,6 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContentResolver;
-import android.test.suitebuilder.annotation.LargeTest;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
@@ -64,7 +64,6 @@ import java.util.Map.Entry;
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
  */
-@LargeTest
 public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected static final String PACKAGE = "ContactsProvider2Test";

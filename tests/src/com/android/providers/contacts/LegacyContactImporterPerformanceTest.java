@@ -35,8 +35,9 @@ import android.util.Log;
  * <code>
  * adb push <large contacts.db> \
  *         data/data/com.android.providers.contacts/databases/perf_imp.contacts.db
- * adb shell am instrument -w \
- *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * adb shell am instrument \
+ *         -e class com.android.providers.contacts.LegacyContactImporterPerformanceTest \
+ *         -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
 @LargeTest
