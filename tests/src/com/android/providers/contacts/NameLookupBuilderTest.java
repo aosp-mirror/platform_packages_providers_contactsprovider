@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.providers.contacts;
 
 import android.test.suitebuilder.annotation.SmallTest;
@@ -23,6 +24,12 @@ import junit.framework.TestCase;
 
 /**
  * Unit tests for {@link NameLookupBuilder}.
+ *
+ * Run the test like this:
+ * <code>
+ * adb shell am instrument -e class com.android.providers.contacts.NameLookupBuilderTest -w \
+ *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * </code>
  */
 @SmallTest
 public class NameLookupBuilderTest extends TestCase {

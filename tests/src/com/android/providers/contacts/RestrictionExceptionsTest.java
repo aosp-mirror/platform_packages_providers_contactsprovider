@@ -38,7 +38,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -w \
+ * adb shell am instrument -e class com.android.providers.contacts.RestrictionExceptionsTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */

@@ -39,6 +39,12 @@ import java.io.IOException;
 
 /**
  * Tests for legacy contacts APIs.
+ *
+ * Run the test like this:
+ * <code>
+ * adb shell am instrument -e class com.android.providers.contacts.LegacyContactsProviderTest -w \
+ *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * </code>
  */
 @LargeTest
 public class LegacyContactsProviderTest extends BaseContactsProvider2Test {

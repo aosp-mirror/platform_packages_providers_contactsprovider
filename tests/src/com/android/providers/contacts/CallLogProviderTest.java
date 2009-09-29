@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.providers.contacts;
 
 import com.android.internal.telephony.CallerInfo;
@@ -28,18 +29,18 @@ import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 /**
  * Unit tests for {@link CallLogProvider}.
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -w \
+ * adb shell am instrument -e class com.android.providers.contacts.CallLogProviderTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@MediumTest
 public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     private static final boolean USE_LEGACY_PROVIDER = false;
