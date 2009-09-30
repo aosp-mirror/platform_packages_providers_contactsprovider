@@ -3760,7 +3760,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String requestingPackage = uri.getQueryParameter(
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
-            excludeRestrictedData = !ContactsDatabaseHelper.hasRestrictedAccess(requestingPackage);
+            excludeRestrictedData = !mDbHelper.hasAccessToRestrictedData(requestingPackage);
         }
         sb.append(mDbHelper.getContactView(excludeRestrictedData));
         if (mDbHelper.isInProjection(projection,
@@ -3788,7 +3788,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String requestingPackage = uri.getQueryParameter(
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
-            excludeRestrictedData = !ContactsDatabaseHelper.hasRestrictedAccess(requestingPackage);
+            excludeRestrictedData = !mDbHelper.hasAccessToRestrictedData(requestingPackage);
         }
         sb.append(mDbHelper.getRawContactView(excludeRestrictedData));
         qb.setTables(sb.toString());
@@ -3807,7 +3807,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
             excludeRestrictedData = excludeRestrictedData
-                    || !ContactsDatabaseHelper.hasRestrictedAccess(requestingPackage);
+                    || !mDbHelper.hasAccessToRestrictedData(requestingPackage);
         }
 
         sb.append(mDbHelper.getDataView(excludeRestrictedData));
@@ -3948,7 +3948,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     String getContactsRestrictions() {
-        if (mDbHelper.hasRestrictedAccess()) {
+        if (mDbHelper.hasAccessToRestrictedData()) {
             return "1";
         } else {
             return RawContacts.IS_RESTRICTED + "=0";
@@ -3956,7 +3956,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public String getContactsRestrictionExceptionAsNestedQuery(String contactIdColumn) {
-        if (mDbHelper.hasRestrictedAccess()) {
+        if (mDbHelper.hasAccessToRestrictedData()) {
             return "1";
         } else {
             return "(SELECT " + RawContacts.IS_RESTRICTED + " FROM " + Tables.RAW_CONTACTS
