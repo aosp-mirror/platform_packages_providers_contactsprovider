@@ -30,8 +30,7 @@ public abstract class NameLookupBuilder {
 
     private final NameSplitter mSplitter;
     private String[][] mNicknameClusters = new String[MAX_NAME_TOKENS][];
-    private StringBuilder mStringBuilder1 = new StringBuilder();
-    private StringBuilder mStringBuilder2 = new StringBuilder();
+    private StringBuilder mStringBuilder = new StringBuilder();
     private String[] mNames = new String[NameSplitter.MAX_TOKENS];
 
     public NameLookupBuilder(NameSplitter splitter) {
@@ -79,6 +78,15 @@ public abstract class NameLookupBuilder {
                     return s2.length() - s1.length();
                 }
             });
+
+            // Insert a collation key for each extra word - useful for contact filtering
+            // and suggestions
+            String firstToken = mNames[0];
+            for (int i = MAX_NAME_TOKENS; i < tokenCount; i++) {
+                mNames[0] = mNames[i];
+                insertCollationKey(rawContactId, dataId, MAX_NAME_TOKENS);
+            }
+            mNames[0] = firstToken;
 
             tokenCount = MAX_NAME_TOKENS;
         }
@@ -135,27 +143,34 @@ public abstract class NameLookupBuilder {
      */
     private void insertNameVariant(long rawContactId, long dataId, int tokenCount,
             int lookupType, boolean buildCollationKey) {
-        mStringBuilder1.setLength(0);
+        mStringBuilder.setLength(0);
 
         for (int i = 0; i < tokenCount; i++) {
             if (i != 0) {
-                mStringBuilder1.append('.');
+                mStringBuilder.append('.');
             }
-            mStringBuilder1.append(mNames[i]);
+            mStringBuilder.append(mNames[i]);
         }
 
-        insertNameLookup(rawContactId, dataId, lookupType, mStringBuilder1.toString());
+        insertNameLookup(rawContactId, dataId, lookupType, mStringBuilder.toString());
 
         if (buildCollationKey) {
-            mStringBuilder2.setLength(0);
-
-            for (int i = 0; i < tokenCount; i++) {
-                mStringBuilder2.append(mNames[i]);
-            }
-
-            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
-                    mStringBuilder2.toString());
+            insertCollationKey(rawContactId, dataId, tokenCount);
         }
+    }
+
+    /**
+     * Inserts a collation key for the current contents of {@link #mNames}.
+     */
+    private void insertCollationKey(long rawContactId, long dataId, int tokenCount) {
+        mStringBuilder.setLength(0);
+
+        for (int i = 0; i < tokenCount; i++) {
+            mStringBuilder.append(mNames[i]);
+        }
+
+        insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
+                mStringBuilder.toString());
     }
 
     /**

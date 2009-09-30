@@ -182,9 +182,21 @@ public class NameLookupBuilderTest extends TestCase {
     public void testMultiwordName() {
         mBuilder.insertNameLookup(0, 0, "Jo Jeffrey John Jessy Longname");
         String actual = mBuilder.inserted();
-        assertTrue(actual.startsWith(
-                "(0:Jo.Jeffrey.John.Jessy.Longname)" +  // Exact
-                "(2:JoJeffreyJohnJessyLongname)" +      // Full collation key
-                "(1:Longname.Jeffrey.Jessy.John)"));    // Variant: four longest parts
+
+        // Exact name
+        assertTrue(actual.contains("(0:Jo.Jeffrey.John.Jessy.Longname)"));
+
+        // Full collation key
+        assertTrue(actual.contains("(2:JoJeffreyJohnJessyLongname)"));
+
+        // Variant: four longest parts
+        assertTrue(actual.contains("(1:Longname.Jeffrey.Jessy.John)"));
+
+        // All individual words
+        assertTrue(actual.contains("(2:Jo"));
+        assertTrue(actual.contains("(2:Jeffrey"));
+        assertTrue(actual.contains("(2:John"));
+        assertTrue(actual.contains("(2:Jessy"));
+        assertTrue(actual.contains("(2:Longname"));
     }
 }
