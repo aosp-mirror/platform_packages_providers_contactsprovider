@@ -1438,7 +1438,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(photoId, twigId);
     }
 
-    public void testUpdateRawContactData() {
+    public void testUpdateRawContactDataPhoto() {
         // setup a contact with a null photo
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -1466,9 +1466,46 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[] {Photo.CONTENT_ITEM_TYPE}));
 
         // verify the photo
-        Cursor storedPhoto = mResolver.query(rawContactUri, new String[] {Photo.PHOTO},
+        Cursor storedPhoto = mResolver.query(dataUri, new String[] {Photo.PHOTO},
                 Data.MIMETYPE + "=?", new String[] {Photo.CONTENT_ITEM_TYPE}, null);
+        storedPhoto.moveToFirst();
         MoreAsserts.assertEquals(loadTestPhoto(), storedPhoto.getBlob(0));
+    }
+
+    public void testUpdateRawContactSetStarred() {
+        long rawContactId1 = createRawContactWithName();
+        Uri rawContactUri1 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
+        long rawContactId2 = createRawContactWithName();
+        Uri rawContactUri2 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2);
+
+        assertAggregated(rawContactId1, rawContactId2);
+
+        long contactId = queryContactId(rawContactId1);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertStoredValue(contactUri, Contacts.STARRED, "0");
+
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.STARRED, "1");
+
+        mResolver.update(rawContactUri1, values, null, null);
+
+        assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
+        assertStoredValue(rawContactUri2, RawContacts.STARRED, "0");
+        assertStoredValue(contactUri, Contacts.STARRED, "1");
+
+        values.put(RawContacts.STARRED, "0");
+        mResolver.update(rawContactUri1, values, null, null);
+
+        assertStoredValue(rawContactUri1, RawContacts.STARRED, "0");
+        assertStoredValue(rawContactUri2, RawContacts.STARRED, "0");
+        assertStoredValue(contactUri, Contacts.STARRED, "0");
+
+        values.put(Contacts.STARRED, "1");
+        mResolver.update(contactUri, values, null, null);
+
+        assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
+        assertStoredValue(rawContactUri2, RawContacts.STARRED, "1");
+        assertStoredValue(contactUri, Contacts.STARRED, "1");
     }
 
     public void testLiveFolders() {
