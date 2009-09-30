@@ -91,7 +91,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     @Override
     protected Account getDefaultAccount() {
         if (mAccount == null) {
-            mAccount = new Account("androidtest@gmail.com", "com.google.GAIA");
+            mAccount = new Account("androidtest@gmail.com", "com.google");
         }
         return mAccount;
     }

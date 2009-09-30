@@ -58,7 +58,7 @@ public class LegacyContactImporter {
     private static final int MAX_ATTEMPTS = 5;
     private static final int DELAY_BETWEEN_ATTEMPTS = 2000;
 
-    public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
+    public static final String DEFAULT_ACCOUNT_TYPE = "com.google";
     private static final String DATABASE_NAME = "contacts.db";
 
     private static final int INSERT_BATCH_SIZE = 200;
