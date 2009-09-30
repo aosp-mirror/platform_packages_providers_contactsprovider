@@ -1,7 +1,7 @@
 1 0 {
 2    _id=1
 3    account_name=non_syncable
-4    account_type=com.google.GAIA
+4    account_type=com.google
 5    deleted=0
 6    dirty=1
 7    sourceid=null
@@ -14,7 +14,7 @@
 14 1 {
 15    _id=2
 16    account_name=android.contacts.test.eclair@gmail.com
-17    account_type=com.google.GAIA
+17    account_type=com.google
 18    deleted=0
 19    dirty=1
 20    sourceid=3d09f37e0f0dbc6f
@@ -27,7 +27,7 @@
 27 2 {
 28    _id=3
 29    account_name=android.contacts.test.eclair@gmail.com
-30    account_type=com.google.GAIA
+30    account_type=com.google
 31    deleted=0
 32    dirty=1
 33    sourceid=5c9ae978b346ac9
@@ -40,7 +40,7 @@
 40 3 {
 41    _id=11
 42    account_name=android.contacts.test.eclair@gmail.com
-43    account_type=com.google.GAIA
+43    account_type=com.google
 44    deleted=0
 45    dirty=1
 46    sourceid=null
@@ -53,7 +53,7 @@
 53 4 {
 54    _id=12
 55    account_name=android.contacts.test.eclair@gmail.com
-56    account_type=com.google.GAIA
+56    account_type=com.google
 57    deleted=1
 58    dirty=0
 59    sourceid=20d08a710c3df43d
