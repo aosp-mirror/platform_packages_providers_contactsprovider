@@ -22,6 +22,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceC
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DisplayNameSources;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
@@ -475,28 +476,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sContactsProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sContactsProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
 
+        // Handle projections for Contacts-level statuses
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_PRESENCE,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_RES_PACKAGE,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_LABEL,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_ICON,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON);
+
         sContactsVCardProjectionMap = Maps.newHashMap();
         sContactsVCardProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
                 + " || '.vcf' AS " + OpenableColumns.DISPLAY_NAME);
         sContactsVCardProjectionMap.put(OpenableColumns.SIZE, "0 AS " + OpenableColumns.SIZE);
-        sContactsProjectionMap.put(Contacts.CONTACT_PRESENCE,
-                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE
-                        + " AS " + Contacts.CONTACT_PRESENCE);
-        sContactsProjectionMap.put(Contacts.CONTACT_STATUS,
-                StatusUpdates.STATUS
-                        + " AS " + Contacts.CONTACT_STATUS);
-        sContactsProjectionMap.put(Contacts.CONTACT_STATUS_TIMESTAMP,
-                StatusUpdates.STATUS_TIMESTAMP
-                        + " AS " + Contacts.CONTACT_STATUS_TIMESTAMP);
-        sContactsProjectionMap.put(Contacts.CONTACT_STATUS_RES_PACKAGE,
-                StatusUpdates.STATUS_RES_PACKAGE
-                        + " AS " + Contacts.CONTACT_STATUS_RES_PACKAGE);
-        sContactsProjectionMap.put(Contacts.CONTACT_STATUS_LABEL,
-                StatusUpdates.STATUS_LABEL
-                        + " AS " + Contacts.CONTACT_STATUS_LABEL);
-        sContactsProjectionMap.put(Contacts.CONTACT_STATUS_ICON,
-                StatusUpdates.STATUS_ICON
-                        + " AS " + Contacts.CONTACT_STATUS_ICON);
 
         sRawContactsProjectionMap = new HashMap<String, String>();
         sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
@@ -560,13 +557,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
-        sDataProjectionMap.put(Contacts.CONTACT_PRESENCE,
-                StatusUpdates.PRESENCE + " AS " + Contacts.CONTACT_PRESENCE);
-        sDataProjectionMap.put(Contacts.CONTACT_STATUS,
-                StatusUpdates.STATUS + " AS " + Contacts.CONTACT_STATUS);
-        sDataProjectionMap.put(Contacts.CONTACT_STATUS_TIMESTAMP,
-                StatusUpdates.STATUS_TIMESTAMP + " AS " + Contacts.CONTACT_STATUS_TIMESTAMP);
         sDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
+
+        // Handle projections for Contacts-level statuses
+        addProjection(sDataProjectionMap, Contacts.CONTACT_PRESENCE,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS);
+        addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
+        addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS_RES_PACKAGE,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
+        addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS_LABEL,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL);
+        addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS_ICON,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON);
+
+        // Handle projections for Data-level statuses
+        addProjection(sDataProjectionMap, Data.PRESENCE,
+                Tables.PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDataProjectionMap, Data.STATUS,
+                StatusUpdatesColumns.CONCRETE_STATUS);
+        addProjection(sDataProjectionMap, Data.STATUS_TIMESTAMP,
+                StatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
+        addProjection(sDataProjectionMap, Data.STATUS_RES_PACKAGE,
+                StatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
+        addProjection(sDataProjectionMap, Data.STATUS_LABEL,
+                StatusUpdatesColumns.CONCRETE_STATUS_LABEL);
+        addProjection(sDataProjectionMap, Data.STATUS_ICON,
+                StatusUpdatesColumns.CONCRETE_STATUS_ICON);
 
         // Projection map for data grouped by contact (not raw contact) and some data field(s)
         sDistinctDataProjectionMap = new HashMap<String, String>();
@@ -605,14 +624,36 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDistinctDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sDistinctDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDistinctDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
-        sDistinctDataProjectionMap.put(Contacts.CONTACT_PRESENCE,
-                StatusUpdates.PRESENCE + " AS " + Contacts.CONTACT_PRESENCE);
-        sDistinctDataProjectionMap.put(Contacts.CONTACT_STATUS,
-                StatusUpdates.STATUS + " AS " + Contacts.CONTACT_STATUS);
-        sDistinctDataProjectionMap.put(Contacts.CONTACT_STATUS_TIMESTAMP,
-                StatusUpdates.STATUS_TIMESTAMP + " AS " + Contacts.CONTACT_STATUS_TIMESTAMP);
         sDistinctDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID,
                 GroupMembership.GROUP_SOURCE_ID);
+
+        // Handle projections for Contacts-level statuses
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_PRESENCE,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS);
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS_RES_PACKAGE,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS_LABEL,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL);
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS_ICON,
+                ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON);
+
+        // Handle projections for Data-level statuses
+        addProjection(sDistinctDataProjectionMap, Data.PRESENCE,
+                Tables.PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDistinctDataProjectionMap, Data.STATUS,
+                StatusUpdatesColumns.CONCRETE_STATUS);
+        addProjection(sDistinctDataProjectionMap, Data.STATUS_TIMESTAMP,
+                StatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
+        addProjection(sDistinctDataProjectionMap, Data.STATUS_RES_PACKAGE,
+                StatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
+        addProjection(sDistinctDataProjectionMap, Data.STATUS_LABEL,
+                StatusUpdatesColumns.CONCRETE_STATUS_LABEL);
+        addProjection(sDistinctDataProjectionMap, Data.STATUS_ICON,
+                StatusUpdatesColumns.CONCRETE_STATUS_ICON);
 
         sPhoneLookupProjectionMap = new HashMap<String, String>();
         sPhoneLookupProjectionMap.put(PhoneLookup._ID,
@@ -749,6 +790,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         //      Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
     }
 
+    private static void addProjection(HashMap<String, String> map, String toField, String fromField) {
+        map.put(toField, fromField + " AS " + toField);
+    }
+
     /**
      * Handles inserts and update for a specific Data type.
      */
@@ -828,6 +873,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
             boolean primary = c.getInt(DataDeleteQuery.IS_PRIMARY) != 0;
             int count = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
+            db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             if (count != 0 && primary) {
                 fixPrimary(db, rawContactId);
             }
@@ -3776,9 +3822,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Contacts.CONTACT_STATUS_ICON,
                 Contacts.CONTACT_STATUS_LABEL,
                 Contacts.CONTACT_STATUS_TIMESTAMP)) {
-            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
+            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES + " "
+                    + ContactsStatusUpdatesColumns.ALIAS +
                     " ON (" + ContactsColumns.LAST_STATUS_UPDATE_ID + "="
-                            + StatusUpdatesColumns.DATA_ID + ")");
+                            + ContactsStatusUpdatesColumns.CONCRETE_DATA_ID + ")");
         }
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionMap);
@@ -3815,22 +3862,45 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(mDbHelper.getDataView(excludeRestrictedData));
         sb.append(" data");
 
+        // Include aggregated presence when requested
         if (mDbHelper.isInProjection(projection, Data.CONTACT_PRESENCE)) {
             sb.append(" LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
-                    " ON (" + AggregatedPresenceColumns.CONTACT_ID + "="
+                    " ON (" + AggregatedPresenceColumns.CONCRETE_CONTACT_ID + "="
                     + RawContacts.CONTACT_ID + ")");
         }
 
+        // Include aggregated status updates when requested
         if (mDbHelper.isInProjection(projection,
                 Data.CONTACT_STATUS,
                 Data.CONTACT_STATUS_RES_PACKAGE,
                 Data.CONTACT_STATUS_ICON,
                 Data.CONTACT_STATUS_LABEL,
                 Data.CONTACT_STATUS_TIMESTAMP)) {
-            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
+            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES + " "
+                    + ContactsStatusUpdatesColumns.ALIAS +
                     " ON (" + ContactsColumns.LAST_STATUS_UPDATE_ID + "="
-                            + StatusUpdatesColumns.DATA_ID + ")");
+                            + ContactsStatusUpdatesColumns.CONCRETE_DATA_ID + ")");
         }
+
+        // Include individual presence when requested
+        if (mDbHelper.isInProjection(projection, Data.PRESENCE)) {
+            sb.append(" LEFT OUTER JOIN " + Tables.PRESENCE +
+                    " ON (" + StatusUpdates.DATA_ID + "="
+                    + DataColumns.CONCRETE_ID + ")");
+        }
+
+        // Include individual status updates when requested
+        if (mDbHelper.isInProjection(projection,
+                Data.STATUS,
+                Data.STATUS_RES_PACKAGE,
+                Data.STATUS_ICON,
+                Data.STATUS_LABEL,
+                Data.STATUS_TIMESTAMP)) {
+            sb.append(" LEFT OUTER JOIN " + Tables.STATUS_UPDATES +
+                    " ON (" + StatusUpdatesColumns.CONCRETE_DATA_ID + "="
+                            + DataColumns.CONCRETE_ID + ")");
+        }
+
         qb.setTables(sb.toString());
         qb.setProjectionMap(distinct ? sDistinctDataProjectionMap : sDataProjectionMap);
         appendAccountFromParameter(qb, uri);

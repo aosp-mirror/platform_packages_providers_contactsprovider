@@ -439,13 +439,39 @@ import java.util.HashMap;
 
     public interface AggregatedPresenceColumns {
         String CONTACT_ID = "presence_contact_id";
+
+        String CONCRETE_CONTACT_ID = Tables.AGGREGATED_PRESENCE + "." + CONTACT_ID;
     }
 
     public interface StatusUpdatesColumns {
         String DATA_ID = "status_update_data_id";
+
+        String CONCRETE_DATA_ID = Tables.STATUS_UPDATES + "." + DATA_ID;
+
+        String CONCRETE_PRESENCE = Tables.STATUS_UPDATES + "." + StatusUpdates.PRESENCE;
+        String CONCRETE_STATUS = Tables.STATUS_UPDATES + "." + StatusUpdates.STATUS;
+        String CONCRETE_STATUS_TIMESTAMP = Tables.STATUS_UPDATES + "."
+                + StatusUpdates.STATUS_TIMESTAMP;
+        String CONCRETE_STATUS_RES_PACKAGE = Tables.STATUS_UPDATES + "."
+                + StatusUpdates.STATUS_RES_PACKAGE;
+        String CONCRETE_STATUS_LABEL = Tables.STATUS_UPDATES + "." + StatusUpdates.STATUS_LABEL;
+        String CONCRETE_STATUS_ICON = Tables.STATUS_UPDATES + "." + StatusUpdates.STATUS_ICON;
     }
 
-    /** In-memory cache of previously found mimetype mappings */
+    public interface ContactsStatusUpdatesColumns {
+        String ALIAS = "contacts_" + Tables.STATUS_UPDATES;
+
+        String CONCRETE_DATA_ID = ALIAS + "." + StatusUpdatesColumns.DATA_ID;
+
+        String CONCRETE_PRESENCE = ALIAS + "." + StatusUpdates.PRESENCE;
+        String CONCRETE_STATUS = ALIAS + "." + StatusUpdates.STATUS;
+        String CONCRETE_STATUS_TIMESTAMP = ALIAS + "." + StatusUpdates.STATUS_TIMESTAMP;
+        String CONCRETE_STATUS_RES_PACKAGE = ALIAS + "." + StatusUpdates.STATUS_RES_PACKAGE;
+        String CONCRETE_STATUS_LABEL = ALIAS + "." + StatusUpdates.STATUS_LABEL;
+        String CONCRETE_STATUS_ICON = ALIAS + "." + StatusUpdates.STATUS_ICON;
+    }
+
+    /** In-memory cache of previously found MIME-type mappings */
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
