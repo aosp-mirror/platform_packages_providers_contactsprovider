@@ -24,6 +24,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
 import android.database.DatabaseUtils;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
@@ -474,6 +475,11 @@ import java.util.HashMap;
 
     private boolean mUseStrictPhoneNumberComparation;
 
+    /**
+     * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
+     */
+    private String[] mUnrestrictedPackages;
+
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
             sSingleton = new ContactsDatabaseHelper(context);
@@ -488,12 +494,16 @@ import java.util.HashMap;
     ContactsDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         Log.i(TAG, "Creating OpenHelper");
+        Resources resources = context.getResources();
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
         mUseStrictPhoneNumberComparation =
-            context.getResources().getBoolean(
-                    com.android.internal.R.bool.config_use_strict_phone_number_comparation);
+                resources.getBoolean(
+                        com.android.internal.R.bool.config_use_strict_phone_number_comparation);
+        mUnrestrictedPackages = resources.getStringArray(
+                resources.getIdentifier("unrestricted_packages", "array",
+                        context.getPackageName()));
     }
 
     @Override
@@ -1622,24 +1632,16 @@ import java.util.HashMap;
     }
 
     /**
-     * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
-     */
-    static final String[] sAllowedPackages = new String[] {
-        "com.android.contacts",
-        "com.facebook.katana",
-    };
-
-    /**
      * Check if {@link Binder#getCallingUid()} should be allowed access to
      * {@link RawContacts#IS_RESTRICTED} data.
      */
-    boolean hasRestrictedAccess() {
+    boolean hasAccessToRestrictedData() {
         final PackageManager pm = mContext.getPackageManager();
         final String[] callerPackages = pm.getPackagesForUid(Binder.getCallingUid());
 
         // Has restricted access if caller matches any packages
         for (String callerPackage : callerPackages) {
-            if (hasRestrictedAccess(callerPackage)) {
+            if (hasAccessToRestrictedData(callerPackage)) {
                 return true;
             }
         }
@@ -1650,10 +1652,12 @@ import java.util.HashMap;
      * Check if requestingPackage should be allowed access to
      * {@link RawContacts#IS_RESTRICTED} data.
      */
-    static boolean hasRestrictedAccess(String requestingPackage) {
-        for (String allowedPackage : sAllowedPackages) {
-            if (allowedPackage.equals(requestingPackage)) {
-                return true;
+    boolean hasAccessToRestrictedData(String requestingPackage) {
+        if (mUnrestrictedPackages != null) {
+            for (String allowedPackage : mUnrestrictedPackages) {
+                if (allowedPackage.equals(requestingPackage)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -1664,7 +1668,7 @@ import java.util.HashMap;
     }
 
     public String getDataView(boolean requireRestrictedView) {
-        return (hasRestrictedAccess() && !requireRestrictedView) ?
+        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
                 Views.DATA_ALL : Views.DATA_RESTRICTED;
     }
 
@@ -1673,7 +1677,7 @@ import java.util.HashMap;
     }
 
     public String getRawContactView(boolean requireRestrictedView) {
-        return (hasRestrictedAccess() && !requireRestrictedView) ?
+        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
                 Views.RAW_CONTACTS_ALL : Views.RAW_CONTACTS_RESTRICTED;
     }
 
@@ -1682,7 +1686,7 @@ import java.util.HashMap;
     }
 
     public String getContactView(boolean requireRestrictedView) {
-        return (hasRestrictedAccess() && !requireRestrictedView) ?
+        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
                 Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
     }
 
@@ -1695,7 +1699,7 @@ import java.util.HashMap;
     }
 
     public String getContactEntitiesView(boolean requireRestrictedView) {
-        return (hasRestrictedAccess() && !requireRestrictedView) ?
+        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
                 Tables.CONTACT_ENTITIES : Tables.CONTACT_ENTITIES_RESTRICTED;
     }
 
