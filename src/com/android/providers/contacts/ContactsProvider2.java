@@ -320,7 +320,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 DisplayNameSources.EMAIL);
     }
 
-    public static final String DEFAULT_ACCOUNT_TYPE = "com.google.GAIA";
+    public static final String DEFAULT_ACCOUNT_TYPE = "com.google";
     public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
     /** Sql where statement for filtering on groups. */
