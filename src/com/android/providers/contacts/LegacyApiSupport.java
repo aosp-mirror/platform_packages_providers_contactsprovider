@@ -108,8 +108,9 @@ public class LegacyApiSupport {
     private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
     private static final int CONTACTMETHODS_EMAIL = 39;
     private static final int GROUP_NAME_MEMBERS = 40;
-    private static final int PEOPLE_ORGANIZATIONS = 41;
-    private static final int PEOPLE_ORGANIZATIONS_ID = 42;
+    private static final int GROUP_SYSTEM_ID_MEMBERS = 41;
+    private static final int PEOPLE_ORGANIZATIONS = 42;
+    private static final int PEOPLE_ORGANIZATIONS_ID = 43;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -268,7 +269,7 @@ public class LegacyApiSupport {
         matcher.addURI(authority, "groups/name/*/members", GROUP_NAME_MEMBERS);
 //        matcher.addURI(authority, "groups/name/*/members/filter/*",
 //                GROUP_NAME_MEMBERS_FILTER);
-//        matcher.addURI(authority, "groups/system_id/*/members", GROUP_SYSTEM_ID_MEMBERS);
+        matcher.addURI(authority, "groups/system_id/*/members", GROUP_SYSTEM_ID_MEMBERS);
 //        matcher.addURI(authority, "groups/system_id/*/members/filter/*",
 //                GROUP_SYSTEM_ID_MEMBERS_FILTER);
         matcher.addURI(authority, "groupmembership", GROUPMEMBERSHIP);
@@ -1466,6 +1467,14 @@ public class LegacyApiSupport {
                 qb.appendWhere(" AND " + buildGroupNameMatchWhereClause(group));
                 break;
 
+            case GROUP_SYSTEM_ID_MEMBERS:
+                qb.setTables(LegacyTables.PEOPLE_JOIN_PRESENCE);
+                qb.setProjectionMap(sPeopleProjectionMap);
+                applyRawContactsAccount(qb);
+                String systemId = uri.getPathSegments().get(2);
+                qb.appendWhere(" AND " + buildGroupSystemIdMatchWhereClause(systemId));
+                break;
+
             case ORGANIZATIONS:
                 qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
                 qb.setProjectionMap(sOrganizationProjectionMap);
@@ -1773,6 +1782,26 @@ public class LegacyApiSupport {
                                 + " FROM " + Tables.GROUPS
                                 + " WHERE " + Groups.TITLE + "="
                                         + DatabaseUtils.sqlEscapeString(groupName) + "))";
+    }
+
+    /**
+     * Build a WHERE clause that restricts the query to match people that are a member of
+     * a group with a particular system id. The projection map of the query must include
+     * {@link People#_ID}.
+     *
+     * @param groupName The name of the group
+     * @return The where clause.
+     */
+    private String buildGroupSystemIdMatchWhereClause(String systemId) {
+        return "people._id IN "
+                + "(SELECT " + DataColumns.CONCRETE_RAW_CONTACT_ID
+                + " FROM " + Tables.DATA_JOIN_MIMETYPES
+                + " WHERE " + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                        + "' AND " + GroupMembership.GROUP_ROW_ID + "="
+                                + "(SELECT " + Tables.GROUPS + "." + Groups._ID
+                                + " FROM " + Tables.GROUPS
+                                + " WHERE " + Groups.SYSTEM_ID + "="
+                                        + DatabaseUtils.sqlEscapeString(systemId) + "))";
     }
 
     /**
