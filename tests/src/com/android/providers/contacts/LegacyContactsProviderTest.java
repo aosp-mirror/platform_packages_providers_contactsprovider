@@ -340,6 +340,13 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         assertTypeAndLabelConstraints(Organizations.CONTENT_URI, Organizations.PERSON_ID, personId,
                 Organizations.TYPE, Organizations.TYPE_CUSTOM, Organizations.TYPE_OTHER,
                 Organizations.LABEL);
+
+
+        Uri twigUri = Uri.withAppendedPath(personUri, Organizations.CONTENT_DIRECTORY);
+        assertStoredValues(twigUri, values);
+
+        Uri twigUriWithId = ContentUris.withAppendedId(twigUri, ContentUris.parseId(uri));
+        assertStoredValues(twigUriWithId, values);
     }
 
     public void testOrganizationsUpdate() {
