@@ -116,6 +116,15 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
+    public void wipeData() {
+        super.wipeData();
+        SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
+        db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('raw_contacts', 42)");
+        db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('contacts', 2009)");
+        db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('data', 777)");
+    }
+
+    @Override
     protected boolean isLegacyContactImportNeeded() {
 
         // We have an explicit test for data conversion - no need to do it every time
