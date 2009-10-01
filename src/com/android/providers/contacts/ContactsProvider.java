@@ -427,25 +427,25 @@ public class ContactsProvider extends AbstractSyncableContentProvider {
                 // in some upgrade paths, these column might already exists
             }
             db.execSQL("UPDATE people"
-                    + " SET _sync_account_type='com.google.GAIA'"
+                    + " SET _sync_account_type='com.google'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE _deleted_people"
-                    + " SET _sync_account_type='com.google.GAIA'"
+                    + " SET _sync_account_type='com.google'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE groups"
-                    + " SET _sync_account_type='com.google.GAIA'"
+                    + " SET _sync_account_type='com.google'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE _deleted_groups"
-                    + " SET _sync_account_type='com.google.GAIA'"
+                    + " SET _sync_account_type='com.google'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE settings"
-                    + " SET _sync_account_type='com.google.GAIA'"
+                    + " SET _sync_account_type='com.google'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE photos"
-                    + " SET _sync_account_type='com.google.GAIA'"
+                    + " SET _sync_account_type='com.google'"
                     + " WHERE _sync_account IS NOT NULL");
             db.execSQL("UPDATE groupmembership"
-                    + " SET group_sync_account_type='com.google.GAIA'"
+                    + " SET group_sync_account_type='com.google'"
                     + " WHERE group_sync_account IS NOT NULL");
 
             db.execSQL("CREATE INDEX groupTempIndex ON groups ("
