@@ -13,7 +13,7 @@
 13 1 {
 14    _id=2
 15    display_name=Jane Doe
-16    photo_id=32
+16    photo_id=809
 17    times_contacted=1
 18    last_time_contacted=1249177384979
 19    custom_ringtone=null
@@ -25,7 +25,7 @@
 25 2 {
 26    _id=3
 27    display_name=John Doe
-28    photo_id=33
+28    photo_id=810
 29    times_contacted=0
 30    last_time_contacted=0
 31    custom_ringtone=content://media/internal/audio/media/80
