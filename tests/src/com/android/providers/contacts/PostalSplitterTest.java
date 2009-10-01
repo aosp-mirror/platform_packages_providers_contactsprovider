@@ -25,7 +25,13 @@ import java.util.Locale;
 import junit.framework.TestCase;
 
 /**
- * Tests for {@link NameSplitter}.
+ * Tests for {@link PostalSplitter}.
+ *
+ * Run the test like this:
+ * <code>
+ * adb shell am instrument -e class com.android.providers.contacts.PostalSplitterTest -w \
+ *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * </code>
  */
 @SmallTest
 public class PostalSplitterTest extends TestCase {
