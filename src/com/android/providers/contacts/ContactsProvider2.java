@@ -3299,7 +3299,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     String normalizedName = NameNormalizer.normalize(filterParam);
                     if (normalizedName.length() > 0) {
                         sb.append(Data.RAW_CONTACT_ID + " IN ");
-                        appendRawContactsByNormalizedNameFilter(sb, normalizedName, null);
+                        appendRawContactsByNormalizedNameFilter(sb, normalizedName, null, false);
                         orNeeded = true;
                     }
 
@@ -3354,11 +3354,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     StringBuilder sb = new StringBuilder();
                     sb.append("(");
 
-                    String normalizedName = NameNormalizer.normalize(filterParam);
-                    if (normalizedName.length() > 0) {
-                        sb.append(Data.RAW_CONTACT_ID + " IN ");
-                        appendRawContactsByNormalizedNameFilter(sb, normalizedName, null);
-                        sb.append(" OR ");
+                    if (!filterParam.contains("@")) {
+                        String normalizedName = NameNormalizer.normalize(filterParam);
+                        if (normalizedName.length() > 0) {
+                            sb.append(Data.RAW_CONTACT_ID + " IN ");
+                            appendRawContactsByNormalizedNameFilter(sb, normalizedName, null, false);
+                            sb.append(" OR ");
+                        }
                     }
 
                     sb.append(Email.DATA + " LIKE ");
@@ -4696,11 +4698,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public void appendRawContactsByFilterAsNestedQuery(StringBuilder sb, String filterParam,
             String limit) {
-        appendRawContactsByNormalizedNameFilter(sb, NameNormalizer.normalize(filterParam), limit);
+        appendRawContactsByNormalizedNameFilter(sb, NameNormalizer.normalize(filterParam), limit,
+                true);
     }
 
     private void appendRawContactsByNormalizedNameFilter(StringBuilder sb, String normalizedName,
-            String limit) {
+            String limit, boolean allowEmailMatch) {
         sb.append("(" +
                 "SELECT DISTINCT " + NameLookupColumns.RAW_CONTACT_ID +
                 " FROM " + Tables.NAME_LOOKUP +
@@ -4710,8 +4713,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
                 + NameLookupType.NAME_COLLATION_KEY + ","
                 + NameLookupType.NICKNAME + ","
-                + NameLookupType.EMAIL_BASED_NICKNAME + ","
-                + NameLookupType.ORGANIZATION + ")");
+                + NameLookupType.ORGANIZATION);
+        if (allowEmailMatch) {
+            sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
+        }
+        sb.append(")");
 
         if (limit != null) {
             sb.append(" LIMIT ").append(limit);
