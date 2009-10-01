@@ -161,6 +161,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     // don't attempt to aggregate - this is likely an error or a shared corporate data element.
     private static final int SECONDARY_HIT_LIMIT = 20;
 
+    // If we encounter more than this many contacts with matching name during aggregation
+    // suggestion lookup, ignore the remaining results.
+    private static final int FIRST_LETTER_SUGGESTION_HIT_LIMIT = 100;
 
     private final ContactsProvider2 mContactsProvider;
     private final OpenHelper mOpenHelper;
@@ -1004,7 +1007,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         selection.append(")");
 
         matchAllCandidates(db, selection.toString(), candidates, matcher,
-                ContactMatcher.MATCHING_ALGORITHM_EXACT);
+                ContactMatcher.MATCHING_ALGORITHM_EXACT, String.valueOf(PRIMARY_HIT_LIMIT));
     }
 
     /**
@@ -1021,9 +1024,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (!firstLetters.contains(firstLetter)) {
                     firstLetters.add(firstLetter);
                     final String selection = "(" + NameLookupColumns.NORMALIZED_NAME + " GLOB '"
-                            + firstLetter + "*')";
+                            + firstLetter + "*') AND "
+                            + NameLookupColumns.NAME_TYPE + " IN("
+                                    + NameLookupType.NAME_COLLATION_KEY + ","
+                                    + NameLookupType.EMAIL_BASED_NICKNAME + ","
+                                    + NameLookupType.NICKNAME + ")";
                     matchAllCandidates(db, selection, candidates, matcher,
-                            ContactMatcher.MATCHING_ALGORITHM_APPROXIMATE);
+                            ContactMatcher.MATCHING_ALGORITHM_APPROXIMATE,
+                            String.valueOf(FIRST_LETTER_SUGGESTION_HIT_LIMIT));
                 }
             }
         }
@@ -1034,9 +1042,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * on that data.
      */
     private void matchAllCandidates(SQLiteDatabase db, String selection,
-            MatchCandidateList candidates, ContactMatcher matcher, int algorithm) {
+            MatchCandidateList candidates, ContactMatcher matcher, int algorithm, String limit) {
         final Cursor c = db.query(NameLookupQuery.TABLE, NameLookupQuery.COLUMNS,
-                selection, null, null, null, null, String.valueOf(PRIMARY_HIT_LIMIT));
+                selection, null, null, null, null, limit);
 
         try {
             while (c.moveToNext()) {
