@@ -1492,9 +1492,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     /**
      * Execute {@link SQLiteStatement} that will update the
-     * {@link Contacts#STARRED} flag for the given {@link Contacts#_ID}.
+     * {@link Contacts#STARRED} flag for the given {@link RawContacts#_ID}.
      */
-    protected void updateStarred(long contactId) {
+    protected void updateStarred(long rawContactId) {
+        long contactId = mDbHelper.getContactId(rawContactId);
+        if (contactId == 0) {
+            return;
+        }
+
         mStarredUpdate.bindLong(1, contactId);
         mStarredUpdate.execute();
     }
