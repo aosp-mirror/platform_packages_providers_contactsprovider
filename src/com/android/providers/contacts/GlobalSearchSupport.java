@@ -155,10 +155,10 @@ public class GlobalSearchSupport {
 
             if (!titleIsOrganization && hasOrganization) {
                 text2 = organization;
-            } else if (!titleIsEmail && hasEmail) {
-                text2 = email;
             } else if (!titleIsPhone && hasPhone) {
                 text2 = phoneNumber;
+            } else if (!titleIsEmail && hasEmail) {
+                text2 = email;
             }
 
             if (photoUri != null) {
