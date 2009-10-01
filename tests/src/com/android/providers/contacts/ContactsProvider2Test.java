@@ -16,7 +16,7 @@
 package com.android.providers.contacts;
 
 import com.android.internal.util.ArrayUtils;
-import com.android.providers.contacts.OpenHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 
 import android.accounts.Account;
 import android.content.ContentUris;

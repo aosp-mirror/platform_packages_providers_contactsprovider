@@ -154,14 +154,14 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     }
 
     public static class TestCallLogProvider extends CallLogProvider {
-        private static OpenHelper mOpenHelper;
+        private static ContactsDatabaseHelper mDbHelper;
 
         @Override
-        protected OpenHelper getOpenHelper(final Context context) {
-            if (mOpenHelper == null) {
-                mOpenHelper = new OpenHelper(context);
+        protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+            if (mDbHelper == null) {
+                mDbHelper = new ContactsDatabaseHelper(context);
             }
-            return mOpenHelper;
+            return mDbHelper;
         }
     }
 }

@@ -16,11 +16,11 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.OpenHelper.DataColumns;
-import com.android.providers.contacts.OpenHelper.PhoneColumns;
-import com.android.providers.contacts.OpenHelper.PhoneLookupColumns;
-import com.android.providers.contacts.OpenHelper.RawContactsColumns;
-import com.android.providers.contacts.OpenHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -65,7 +65,7 @@ public class LegacyContactImporter {
 
     private final Context mContext;
     private final ContactsProvider2 mContactsProvider;
-    private OpenHelper mOpenHelper;
+    private ContactsDatabaseHelper mDbHelper;
     private ContentValues mValues = new ContentValues();
     private ContentResolver mResolver;
     private boolean mPhoneticNameAvailable = true;
@@ -141,8 +141,8 @@ public class LegacyContactImporter {
             mPhoneticNameAvailable = false;
         }
 
-        mOpenHelper = (OpenHelper)mContactsProvider.getOpenHelper();
-        mTargetDb = mOpenHelper.getWritableDatabase();
+        mDbHelper = (ContactsDatabaseHelper)mContactsProvider.getDatabaseHelper();
+        mTargetDb = mDbHelper.getWritableDatabase();
 
         /*
          * At this point there should be no data in the contacts provider, but in case
@@ -152,16 +152,16 @@ public class LegacyContactImporter {
          */
         mContactsProvider.wipeData();
 
-        mStructuredNameMimetypeId = mOpenHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
-        mNoteMimetypeId = mOpenHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
-        mOrganizationMimetypeId = mOpenHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
-        mPhoneMimetypeId = mOpenHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-        mEmailMimetypeId = mOpenHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        mImMimetypeId = mOpenHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
-        mPostalMimetypeId = mOpenHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
-        mPhotoMimetypeId = mOpenHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        mStructuredNameMimetypeId = mDbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+        mNoteMimetypeId = mDbHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
+        mOrganizationMimetypeId = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+        mPhoneMimetypeId = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+        mEmailMimetypeId = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mImMimetypeId = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mPostalMimetypeId = mDbHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE);
+        mPhotoMimetypeId = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
         mGroupMembershipMimetypeId =
-                mOpenHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+                mDbHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
 
         mNameSplitter = mContactsProvider.getNameSplitter();
 
@@ -179,7 +179,7 @@ public class LegacyContactImporter {
         // will be autoincremented
         importDeletedPeople();
 
-        mOpenHelper.updateAllVisible();
+        mDbHelper.updateAllVisible();
 
         mTargetDb.setTransactionSuccessful();
         mTargetDb.endTransaction();
