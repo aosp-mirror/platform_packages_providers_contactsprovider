@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 98;
+    private static final int DATABASE_VERSION = 99;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
