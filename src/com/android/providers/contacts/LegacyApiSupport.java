@@ -108,6 +108,8 @@ public class LegacyApiSupport {
     private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
     private static final int CONTACTMETHODS_EMAIL = 39;
     private static final int GROUP_NAME_MEMBERS = 40;
+    private static final int PEOPLE_ORGANIZATIONS = 41;
+    private static final int PEOPLE_ORGANIZATIONS_ID = 42;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -293,8 +295,8 @@ public class LegacyApiSupport {
 //        matcher.addURI(authority, "people/#/contact_methods_with_presence",
 //                PEOPLE_CONTACTMETHODS_WITH_PRESENCE);
         matcher.addURI(authority, "people/#/contact_methods/#", PEOPLE_CONTACTMETHODS_ID);
-//        matcher.addURI(authority, "people/#/organizations", PEOPLE_ORGANIZATIONS);
-//        matcher.addURI(authority, "people/#/organizations/#", PEOPLE_ORGANIZATIONS_ID);
+        matcher.addURI(authority, "people/#/organizations", PEOPLE_ORGANIZATIONS);
+        matcher.addURI(authority, "people/#/organizations/#", PEOPLE_ORGANIZATIONS_ID);
         matcher.addURI(authority, "people/#/groupmembership", PEOPLE_GROUPMEMBERSHIP);
         matcher.addURI(authority, "people/#/groupmembership/#", PEOPLE_GROUPMEMBERSHIP_ID);
 //        matcher.addURI(authority, "people/raw", PEOPLE_RAW);
@@ -1476,6 +1478,24 @@ public class LegacyApiSupport {
                 applyRawContactsAccount(qb);
                 qb.appendWhere(" AND " + android.provider.Contacts.Organizations._ID + "=");
                 qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case PEOPLE_ORGANIZATIONS:
+                qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
+                qb.setProjectionMap(sOrganizationProjectionMap);
+                applyRawContactsAccount(qb);
+                qb.appendWhere(" AND " + android.provider.Contacts.Organizations.PERSON_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                break;
+
+            case PEOPLE_ORGANIZATIONS_ID:
+                qb.setTables(LegacyTables.ORGANIZATIONS + " organizations");
+                qb.setProjectionMap(sOrganizationProjectionMap);
+                applyRawContactsAccount(qb);
+                qb.appendWhere(" AND " + android.provider.Contacts.Organizations.PERSON_ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(1));
+                qb.appendWhere(" AND " + android.provider.Contacts.Organizations._ID + "=");
+                qb.appendWhere(uri.getPathSegments().get(3));
                 break;
 
             case CONTACTMETHODS:
