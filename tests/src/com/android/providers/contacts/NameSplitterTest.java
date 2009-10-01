@@ -61,8 +61,8 @@ public class NameSplitterTest extends TestCase {
     }
 
     public void testLastName() {
-        assertSplitName("Smith", null, null, null, "Smith", null);
-        assertJoinedName("Smith", null, null, null, "Smith", null);
+        assertSplitName("Smith", null, "Smith", null, null, null);
+        assertJoinedName("Smith", null, "Smith", null, null, null);
     }
 
     public void testIgnoreSuffix() {

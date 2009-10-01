@@ -234,9 +234,13 @@ public class NameSplitter {
             parseSuffix(name, tokens);
         }
 
-        parseLastName(name, tokens);
-        parseMiddleName(name, tokens);
-        parseGivenNames(name, tokens);
+        if (name.prefix == null && tokens.mEndPointer - tokens.mStartPointer == 1) {
+            name.givenNames = tokens.mTokens[tokens.mStartPointer];
+        } else {
+            parseLastName(name, tokens);
+            parseMiddleName(name, tokens);
+            parseGivenNames(name, tokens);
+        }
     }
 
     /**
