@@ -501,9 +501,13 @@ import java.util.HashMap;
         mUseStrictPhoneNumberComparation =
                 resources.getBoolean(
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
-        mUnrestrictedPackages = resources.getStringArray(
-                resources.getIdentifier("unrestricted_packages", "array",
-                        context.getPackageName()));
+        int resourceId = resources.getIdentifier("unrestricted_packages", "array",
+                context.getPackageName());
+        if (resourceId != 0) {
+            mUnrestrictedPackages = resources.getStringArray(resourceId);
+        } else {
+            mUnrestrictedPackages = new String[0];
+        }
     }
 
     @Override

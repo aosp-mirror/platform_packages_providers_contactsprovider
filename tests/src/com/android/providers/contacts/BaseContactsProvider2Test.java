@@ -33,7 +33,6 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;

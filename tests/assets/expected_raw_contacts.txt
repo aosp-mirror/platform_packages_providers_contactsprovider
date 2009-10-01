@@ -51,7 +51,7 @@
 51    sync4=null
 52 }
 53 4 {
-54    _id=12
+54    _id=43
 55    account_name=android.contacts.test.eclair@gmail.com
 56    account_type=com.google
 57    deleted=1
