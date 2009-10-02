@@ -4083,7 +4083,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_AS_VCARD: {
                 final String lookupKey = uri.getPathSegments().get(2);
                 final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
-                final String selection = RawContacts.CONTACT_ID + "=" + contactId;
+                final String selection = Contacts._ID + "=" + contactId;
 
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
