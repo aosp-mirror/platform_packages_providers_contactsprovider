@@ -643,6 +643,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "James Sullivan");
     }
 
+    public void testDisplayNameUpdateFromStructuredNameUpdate() {
+        long rawContactId = createRawContact();
+        Uri nameUri = insertStructuredName(rawContactId, "Slinky", "Dog");
+
+        long contactId = queryContactId(rawContactId);
+
+        Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Slinky Dog");
+
+        ContentValues values = new ContentValues();
+        values.putNull(StructuredName.FAMILY_NAME);
+
+        mResolver.update(nameUri, values, null, null);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Slinky");
+
+        values.putNull(StructuredName.GIVEN_NAME);
+
+        mResolver.update(nameUri, values, null, null);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, null);
+
+        values.put(StructuredName.FAMILY_NAME, "Dog");
+        mResolver.update(nameUri, values, null, null);
+
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Dog");
+    }
+
     public void testSendToVoicemailDefault() {
         long rawContactId = createRawContactWithName();
         long contactId = queryContactId(rawContactId);
