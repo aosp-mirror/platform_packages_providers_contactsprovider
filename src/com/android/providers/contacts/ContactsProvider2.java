@@ -43,7 +43,7 @@ import com.google.android.collect.Sets;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
-import android.accounts.OnAccountsUpdatedListener;
+import android.accounts.OnAccountsUpdateListener;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -121,7 +121,7 @@ import java.util.concurrent.CountDownLatch;
  * Contacts content provider. The contract between this provider and applications
  * is defined in {@link ContactsContract}.
  */
-public class ContactsProvider2 extends SQLiteContentProvider implements OnAccountsUpdatedListener {
+public class ContactsProvider2 extends SQLiteContentProvider implements OnAccountsUpdateListener {
 
     private static final String TAG = "ContactsProvider";
 
