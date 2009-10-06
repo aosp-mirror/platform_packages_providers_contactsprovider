@@ -58,8 +58,8 @@ public class ContactLookupKey {
 
     public static void appendToLookupKey(StringBuilder lookupKey, String accountType,
             String accountName, String sourceId, String displayName) {
-        if (TextUtils.isEmpty(sourceId) && TextUtils.isEmpty(displayName)) {
-            return;
+        if (displayName == null) {
+            displayName = "";
         }
 
         if (lookupKey.length() != 0) {
