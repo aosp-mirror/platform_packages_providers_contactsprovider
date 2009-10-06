@@ -167,6 +167,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
     private static final int RAW_CONTACTS_DATA = 2004;
+    private static final int RAW_CONTACT_ENTITY_ID = 2005;
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
@@ -206,6 +207,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int LIVE_FOLDERS_CONTACTS_WITH_PHONES = 14001;
     private static final int LIVE_FOLDERS_CONTACTS_FAVORITES = 14002;
     private static final int LIVE_FOLDERS_CONTACTS_GROUP_NAME = 14003;
+
+    private static final int RAW_CONTACT_ENTITIES = 15001;
 
     private interface ContactsQuery {
         public static final String TABLE = Tables.RAW_CONTACTS;
@@ -348,6 +351,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sContactsVCardProjectionMap;
     /** Contains just the raw contacts columns */
     private static final HashMap<String, String> sRawContactsProjectionMap;
+    /** Contains the columns from the raw contacts entity view*/
+    private static final HashMap<String, String> sRawContactsEntityProjectionMap;
     /** Contains columns from the data view */
     private static final HashMap<String, String> sDataProjectionMap;
     /** Contains columns from the data view */
@@ -414,6 +419,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ENTITY_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contact_entities", RAW_CONTACT_ENTITIES);
 
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
@@ -565,6 +573,49 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
         sDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
 
+        HashMap<String, String> columns;
+        columns = new HashMap<String, String>();
+        columns.put(RawContacts._ID, RawContacts._ID);
+        columns.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
+        columns.put(RawContacts.ACCOUNT_NAME, RawContacts.ACCOUNT_NAME);
+        columns.put(RawContacts.ACCOUNT_TYPE, RawContacts.ACCOUNT_TYPE);
+        columns.put(RawContacts.SOURCE_ID, RawContacts.SOURCE_ID);
+        columns.put(RawContacts.VERSION, RawContacts.VERSION);
+        columns.put(RawContacts.DIRTY, RawContacts.DIRTY);
+        columns.put(RawContacts.DELETED, RawContacts.DELETED);
+        columns.put(RawContacts.SYNC1, RawContacts.SYNC1);
+        columns.put(RawContacts.SYNC2, RawContacts.SYNC2);
+        columns.put(RawContacts.SYNC3, RawContacts.SYNC3);
+        columns.put(RawContacts.SYNC4, RawContacts.SYNC4);
+        columns.put(Data.RES_PACKAGE, Data.RES_PACKAGE);
+        columns.put(Data.MIMETYPE, Data.MIMETYPE);
+        columns.put(Data.DATA1, Data.DATA1);
+        columns.put(Data.DATA2, Data.DATA2);
+        columns.put(Data.DATA3, Data.DATA3);
+        columns.put(Data.DATA4, Data.DATA4);
+        columns.put(Data.DATA5, Data.DATA5);
+        columns.put(Data.DATA6, Data.DATA6);
+        columns.put(Data.DATA7, Data.DATA7);
+        columns.put(Data.DATA8, Data.DATA8);
+        columns.put(Data.DATA9, Data.DATA9);
+        columns.put(Data.DATA10, Data.DATA10);
+        columns.put(Data.DATA11, Data.DATA11);
+        columns.put(Data.DATA12, Data.DATA12);
+        columns.put(Data.DATA13, Data.DATA13);
+        columns.put(Data.DATA14, Data.DATA14);
+        columns.put(Data.DATA15, Data.DATA15);
+        columns.put(Data.SYNC1, Data.SYNC1);
+        columns.put(Data.SYNC2, Data.SYNC2);
+        columns.put(Data.SYNC3, Data.SYNC3);
+        columns.put(Data.SYNC4, Data.SYNC4);
+        columns.put(RawContacts.Entity.DATA_ID, RawContacts.Entity.DATA_ID);
+        columns.put(Data.STARRED, Data.STARRED);
+        columns.put(Data.DATA_VERSION, Data.DATA_VERSION);
+        columns.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
+        columns.put(Data.IS_SUPER_PRIMARY, Data.IS_SUPER_PRIMARY);
+        columns.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
+        sRawContactsEntityProjectionMap = columns;
+
         // Handle projections for Contacts-level statuses
         addProjection(sDataProjectionMap, Contacts.CONTACT_PRESENCE,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
@@ -692,8 +743,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Phone.TYPE + " AS " + PhoneLookup.TYPE);
         sPhoneLookupProjectionMap.put(PhoneLookup.LABEL,
                 Phone.LABEL + " AS " + PhoneLookup.LABEL);
-
-        HashMap<String, String> columns;
 
         // Groups projection map
         columns = new HashMap<String, String>();
@@ -2648,7 +2697,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private boolean readBooleanQueryParameter(Uri uri, String name, boolean defaultValue) {
+    private static boolean readBooleanQueryParameter(Uri uri, String name, boolean defaultValue) {
         final String flag = uri.getQueryParameter(name);
         return flag == null
                 ? defaultValue
@@ -3632,6 +3681,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 break;
 
+            case RAW_CONTACT_ENTITIES: {
+                setTablesAndProjectionMapForRawContactsEntities(qb, uri);
+                break;
+            }
+
+            case RAW_CONTACT_ENTITY_ID: {
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                setTablesAndProjectionMapForRawContactsEntities(qb, uri);
+                qb.appendWhere(" AND " + RawContacts._ID + "=" + rawContactId);
+                break;
+            }
+
             default:
                 return mLegacyApiSupport.query(uri, projection, selection, selectionArgs,
                         sortOrder, limit);
@@ -3880,6 +3941,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(mDbHelper.getRawContactView(excludeRestrictedData));
         qb.setTables(sb.toString());
         qb.setProjectionMap(sRawContactsProjectionMap);
+        appendAccountFromParameter(qb, uri);
+    }
+
+    private void setTablesAndProjectionMapForRawContactsEntities(SQLiteQueryBuilder qb, Uri uri) {
+        // Note: currently, "export only" equals to "restricted", but may not in the future.
+        boolean excludeRestrictedData = readBooleanQueryParameter(uri,
+                Data.FOR_EXPORT_ONLY, false);
+
+        String requestingPackage = uri.getQueryParameter(
+                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
+        if (requestingPackage != null) {
+            excludeRestrictedData = excludeRestrictedData
+                    || !mDbHelper.hasAccessToRestrictedData(requestingPackage);
+        }
+        qb.setTables(mDbHelper.getContactEntitiesView(excludeRestrictedData));
+        qb.setProjectionMap(sRawContactsEntityProjectionMap);
         appendAccountFromParameter(qb, uri);
     }
 
@@ -4200,13 +4277,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Data.SYNC3,
                 Data.SYNC4};
 
-        private static final String[] PROJECTION = new String[]{
+        public static final String[] PROJECTION = new String[]{
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.ACCOUNT_TYPE,
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
                 RawContacts.DIRTY,
-                Data._ID,
+                RawContacts.Entity.DATA_ID,
                 Data.RES_PACKAGE,
                 Data.MIMETYPE,
                 Data.DATA1,
@@ -4228,7 +4305,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Data.SYNC2,
                 Data.SYNC3,
                 Data.SYNC4,
-                Data.RAW_CONTACT_ID,
+                RawContacts._ID,
                 Data.IS_PRIMARY,
                 Data.IS_SUPER_PRIMARY,
                 Data.DATA_VERSION,
@@ -4263,35 +4340,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         private static final int COLUMN_CONTACT_ID = 37;
         private static final int COLUMN_STARRED = 38;
 
-        public RawContactsEntityIterator(ContactsProvider2 provider, String contactsIdString,
-                Uri uri, String selection, String[] selectionArgs, String sortOrder) {
+        public RawContactsEntityIterator(ContactsProvider2 provider, Uri entityUri,
+                String contactsIdString,
+                String selection, String[] selectionArgs, String sortOrder) {
             mIsClosed = false;
-
-            final String updatedSortOrder = (sortOrder == null)
-                    ? Data.RAW_CONTACT_ID
-                    : (Data.RAW_CONTACT_ID + "," + sortOrder);
-
-            final SQLiteDatabase db = provider.mDbHelper.getReadableDatabase();
-            final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-            final boolean excludeRestrictedData =
-                provider.readBooleanQueryParameter(uri, Data.FOR_EXPORT_ONLY, false);
-            qb.setTables(provider.mDbHelper.getContactEntitiesView(excludeRestrictedData));
+            Uri uri;
             if (contactsIdString != null) {
-                qb.appendWhere(Data.RAW_CONTACT_ID + "=" + contactsIdString);
+                uri = Uri.withAppendedPath(RawContacts.CONTENT_URI, contactsIdString);
+                uri = Uri.withAppendedPath(uri, RawContacts.Entity.CONTENT_DIRECTORY);
+            } else {
+                uri = ContactsContract.RawContactsEntity.CONTENT_URI;
             }
-            final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
-            final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
-            if (!TextUtils.isEmpty(accountName)) {
-                if (contactsIdString != null) {
-                    qb.appendWhere(" AND ");
-                }
-                qb.appendWhere(RawContacts.ACCOUNT_NAME + "="
-                        + DatabaseUtils.sqlEscapeString(accountName) + " AND "
-                        + RawContacts.ACCOUNT_TYPE + "="
-                        + DatabaseUtils.sqlEscapeString(accountType));
-            }
-            mEntityCursor = qb.query(db, PROJECTION, selection, selectionArgs,
-                    null, null, updatedSortOrder);
+            final Uri.Builder builder = uri.buildUpon();
+            String query = entityUri.getQuery();
+            builder.encodedQuery(query);
+            mEntityCursor = provider.query(builder.build(),
+                    PROJECTION, selection, selectionArgs, sortOrder);
             mEntityCursor.moveToFirst();
         }
 
@@ -4542,8 +4606,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     contactsIdString = uri.getPathSegments().get(1);
                 }
 
-                return new RawContactsEntityIterator(this, contactsIdString,
-                        uri, selection, selectionArgs, sortOrder);
+                return new RawContactsEntityIterator(this, uri, contactsIdString,
+                        selection, selectionArgs, sortOrder);
             case GROUPS:
             case GROUPS_ID:
                 String idString = null;
