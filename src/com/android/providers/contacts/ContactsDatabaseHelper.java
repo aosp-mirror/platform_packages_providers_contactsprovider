@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 100;
+    private static final int DATABASE_VERSION = 101;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1002,7 +1002,36 @@ import java.util.HashMap;
                 StatusUpdates.STATUS_ICON + " INTEGER" +
         ");");
 
+        createContactsViews(db);
+        createGroupsView(db);
         createContactEntitiesView(db);
+
+        loadNicknameLookupTable(db);
+
+        // Add the legacy API support views, etc
+        LegacyApiSupport.createDatabase(db);
+
+        // This will create a sqlite_stat1 table that is used for query optimization
+        db.execSQL("ANALYZE;");
+
+        updateSqliteStats(db);
+
+        // We need to close and reopen the database connection so that the stats are
+        // taken into account. Make a note of it and do the actual reopening in the
+        // getWritableDatabase method.
+        mReopenDatabase = true;
+
+        ContentResolver.requestSync(null /* all accounts */,
+                ContactsContract.AUTHORITY, new Bundle());
+    }
+
+    private static void createContactsViews(SQLiteDatabase db) {
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1063,21 +1092,22 @@ import java.util.HashMap;
                 + ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
+                + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
+                + " JOIN " + Tables.MIMETYPES + " ON ("
+                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " JOIN " + Tables.CONTACTS + " ON ("
+                +   RawContacts.CONTACT_ID + "=" + Tables.CONTACTS + "." + Contacts._ID + ")"
                 + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
                 +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
-                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.RAW_CONTACTS + " ON ("
-                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
                 + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
                 +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
                 +   "' AND " + GroupsColumns.CONCRETE_ID + "="
-                        + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.CONTACTS + " ON ("
-                +   RawContacts.CONTACT_ID + "=" + Tables.CONTACTS + "." + Contacts._ID + ")";
+                        + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.DATA_ALL + " AS " + dataSelect);
         db.execSQL("CREATE VIEW " + Views.DATA_RESTRICTED + " AS " + dataSelect + " WHERE "
@@ -1112,6 +1142,7 @@ import java.util.HashMap;
                 + Contacts.HAS_PHONE_NUMBER + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
+                + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
                         + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
@@ -1135,7 +1166,10 @@ import java.util.HashMap;
 
         db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
         db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + restrictedContactsSelect);
+    }
 
+    private static void createGroupsView(SQLiteDatabase db) {
+        db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS_ALL + ";");
         String groupsColumns =
                 Groups.ACCOUNT_NAME + ","
                 + Groups.ACCOUNT_TYPE + ","
@@ -1161,27 +1195,12 @@ import java.util.HashMap;
                 + " FROM " + Tables.GROUPS_JOIN_PACKAGES;
 
         db.execSQL("CREATE VIEW " + Views.GROUPS_ALL + " AS " + groupsSelect);
-
-        loadNicknameLookupTable(db);
-
-        // Add the legacy API support views, etc
-        LegacyApiSupport.createDatabase(db);
-
-        // This will create a sqlite_stat1 table that is used for query optimization
-        db.execSQL("ANALYZE;");
-
-        updateSqliteStats(db);
-
-        // We need to close and reopen the database connection so that the stats are
-        // taken into account. Make a note of it and do the actual reopening in the
-        // getWritableDatabase method.
-        mReopenDatabase = true;
-
-        ContentResolver.requestSync(null /* all accounts */,
-                ContactsContract.AUTHORITY, new Bundle());
     }
 
     private static void createContactEntitiesView(SQLiteDatabase db) {
+        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
+
         String contactEntitiesSelect = "SELECT "
                 + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
                 + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
@@ -1260,16 +1279,6 @@ import java.util.HashMap;
             db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
             db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
 
-            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS_ALL + ";");
-
             // TODO: we should not be dropping agg_exceptions and contact_options. In case that
             // table's schema changes, we should try to preserve the data, because it was entered
             // by the user and has never been synched to the server.
@@ -1280,11 +1289,21 @@ import java.util.HashMap;
         }
 
         Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion);
-        
+
         if (oldVersion == 99) {
-            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
-            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
             createContactEntitiesView(db);
+            oldVersion++;
+        }
+
+        if (oldVersion == 100) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS mimetypes_mimetype_index ON "
+                    + Tables.MIMETYPES + " ("
+                            + MimetypesColumns.MIMETYPE + ","
+                            + MimetypesColumns._ID + ");");
+            updateIndexStats(db, Tables.MIMETYPES,
+                    "mimetypes_mimetype_index", "50 1 1");
+
+            createContactsViews(db);
             oldVersion++;
         }
 
