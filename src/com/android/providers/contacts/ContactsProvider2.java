@@ -571,6 +571,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
+        sDataProjectionMap.put(Contacts.IN_VISIBLE_GROUP, Contacts.IN_VISIBLE_GROUP);
         sDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
 
         HashMap<String, String> columns;
@@ -681,6 +682,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDistinctDataProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sDistinctDataProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
         sDistinctDataProjectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
+        sDistinctDataProjectionMap.put(Contacts.IN_VISIBLE_GROUP, Contacts.IN_VISIBLE_GROUP);
         sDistinctDataProjectionMap.put(GroupMembership.GROUP_SOURCE_ID,
                 GroupMembership.GROUP_SOURCE_ID);
 
@@ -3453,6 +3455,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     qb.appendWhere(" AND " + sb);
                 }
                 groupBy = PhoneColumns.NORMALIZED_NUMBER + "," + RawContacts.CONTACT_ID;
+                if (sortOrder == null) {
+                    sortOrder = Contacts.IN_VISIBLE_GROUP + " DESC, " + RawContacts.CONTACT_ID;
+                }
                 break;
             }
 
@@ -3502,6 +3507,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     qb.appendWhere(" AND " + sb);
                 }
                 groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
+                if (sortOrder == null) {
+                    sortOrder = Contacts.IN_VISIBLE_GROUP + " DESC, " + RawContacts.CONTACT_ID;
+                }
                 break;
             }
 
