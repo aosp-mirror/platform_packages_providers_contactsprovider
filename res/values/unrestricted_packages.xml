@@ -18,7 +18,7 @@
            xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
 
     <!-- The list of packages that have access to data that is marked as being restricted -->
-    <string-array name="unrestricted_packages">
+    <string-array name="unrestricted_packages" translatable="false">
 
         <item>com.android.contacts</item>
 
