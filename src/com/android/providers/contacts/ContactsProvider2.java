@@ -1119,16 +1119,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          * name.
          */
         private void fixStructuredNameComponents(ContentValues augmented, ContentValues update) {
+            final String unstruct = update.getAsString(StructuredName.DISPLAY_NAME);
 
-            final boolean touchedUnstruct = update.containsKey(StructuredName.DISPLAY_NAME);
-            final boolean touchedStruct = areAnySpecified(update, STRUCTURED_FIELDS);
+            final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
+            final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
 
             if (touchedUnstruct && !touchedStruct) {
-                final String unstruct = update.getAsString(StructuredName.DISPLAY_NAME);
                 NameSplitter.Name name = new NameSplitter.Name();
                 mSplitter.split(name, unstruct);
                 name.toValues(update);
-            } else if (!touchedUnstruct && touchedStruct) {
+            } else if (!touchedUnstruct
+                    && (touchedStruct || areAnySpecified(update, STRUCTURED_FIELDS))) {
+                // We need to update the display name when any structured components
+                // are specified, even when they are null, which is why we are checking
+                // areAnySpecified.  The touchedStruct in the condition is an optimization:
+                // if there are non-null values, we know for a fact that some values are present.
                 NameSplitter.Name name = new NameSplitter.Name();
                 name.fromValues(augmented);
                 final String joined = mSplitter.join(name);
@@ -1176,16 +1181,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          * unstructured value is assigned to {@link StructuredPostal#STREET}.
          */
         private void fixStructuredPostalComponents(ContentValues augmented, ContentValues update) {
-            final boolean touchedUnstruct = update.containsKey(StructuredPostal.FORMATTED_ADDRESS);
-            final boolean touchedStruct = areAnySpecified(update, STRUCTURED_FIELDS);
+            final String unstruct = update.getAsString(StructuredPostal.FORMATTED_ADDRESS);
+
+            final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
+            final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
 
             final PostalSplitter.Postal postal = new PostalSplitter.Postal();
 
             if (touchedUnstruct && !touchedStruct) {
-                final String unstruct = update.getAsString(StructuredPostal.FORMATTED_ADDRESS);
                 mSplitter.split(postal, unstruct);
                 postal.toValues(update);
-            } else if (!touchedUnstruct && touchedStruct) {
+            } else if (!touchedUnstruct
+                    && (touchedStruct || areAnySpecified(update, STRUCTURED_FIELDS))) {
+                // See comment in
                 postal.fromValues(augmented);
                 final String joined = mSplitter.join(postal);
                 update.put(StructuredPostal.FORMATTED_ADDRESS, joined);
@@ -3249,6 +3257,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /**
      * Test all against {@link TextUtils#isEmpty(CharSequence)}.
+     */
+    private static boolean areAllEmpty(ContentValues values, String[] keys) {
+        for (String key : keys) {
+            if (!TextUtils.isEmpty(values.getAsString(key))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns true if a value (possibly null) is specified for at least one of the supplied keys.
      */
     private static boolean areAnySpecified(ContentValues values, String[] keys) {
         for (String key : keys) {

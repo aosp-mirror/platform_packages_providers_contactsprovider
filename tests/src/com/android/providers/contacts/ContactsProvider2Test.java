@@ -573,6 +573,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr");
     }
 
+    public void testDisplayNameParsingWhenPartsAreNull() {
+        long rawContactId = createRawContact();
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
+        values.putNull(StructuredName.GIVEN_NAME);
+        values.putNull(StructuredName.FAMILY_NAME);
+        insertStructuredName(rawContactId, values);
+        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr");
+    }
+
     public void testDisplayNameParsingWhenPartsSpecified() {
         long rawContactId = createRawContact();
         ContentValues values = new ContentValues();
