@@ -1135,6 +1135,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             RawContacts.IS_RESTRICTED,
             DataColumns.CONCRETE_ID,
             DataColumns.CONCRETE_MIMETYPE_ID,
+            Data.IS_SUPER_PRIMARY,
         };
 
         int RAW_CONTACT_ID = 0;
@@ -1151,6 +1152,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         int IS_RESTRICTED = 11;
         int DATA_ID = 12;
         int MIMETYPE_ID = 13;
+        int IS_SUPER_PRIMARY = 14;
     }
 
     /**
@@ -1170,6 +1172,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
         String bestDisplayName = null;
         long bestPhotoId = -1;
+        boolean foundSuperPrimaryPhoto = false;
         String photoAccount = null;
         int totalRowCount = 0;
         int contactSendToVoicemail = 0;
@@ -1269,18 +1272,18 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 if (!c.isNull(RawContactsQuery.DATA_ID)) {
                     long dataId = c.getLong(RawContactsQuery.DATA_ID);
                     int mimetypeId = c.getInt(RawContactsQuery.MIMETYPE_ID);
+                    boolean superprimary = c.getInt(RawContactsQuery.IS_SUPER_PRIMARY) != 0;
                     if (mimetypeId == photoMimeType) {
 
                         // For now, just choose the first photo in a list sorted by account name.
                         String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
-                        if (photoAccount == null) {
+                        if (!foundSuperPrimaryPhoto
+                                && (superprimary
+                                        || photoAccount == null
+                                        || account.compareToIgnoreCase(photoAccount) < 0)) {
                             photoAccount = account;
                             bestPhotoId = dataId;
-                        } else {
-                            if (account.compareToIgnoreCase(photoAccount) < 0) {
-                                photoAccount = account;
-                                bestPhotoId = dataId;
-                            }
+                            foundSuperPrimaryPhoto |= superprimary;
                         }
                     } else if (mimetypeId == phoneMimeType) {
                         hasPhoneNumber = 1;
@@ -1320,10 +1323,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         String[] COLUMNS = new String[] {
             RawContacts.ACCOUNT_NAME,
             DataColumns.CONCRETE_ID,
+            Data.IS_SUPER_PRIMARY,
         };
 
         int ACCOUNT_NAME = 0;
         int DATA_ID = 1;
+        int IS_SUPER_PRIMARY = 2;
     }
 
     public void updatePhotoId(SQLiteDatabase db, long rawContactId) {
@@ -1348,6 +1353,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         try {
             while (c.moveToNext()) {
                 long dataId = c.getLong(PhotoIdQuery.DATA_ID);
+                boolean superprimary = c.getInt(PhotoIdQuery.IS_SUPER_PRIMARY) != 0;
+                if (superprimary) {
+                    bestPhotoId = dataId;
+                    break;
+                }
 
                 // For now, just choose the first photo in a list sorted by account name.
                 String account = c.getString(PhotoIdQuery.ACCOUNT_NAME);

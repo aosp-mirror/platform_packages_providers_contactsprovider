@@ -1447,6 +1447,39 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(ContentUris.parseId(photoUri), twigId);
     }
 
+    public void testSuperPrimaryPhoto() {
+        long rawContactId1 = createRawContact(new Account("a", "a"));
+        Uri photoUri1 = insertPhoto(rawContactId1);
+        long photoId1 = ContentUris.parseId(photoUri1);
+
+        long rawContactId2 = createRawContact(new Account("b", "b"));
+        Uri photoUri2 = insertPhoto(rawContactId2);
+        long photoId2 = ContentUris.parseId(photoUri2);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId1));
+        assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId1);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
+
+        ContentValues values = new ContentValues();
+        values.put(Data.IS_SUPER_PRIMARY, 1);
+        mResolver.update(photoUri2, values, null, null);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+        contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId1));
+        assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId2);
+
+        mResolver.update(photoUri1, values, null, null);
+        assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId1);
+    }
+
     public void testUpdatePhoto() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
