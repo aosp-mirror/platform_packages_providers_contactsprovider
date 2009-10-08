@@ -22,6 +22,7 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.FileUtils;
+import android.provider.BaseColumns;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.Contacts;
@@ -213,7 +214,7 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
     }
 
     private String dumpCursorToString(Uri uri, String[] projection) {
-        Cursor c = mResolver.query(uri, projection, null, null, null);
+        Cursor c = mResolver.query(uri, projection, null, null, BaseColumns._ID);
         if (c == null) {
             return "Null cursor";
         }
