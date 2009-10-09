@@ -54,6 +54,11 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
             public Resources getResources() {
                 return targetContext.getResources();
             }
+
+            @Override
+            public String getPackageName() {
+                return "no.package";
+            }
         };
         RenamingDelegatingContext targetContextWrapper =
                 new RenamingDelegatingContext(context, targetContext, "perf.");
