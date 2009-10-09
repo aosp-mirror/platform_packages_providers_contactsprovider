@@ -2491,7 +2491,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Cursor cursor = null;
         try {
             cursor = mDb.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
-                    mSb.toString(), null, null, null, null);
+                    mSb.toString(), null, null, null,
+                    Contacts.IN_VISIBLE_GROUP + " DESC, " + Data.RAW_CONTACT_ID);
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
                 rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
