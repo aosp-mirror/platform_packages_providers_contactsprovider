@@ -222,19 +222,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private interface DataContactsQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS;
+        public static final String TABLE = "data "
+                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + "JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String[] PROJECTION = new String[] {
             RawContactsColumns.CONCRETE_ID,
             DataColumns.CONCRETE_ID,
-            ContactsColumns.CONCRETE_ID,
-            MimetypesColumns.CONCRETE_ID,
+            ContactsColumns.CONCRETE_ID
         };
 
         public static final int RAW_CONTACT_ID = 0;
         public static final int DATA_ID = 1;
         public static final int CONTACT_ID = 2;
-        public static final int MIMETYPE_ID = 3;
     }
 
     private interface DisplayNameQuery {
@@ -386,6 +386,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mStatusUpdateReplace;
     private SQLiteStatement mStatusAttributionUpdate;
     private SQLiteStatement mStatusUpdateDelete;
+
+    private long mMimeTypeIdEmail;
+    private long mMimeTypeIdIm;
+    private StringBuilder mSb = new StringBuilder();
 
     static {
         // Contacts URI matching table
@@ -1722,6 +1726,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         verifyAccounts();
 
+        mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimeTypeIdIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
         return (db != null);
     }
 
@@ -2363,15 +2369,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         long rawContactId = -1;
         long contactId = -1;
         Long dataId = values.getAsLong(StatusUpdates.DATA_ID);
-        StringBuilder selection = new StringBuilder();
-        String[] selectionArgs;
-
+        mSb.setLength(0);
         if (dataId != null) {
             // Lookup the contact info for the given data row.
 
-            selection.append(Tables.DATA + "." + Data._ID + "=");
-            selection.append(dataId);
-            selectionArgs = null;
+            mSb.append(Tables.DATA + "." + Data._ID + "=");
+            mSb.append(dataId);
         } else {
             // Lookup the data row to attach this presence update to
 
@@ -2383,43 +2386,54 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == protocol;
 
             if (matchEmail) {
-                selection.append(
-                        "((" + MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Im.PROTOCOL + "=?"
-                        + " AND " + Im.DATA + "=?");
-                if (customProtocol != null) {
-                    selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
-                    DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
-                }
-                selection.append(") OR ("
-                        + MimetypesColumns.MIMETYPE + "='" + Email.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Email.DATA + "=?"
-                        + "))");
-                selectionArgs = new String[] { String.valueOf(protocol), handle, handle };
-            } else {
-                selection.append(
-                        MimetypesColumns.MIMETYPE + "='" + Im.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Im.PROTOCOL + "=?"
-                        + " AND " + Im.DATA + "=?");
-                if (customProtocol != null) {
-                    selection.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
-                    DatabaseUtils.appendEscapedSQLString(selection, customProtocol);
-                }
 
-                selectionArgs = new String[] { String.valueOf(protocol), handle };
+                // The following hack forces SQLite to use the (mimetype_id,data1) index, otherwise
+                // the "OR" conjunction confuses it and it switches to a full scan of
+                // the raw_contacts table.
+
+                // This code relies on the fact that Im.DATA and Email.DATA are in fact the same
+                // column - Data.DATA1
+                mSb.append(DataColumns.MIMETYPE_ID + " IN (")
+                        .append(mMimeTypeIdEmail)
+                        .append(",")
+                        .append(mMimeTypeIdIm)
+                        .append(")" + " AND " + Data.DATA1 + "=");
+                DatabaseUtils.appendEscapedSQLString(mSb, handle);
+                mSb.append(" AND ((" + DataColumns.MIMETYPE_ID + "=")
+                        .append(mMimeTypeIdIm)
+                        .append(" AND " + Im.PROTOCOL + "=")
+                        .append(protocol);
+                if (customProtocol != null) {
+                    mSb.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
+                    DatabaseUtils.appendEscapedSQLString(mSb, customProtocol);
+                }
+                mSb.append(") OR (" + DataColumns.MIMETYPE_ID + "=")
+                        .append(mMimeTypeIdEmail)
+                        .append("))");
+            } else {
+                mSb.append(DataColumns.MIMETYPE_ID + "=")
+                        .append(mMimeTypeIdIm)
+                        .append(" AND " + Im.PROTOCOL + "=")
+                        .append(protocol)
+                        .append(" AND " + Im.DATA + "=");
+                DatabaseUtils.appendEscapedSQLString(mSb, handle);
+                if (customProtocol != null) {
+                    mSb.append(" AND " + Im.CUSTOM_PROTOCOL + "=");
+                    DatabaseUtils.appendEscapedSQLString(mSb, customProtocol);
+                }
             }
 
             if (values.containsKey(StatusUpdates.DATA_ID)) {
-                selection.append(" AND " + DataColumns.CONCRETE_ID + "=")
+                mSb.append(" AND " + DataColumns.CONCRETE_ID + "=")
                         .append(values.getAsLong(StatusUpdates.DATA_ID));
             }
         }
-        selection.append(" AND ").append(getContactsRestrictions());
+        mSb.append(" AND ").append(getContactsRestrictions());
 
         Cursor cursor = null;
         try {
             cursor = mDb.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
-                    selection.toString(), selectionArgs, null, null, null);
+                    mSb.toString(), null, null, null, null);
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
                 rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
