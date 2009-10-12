@@ -1068,12 +1068,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          * name.
          */
         private void fixStructuredNameComponents(ContentValues augmented, ContentValues update) {
-            final String unstruct = update.getAsString(StructuredName.DISPLAY_NAME);
 
-            final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
-            final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
+            final boolean touchedUnstruct = update.containsKey(StructuredName.DISPLAY_NAME);
+            final boolean touchedStruct = areAnySpecified(update, STRUCTURED_FIELDS);
 
             if (touchedUnstruct && !touchedStruct) {
+                final String unstruct = update.getAsString(StructuredName.DISPLAY_NAME);
                 NameSplitter.Name name = new NameSplitter.Name();
                 mSplitter.split(name, unstruct);
                 name.toValues(update);
@@ -1125,14 +1125,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          * unstructured value is assigned to {@link StructuredPostal#STREET}.
          */
         private void fixStructuredPostalComponents(ContentValues augmented, ContentValues update) {
-            final String unstruct = update.getAsString(StructuredPostal.FORMATTED_ADDRESS);
-
-            final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
-            final boolean touchedStruct = !areAllEmpty(update, STRUCTURED_FIELDS);
+            final boolean touchedUnstruct = update.containsKey(StructuredPostal.FORMATTED_ADDRESS);
+            final boolean touchedStruct = areAnySpecified(update, STRUCTURED_FIELDS);
 
             final PostalSplitter.Postal postal = new PostalSplitter.Postal();
 
             if (touchedUnstruct && !touchedStruct) {
+                final String unstruct = update.getAsString(StructuredPostal.FORMATTED_ADDRESS);
                 mSplitter.split(postal, unstruct);
                 postal.toValues(update);
             } else if (!touchedUnstruct && touchedStruct) {
@@ -3200,13 +3199,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Test all against {@link TextUtils#isEmpty(CharSequence)}.
      */
-    private static boolean areAllEmpty(ContentValues values, String[] keys) {
+    private static boolean areAnySpecified(ContentValues values, String[] keys) {
         for (String key : keys) {
-            if (!TextUtils.isEmpty(values.getAsString(key))) {
-                return false;
+            if (values.containsKey(key)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     @Override
