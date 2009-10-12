@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 99;
+    private static final int DATABASE_VERSION = 100;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1002,62 +1002,7 @@ import java.util.HashMap;
                 StatusUpdates.STATUS_ICON + " INTEGER" +
         ");");
 
-        String contactEntitiesSelect = "SELECT "
-                + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
-                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
-                + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
-                + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
-                + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
-                + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
-                + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
-                + RawContacts.CONTACT_ID + ", "
-                + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ", "
-                + RawContactsColumns.CONCRETE_SYNC2 + " AS " + RawContacts.SYNC2 + ", "
-                + RawContactsColumns.CONCRETE_SYNC3 + " AS " + RawContacts.SYNC3 + ", "
-                + RawContactsColumns.CONCRETE_SYNC4 + " AS " + RawContacts.SYNC4 + ", "
-                + Data.MIMETYPE + ", "
-                + Data.DATA1 + ", "
-                + Data.DATA2 + ", "
-                + Data.DATA3 + ", "
-                + Data.DATA4 + ", "
-                + Data.DATA5 + ", "
-                + Data.DATA6 + ", "
-                + Data.DATA7 + ", "
-                + Data.DATA8 + ", "
-                + Data.DATA9 + ", "
-                + Data.DATA10 + ", "
-                + Data.DATA11 + ", "
-                + Data.DATA12 + ", "
-                + Data.DATA13 + ", "
-                + Data.DATA14 + ", "
-                + Data.DATA15 + ", "
-                + Data.SYNC1 + ", "
-                + Data.SYNC2 + ", "
-                + Data.SYNC3 + ", "
-                + Data.SYNC4 + ", "
-                + RawContactsColumns.CONCRETE_ID + " AS " + Data.RAW_CONTACT_ID + ", "
-                + Data.IS_PRIMARY + ", "
-                + Data.IS_SUPER_PRIMARY + ", "
-                + Data.DATA_VERSION + ", "
-                + DataColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
-                + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
-                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
-                + " FROM " + Tables.RAW_CONTACTS
-                + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
-                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
-                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
-                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
-                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
-                +   "' AND " + GroupsColumns.CONCRETE_ID + "="
-                + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
-
-        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS "
-                + contactEntitiesSelect);
-        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES_RESTRICTED + " AS "
-                + contactEntitiesSelect + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
+        createContactEntitiesView(db);
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1236,42 +1181,117 @@ import java.util.HashMap;
                 ContactsContract.AUTHORITY, new Bundle());
     }
 
+    private static void createContactEntitiesView(SQLiteDatabase db) {
+        String contactEntitiesSelect = "SELECT "
+                + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
+                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
+                + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
+                + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
+                + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
+                + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
+                + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
+                + RawContacts.CONTACT_ID + ", "
+                + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ", "
+                + RawContactsColumns.CONCRETE_SYNC2 + " AS " + RawContacts.SYNC2 + ", "
+                + RawContactsColumns.CONCRETE_SYNC3 + " AS " + RawContacts.SYNC3 + ", "
+                + RawContactsColumns.CONCRETE_SYNC4 + " AS " + RawContacts.SYNC4 + ", "
+                + Data.MIMETYPE + ", "
+                + Data.DATA1 + ", "
+                + Data.DATA2 + ", "
+                + Data.DATA3 + ", "
+                + Data.DATA4 + ", "
+                + Data.DATA5 + ", "
+                + Data.DATA6 + ", "
+                + Data.DATA7 + ", "
+                + Data.DATA8 + ", "
+                + Data.DATA9 + ", "
+                + Data.DATA10 + ", "
+                + Data.DATA11 + ", "
+                + Data.DATA12 + ", "
+                + Data.DATA13 + ", "
+                + Data.DATA14 + ", "
+                + Data.DATA15 + ", "
+                + Data.SYNC1 + ", "
+                + Data.SYNC2 + ", "
+                + Data.SYNC3 + ", "
+                + Data.SYNC4 + ", "
+                + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ", "
+                + Data.IS_PRIMARY + ", "
+                + Data.IS_SUPER_PRIMARY + ", "
+                + Data.DATA_VERSION + ", "
+                + DataColumns.CONCRETE_ID + " AS " + RawContacts.Entity.DATA_ID + ","
+                + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
+                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
+                + " FROM " + Tables.RAW_CONTACTS
+                + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
+                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
+                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
+                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                +   "' AND " + GroupsColumns.CONCRETE_ID + "="
+                + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
+
+        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS "
+                + contactEntitiesSelect);
+        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES_RESTRICTED + " AS "
+                + contactEntitiesSelect + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 99) {
+            Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
+                    + ", data will be lost!");
 
-        Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
-                + ", data will be lost!");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.RAW_CONTACTS + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGES + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPES + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
 
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.RAW_CONTACTS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGES + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPES + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS_ALL + ";");
 
-        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS_ALL + ";");
+            // TODO: we should not be dropping agg_exceptions and contact_options. In case that
+            // table's schema changes, we should try to preserve the data, because it was entered
+            // by the user and has never been synched to the server.
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
 
-        // TODO: we should not be dropping agg_exceptions and contact_options. In case that table's
-        // schema changes, we should try to preserve the data, because it was entered by the user
-        // and has never been synched to the server.
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
+            onCreate(db);
+            return;
+        }
 
-        onCreate(db);
+        Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion);
+        
+        if (oldVersion == 99) {
+            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
+            db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
+            createContactEntitiesView(db);
+            oldVersion++;
+        }
+
+        if (oldVersion != newVersion) {
+            throw new IllegalStateException(
+                    "error upgrading the database to version " + newVersion);
+        }
     }
 
     /**
