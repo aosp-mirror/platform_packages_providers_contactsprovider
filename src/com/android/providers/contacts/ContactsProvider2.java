@@ -47,6 +47,7 @@ import android.accounts.OnAccountsUpdatedListener;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -66,6 +67,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.MemoryFile;
 import android.os.RemoteException;
 import android.os.SystemProperties;
@@ -2869,6 +2871,29 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int count = mDb.update(Tables.GROUPS, updatedValues, selectionWithId, selectionArgs);
         if (updatedValues.containsKey(Groups.GROUP_VISIBLE)) {
             mVisibleTouched = true;
+        }
+        if (updatedValues.containsKey(Groups.SHOULD_SYNC)
+	        && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
+            final long groupId = ContentUris.parseId(uri);
+            Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
+                    Groups.ACCOUNT_TYPE}, Groups._ID + "=" + groupId, null, null,
+                    null, null);
+            String accountName;
+            String accountType;
+            try {
+                while (c.moveToNext()) {
+                    accountName = c.getString(0);
+                    accountType = c.getString(1);
+                    if(!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
+                        Account account = new Account(accountName, accountType);
+	                ContentResolver.requestSync(account, ContactsContract.AUTHORITY,
+                                new Bundle());
+                        break;
+                    }
+                }
+            } finally {
+                c.close();
+            }
         }
         return count;
     }
