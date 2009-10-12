@@ -519,7 +519,7 @@ import java.util.HashMap;
      */
     ContactsDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
-        Log.i(TAG, "Creating OpenHelper");
+        if (false) Log.i(TAG, "Creating OpenHelper");
         Resources resources = context.getResources();
 
         mContext = context;
