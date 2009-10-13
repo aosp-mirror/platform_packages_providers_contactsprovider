@@ -16,46 +16,43 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.ContactsActor.PACKAGE_BLUE;
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREEN;
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 import static com.android.providers.contacts.ContactsActor.PACKAGE_RED;
 
 import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
+import android.content.Entity;
+import android.content.EntityIterator;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.BaseColumns;
 import android.provider.ContactsContract;
+import android.provider.LiveFolders;
 import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 
+import java.io.InputStream;
+
 /**
- * Unit tests for {@link RestrictionExceptions}.
- *
- * Run the test like this:
- * <code>
- * adb shell am instrument -e class com.android.providers.contacts.RestrictionExceptionsTest -w \
- *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
- * </code>
+ * Unit tests for {@link RawContacts#IS_RESTRICTED}.
  */
 @LargeTest
 public class RestrictionExceptionsTest extends AndroidTestCase {
-    private static final String TAG = "RestrictionExceptionsTest";
-
-    private static ContactsActor mGrey;
-    private static ContactsActor mRed;
-    private static ContactsActor mGreen;
-    private static ContactsActor mBlue;
+    private ContactsActor mGrey;
+    private ContactsActor mRed;
 
     private static final String PHONE_GREY = "555-1111";
     private static final String PHONE_RED = "555-2222";
-    private static final String PHONE_GREEN = "555-3333";
-    private static final String PHONE_BLUE = "555-4444";
 
+    private static final String EMAIL_GREY = "user@example.com";
+    private static final String EMAIL_RED = "user@example.org";
+
+    private static final String GENERIC_STATUS = "Status update";
     private static final String GENERIC_NAME = "Smith";
 
     public RestrictionExceptionsTest() {
@@ -72,275 +69,256 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
                 SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
         mRed = new ContactsActor(overallContext, PACKAGE_RED,
                 SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
-        mGreen = new ContactsActor(overallContext, PACKAGE_GREEN,
-                SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
-        mBlue = new ContactsActor(overallContext, PACKAGE_BLUE,
-                SynchronousContactsProvider2.class, ContactsContract.AUTHORITY);
 
         // TODO make the provider wipe data automatically
         ((SynchronousContactsProvider2)mGrey.provider).wipeData();
     }
 
     /**
-     * Create various contacts that are both open and restricted, and assert
-     * that both {@link Contacts#IS_RESTRICTED} and
-     * {@link RestrictionExceptions} are being applied correctly.
+     * Assert that {@link Contacts#CONTACT_STATUS} matches the given value, or
+     * that no rows are returned when null.
      */
-    public void __testDataRestriction() {
+    void assertStatus(ContactsActor actor, long aggId, String status) {
+        final Uri aggUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, aggId);
 
-        // Grey creates an unprotected contact
-        long greyContact = mGrey.createContact(false);
-        long greyData = mGrey.createPhone(greyContact, PHONE_GREY);
-        long greyAgg = mGrey.getContactForRawContact(greyContact);
-
-        // Assert that both Grey and Blue can read contact
-        assertTrue("Owner of unrestricted contact unable to read",
-                (mGrey.getDataCountForContact(greyAgg) == 1));
-        assertTrue("Non-owner of unrestricted contact unable to read",
-                (mBlue.getDataCountForContact(greyAgg) == 1));
-
-        // Red grants protected access to itself
-        mRed.updateException(PACKAGE_RED, PACKAGE_RED, true);
-
-        // Red creates a protected contact
-        long redContact = mRed.createContact(true);
-        long redData = mRed.createPhone(redContact, PHONE_RED);
-        long redAgg = mRed.getContactForRawContact(redContact);
-
-        // Assert that only Red can read contact
-        assertTrue("Owner of restricted contact unable to read",
-                (mRed.getDataCountForContact(redAgg) == 1));
-        assertTrue("Non-owner of restricted contact able to read",
-                (mBlue.getDataCountForContact(redAgg) == 0));
-        assertTrue("Non-owner of restricted contact able to read",
-                (mGreen.getDataCountForContact(redAgg) == 0));
-
+        actor.ensureCallingPackage();
+        final Cursor cursor = actor.resolver.query(aggUri,
+                new String[] { Contacts.CONTACT_STATUS }, null, null, null);
         try {
-            // Blue tries to grant an exception for Red data, which should throw
-            // exception. If it somehow worked, fail this test.
-            mBlue.updateException(PACKAGE_RED, PACKAGE_BLUE, true);
-            fail("Non-owner able to grant restriction exception");
-
-        } catch (RuntimeException e) {
+            if (status == null) {
+                assertEquals(0, cursor.getCount());
+            } else {
+                while (cursor.moveToNext()) {
+                    final String foundStatus = cursor.getString(0);
+                    assertEquals(status, foundStatus);
+                }
+            }
+        } finally {
+            cursor.close();
         }
-
-        // Red grants exception to Blue for contact
-        mRed.updateException(PACKAGE_RED, PACKAGE_BLUE, true);
-
-        // Both Blue and Red can read Red contact, but still not Green
-        assertTrue("Owner of restricted contact unable to read",
-                (mRed.getDataCountForContact(redAgg) == 1));
-        assertTrue("Non-owner with restriction exception unable to read",
-                (mBlue.getDataCountForContact(redAgg) == 1));
-        assertTrue("Non-owner of restricted contact able to read",
-                (mGreen.getDataCountForContact(redAgg) == 0));
-
-        // Red revokes exception to Blue
-        mRed.updateException(PACKAGE_RED, PACKAGE_BLUE, false);
-
-        // Assert that only Red can read contact
-        assertTrue("Owner of restricted contact unable to read",
-                (mRed.getDataCountForContact(redAgg) == 1));
-        assertTrue("Non-owner of restricted contact able to read",
-                (mBlue.getDataCountForContact(redAgg) == 0));
-        assertTrue("Non-owner of restricted contact able to read",
-                (mGreen.getDataCountForContact(redAgg) == 0));
-
     }
 
-    /**
-     * Create an aggregate that has multiple contacts with various levels of
-     * protected data, and ensure that {@link Contacts#CONTENT_URI}
-     * details don't expose {@link Contacts#IS_RESTRICTED} data.
-     */
-    public void __testAggregateSummary() {
+    public void testRestrictedInsertRestrictedQuery() {
+        // Restricted query can read restricted data
+        final long rawContact = mGrey.createContact(true, GENERIC_NAME);
+        final int count = mGrey.getDataCountForRawContact(rawContact);
+        assertEquals(1, count);
+    }
 
-        // Red grants exceptions to itself and Grey
-        mRed.updateException(PACKAGE_RED, PACKAGE_RED, true);
-        mRed.updateException(PACKAGE_RED, PACKAGE_GREY, true);
+    public void testRestrictedInsertGenericQuery() {
+        // Generic query is denied restricted data
+        final long rawContact = mGrey.createContact(true, GENERIC_NAME);
+        final int count = mRed.getDataCountForRawContact(rawContact);
+        assertEquals(0, count);
+    }
 
-        // Red creates a protected contact
-        long redContact = mRed.createContact(true);
-        long redName = mRed.createName(redContact, GENERIC_NAME);
-        long redPhone = mRed.createPhone(redContact, PHONE_RED);
+    public void testGenericInsertRestrictedQuery() {
+        // Restricted query can read generic data
+        final long rawContact = mRed.createContact(false, GENERIC_NAME);
+        final int count = mGrey.getDataCountForRawContact(rawContact);
+        assertEquals(1, count);
+    }
 
-        // Blue grants exceptions to itself and Grey
-        mBlue.updateException(PACKAGE_BLUE, PACKAGE_BLUE, true);
-        mBlue.updateException(PACKAGE_BLUE, PACKAGE_GREY, true);
+    public void testGenericInsertGenericQuery() {
+        // Generic query can read generic data
+        final long rawContact = mRed.createContact(false, GENERIC_NAME);
+        final int count = mRed.getDataCountForRawContact(rawContact);
+        assertEquals(1, count);
+    }
 
-        // Blue creates a protected contact
-        long blueContact = mBlue.createContact(true);
-        long blueName = mBlue.createName(blueContact, GENERIC_NAME);
-        long bluePhone = mBlue.createPhone(blueContact, PHONE_BLUE);
-
-        // Set the super-primary phone number to Red
-        mRed.setSuperPrimaryPhone(redPhone);
+    public void testMixedAggregateRestrictedQuery() {
+        // Create mixed aggregate with a restricted phone number
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
+        final long redContact = mRed.createContact(false, GENERIC_NAME);
+        final long redPhone = mRed.createPhone(redContact, PHONE_RED);
 
         // Make sure both aggregates were joined
-        long singleAgg;
-        {
-            long redAgg = mRed.getContactForRawContact(redContact);
-            long blueAgg = mBlue.getContactForRawContact(blueContact);
-            assertTrue("Two contacts with identical name not aggregated correctly",
-                    (redAgg == blueAgg));
-            singleAgg = redAgg;
-        }
+        final long greyAgg = mGrey.getContactForRawContact(greyContact);
+        final long redAgg = mRed.getContactForRawContact(redContact);
+        assertEquals(greyAgg, redAgg);
 
-        /*
-        // Grey and Red querying summary should see Red phone. Blue shouldn't
-        // see any summary data, since it's own data is protected and it's not
-        // the super-primary. Green shouldn't know this aggregate exists.
-        assertTrue("Participant with restriction exception reading incorrect summary",
-                (mGrey.getPrimaryPhoneId(singleAgg) == redPhone));
-        assertTrue("Participant with super-primary restricted data reading incorrect summary",
-                (mRed.getPrimaryPhoneId(singleAgg) == redPhone));
-        assertTrue("Participant with non-super-primary restricted data reading incorrect summary",
-                (mBlue.getPrimaryPhoneId(singleAgg) == 0));
-        assertTrue("Non-participant able to discover aggregate existance",
-                (mGreen.getPrimaryPhoneId(singleAgg) == 0));
+        // Restricted reader should have access to both numbers
+        final int greyCount = mGrey.getDataCountForContact(greyAgg);
+        assertEquals(4, greyCount);
 
-        // Add an unprotected Grey contact into the mix
-        long greyContact = mGrey.createContact(false);
-        long greyName = mGrey.createName(greyContact, GENERIC_NAME);
-        long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
-
-        // Set the super-primary phone number to Blue
-        mBlue.setSuperPrimaryPhone(bluePhone);
-
-        // Make sure all three aggregates were joined
-        {
-            long redAgg = mRed.getContactForRawContact(redContact);
-            long blueAgg = mBlue.getContactForRawContact(blueContact);
-            long greyAgg = mGrey.getContactForRawContact(greyContact);
-            assertTrue("Three contacts with identical name not aggregated correctly",
-                    (redAgg == blueAgg) && (blueAgg == greyAgg));
-            singleAgg = redAgg;
-        }
-
-        // Grey and Blue querying summary should see Blue phone. Red should see
-        // the Grey phone in its summary, since it's the unprotected fallback.
-        // Red doesn't see its own phone number because it's not super-primary,
-        // and is protected. Again, green shouldn't know this exists.
-        assertTrue("Participant with restriction exception reading incorrect summary",
-                (mGrey.getPrimaryPhoneId(singleAgg) == bluePhone));
-        assertTrue("Participant with non-super-primary restricted data reading incorrect summary",
-                (mRed.getPrimaryPhoneId(singleAgg) == greyPhone));
-        assertTrue("Participant with super-primary restricted data reading incorrect summary",
-                (mBlue.getPrimaryPhoneId(singleAgg) == bluePhone));
-        assertTrue("Non-participant couldn't find unrestricted primary through summary",
-                (mGreen.getPrimaryPhoneId(singleAgg) == greyPhone));
-         */
+        // Generic reader should have limited access
+        final int redCount = mRed.getDataCountForContact(redAgg);
+        assertEquals(2, redCount);
     }
 
-    /**
-     * Create a contact that is completely restricted and isolated in its own
-     * aggregate, and make sure that another actor can't detect its existence.
-     */
-    public void __testRestrictionSilence() {
-        Cursor cursor;
+    public void testUpdateRestricted() {
+        // Assert that we can't un-restrict something
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
 
-        // Green grants exception to itself
-        mGreen.updateException(PACKAGE_GREEN, PACKAGE_GREEN, true);
+        int count = mRed.getDataCountForRawContact(greyContact);
+        assertEquals(0, count);
 
-        // Green creates a protected contact
-        long greenContact = mGreen.createContact(true);
-        long greenData = mGreen.createPhone(greenContact, PHONE_GREEN);
-        long greenAgg = mGreen.getContactForRawContact(greenContact);
+        // Try un-restricting that contact
+        final Uri greyUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, greyContact);
+        final ContentValues values = new ContentValues();
+        values.put(RawContacts.IS_RESTRICTED, 0);
+        mRed.ensureCallingPackage();
+        mRed.provider.update(greyUri, values, null, null);
 
-        // AGGREGATES
-        cursor = mRed.resolver
-                .query(Contacts.CONTENT_URI, Projections.PROJ_ID, null, null, null);
-        while (cursor.moveToNext()) {
-            assertTrue("Discovered restricted contact",
-                    (cursor.getLong(Projections.COL_ID) != greenAgg));
-        }
-        cursor.close();
-
-        // AGGREGATES_ID
-        cursor = mRed.resolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, greenAgg),
-                Projections.PROJ_ID, null, null, null);
-        assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
-        cursor.close();
-
-        // AGGREGATES_DATA
-        cursor = mRed.resolver.query(Uri.withAppendedPath(ContentUris.withAppendedId(
-                Contacts.CONTENT_URI, greenAgg), Contacts.Data.CONTENT_DIRECTORY),
-                Projections.PROJ_ID, null, null, null);
-        assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
-        cursor.close();
-
-        // AGGREGATES_SUMMARY
-        cursor = mRed.resolver.query(Contacts.CONTENT_URI, Projections.PROJ_ID, null,
-                null, null);
-        while (cursor.moveToNext()) {
-            assertTrue("Discovered restricted contact",
-                    (cursor.getLong(Projections.COL_ID) != greenAgg));
-        }
-        cursor.close();
-
-        // AGGREGATES_SUMMARY_ID
-        cursor = mRed.resolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                greenAgg), Projections.PROJ_ID, null, null, null);
-        assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
-        cursor.close();
-
-        // TODO: AGGREGATES_SUMMARY_FILTER
-        // TODO: =========================
-
-        // TODO: AGGREGATION_SUGGESTIONS
-        // TODO: =======================
-
-        // CONTACTS
-        cursor = mRed.resolver.query(RawContacts.CONTENT_URI, Projections.PROJ_ID,
-                null, null, null);
-        while (cursor.moveToNext()) {
-            assertTrue("Discovered restricted contact",
-                    (cursor.getLong(Projections.COL_ID) != greenContact));
-        }
-        cursor.close();
-
-        // CONTACTS_ID
-        cursor = mRed.resolver.query(ContentUris
-                .withAppendedId(RawContacts.CONTENT_URI, greenContact), Projections.PROJ_ID, null,
-                null, null);
-        assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
-        cursor.close();
-
-        // CONTACTS_DATA
-        cursor = mRed.resolver.query(Uri.withAppendedPath(ContentUris.withAppendedId(
-                RawContacts.CONTENT_URI, greenContact), RawContacts.Data.CONTENT_DIRECTORY),
-                Projections.PROJ_ID, null, null, null);
-        assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
-        cursor.close();
-
-        // TODO: CONTACTS_FILTER_EMAIL
-        // TODO: =====================
-
-        // DATA
-        cursor = mRed.resolver.query(Data.CONTENT_URI, Projections.PROJ_ID, null, null, null);
-        while (cursor.moveToNext()) {
-            assertTrue("Discovered restricted contact",
-                    (cursor.getLong(Projections.COL_ID) != greenData));
-        }
-        cursor.close();
-
-        // DATA_ID
-        cursor = mRed.resolver.query(ContentUris.withAppendedId(Data.CONTENT_URI, greenData),
-                Projections.PROJ_ID, null, null, null);
-        assertTrue("Discovered restricted contact", (cursor.getCount() == 0));
-        cursor.close();
-
-        // TODO: PHONE_LOOKUP
-        // TODO: ============
-
+        count = mRed.getDataCountForRawContact(greyContact);
+        assertEquals(0, count);
     }
 
-    private interface Projections {
-        static final String[] PROJ_ID = new String[] {
-                BaseColumns._ID,
-        };
+    public void testExportVCard() throws Exception {
+        // Create mixed aggregate with a restricted phone number
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
+        final long redContact = mRed.createContact(false, GENERIC_NAME);
+        final long redPhone = mRed.createPhone(redContact, PHONE_RED);
 
-        static final int COL_ID = 0;
+        // Make sure both aggregates were joined
+        final long greyAgg = mGrey.getContactForRawContact(greyContact);
+        final long redAgg = mRed.getContactForRawContact(redContact);
+        assertEquals(greyAgg, redAgg);
+
+        // Exported vCard shouldn't contain restricted phone
+        mRed.ensureCallingPackage();
+        final Uri aggUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, greyAgg);
+        final Cursor cursor = mRed.resolver.query(aggUri,
+                new String[] { Contacts.LOOKUP_KEY }, null, null, null);
+        assertTrue(cursor.moveToFirst());
+        final String lookupKey = cursor.getString(0);
+        cursor.close();
+
+        // Read vCard into buffer
+        final Uri shareUri = Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, lookupKey);
+        final AssetFileDescriptor file = mRed.resolver.openAssetFileDescriptor(shareUri, "r");
+        final InputStream in = file.createInputStream();
+        final byte[] buf = new byte[in.available()];
+        in.read(buf);
+        in.close();
+        final String card = new String(buf);
+
+        // Make sure that only unrestricted phones appear
+        assertTrue(card.indexOf(PHONE_RED) != -1);
+        assertTrue(card.indexOf(PHONE_GREY) == -1);
     }
 
+    public void testContactsLiveFolder() {
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
+
+        // Protected contact should be omitted from live folder
+        mRed.ensureCallingPackage();
+        final Uri folderUri = Uri.withAppendedPath(ContactsContract.AUTHORITY_URI,
+                "live_folders/contacts_with_phones");
+        final Cursor cursor = mRed.resolver.query(folderUri,
+                new String[] { LiveFolders._ID }, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                final long id = cursor.getLong(0);
+                assertFalse(id == greyContact);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    public void testRestrictedQueryParam() throws Exception {
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
+
+        final Uri greyUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, greyContact);
+        final Uri redUri = greyUri.buildUpon().appendQueryParameter(
+                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY, mRed.packageName).build();
+
+        // When calling normally, we have access to protected
+        mGrey.ensureCallingPackage();
+        EntityIterator iterator = mGrey.resolver.queryEntities(greyUri, null, null, null);
+        while (iterator.hasNext()) {
+            final Entity entity = iterator.next();
+            final long rawContactId = entity.getEntityValues().getAsLong(RawContacts._ID);
+            assertTrue(rawContactId == greyContact);
+        }
+
+        // When calling on behalf of another package, protected is omitted
+        mGrey.ensureCallingPackage();
+        iterator = mGrey.resolver.queryEntities(redUri, null, null, null);
+        while (iterator.hasNext()) {
+            final Entity entity = iterator.next();
+            final long rawContactId = entity.getEntityValues().getAsLong(RawContacts._ID);
+            assertTrue(rawContactId != greyContact);
+        }
+    }
+
+    public void testRestrictedEmailLookupRestricted() {
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyEmail = mGrey.createEmail(greyContact, EMAIL_GREY);
+
+        // Restricted caller should see protected data
+        mGrey.ensureCallingPackage();
+        final Uri lookupUri = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, EMAIL_GREY);
+        final Cursor cursor = mGrey.resolver.query(lookupUri,
+                new String[] { Data._ID }, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                final long dataId = cursor.getLong(0);
+                assertTrue(dataId == greyEmail);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    public void testRestrictedEmailLookupGeneric() {
+        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyEmail = mGrey.createEmail(greyContact, EMAIL_GREY);
+
+        // Generic caller should never see protected data
+        mRed.ensureCallingPackage();
+        final Uri lookupUri = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, EMAIL_GREY);
+        final Cursor cursor = mRed.resolver.query(lookupUri,
+                new String[] { Data._ID }, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                final long dataId = cursor.getLong(0);
+                assertFalse(dataId == greyEmail);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    public void testStatusRestrictedInsertRestrictedQuery() {
+        final long rawContactId = mGrey.createContactWithStatus(true,
+                GENERIC_NAME, EMAIL_GREY, GENERIC_STATUS);
+        final long aggId = mGrey.getContactForRawContact(rawContactId);
+
+        // Restricted query can read restricted status
+        assertStatus(mGrey, aggId, GENERIC_STATUS);
+    }
+
+    public void testStatusRestrictedInsertGenericQuery() {
+        final long rawContactId = mGrey.createContactWithStatus(true,
+                GENERIC_NAME, EMAIL_GREY, GENERIC_STATUS);
+        final long aggId = mGrey.getContactForRawContact(rawContactId);
+
+        // Generic query is denied restricted status
+        assertStatus(mRed, aggId, null);
+    }
+
+    public void testStatusGenericInsertRestrictedQuery() {
+        final long rawContactId = mRed.createContactWithStatus(false,
+                GENERIC_NAME, EMAIL_RED, GENERIC_STATUS);
+        final long aggId = mRed.getContactForRawContact(rawContactId);
+
+        // Restricted query can read generic status
+        assertStatus(mGrey, aggId, GENERIC_STATUS);
+    }
+
+    public void testStatusGenericInsertGenericQuery() {
+        final long rawContactId = mRed.createContactWithStatus(false,
+                GENERIC_NAME, EMAIL_RED, GENERIC_STATUS);
+        final long aggId = mRed.getContactForRawContact(rawContactId);
+
+        // Generic query can read generic status
+        assertStatus(mRed, aggId, GENERIC_STATUS);
+    }
 }
