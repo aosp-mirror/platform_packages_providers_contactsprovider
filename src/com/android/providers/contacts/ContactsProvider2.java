@@ -372,6 +372,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /** Contains Live Folders columns */
     private static final HashMap<String, String> sLiveFoldersProjectionMap;
 
+    // where clause to update the status_updates table
+    private static final String WHERE_CLAUSE_FOR_STATUS_UPDATES_TABLE =
+            StatusUpdatesColumns.DATA_ID + " IN (SELECT Distinct " + StatusUpdates.DATA_ID +
+            " FROM " + Tables.STATUS_UPDATES + " LEFT OUTER JOIN " + Tables.PRESENCE +
+            " ON " + StatusUpdatesColumns.DATA_ID + " = " + StatusUpdates.DATA_ID + " WHERE ";
+
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
     /** Precompiled sql statement for setting a data record to the super primary. */
@@ -2768,8 +2774,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int deleteStatusUpdates(String selection, String[] selectionArgs) {
-        // TODO delete from both tables: presence and status_updates
-        return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
+      // delete from both tables: presence and status_updates
+      // TODO should account type/name be appended to the where clause?
+      if (VERBOSE_LOGGING) {
+          Log.v(TAG, "deleting data from status_updates for " + selection);
+      }
+      mDb.delete(Tables.STATUS_UPDATES, getWhereClauseForStatusUpdatesTable(selection),
+          selectionArgs);
+      return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
     }
 
     private int markRawContactAsDeleted(long rawContactId) {
@@ -2919,6 +2931,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case STATUS_UPDATES: {
+                count = updateStatusUpdate(uri, values, selection, selectionArgs);
+                break;
+            }
+
             default: {
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.update(uri, values, selection, selectionArgs);
@@ -2926,6 +2943,63 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return count;
+    }
+
+    private int updateStatusUpdate(Uri uri, ContentValues values, String selection,
+        String[] selectionArgs) {
+        // update status_updates table, if status is provided
+        // TODO should account type/name be appended to the where clause?
+        int updateCount = 0;
+        ContentValues settableValues = getSettableColumnsForStatusUpdatesTable(values);
+        if (settableValues.size() > 0) {
+          updateCount = mDb.update(Tables.STATUS_UPDATES,
+                    settableValues,
+                    getWhereClauseForStatusUpdatesTable(selection),
+                    selectionArgs);
+        }
+
+        // now update the Presence table
+        settableValues = getSettableColumnsForPresenceTable(values);
+        if (settableValues.size() > 0) {
+          updateCount = mDb.update(Tables.PRESENCE, settableValues,
+                    selection, selectionArgs);
+        }
+        // TODO updateCount is not entirely a valid count of updated rows because 2 tables could
+        // potentially get updated in this method.
+        return updateCount;
+    }
+
+    /**
+     * Build a where clause to select the rows to be updated in status_updates table.
+     */
+    private String getWhereClauseForStatusUpdatesTable(String selection) {
+        mSb.setLength(0);
+        mSb.append(WHERE_CLAUSE_FOR_STATUS_UPDATES_TABLE);
+        mSb.append(selection);
+        mSb.append(")");
+        return mSb.toString();
+    }
+
+    private ContentValues getSettableColumnsForStatusUpdatesTable(ContentValues values) {
+        mValues.clear();
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS, values,
+            StatusUpdates.STATUS);
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_TIMESTAMP, values,
+            StatusUpdates.STATUS_TIMESTAMP);
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_RES_PACKAGE, values,
+            StatusUpdates.STATUS_RES_PACKAGE);
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_LABEL, values,
+            StatusUpdates.STATUS_LABEL);
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_ICON, values,
+            StatusUpdates.STATUS_ICON);
+        return mValues;
+    }
+
+    private ContentValues getSettableColumnsForPresenceTable(ContentValues values) {
+        mValues.clear();
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.PRESENCE, values,
+            StatusUpdates.PRESENCE);
+        return mValues;
     }
 
     private int updateGroups(Uri uri, ContentValues values, String selectionWithId,
