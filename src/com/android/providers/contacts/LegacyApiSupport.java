@@ -20,6 +20,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.ExtensionsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
@@ -637,10 +638,14 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.Phones.TYPE + ", " +
                 Tables.DATA + "." + Phone.LABEL
                         + " AS " + android.provider.Contacts.Phones.LABEL + ", " +
-                PhoneColumns.CONCRETE_NORMALIZED_NUMBER
+                Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.NORMALIZED_NUMBER
                         + " AS " + android.provider.Contacts.Phones.NUMBER_KEY + ", " +
                 peopleColumns +
-                " FROM " + Tables.DATA + DATA_JOINS +
+                " FROM " + Tables.DATA
+                        + " JOIN " + Tables.PHONE_LOOKUP
+                        + " ON (" + Tables.DATA + "._id = "
+                                + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.DATA_ID + ")"
+                        + DATA_JOINS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Phone.CONTENT_ITEM_TYPE + "'"
                         + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
