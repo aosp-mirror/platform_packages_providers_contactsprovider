@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 101;
+    private static final int DATABASE_VERSION = 102;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -657,15 +657,6 @@ import java.util.HashMap;
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
-        db.execSQL("CREATE TRIGGER contacts_times_contacted UPDATE OF " +
-                Contacts.LAST_TIME_CONTACTED + " ON " + Tables.CONTACTS + " " +
-            "BEGIN " +
-                "UPDATE " + Tables.CONTACTS + " SET "
-                    + Contacts.TIMES_CONTACTED + " = " + "" +
-                            "(new." + Contacts.TIMES_CONTACTED + " + 1)"
-                    + " WHERE _id = new._id;" +
-            "END");
-
         db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
                 Contacts.IN_VISIBLE_GROUP + "," +
                 Contacts.DISPLAY_NAME + " COLLATE LOCALIZED" +
@@ -785,67 +776,6 @@ import java.util.HashMap;
                 Data.DATA1 +
         ");");
 
-        /**
-         * Automatically delete Data rows when a raw contact is deleted.
-         */
-        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_deleted "
-                + "   BEFORE DELETE ON " + Tables.RAW_CONTACTS
-                + " BEGIN "
-                + "   DELETE FROM " + Tables.DATA
-                + "     WHERE " + Data.RAW_CONTACT_ID
-                                + "=OLD." + RawContacts._ID + ";"
-                + "   DELETE FROM " + Tables.PHONE_LOOKUP
-                + "     WHERE " + PhoneLookupColumns.RAW_CONTACT_ID
-                                + "=OLD." + RawContacts._ID + ";"
-                + "   DELETE FROM " + Tables.NAME_LOOKUP
-                + "     WHERE " + NameLookupColumns.RAW_CONTACT_ID
-                                + "=OLD." + RawContacts._ID + ";"
-                + "   DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS
-                + "     WHERE " + AggregationExceptions.RAW_CONTACT_ID1
-                                + "=OLD." + RawContacts._ID
-                + "        OR " + AggregationExceptions.RAW_CONTACT_ID2
-                                + "=OLD." + RawContacts._ID + ";"
-                + "   DELETE FROM " + Tables.CONTACTS
-                + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
-                + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
-                + "            WHERE " + RawContacts.CONTACT_ID + "=OLD." + RawContacts.CONTACT_ID
-                + "           )=1;"
-                + " END");
-
-        /**
-         * Triggers that update {@link RawContacts#VERSION} when the contact is
-         * marked for deletion or any time a data row is inserted, updated or
-         * deleted.
-         */
-        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_marked_deleted "
-                + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
-                + " BEGIN "
-                + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET "
-                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1 "
-                + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID
-                + "       AND NEW." + RawContacts.DELETED + "!= OLD." + RawContacts.DELETED + ";"
-                + " END");
-
-        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated BEFORE UPDATE ON " + Tables.DATA
-                + " BEGIN "
-                + "   UPDATE " + Tables.DATA
-                + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
-                + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
-                + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " +	RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
-                + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
-                + " END");
-
-        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
-                + " BEGIN "
-                + "   UPDATE " + Tables.RAW_CONTACTS
-                + "     SET " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
-                + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
-                + "   DELETE FROM " + Tables.PHONE_LOOKUP
-                + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
-                + " END");
-
         // Private phone numbers table used for lookup
         db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
                 PhoneLookupColumns.DATA_ID
@@ -923,15 +853,6 @@ import java.util.HashMap;
                 Groups.ACCOUNT_NAME +
         ");");
 
-        db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_updated1 "
-                + "   BEFORE UPDATE ON " + Tables.GROUPS
-                + " BEGIN "
-                + "   UPDATE " + Tables.GROUPS
-                + "     SET "
-                +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1"
-                + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
-                + " END");
-
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
                 AggregationExceptionColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AggregationExceptions.TYPE + " INTEGER NOT NULL, " +
@@ -1005,6 +926,7 @@ import java.util.HashMap;
         createContactsViews(db);
         createGroupsView(db);
         createContactEntitiesView(db);
+        createContactsTriggers(db);
 
         loadNicknameLookupTable(db);
 
@@ -1023,6 +945,94 @@ import java.util.HashMap;
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
+    }
+
+    private void createContactsTriggers(SQLiteDatabase db) {
+
+        /*
+         * Automatically delete Data rows when a raw contact is deleted.
+         */
+        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.RAW_CONTACTS + "_deleted;");
+        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_deleted "
+                + "   BEFORE DELETE ON " + Tables.RAW_CONTACTS
+                + " BEGIN "
+                + "   DELETE FROM " + Tables.DATA
+                + "     WHERE " + Data.RAW_CONTACT_ID
+                                + "=OLD." + RawContacts._ID + ";"
+                + "   DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS
+                + "     WHERE " + AggregationExceptions.RAW_CONTACT_ID1
+                                + "=OLD." + RawContacts._ID
+                + "        OR " + AggregationExceptions.RAW_CONTACT_ID2
+                                + "=OLD." + RawContacts._ID + ";"
+                + "   DELETE FROM " + Tables.CONTACTS
+                + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
+                + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
+                + "            WHERE " + RawContacts.CONTACT_ID + "=OLD." + RawContacts.CONTACT_ID
+                + "           )=1;"
+                + " END");
+
+
+        db.execSQL("DROP TRIGGER IF EXISTS contacts_times_contacted;");
+        db.execSQL("CREATE TRIGGER contacts_times_contacted UPDATE OF " +
+                Contacts.LAST_TIME_CONTACTED + " ON " + Tables.CONTACTS + " " +
+            "BEGIN " +
+                "UPDATE " + Tables.CONTACTS + " SET "
+                    + Contacts.TIMES_CONTACTED + " = " + "" +
+                            "(new." + Contacts.TIMES_CONTACTED + " + 1)"
+                    + " WHERE _id = new._id;" +
+            "END");
+
+        /*
+         * Triggers that update {@link RawContacts#VERSION} when the contact is
+         * marked for deletion or any time a data row is inserted, updated or
+         * deleted.
+         */
+        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.RAW_CONTACTS + "_marked_deleted;");
+        db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_marked_deleted "
+                + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
+                + " BEGIN "
+                + "   UPDATE " + Tables.RAW_CONTACTS
+                + "     SET "
+                +         RawContacts.VERSION + "=OLD." + RawContacts.VERSION + "+1 "
+                + "     WHERE " + RawContacts._ID + "=OLD." + RawContacts._ID
+                + "       AND NEW." + RawContacts.DELETED + "!= OLD." + RawContacts.DELETED + ";"
+                + " END");
+
+        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.DATA + "_updated;");
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated BEFORE UPDATE ON " + Tables.DATA
+                + " BEGIN "
+                + "   UPDATE " + Tables.DATA
+                + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
+                + "     WHERE " + Data._ID + "=OLD." + Data._ID + ";"
+                + "   UPDATE " + Tables.RAW_CONTACTS
+                + "     SET " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
+                + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
+                + " END");
+
+        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.DATA + "_deleted;");
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_deleted BEFORE DELETE ON " + Tables.DATA
+                + " BEGIN "
+                + "   UPDATE " + Tables.RAW_CONTACTS
+                + "     SET " + RawContacts.VERSION + "=" + RawContacts.VERSION + "+1 "
+                + "     WHERE " + RawContacts._ID + "=OLD." + Data.RAW_CONTACT_ID + ";"
+                + "   DELETE FROM " + Tables.PHONE_LOOKUP
+                + "     WHERE " + PhoneLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
+                + "   DELETE FROM " + Tables.STATUS_UPDATES
+                + "     WHERE " + StatusUpdatesColumns.DATA_ID + "=OLD." + Data._ID + ";"
+                + "   DELETE FROM " + Tables.NAME_LOOKUP
+                + "     WHERE " + NameLookupColumns.DATA_ID + "=OLD." + Data._ID + ";"
+                + " END");
+
+
+        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.GROUPS + "_updated1;");
+        db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_updated1 "
+                + "   BEFORE UPDATE ON " + Tables.GROUPS
+                + " BEGIN "
+                + "   UPDATE " + Tables.GROUPS
+                + "     SET "
+                +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1"
+                + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
+                + " END");
     }
 
     private static void createContactsViews(SQLiteDatabase db) {
@@ -1304,6 +1314,11 @@ import java.util.HashMap;
                     "mimetypes_mimetype_index", "50 1 1");
 
             createContactsViews(db);
+            oldVersion++;
+        }
+
+        if (oldVersion == 101) {
+            createContactsTriggers(db);
             oldVersion++;
         }
 
