@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 102;
+    private static final int DATABASE_VERSION = 103;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1319,6 +1319,11 @@ import java.util.HashMap;
 
         if (oldVersion == 101) {
             createContactsTriggers(db);
+            oldVersion++;
+        }
+
+        if (oldVersion == 102) {
+            LegacyApiSupport.createDatabase(db);
             oldVersion++;
         }
 
