@@ -65,6 +65,9 @@ public class ContactMatcher {
     // Minimum edit distance between two names to be considered an approximate match
     public static final float APPROXIMATE_MATCH_THRESHOLD = 0.82f;
 
+    // Minimum edit distance between two email ids to be considered an approximate match
+    public static final float APPROXIMATE_MATCH_THRESHOLD_FOR_EMAIL = 0.95f;
+
     /**
      * Name matching scores: a matrix by name type vs. candidate lookup type.
      * For example, if the name type is "full name" while we are looking for a
@@ -289,7 +292,12 @@ public class ContactMatcher {
 
         int score;
         float distance = nameDistance.getDistance(decodedCandidateName, decodedName);
-        if (distance > APPROXIMATE_MATCH_THRESHOLD) {
+        boolean emailBased = candidateNameType == NameLookupType.EMAIL_BASED_NICKNAME
+                || nameType == NameLookupType.EMAIL_BASED_NICKNAME;
+        float threshold = emailBased
+                ? APPROXIMATE_MATCH_THRESHOLD_FOR_EMAIL
+                : APPROXIMATE_MATCH_THRESHOLD;
+        if (distance > threshold) {
             score = (int)(minScore +  (maxScore - minScore) * (1.0f - distance));
         } else {
             score = 0;

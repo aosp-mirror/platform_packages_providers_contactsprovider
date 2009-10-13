@@ -524,11 +524,11 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         // Create two contacts that would not be aggregated because of name mismatch
         long rawContactId1 = createRawContact();
         insertStructuredName(rawContactId1, "Bob", null);
-        insertEmail(rawContactId1, "incredible2004@android.com");
+        insertEmail(rawContactId1, "incredible@android.com");
 
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Lucius", "Best");
-        insertEmail(rawContactId2, "incrediball@androidd.com");
+        insertEmail(rawContactId2, "incrediball@android.com");
 
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
