@@ -2882,7 +2882,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     count = updateRawContacts(values, RawContacts._ID + "=" + rawContactId
                                     + " AND(" + selection + ")", selectionArgs);
                 } else {
-                    count = updateRawContact(rawContactId, values);
+                    count = updateRawContacts(values, RawContacts._ID + "=" + rawContactId, null);
                 }
                 break;
             }
