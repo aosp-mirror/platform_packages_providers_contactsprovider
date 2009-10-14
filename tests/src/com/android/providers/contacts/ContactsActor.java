@@ -24,6 +24,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
@@ -33,12 +34,17 @@ import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
 import android.test.mock.MockPackageManager;
+import android.test.mock.MockResources;
+import android.util.Log;
+import android.util.TypedValue;
 
 import java.util.HashMap;
 
@@ -108,6 +114,7 @@ public class ContactsActor {
         private final String mReportedPackageName;
         private final RestrictionMockPackageManager mPackageManager;
         private final ContentResolver mResolver;
+        private final Resources mRes;
 
         /**
          * Create a {@link Context} under the given package name.
@@ -117,11 +124,14 @@ public class ContactsActor {
             mOverallContext = overallContext;
             mReportedPackageName = reportedPackageName;
             mResolver = resolver;
+
             mPackageManager = new RestrictionMockPackageManager();
             mPackageManager.addPackage(1000, PACKAGE_GREY);
             mPackageManager.addPackage(2000, PACKAGE_RED);
             mPackageManager.addPackage(3000, PACKAGE_GREEN);
             mPackageManager.addPackage(4000, PACKAGE_BLUE);
+
+            mRes = new RestrictionMockResources(overallContext.getResources());
         }
 
         @Override
@@ -136,13 +146,63 @@ public class ContactsActor {
 
         @Override
         public Resources getResources() {
-            return mOverallContext.getResources();
+            return mRes;
         }
 
         @Override
         public ContentResolver getContentResolver() {
             return mResolver;
         }
+    }
+
+    private static class RestrictionMockResources extends MockResources {
+        private static final String UNRESTRICTED = "unrestricted_packages";
+        private static final int UNRESTRICTED_ID = 1024;
+
+        private static final String[] UNRESTRICTED_LIST = new String[] {
+            PACKAGE_GREY
+        };
+
+        private final Resources mRes;
+
+        public RestrictionMockResources(Resources res) {
+            mRes = res;
+        }
+
+        @Override
+        public int getIdentifier(String name, String defType, String defPackage) {
+            if (UNRESTRICTED.equals(name)) {
+                return UNRESTRICTED_ID;
+            } else {
+                return mRes.getIdentifier(name, defType, defPackage);
+            }
+        }
+
+        @Override
+        public String[] getStringArray(int id) throws NotFoundException {
+            if (id == UNRESTRICTED_ID) {
+                return UNRESTRICTED_LIST;
+            } else {
+                return mRes.getStringArray(id);
+            }
+        }
+
+        @Override
+        public void getValue(int id, TypedValue outValue, boolean resolveRefs)
+                throws NotFoundException {
+            mRes.getValue(id, outValue, resolveRefs);
+        }
+
+        @Override
+        public String getString(int id) throws NotFoundException {
+            return mRes.getString(id);
+        }
+    }
+
+    private static String sCallingPackage = null;
+
+    void ensureCallingPackage() {
+        sCallingPackage = this.packageName;
     }
 
     /**
@@ -155,6 +215,9 @@ public class ContactsActor {
         private final HashMap<Integer, String> mForward = new HashMap<Integer, String>();
         private final HashMap<String, Integer> mReverse = new HashMap<String, Integer>();
 
+        public RestrictionMockPackageManager() {
+        }
+
         /**
          * Add a UID-to-package mapping, which is then stored internally.
          */
@@ -165,7 +228,7 @@ public class ContactsActor {
 
         @Override
         public String[] getPackagesForUid(int uid) {
-            return new String[] { mForward.get(uid) };
+            return new String[] { sCallingPackage };
         }
 
         @Override
@@ -178,12 +241,14 @@ public class ContactsActor {
     }
 
     public long createContact(boolean isRestricted, String name) {
+        ensureCallingPackage();
         long contactId = createContact(isRestricted);
         createName(contactId, name);
         return contactId;
     }
 
     public long createContact(boolean isRestricted) {
+        ensureCallingPackage();
         final ContentValues values = new ContentValues();
         if (isRestricted) {
             values.put(RawContacts.IS_RESTRICTED, 1);
@@ -193,7 +258,16 @@ public class ContactsActor {
         return ContentUris.parseId(contactUri);
     }
 
+    public long createContactWithStatus(boolean isRestricted, String name, String address,
+            String status) {
+        final long rawContactId = createContact(isRestricted, name);
+        final long dataId = createEmail(rawContactId, address);
+        createStatus(dataId, status);
+        return rawContactId;
+    }
+
     public long createName(long contactId, String name) {
+        ensureCallingPackage();
         final ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, contactId);
         values.put(Data.IS_PRIMARY, 1);
@@ -207,6 +281,7 @@ public class ContactsActor {
     }
 
     public long createPhone(long contactId, String phoneNumber) {
+        ensureCallingPackage();
         final ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, contactId);
         values.put(Data.IS_PRIMARY, 1);
@@ -221,11 +296,36 @@ public class ContactsActor {
         return ContentUris.parseId(dataUri);
     }
 
+    public long createEmail(long contactId, String address) {
+        ensureCallingPackage();
+        final ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, contactId);
+        values.put(Data.IS_PRIMARY, 1);
+        values.put(Data.IS_SUPER_PRIMARY, 1);
+        values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        values.put(Email.TYPE, Email.TYPE_HOME);
+        values.put(Email.DATA, address);
+        Uri insertUri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                contactId), RawContacts.Data.CONTENT_DIRECTORY);
+        Uri dataUri = resolver.insert(insertUri, values);
+        return ContentUris.parseId(dataUri);
+    }
+
+    public long createStatus(long dataId, String status) {
+        ensureCallingPackage();
+        final ContentValues values = new ContentValues();
+        values.put(StatusUpdates.DATA_ID, dataId);
+        values.put(StatusUpdates.STATUS, status);
+        Uri dataUri = resolver.insert(StatusUpdates.CONTENT_URI, values);
+        return ContentUris.parseId(dataUri);
+    }
+
     public void updateException(String packageProvider, String packageClient, boolean allowAccess) {
         throw new UnsupportedOperationException("RestrictionExceptions are hard-coded");
     }
 
     public long getContactForRawContact(long rawContactId) {
+        ensureCallingPackage();
         Uri contactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         final Cursor cursor = resolver.query(contactUri, Projections.PROJ_RAW_CONTACTS, null,
                 null, null);
@@ -239,6 +339,7 @@ public class ContactsActor {
     }
 
     public int getDataCountForContact(long contactId) {
+        ensureCallingPackage();
         Uri contactUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 contactId), Contacts.Data.CONTENT_DIRECTORY);
         final Cursor cursor = resolver.query(contactUri, Projections.PROJ_ID, null, null,
@@ -248,7 +349,19 @@ public class ContactsActor {
         return count;
     }
 
+    public int getDataCountForRawContact(long rawContactId) {
+        ensureCallingPackage();
+        Uri contactUri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                rawContactId), Contacts.Data.CONTENT_DIRECTORY);
+        final Cursor cursor = resolver.query(contactUri, Projections.PROJ_ID, null, null,
+                null);
+        final int count = cursor.getCount();
+        cursor.close();
+        return count;
+    }
+
     public void setSuperPrimaryPhone(long dataId) {
+        ensureCallingPackage();
         final ContentValues values = new ContentValues();
         values.put(Data.IS_PRIMARY, 1);
         values.put(Data.IS_SUPER_PRIMARY, 1);
@@ -257,6 +370,7 @@ public class ContactsActor {
     }
 
     public long createGroup(String groupName) {
+        ensureCallingPackage();
         final ContentValues values = new ContentValues();
         values.put(ContactsContract.Groups.RES_PACKAGE, packageName);
         values.put(ContactsContract.Groups.TITLE, groupName);
@@ -265,6 +379,7 @@ public class ContactsActor {
     }
 
     public long createGroupMembership(long rawContactId, long groupId) {
+        ensureCallingPackage();
         final ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE);
