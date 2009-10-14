@@ -894,11 +894,53 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.CONTACT_STATUS, "Available");
         assertStoredValuesWithProjection(contactUri, values);
 
-        mResolver.delete(StatusUpdates.CONTENT_URI, StatusUpdates.DATA_ID + "=" + statusId, null);
-        values.putNull(Contacts.CONTACT_PRESENCE);
+        // update status_updates table to set new values for
+        //     status_updates.status
+        //     status_updates.status_ts
+        //     presence
+        long updatedTs = 200;
+        String testUpdate = "test_update";
+        String selection = StatusUpdates.DATA_ID + "=" + statusId;
+        values.clear();
+        values.put(StatusUpdates.STATUS_TIMESTAMP, updatedTs);
+        values.put(StatusUpdates.STATUS, testUpdate);
+        values.put(StatusUpdates.PRESENCE, "presence_test");
+        mResolver.update(StatusUpdates.CONTENT_URI, values,
+                StatusUpdates.DATA_ID + "=" + statusId, null);
+        assertStoredValuesWithProjection(StatusUpdates.CONTENT_URI, values);
 
-        // Latest custom status update stays on the phone
-        values.put(Contacts.CONTACT_STATUS, "Available");
+        // update status_updates table to set new values for columns in status_updates table ONLY
+        // i.e., no rows in presence table are to be updated.
+        updatedTs = 300;
+        testUpdate = "test_update_new";
+        selection = StatusUpdates.DATA_ID + "=" + statusId;
+        values.clear();
+        values.put(StatusUpdates.STATUS_TIMESTAMP, updatedTs);
+        values.put(StatusUpdates.STATUS, testUpdate);
+        mResolver.update(StatusUpdates.CONTENT_URI, values,
+                StatusUpdates.DATA_ID + "=" + statusId, null);
+        // make sure the presence column value is still the old value
+        values.put(StatusUpdates.PRESENCE, "presence_test");
+        assertStoredValuesWithProjection(StatusUpdates.CONTENT_URI, values);
+
+        // update status_updates table to set new values for columns in presence table ONLY
+        // i.e., no rows in status_updates table are to be updated.
+        selection = StatusUpdates.DATA_ID + "=" + statusId;
+        values.clear();
+        values.put(StatusUpdates.PRESENCE, "presence_test_new");
+        mResolver.update(StatusUpdates.CONTENT_URI, values,
+                StatusUpdates.DATA_ID + "=" + statusId, null);
+        // make sure the status_updates table is not updated
+        values.put(StatusUpdates.STATUS_TIMESTAMP, updatedTs);
+        values.put(StatusUpdates.STATUS, testUpdate);
+        assertStoredValuesWithProjection(StatusUpdates.CONTENT_URI, values);
+
+        // effect "delete status_updates" operation and expect the following
+        //   data deleted from status_updates table
+        //   presence set to null
+        mResolver.delete(StatusUpdates.CONTENT_URI, StatusUpdates.DATA_ID + "=" + statusId, null);
+        values.clear();
+        values.putNull(Contacts.CONTACT_PRESENCE);
         assertStoredValuesWithProjection(contactUri, values);
     }
 
