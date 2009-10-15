@@ -2764,6 +2764,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public int deleteRawContact(long rawContactId, boolean callerIsSyncAdapter) {
+        mContactAggregator.invalidateAggregationExceptionCache();
         if (callerIsSyncAdapter) {
             mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
@@ -3266,6 +3267,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     exceptionValues);
         }
 
+        mContactAggregator.invalidateAggregationExceptionCache();
         mContactAggregator.markForAggregation(rawContactId1);
         mContactAggregator.markForAggregation(rawContactId2);
 
