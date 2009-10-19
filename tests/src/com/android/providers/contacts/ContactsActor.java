@@ -197,6 +197,16 @@ public class ContactsActor {
         public String getString(int id) throws NotFoundException {
             return mRes.getString(id);
         }
+
+        @Override
+        public String getString(int id, Object... formatArgs) throws NotFoundException {
+            return mRes.getString(id, formatArgs);
+        }
+
+        @Override
+        public CharSequence getText(int id) throws NotFoundException {
+            return mRes.getText(id);
+        }
     }
 
     private static String sCallingPackage = null;
