@@ -22,6 +22,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.suitebuilder.annotation.LargeTest;
 
@@ -364,6 +365,20 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertStructuredName(rawContactId2, "Shawn", "Johnson");
         insertNickname(rawContactId2, "Elastigirl");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testNonAggregationOnOrganization() {
+        ContentValues values = new ContentValues();
+        values.put(Organization.TITLE, "Monsters, Inc");
+        long rawContactId1 = createRawContact();
+        insertOrganization(rawContactId1, values);
+        insertNickname(rawContactId1, "Boo");
+
+        long rawContactId2 = createRawContact();
+        insertOrganization(rawContactId2, values);
+        insertNickname(rawContactId2, "Rendall");   // To force reaggregation
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
