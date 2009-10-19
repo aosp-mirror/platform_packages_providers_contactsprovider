@@ -1413,6 +1413,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactId);
                 phoneValues.put(PhoneLookupColumns.DATA_ID, dataId);
                 phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
+                phoneValues.put(PhoneLookupColumns.MIN_MATCH,
+                        PhoneNumberUtils.toCallerIDMinMatch(number));
+
                 db.replace(Tables.PHONE_LOOKUP, null, phoneValues);
             } else {
                 db.delete(Tables.PHONE_LOOKUP, PhoneLookupColumns.DATA_ID + "=" + dataId, null);

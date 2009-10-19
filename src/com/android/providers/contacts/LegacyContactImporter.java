@@ -814,12 +814,14 @@ public class LegacyContactImporter {
         String INSERT_SQL = "INSERT INTO " + Tables.PHONE_LOOKUP + "(" +
                 PhoneLookupColumns.RAW_CONTACT_ID + "," +
                 PhoneLookupColumns.DATA_ID + "," +
-                PhoneLookupColumns.NORMALIZED_NUMBER +
-         ") VALUES (?,?,?)";
+                PhoneLookupColumns.NORMALIZED_NUMBER + "," +
+                PhoneLookupColumns.MIN_MATCH +
+         ") VALUES (?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int DATA_ID = 2;
         int NORMALIZED_NUMBER = 3;
+        int MIN_MATCH = 4;
     }
 
     private interface HasPhoneNumberUpdate {
@@ -868,6 +870,8 @@ public class LegacyContactImporter {
             phoneLookupInsert.bindLong(PhoneLookupInsert.RAW_CONTACT_ID, id);
             phoneLookupInsert.bindLong(PhoneLookupInsert.DATA_ID, dataId);
             phoneLookupInsert.bindString(PhoneLookupInsert.NORMALIZED_NUMBER, normalizedNumber);
+            phoneLookupInsert.bindString(PhoneLookupInsert.MIN_MATCH,
+                    PhoneNumberUtils.toCallerIDMinMatch(number));
             insert(phoneLookupInsert);
 
             if (lastUpdatedContact != id) {
