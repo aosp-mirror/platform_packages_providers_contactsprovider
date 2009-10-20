@@ -1930,7 +1930,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "flushTransactionChanges");
         }
-        for (long rawContactId : mInsertedRawContacts) {
+        for (long rawContactId : mInsertedRawContacts.keySet()) {
             updateRawContactDisplayName(mDb, rawContactId);
             mContactAggregator.onRawContactInsert(mDb, rawContactId);
         }
