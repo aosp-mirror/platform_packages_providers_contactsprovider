@@ -528,7 +528,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     /**
      * Creates a new contact based on the given raw contact.  Does not perform aggregation.
      */
-    public void insertContact(SQLiteDatabase db, long rawContactId) {
+    public void onRawContactInsert(SQLiteDatabase db, long rawContactId) {
         ContentValues contactValues = new ContentValues();
         contactValues.put(Contacts.DISPLAY_NAME, "");
         contactValues.put(Contacts.IN_VISIBLE_GROUP, false);
