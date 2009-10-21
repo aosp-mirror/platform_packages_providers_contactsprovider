@@ -241,22 +241,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public static final int CONTACT_ID = 2;
     }
 
-    private interface DisplayNameQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
-
-        public static final String[] COLUMNS = new String[] {
-            MimetypesColumns.MIMETYPE,
-            Data.IS_PRIMARY,
-            Data.DATA1,
-            Organization.TITLE,
-        };
-
-        public static final int MIMETYPE = 0;
-        public static final int IS_PRIMARY = 1;
-        public static final int DATA = 2;
-        public static final int TITLE = 3;
-    }
-
     private interface DataDeleteQuery {
         public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
 
@@ -976,41 +960,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         protected void fixRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
-            String bestDisplayName = null;
-            int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
-
-            Cursor c = db.query(DisplayNameQuery.TABLE, DisplayNameQuery.COLUMNS,
-                    Data.RAW_CONTACT_ID + "=" + rawContactId, null, null, null, null);
-            try {
-                while (c.moveToNext()) {
-                    String mimeType = c.getString(DisplayNameQuery.MIMETYPE);
-
-                    // Display name is at DATA1 in all type.  This is ensured in the constructor.
-                    String name = c.getString(DisplayNameQuery.DATA);
-                    if (TextUtils.isEmpty(name)
-                            && Organization.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                        name = c.getString(DisplayNameQuery.TITLE);
-                    }
-                    boolean primary = StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)
-                        || (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
-
-                    if (name != null) {
-                        Integer source = sDisplayNameSources.get(mimeType);
-                        if (source != null
-                                && (source > bestDisplayNameSource
-                                        || (source == bestDisplayNameSource && primary))) {
-                            bestDisplayNameSource = source;
-                            bestDisplayName = name;
-                        }
-                    }
-                }
-
-            } finally {
-                c.close();
-            }
-
-            setDisplayName(rawContactId, bestDisplayName, bestDisplayNameSource);
             if (!isNewRawContact(rawContactId)) {
+                updateRawContactDisplayName(db, rawContactId);
                 mContactAggregator.updateDisplayName(db, rawContactId);
             }
         }
@@ -1974,7 +1925,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "flushTransactionChanges");
         }
         for (long rawContactId : mInsertedRawContacts) {
-            mContactAggregator.insertContact(mDb, rawContactId);
+            updateRawContactDisplayName(mDb, rawContactId);
+            mContactAggregator.onRawContactInsert(mDb, rawContactId);
         }
 
         String ids;
@@ -2299,6 +2251,63 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         } finally {
             c.close();
         }
+    }
+
+    private interface DisplayNameQuery {
+        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
+
+        public static final String[] COLUMNS = new String[] {
+            MimetypesColumns.MIMETYPE,
+            Data.IS_PRIMARY,
+            Data.DATA1,
+            Organization.TITLE,
+        };
+
+        public static final int MIMETYPE = 0;
+        public static final int IS_PRIMARY = 1;
+        public static final int DATA = 2;
+        public static final int TITLE = 3;
+    }
+
+    /**
+     * Updates a raw contact display name based on data rows, e.g. structured name,
+     * organization, email etc.
+     */
+    private void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
+        String bestDisplayName = null;
+        int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
+
+        Cursor c = db.query(DisplayNameQuery.TABLE, DisplayNameQuery.COLUMNS,
+                Data.RAW_CONTACT_ID + "=" + rawContactId, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                String mimeType = c.getString(DisplayNameQuery.MIMETYPE);
+
+                // Display name is at DATA1 in all type.  This is ensured in the constructor.
+                String name = c.getString(DisplayNameQuery.DATA);
+                if (TextUtils.isEmpty(name)
+                        && Organization.CONTENT_ITEM_TYPE.equals(mimeType)) {
+                    name = c.getString(DisplayNameQuery.TITLE);
+                }
+                boolean primary = StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)
+                    || (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
+
+                if (name != null) {
+                    Integer source = sDisplayNameSources.get(mimeType);
+                    if (source != null
+                            && (source > bestDisplayNameSource
+                                    || (source == bestDisplayNameSource && primary))) {
+                        bestDisplayNameSource = source;
+                        bestDisplayName = name;
+                    }
+                }
+            }
+
+        } finally {
+            c.close();
+        }
+
+        setDisplayName(rawContactId, bestDisplayName, bestDisplayNameSource);
     }
 
     /**

@@ -18,8 +18,11 @@ package com.android.providers.contacts;
 
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.google.android.collect.Lists;
 
 import android.accounts.Account;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
@@ -677,6 +680,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(nameUri, values, null, null);
 
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "Dog");
+    }
+
+    public void testInsertDataWithContentProviderOperations() throws Exception {
+        ContentProviderOperation cpo1 = ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
+                .withValues(new ContentValues())
+                .build();
+        ContentProviderOperation cpo2 = ContentProviderOperation.newInsert(Data.CONTENT_URI)
+                .withValueBackReference(Data.RAW_CONTACT_ID, 0)
+                .withValue(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE)
+                .withValue(StructuredName.GIVEN_NAME, "John")
+                .withValue(StructuredName.FAMILY_NAME, "Doe")
+                .build();
+        ContentProviderResult[] results =
+                mResolver.applyBatch(ContactsContract.AUTHORITY, Lists.newArrayList(cpo1, cpo2));
+        long contactId = queryContactId(ContentUris.parseId(results[0].uri));
+        Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "John Doe");
     }
 
     public void testSendToVoicemailDefault() {
