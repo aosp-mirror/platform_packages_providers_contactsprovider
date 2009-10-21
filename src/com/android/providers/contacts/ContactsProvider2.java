@@ -4878,7 +4878,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Read all known common nicknames from the database and populate a Bloom
      * filter using the corresponding hash codes. The idea is to eliminate most
      * of unnecessary database lookups for nicknames. Given a name, we will take
-     * its hash code and see it is set in the Bloom filter. If not, we will know
+     * its hash code and see if it is set in the Bloom filter. If not, we will know
      * that the name is not in the database. If it is, we still need to run a
      * query.
      * <p>

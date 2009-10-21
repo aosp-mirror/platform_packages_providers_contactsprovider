@@ -21,7 +21,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceC
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DisplayNameSources;
-import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
@@ -30,25 +29,19 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
-import android.text.util.Rfc822Token;
-import android.text.util.Rfc822Tokenizer;
 import android.util.EventLog;
 import android.util.Log;
 
@@ -70,57 +63,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private static final String TAG = "ContactAggregator";
 
-    private interface DataMimetypeQuery {
-
-        // Data mime types used in the contact matching algorithm
-        String MIMETYPE_SELECTION_IN_CLAUSE = MimetypesColumns.MIMETYPE + " IN ('"
-                + Email.CONTENT_ITEM_TYPE + "','"
-                + Nickname.CONTENT_ITEM_TYPE + "','"
-                + Phone.CONTENT_ITEM_TYPE + "','"
-                + StructuredName.CONTENT_ITEM_TYPE + "')";
-
-        String[] COLUMNS = new String[] {
-                MimetypesColumns.MIMETYPE, Data.DATA1
-        };
-
-        int MIMETYPE = 0;
-        int DATA1 = 1;
-    }
-
-    private interface DataContactIdQuery {
-        String TABLE = Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS;
-
-        String[] COLUMNS = new String[] {
-                Data.DATA1, RawContacts.CONTACT_ID
-        };
-
-        int DATA1 = 0;
-        int CONTACT_ID = 1;
-    }
-
-    private interface NameLookupQuery {
-        String TABLE = Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS;
-
-        String[] COLUMNS = new String[] {
-                RawContacts.CONTACT_ID, NameLookupColumns.NORMALIZED_NAME,
-                NameLookupColumns.NAME_TYPE
-        };
-
-        int CONTACT_ID = 0;
-        int NORMALIZED_NAME = 1;
-        int NAME_TYPE = 2;
-    }
-
-    private interface EmailLookupQuery {
-        String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
-
-        String[] COLUMNS = new String[] {
-            RawContacts.CONTACT_ID
-        };
-
-        int CONTACT_ID = 0;
-    }
-
     private interface ContactIdQuery {
         String TABLE = Tables.CONTACTS;
 
@@ -131,12 +73,15 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         int _ID = 0;
     }
 
+    private static final String STRUCTURED_NAME_BASED_LOOKUP_SQL =
+            NameLookupColumns.NAME_TYPE + " IN ("
+                    + NameLookupType.NAME_EXACT + ","
+                    + NameLookupType.NAME_VARIANT + ","
+                    + NameLookupType.NAME_COLLATION_KEY + ")";
+
     private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
     private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
     private static final int COL_CONTACT_ID = 0;
-
-    private static final int MODE_AGGREGATION = 0;
-    private static final int MODE_SUGGESTIONS = 1;
 
     /**
      * When yielding the transaction to another thread, sleep for this many milliseconds
@@ -156,10 +101,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     // If we encounter more than this many contacts with matching names, aggregate only this many
     private static final int PRIMARY_HIT_LIMIT = 15;
+    private static final String PRIMARY_HIT_LIMIT_STRING = String.valueOf(PRIMARY_HIT_LIMIT);
 
     // If we encounter more than this many contacts with matching phone number or email,
     // don't attempt to aggregate - this is likely an error or a shared corporate data element.
     private static final int SECONDARY_HIT_LIMIT = 20;
+    private static final String SECONDARY_HIT_LIMIT_STRING = String.valueOf(SECONDARY_HIT_LIMIT);
 
     // If we encounter more than this many contacts with matching name during aggregation
     // suggestion lookup, ignore the remaining results.
@@ -190,6 +137,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private SQLiteStatement mMarkAggregatedUpdate;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
+
+    private String[] mSelectionArgs1 = new String[1];
+    private String[] mSelectionArgs2 = new String[2];
+    private String[] mSelectionArgs3 = new String[3];
+    private long mMimeTypeIdEmail;
+    private long mMimeTypeIdPhone;
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -230,27 +183,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         public void clear() {
             mCount = 0;
-        }
-    }
-
-    private class AggregationNameLookupBuilder extends NameLookupBuilder {
-
-        private final MatchCandidateList mCandidates;
-
-        public AggregationNameLookupBuilder(NameSplitter splitter, MatchCandidateList candidates) {
-            super(splitter);
-            mCandidates = candidates;
-        }
-
-        @Override
-        protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
-                String name) {
-            mCandidates.add(name, lookupType);
-        }
-
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            return mContactsProvider.getCommonNicknameClusters(normalizedName);
         }
     }
 
@@ -347,6 +279,9 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 "UPDATE " + Tables.PRESENCE +
                 " SET " + PresenceColumns.CONTACT_ID + "=?" +
                 " WHERE " + PresenceColumns.RAW_CONTACT_ID + "=?");
+
+        mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -881,17 +816,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private long pickBestMatchBasedOnData(SQLiteDatabase db, long rawContactId,
             MatchCandidateList candidates, ContactMatcher matcher) {
 
-        updateMatchScoresBasedOnDataMatches(db, rawContactId, MODE_AGGREGATION, candidates, matcher);
-
-        // See if we have already found a good match based on name matches alone
-        long bestMatch = matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_PRIMARY);
+        // Find good matches based on name alone
+        long bestMatch = updateMatchScoresBasedOnDataMatches(db, rawContactId, candidates, matcher);
         if (bestMatch == -1) {
             // We haven't found a good match on name, see if we have any matches on phone, email etc
-            bestMatch = pickBestMatchBasedOnSecondaryData(db, candidates, matcher);
+            bestMatch = pickBestMatchBasedOnSecondaryData(db, rawContactId, candidates, matcher);
         }
 
         return bestMatch;
     }
+
 
     /**
      * Picks the best matching contact based on secondary data matches.  The method loads
@@ -899,12 +833,14 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      * matching.
      */
     private long pickBestMatchBasedOnSecondaryData(SQLiteDatabase db,
-            MatchCandidateList candidates, ContactMatcher matcher) {
+            long rawContactId, MatchCandidateList candidates, ContactMatcher matcher) {
         List<Long> secondaryContactIds = matcher.prepareSecondaryMatchCandidates(
                 ContactMatcher.SCORE_THRESHOLD_PRIMARY);
         if (secondaryContactIds == null || secondaryContactIds.size() > SECONDARY_HIT_LIMIT) {
             return -1;
         }
+
+        loadNameMatchCandidates(db, rawContactId, candidates, true);
 
         StringBuilder selection = new StringBuilder();
         selection.append(RawContacts.CONTACT_ID).append(" IN (");
@@ -914,156 +850,187 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             }
             selection.append(secondaryContactIds.get(i));
         }
-        selection.append(") AND " + MimetypesColumns.MIMETYPE + "='"
-                + StructuredName.CONTENT_ITEM_TYPE + "'");
 
-        final Cursor c = db.query(DataContactIdQuery.TABLE, DataContactIdQuery.COLUMNS,
-                selection.toString(), null, null, null, null);
+        // We only want to compare structured names to structured names
+        // at this stage, we need to ignore all other sources of name lookup data.
+        selection.append(") AND " + STRUCTURED_NAME_BASED_LOOKUP_SQL);
 
-        MatchCandidateList nameCandidates = new MatchCandidateList();
-        AggregationNameLookupBuilder builder =
-            new AggregationNameLookupBuilder(mContactsProvider.getNameSplitter(), nameCandidates);
+        matchAllCandidates(db, selection.toString(), candidates, matcher,
+                ContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE, null);
+
+        return matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_SECONDARY);
+    }
+
+    private interface NameLookupQuery {
+        String TABLE = Tables.NAME_LOOKUP;
+
+        String SELECTION = NameLookupColumns.RAW_CONTACT_ID + "=?";
+        String SELECTION_STRUCTURED_NAME_BASED =
+                SELECTION + " AND " + STRUCTURED_NAME_BASED_LOOKUP_SQL;
+
+        String[] COLUMNS = new String[] {
+                NameLookupColumns.NORMALIZED_NAME,
+                NameLookupColumns.NAME_TYPE
+        };
+
+        int NORMALIZED_NAME = 0;
+        int NAME_TYPE = 1;
+    }
+
+    private void loadNameMatchCandidates(SQLiteDatabase db, long rawContactId,
+            MatchCandidateList candidates, boolean structuredNameBased) {
+        candidates.clear();
+        mSelectionArgs1[0] = String.valueOf(rawContactId);
+        Cursor c = db.query(NameLookupQuery.TABLE, NameLookupQuery.COLUMNS,
+                structuredNameBased
+                        ? NameLookupQuery.SELECTION_STRUCTURED_NAME_BASED
+                        : NameLookupQuery.SELECTION,
+                mSelectionArgs1, null, null, null);
         try {
             while (c.moveToNext()) {
-                String name = c.getString(DataContactIdQuery.DATA1);
-                long contactId = c.getLong(DataContactIdQuery.CONTACT_ID);
-
-                nameCandidates.clear();
-                builder.insertNameLookup(0, 0, name);
-
-                // Note the N^2 complexity of the following fragment. This is not a huge concern
-                // since the number of candidates is very small and in general secondary hits
-                // in the absence of primary hits are rare.
-                for (int i = 0; i < candidates.mCount; i++) {
-                    NameMatchCandidate candidate = candidates.mList.get(i);
-
-                    // We only want to compare structured names to structured names
-                    // at this stage, we need to ignore all other sources of name lookup data.
-                    if (NameLookupType.isBasedOnStructuredName(candidate.mLookupType)) {
-                        for (int j = 0; j < nameCandidates.mCount; j++) {
-                            NameMatchCandidate nameCandidate = nameCandidates.mList.get(j);
-                            matcher.matchName(contactId,
-                                    nameCandidate.mLookupType, nameCandidate.mName,
-                                    candidate.mLookupType, candidate.mName,
-                                    ContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE);
-                        }
-                    }
-                }
+                String normalizedName = c.getString(NameLookupQuery.NORMALIZED_NAME);
+                int type = c.getInt(NameLookupQuery.NAME_TYPE);
+                candidates.add(normalizedName, type);
             }
         } finally {
             c.close();
         }
-
-        return matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_SECONDARY);
     }
 
     /**
      * Computes scores for contacts that have matching data rows.
      */
-    private void updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long rawContactId,
-            int mode, MatchCandidateList candidates, ContactMatcher matcher) {
+    private long updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long rawContactId,
+            MatchCandidateList candidates, ContactMatcher matcher) {
 
-        final Cursor c = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS,
-                DataMimetypeQuery.COLUMNS,
-                Data.RAW_CONTACT_ID + "=" + rawContactId + " AND ("
-                        + DataMimetypeQuery.MIMETYPE_SELECTION_IN_CLAUSE + ")",
-                null, null, null, null);
+        updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
+        long bestMatch = matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_PRIMARY);
+        if (bestMatch != -1) {
+            return bestMatch;
+        }
 
+        updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
+        updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
+
+        return -1;
+    }
+
+    private interface NameLookupMatchQuery {
+        String TABLE = Tables.NAME_LOOKUP + " nameA"
+                + " JOIN " + Tables.NAME_LOOKUP + " nameB" +
+                " ON (" + "nameA." + NameLookupColumns.NORMALIZED_NAME + "="
+                        + "nameB." + NameLookupColumns.NORMALIZED_NAME + ")"
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (nameB." + NameLookupColumns.RAW_CONTACT_ID + " = "
+                        + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        String SELECTION = "nameA." + NameLookupColumns.RAW_CONTACT_ID + "=?"
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0";
+
+        String[] COLUMNS = new String[] {
+            RawContacts.CONTACT_ID,
+            "nameA." + NameLookupColumns.NORMALIZED_NAME,
+            "nameA." + NameLookupColumns.NAME_TYPE,
+            "nameB." + NameLookupColumns.NAME_TYPE,
+        };
+
+        int CONTACT_ID = 0;
+        int NAME = 1;
+        int NAME_TYPE_A = 2;
+        int NAME_TYPE_B = 3;
+    }
+
+    private void updateMatchScoresBasedOnNameMatches(SQLiteDatabase db, long rawContactId,
+            ContactMatcher matcher) {
+        mSelectionArgs1[0] = String.valueOf(rawContactId);
+        Cursor c = db.query(NameLookupMatchQuery.TABLE, NameLookupMatchQuery.COLUMNS,
+                NameLookupMatchQuery.SELECTION,
+                mSelectionArgs1, null, null, null, PRIMARY_HIT_LIMIT_STRING);
         try {
             while (c.moveToNext()) {
-                String mimeType = c.getString(DataMimetypeQuery.MIMETYPE);
-                String data = c.getString(DataMimetypeQuery.DATA1);
-                if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
-                    addMatchCandidatesStructuredName(data, candidates);
-                } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-                    if (!TextUtils.isEmpty(data)) {
-                        addMatchCandidatesEmail(data, mode, candidates);
-                        lookupEmailMatches(db, data, matcher);
-                    }
-                } else if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
-                    if (!TextUtils.isEmpty(data)) {
-                        lookupPhoneMatches(db, data, matcher);
-                    }
-                } else if (mimeType.equals(CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
-                    if (!TextUtils.isEmpty(data)) {
-                        addMatchCandidatesNickname(data, mode, candidates);
-                        lookupNicknameMatches(db, data, matcher);
-                    }
+                long contactId = c.getLong(NameLookupMatchQuery.CONTACT_ID);
+                String name = c.getString(NameLookupMatchQuery.NAME);
+                int nameTypeA = c.getInt(NameLookupMatchQuery.NAME_TYPE_A);
+                int nameTypeB = c.getInt(NameLookupMatchQuery.NAME_TYPE_B);
+                matcher.matchName(contactId, nameTypeA, name,
+                        nameTypeB, name, ContactMatcher.MATCHING_ALGORITHM_EXACT);
+                if (nameTypeA == NameLookupType.NICKNAME &&
+                        nameTypeB == NameLookupType.NICKNAME) {
+                    matcher.updateScoreWithNicknameMatch(contactId);
                 }
             }
         } finally {
             c.close();
         }
+    }
 
-        lookupNameMatches(db, candidates, matcher);
+    private interface EmailLookupQuery {
+        String TABLE = Tables.DATA + " dataA"
+                + " JOIN " + Tables.DATA + " dataB" +
+                " ON (" + "dataA." + Email.DATA + "=dataB." + Email.DATA + ")"
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (dataB." + Data.RAW_CONTACT_ID + " = "
+                        + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
 
-        if (mode == MODE_SUGGESTIONS) {
-            lookupApproximateNameMatches(db, candidates, matcher);
+        String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
+                + " AND dataA." + DataColumns.MIMETYPE_ID + "=?"
+                + " AND dataA." + Email.DATA + " NOT NULL"
+                + " AND dataB." + DataColumns.MIMETYPE_ID + "=?"
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0";
+
+        String[] COLUMNS = new String[] {
+            RawContacts.CONTACT_ID
+        };
+
+        int CONTACT_ID = 0;
+    }
+
+    private void updateMatchScoresBasedOnEmailMatches(SQLiteDatabase db, long rawContactId,
+            ContactMatcher matcher) {
+        mSelectionArgs3[0] = String.valueOf(rawContactId);
+        mSelectionArgs3[1] = mSelectionArgs3[2] = String.valueOf(mMimeTypeIdEmail);
+        Cursor c = db.query(EmailLookupQuery.TABLE, EmailLookupQuery.COLUMNS,
+                EmailLookupQuery.SELECTION,
+                mSelectionArgs3, null, null, null, SECONDARY_HIT_LIMIT_STRING);
+        try {
+            while (c.moveToNext()) {
+                long contactId = c.getLong(EmailLookupQuery.CONTACT_ID);
+                matcher.updateScoreWithEmailMatch(contactId);
+            }
+        } finally {
+            c.close();
         }
     }
 
-    /**
-     * Looks for matches based on the full name.
-     */
-    private void addMatchCandidatesStructuredName(String name, MatchCandidateList candidates) {
-        AggregationNameLookupBuilder builder =
-                new AggregationNameLookupBuilder(mContactsProvider.getNameSplitter(), candidates);
-        builder.insertNameLookup(0, 0, name);
+    private interface PhoneNumberQuery {
+        String TABLE = Tables.DATA;
+
+        String SELECTION = Data.RAW_CONTACT_ID + "=?"
+                + " AND " + DataColumns.MIMETYPE_ID + "=?"
+                + " AND " + Phone.NUMBER + " NOT NULL";
+
+        String[] COLUMNS = new String[] {
+                Phone.NUMBER
+        };
+
+        int NUMBER = 0;
     }
 
-    /**
-     * Extracts the user name portion from an email address and normalizes it so that it
-     * can be matched against names and nicknames.
-     */
-    private void addMatchCandidatesEmail(String email, int mode, MatchCandidateList candidates) {
-        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
-        if (tokens.length == 0) {
-            return;
-        }
-
-        String address = tokens[0].getAddress();
-        int at = address.indexOf('@');
-        if (at != -1) {
-            address = address.substring(0, at);
-        }
-
-        candidates.add(NameNormalizer.normalize(address), NameLookupType.EMAIL_BASED_NICKNAME);
-    }
-
-
-    /**
-     * Normalizes the nickname and adds it to the list of candidates.
-     */
-    private void addMatchCandidatesNickname(String nickname, int mode,
-            MatchCandidateList candidates) {
-        candidates.add(NameNormalizer.normalize(nickname), NameLookupType.NICKNAME);
-    }
-
-    /**
-     * Given a list of {@link NameMatchCandidate}'s, finds all matches and computes their scores.
-     */
-    private void lookupNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
+    private void updateMatchScoresBasedOnPhoneMatches(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
 
-        if (candidates.mCount == 0) {
-            return;
+        mSelectionArgs2[0] = String.valueOf(rawContactId);
+        mSelectionArgs2[1] = String.valueOf(mMimeTypeIdPhone);
+        final Cursor c = db.query(PhoneNumberQuery.TABLE, PhoneNumberQuery.COLUMNS,
+                PhoneNumberQuery.SELECTION, mSelectionArgs2, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                String phoneNumber = c.getString(PhoneNumberQuery.NUMBER);
+                lookupPhoneMatches(db, phoneNumber, matcher);
+            }
+        } finally {
+            c.close();
         }
-
-        StringBuilder selection = new StringBuilder();
-        selection.append(RawContactsColumns.AGGREGATION_NEEDED + "=0 AND ");
-        selection.append(NameLookupColumns.NORMALIZED_NAME);
-        selection.append(" IN (");
-        for (int i = 0; i < candidates.mCount; i++) {
-            DatabaseUtils.appendEscapedSQLString(selection, candidates.mList.get(i).mName);
-            selection.append(",");
-        }
-
-        // Yank the last comma
-        selection.setLength(selection.length() - 1);
-        selection.append(")");
-
-        matchAllCandidates(db, selection.toString(), candidates, matcher,
-                ContactMatcher.MATCHING_ALGORITHM_EXACT, String.valueOf(PRIMARY_HIT_LIMIT));
     }
 
     /**
@@ -1093,22 +1060,38 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
     }
 
+    private interface ContactNameLookupQuery {
+        String TABLE = Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS;
+
+        String[] COLUMNS = new String[] {
+                RawContacts.CONTACT_ID,
+                NameLookupColumns.NORMALIZED_NAME,
+                NameLookupColumns.NAME_TYPE
+        };
+
+        int CONTACT_ID = 0;
+        int NORMALIZED_NAME = 1;
+        int NAME_TYPE = 2;
+    }
+
     /**
      * Loads all candidate rows from the name lookup table and updates match scores based
      * on that data.
      */
     private void matchAllCandidates(SQLiteDatabase db, String selection,
             MatchCandidateList candidates, ContactMatcher matcher, int algorithm, String limit) {
-        final Cursor c = db.query(NameLookupQuery.TABLE, NameLookupQuery.COLUMNS,
+        final Cursor c = db.query(ContactNameLookupQuery.TABLE, ContactNameLookupQuery.COLUMNS,
                 selection, null, null, null, null, limit);
 
         try {
             while (c.moveToNext()) {
-                Long contactId = c.getLong(NameLookupQuery.CONTACT_ID);
-                String name = c.getString(NameLookupQuery.NORMALIZED_NAME);
-                int nameType = c.getInt(NameLookupQuery.NAME_TYPE);
+                Long contactId = c.getLong(ContactNameLookupQuery.CONTACT_ID);
+                String name = c.getString(ContactNameLookupQuery.NORMALIZED_NAME);
+                int nameType = c.getInt(ContactNameLookupQuery.NAME_TYPE);
 
-                // Determine which candidate produced this match
+                // Note the N^2 complexity of the following fragment. This is not a huge concern
+                // since the number of candidates is very small and in general secondary hits
+                // in the absence of primary hits are rare.
                 for (int i = 0; i < candidates.mCount; i++) {
                     NameMatchCandidate candidate = candidates.mList.get(i);
                     matcher.matchName(contactId, candidate.mLookupType, candidate.mName,
@@ -1124,51 +1107,11 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         mDbHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
         Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContactsColumns.AGGREGATION_NEEDED + "=0",
-                null, null, null, null, String.valueOf(SECONDARY_HIT_LIMIT));
+                null, null, null, null, SECONDARY_HIT_LIMIT_STRING);
         try {
             while (c.moveToNext()) {
                 long contactId = c.getLong(COL_CONTACT_ID);
                 matcher.updateScoreWithPhoneNumberMatch(contactId);
-            }
-        } finally {
-            c.close();
-        }
-    }
-
-    /**
-     * Finds exact email matches and updates their match scores.
-     */
-    private void lookupEmailMatches(SQLiteDatabase db, String address, ContactMatcher matcher) {
-        long mimetypeId = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        Cursor c = db.query(EmailLookupQuery.TABLE, EmailLookupQuery.COLUMNS,
-                DataColumns.MIMETYPE_ID + "=" + mimetypeId
-                        + " AND " + Email.DATA + "=?"
-                        + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0",
-                new String[] {address}, null, null, null, String.valueOf(SECONDARY_HIT_LIMIT));
-        try {
-            while (c.moveToNext()) {
-                long contactId = c.getLong(EmailLookupQuery.CONTACT_ID);
-                matcher.updateScoreWithEmailMatch(contactId);
-            }
-        } finally {
-            c.close();
-        }
-    }
-
-    /**
-     * Finds exact nickname matches in the name lookup table and updates their match scores.
-     */
-    private void lookupNicknameMatches(SQLiteDatabase db, String nickname, ContactMatcher matcher) {
-        String normalized = NameNormalizer.normalize(nickname);
-        Cursor c = db.query(true, Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS, CONTACT_ID_COLUMNS,
-                NameLookupColumns.NAME_TYPE + "=" + NameLookupType.NICKNAME + " AND "
-                        + NameLookupColumns.NORMALIZED_NAME + "='" + normalized + "' AND "
-                        + RawContactsColumns.AGGREGATION_NEEDED + "=0",
-                null, null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                long contactId = c.getLong(COL_CONTACT_ID);
-                matcher.updateScoreWithNicknameMatch(contactId);
             }
         } finally {
             c.close();
@@ -1683,7 +1626,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(0);
-                updateMatchScoresBasedOnDataMatches(db, rawContactId, MODE_SUGGESTIONS, candidates,
+                updateMatchScoresForSuggestionsBasedOnDataMatches(db, rawContactId, candidates,
                         matcher);
             }
         } finally {
@@ -1691,5 +1634,18 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
 
         return matcher.pickBestMatches(ContactMatcher.SCORE_THRESHOLD_SUGGEST);
+    }
+
+    /**
+     * Computes scores for contacts that have matching data rows.
+     */
+    private void updateMatchScoresForSuggestionsBasedOnDataMatches(SQLiteDatabase db,
+            long rawContactId, MatchCandidateList candidates, ContactMatcher matcher) {
+
+        updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
+        updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
+        updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
+        loadNameMatchCandidates(db, rawContactId, candidates, false);
+        lookupApproximateNameMatches(db, candidates, matcher);
     }
 }
