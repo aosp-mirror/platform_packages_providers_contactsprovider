@@ -1552,7 +1552,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         // Run a query and find ids of best matching contacts satisfying the filter (if any)
         HashSet<Long> foundIds = new HashSet<Long>();
-        Cursor cursor = db.query(ContactIdQuery.TABLE, ContactIdQuery.COLUMNS, sb.toString(),
+        Cursor cursor = db.query(qb.getTables(), ContactIdQuery.COLUMNS, sb.toString(),
                 null, null, null, null);
         try {
             while(cursor.moveToNext()) {
