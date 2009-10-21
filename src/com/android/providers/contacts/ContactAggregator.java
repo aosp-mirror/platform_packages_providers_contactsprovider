@@ -23,12 +23,14 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DisplayNameSources;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
@@ -1002,35 +1004,47 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         }
     }
 
-    private interface PhoneNumberQuery {
-        String TABLE = Tables.DATA;
+    private interface PhoneLookupQuery {
+        String TABLE = Tables.PHONE_LOOKUP + " phoneA"
+                + " JOIN " + Tables.DATA + " dataA"
+                + " ON (dataA." + Data._ID + "=phoneA." + PhoneLookupColumns.DATA_ID + ")"
+                + " JOIN " + Tables.PHONE_LOOKUP + " phoneB"
+                + " ON (phoneA." + PhoneLookupColumns.MIN_MATCH + "="
+                        + "phoneB." + PhoneLookupColumns.MIN_MATCH + ")"
+                + " JOIN " + Tables.DATA + " dataB"
+                + " ON (dataB." + Data._ID + "=phoneB." + PhoneLookupColumns.DATA_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS
+                + " ON (dataB." + Data.RAW_CONTACT_ID + " = "
+                        + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
 
-        String SELECTION = Data.RAW_CONTACT_ID + "=?"
-                + " AND " + DataColumns.MIMETYPE_ID + "=?"
-                + " AND " + Phone.NUMBER + " NOT NULL";
+        String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
+                + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
+                        + "dataB." + Phone.NUMBER + ",?)"
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0";
 
         String[] COLUMNS = new String[] {
-                Phone.NUMBER
+            RawContacts.CONTACT_ID
         };
 
-        int NUMBER = 0;
+        int CONTACT_ID = 0;
     }
 
     private void updateMatchScoresBasedOnPhoneMatches(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
-
         mSelectionArgs2[0] = String.valueOf(rawContactId);
-        mSelectionArgs2[1] = String.valueOf(mMimeTypeIdPhone);
-        final Cursor c = db.query(PhoneNumberQuery.TABLE, PhoneNumberQuery.COLUMNS,
-                PhoneNumberQuery.SELECTION, mSelectionArgs2, null, null, null);
+        mSelectionArgs2[1] = mDbHelper.getUseStrictPhoneNumberComparisonParameter();
+        Cursor c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
+                PhoneLookupQuery.SELECTION,
+                mSelectionArgs2, null, null, null, SECONDARY_HIT_LIMIT_STRING);
         try {
             while (c.moveToNext()) {
-                String phoneNumber = c.getString(PhoneNumberQuery.NUMBER);
-                lookupPhoneMatches(db, phoneNumber, matcher);
+                long contactId = c.getLong(PhoneLookupQuery.CONTACT_ID);
+                matcher.updateScoreWithPhoneNumberMatch(contactId);
             }
         } finally {
             c.close();
         }
+
     }
 
     /**
@@ -1097,21 +1111,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                     matcher.matchName(contactId, candidate.mLookupType, candidate.mName,
                             nameType, name, algorithm);
                 }
-            }
-        } finally {
-            c.close();
-        }
-    }
-
-    private void lookupPhoneMatches(SQLiteDatabase db, String phoneNumber, ContactMatcher matcher) {
-        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        mDbHelper.buildPhoneLookupAndRawContactQuery(qb, phoneNumber);
-        Cursor c = qb.query(db, CONTACT_ID_COLUMNS, RawContactsColumns.AGGREGATION_NEEDED + "=0",
-                null, null, null, null, SECONDARY_HIT_LIMIT_STRING);
-        try {
-            while (c.moveToNext()) {
-                long contactId = c.getLong(COL_CONTACT_ID);
-                matcher.updateScoreWithPhoneNumberMatch(contactId);
             }
         } finally {
             c.close();

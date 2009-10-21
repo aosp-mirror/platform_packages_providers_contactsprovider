@@ -25,6 +25,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Resources;
+import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
@@ -49,6 +50,7 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.SocialContract.Activities;
 import android.telephony.PhoneNumberUtils;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -61,7 +63,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 103;
+    private static final int DATABASE_VERSION = 201;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -374,6 +376,7 @@ import java.util.HashMap;
         public static final String DATA_ID = "data_id";
         public static final String RAW_CONTACT_ID = "raw_contact_id";
         public static final String NORMALIZED_NUMBER = "normalized_number";
+        public static final String MIN_MATCH = "min_match";
     }
 
     public interface NameLookupColumns {
@@ -499,7 +502,7 @@ import java.util.HashMap;
 
     private static ContactsDatabaseHelper sSingleton = null;
 
-    private boolean mUseStrictPhoneNumberComparation;
+    private boolean mUseStrictPhoneNumberComparison;
 
     /**
      * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
@@ -524,7 +527,7 @@ import java.util.HashMap;
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
-        mUseStrictPhoneNumberComparation =
+        mUseStrictPhoneNumberComparison =
                 resources.getBoolean(
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
         int resourceId = resources.getIdentifier("unrestricted_packages", "array",
@@ -782,11 +785,18 @@ import java.util.HashMap;
                         + " INTEGER PRIMARY KEY REFERENCES data(_id) NOT NULL," +
                 PhoneLookupColumns.RAW_CONTACT_ID
                         + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
-                PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL" +
+                PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL," +
+                PhoneLookupColumns.MIN_MATCH + " TEXT NOT NULL" +
         ");");
 
         db.execSQL("CREATE INDEX phone_lookup_index ON " + Tables.PHONE_LOOKUP + " (" +
                 PhoneLookupColumns.NORMALIZED_NUMBER + "," +
+                PhoneLookupColumns.RAW_CONTACT_ID + "," +
+                PhoneLookupColumns.DATA_ID +
+        ");");
+
+        db.execSQL("CREATE INDEX phone_lookup_min_match_index ON " + Tables.PHONE_LOOKUP + " (" +
+                PhoneLookupColumns.MIN_MATCH + "," +
                 PhoneLookupColumns.RAW_CONTACT_ID + "," +
                 PhoneLookupColumns.DATA_ID +
         ");");
@@ -1327,9 +1337,52 @@ import java.util.HashMap;
             oldVersion++;
         }
 
+        if (oldVersion == 103) {
+            addColumnPhoneNumberMinMatch(db);
+            oldVersion = 201;
+        }
+
         if (oldVersion != newVersion) {
             throw new IllegalStateException(
                     "error upgrading the database to version " + newVersion);
+        }
+    }
+
+    private void addColumnPhoneNumberMinMatch(SQLiteDatabase db) {
+        db.execSQL(
+                "ALTER TABLE " + Tables.PHONE_LOOKUP +
+                " ADD " + PhoneLookupColumns.MIN_MATCH + " TEXT;");
+
+        db.execSQL("CREATE INDEX phone_lookup_min_match_index ON " + Tables.PHONE_LOOKUP + " (" +
+                PhoneLookupColumns.MIN_MATCH + "," +
+                PhoneLookupColumns.RAW_CONTACT_ID + "," +
+                PhoneLookupColumns.DATA_ID +
+        ");");
+
+        updateIndexStats(db, Tables.PHONE_LOOKUP,
+                "phone_lookup_min_match_index", "10000 2 2 1");
+
+        SQLiteStatement update = db.compileStatement(
+                "UPDATE " + Tables.PHONE_LOOKUP +
+                " SET " + PhoneLookupColumns.MIN_MATCH + "=?" +
+                " WHERE " + PhoneLookupColumns.DATA_ID + "=?");
+
+        // Populate the new column
+        Cursor c = db.query(Tables.PHONE_LOOKUP + " JOIN " + Tables.DATA +
+                " ON (" + PhoneLookupColumns.DATA_ID + "=" + DataColumns.CONCRETE_ID + ")",
+                new String[]{Data._ID, Phone.NUMBER}, null, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                long dataId = c.getLong(0);
+                String number = c.getString(1);
+                if (!TextUtils.isEmpty(number)) {
+                    update.bindString(1, PhoneNumberUtils.toCallerIDMinMatch(number));
+                    update.bindLong(2, dataId);
+                    update.execute();
+                }
+            }
+        } finally {
+            c.close();
         }
     }
 
@@ -1361,6 +1414,8 @@ import java.util.HashMap;
 
             updateIndexStats(db, Tables.PHONE_LOOKUP,
                     "phone_lookup_index", "10000 2 2 1");
+            updateIndexStats(db, Tables.PHONE_LOOKUP,
+                    "phone_lookup_min_match_index", "10000 2 2 1");
 
             updateIndexStats(db, Tables.DATA,
                     "data_mimetype_data1_index", "60000 5000 2");
@@ -1577,25 +1632,25 @@ import java.util.HashMap;
     }
 
     public void buildPhoneLookupAndRawContactQuery(SQLiteQueryBuilder qb, String number) {
-        String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
         qb.setTables(Tables.DATA_JOIN_RAW_CONTACTS +
                 " JOIN " + Tables.PHONE_LOOKUP
                 + " ON(" + DataColumns.CONCRETE_ID + "=" + PhoneLookupColumns.DATA_ID + ")");
 
         StringBuilder sb = new StringBuilder();
-        sb.append(PhoneLookupColumns.NORMALIZED_NUMBER + " GLOB '");
-        sb.append(normalizedNumber);
-        sb.append("*' AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
+        sb.append(PhoneLookupColumns.MIN_MATCH + "='");
+        sb.append(minMatch);
+        sb.append("' AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
         DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
+        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0)");
 
         qb.appendWhere(sb.toString());
     }
 
     public void buildPhoneLookupAndContactQuery(SQLiteQueryBuilder qb, String number) {
-        String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
         StringBuilder sb = new StringBuilder();
-        appendPhoneLookupTables(sb, normalizedNumber, true);
+        appendPhoneLookupTables(sb, minMatch, true);
         qb.setTables(sb.toString());
 
         sb = new StringBuilder();
@@ -1605,16 +1660,16 @@ import java.util.HashMap;
 
     public String buildPhoneLookupAsNestedQuery(String number) {
         StringBuilder sb = new StringBuilder();
-        final String normalizedNumber = PhoneNumberUtils.toCallerIDMinMatch(number);
+        final String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
         sb.append("(SELECT DISTINCT raw_contact_id" + " FROM ");
-        appendPhoneLookupTables(sb, normalizedNumber, false);
+        appendPhoneLookupTables(sb, minMatch, false);
         sb.append(" WHERE ");
         appendPhoneLookupSelection(sb, number);
         sb.append(")");
         return sb.toString();
     }
 
-    private void appendPhoneLookupTables(StringBuilder sb, final String normalizedNumber,
+    private void appendPhoneLookupTables(StringBuilder sb, final String minMatch,
             boolean joinContacts) {
         sb.append(Tables.RAW_CONTACTS);
         if (joinContacts) {
@@ -1622,16 +1677,20 @@ import java.util.HashMap;
                     + " ON (contacts._id = raw_contacts.contact_id)");
         }
         sb.append(", (SELECT data_id FROM phone_lookup "
-                + "WHERE (phone_lookup.normalized_number GLOB '");
-        sb.append(normalizedNumber);
-        sb.append("*')) AS lookup, " + Tables.DATA);
+                + "WHERE (" + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.MIN_MATCH + " = '");
+        sb.append(minMatch);
+        sb.append("')) AS lookup, " + Tables.DATA);
     }
 
     private void appendPhoneLookupSelection(StringBuilder sb, String number) {
         sb.append("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id"
                 + " AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
         DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
+        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0)");
+    }
+
+    public String getUseStrictPhoneNumberComparisonParameter() {
+        return mUseStrictPhoneNumberComparison ? "1" : "0";
     }
 
     /**
