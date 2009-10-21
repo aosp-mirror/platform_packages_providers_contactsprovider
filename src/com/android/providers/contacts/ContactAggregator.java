@@ -741,6 +741,52 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         mPresenceContactIdUpdate.execute();
     }
 
+    interface AggregateExceptionPrefetchQuery {
+        String TABLE = Tables.AGGREGATION_EXCEPTIONS;
+
+        String[] COLUMNS = {
+            AggregationExceptions.RAW_CONTACT_ID1,
+            AggregationExceptions.RAW_CONTACT_ID2,
+        };
+
+        int RAW_CONTACT_ID1 = 0;
+        int RAW_CONTACT_ID2 = 1;
+    }
+
+    // A set of raw contact IDs for which there are aggregation exceptions
+    private final HashSet<Long> mAggregationExceptionIds = new HashSet<Long>();
+    private boolean mAggregationExceptionIdsValid;
+
+    public void invalidateAggregationExceptionCache() {
+        mAggregationExceptionIdsValid = false;
+    }
+
+    /**
+     * Finds all raw contact IDs for which there are aggregation exceptions. The list of
+     * ids is used as an optimization in aggregation: there is no point to run a query against
+     * the agg_exceptions table if it is known that there are no records there for a given
+     * raw contact ID.
+     */
+    private void prefetchAggregationExceptionIds(SQLiteDatabase db) {
+        mAggregationExceptionIds.clear();
+        final Cursor c = db.query(AggregateExceptionPrefetchQuery.TABLE,
+                AggregateExceptionPrefetchQuery.COLUMNS,
+                null, null, null, null, null);
+
+        try {
+            while (c.moveToNext()) {
+                long rawContactId1 = c.getLong(AggregateExceptionPrefetchQuery.RAW_CONTACT_ID1);
+                long rawContactId2 = c.getLong(AggregateExceptionPrefetchQuery.RAW_CONTACT_ID2);
+                mAggregationExceptionIds.add(rawContactId1);
+                mAggregationExceptionIds.add(rawContactId2);
+            }
+        } finally {
+            c.close();
+        }
+
+        mAggregationExceptionIdsValid = true;
+    }
+
     interface AggregateExceptionQuery {
         String TABLE = Tables.AGGREGATION_EXCEPTIONS
             + " JOIN raw_contacts raw_contacts1 "
@@ -771,6 +817,16 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
      */
     private long pickBestMatchBasedOnExceptions(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
+        if (!mAggregationExceptionIdsValid) {
+            prefetchAggregationExceptionIds(db);
+        }
+
+        // If there are no aggregation exceptions involving this raw contact, there is no need to
+        // run a query and we can just return -1, which stands for "nothing found"
+        if (!mAggregationExceptionIds.contains(rawContactId)) {
+            return -1;
+        }
+
         final Cursor c = db.query(AggregateExceptionQuery.TABLE,
                 AggregateExceptionQuery.COLUMNS,
                 AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId
