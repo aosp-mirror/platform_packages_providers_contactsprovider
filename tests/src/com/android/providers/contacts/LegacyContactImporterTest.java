@@ -87,6 +87,12 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
         addProvider(TestCallLogProvider.class, CallLog.AUTHORITY);
     }
 
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+        SynchronousContactsProvider2.resetOpenHelper();
+    }
+
     public void testContactImport() throws Exception {
         ContactsProvider2 provider = (ContactsProvider2)getProvider();
         LegacyContactImporter importer =
