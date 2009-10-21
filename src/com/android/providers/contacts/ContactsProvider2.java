@@ -211,20 +211,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final int RAW_CONTACT_ENTITIES = 15001;
 
-    private interface ContactsQuery {
-        public static final String TABLE = Tables.RAW_CONTACTS;
-
-        public static final String[] PROJECTION = new String[] {
-            RawContactsColumns.CONCRETE_ID,
-            RawContacts.ACCOUNT_NAME,
-            RawContacts.ACCOUNT_TYPE,
-        };
-
-        public static final int RAW_CONTACT_ID = 0;
-        public static final int ACCOUNT_NAME = 1;
-        public static final int ACCOUNT_TYPE = 2;
-    }
-
     private interface DataContactsQuery {
         public static final String TABLE = "data "
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
@@ -280,10 +266,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String TABLE = Tables.RAW_CONTACTS;
 
         String[] COLUMNS = new String[] {
-                ContactsContract.RawContacts.DELETED
+                RawContacts.DELETED,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_NAME,
         };
 
         int DELETED = 0;
+        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_NAME = 2;
     }
 
     private static final HashMap<String, Integer> sDisplayNameSources;
@@ -1505,7 +1495,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             if (containsGroupSourceId) {
                 final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
-                final long groupId = getOrMakeGroup(db, rawContactId, sourceId);
+                final long groupId = getOrMakeGroup(db, rawContactId, sourceId,
+                        mInsertedRawContacts.get(rawContactId));
                 values.remove(GroupMembership.GROUP_SOURCE_ID);
                 values.put(GroupMembership.GROUP_ROW_ID, groupId);
             }
@@ -1554,6 +1545,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
+    /**
+     * An entry in group id cache. It maps the combination of (account type, account name
+     * and source id) to group row id.
+     */
+    public class GroupIdCacheEntry {
+        String accountType;
+        String accountName;
+        String sourceId;
+        long groupId;
+    }
 
     private HashMap<String, DataRowHandler> mDataRowHandlers;
     private final ContactAggregationScheduler mAggregationScheduler;
@@ -1561,14 +1562,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private NameSplitter mNameSplitter;
     private NameLookupBuilder mNameLookupBuilder;
-    private HashMap<String, SoftReference<String[]>> mNicknameClusterCache =
-            new HashMap<String, SoftReference<String[]>>();
 
     // We will use this much memory (in bits) to optimize the nickname cluster lookup
     private static final int NICKNAME_BLOOM_FILTER_SIZE = 0x1FFF;   // =long[128]
     private BitSet mNicknameBloomFilter;
 
+    private HashMap<String, SoftReference<String[]>> mNicknameClusterCache = Maps.newHashMap();
+
     private PostalSplitter mPostalSplitter;
+
+    // We don't need a soft cache for groups - the assumption is that there will only
+    // be a small number of contact groups. The cache is keyed off source id.  The value
+    // is a list of groups with this group id.
+    private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
 
     private ContactAggregator mContactAggregator;
     private LegacyApiSupport mLegacyApiSupport;
@@ -1579,7 +1585,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private volatile CountDownLatch mAccessLatch;
     private boolean mImportMode;
 
-    private HashSet<Long> mInsertedRawContacts = Sets.newHashSet();
+    private HashMap<Long, Account> mInsertedRawContacts = Maps.newHashMap();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
@@ -1975,7 +1981,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private boolean isNewRawContact(long rawContactId) {
-        return mInsertedRawContacts.contains(rawContactId);
+        return mInsertedRawContacts.containsKey(rawContactId);
     }
 
     private DataRowHandler getDataRowHandler(final String mimeType) {
@@ -2119,7 +2125,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.markNewForAggregation(rawContactId);
 
         // Trigger creation of a Contact based on this RawContact at the end of transaction
-        mInsertedRawContacts.add(rawContactId);
+        mInsertedRawContacts.put(rawContactId, account);
         return rawContactId;
     }
 
@@ -2207,35 +2213,59 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * @throws IllegalArgumentException if the contact is not associated with an account
      * @throws IllegalStateException if a group needs to be created but the creation failed
      */
-    private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId) {
-        Account account = null;
-        Cursor c = db.query(ContactsQuery.TABLE, ContactsQuery.PROJECTION, RawContacts._ID + "="
-                + rawContactId, null, null, null, null);
-        try {
-            if (c.moveToNext()) {
-                final String accountName = c.getString(ContactsQuery.ACCOUNT_NAME);
-                final String accountType = c.getString(ContactsQuery.ACCOUNT_TYPE);
-                if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                    account = new Account(accountName, accountType);
+    private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId,
+            Account account) {
+
+        if (account == null) {
+            Cursor c = db.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
+                    RawContacts._ID + "=" + rawContactId, null, null, null, null);
+            try {
+                if (c.moveToFirst()) {
+                    String accountName = c.getString(RawContactsQuery.ACCOUNT_NAME);
+                    String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
+                    if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
+                        account = new Account(accountName, accountType);
+                    }
                 }
+            } finally {
+                c.close();
             }
-        } finally {
-            c.close();
         }
+
         if (account == null) {
             throw new IllegalArgumentException("if the groupmembership only "
-                    + "has a sourceid the the contact must be associate with "
+                    + "has a sourceid the the contact must be associated with "
                     + "an account");
         }
 
+        ArrayList<GroupIdCacheEntry> entries = mGroupIdCache.get(sourceId);
+        if (entries == null) {
+            entries = new ArrayList<GroupIdCacheEntry>(1);
+            mGroupIdCache.put(sourceId, entries);
+        }
+
+        int count = entries.size();
+        for (int i = 0; i < count; i++) {
+            GroupIdCacheEntry entry = entries.get(i);
+            if (entry.accountName.equals(account.name) && entry.accountType.equals(account.type)) {
+                return entry.groupId;
+            }
+        }
+
+        GroupIdCacheEntry entry = new GroupIdCacheEntry();
+        entry.accountName = account.name;
+        entry.accountType = account.type;
+        entry.sourceId = sourceId;
+        entries.add(0, entry);
+
         // look up the group that contains this sourceId and has the same account name and type
         // as the contact refered to by rawContactId
-        c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
+        Cursor c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
                 Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
                 new String[]{sourceId, account.name, account.type}, null, null, null);
         try {
-            if (c.moveToNext()) {
-                return c.getLong(0);
+            if (c.moveToFirst()) {
+                entry.groupId = c.getLong(0);
             } else {
                 ContentValues groupValues = new ContentValues();
                 groupValues.put(Groups.ACCOUNT_NAME, account.name);
@@ -2246,11 +2276,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     throw new IllegalStateException("unable to create a new group with "
                             + "this sourceid: " + groupValues);
                 }
-                return groupId;
+                entry.groupId = groupId;
             }
         } finally {
             c.close();
         }
+
+        return entry.groupId;
     }
 
     private interface DisplayNameQuery {
@@ -2728,6 +2760,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
+        mGroupIdCache.clear();
         final long groupMembershipMimetypeId = mDbHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         mDb.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
@@ -3012,6 +3045,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private int updateGroups(Uri uri, ContentValues values, String selectionWithId,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
 
+        mGroupIdCache.clear();
+
         ContentValues updatedValues;
         if (!callerIsSyncAdapter && !values.containsKey(Groups.DIRTY)) {
             updatedValues = mValues;
@@ -3040,7 +3075,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     accountType = c.getString(1);
                     if(!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
                         Account account = new Account(accountName, accountType);
-	                ContentResolver.requestSync(account, ContactsContract.AUTHORITY,
+                        ContentResolver.requestSync(account, ContactsContract.AUTHORITY,
                                 new Bundle());
                         break;
                     }
@@ -3089,12 +3124,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final boolean requestUndoDelete = (values.containsKey(RawContacts.DELETED)
                 && values.getAsInteger(RawContacts.DELETED) == 0);
         int previousDeleted = 0;
+        String accountType = null;
+        String accountName = null;
         if (requestUndoDelete) {
             Cursor cursor = mDb.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS, selection,
                     null, null, null, null);
             try {
                 if (cursor.moveToFirst()) {
                     previousDeleted = cursor.getInt(RawContactsQuery.DELETED);
+                    accountType = cursor.getString(RawContactsQuery.ACCOUNT_TYPE);
+                    accountName = cursor.getString(RawContactsQuery.ACCOUNT_NAME);
                 }
             } finally {
                 cursor.close();
@@ -3112,7 +3151,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             if (requestUndoDelete && previousDeleted == 1) {
                 // undo delete, needs aggregation again.
-                mInsertedRawContacts.add(rawContactId);
+                mInsertedRawContacts.put(rawContactId, new Account(accountName, accountType));
             }
         }
         return count;
