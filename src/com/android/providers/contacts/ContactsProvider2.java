@@ -308,6 +308,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                     + " FROM " + Tables.GROUPS
                                     + " WHERE " + Groups.TITLE + "=?)))";
 
+    /** Sql for updating DIRTY flag on multiple raw contacts */
+    private static final String UPDATE_RAW_CONTACT_SET_DIRTY_SQL =
+            "UPDATE " + Tables.RAW_CONTACTS +
+            " SET " + RawContacts.DIRTY + "=1" +
+            " WHERE " + RawContacts._ID + " IN (";
+
+    /** Sql for updating VERSION on multiple raw contacts */
+    private static final String UPDATE_RAW_CONTACT_SET_VERSION_SQL =
+            "UPDATE " + Tables.RAW_CONTACTS +
+            " SET " + RawContacts.VERSION + " = " + RawContacts.VERSION + " + 1" +
+            " WHERE " + RawContacts._ID + " IN (";
+
     /** Contains just BaseColumns._COUNT */
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
@@ -351,8 +363,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mContactsLastTimeContactedUpdate;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mRawContactDisplayNameUpdate;
-    /** Precompiled sql statement for marking a raw contact as dirty */
-    private SQLiteStatement mRawContactDirtyUpdate;
     /** Precompiled sql statement for updating an aggregated status update */
     private SQLiteStatement mLastStatusUpdate;
     private SQLiteStatement mNameLookupInsert;
@@ -1586,10 +1596,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private ContentValues mValues = new ContentValues();
 
     private volatile CountDownLatch mAccessLatch;
-    private boolean mImportMode;
 
     private HashMap<Long, Account> mInsertedRawContacts = Maps.newHashMap();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
+    private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
     private boolean mVisibleTouched = false;
@@ -1649,12 +1659,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + RawContactsColumns.DISPLAY_NAME_SOURCE + "=?" +
                 " WHERE " + RawContacts._ID + "=?");
 
-        mRawContactDirtyUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
-                + RawContacts.DIRTY + "=1 WHERE " + RawContacts._ID + "=?");
-
         mLastStatusUpdate = db.compileStatement(
-                "UPDATE " + Tables.CONTACTS
-                + " SET " + ContactsColumns.LAST_STATUS_UPDATE_ID + "=" +
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + ContactsColumns.LAST_STATUS_UPDATE_ID + "=" +
                         "(SELECT " + DataColumns.CONCRETE_ID +
                         " FROM " + Tables.STATUS_UPDATES +
                         " JOIN " + Tables.DATA +
@@ -1666,8 +1673,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         " WHERE " + RawContacts.CONTACT_ID + "=?" +
                         " ORDER BY " + StatusUpdates.STATUS_TIMESTAMP + " DESC,"
                                 + StatusUpdates.STATUS +
-                        " LIMIT 1)"
-                + " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
+                        " LIMIT 1)" +
+                " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
         final Locale locale = Locale.getDefault();
         mNameSplitter = new NameSplitter(
@@ -1823,7 +1830,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /* package */ boolean importLegacyContacts(LegacyContactImporter importer) {
         boolean aggregatorEnabled = mContactAggregator.isEnabled();
         mContactAggregator.setEnabled(false);
-        mImportMode = true;
         try {
             importer.importContacts();
             mContactAggregator.setEnabled(aggregatorEnabled);
@@ -1831,8 +1837,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         } catch (Throwable e) {
            Log.e(TAG, "Legacy contact import failed", e);
            return false;
-        } finally {
-            mImportMode = false;
         }
     }
 
@@ -1913,6 +1917,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mInsertedRawContacts.clear();
         mUpdatedRawContacts.clear();
         mUpdatedSyncStates.clear();
+        mDirtyRawContacts.clear();
     }
 
     @Override
@@ -1938,11 +1943,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mContactAggregator.onRawContactInsert(mDb, rawContactId);
         }
 
-        String ids;
+        if (!mDirtyRawContacts.isEmpty()) {
+            mSb.setLength(0);
+            mSb.append(UPDATE_RAW_CONTACT_SET_DIRTY_SQL);
+            appendIds(mSb, mDirtyRawContacts);
+            mSb.append(")");
+            mDb.execSQL(mSb.toString());
+        }
+
         if (!mUpdatedRawContacts.isEmpty()) {
-            ids = buildIdsString(mUpdatedRawContacts);
-            mDb.execSQL("UPDATE raw_contacts SET version = version + 1 WHERE _id in " + ids,
-                    new Object[]{});
+            mSb.setLength(0);
+            mSb.append(UPDATE_RAW_CONTACT_SET_VERSION_SQL);
+            appendIds(mSb, mUpdatedRawContacts);
+            mSb.append(")");
+            mDb.execSQL(mSb.toString());
         }
 
         for (Map.Entry<Long, Object> entry : mUpdatedSyncStates.entrySet()) {
@@ -1953,19 +1967,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         clearTransactionalChanges();
     }
 
-    private String buildIdsString(HashSet<Long> ids) {
-        StringBuilder idsBuilder = null;
+    /**
+     * Appends comma separated ids.
+     * @param ids Should not be empty
+     */
+    private void appendIds(StringBuilder sb, HashSet<Long> ids) {
         for (long id : ids) {
-            if (idsBuilder == null) {
-                idsBuilder = new StringBuilder();
-                idsBuilder.append("(");
-            } else {
-                idsBuilder.append(",");
-            }
-            idsBuilder.append(id);
+            sb.append(id).append(',');
         }
-        idsBuilder.append(")");
-        return idsBuilder.toString();
+
+        sb.setLength(sb.length() - 1); // Yank the last comma
     }
 
     @Override
@@ -3573,7 +3584,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
-                    sb.append("(");
+                    sb.append(" AND (");
 
                     boolean orNeeded = false;
                     String normalizedName = NameNormalizer.normalize(filterParam);
@@ -3597,7 +3608,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         sb.append("')");
                     }
                     sb.append(")");
-                    qb.appendWhere(" AND " + sb);
+                    qb.appendWhere(sb);
                 }
                 groupBy = PhoneColumns.NORMALIZED_NUMBER + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
@@ -3635,7 +3646,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
-                    sb.append("(");
+                    sb.append(" AND (");
 
                     if (!filterParam.contains("@")) {
                         String normalizedName = NameNormalizer.normalize(filterParam);
@@ -3649,7 +3660,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     sb.append(Email.DATA + " LIKE ");
                     sb.append(DatabaseUtils.sqlEscapeString(filterParam + '%'));
                     sb.append(")");
-                    qb.appendWhere(" AND " + sb);
+                    qb.appendWhere(sb);
                 }
                 groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
@@ -4837,8 +4848,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Sets the {@link RawContacts#DIRTY} for the specified raw contact.
      */
     private void setRawContactDirty(long rawContactId) {
-        mRawContactDirtyUpdate.bindLong(1, rawContactId);
-        mRawContactDirtyUpdate.execute();
+        mDirtyRawContacts.add(rawContactId);
     }
 
     /*
