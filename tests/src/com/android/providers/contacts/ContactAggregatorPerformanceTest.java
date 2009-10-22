@@ -46,6 +46,18 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
     private static final String TAG = "ContactAggregatorPerformanceTest";
     private static final boolean TRACE = false;
 
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        SynchronousContactsProvider2.resetOpenHelper();
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+        SynchronousContactsProvider2.resetOpenHelper();
+    }
+
     public void testPerformance() {
         final Context targetContext = getContext();
         MockContentResolver resolver = new MockContentResolver();
