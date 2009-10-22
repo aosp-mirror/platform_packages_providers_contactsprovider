@@ -95,7 +95,10 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
         if (TRACE) {
             Debug.startMethodTracing("aggregation");
         }
-        provider.aggregate();
+
+        // TODO
+//        provider.aggregate();
+
         if (TRACE) {
             Debug.stopMethodTracing();
         }

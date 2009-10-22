@@ -177,8 +177,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContactWithName("Hot", "Tamale");
         insertPhoneNumber(rawContactId2, "1-800-466-4411");
 
-        forceAggregation();
-
         Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
         ContentValues values = new ContentValues();
         values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
@@ -325,7 +323,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         long rawContactId2 = createRawContactWithName("Hot", "Tamale");
         insertEmail(rawContactId2, "tamale@acme.com");
-        forceAggregation();
 
         Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tam");
         ContentValues values = new ContentValues();
@@ -1394,7 +1391,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testContactDeletion() {
         long rawContactId1 = createRawContactWithName("John", "Doe");
         long rawContactId2 = createRawContactWithName("John", "Doe");
-        forceAggregation();
 
         long contactId = queryContactId(rawContactId1);
 

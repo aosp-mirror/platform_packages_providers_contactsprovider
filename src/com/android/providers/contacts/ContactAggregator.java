@@ -57,10 +57,8 @@ import java.util.List;
  * ContactAggregator deals with aggregating contact information coming from different sources.
  * Two John Doe contacts from two disjoint sources are presumed to be the same
  * person unless the user declares otherwise.
- * <p>
- * ContactAggregator runs on a separate thread.
  */
-public class ContactAggregator implements ContactAggregationScheduler.Aggregator {
+public class ContactAggregator {
 
     private static final String TAG = "ContactAggregator";
 
@@ -84,17 +82,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
     private static final int COL_CONTACT_ID = 0;
 
-    /**
-     * When yielding the transaction to another thread, sleep for this many milliseconds
-     * to allow the other thread to build up a transaction before yielding back.
-     */
-    private static final int SLEEP_AFTER_YIELD_DELAY = 4000;
-
-    /**
-     * The maximum number of contacts aggregated in a single transaction.
-     */
-    private static final int MAX_TRANSACTION_SIZE = 50;
-
     // From system/core/logcat/event-log-tags
     // aggregator [time, count] will be logged for each aggregator cycle.
     // For the query (as opposed to the merge), count will be negative
@@ -115,11 +102,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     private final ContactsProvider2 mContactsProvider;
     private final ContactsDatabaseHelper mDbHelper;
-    private final ContactAggregationScheduler mScheduler;
     private boolean mEnabled = true;
-
-    // Set if the current aggregation pass should be interrupted
-    private volatile boolean mCancel;
 
     /** Precompiled sql statement for setting an aggregated presence */
     private SQLiteStatement mAggregatedPresenceReplace;
@@ -188,12 +171,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     }
 
     /**
-     * Constructor.  Starts a contact aggregation thread.  Call {@link #quit} to kill the
-     * aggregation thread.  Call {@link #schedule} to kick off the aggregation process after
-     * a delay of {@link ContactAggregationScheduler#AGGREGATION_DELAY} milliseconds.
+     * Constructor.
      */
     public ContactAggregator(ContactsProvider2 contactsProvider,
-            ContactsDatabaseHelper contactsDatabaseHelper, ContactAggregationScheduler scheduler) {
+            ContactsDatabaseHelper contactsDatabaseHelper) {
         mContactsProvider = contactsProvider;
         mDbHelper = contactsDatabaseHelper;
 
@@ -282,15 +263,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 " WHERE " + PresenceColumns.RAW_CONTACT_ID + "=?");
 
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-
-        mScheduler = scheduler;
-        mScheduler.setAggregator(this);
-        mScheduler.start();
-
-        // Perform an aggregation pass in the beginning, which will most of the time
-        // do nothing.  It will only be useful if the content provider has been killed
-        // before completing aggregation.
-        mScheduler.schedule();
     }
 
     public void setEnabled(boolean enabled) {
@@ -299,30 +271,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
     public boolean isEnabled() {
         return mEnabled;
-    }
-
-    /**
-     * Schedules aggregation pass after a short delay.  This method should be called every time
-     * the {@link RawContacts#CONTACT_ID} field is reset on any record.
-     */
-    public void schedule() {
-        if (mEnabled) {
-            mScheduler.schedule();
-        }
-    }
-
-    /**
-     * Kills the contact aggregation thread.
-     */
-    public void quit() {
-        mScheduler.stop();
-    }
-
-    /**
-     * Invoked by the scheduler to cancel aggregation.
-     */
-    public void interrupt() {
-        mCancel = true;
     }
 
     private interface AggregationQuery {
@@ -340,119 +288,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                         + "=" + RawContacts.AGGREGATION_MODE_DEFAULT
                 + " AND " + RawContacts.CONTACT_ID + " NOT NULL";
     }
-
-    /**
-     * Find all contacts that require aggregation and pass them through aggregation one by one.
-     * Do not call directly.  It is invoked by the scheduler.
-     */
-    public void run() {
-        if (!mEnabled) {
-            return;
-        }
-
-        mCancel = false;
-
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatcher matcher = new ContactMatcher();
-        ContentValues values = new ContentValues();
-        long rawContactIds[] = new long[MAX_TRANSACTION_SIZE];
-        long contactIds[] = new long[MAX_TRANSACTION_SIZE];
-        while (!mCancel) {
-            if (!aggregateBatch(db, candidates, matcher, values, rawContactIds, contactIds)) {
-                break;
-            }
-        }
-    }
-
-    /**
-     * Takes a batch of contacts and aggregates them. Returns the number of successfully
-     * processed raw contacts.
-     *
-     * @return true if there are possibly more contacts to aggregate
-     */
-    private boolean aggregateBatch(SQLiteDatabase db, MatchCandidateList candidates,
-            ContactMatcher matcher, ContentValues values, long[] rawContactIds, long[] contactIds) {
-        boolean lastBatch = false;
-        long elapsedTime = 0;
-        int aggregatedCount = 0;
-        while (!mCancel && aggregatedCount < MAX_TRANSACTION_SIZE) {
-            db.beginTransaction();
-            try {
-
-                long start = System.currentTimeMillis();
-                int count = findContactsToAggregate(db, rawContactIds, contactIds,
-                        MAX_TRANSACTION_SIZE - aggregatedCount);
-                if (mCancel || count == 0) {
-                    lastBatch = true;
-                    break;
-                }
-
-                Log.i(TAG, "Contact aggregation: " + count);
-                EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION,
-                        System.currentTimeMillis() - start, -count);
-
-                for (int i = 0; i < count; i++) {
-                    start = System.currentTimeMillis();
-                    aggregateContact(db, rawContactIds[i], contactIds[i], candidates, matcher,
-                            values);
-                    long end = System.currentTimeMillis();
-                    elapsedTime += (end - start);
-                    aggregatedCount++;
-                    if (db.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
-
-                        // We have yielded the database, so the rawContactIds and contactIds
-                        // arrays are no longer current - we need to refetch them
-                        break;
-                    }
-                }
-                db.setTransactionSuccessful();
-            } finally {
-                db.endTransaction();
-            }
-        }
-
-        EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, elapsedTime, aggregatedCount);
-        String performance = aggregatedCount == 0 ? "" : ", " + (elapsedTime / aggregatedCount)
-                + " ms per contact";
-        if (aggregatedCount != 0) {
-            Log.i(TAG, "Contact aggregation complete: " + aggregatedCount + performance);
-        }
-
-        if (aggregatedCount > 0) {
-
-            // Aggregation does not affect raw contacts and therefore there is no reason
-            // to send a notification to sync adapters.  We do need to notify every one else though.
-            mContactsProvider.notifyChange(false);
-        }
-
-        return !lastBatch;
-    }
-
-    /**
-     * Finds a batch of contacts marked for aggregation. The maximum batch size
-     * is {@link #MAX_TRANSACTION_SIZE} contacts.
-     * @param limit
-     */
-    private int findContactsToAggregate(SQLiteDatabase db, long[] rawContactIds,
-            long[] contactIds, int limit) {
-        Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS,
-                AggregationQuery.SELECTION, null, null, null, null,
-                String.valueOf(limit));
-
-        int count = 0;
-        try {
-            while (c.moveToNext()) {
-                rawContactIds[count] = c.getLong(AggregationQuery._ID);
-                contactIds[count] = c.getLong(AggregationQuery.CONTACT_ID);
-                count++;
-            }
-        } finally {
-            c.close();
-        }
-        return count;
-    }
-
 
     /**
      * Aggregate all raw contacts that were marked for aggregation in the current transaction.

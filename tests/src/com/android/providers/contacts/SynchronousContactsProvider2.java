@@ -31,14 +31,6 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private Account mAccount;
     private boolean mNetworkNotified;
 
-    public SynchronousContactsProvider2() {
-        this(new SynchronousAggregationScheduler());
-    }
-
-    public SynchronousContactsProvider2(ContactAggregationScheduler scheduler) {
-        super(scheduler);
-    }
-
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         if (mDbHelper == null) {
@@ -129,32 +121,5 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
         // We have an explicit test for data conversion - no need to do it every time
         return false;
-    }
-
-    public void aggregate() {
-        ContactAggregationScheduler scheduler = getContactAggregationScheduler();
-        scheduler.run();
-    }
-
-    private static class SynchronousAggregationScheduler extends ContactAggregationScheduler {
-
-        @Override
-        public void start() {
-        }
-
-        @Override
-        public void stop() {
-        }
-
-        @Override
-        long currentTime() {
-            return 0;
-        }
-
-        @Override
-        void runDelayed() {
-//            super.run();
-        }
-
     }
 }

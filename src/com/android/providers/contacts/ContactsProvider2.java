@@ -1583,7 +1583,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private HashMap<String, DataRowHandler> mDataRowHandlers;
-    private final ContactAggregationScheduler mAggregationScheduler;
     private ContactsDatabaseHelper mDbHelper;
 
     private NameSplitter mNameSplitter;
@@ -1619,17 +1618,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private boolean mSyncToNetwork;
 
-    public ContactsProvider2() {
-        this(new ContactAggregationScheduler());
-    }
-
-    /**
-     * Constructor for testing.
-     */
-    /* package */ ContactsProvider2(ContactAggregationScheduler scheduler) {
-        mAggregationScheduler = scheduler;
-    }
-
     @Override
     public boolean onCreate() {
         super.onCreate();
@@ -1638,7 +1626,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
-        mContactAggregator = new ContactAggregator(this, mDbHelper, mAggregationScheduler);
+        mContactAggregator = new ContactAggregator(this, mDbHelper);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
@@ -1783,10 +1771,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return ContactsDatabaseHelper.getInstance(context);
     }
 
-    /* package */ ContactAggregationScheduler getContactAggregationScheduler() {
-        return mAggregationScheduler;
-    }
-
     /* package */ NameSplitter getNameSplitter() {
         return mNameSplitter;
     }
@@ -1811,6 +1795,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             @Override
             public void run() {
                 if (importLegacyContacts()) {
+                    // TODO aggregate all newly added raw contacts
 
                     /*
                      * When the import process is done, we can unlock the provider and
@@ -1818,7 +1803,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                      */
                     mAccessLatch.countDown();
                     mAccessLatch = null;
-                    scheduleContactAggregation();
                 }
             }
         };
@@ -1851,15 +1835,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
            Log.e(TAG, "Legacy contact import failed", e);
            return false;
         }
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-        if (mContactAggregator != null) {
-            mContactAggregator.quit();
-        }
-
-        super.finalize();
     }
 
     /**
@@ -2001,10 +1976,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     protected void notifyChange(boolean syncToNetwork) {
         getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
                 syncToNetwork);
-    }
-
-    protected void scheduleContactAggregation() {
-        mContactAggregator.schedule();
     }
 
     private boolean isNewRawContact(long rawContactId) {
