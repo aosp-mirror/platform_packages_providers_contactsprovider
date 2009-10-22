@@ -77,8 +77,7 @@ public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
                 targetContext, "perf_imp.");
         targetContextWrapper.makeExistingFilesAndDbsAccessible();
         IsolatedContext providerContext = new IsolatedContext(resolver, targetContextWrapper);
-        TestAggregationScheduler scheduler = new TestAggregationScheduler();
-        SynchronousContactsProvider2 provider = new SynchronousContactsProvider2(scheduler);
+        SynchronousContactsProvider2 provider = new SynchronousContactsProvider2();
         provider.setDataWipeEnabled(false);
         provider.attachInfo(providerContext, null);
         resolver.addProvider(ContactsContract.AUTHORITY, provider);
@@ -118,30 +117,6 @@ public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
                 mDbHelper = new ContactsDatabaseHelper(context);
             }
             return mDbHelper;
-        }
-    }
-
-    private static class TestAggregationScheduler extends ContactAggregationScheduler {
-
-        @Override
-        public void start() {
-        }
-
-        @Override
-        public void stop() {
-        }
-
-        @Override
-        long currentTime() {
-            return 0;
-        }
-
-        @Override
-        void runDelayed() {
-        }
-
-        void trigger() {
-            run();
         }
     }
 }

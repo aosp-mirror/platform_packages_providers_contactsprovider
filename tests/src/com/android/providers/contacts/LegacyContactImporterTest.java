@@ -184,8 +184,6 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Calls.CACHED_NUMBER_TYPE,
         });
 
-        // Performing an aggregation pass should not change anything.
-        provider.scheduleContactAggregation();
         assertQueryResults("expected_contacts.txt", Contacts.CONTENT_URI, new String[]{
                 Contacts._ID,
                 Contacts.DISPLAY_NAME,
