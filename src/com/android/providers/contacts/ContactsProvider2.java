@@ -146,8 +146,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
+    private static final String TIMES_CONTACED_SORT_COLUMN = "times_contacted_sort";
+
     private static final String STREQUENT_ORDER_BY = Contacts.STARRED + " DESC, "
-            + Contacts.TIMES_CONTACTED + " DESC, "
+            + TIMES_CONTACED_SORT_COLUMN + " DESC, "
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
     private static final String STREQUENT_LIMIT =
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
@@ -324,6 +326,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
+    /** Used for pushing starred contacts to the top of a times contacted list **/
+    private static final HashMap<String, String> sStrequentStarredProjectionMap;
+    private static final HashMap<String, String> sStrequentFrequentProjectionMap;
     /** Contains just the contacts vCard columns */
     private static final HashMap<String, String> sContactsVCardProjectionMap;
     /** Contains just the raw contacts columns */
@@ -484,6 +489,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL);
         addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_ICON,
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON);
+
+        sStrequentStarredProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
+        sStrequentStarredProjectionMap.put(TIMES_CONTACED_SORT_COLUMN,
+                  Long.MAX_VALUE + " AS " + TIMES_CONTACED_SORT_COLUMN);
+
+        sStrequentFrequentProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
+        sStrequentFrequentProjectionMap.put(TIMES_CONTACED_SORT_COLUMN,
+                  Contacts.TIMES_CONTACTED + " AS " + TIMES_CONTACED_SORT_COLUMN);
 
         sContactsVCardProjectionMap = Maps.newHashMap();
         sContactsVCardProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
@@ -3512,11 +3525,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
 
+                String[] starredProjection = null;
+                String[] frequentProjection = null;
+                if (projection != null) {
+                    starredProjection = appendProjectionArg(projection, TIMES_CONTACED_SORT_COLUMN);
+                    frequentProjection = appendProjectionArg(projection, TIMES_CONTACED_SORT_COLUMN);
+                }
+
                 // Build the first query for starred
                 if (filterSql != null) {
                     qb.appendWhere(filterSql);
                 }
-                final String starredQuery = qb.buildQuery(projection, Contacts.STARRED + "=1",
+                qb.setProjectionMap(sStrequentStarredProjectionMap);
+                final String starredQuery = qb.buildQuery(starredProjection, Contacts.STARRED + "=1",
                         null, Contacts._ID, null, null, null);
 
                 // Build the second query for frequent
@@ -3525,7 +3546,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (filterSql != null) {
                     qb.appendWhere(filterSql);
                 }
-                final String frequentQuery = qb.buildQuery(projection,
+                qb.setProjectionMap(sStrequentFrequentProjectionMap);
+                final String frequentQuery = qb.buildQuery(frequentProjection,
                         Contacts.TIMES_CONTACTED + " > 0 AND (" + Contacts.STARRED
                         + " = 0 OR " + Contacts.STARRED + " IS NULL)",
                         null, Contacts._ID, null, null, null);
@@ -5130,6 +5152,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             System.arraycopy(selectionArgs, 0, newSelectionArgs, 1, selectionArgs.length);
             return newSelectionArgs;
         }
+    }
+
+    private String[] appendProjectionArg(String[] projection, String arg) {
+        if (projection == null) {
+            return null;
+        }
+        final int length = projection.length;
+        String[] newProjection = new String[length + 1];
+        System.arraycopy(projection, 0, newProjection, 0, length);
+        newProjection[length] = arg;
+        return newProjection;
     }
 
     protected Account getDefaultAccount() {
