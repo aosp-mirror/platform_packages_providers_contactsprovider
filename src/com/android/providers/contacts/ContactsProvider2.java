@@ -58,6 +58,7 @@ import android.content.SharedPreferences;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
 import android.content.res.AssetFileDescriptor;
+import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteConstraintException;
@@ -278,21 +279,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int ACCOUNT_NAME = 2;
     }
 
-    private static final HashMap<String, Integer> sDisplayNameSources;
-    static {
-        sDisplayNameSources = new HashMap<String, Integer>();
-        sDisplayNameSources.put(StructuredName.CONTENT_ITEM_TYPE,
-                DisplayNameSources.STRUCTURED_NAME);
-        sDisplayNameSources.put(Nickname.CONTENT_ITEM_TYPE,
-                DisplayNameSources.NICKNAME);
-        sDisplayNameSources.put(Organization.CONTENT_ITEM_TYPE,
-                DisplayNameSources.ORGANIZATION);
-        sDisplayNameSources.put(Phone.CONTENT_ITEM_TYPE,
-                DisplayNameSources.PHONE);
-        sDisplayNameSources.put(Email.CONTENT_ITEM_TYPE,
-                DisplayNameSources.EMAIL);
-    }
-
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google";
     public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
@@ -380,7 +366,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
+    private long mMimeTypeIdStructuredName;
+    private long mMimeTypeIdOrganization;
+    private long mMimeTypeIdNickname;
+    private long mMimeTypeIdPhone;
     private StringBuilder mSb = new StringBuilder();
+    private String[] mSelectionArgs1 = new String[1];
+    private String[] mSelectionArgs2 = new String[2];
+    private String[] mSelectionArgs3 = new String[3];
 
     static {
         // Contacts URI matching table
@@ -853,6 +846,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         protected final String mMimetype;
         protected long mMimetypeId;
 
+        @SuppressWarnings("all")
         public DataRowHandler(String mimetype) {
             mMimetype = mimetype;
 
@@ -1606,6 +1600,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private GlobalSearchSupport mGlobalSearchSupport;
 
     private ContentValues mValues = new ContentValues();
+    private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
 
     private volatile CountDownLatch mAccessLatch;
 
@@ -1756,6 +1751,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         mMimeTypeIdIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mMimeTypeIdStructuredName = mDbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+        mMimeTypeIdOrganization = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+        mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
+        mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
         preloadNicknameBloomFilter();
         return (db != null);
     }
@@ -1910,6 +1909,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     protected void beforeTransactionCommit() {
+
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "beforeTransactionCommit");
         }
@@ -1926,6 +1926,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "flushTransactionChanges");
         }
+
         for (long rawContactId : mInsertedRawContacts.keySet()) {
             updateRawContactDisplayName(mDb, rawContactId);
             mContactAggregator.onRawContactInsert(mDb, rawContactId);
@@ -1994,7 +1995,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "insertInTransaction: " + uri);
+            Log.v(TAG, "insertInTransaction: " + uri + " " + values);
         }
 
         final boolean callerIsSyncAdapter =
@@ -2284,14 +2285,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private interface DisplayNameQuery {
-        public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
-
-        public static final String[] COLUMNS = new String[] {
-            MimetypesColumns.MIMETYPE,
-            Data.IS_PRIMARY,
-            Data.DATA1,
-            Organization.TITLE,
-        };
+        public static final String RAW_SQL =
+                "SELECT "
+                        + DataColumns.MIMETYPE_ID + ","
+                        + Data.IS_PRIMARY + ","
+                        + Data.DATA1 + ","
+                        + Organization.TITLE +
+                " FROM " + Tables.DATA +
+                " WHERE " + Data.RAW_CONTACT_ID + "=?" +
+                        " AND (" + Data.DATA1 + " NOT NULL OR " +
+                                Organization.TITLE + " NOT NULL)";
 
         public static final int MIMETYPE = 0;
         public static final int IS_PRIMARY = 1;
@@ -2307,28 +2310,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String bestDisplayName = null;
         int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
 
-        Cursor c = db.query(DisplayNameQuery.TABLE, DisplayNameQuery.COLUMNS,
-                Data.RAW_CONTACT_ID + "=" + rawContactId, null, null, null, null);
+        mSelectionArgs1[0] = String.valueOf(rawContactId);
+        Cursor c = db.rawQuery(DisplayNameQuery.RAW_SQL, mSelectionArgs1);
         try {
             while (c.moveToNext()) {
-                String mimeType = c.getString(DisplayNameQuery.MIMETYPE);
+                int mimeType = c.getInt(DisplayNameQuery.MIMETYPE);
 
-                // Display name is at DATA1 in all type.  This is ensured in the constructor.
-                String name = c.getString(DisplayNameQuery.DATA);
-                if (TextUtils.isEmpty(name)
-                        && Organization.CONTENT_ITEM_TYPE.equals(mimeType)) {
-                    name = c.getString(DisplayNameQuery.TITLE);
+                // Display name is at DATA1 in all type. This is ensured in the
+                // constructor.
+                mCharArrayBuffer.sizeCopied = 0;
+                c.copyStringToBuffer(DisplayNameQuery.DATA, mCharArrayBuffer);
+                if (mimeType == mMimeTypeIdOrganization && mCharArrayBuffer.sizeCopied == 0) {
+                    c.copyStringToBuffer(DisplayNameQuery.TITLE, mCharArrayBuffer);
                 }
-                boolean primary = StructuredName.CONTENT_ITEM_TYPE.equals(mimeType)
-                    || (c.getInt(DisplayNameQuery.IS_PRIMARY) != 0);
 
-                if (name != null) {
-                    Integer source = sDisplayNameSources.get(mimeType);
-                    if (source != null
-                            && (source > bestDisplayNameSource
-                                    || (source == bestDisplayNameSource && primary))) {
+                if (mCharArrayBuffer.sizeCopied != 0) {
+                    int source = getDisplayNameSource(mimeType);
+                    if (source > bestDisplayNameSource) {
                         bestDisplayNameSource = source;
-                        bestDisplayName = name;
+                        bestDisplayName = new String(mCharArrayBuffer.data, 0,
+                                mCharArrayBuffer.sizeCopied);
+                    } else if (source == bestDisplayNameSource
+                            && source != DisplayNameSources.UNDEFINED) {
+                        if (mimeType == mMimeTypeIdStructuredName
+                                || c.getInt(DisplayNameQuery.IS_PRIMARY) != 0) {
+                            bestDisplayNameSource = source;
+                            bestDisplayName = new String(mCharArrayBuffer.data, 0,
+                                    mCharArrayBuffer.sizeCopied);
+                        }
                     }
                 }
             }
@@ -2338,6 +2347,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         setDisplayName(rawContactId, bestDisplayName, bestDisplayNameSource);
+    }
+
+    private int getDisplayNameSource(int mimeTypeId) {
+        if (mimeTypeId == mMimeTypeIdStructuredName) {
+            return DisplayNameSources.STRUCTURED_NAME;
+        } else if (mimeTypeId == mMimeTypeIdEmail) {
+            return DisplayNameSources.EMAIL;
+        } else if (mimeTypeId == mMimeTypeIdPhone) {
+            return DisplayNameSources.PHONE;
+        } else if (mimeTypeId == mMimeTypeIdOrganization) {
+            return DisplayNameSources.ORGANIZATION;
+        } else if (mimeTypeId == mMimeTypeIdNickname) {
+            return DisplayNameSources.NICKNAME;
+        } else {
+            return DisplayNameSources.UNDEFINED;
+        }
     }
 
     /**
@@ -2846,7 +2871,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final int match = sUriMatcher.match(uri);
         if (match == SYNCSTATE_ID && selection == null) {
             long rowId = ContentUris.parseId(uri);
-            Object data = values.get(ContactsContract.SyncStateColumns.DATA);
+            Object data = values.get(ContactsContract.SyncState.DATA);
             mUpdatedSyncStates.put(rowId, data);
             return 1;
         }
@@ -3060,7 +3085,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mVisibleTouched = true;
         }
         if (updatedValues.containsKey(Groups.SHOULD_SYNC)
-	        && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
+                && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
             final long groupId = ContentUris.parseId(uri);
             Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
                     Groups.ACCOUNT_TYPE}, Groups._ID + "=" + groupId, null, null,

@@ -30,6 +30,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
@@ -62,25 +63,13 @@ public class ContactAggregator {
 
     private static final String TAG = "ContactAggregator";
 
-    private interface ContactIdQuery {
-        String TABLE = Tables.CONTACTS;
-
-        String[] COLUMNS = new String[] {
-            Contacts._ID
-        };
-
-        int _ID = 0;
-    }
+    private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
     private static final String STRUCTURED_NAME_BASED_LOOKUP_SQL =
             NameLookupColumns.NAME_TYPE + " IN ("
                     + NameLookupType.NAME_EXACT + ","
                     + NameLookupType.NAME_VARIANT + ","
                     + NameLookupType.NAME_COLLATION_KEY + ")";
-
-    private static final String[] CONTACT_ID_COLUMN = new String[] { RawContacts._ID };
-    private static final String[] CONTACT_ID_COLUMNS = new String[]{ RawContacts.CONTACT_ID };
-    private static final int COL_CONTACT_ID = 0;
 
     // From system/core/logcat/event-log-tags
     // aggregator [time, count] will be logged for each aggregator cycle.
@@ -119,6 +108,8 @@ public class ContactAggregator {
     private SQLiteStatement mContactIdAndMarkAggregatedUpdate;
     private SQLiteStatement mContactIdUpdate;
     private SQLiteStatement mMarkAggregatedUpdate;
+    private SQLiteStatement mContactUpdate;
+    private SQLiteStatement mContactInsert;
 
     private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
 
@@ -126,7 +117,15 @@ public class ContactAggregator {
     private String[] mSelectionArgs2 = new String[2];
     private String[] mSelectionArgs3 = new String[3];
     private long mMimeTypeIdEmail;
+    private long mMimeTypeIdPhoto;
+    private long mMimeTypeIdPhone;
+    private String mRawContactsQueryByRawContactId;
+    private String mRawContactsQueryByContactId;
     private StringBuilder mSb = new StringBuilder();
+    private MatchCandidateList mCandidates = new MatchCandidateList();
+    private ContactMatcher mMatcher = new ContactMatcher();
+    private ContentValues mValues = new ContentValues();
+
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -262,7 +261,21 @@ public class ContactAggregator {
                 " SET " + PresenceColumns.CONTACT_ID + "=?" +
                 " WHERE " + PresenceColumns.RAW_CONTACT_ID + "=?");
 
+        mContactUpdate = db.compileStatement(ContactReplaceSqlStatement.UPDATE_SQL);
+        mContactInsert = db.compileStatement(ContactReplaceSqlStatement.INSERT_SQL);
+
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimeTypeIdPhoto = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
+        mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+
+        // Query used to retrieve data from raw contacts to populate the corresponding aggregate
+        mRawContactsQueryByRawContactId = String.format(
+                RawContactsQuery.SQL_FORMAT_BY_RAW_CONTACT_ID,
+                mMimeTypeIdPhoto, mMimeTypeIdPhone);
+
+        mRawContactsQueryByContactId = String.format(
+                RawContactsQuery.SQL_FORMAT_BY_CONTACT_ID,
+                mMimeTypeIdPhoto, mMimeTypeIdPhone);
     }
 
     public void setEnabled(boolean enabled) {
@@ -274,19 +287,13 @@ public class ContactAggregator {
     }
 
     private interface AggregationQuery {
-        String TABLE = Tables.RAW_CONTACTS;
-
-        String[] COLUMNS = {
-                RawContacts._ID, RawContacts.CONTACT_ID
-        };
+        String SQL =
+                "SELECT " + RawContacts._ID + "," + RawContacts.CONTACT_ID +
+                " FROM " + Tables.RAW_CONTACTS +
+                " WHERE " + RawContacts._ID + " IN(";
 
         int _ID = 0;
         int CONTACT_ID = 1;
-
-        String SELECTION = RawContactsColumns.AGGREGATION_NEEDED + "=1"
-                + " AND " + RawContacts.AGGREGATION_MODE
-                        + "=" + RawContacts.AGGREGATION_MODE_DEFAULT
-                + " AND " + RawContacts.CONTACT_ID + " NOT NULL";
     }
 
     /**
@@ -300,14 +307,17 @@ public class ContactAggregator {
         }
 
         long start = System.currentTimeMillis();
-        Log.i(TAG, "Contact aggregation: " + count);
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "Contact aggregation: " + count);
+        }
+
         EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, start, -count);
 
         long rawContactIds[] = new long[count];
         long contactIds[] = new long[count];
 
         mSb.setLength(0);
-        mSb.append(RawContacts._ID + " IN(");
+        mSb.append(AggregationQuery.SQL);
         for (long rawContactId : mRawContactsMarkedForAggregation) {
             mSb.append(rawContactId);
             mSb.append(',');
@@ -316,11 +326,9 @@ public class ContactAggregator {
         mSb.setLength(mSb.length() - 1);
         mSb.append(')');
 
-        Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS, mSb.toString(), null,
-                null, null, null);
-
-        int index = 0;
+        Cursor c = db.rawQuery(mSb.toString(), null);
         try {
+            int index = 0;
             while (c.moveToNext()) {
                 rawContactIds[index] = c.getLong(AggregationQuery._ID);
                 contactIds[index] = c.getLong(AggregationQuery.CONTACT_ID);
@@ -330,18 +338,17 @@ public class ContactAggregator {
             c.close();
         }
 
-        MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatcher matcher = new ContactMatcher();
-        ContentValues values = new ContentValues();
-
         for (int i = 0; i < count; i++) {
-            aggregateContact(db, rawContactIds[i], contactIds[i], candidates, matcher, values);
+            aggregateContact(db, rawContactIds[i], contactIds[i], mCandidates, mMatcher, mValues);
         }
 
         long elapsedTime = System.currentTimeMillis() - start;
         EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, elapsedTime, count);
-        String performance = count == 0 ? "" : ", " + (elapsedTime / count) + " ms per contact";
-        Log.i(TAG, "Contact aggregation complete: " + count + performance);
+
+        if (VERBOSE_LOGGING) {
+            String performance = count == 0 ? "" : ", " + (elapsedTime / count) + " ms per contact";
+            Log.i(TAG, "Contact aggregation complete: " + count + performance);
+        }
     }
 
     public void clearPendingAggregations() {
@@ -364,12 +371,9 @@ public class ContactAggregator {
      * Creates a new contact based on the given raw contact.  Does not perform aggregation.
      */
     public void onRawContactInsert(SQLiteDatabase db, long rawContactId) {
-        ContentValues contactValues = new ContentValues();
-        contactValues.put(Contacts.DISPLAY_NAME, "");
-        contactValues.put(Contacts.IN_VISIBLE_GROUP, false);
-        computeAggregateData(db,
-                RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
-        long contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
+        mSelectionArgs1[0] = String.valueOf(rawContactId);
+        computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1, mContactInsert);
+        long contactId = mContactInsert.executeInsert();
         setContactId(rawContactId, contactId);
         mDbHelper.updateContactVisible(contactId);
     }
@@ -395,9 +399,9 @@ public class ContactAggregator {
         }
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        final ContentValues values = new ContentValues();
-        computeAggregateData(db, contactId, values);
-        db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+        computeAggregateData(db, contactId, mContactUpdate);
+        mContactUpdate.bindLong(ContactReplaceSqlStatement.CONTACT_ID, contactId);
+        mContactUpdate.execute();
 
         mDbHelper.updateContactVisible(contactId);
         updateAggregatedPresence(contactId);
@@ -445,11 +449,10 @@ public class ContactAggregator {
             markAggregated(rawContactId);
         } else if (contactId == -1) {
             // Splitting an aggregate
-            ContentValues contactValues = new ContentValues();
-            contactValues.put(RawContactsColumns.DISPLAY_NAME, "");
-            computeAggregateData(db,
-                    RawContactsColumns.CONCRETE_ID + "=" + rawContactId, contactValues);
-            contactId = db.insert(Tables.CONTACTS, Contacts.DISPLAY_NAME, contactValues);
+            mSelectionArgs1[0] = String.valueOf(rawContactId);
+            computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1,
+                    mContactInsert);
+            contactId = mContactInsert.executeInsert();
             setContactIdAndMarkAggregated(rawContactId, contactId);
             mDbHelper.updateContactVisible(contactId);
 
@@ -472,8 +475,9 @@ public class ContactAggregator {
             }
 
             setContactIdAndMarkAggregated(rawContactId, contactId);
-            computeAggregateData(db, contactId, values);
-            db.update(Tables.CONTACTS, values, Contacts._ID + "=" + contactId, null);
+            computeAggregateData(db, contactId, mContactUpdate);
+            mContactUpdate.bindLong(ContactReplaceSqlStatement.CONTACT_ID, contactId);
+            mContactUpdate.execute();
             mDbHelper.updateContactVisible(contactId);
             updateAggregatedPresence(contactId);
         }
@@ -951,23 +955,37 @@ public class ContactAggregator {
     }
 
     private interface RawContactsQuery {
-        String[] COLUMNS = new String[] {
-            RawContactsColumns.CONCRETE_ID,
-            RawContactsColumns.DISPLAY_NAME,
-            RawContactsColumns.DISPLAY_NAME_SOURCE,
-            RawContacts.ACCOUNT_TYPE,
-            RawContacts.ACCOUNT_NAME,
-            RawContacts.SOURCE_ID,
-            RawContacts.CUSTOM_RINGTONE,
-            RawContacts.SEND_TO_VOICEMAIL,
-            RawContacts.LAST_TIME_CONTACTED,
-            RawContacts.TIMES_CONTACTED,
-            RawContacts.STARRED,
-            RawContacts.IS_RESTRICTED,
-            DataColumns.CONCRETE_ID,
-            DataColumns.CONCRETE_MIMETYPE_ID,
-            Data.IS_SUPER_PRIMARY,
-        };
+        String SQL_FORMAT =
+                "SELECT "
+                        + RawContactsColumns.CONCRETE_ID + ","
+                        + RawContactsColumns.DISPLAY_NAME + ","
+                        + RawContactsColumns.DISPLAY_NAME_SOURCE + ","
+                        + RawContacts.ACCOUNT_TYPE + ","
+                        + RawContacts.ACCOUNT_NAME + ","
+                        + RawContacts.SOURCE_ID + ","
+                        + RawContacts.CUSTOM_RINGTONE + ","
+                        + RawContacts.SEND_TO_VOICEMAIL + ","
+                        + RawContacts.LAST_TIME_CONTACTED + ","
+                        + RawContacts.TIMES_CONTACTED + ","
+                        + RawContacts.STARRED + ","
+                        + RawContacts.IS_RESTRICTED + ","
+                        + DataColumns.CONCRETE_ID + ","
+                        + DataColumns.CONCRETE_MIMETYPE_ID + ","
+                        + Data.IS_SUPER_PRIMARY +
+                " FROM " + Tables.RAW_CONTACTS +
+                " LEFT OUTER JOIN " + Tables.DATA +
+                " ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                        + " AND ((" + DataColumns.MIMETYPE_ID + "=%d"
+                                + " AND " + Photo.PHOTO + " NOT NULL)"
+                        + " OR (" + DataColumns.MIMETYPE_ID + "=%d"
+                                + " AND " + Phone.NUMBER + " NOT NULL)))";
+
+        String SQL_FORMAT_BY_RAW_CONTACT_ID = SQL_FORMAT +
+                " WHERE " + RawContactsColumns.CONCRETE_ID + "=?";
+
+        String SQL_FORMAT_BY_CONTACT_ID = SQL_FORMAT +
+                " WHERE " + RawContacts.CONTACT_ID + "=?"
+                + " AND " + RawContacts.DELETED + "=0";
 
         int RAW_CONTACT_ID = 0;
         int DISPLAY_NAME = 1;
@@ -986,19 +1004,64 @@ public class ContactAggregator {
         int IS_SUPER_PRIMARY = 14;
     }
 
+    private interface ContactReplaceSqlStatement {
+        String UPDATE_SQL =
+                "UPDATE " + Tables.CONTACTS +
+                " SET "
+                        + Contacts.DISPLAY_NAME + "=?, "
+                        + Contacts.PHOTO_ID + "=?, "
+                        + Contacts.SEND_TO_VOICEMAIL + "=?, "
+                        + Contacts.CUSTOM_RINGTONE + "=?, "
+                        + Contacts.LAST_TIME_CONTACTED + "=?, "
+                        + Contacts.TIMES_CONTACTED + "=?, "
+                        + Contacts.STARRED + "=?, "
+                        + Contacts.HAS_PHONE_NUMBER + "=?, "
+                        + ContactsColumns.SINGLE_IS_RESTRICTED + "=?, "
+                        + Contacts.LOOKUP_KEY + "=? " +
+                " WHERE " + Contacts._ID + "=?";
+
+        String INSERT_SQL =
+                "INSERT INTO " + Tables.CONTACTS + " ("
+                        + Contacts.DISPLAY_NAME + ", "
+                        + Contacts.PHOTO_ID + ", "
+                        + Contacts.SEND_TO_VOICEMAIL + ", "
+                        + Contacts.CUSTOM_RINGTONE + ", "
+                        + Contacts.LAST_TIME_CONTACTED + ", "
+                        + Contacts.TIMES_CONTACTED + ", "
+                        + Contacts.STARRED + ", "
+                        + Contacts.HAS_PHONE_NUMBER + ", "
+                        + ContactsColumns.SINGLE_IS_RESTRICTED + ", "
+                        + Contacts.LOOKUP_KEY + ", "
+                        + Contacts.IN_VISIBLE_GROUP + ") " +
+                " VALUES (?,?,?,?,?,?,?,?,?,?,0)";
+
+        int DISPLAY_NAME = 1;
+        int PHOTO_ID = 2;
+        int SEND_TO_VOICEMAIL = 3;
+        int CUSTOM_RINGTONE = 4;
+        int LAST_TIME_CONTACTED = 5;
+        int TIMES_CONTACTED = 6;
+        int STARRED = 7;
+        int HAS_PHONE_NUMBER = 8;
+        int SINGLE_IS_RESTRICTED = 9;
+        int LOOKUP_KEY = 10;
+        int CONTACT_ID = 11;
+    }
+
     /**
      * Computes aggregate-level data for the specified aggregate contact ID.
      */
-    private void computeAggregateData(SQLiteDatabase db, long contactId, ContentValues values) {
-        computeAggregateData(db, RawContacts.CONTACT_ID + "=" + contactId
-                + " AND " + RawContacts.DELETED + "=0", values);
+    private void computeAggregateData(SQLiteDatabase db, long contactId,
+            SQLiteStatement statement) {
+        mSelectionArgs1[0] = String.valueOf(contactId);
+        computeAggregateData(db, mRawContactsQueryByContactId, mSelectionArgs1, statement);
     }
 
     /**
      * Computes aggregate-level data from constituent raw contacts.
      */
-    private void computeAggregateData(final SQLiteDatabase db, String selection,
-            final ContentValues values) {
+    private void computeAggregateData(final SQLiteDatabase db, String sql, String[] sqlArgs,
+            SQLiteStatement statement) {
         long currentRawContactId = -1;
         int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
         String bestDisplayName = null;
@@ -1010,25 +1073,12 @@ public class ContactAggregator {
         String contactCustomRingtone = null;
         long contactLastTimeContacted = 0;
         int contactTimesContacted = 0;
-        boolean contactStarred = false;
+        int contactStarred = 0;
         int singleIsRestricted = 1;
         int hasPhoneNumber = 0;
 
-        long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
-        long phoneMimeType = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-
-        String isPhotoSql = "(" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
-                + Photo.PHOTO + " NOT NULL)";
-        String isPhoneSql = "(" + DataColumns.MIMETYPE_ID + "=" + phoneMimeType + " AND "
-                + Phone.NUMBER + " NOT NULL)";
-
-        String tables = Tables.RAW_CONTACTS + " LEFT OUTER JOIN " + Tables.DATA + " ON("
-                + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
-                + " AND (" + isPhotoSql + " OR " + isPhoneSql + "))";
-
         mSb.setLength(0);       // Lookup key
-        final Cursor c = db.query(tables, RawContactsQuery.COLUMNS, selection, null, null, null,
-                null);
+        Cursor c = db.rawQuery(sql, sqlArgs);
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(RawContactsQuery.RAW_CONTACT_ID);
@@ -1078,7 +1128,9 @@ public class ContactAggregator {
                         contactTimesContacted = timesContacted;
                     }
 
-                    contactStarred |= (c.getInt(RawContactsQuery.STARRED) != 0);
+                    if (c.getInt(RawContactsQuery.STARRED) != 0) {
+                        contactStarred = 1;
+                    }
 
                     // Single restricted
                     if (totalRowCount > 1) {
@@ -1104,7 +1156,7 @@ public class ContactAggregator {
                     long dataId = c.getLong(RawContactsQuery.DATA_ID);
                     int mimetypeId = c.getInt(RawContactsQuery.MIMETYPE_ID);
                     boolean superprimary = c.getInt(RawContactsQuery.IS_SUPER_PRIMARY) != 0;
-                    if (mimetypeId == photoMimeType) {
+                    if (mimetypeId == mMimeTypeIdPhoto) {
 
                         // For now, just choose the first photo in a list sorted by account name.
                         String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
@@ -1116,7 +1168,7 @@ public class ContactAggregator {
                             bestPhotoId = dataId;
                             foundSuperPrimaryPhoto |= superprimary;
                         }
-                    } else if (mimetypeId == phoneMimeType) {
+                    } else if (mimetypeId == mMimeTypeIdPhone) {
                         hasPhoneNumber = 1;
                     }
                 }
@@ -1126,28 +1178,33 @@ public class ContactAggregator {
             c.close();
         }
 
-        values.clear();
-
         // If don't have anything to base the display name on, let's just leave what was in
         // that field hoping that there was something there before and it is still valid.
-        if (bestDisplayName != null) {
-            values.put(Contacts.DISPLAY_NAME, bestDisplayName);
-        }
+        DatabaseUtils.bindObjectToProgram(statement, ContactReplaceSqlStatement.DISPLAY_NAME,
+                bestDisplayName);
 
         if (bestPhotoId != -1) {
-            values.put(Contacts.PHOTO_ID, bestPhotoId);
+            statement.bindLong(ContactReplaceSqlStatement.PHOTO_ID, bestPhotoId);
         } else {
-            values.putNull(Contacts.PHOTO_ID);
+            statement.bindNull(ContactReplaceSqlStatement.PHOTO_ID);
         }
 
-        values.put(Contacts.SEND_TO_VOICEMAIL, totalRowCount == contactSendToVoicemail);
-        values.put(Contacts.CUSTOM_RINGTONE, contactCustomRingtone);
-        values.put(Contacts.LAST_TIME_CONTACTED, contactLastTimeContacted);
-        values.put(Contacts.TIMES_CONTACTED, contactTimesContacted);
-        values.put(Contacts.STARRED, contactStarred);
-        values.put(Contacts.HAS_PHONE_NUMBER, hasPhoneNumber);
-        values.put(ContactsColumns.SINGLE_IS_RESTRICTED, singleIsRestricted);
-        values.put(Contacts.LOOKUP_KEY, Uri.encode(mSb.toString()));
+        statement.bindLong(ContactReplaceSqlStatement.SEND_TO_VOICEMAIL,
+                totalRowCount == contactSendToVoicemail ? 1 : 0);
+        DatabaseUtils.bindObjectToProgram(statement, ContactReplaceSqlStatement.CUSTOM_RINGTONE,
+                contactCustomRingtone);
+        statement.bindLong(ContactReplaceSqlStatement.LAST_TIME_CONTACTED,
+                contactLastTimeContacted);
+        statement.bindLong(ContactReplaceSqlStatement.TIMES_CONTACTED,
+                contactTimesContacted);
+        statement.bindLong(ContactReplaceSqlStatement.STARRED,
+                contactStarred);
+        statement.bindLong(ContactReplaceSqlStatement.HAS_PHONE_NUMBER,
+                hasPhoneNumber);
+        statement.bindLong(ContactReplaceSqlStatement.SINGLE_IS_RESTRICTED,
+                singleIsRestricted);
+        statement.bindString(ContactReplaceSqlStatement.LOOKUP_KEY,
+                Uri.encode(mSb.toString()));
     }
 
     private interface PhotoIdQuery {
@@ -1357,6 +1414,14 @@ public class ContactAggregator {
                 filter);
     }
 
+    private interface ContactIdQuery {
+        String[] COLUMNS = new String[] {
+            Contacts._ID
+        };
+
+        int _ID = 0;
+    }
+
     /**
      * Loads contacts with specified IDs and returns them in the order of IDs in the
      * supplied list.
@@ -1441,6 +1506,16 @@ public class ContactAggregator {
         return new ReorderingCursorWrapper(cursor, positionMap);
     }
 
+    private interface RawContactIdQuery {
+        String TABLE = Tables.RAW_CONTACTS;
+
+        String[] COLUMNS = new String[] {
+            RawContacts._ID
+        };
+
+        int _ID = 0;
+    }
+
     /**
      * Finds contacts with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
@@ -1453,11 +1528,11 @@ public class ContactAggregator {
         // Don't aggregate a contact with itself
         matcher.keepOut(contactId);
 
-        final Cursor c = db.query(Tables.RAW_CONTACTS, CONTACT_ID_COLUMN,
+        final Cursor c = db.query(RawContactIdQuery.TABLE, RawContactIdQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
         try {
             while (c.moveToNext()) {
-                long rawContactId = c.getLong(0);
+                long rawContactId = c.getLong(RawContactIdQuery._ID);
                 updateMatchScoresForSuggestionsBasedOnDataMatches(db, rawContactId, candidates,
                         matcher);
             }
