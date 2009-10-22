@@ -30,7 +30,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
@@ -144,7 +143,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
     private String[] mSelectionArgs2 = new String[2];
     private String[] mSelectionArgs3 = new String[3];
     private long mMimeTypeIdEmail;
-    private long mMimeTypeIdPhone;
+    private StringBuilder mSb = new StringBuilder();
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -283,7 +282,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 " WHERE " + PresenceColumns.RAW_CONTACT_ID + "=?");
 
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
         mScheduler = scheduler;
         mScheduler.setAggregator(this);
@@ -473,17 +471,17 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         long rawContactIds[] = new long[count];
         long contactIds[] = new long[count];
 
-        StringBuilder sb = new StringBuilder();
-        sb.append(RawContacts._ID + " IN(");
+        mSb.setLength(0);
+        mSb.append(RawContacts._ID + " IN(");
         for (long rawContactId : mRawContactsMarkedForAggregation) {
-            sb.append(rawContactId);
-            sb.append(',');
+            mSb.append(rawContactId);
+            mSb.append(',');
         }
 
-        sb.setLength(sb.length() - 1);
-        sb.append(')');
+        mSb.setLength(mSb.length() - 1);
+        mSb.append(')');
 
-        Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS, sb.toString(), null,
+        Cursor c = db.query(AggregationQuery.TABLE, AggregationQuery.COLUMNS, mSb.toString(), null,
                 null, null, null);
 
         int index = 0;
@@ -844,20 +842,20 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
 
         loadNameMatchCandidates(db, rawContactId, candidates, true);
 
-        StringBuilder selection = new StringBuilder();
-        selection.append(RawContacts.CONTACT_ID).append(" IN (");
+        mSb.setLength(0);
+        mSb.append(RawContacts.CONTACT_ID).append(" IN (");
         for (int i = 0; i < secondaryContactIds.size(); i++) {
             if (i != 0) {
-                selection.append(',');
+                mSb.append(',');
             }
-            selection.append(secondaryContactIds.get(i));
+            mSb.append(secondaryContactIds.get(i));
         }
 
         // We only want to compare structured names to structured names
         // at this stage, we need to ignore all other sources of name lookup data.
-        selection.append(") AND " + STRUCTURED_NAME_BASED_LOOKUP_SQL);
+        mSb.append(") AND " + STRUCTURED_NAME_BASED_LOOKUP_SQL);
 
-        matchAllCandidates(db, selection.toString(), candidates, matcher,
+        matchAllCandidates(db, mSb.toString(), candidates, matcher,
                 ContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE, null);
 
         return matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_SECONDARY);
@@ -1180,7 +1178,6 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         boolean contactStarred = false;
         int singleIsRestricted = 1;
         int hasPhoneNumber = 0;
-        StringBuilder lookupKey = new StringBuilder();
 
         long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
         long phoneMimeType = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
@@ -1194,6 +1191,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                 + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
                 + " AND (" + isPhotoSql + " OR " + isPhoneSql + "))";
 
+        mSb.setLength(0);       // Lookup key
         final Cursor c = db.query(tables, RawContactsQuery.COLUMNS, selection, null, null, null,
                 null);
         try {
@@ -1260,7 +1258,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
                         }
                     }
 
-                    ContactLookupKey.appendToLookupKey(lookupKey,
+                    ContactLookupKey.appendToLookupKey(mSb,
                             c.getString(RawContactsQuery.ACCOUNT_TYPE),
                             c.getString(RawContactsQuery.ACCOUNT_NAME),
                             c.getString(RawContactsQuery.SOURCE_ID),
@@ -1314,7 +1312,7 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
         values.put(Contacts.STARRED, contactStarred);
         values.put(Contacts.HAS_PHONE_NUMBER, hasPhoneNumber);
         values.put(ContactsColumns.SINGLE_IS_RESTRICTED, singleIsRestricted);
-        values.put(Contacts.LOOKUP_KEY, Uri.encode(lookupKey.toString()));
+        values.put(Contacts.LOOKUP_KEY, Uri.encode(mSb.toString()));
     }
 
     private interface PhotoIdQuery {
@@ -1474,12 +1472,12 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             return;
         }
 
-        StringBuilder lookupKey = new StringBuilder();
+        mSb.setLength(0);
         final Cursor c = db.query(Tables.RAW_CONTACTS, LookupKeyQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
         try {
             while (c.moveToNext()) {
-                ContactLookupKey.appendToLookupKey(lookupKey,
+                ContactLookupKey.appendToLookupKey(mSb,
                         c.getString(LookupKeyQuery.ACCOUNT_TYPE),
                         c.getString(LookupKeyQuery.ACCOUNT_NAME),
                         c.getString(LookupKeyQuery.SOURCE_ID),
@@ -1489,10 +1487,10 @@ public class ContactAggregator implements ContactAggregationScheduler.Aggregator
             c.close();
         }
 
-        if (lookupKey.length() == 0) {
+        if (mSb.length() == 0) {
             mLookupKeyUpdate.bindNull(1);
         } else {
-            mLookupKeyUpdate.bindString(1, lookupKey.toString());
+            mLookupKeyUpdate.bindString(1, mSb.toString());
         }
         mLookupKeyUpdate.bindLong(2, contactId);
         mLookupKeyUpdate.execute();
