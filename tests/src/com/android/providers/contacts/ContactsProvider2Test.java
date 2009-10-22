@@ -1684,6 +1684,42 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    public void testReadBooleanQueryParameter() {
+        assertBooleanUriParameter("foo:bar", "bool", true, true);
+        assertBooleanUriParameter("foo:bar", "bool", false, false);
+        assertBooleanUriParameter("foo:bar?bool=0", "bool", true, false);
+        assertBooleanUriParameter("foo:bar?bool=1", "bool", false, true);
+        assertBooleanUriParameter("foo:bar?bool=false", "bool", true, false);
+        assertBooleanUriParameter("foo:bar?bool=true", "bool", false, true);
+        assertBooleanUriParameter("foo:bar?bool=FaLsE", "bool", true, false);
+        assertBooleanUriParameter("foo:bar?bool=false&some=some", "bool", true, false);
+        assertBooleanUriParameter("foo:bar?bool=1&some=some", "bool", false, true);
+        assertBooleanUriParameter("foo:bar?some=bool", "bool", true, true);
+        assertBooleanUriParameter("foo:bar?bool", "bool", true, true);
+    }
+
+    private void assertBooleanUriParameter(String uriString, String parameter,
+            boolean defaultValue, boolean expectedValue) {
+        assertEquals(expectedValue, ContactsProvider2.readBooleanQueryParameter(
+                Uri.parse(uriString), parameter, defaultValue));
+    }
+
+    public void testGetQueryParameter() {
+        assertQueryParameter("foo:bar", "param", null);
+        assertQueryParameter("foo:bar?param", "param", null);
+        assertQueryParameter("foo:bar?param=", "param", "");
+        assertQueryParameter("foo:bar?param=val", "param", "val");
+        assertQueryParameter("foo:bar?param=val&some=some", "param", "val");
+        assertQueryParameter("foo:bar?some=some&param=val", "param", "val");
+        assertQueryParameter("foo:bar?some=some&param=val&else=else", "param", "val");
+        assertQueryParameter("foo:bar?param=john%40doe.com", "param", "john@doe.com");
+    }
+
+    private void assertQueryParameter(String uriString, String parameter, String expectedValue) {
+        assertEquals(expectedValue, ContactsProvider2.getQueryParameter(
+                Uri.parse(uriString), parameter));
+    }
+
     private long createContact(ContentValues values, String firstName, String givenName,
             String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
             long groupId) {
