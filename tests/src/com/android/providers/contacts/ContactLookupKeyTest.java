@@ -126,8 +126,6 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
         long rawContactId3 = createRawContactWithName("John", "Doe");
         storeValue(RawContacts.CONTENT_URI, rawContactId3, RawContacts.SOURCE_ID, "3");
 
-        forceAggregation();
-
         String lookupKey = "0i1.0i2.0i3";
 
         long contactId = queryContactId(rawContactId1);
