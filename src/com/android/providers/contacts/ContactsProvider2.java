@@ -374,6 +374,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private String[] mSelectionArgs1 = new String[1];
     private String[] mSelectionArgs2 = new String[2];
     private String[] mSelectionArgs3 = new String[3];
+    private Account mAccount;
 
     static {
         // Contacts URI matching table
@@ -2015,8 +2016,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS: {
-                final Account account = readAccountFromQueryParams(uri);
-                id = insertRawContact(values, account);
+                id = insertRawContact(uri, values);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2035,8 +2035,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS: {
-                final Account account = readAccountFromQueryParams(uri);
-                id = insertGroup(uri, values, account, callerIsSyncAdapter);
+                id = insertGroup(uri, values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2067,25 +2066,49 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * If account is non-null then store it in the values. If the account is already
      * specified in the values then it must be consistent with the account, if it is non-null.
-     * @param values the ContentValues to read from and update
-     * @param account the explicitly provided Account
-     * @return false if the accounts are inconsistent
+     * @param uri the ContentValues to read from and update
+     * @param values the explicitly provided Account
+     * @return false if the parameters are inconsistent
      */
-    private boolean resolveAccount(ContentValues values, Account account) {
-        // If either is specified then both must be specified.
-        final String accountName = values.getAsString(RawContacts.ACCOUNT_NAME);
-        final String accountType = values.getAsString(RawContacts.ACCOUNT_TYPE);
-        if (!TextUtils.isEmpty(accountName) || !TextUtils.isEmpty(accountType)) {
-            final Account valuesAccount = new Account(accountName, accountType);
-            if (account != null && !valuesAccount.equals(account)) {
+    private boolean resolveAccount(Uri uri, ContentValues values) {
+        String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
+        String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
+
+        if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+            accountName = null;
+            accountType = null;
+        }
+
+        String valueAccountName = values.getAsString(RawContacts.ACCOUNT_NAME);
+        String valueAccountType = values.getAsString(RawContacts.ACCOUNT_TYPE);
+
+        if (TextUtils.isEmpty(valueAccountName) && TextUtils.isEmpty(valueAccountType)) {
+            values.put(RawContacts.ACCOUNT_NAME, accountName);
+            values.put(RawContacts.ACCOUNT_TYPE, accountType);
+        } else {
+            if (accountName != null && !accountName.equals(valueAccountName)) {
                 return false;
             }
-            account = valuesAccount;
+
+            if (accountType != null && !accountType.equals(valueAccountType)) {
+                return false;
+            }
+
+            accountName = valueAccountName;
+            accountType = valueAccountType;
         }
-        if (account != null) {
-            values.put(RawContacts.ACCOUNT_NAME, account.name);
-            values.put(RawContacts.ACCOUNT_TYPE, account.type);
+
+        if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+            mAccount = null;
+            return true;
         }
+
+        if (mAccount == null
+                || !mAccount.name.equals(accountName)
+                || !mAccount.type.equals(accountType)) {
+            mAccount = new Account(accountName, accountType);
+        }
+
         return true;
     }
 
@@ -2102,29 +2125,30 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Inserts an item in the contacts table
      *
-     * @param values the values for the new row
-     * @param account the account this contact should be associated with. may be null.
+     * @param uri the values for the new row
+     * @param values the account this contact should be associated with. may be null.
      * @return the row ID of the newly created row
      */
-    private long insertRawContact(ContentValues values, Account account) {
-        ContentValues overriddenValues = new ContentValues(values);
-        overriddenValues.putNull(RawContacts.CONTACT_ID);
-        if (!resolveAccount(overriddenValues, account)) {
+    private long insertRawContact(Uri uri, ContentValues values) {
+        mValues.clear();
+        mValues.putAll(values);
+        mValues.putNull(RawContacts.CONTACT_ID);
+
+        if (!resolveAccount(uri, mValues)) {
             return -1;
         }
 
         if (values.containsKey(RawContacts.DELETED)
                 && values.getAsInteger(RawContacts.DELETED) != 0) {
-            overriddenValues.put(RawContacts.AGGREGATION_MODE,
-                    RawContacts.AGGREGATION_MODE_DISABLED);
+            mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
-        long rawContactId =
-                mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, overriddenValues);
+        long rawContactId = mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, mValues);
         mContactAggregator.markNewForAggregation(rawContactId);
 
         // Trigger creation of a Contact based on this RawContact at the end of transaction
-        mInsertedRawContacts.put(rawContactId, account);
+        mInsertedRawContacts.put(rawContactId, mAccount);
+
         return rawContactId;
     }
 
@@ -2438,27 +2462,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Inserts an item in the groups table
      */
-    private long insertGroup(Uri uri, ContentValues values, Account account,
-            boolean callerIsSyncAdapter) {
-        ContentValues overriddenValues = new ContentValues(values);
-        if (!resolveAccount(overriddenValues, account)) {
+    private long insertGroup(Uri uri, ContentValues values, boolean callerIsSyncAdapter) {
+        mValues.clear();
+        mValues.putAll(values);
+
+        if (!resolveAccount(uri, mValues)) {
             return -1;
         }
 
         // Replace package with internal mapping
-        final String packageName = overriddenValues.getAsString(Groups.RES_PACKAGE);
+        final String packageName = mValues.getAsString(Groups.RES_PACKAGE);
         if (packageName != null) {
-            overriddenValues.put(GroupsColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
+            mValues.put(GroupsColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
         }
-        overriddenValues.remove(Groups.RES_PACKAGE);
+        mValues.remove(Groups.RES_PACKAGE);
 
         if (!callerIsSyncAdapter) {
-            overriddenValues.put(Groups.DIRTY, 1);
+            mValues.put(Groups.DIRTY, 1);
         }
 
-        long result = mDb.insert(Tables.GROUPS, Groups.TITLE, overriddenValues);
+        long result = mDb.insert(Tables.GROUPS, Groups.TITLE, mValues);
 
-        if (overriddenValues.containsKey(Groups.GROUP_VISIBLE)) {
+        if (mValues.containsKey(Groups.GROUP_VISIBLE)) {
             mVisibleTouched = true;
         }
 
@@ -2773,13 +2798,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
             }
         }
-    }
-
-    private static boolean readBooleanQueryParameter(Uri uri, String name, boolean defaultValue) {
-        final String flag = uri.getQueryParameter(name);
-        return flag == null
-                ? defaultValue
-                : (!"false".equals(flag.toLowerCase()) && !"0".equals(flag.toLowerCase()));
     }
 
     private int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
@@ -4086,7 +4104,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String[] projection) {
         StringBuilder sb = new StringBuilder();
         boolean excludeRestrictedData = false;
-        String requestingPackage = uri.getQueryParameter(
+        String requestingPackage = getQueryParameter(uri,
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
             excludeRestrictedData = !mDbHelper.hasAccessToRestrictedData(requestingPackage);
@@ -4115,7 +4133,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForRawContacts(SQLiteQueryBuilder qb, Uri uri) {
         StringBuilder sb = new StringBuilder();
         boolean excludeRestrictedData = false;
-        String requestingPackage = uri.getQueryParameter(
+        String requestingPackage = getQueryParameter(uri,
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
             excludeRestrictedData = !mDbHelper.hasAccessToRestrictedData(requestingPackage);
@@ -4131,7 +4149,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         boolean excludeRestrictedData = readBooleanQueryParameter(uri,
                 Data.FOR_EXPORT_ONLY, false);
 
-        String requestingPackage = uri.getQueryParameter(
+        String requestingPackage = getQueryParameter(uri,
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
             excludeRestrictedData = excludeRestrictedData
@@ -4149,7 +4167,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         boolean excludeRestrictedData = readBooleanQueryParameter(uri,
                 Data.FOR_EXPORT_ONLY, false);
 
-        String requestingPackage = uri.getQueryParameter(
+        String requestingPackage = getQueryParameter(uri,
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
         if (requestingPackage != null) {
             excludeRestrictedData = excludeRestrictedData
@@ -4230,8 +4248,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
-        final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
-        final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
+        final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
+        final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
         if (!TextUtils.isEmpty(accountName)) {
             qb.appendWhere(RawContacts.ACCOUNT_NAME + "="
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
@@ -4243,8 +4261,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private String appendAccountToSelection(Uri uri, String selection) {
-        final String accountName = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
-        final String accountType = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
+        final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
+        final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
         if (!TextUtils.isEmpty(accountName)) {
             StringBuilder selectionSb = new StringBuilder(RawContacts.ACCOUNT_NAME + "="
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
@@ -4267,8 +4285,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * @return A string containing a non-negative integer, or <code>null</code> if
      *         the parameter is not set, or is set to an invalid value.
      */
-    private String getLimit(Uri url) {
-        String limitParam = url.getQueryParameter("limit");
+    private String getLimit(Uri uri) {
+        String limitParam = getQueryParameter(uri, "limit");
         if (limitParam == null) {
             return null;
         }
@@ -4418,17 +4436,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         composer.terminate();
     }
-
-
-    private static Account readAccountFromQueryParams(Uri uri) {
-        final String name = uri.getQueryParameter(RawContacts.ACCOUNT_NAME);
-        final String type = uri.getQueryParameter(RawContacts.ACCOUNT_TYPE);
-        if (TextUtils.isEmpty(name) || TextUtils.isEmpty(type)) {
-            return null;
-        }
-        return new Account(name, type);
-    }
-
 
     /**
      * An implementation of EntityIterator that joins the contacts and data tables
@@ -4698,8 +4705,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (groupIdString != null) {
                 qb.appendWhere(Groups._ID + "=" + groupIdString);
             }
-            final String accountName = uri.getQueryParameter(Groups.ACCOUNT_NAME);
-            final String accountType = uri.getQueryParameter(Groups.ACCOUNT_TYPE);
+            final String accountName = getQueryParameter(uri, Groups.ACCOUNT_NAME);
+            final String accountType = getQueryParameter(uri, Groups.ACCOUNT_TYPE);
             if (!TextUtils.isEmpty(accountName)) {
                 qb.appendWhere(Groups.ACCOUNT_NAME + "="
                         + DatabaseUtils.sqlEscapeString(accountName) + " AND "
@@ -5173,5 +5180,74 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.e(TAG, "Cannot determine the default account for contacts compatibility", e);
         }
         return null;
+    }
+
+    /* package */ static boolean readBooleanQueryParameter(Uri uri, String parameter,
+            boolean defaultValue) {
+
+        // Manually parse the query, which is much faster than calling uri.getQueryParameter
+        String query = uri.getEncodedQuery();
+        if (query == null) {
+            return defaultValue;
+        }
+
+        int index = query.indexOf(parameter);
+        if (index == -1) {
+            return defaultValue;
+        }
+
+        index += parameter.length();
+
+        return !matchQueryParameter(query, index, "=0", false)
+                && !matchQueryParameter(query, index, "=false", true);
+    }
+
+    private static boolean matchQueryParameter(String query, int index, String value,
+            boolean ignoreCase) {
+        int length = value.length();
+        return query.regionMatches(ignoreCase, index, value, 0, length)
+                && (query.length() == index + length || query.charAt(index + length) == '&');
+    }
+
+    /**
+     * A fast re-implementation of {@link Uri#getQueryParameter}
+     */
+    /* package */ static String getQueryParameter(Uri uri, String parameter) {
+        String query = uri.getEncodedQuery();
+        if (query == null) {
+            return null;
+        }
+
+        int queryLength = query.length();
+        int parameterLength = parameter.length();
+
+        String value;
+        int index = 0;
+        while (true) {
+            index = query.indexOf(parameter, index);
+            if (index == -1) {
+                return null;
+            }
+
+            index += parameterLength;
+
+            if (queryLength == index) {
+                return null;
+            }
+
+            if (query.charAt(index) == '=') {
+                index++;
+                break;
+            }
+        }
+
+        int ampIndex = query.indexOf('&', index);
+        if (ampIndex == -1) {
+            value = query.substring(index);
+        } else {
+            value = query.substring(index, ampIndex);
+        }
+
+        return Uri.decode(value);
     }
 }
