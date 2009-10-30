@@ -88,6 +88,11 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return mAccount;
     }
 
+    @Override
+    protected boolean isWritableAccount(Account account) {
+        return true;
+    }
+
     public void prepareForFullAggregation(int maxContact) {
         SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
         db.execSQL("UPDATE raw_contacts SET aggregation_mode=0,aggregation_needed=1;");
