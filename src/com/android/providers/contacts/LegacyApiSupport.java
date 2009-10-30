@@ -66,9 +66,6 @@ public class LegacyApiSupport {
 
     private static final String TAG = "ContactsProviderV1";
 
-    private static final String NON_EXISTENT_ACCOUNT_TYPE = "android.INVALID_ACCOUNT_TYPE";
-    private static final String NON_EXISTENT_ACCOUNT_NAME = "invalid";
-
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
     private static final int PEOPLE = 1;
@@ -477,11 +474,13 @@ public class LegacyApiSupport {
     private final ContentValues mValues = new ContentValues();
     private final ContentValues mValues2 = new ContentValues();
     private final ContentValues mValues3 = new ContentValues();
+    private boolean mDefaultAccountKnown;
     private Account mAccount;
 
     private long mMimetypeEmail;
     private long mMimetypeIm;
     private long mMimetypePostal;
+
 
     public LegacyApiSupport(Context context, ContactsDatabaseHelper contactsDatabaseHelper,
             ContactsProvider2 contactsProvider, GlobalSearchSupport globalSearchSupport) {
@@ -515,14 +514,9 @@ public class LegacyApiSupport {
     }
 
     private void ensureDefaultAccount() {
-        if (mAccount == null) {
+        if (!mDefaultAccountKnown) {
             mAccount = mContactsProvider.getDefaultAccount();
-            if (mAccount == null) {
-
-                // This fall-through account will not match any data in the database, which
-                // is the expected behavior
-                mAccount = new Account(NON_EXISTENT_ACCOUNT_NAME, NON_EXISTENT_ACCOUNT_TYPE);
-            }
+            mDefaultAccountKnown = true;
         }
     }
 
@@ -876,8 +870,10 @@ public class LegacyApiSupport {
     private long insertGroup(ContentValues values) {
         parseGroupValues(values);
 
-        mValues.put(Groups.ACCOUNT_NAME, mAccount.name);
-        mValues.put(Groups.ACCOUNT_TYPE, mAccount.type);
+        if (mAccount != null) {
+            mValues.put(Groups.ACCOUNT_NAME, mAccount.name);
+            mValues.put(Groups.ACCOUNT_TYPE, mAccount.type);
+        }
 
         Uri uri = mContactsProvider.insertInTransaction(Groups.CONTENT_URI, mValues);
         return ContentUris.parseId(uri);
@@ -1200,8 +1196,10 @@ public class LegacyApiSupport {
                 values, People.TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, People.STARRED);
-        mValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
-        mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
+        if (mAccount != null) {
+            mValues.put(RawContacts.ACCOUNT_NAME, mAccount.name);
+            mValues.put(RawContacts.ACCOUNT_TYPE, mAccount.type);
+        }
 
         if (values.containsKey(People.NAME) || values.containsKey(People.PHONETIC_NAME)) {
             mValues2.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
@@ -1750,10 +1748,15 @@ public class LegacyApiSupport {
     }
 
     private void appendRawContactsAccount(StringBuilder sb) {
-        sb.append(RawContacts.ACCOUNT_NAME + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
-        sb.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
+        if (mAccount != null) {
+            sb.append(RawContacts.ACCOUNT_NAME + "=");
+            DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
+            sb.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
+            DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
+        } else {
+            sb.append(RawContacts.ACCOUNT_NAME + " IS NULL" +
+                    " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL");
+        }
     }
 
     private void applyGroupAccount(SQLiteQueryBuilder qb) {
@@ -1763,10 +1766,15 @@ public class LegacyApiSupport {
     }
 
     private void appendGroupAccount(StringBuilder sb) {
-        sb.append(Groups.ACCOUNT_NAME + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
-        sb.append(" AND " + Groups.ACCOUNT_TYPE + "=");
-        DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
+        if (mAccount != null) {
+            sb.append(Groups.ACCOUNT_NAME + "=");
+            DatabaseUtils.appendEscapedSQLString(sb, mAccount.name);
+            sb.append(" AND " + Groups.ACCOUNT_TYPE + "=");
+            DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
+        } else {
+            sb.append(Groups.ACCOUNT_NAME + " IS NULL" +
+                    " AND " + Groups.ACCOUNT_TYPE + " IS NULL");
+        }
     }
 
     /**
