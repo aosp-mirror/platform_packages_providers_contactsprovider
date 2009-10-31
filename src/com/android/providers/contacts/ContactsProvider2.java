@@ -53,8 +53,10 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.IContentService;
 import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
+import android.content.SyncAdapterType;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
 import android.content.res.AssetFileDescriptor;
@@ -3372,49 +3374,103 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDb = mDbHelper.getWritableDatabase();
         if (mDb == null) return;
 
-        Set<Account> validAccounts = Sets.newHashSet();
-        for (Account account : accounts) {
-            validAccounts.add(new Account(account.name, account.type));
-        }
-        ArrayList<Account> accountsToDelete = new ArrayList<Account>();
-
+        HashSet<Account> existingAccounts = new HashSet<Account>();
+        boolean hasUnassignedContacts[] = new boolean[]{false};
         mDb.beginTransaction();
         try {
+            findValidAccounts(existingAccounts, hasUnassignedContacts,
+                    Tables.RAW_CONTACTS, RawContacts.ACCOUNT_NAME, RawContacts.ACCOUNT_TYPE);
+            findValidAccounts(existingAccounts, hasUnassignedContacts,
+                    Tables.GROUPS, Groups.ACCOUNT_NAME, Groups.ACCOUNT_TYPE);
+            findValidAccounts(existingAccounts, hasUnassignedContacts,
+                    Tables.SETTINGS, Settings.ACCOUNT_NAME, Settings.ACCOUNT_TYPE);
 
-            for (String table : new String[]{Tables.RAW_CONTACTS, Tables.GROUPS, Tables.SETTINGS}) {
-                // Find all the accounts the contacts DB knows about, mark the ones that aren't
-                // in the valid set for deletion.
-                Cursor c = mDb.rawQuery("SELECT DISTINCT account_name, account_type from "
-                        + table, null);
-                while (c.moveToNext()) {
-                    if (c.getString(0) != null && c.getString(1) != null) {
-                        Account currAccount = new Account(c.getString(0), c.getString(1));
-                        if (!validAccounts.contains(currAccount)) {
-                            accountsToDelete.add(currAccount);
-                        }
-                    }
-                }
-                c.close();
+            // Remove all valid accounts from the existing account set. What is left
+            // in the existingAccounts set will be extra accounts whose data must be deleted.
+            HashSet<Account> accountsToDelete = new HashSet<Account>(existingAccounts);
+            for (Account account : accounts) {
+                accountsToDelete.remove(account);
             }
 
             for (Account account : accountsToDelete) {
                 Log.d(TAG, "removing data for removed account " + account);
-                String[] params = new String[]{account.name, account.type};
-                mDb.execSQL("DELETE FROM " + Tables.GROUPS
-                        + " WHERE account_name = ? AND account_type = ?", params);
-                mDb.execSQL("DELETE FROM " + Tables.PRESENCE
-                        + " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (SELECT "
-                        + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS
-                        + " WHERE account_name = ? AND account_type = ?)", params);
-                mDb.execSQL("DELETE FROM " + Tables.RAW_CONTACTS
-                        + " WHERE account_name = ? AND account_type = ?", params);
-                mDb.execSQL("DELETE FROM " + Tables.SETTINGS
-                        + " WHERE account_name = ? AND account_type = ?", params);
+                String[] params = new String[] {account.name, account.type};
+                mDb.execSQL(
+                        "DELETE FROM " + Tables.GROUPS +
+                        " WHERE " + Groups.ACCOUNT_NAME + " = ?" +
+                                " AND " + Groups.ACCOUNT_TYPE + " = ?", params);
+                mDb.execSQL(
+                        "DELETE FROM " + Tables.PRESENCE +
+                        " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
+                                "SELECT " + RawContacts._ID +
+                                " FROM " + Tables.RAW_CONTACTS +
+                                " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
+                                " AND " + RawContacts.ACCOUNT_TYPE + " = ?)", params);
+                mDb.execSQL(
+                        "DELETE FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
+                        " AND " + RawContacts.ACCOUNT_TYPE + " = ?", params);
+                mDb.execSQL(
+                        "DELETE FROM " + Tables.SETTINGS +
+                        " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
+                        " AND " + Settings.ACCOUNT_TYPE + " = ?", params);
             }
+
+            if (hasUnassignedContacts[0]) {
+
+                Account primaryAccount = null;
+                for (Account account : accounts) {
+                    if (isWritableAccount(account)) {
+                        primaryAccount = account;
+                        break;
+                    }
+                }
+
+                if (primaryAccount != null) {
+                    String[] params = new String[] {primaryAccount.name, primaryAccount.type};
+
+                    mDb.execSQL(
+                            "UPDATE " + Tables.RAW_CONTACTS +
+                            " SET " + RawContacts.ACCOUNT_NAME + "=?,"
+                                    + RawContacts.ACCOUNT_TYPE + "=?" +
+                            " WHERE " + RawContacts.ACCOUNT_NAME + " IS NULL" +
+                            " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL", params);
+
+                    // We don't currently support groups for unsynced accounts, so this is for
+                    // the future
+                    mDb.execSQL(
+                            "UPDATE " + Tables.GROUPS +
+                            " SET " + Groups.ACCOUNT_NAME + "=?,"
+                                    + Groups.ACCOUNT_TYPE + "=?" +
+                            " WHERE " + Groups.ACCOUNT_NAME + " IS NULL" +
+                            " AND " + Groups.ACCOUNT_TYPE + " IS NULL", params);
+                }
+            }
+
             mDbHelper.getSyncState().onAccountsChanged(mDb, accounts);
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
+        }
+    }
+
+    /**
+     * Finds all distinct accounts present in the specified table.
+     */
+    private void findValidAccounts(Set<Account> validAccounts, boolean[] hasUnassignedContacts,
+            String table, String accountNameColumn, String accountTypeColumn) {
+        Cursor c = mDb.rawQuery("SELECT DISTINCT " + accountNameColumn + "," + accountTypeColumn
+                + " FROM " + table, null);
+        try {
+            while (c.moveToNext()) {
+                if (c.isNull(0) && c.isNull(1)) {
+                    hasUnassignedContacts[0] = true;
+                } else {
+                    validAccounts.add(new Account(c.getString(0), c.getString(1)));
+                }
+            }
+        } finally {
+            c.close();
         }
     }
 
@@ -5180,6 +5236,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.e(TAG, "Cannot determine the default account for contacts compatibility", e);
         }
         return null;
+    }
+
+    protected boolean isWritableAccount(Account account) {
+        IContentService contentService = ContentResolver.getContentService();
+        try {
+            for (SyncAdapterType sync : contentService.getSyncAdapterTypes()) {
+                if (ContactsContract.AUTHORITY.equals(sync.authority) &&
+                        account.type.equals(sync.accountType)) {
+                    return sync.supportsUploading();
+                }
+            }
+        } catch (RemoteException e) {
+            Log.e(TAG, "Could not acquire sync adapter types");
+        }
+        return false;
     }
 
     /* package */ static boolean readBooleanQueryParameter(Uri uri, String parameter,

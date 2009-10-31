@@ -1364,7 +1364,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, RawContacts.DELETED, "1");
     }
 
-    public void testContactDeletionAccountsUpdated() {
+    public void testAccountsUpdated() {
         long rawContactId1 = createRawContact(mAccount);
         insertEmail(rawContactId1, "account1@email.com");
         long rawContactId2 = createRawContact(mAccountTwo);
@@ -1377,15 +1377,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // accidentally.
         long rawContactId3 = createRawContactWithName("James", "Sullivan");
         insertPhoneNumber(rawContactId3, "5234567890");
+        Uri rawContact3 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId3);
 
         ContactsProvider2 cp = (ContactsProvider2) getProvider();
 
         Account accountRemaining = new Account("account1", "account type1");
         cp.onAccountsUpdated(new Account[]{accountRemaining});
-        Cursor c = mResolver.query(RawContacts.CONTENT_URI, null, null, null, null);
-        assertEquals(2, c.getCount());
+        assertEquals(2, getCount(RawContacts.CONTENT_URI, null, null));
         assertEquals(0, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId2, null));
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, "account1");
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, "account type1");
     }
 
     public void testContactDeletion() {
