@@ -574,6 +574,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         columns.put(RawContacts.VERSION, RawContacts.VERSION);
         columns.put(RawContacts.DIRTY, RawContacts.DIRTY);
         columns.put(RawContacts.DELETED, RawContacts.DELETED);
+        columns.put(RawContacts.IS_RESTRICTED, RawContacts.IS_RESTRICTED);
         columns.put(RawContacts.SYNC1, RawContacts.SYNC1);
         columns.put(RawContacts.SYNC2, RawContacts.SYNC2);
         columns.put(RawContacts.SYNC3, RawContacts.SYNC3);
@@ -4561,7 +4562,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 RawContacts.SYNC4,
                 RawContacts.DELETED,
                 RawContacts.CONTACT_ID,
-                RawContacts.STARRED};
+                RawContacts.STARRED,
+                RawContacts.IS_RESTRICTED};
 
         private static final int COLUMN_ACCOUNT_NAME = 0;
         private static final int COLUMN_ACCOUNT_TYPE = 1;
@@ -4584,6 +4586,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         private static final int COLUMN_DELETED = 36;
         private static final int COLUMN_CONTACT_ID = 37;
         private static final int COLUMN_STARRED = 38;
+        private static final int COLUMN_IS_RESTRICTED = 39;
 
         public RawContactsEntityIterator(ContactsProvider2 provider, Uri entityUri,
                 String contactsIdString,
@@ -4654,6 +4657,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             contactValues.put(RawContacts.DELETED, c.getLong(COLUMN_DELETED));
             contactValues.put(RawContacts.CONTACT_ID, c.getLong(COLUMN_CONTACT_ID));
             contactValues.put(RawContacts.STARRED, c.getLong(COLUMN_STARRED));
+            contactValues.put(RawContacts.IS_RESTRICTED, c.getInt(COLUMN_IS_RESTRICTED));
             Entity contact = new Entity(contactValues);
 
             // read data rows until the contact id changes
