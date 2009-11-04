@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 103;
+    private static final int DATABASE_VERSION = 104;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -290,6 +290,8 @@ import java.util.HashMap;
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC4;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
+        public static final String CONCRETE_IS_RESTRICTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.IS_RESTRICTED;
 
         public static final String DISPLAY_NAME = "display_name";
         public static final String DISPLAY_NAME_SOURCE = "display_name_source";
@@ -1250,6 +1252,8 @@ import java.util.HashMap;
                 + Data.DATA_VERSION + ", "
                 + DataColumns.CONCRETE_ID + " AS " + RawContacts.Entity.DATA_ID + ","
                 + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
+                + RawContactsColumns.CONCRETE_IS_RESTRICTED + " AS "
+                        + RawContacts.IS_RESTRICTED + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.RAW_CONTACTS
                 + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
@@ -1324,6 +1328,11 @@ import java.util.HashMap;
 
         if (oldVersion == 102) {
             LegacyApiSupport.createDatabase(db);
+            oldVersion++;
+        }
+
+        if (oldVersion == 103) {
+            createContactEntitiesView(db);
             oldVersion++;
         }
 
