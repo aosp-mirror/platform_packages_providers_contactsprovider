@@ -313,22 +313,27 @@ public class ContactAggregator {
 
         EventLog.writeEvent(LOG_SYNC_CONTACTS_AGGREGATION, start, -count);
 
-        long rawContactIds[] = new long[count];
-        long contactIds[] = new long[count];
+        String selectionArgs[] = new String[count];
 
+        int index = 0;
         mSb.setLength(0);
         mSb.append(AggregationQuery.SQL);
         for (long rawContactId : mRawContactsMarkedForAggregation) {
-            mSb.append(rawContactId);
-            mSb.append(',');
+            if (index > 0) {
+                mSb.append(',');
+            }
+            mSb.append('?');
+            selectionArgs[index++] = String.valueOf(rawContactId);
         }
 
-        mSb.setLength(mSb.length() - 1);
         mSb.append(')');
 
-        Cursor c = db.rawQuery(mSb.toString(), null);
+        long rawContactIds[] = new long[count];
+        long contactIds[] = new long[count];
+        Cursor c = db.rawQuery(mSb.toString(), selectionArgs);
         try {
-            int index = 0;
+            count = c.getCount();
+            index = 0;
             while (c.moveToNext()) {
                 rawContactIds[index] = c.getLong(AggregationQuery._ID);
                 contactIds[index] = c.getLong(AggregationQuery.CONTACT_ID);
@@ -1236,8 +1241,9 @@ public class ContactAggregator {
                 + " AND (" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
                         + Photo.PHOTO + " NOT NULL))";
 
+        mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(tables, PhotoIdQuery.COLUMNS,
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
         try {
             while (c.moveToNext()) {
                 long dataId = c.getLong(PhotoIdQuery.DATA_ID);
@@ -1293,8 +1299,9 @@ public class ContactAggregator {
         String bestDisplayName = null;
 
 
+        mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(Tables.RAW_CONTACTS, DisplayNameQuery.COLUMNS,
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
         try {
             while (c.moveToNext()) {
                 String displayName = c.getString(DisplayNameQuery.DISPLAY_NAME);
@@ -1365,8 +1372,9 @@ public class ContactAggregator {
         }
 
         mSb.setLength(0);
+        mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(Tables.RAW_CONTACTS, LookupKeyQuery.COLUMNS,
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
         try {
             while (c.moveToNext()) {
                 ContactLookupKey.appendToLookupKey(mSb,
