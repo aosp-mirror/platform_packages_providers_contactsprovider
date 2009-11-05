@@ -1379,7 +1379,7 @@ public class LegacyApiSupport {
         switch (match) {
             case PEOPLE:
             case PEOPLE_ID:
-                count = mContactsProvider.deleteRawContact(ContentUris.parseId(uri), false);
+                count = mContactsProvider.deleteRawContact(id, false);
                 break;
 
             case PEOPLE_PHOTO:
@@ -1390,33 +1390,27 @@ public class LegacyApiSupport {
 
             case ORGANIZATIONS:
             case ORGANIZATIONS_ID:
-                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
-                        ORGANIZATION_MIME_TYPES);
+                count = mContactsProvider.deleteData(id, ORGANIZATION_MIME_TYPES);
                 break;
 
             case CONTACTMETHODS:
             case CONTACTMETHODS_ID:
-                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
-                        CONTACT_METHOD_MIME_TYPES);
+                count = mContactsProvider.deleteData(id, CONTACT_METHOD_MIME_TYPES);
                 break;
-
 
             case PHONES:
             case PHONES_ID:
-                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
-                        PHONE_MIME_TYPES);
+                count = mContactsProvider.deleteData(id, PHONE_MIME_TYPES);
                 break;
 
             case EXTENSIONS:
             case EXTENSIONS_ID:
-                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
-                        EXTENSION_MIME_TYPES);
+                count = mContactsProvider.deleteData(id, EXTENSION_MIME_TYPES);
                 break;
 
             case PHOTOS:
             case PHOTOS_ID:
-                count = mContactsProvider.deleteData(ContentUris.parseId(uri),
-                        PHOTO_MIME_TYPES);
+                count = mContactsProvider.deleteData(id, PHOTO_MIME_TYPES);
 
                 break;
 
