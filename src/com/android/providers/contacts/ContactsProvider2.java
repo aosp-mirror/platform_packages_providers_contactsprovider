@@ -909,7 +909,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             if (values.size() > 0) {
-                mDb.update(Tables.DATA, values, Data._ID + " = " + dataId, null);
+                mSelectionArgs1[0] = String.valueOf(dataId);
+                mDb.update(Tables.DATA, values, Data._ID + " =?", mSelectionArgs1);
             }
 
             if (!callerIsSyncAdapter) {
@@ -921,8 +922,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = c.getLong(DataDeleteQuery._ID);
             long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
             boolean primary = c.getInt(DataDeleteQuery.IS_PRIMARY) != 0;
-            int count = db.delete(Tables.DATA, Data._ID + "=" + dataId, null);
-            db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
+            mSelectionArgs1[0] = String.valueOf(dataId);
+            int count = db.delete(Tables.DATA, Data._ID + "=?", mSelectionArgs1);
+            mSelectionArgs1[0] = String.valueOf(rawContactId);
+            db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=?", mSelectionArgs1);
             if (count != 0 && primary) {
                 fixPrimary(db, rawContactId);
             }
@@ -930,16 +933,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         private void fixPrimary(SQLiteDatabase db, long rawContactId) {
-            long newPrimaryId = findNewPrimaryDataId(db, rawContactId);
-            if (newPrimaryId != -1) {
-                setIsPrimary(rawContactId, newPrimaryId, getMimeTypeId());
-            }
-        }
-
-        protected long findNewPrimaryDataId(SQLiteDatabase db, long rawContactId) {
+            long mimeTypeId = getMimeTypeId();
             long primaryId = -1;
             int primaryType = -1;
-            Cursor c = queryData(db, rawContactId);
+            mSelectionArgs1[0] = String.valueOf(rawContactId);
+            Cursor c = db.query(DataDeleteQuery.TABLE,
+                    DataDeleteQuery.CONCRETE_COLUMNS,
+                    Data.RAW_CONTACT_ID + "=?" +
+                        " AND " + DataColumns.MIMETYPE_ID + "=" + mimeTypeId,
+                    mSelectionArgs1, null, null, null);
             try {
                 while (c.moveToNext()) {
                     long dataId = c.getLong(DataDeleteQuery._ID);
@@ -952,7 +954,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             } finally {
                 c.close();
             }
-            return primaryId;
+            if (primaryId != -1) {
+                setIsPrimary(rawContactId, primaryId, mimeTypeId);
+            }
         }
 
         /**
@@ -961,13 +965,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          */
         protected int getTypeRank(int type) {
             return 0;
-        }
-
-        protected Cursor queryData(SQLiteDatabase db, long rawContactId) {
-            return db.query(DataDeleteQuery.TABLE, DataDeleteQuery.CONCRETE_COLUMNS,
-                    Data.RAW_CONTACT_ID + "=" + rawContactId +
-                    " AND " + MimetypesColumns.MIMETYPE + "='" + mMimetype + "'",
-                    null, null, null, null);
         }
 
         protected void fixRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
@@ -988,8 +985,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public ContentValues getAugmentedValues(SQLiteDatabase db, long dataId,
                 ContentValues update) {
             final ContentValues values = new ContentValues();
-            final Cursor cursor = db.query(Tables.DATA, null, Data._ID + "=" + dataId,
-                    null, null, null, null);
+            mSelectionArgs1[0] = String.valueOf(dataId);
+            final Cursor cursor = db.query(Tables.DATA, null, Data._ID + "=?",
+                    mSelectionArgs1, null, null, null);
             try {
                 if (cursor.moveToFirst()) {
                     for (int i = 0; i < cursor.getColumnCount(); i++) {
@@ -1439,7 +1437,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 db.replace(Tables.PHONE_LOOKUP, null, phoneValues);
             } else {
-                db.delete(Tables.PHONE_LOOKUP, PhoneLookupColumns.DATA_ID + "=" + dataId, null);
+                mSelectionArgs1[0] = String.valueOf(dataId);
+                db.delete(Tables.PHONE_LOOKUP, PhoneLookupColumns.DATA_ID + "=?", mSelectionArgs1);
             }
         }
 
@@ -2243,8 +2242,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Account account) {
 
         if (account == null) {
+            mSelectionArgs1[0] = String.valueOf(rawContactId);
             Cursor c = db.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
-                    RawContacts._ID + "=" + rawContactId, null, null, null, null);
+                    RawContacts._ID + "=?", mSelectionArgs1, null, null, null);
             try {
                 if (c.moveToFirst()) {
                     String accountName = c.getString(RawContactsQuery.ACCOUNT_NAME);
@@ -2428,8 +2428,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about deleting data we don't have permission to read.
-        Cursor c = query(Data.CONTENT_URI, DataDeleteQuery.COLUMNS, Data._ID + "=" + dataId, null,
-                null);
+        mSelectionArgs1[0] = String.valueOf(dataId);
+        Cursor c = query(Data.CONTENT_URI, DataDeleteQuery.COLUMNS, Data._ID + "=?",
+                mSelectionArgs1, null);
 
         try {
             if (!c.moveToFirst()) {
@@ -2762,7 +2763,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case POSTALS_ID: {
                 long dataId = ContentUris.parseId(uri);
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteData(Data._ID + "=" + dataId, null, callerIsSyncAdapter);
+                mSelectionArgs1[0] = String.valueOf(dataId);
+                return deleteData(Data._ID + "=?", mSelectionArgs1, callerIsSyncAdapter);
             }
 
             case GROUPS_ID: {
@@ -2975,10 +2977,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
                 if (selection != null) {
-                    count = updateRawContacts(values, RawContacts._ID + "=" + rawContactId
+                    selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
+                    count = updateRawContacts(values, RawContacts._ID + "=?"
                                     + " AND(" + selection + ")", selectionArgs);
                 } else {
-                    count = updateRawContacts(values, RawContacts._ID + "=" + rawContactId, null);
+                    mSelectionArgs1[0] = String.valueOf(rawContactId);
+                    count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1);
                 }
                 break;
             }
@@ -2994,7 +2998,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case GROUPS_ID: {
                 long groupId = ContentUris.parseId(uri);
-                String selectionWithId = (Groups._ID + "=" + groupId + " ")
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(groupId));
+                String selectionWithId = Groups._ID + "=? "
                         + (selection == null ? "" : " AND " + selection);
                 count = updateGroups(uri, values, selectionWithId, selectionArgs,
                         callerIsSyncAdapter);
@@ -3108,8 +3113,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (updatedValues.containsKey(Groups.SHOULD_SYNC)
                 && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
             final long groupId = ContentUris.parseId(uri);
+            mSelectionArgs1[0] = String.valueOf(groupId);
             Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
-                    Groups.ACCOUNT_TYPE}, Groups._ID + "=" + groupId, null, null,
+                    Groups.ACCOUNT_TYPE}, Groups._ID + "=?", mSelectionArgs1, null,
                     null, null);
             String accountName;
             String accountType;
@@ -3304,7 +3310,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mValues.put(RawContacts.DIRTY, 1);
         }
 
-        mDb.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=" + contactId, null);
+        mSelectionArgs1[0] = String.valueOf(contactId);
+        mDb.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?", mSelectionArgs1);
 
         // Copy changeable values to prevent automatically managed fields from
         // being explicitly updated by clients.
@@ -3320,7 +3327,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
 
-        return mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=" + contactId, null);
+        return mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=?", mSelectionArgs1);
     }
 
     public void updateContactLastContactedTime(long contactId, long lastTimeContacted) {
@@ -3344,9 +3351,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         if (exceptionType == AggregationExceptions.TYPE_AUTOMATIC) {
+            mSelectionArgs2[0] = String.valueOf(rawContactId1);
+            mSelectionArgs2[1] = String.valueOf(rawContactId2);
             db.delete(Tables.AGGREGATION_EXCEPTIONS,
-                    AggregationExceptions.RAW_CONTACT_ID1 + "=" + rawContactId1 + " AND "
-                    + AggregationExceptions.RAW_CONTACT_ID2 + "=" + rawContactId2, null);
+                    AggregationExceptions.RAW_CONTACT_ID1 + "=? AND "
+                    + AggregationExceptions.RAW_CONTACT_ID2 + "=?", mSelectionArgs2);
         } else {
             ContentValues exceptionValues = new ContentValues(3);
             exceptionValues.put(AggregationExceptions.TYPE, exceptionType);
@@ -3528,7 +3537,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                qb.appendWhere(Contacts._ID + "=" + contactId);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
+                qb.appendWhere(Contacts._ID + "=?");
                 break;
             }
 
@@ -3544,10 +3554,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
-                    lookupQb.appendWhere(Contacts._ID + "=" + contactId + " AND " +
-                            Contacts.LOOKUP_KEY + "=");
-                    lookupQb.appendWhereEscapeString(lookupKey);
-                    Cursor c = query(db, lookupQb, projection, selection, selectionArgs, sortOrder,
+                    String[] args;
+                    if (selectionArgs == null) {
+                        args = new String[2];
+                    } else {
+                        args = new String[selectionArgs.length + 2];
+                        System.arraycopy(selectionArgs, 0, args, 2, selectionArgs.length);
+                    }
+                    args[0] = String.valueOf(contactId);
+                    args[1] = lookupKey;
+                    lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
+                    Cursor c = query(db, lookupQb, projection, selection, args, sortOrder,
                             groupBy, limit);
                     if (c.getCount() != 0) {
                         return c;
@@ -3557,7 +3574,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                qb.appendWhere(Contacts._ID + "=" + lookupContactIdByLookupKey(db, lookupKey));
+                selectionArgs = insertSelectionArg(selectionArgs,
+                        String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
+                qb.appendWhere(Contacts._ID + "=?");
                 break;
             }
 
@@ -3566,7 +3585,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final String lookupKey = uri.getPathSegments().get(2);
                 qb.setTables(mDbHelper.getContactView(true /* require restricted */));
                 qb.setProjectionMap(sContactsVCardProjectionMap);
-                qb.appendWhere(Contacts._ID + "=" + lookupContactIdByLookupKey(db, lookupKey));
+                selectionArgs = insertSelectionArg(selectionArgs,
+                        String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
+                qb.appendWhere(Contacts._ID + "=?");
                 break;
             }
 
@@ -3646,14 +3667,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_DATA: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
+                qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=?");
                 break;
             }
 
             case CONTACTS_PHOTO: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
+                qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=?");
                 qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
                 break;
             }
@@ -3666,8 +3689,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case PHONES_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
-                qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
+                qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
 
@@ -3718,8 +3742,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case EMAILS_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
-                qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'"
+                        + " AND " + Data._ID + "=?");
                 break;
             }
 
@@ -3727,8 +3752,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
-                    qb.appendWhere(" AND " + Email.DATA + "=");
-                    qb.appendWhereEscapeString(uri.getLastPathSegment());
+                    selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                    qb.appendWhere(" AND " + Email.DATA + "=?");
                 }
                 break;
             }
@@ -3771,9 +3796,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case POSTALS_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
                         + StructuredPostal.CONTENT_ITEM_TYPE + "'");
-                qb.appendWhere(" AND " + Data._ID + "=" + uri.getLastPathSegment());
+                qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
 
@@ -3785,14 +3811,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
                 setTablesAndProjectionMapForRawContacts(qb, uri);
-                qb.appendWhere(" AND " + RawContacts._ID + "=" + rawContactId);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
+                qb.appendWhere(" AND " + RawContacts._ID + "=?");
                 break;
             }
 
             case RAW_CONTACTS_DATA: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=" + rawContactId);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
+                qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
                 break;
             }
 
@@ -3803,7 +3831,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case DATA_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data._ID + "=" + ContentUris.parseId(uri));
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
 
@@ -3833,10 +3862,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS_ID: {
-                long groupId = ContentUris.parseId(uri);
                 qb.setTables(mDbHelper.getGroupView());
                 qb.setProjectionMap(sGroupsProjectionMap);
-                qb.appendWhere(Groups._ID + "=" + groupId);
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                qb.appendWhere(Groups._ID + "=?");
                 break;
             }
 
@@ -3901,7 +3930,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case STATUS_UPDATES_ID: {
                 setTableAndProjectionMapForStatusUpdates(qb, projection);
-                qb.appendWhere(DataColumns.CONCRETE_ID + "=" + ContentUris.parseId(uri));
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                qb.appendWhere(DataColumns.CONCRETE_ID + "=?");
                 break;
             }
 
@@ -3946,7 +3976,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACT_ENTITY_ID: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 setTablesAndProjectionMapForRawContactsEntities(qb, uri);
-                qb.appendWhere(" AND " + RawContacts._ID + "=" + rawContactId);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
+                qb.appendWhere(" AND " + RawContacts._ID + "=?");
                 break;
             }
 
@@ -4417,14 +4448,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     throw new FileNotFoundException("Mode " + mode + " not supported.");
                 }
 
-                long contactId = Long.parseLong(uri.getPathSegments().get(1));
-
                 String sql =
                         "SELECT " + Photo.PHOTO + " FROM " + mDbHelper.getDataView() +
                         " WHERE " + Data._ID + "=" + Contacts.PHOTO_ID
-                                + " AND " + RawContacts.CONTACT_ID + "=" + contactId;
+                                + " AND " + RawContacts.CONTACT_ID + "=?";
                 SQLiteDatabase db = mDbHelper.getReadableDatabase();
-                return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql, null);
+                return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql,
+                        new String[]{uri.getPathSegments().get(1)});
             }
 
             case CONTACTS_AS_VCARD: {
