@@ -1619,7 +1619,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     public boolean onCreate() {
         super.onCreate();
+        try {
+            return initialize();
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Cannot start provider", e);
+            return false;
+        }
+    }
 
+    private boolean initialize() {
         final Context context = getContext();
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mGlobalSearchSupport = new GlobalSearchSupport(this);
