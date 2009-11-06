@@ -2805,7 +2805,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
+    public int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
         mGroupIdCache.clear();
         final long groupMembershipMimetypeId = mDbHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
