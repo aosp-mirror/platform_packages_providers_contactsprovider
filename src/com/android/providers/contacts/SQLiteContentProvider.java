@@ -44,6 +44,11 @@ public abstract class SQLiteContentProvider extends ContentProvider
     private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<Boolean>();
     private static final int SLEEP_AFTER_YIELD_DELAY = 4000;
 
+    /**
+     * Maximum number of operations allowed in a batch between yield points.
+     */
+    private static final int MAX_OPERATIONS_PER_YIELD_POINT = 500;
+
     @Override
     public boolean onCreate() {
         Context context = getContext();
@@ -186,6 +191,8 @@ public abstract class SQLiteContentProvider extends ContentProvider
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
+        int ypCount = 0;
+        int opCount = 0;
         mDb = mOpenHelper.getWritableDatabase();
         mDb.beginTransactionWithListener(this);
         try {
@@ -193,9 +200,18 @@ public abstract class SQLiteContentProvider extends ContentProvider
             final int numOperations = operations.size();
             final ContentProviderResult[] results = new ContentProviderResult[numOperations];
             for (int i = 0; i < numOperations; i++) {
+                if (++opCount >= MAX_OPERATIONS_PER_YIELD_POINT) {
+                    throw new OperationApplicationException(
+                            "Too many content provider operations between yield points. "
+                                    + "The maximum number of operations per yield point is "
+                                    + MAX_OPERATIONS_PER_YIELD_POINT, ypCount);
+                }
                 final ContentProviderOperation operation = operations.get(i);
                 if (i > 0 && operation.isYieldAllowed()) {
-                    mDb.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
+                    opCount = 0;
+                    if (mDb.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
+                        ypCount++;
+                    }
                 }
                 results[i] = operation.apply(this, results, i);
             }
