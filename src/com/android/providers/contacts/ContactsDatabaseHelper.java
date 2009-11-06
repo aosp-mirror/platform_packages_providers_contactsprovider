@@ -63,7 +63,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 201;
+    private static final int DATABASE_VERSION = 202;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1337,7 +1337,7 @@ import java.util.HashMap;
         }
 
         if (oldVersion == 102) {
-            LegacyApiSupport.createDatabase(db);
+            LegacyApiSupport.createViews(db);
             oldVersion++;
         }
 
@@ -1348,7 +1348,13 @@ import java.util.HashMap;
 
         if (oldVersion == 104) {
             addColumnPhoneNumberMinMatch(db);
-            oldVersion = 201;
+            oldVersion++;
+        }
+
+        if (oldVersion == 105 || oldVersion == 201) {
+            LegacyApiSupport.createViews(db);
+            LegacyApiSupport.createSettingsTable(db);
+            oldVersion = 202;
         }
 
         if (oldVersion != newVersion) {
