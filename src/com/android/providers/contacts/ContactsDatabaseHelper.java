@@ -61,7 +61,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 104;
+    private static final int DATABASE_VERSION = 105;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1327,12 +1327,18 @@ import java.util.HashMap;
         }
 
         if (oldVersion == 102) {
-            LegacyApiSupport.createDatabase(db);
+            LegacyApiSupport.createViews(db);
             oldVersion++;
         }
 
         if (oldVersion == 103) {
             createContactEntitiesView(db);
+            oldVersion++;
+        }
+
+        if (oldVersion == 104) {
+            LegacyApiSupport.createViews(db);
+            LegacyApiSupport.createSettingsTable(db);
             oldVersion++;
         }
 

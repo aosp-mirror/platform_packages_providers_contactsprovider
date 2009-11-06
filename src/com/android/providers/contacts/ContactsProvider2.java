@@ -2731,7 +2731,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 : (!"false".equals(flag.toLowerCase()) && !"0".equals(flag.toLowerCase()));
     }
 
-    private int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
+    public int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
         final long groupMembershipMimetypeId = mDbHelper
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         mDb.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="

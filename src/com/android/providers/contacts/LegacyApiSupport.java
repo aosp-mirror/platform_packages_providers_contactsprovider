@@ -34,6 +34,7 @@ import android.content.Context;
 import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -47,6 +48,7 @@ import android.provider.Contacts.People;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -62,6 +64,7 @@ import android.util.Log;
 import java.util.HashMap;
 import java.util.Locale;
 
+@SuppressWarnings("deprecation")
 public class LegacyApiSupport {
 
     private static final String TAG = "ContactsProviderV1";
@@ -109,6 +112,7 @@ public class LegacyApiSupport {
     private static final int GROUP_SYSTEM_ID_MEMBERS = 41;
     private static final int PEOPLE_ORGANIZATIONS = 42;
     private static final int PEOPLE_ORGANIZATIONS_ID = 43;
+    private static final int SETTINGS = 44;
 
     private static final String PEOPLE_JOINS =
             " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
@@ -194,6 +198,7 @@ public class LegacyApiSupport {
         public static final String EXTENSIONS = "view_v1_extensions";
         public static final String GROUP_MEMBERSHIP = "view_v1_group_membership";
         public static final String PHOTOS = "view_v1_photos";
+        public static final String SETTINGS = "v1_settings";
     }
 
     private static final String[] ORGANIZATION_MIME_TYPES = new String[] {
@@ -212,6 +217,10 @@ public class LegacyApiSupport {
 
     private static final String[] PHOTO_MIME_TYPES = new String[] {
         Photo.CONTENT_ITEM_TYPE
+    };
+
+    private static final String[] GROUP_MEMBERSHIP_MIME_TYPES = new String[] {
+        GroupMembership.CONTENT_ITEM_TYPE
     };
 
     private static final String[] EXTENSION_MIME_TYPES = new String[] {
@@ -328,8 +337,8 @@ public class LegacyApiSupport {
                 SEARCH_SUGGESTIONS);
         matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
                 SEARCH_SHORTCUT);
-//        matcher.addURI(authority, "settings", SETTINGS);
-//
+        matcher.addURI(authority, "settings", SETTINGS);
+
         matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
         matcher.addURI(authority, "live_folders/people/*",
                 LIVE_FOLDERS_PEOPLE_GROUP_NAME);
@@ -442,6 +451,15 @@ public class LegacyApiSupport {
                 android.provider.Contacts.GroupMembership.PERSON_ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.GROUP_ID,
                 android.provider.Contacts.GroupMembership.GROUP_ID);
+        sGroupMembershipProjectionMap.put(
+                android.provider.Contacts.GroupMembership.GROUP_SYNC_ID,
+                android.provider.Contacts.GroupMembership.GROUP_SYNC_ID);
+        sGroupMembershipProjectionMap.put(
+                android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT,
+                android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT);
+        sGroupMembershipProjectionMap.put(
+                android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT_TYPE,
+                android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT_TYPE);
 
         sPhotoProjectionMap = new HashMap<String, String>();
         sPhotoProjectionMap.put(android.provider.Contacts.Photos._ID,
@@ -522,6 +540,11 @@ public class LegacyApiSupport {
 
     public static void createDatabase(SQLiteDatabase db) {
         Log.i(TAG, "Bootstrapping database legacy support");
+        createViews(db);
+        createSettingsTable(db);
+    }
+
+    public static void createViews(SQLiteDatabase db) {
 
         String peopleColumns = "name." + StructuredName.DISPLAY_NAME
                         + " AS " + People.NAME + ", " +
@@ -691,9 +714,18 @@ public class LegacyApiSupport {
                 Groups.TITLE
                         + " AS " + android.provider.Contacts.GroupMembership.NAME + ", " +
                 Groups.NOTES
-                        + " AS " + android.provider.Contacts.GroupMembership.NOTES + " , " +
+                        + " AS " + android.provider.Contacts.GroupMembership.NOTES + ", " +
                 Groups.SYSTEM_ID
-                        + " AS " + android.provider.Contacts.GroupMembership.SYSTEM_ID +
+                        + " AS " + android.provider.Contacts.GroupMembership.SYSTEM_ID + ", " +
+                GroupsColumns.CONCRETE_SOURCE_ID
+                        + " AS "
+                        + android.provider.Contacts.GroupMembership.GROUP_SYNC_ID + ", " +
+                GroupsColumns.CONCRETE_ACCOUNT_NAME
+                        + " AS "
+                        + android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT + ", " +
+                GroupsColumns.CONCRETE_ACCOUNT_TYPE
+                        + " AS "
+                        + android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT_TYPE +
                 " FROM " + Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + GroupMembership.CONTENT_ITEM_TYPE + "'"
@@ -724,6 +756,18 @@ public class LegacyApiSupport {
                         + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
                         + " AND " + RawContacts.IS_RESTRICTED + "=0" +
         ";");
+
+    }
+
+    public static void createSettingsTable(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS " + LegacyTables.SETTINGS + ";");
+        db.execSQL("CREATE TABLE " + LegacyTables.SETTINGS + " (" +
+                android.provider.Contacts.Settings._ID + " INTEGER PRIMARY KEY," +
+                android.provider.Contacts.Settings._SYNC_ACCOUNT + " TEXT," +
+                android.provider.Contacts.Settings._SYNC_ACCOUNT_TYPE + " TEXT," +
+                android.provider.Contacts.Settings.KEY + " STRING NOT NULL," +
+                android.provider.Contacts.Settings.VALUE + " STRING " +
+        ");");
     }
 
     public Uri insert(Uri uri, ContentValues values) {
@@ -906,6 +950,12 @@ public class LegacyApiSupport {
                 return updatePhoto(rawContactId, values);
             }
 
+            case SETTINGS: {
+                return updateSettings(values);
+            }
+
+            case GROUPMEMBERSHIP:
+            case GROUPMEMBERSHIP_ID:
             case -1: {
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
             }
@@ -1181,6 +1231,104 @@ public class LegacyApiSupport {
         }
     }
 
+    private int updateSettings(ContentValues values) {
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        String accountName = values.getAsString(android.provider.Contacts.Settings._SYNC_ACCOUNT);
+        String accountType =
+                values.getAsString(android.provider.Contacts.Settings._SYNC_ACCOUNT_TYPE);
+        String key = values.getAsString(android.provider.Contacts.Settings.KEY);
+        if (key == null) {
+            throw new IllegalArgumentException("you must specify the key when updating settings");
+        }
+        updateSetting(db, accountName, accountType, values);
+        if (key.equals(android.provider.Contacts.Settings.SYNC_EVERYTHING)) {
+            mValues.clear();
+            mValues.put(Settings.SHOULD_SYNC,
+                    values.getAsInteger(android.provider.Contacts.Settings.VALUE));
+            String selection;
+            String[] selectionArgs;
+            if (accountName != null && accountType != null) {
+                selectionArgs = new String[]{accountName, accountType};
+                selection = Settings.ACCOUNT_NAME + "=?"
+                        + " AND " + Settings.ACCOUNT_TYPE + "=?";
+            } else {
+                selectionArgs = null;
+                selection = Settings.ACCOUNT_NAME + " IS NULL"
+                        + " AND " + Settings.ACCOUNT_TYPE + " IS NULL";
+            }
+            int count = mContactsProvider.updateInTransaction(Settings.CONTENT_URI, mValues,
+                    selection, selectionArgs);
+            if (count == 0) {
+                mValues.put(Settings.ACCOUNT_NAME, accountName);
+                mValues.put(Settings.ACCOUNT_TYPE, accountType);
+                mContactsProvider.insertInTransaction(Settings.CONTENT_URI, mValues);
+            }
+        }
+        return 1;
+    }
+
+    private void updateSetting(SQLiteDatabase db, String accountName, String accountType,
+            ContentValues values) {
+        final String key = values.getAsString(android.provider.Contacts.Settings.KEY);
+        if (accountName == null || accountType == null) {
+            db.delete(LegacyTables.SETTINGS, "_sync_account IS NULL AND key=?", new String[]{key});
+        } else {
+            db.delete(LegacyTables.SETTINGS, "_sync_account=? AND _sync_account_type=? AND key=?",
+                    new String[]{accountName, accountType, key});
+        }
+        long rowId = db.insert(LegacyTables.SETTINGS,
+                android.provider.Contacts.Settings.KEY, values);
+        if (rowId < 0) {
+            throw new SQLException("error updating settings with " + values);
+        }
+    }
+
+    private interface SettingsMatchQuery {
+        String SQL =
+            "SELECT "
+                    + ContactsContract.Settings.ACCOUNT_NAME + ","
+                    + ContactsContract.Settings.ACCOUNT_TYPE + ","
+                    + ContactsContract.Settings.SHOULD_SYNC +
+            " FROM " + Tables.SETTINGS + " LEFT OUTER JOIN " + LegacyTables.SETTINGS +
+            " ON (" + ContactsContract.Settings.ACCOUNT_NAME + "="
+                              + android.provider.Contacts.Settings._SYNC_ACCOUNT +
+                      " AND " + ContactsContract.Settings.ACCOUNT_TYPE + "="
+                              + android.provider.Contacts.Settings._SYNC_ACCOUNT_TYPE +
+                      " AND " + android.provider.Contacts.Settings.KEY + "='"
+                              + android.provider.Contacts.Settings.SYNC_EVERYTHING + "'" +
+            ")" +
+            " WHERE " + ContactsContract.Settings.SHOULD_SYNC + "<>"
+                            + android.provider.Contacts.Settings.VALUE;
+
+        int ACCOUNT_NAME = 0;
+        int ACCOUNT_TYPE = 1;
+        int SHOULD_SYNC = 2;
+    }
+
+    /**
+     * Brings legacy settings table in sync with the new settings.
+     */
+    public void copySettingsToLegacySettings() {
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        Cursor cursor = db.rawQuery(SettingsMatchQuery.SQL, null);
+        try {
+            while(cursor.moveToNext()) {
+                String accountName = cursor.getString(SettingsMatchQuery.ACCOUNT_NAME);
+                String accountType = cursor.getString(SettingsMatchQuery.ACCOUNT_TYPE);
+                String value = cursor.getString(SettingsMatchQuery.SHOULD_SYNC);
+                mValues.clear();
+                mValues.put(android.provider.Contacts.Settings._SYNC_ACCOUNT, accountName);
+                mValues.put(android.provider.Contacts.Settings._SYNC_ACCOUNT_TYPE, accountType);
+                mValues.put(android.provider.Contacts.Settings.KEY,
+                        android.provider.Contacts.Settings.SYNC_EVERYTHING);
+                mValues.put(android.provider.Contacts.Settings.VALUE, value);
+                updateSetting(db, accountName, accountType, mValues);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
     private void parsePeopleValues(ContentValues values) {
         mValues.clear();
         mValues2.clear();
@@ -1355,6 +1503,11 @@ public class LegacyApiSupport {
 
 
     public int delete(Uri uri, String selection, String[] selectionArgs) {
+        final int match = sUriMatcher.match(uri);
+        if (match == -1 || match == SETTINGS) {
+            throw new UnsupportedOperationException("Unknown uri: " + uri);
+        }
+
         Cursor c = query(uri, IdQuery.COLUMNS, selection, selectionArgs, null, null);
         if (c == null) {
             return 0;
@@ -1364,7 +1517,7 @@ public class LegacyApiSupport {
         try {
             while (c.moveToNext()) {
                 long id = c.getLong(IdQuery._ID);
-                count += delete(uri, id);
+                count += delete(uri, match, id);
             }
         } finally {
             c.close();
@@ -1373,8 +1526,7 @@ public class LegacyApiSupport {
         return count;
     }
 
-    public int delete(Uri uri, long id) {
-        final int match = sUriMatcher.match(uri);
+    public int delete(Uri uri, int match, long id) {
         int count = 0;
         switch (match) {
             case PEOPLE:
@@ -1411,7 +1563,16 @@ public class LegacyApiSupport {
             case PHOTOS:
             case PHOTOS_ID:
                 count = mContactsProvider.deleteData(id, PHOTO_MIME_TYPES);
+                break;
 
+            case GROUPMEMBERSHIP:
+            case GROUPMEMBERSHIP_ID:
+                count = mContactsProvider.deleteData(id, GROUP_MEMBERSHIP_MIME_TYPES);
+                break;
+
+            case GROUPS:
+            case GROUPS_ID:
+                count = mContactsProvider.deleteGroup(uri, id, false);
                 break;
 
             default:
@@ -1720,6 +1881,11 @@ public class LegacyApiSupport {
             case DELETED_PEOPLE:
             case DELETED_GROUPS:
                 throw new UnsupportedOperationException();
+
+            case SETTINGS:
+                copySettingsToLegacySettings();
+                qb.setTables(LegacyTables.SETTINGS);
+                break;
 
             default:
                 throw new IllegalArgumentException("Unknown URL " + uri);
