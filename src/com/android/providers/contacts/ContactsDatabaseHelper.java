@@ -1346,14 +1346,14 @@ import java.util.HashMap;
             oldVersion++;
         }
 
-        if (oldVersion == 104) {
-            addColumnPhoneNumberMinMatch(db);
+        if (oldVersion == 104 || oldVersion == 201) {
+            LegacyApiSupport.createViews(db);
+            LegacyApiSupport.createSettingsTable(db);
             oldVersion++;
         }
 
-        if (oldVersion == 105 || oldVersion == 201) {
-            LegacyApiSupport.createViews(db);
-            LegacyApiSupport.createSettingsTable(db);
+        if (oldVersion == 105) {
+            addColumnPhoneNumberMinMatch(db);
             oldVersion = 202;
         }
 
