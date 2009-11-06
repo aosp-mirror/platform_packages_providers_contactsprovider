@@ -23,6 +23,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.Contacts;
+import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.GroupMembership;
@@ -33,6 +34,7 @@ import android.provider.Contacts.People;
 import android.provider.Contacts.Phones;
 import android.provider.Contacts.Photos;
 import android.provider.Contacts.Presence;
+import android.provider.Contacts.Settings;
 import android.test.suitebuilder.annotation.LargeTest;
 
 import java.io.IOException;
@@ -47,6 +49,7 @@ import java.io.IOException;
  * </code>
  */
 @LargeTest
+@SuppressWarnings("deprecation")
 public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     private static final boolean USE_LEGACY_PROVIDER = false;
@@ -932,6 +935,32 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
                 SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
         assertCursorValues(c, values);
         c.close();
+    }
+
+    public void testSettings() throws Exception {
+        mActor.addAuthority(ContactsContract.AUTHORITY);
+
+        ContentValues values = new ContentValues();
+        values.put(Settings._SYNC_ACCOUNT, "foo");
+        values.put(Settings._SYNC_ACCOUNT_TYPE, "bar");
+        values.put(Settings.KEY, Settings.SYNC_EVERYTHING);
+        values.put(Settings.VALUE, 7);
+        mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        assertStoredValue(Settings.CONTENT_URI, Settings._SYNC_ACCOUNT + "='foo' AND "
+                + Settings.KEY + "='" + Settings.SYNC_EVERYTHING + "'", null, Settings.VALUE, "7");
+
+        assertStoredValue(ContactsContract.Settings.CONTENT_URI,
+                ContactsContract.Settings.ACCOUNT_NAME + "='foo'",
+                null, ContactsContract.Settings.SHOULD_SYNC, "7");
+
+        values.clear();
+        values.put(ContactsContract.Settings.SHOULD_SYNC, 8);
+        mResolver.update(ContactsContract.Settings.CONTENT_URI, values,
+                ContactsContract.Settings.ACCOUNT_NAME + "='foo'", null);
+
+        assertStoredValue(Settings.CONTENT_URI, Settings._SYNC_ACCOUNT + "='foo' AND "
+                + Settings.KEY + "='" + Settings.SYNC_EVERYTHING + "'", null, Settings.VALUE, "8");
     }
 
     private Uri insertPerson(String name, ContentValues values) {
