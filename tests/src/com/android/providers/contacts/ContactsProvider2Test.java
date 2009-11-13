@@ -1474,7 +1474,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testRawContactDeletion() {
-        long rawContactId = createRawContact();
+        long rawContactId = createRawContact(mAccount);
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
@@ -1492,8 +1492,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, RawContacts.DELETED, "1");
         assertNetworkNotified(true);
 
-        Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
-                ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
+        Uri permanentDeletionUri = setCallerIsSyncAdapter(uri, mAccount);
         mResolver.delete(permanentDeletionUri, null, null);
         assertEquals(0, getCount(uri, null, null));
         assertEquals(0, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
@@ -1505,8 +1504,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testRawContactDeletionKeepingAggregateContact() {
-        long rawContactId1 = createRawContactWithName();
-        long rawContactId2 = createRawContactWithName();
+        long rawContactId1 = createRawContactWithName(mAccount);
+        long rawContactId2 = createRawContactWithName(mAccount);
 
         // Same name - should be aggregated
         assertAggregated(rawContactId1, rawContactId2);
@@ -1514,8 +1513,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long contactId = queryContactId(rawContactId1);
 
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
-        Uri permanentDeletionUri = uri.buildUpon().appendQueryParameter(
-                ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
+        Uri permanentDeletionUri = setCallerIsSyncAdapter(uri, mAccount);
         mResolver.delete(permanentDeletionUri, null, null);
         assertEquals(0, getCount(uri, null, null));
         assertEquals(1, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
@@ -1600,8 +1598,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri uri = insertStructuredName(rawContactId, "John", "Doe");
         clearDirty(rawContactUri);
-        Uri updateUri = uri.buildUpon()
-                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build();
+        Uri updateUri = setCallerIsSyncAdapter(uri, mAccount);
 
         ContentValues values = new ContentValues();
         values.put(StructuredName.FAMILY_NAME, "Dough");
@@ -1905,6 +1902,36 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertQueryParameter("foo:bar?some=some&param=val", "param", "val");
         assertQueryParameter("foo:bar?some=some&param=val&else=else", "param", "val");
         assertQueryParameter("foo:bar?param=john%40doe.com", "param", "john@doe.com");
+    }
+
+    public void testMissingAccountTypeParameter() {
+        // Try querying for RawContacts only using ACCOUNT_NAME
+        final Uri queryUri = RawContacts.CONTENT_URI.buildUpon().appendQueryParameter(
+                RawContacts.ACCOUNT_NAME, "lolwut").build();
+        try {
+            final Cursor cursor = mResolver.query(queryUri, null, null, null, null);
+            fail("Able to query with incomplete account query parameters");
+        } catch (IllegalArgumentException e) {
+            // Expected behavior.
+        }
+    }
+
+    public void testInsertInconsistentAccountType() {
+        // Try inserting RawContact with inconsistent Accounts
+        final Account red = new Account("red", "red");
+        final Account blue = new Account("blue", "blue");
+
+        final ContentValues values = new ContentValues();
+        values.put(RawContacts.ACCOUNT_NAME, red.name);
+        values.put(RawContacts.ACCOUNT_TYPE, red.type);
+
+        final Uri insertUri = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, blue);
+        try {
+            mResolver.insert(insertUri, values);
+            fail("Able to insert RawContact with inconsistent account details");
+        } catch (IllegalArgumentException e) {
+            // Expected behavior.
+        }
     }
 
     private void assertQueryParameter(String uriString, String parameter, String expectedValue) {

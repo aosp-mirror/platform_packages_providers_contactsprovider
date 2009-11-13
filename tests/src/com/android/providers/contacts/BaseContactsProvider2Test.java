@@ -130,13 +130,32 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected long createRawContactWithName() {
-        return createRawContactWithName("John", "Doe");
+        return createRawContactWithName(null);
+    }
+
+    protected long createRawContactWithName(Account account) {
+        return createRawContactWithName("John", "Doe", account);
     }
 
     protected long createRawContactWithName(String firstName, String lastName) {
-        long rawContactId = createRawContact(null);
+        return createRawContactWithName(firstName, lastName, null);
+    }
+
+    protected long createRawContactWithName(String firstName, String lastName, Account account) {
+        long rawContactId = createRawContact(account);
         insertStructuredName(rawContactId, firstName, lastName);
         return rawContactId;
+    }
+
+    protected Uri setCallerIsSyncAdapter(Uri uri, Account account) {
+        if (account == null) {
+            return uri;
+        }
+        final Uri.Builder builder = uri.buildUpon();
+        builder.appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, account.name);
+        builder.appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, account.type);
+        builder.appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true");
+        return builder.build();
     }
 
     protected long createRawContact(Account account, String... extras) {

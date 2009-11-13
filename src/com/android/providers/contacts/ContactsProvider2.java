@@ -2140,52 +2140,68 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * If account is non-null then store it in the values. If the account is already
-     * specified in the values then it must be consistent with the account, if it is non-null.
-     * @param uri the ContentValues to read from and update
-     * @param values the explicitly provided Account
-     * @return false if the parameters are inconsistent
+     * If account is non-null then store it in the values. If the account is
+     * already specified in the values then it must be consistent with the
+     * account, if it is non-null.
+     *
+     * @param uri Current {@link Uri} being operated on.
+     * @param values {@link ContentValues} to read and possibly update.
+     * @throws IllegalArgumentException when only one of
+     *             {@link RawContacts#ACCOUNT_NAME} or
+     *             {@link RawContacts#ACCOUNT_TYPE} is specified, leaving the
+     *             other undefined.
+     * @throws IllegalArgumentException when {@link RawContacts#ACCOUNT_NAME}
+     *             and {@link RawContacts#ACCOUNT_TYPE} are inconsistent between
+     *             the given {@link Uri} and {@link ContentValues}.
      */
-    private boolean resolveAccount(Uri uri, ContentValues values) {
+    private Account resolveAccount(Uri uri, ContentValues values) throws IllegalArgumentException {
         String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
-
-        if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
-            accountName = null;
-            accountType = null;
-        }
+        final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
 
         String valueAccountName = values.getAsString(RawContacts.ACCOUNT_NAME);
         String valueAccountType = values.getAsString(RawContacts.ACCOUNT_TYPE);
+        final boolean partialValues = TextUtils.isEmpty(valueAccountName)
+                ^ TextUtils.isEmpty(valueAccountType);
 
-        if (TextUtils.isEmpty(valueAccountName) && TextUtils.isEmpty(valueAccountType)) {
+        if (partialUri || partialValues) {
+            // Throw when either account is incomplete
+            throw new IllegalArgumentException("Must specify both or neither of"
+                    + " ACCOUNT_NAME and ACCOUNT_TYPE");
+        }
+
+        // Accounts are valid by only checking one parameter, since we've
+        // already ruled out partial accounts.
+        final boolean validUri = !TextUtils.isEmpty(accountName);
+        final boolean validValues = !TextUtils.isEmpty(valueAccountName);
+
+        if (validValues && validUri) {
+            // Check that accounts match when both present
+            final boolean accountMatch = TextUtils.equals(accountName, valueAccountName)
+                    && TextUtils.equals(accountType, valueAccountType);
+            if (!accountMatch) {
+                throw new IllegalArgumentException("When both specified, "
+                        + " ACCOUNT_NAME and ACCOUNT_TYPE must match");
+            }
+        } else if (validUri) {
+            // Fill values from Uri when not present
             values.put(RawContacts.ACCOUNT_NAME, accountName);
             values.put(RawContacts.ACCOUNT_TYPE, accountType);
-        } else {
-            if (accountName != null && !accountName.equals(valueAccountName)) {
-                return false;
-            }
-
-            if (accountType != null && !accountType.equals(valueAccountType)) {
-                return false;
-            }
-
+        } else if (validValues) {
             accountName = valueAccountName;
             accountType = valueAccountType;
+        } else {
+            return null;
         }
 
-        if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
-            mAccount = null;
-            return true;
-        }
-
+        // Use cached Account object when matches, otherwise create
         if (mAccount == null
                 || !mAccount.name.equals(accountName)
                 || !mAccount.type.equals(accountType)) {
             mAccount = new Account(accountName, accountType);
         }
 
-        return true;
+        return mAccount;
     }
 
     /**
@@ -2210,9 +2226,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.putAll(values);
         mValues.putNull(RawContacts.CONTACT_ID);
 
-        if (!resolveAccount(uri, mValues)) {
-            return -1;
-        }
+        final Account account = resolveAccount(uri, mValues);
 
         if (values.containsKey(RawContacts.DELETED)
                 && values.getAsInteger(RawContacts.DELETED) != 0) {
@@ -2223,7 +2237,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.markNewForAggregation(rawContactId);
 
         // Trigger creation of a Contact based on this RawContact at the end of transaction
-        mInsertedRawContacts.put(rawContactId, mAccount);
+        mInsertedRawContacts.put(rawContactId, account);
 
         return rawContactId;
     }
@@ -2665,9 +2679,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.clear();
         mValues.putAll(values);
 
-        if (!resolveAccount(uri, mValues)) {
-            return -1;
-        }
+        final Account account = resolveAccount(uri, mValues);
 
         // Replace package with internal mapping
         final String packageName = mValues.getAsString(Groups.RES_PACKAGE);
@@ -2990,7 +3002,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case SETTINGS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteSettings(uri, selection, selectionArgs);
+                return deleteSettings(uri, appendAccountToSelection(uri, selection), selectionArgs);
             }
 
             case STATUS_UPDATES: {
@@ -3216,7 +3228,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case SETTINGS: {
-                count = updateSettings(uri, values, selection, selectionArgs);
+                count = updateSettings(uri, values, appendAccountToSelection(uri, selection),
+                        selectionArgs);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3313,10 +3326,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         if (updatedValues.containsKey(Groups.SHOULD_SYNC)
                 && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
-            final long groupId = ContentUris.parseId(uri);
-            mSelectionArgs1[0] = String.valueOf(groupId);
             Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
-                    Groups.ACCOUNT_TYPE}, Groups._ID + "=?", mSelectionArgs1, null,
+                    Groups.ACCOUNT_TYPE}, selectionWithId, selectionArgs, null,
                     null, null);
             String accountName;
             String accountType;
@@ -4563,7 +4574,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
-        if (!TextUtils.isEmpty(accountName)) {
+
+        final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
+        if (partialUri) {
+            // Throw when either account is incomplete
+            throw new IllegalArgumentException("Must specify both or neither of"
+                    + " ACCOUNT_NAME and ACCOUNT_TYPE");
+        }
+
+        // Accounts are valid by only checking one parameter, since we've
+        // already ruled out partial accounts.
+        final boolean validAccount = !TextUtils.isEmpty(accountName);
+        if (validAccount) {
             qb.appendWhere(RawContacts.ACCOUNT_NAME + "="
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
@@ -4576,7 +4598,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private String appendAccountToSelection(Uri uri, String selection) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
-        if (!TextUtils.isEmpty(accountName)) {
+
+        final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
+        if (partialUri) {
+            // Throw when either account is incomplete
+            throw new IllegalArgumentException("Must specify both or neither of"
+                    + " ACCOUNT_NAME and ACCOUNT_TYPE");
+        }
+
+        // Accounts are valid by only checking one parameter, since we've
+        // already ruled out partial accounts.
+        final boolean validAccount = !TextUtils.isEmpty(accountName);
+        if (validAccount) {
             StringBuilder selectionSb = new StringBuilder(RawContacts.ACCOUNT_NAME + "="
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
