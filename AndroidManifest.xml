@@ -7,20 +7,40 @@
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.READ_SYNC_STATS" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.USE_CREDENTIALS" />
     <uses-permission android:name="com.google.android.googleapps.permission.GOOGLE_AUTH" />
     <uses-permission android:name="com.google.android.googleapps.permission.GOOGLE_AUTH.cp" />
     <uses-permission android:name="android.permission.SUBSCRIBED_FEEDS_READ" />
     <uses-permission android:name="android.permission.SUBSCRIBED_FEEDS_WRITE" />
 
     <application android:process="android.process.acore"
-                 android:label="@string/app_label"
-                 android:icon="@drawable/app_icon">
-        <provider android:name="ContactsProvider" android:authorities="contacts;call_log"
-                android:syncable="false" android:multiprocess="false"
-                android:readPermission="android.permission.READ_CONTACTS"
-                android:writePermission="android.permission.WRITE_CONTACTS">
-            <path-permission android:path="/people/search_suggest_query"
+        android:label="@string/app_label"
+        android:icon="@drawable/app_icon">
+
+        <provider android:name="ContactsProvider2"
+            android:authorities="contacts;com.android.contacts"
+            android:label="@string/provider_label"
+            android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS">
+            <path-permission
+                    android:path="/contacts/search_suggest_query"
                     android:readPermission="android.permission.GLOBAL_SEARCH" />
         </provider>
+
+        <provider android:name="CallLogProvider"
+            android:authorities="call_log"
+            android:syncable="false" android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS">
+        </provider>
+
+        <!-- TODO: create permissions for social data -->
+        <provider android:name="SocialProvider"
+            android:authorities="com.android.social"
+            android:syncable="false"
+            android:multiprocess="false"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS" />
     </application>
 </manifest>
