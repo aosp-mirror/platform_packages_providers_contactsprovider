@@ -68,6 +68,9 @@ import java.util.HashMap;
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
+    /** size of the compiled-sql statement cache mainatained by {@link SQLiteDatabase} */
+    private static final int MAX_CACHE_SIZE_FOR_CONTACTS_DB = 250;
+
     public interface Tables {
         public static final String CONTACTS = "contacts";
         public static final String RAW_CONTACTS = "raw_contacts";
@@ -1469,6 +1472,8 @@ import java.util.HashMap;
             close();
             db = super.getWritableDatabase();
         }
+        // let {@link SQLiteDatabase} cache my compiled-sql statements.
+        db.setMaxSqlCacheSize(MAX_CACHE_SIZE_FOR_CONTACTS_DB);
         return db;
     }
 
