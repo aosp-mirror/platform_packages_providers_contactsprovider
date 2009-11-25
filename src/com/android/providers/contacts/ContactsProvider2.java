@@ -5220,7 +5220,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void appendRawContactsByNormalizedNameFilter(StringBuilder sb, String normalizedName,
             String limit, boolean allowEmailMatch) {
         sb.append("(" +
-                "SELECT DISTINCT " + NameLookupColumns.RAW_CONTACT_ID +
+                "SELECT " + NameLookupColumns.RAW_CONTACT_ID +
                 " FROM " + Tables.NAME_LOOKUP +
                 " WHERE " + NameLookupColumns.NORMALIZED_NAME +
                 " GLOB '");
