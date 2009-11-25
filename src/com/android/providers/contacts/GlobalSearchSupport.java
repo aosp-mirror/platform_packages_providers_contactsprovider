@@ -20,7 +20,6 @@ import com.android.internal.database.ArrayListCursor;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.app.SearchManager;
@@ -32,11 +31,9 @@ import android.net.Uri;
 import android.provider.Contacts.Intents;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.Presence;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -80,14 +77,7 @@ public class GlobalSearchSupport {
         public static final String JOIN_CONTACTS =
                 " JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
-        public static final String JOIN_MIMETYPES =
-                " JOIN mimetypes ON (data.mimetype_id = mimetypes._id AND mimetypes.mimetype IN ('"
-                + StructuredName.CONTENT_ITEM_TYPE + "','" + Email.CONTENT_ITEM_TYPE + "','"
-                + Phone.CONTENT_ITEM_TYPE + "','" + Organization.CONTENT_ITEM_TYPE + "','"
-                + GroupMembership.CONTENT_ITEM_TYPE + "')) ";
-
-        public static final String TABLE = "data " + JOIN_RAW_CONTACTS + JOIN_MIMETYPES
-                + JOIN_CONTACTS;
+        public static final String TABLE = "data " + JOIN_RAW_CONTACTS + JOIN_CONTACTS;
 
         public static final String PRESENCE_SQL =
                 "(SELECT " + StatusUpdates.PRESENCE_STATUS +
@@ -100,11 +90,9 @@ public class GlobalSearchSupport {
             ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME,
             PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE,
             DataColumns.CONCRETE_ID + " AS data_id",
-            MimetypesColumns.MIMETYPE,
+            DataColumns.MIMETYPE_ID,
             Data.IS_SUPER_PRIMARY,
-            Organization.COMPANY,
-            Email.DATA,
-            Phone.NUMBER,
+            Data.DATA1,
             Contacts.PHOTO_ID,
         };
 
@@ -112,12 +100,12 @@ public class GlobalSearchSupport {
         public static final int DISPLAY_NAME = 1;
         public static final int PRESENCE_STATUS = 2;
         public static final int DATA_ID = 3;
-        public static final int MIMETYPE = 4;
+        public static final int MIMETYPE_ID = 4;
         public static final int IS_SUPER_PRIMARY = 5;
         public static final int ORGANIZATION = 6;
-        public static final int EMAIL = 7;
-        public static final int PHONE = 8;
-        public static final int PHOTO_ID = 9;
+        public static final int EMAIL = 6;
+        public static final int PHONE = 6;
+        public static final int PHOTO_ID = 7;
     }
 
     private static class SearchSuggestion {
@@ -225,9 +213,34 @@ public class GlobalSearchSupport {
     }
 
     private final ContactsProvider2 mContactsProvider;
+    private boolean mMimeTypeIdsLoaded;
+    private long mMimeTypeIdEmail;
+    private long mMimeTypeIdStructuredName;
+    private long mMimeTypeIdOrganization;
+    private long mMimeTypeIdPhone;
 
+    @SuppressWarnings("all")
     public GlobalSearchSupport(ContactsProvider2 contactsProvider) {
         mContactsProvider = contactsProvider;
+
+        // To ensure the data column position. This is dead code if properly configured.
+        if (Organization.COMPANY != Data.DATA1 || Phone.NUMBER != Data.DATA1
+                || Email.DATA != Data.DATA1) {
+            throw new AssertionError("Some of ContactsContract.CommonDataKinds class primary"
+                    + " data is not in DATA1 column");
+        }
+    }
+
+    private void ensureMimetypeIdsLoaded() {
+        if (!mMimeTypeIdsLoaded) {
+            ContactsDatabaseHelper dbHelper = (ContactsDatabaseHelper)mContactsProvider
+                    .getDatabaseHelper();
+            mMimeTypeIdStructuredName = dbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+            mMimeTypeIdOrganization = dbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+            mMimeTypeIdPhone = dbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+            mMimeTypeIdEmail = dbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+            mMimeTypeIdsLoaded = true;
+        }
     }
 
     public Cursor handleSearchSuggestionsQuery(SQLiteDatabase db, Uri uri, String limit) {
@@ -243,11 +256,14 @@ public class GlobalSearchSupport {
         }
     }
 
-    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, long contactId, String[] projection) {
+    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, long contactId,
+            String[] projection) {
+        ensureMimetypeIdsLoaded();
         StringBuilder sb = new StringBuilder();
         sb.append(mContactsProvider.getContactsRestrictions());
+        appendMimeTypeFilter(sb);
         sb.append(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
-        return buildCursorForSearchSuggestions(db, sb.toString(), projection);
+        return buildCursorForSearchSuggestions(db, sb.toString(), projection, null);
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
@@ -296,22 +312,46 @@ public class GlobalSearchSupport {
 
     private Cursor buildCursorForSearchSuggestionsBasedOnName(SQLiteDatabase db,
             String searchClause, String limit) {
-
+        ensureMimetypeIdsLoaded();
         StringBuilder sb = new StringBuilder();
         sb.append(mContactsProvider.getContactsRestrictions());
+        appendMimeTypeFilter(sb);
         sb.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
         mContactsProvider.appendRawContactsByFilterAsNestedQuery(sb, searchClause, limit);
-        sb.append(" AND " + Contacts.IN_VISIBLE_GROUP + "=1");
 
-        return buildCursorForSearchSuggestions(db, sb.toString(), null);
+        /*
+         *  Prepending "+" to the IN_VISIBLE_GROUP column disables the index on the
+         *  that column.  The logic is this:  let's say we have 10,000 contacts
+         *  of which 500 are visible.  The first letter we type narrows this down
+         *  to 10,000/26 = 384, which is already less than 500 that we would get
+         *  from the IN_VISIBLE_GROUP index.  Typing the second letter will narrow
+         *  the search down to 10,000/26/26 = 14 contacts. And a lot of people
+         *  will have more that 5% of their contacts visible, while the alphabet
+         *  will always have 26 letters.
+         */
+        sb.append(" AND " + "+" + Contacts.IN_VISIBLE_GROUP + "=1");
+        String selection = sb.toString();
+
+        return buildCursorForSearchSuggestions(db, selection, null, limit);
     }
 
-    private Cursor buildCursorForSearchSuggestions(SQLiteDatabase db, String selection,
-            String[] projection) {
+    private void appendMimeTypeFilter(StringBuilder sb) {
+
+        /*
+         * The "+" syntax prevents the mime type index from being used - we just want
+         * to reduce the size of the result set, not actually search by mime types.
+         */
+        sb.append(" AND " + "+" + DataColumns.MIMETYPE_ID + " IN (" + mMimeTypeIdEmail + "," +
+                mMimeTypeIdOrganization + "," + mMimeTypeIdPhone + "," +
+                mMimeTypeIdStructuredName + ")");
+    }
+
+    private Cursor buildCursorForSearchSuggestions(SQLiteDatabase db,
+            String selection, String[] projection, String limit) {
         ArrayList<SearchSuggestion> suggestionList = new ArrayList<SearchSuggestion>();
         HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
-        Cursor c = db.query(true, SearchSuggestionQuery.TABLE,
-                SearchSuggestionQuery.COLUMNS, selection, null, null, null, null, null);
+        Cursor c = db.query(false, SearchSuggestionQuery.TABLE,
+                SearchSuggestionQuery.COLUMNS, selection, null, null, null, null, limit);
         try {
             while (c.moveToNext()) {
 
@@ -330,18 +370,18 @@ public class GlobalSearchSupport {
                     suggestion.presence = c.getInt(SearchSuggestionQuery.PRESENCE_STATUS);
                 }
 
-                String mimetype = c.getString(SearchSuggestionQuery.MIMETYPE);
-                if (StructuredName.CONTENT_ITEM_TYPE.equals(mimetype)) {
+                long mimetype = c.getLong(SearchSuggestionQuery.MIMETYPE_ID);
+                if (mimetype == mMimeTypeIdStructuredName) {
                     suggestion.titleIsName = true;
-                } else if (Organization.CONTENT_ITEM_TYPE.equals(mimetype)) {
+                } else if (mimetype == mMimeTypeIdOrganization) {
                     if (isSuperPrimary || suggestion.organization == null) {
                         suggestion.organization = c.getString(SearchSuggestionQuery.ORGANIZATION);
                     }
-                } else if (Email.CONTENT_ITEM_TYPE.equals(mimetype)) {
+                } else if (mimetype == mMimeTypeIdEmail) {
                     if (isSuperPrimary || suggestion.email == null) {
                         suggestion.email = c.getString(SearchSuggestionQuery.EMAIL);
                     }
-                } else if (Phone.CONTENT_ITEM_TYPE.equals(mimetype)) {
+                } else if (mimetype == mMimeTypeIdPhone) {
                     if (isSuperPrimary || suggestion.phoneNumber == null) {
                         suggestion.phoneNumber = c.getString(SearchSuggestionQuery.PHONE);
                     }
