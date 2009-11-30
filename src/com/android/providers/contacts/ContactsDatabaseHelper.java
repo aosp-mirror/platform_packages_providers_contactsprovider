@@ -1004,7 +1004,7 @@ import java.util.HashMap;
          */
         db.execSQL("DROP TRIGGER IF EXISTS " + Tables.RAW_CONTACTS + "_marked_deleted;");
         db.execSQL("CREATE TRIGGER " + Tables.RAW_CONTACTS + "_marked_deleted "
-                + "   BEFORE UPDATE ON " + Tables.RAW_CONTACTS
+                + "   AFTER UPDATE ON " + Tables.RAW_CONTACTS
                 + " BEGIN "
                 + "   UPDATE " + Tables.RAW_CONTACTS
                 + "     SET "
@@ -1014,7 +1014,7 @@ import java.util.HashMap;
                 + " END");
 
         db.execSQL("DROP TRIGGER IF EXISTS " + Tables.DATA + "_updated;");
-        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated BEFORE UPDATE ON " + Tables.DATA
+        db.execSQL("CREATE TRIGGER " + Tables.DATA + "_updated AFTER UPDATE ON " + Tables.DATA
                 + " BEGIN "
                 + "   UPDATE " + Tables.DATA
                 + "     SET " + Data.DATA_VERSION + "=OLD." + Data.DATA_VERSION + "+1 "
@@ -1041,7 +1041,7 @@ import java.util.HashMap;
 
         db.execSQL("DROP TRIGGER IF EXISTS " + Tables.GROUPS + "_updated1;");
         db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_updated1 "
-                + "   BEFORE UPDATE ON " + Tables.GROUPS
+                + "   AFTER UPDATE ON " + Tables.GROUPS
                 + " BEGIN "
                 + "   UPDATE " + Tables.GROUPS
                 + "     SET "
