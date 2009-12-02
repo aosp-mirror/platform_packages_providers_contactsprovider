@@ -84,7 +84,8 @@ public class SocialProvider extends ContentProvider {
 
         // Contacts projection map
         columns = new HashMap<String, String>();
-        columns.put(Contacts.DISPLAY_NAME, ContactsColumns.CONCRETE_DISPLAY_NAME + " AS "
+        // TODO: fix display name reference (in fact, use the contacts view instead of the table)
+        columns.put(Contacts.DISPLAY_NAME, "contact." + Contacts.DISPLAY_NAME + " AS "
                 + Contacts.DISPLAY_NAME);
         sContactsProjectionMap = columns;
 

@@ -707,28 +707,37 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         sPhoneLookupProjectionMap = new HashMap<String, String>();
         sPhoneLookupProjectionMap.put(PhoneLookup._ID,
-                ContactsColumns.CONCRETE_ID + " AS " + PhoneLookup._ID);
+                "contacts_view." + Contacts._ID
+                        + " AS " + PhoneLookup._ID);
         sPhoneLookupProjectionMap.put(PhoneLookup.LOOKUP_KEY,
-                Contacts.LOOKUP_KEY + " AS " + PhoneLookup.LOOKUP_KEY);
+                "contacts_view." + Contacts.LOOKUP_KEY
+                        + " AS " + PhoneLookup.LOOKUP_KEY);
         sPhoneLookupProjectionMap.put(PhoneLookup.DISPLAY_NAME,
-                ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + PhoneLookup.DISPLAY_NAME);
+                "contacts_view." + Contacts.DISPLAY_NAME
+                        + " AS " + PhoneLookup.DISPLAY_NAME);
         sPhoneLookupProjectionMap.put(PhoneLookup.LAST_TIME_CONTACTED,
-                ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
+                "contacts_view." + Contacts.LAST_TIME_CONTACTED
                         + " AS " + PhoneLookup.LAST_TIME_CONTACTED);
         sPhoneLookupProjectionMap.put(PhoneLookup.TIMES_CONTACTED,
-                ContactsColumns.CONCRETE_TIMES_CONTACTED + " AS " + PhoneLookup.TIMES_CONTACTED);
+                "contacts_view." + Contacts.TIMES_CONTACTED
+                        + " AS " + PhoneLookup.TIMES_CONTACTED);
         sPhoneLookupProjectionMap.put(PhoneLookup.STARRED,
-                ContactsColumns.CONCRETE_STARRED + " AS " + PhoneLookup.STARRED);
+                "contacts_view." + Contacts.STARRED
+                        + " AS " + PhoneLookup.STARRED);
         sPhoneLookupProjectionMap.put(PhoneLookup.IN_VISIBLE_GROUP,
-                Contacts.IN_VISIBLE_GROUP + " AS " + PhoneLookup.IN_VISIBLE_GROUP);
+                "contacts_view." + Contacts.IN_VISIBLE_GROUP
+                        + " AS " + PhoneLookup.IN_VISIBLE_GROUP);
         sPhoneLookupProjectionMap.put(PhoneLookup.PHOTO_ID,
-                Contacts.PHOTO_ID + " AS " + PhoneLookup.PHOTO_ID);
+                "contacts_view." + Contacts.PHOTO_ID
+                        + " AS " + PhoneLookup.PHOTO_ID);
         sPhoneLookupProjectionMap.put(PhoneLookup.CUSTOM_RINGTONE,
-                ContactsColumns.CONCRETE_CUSTOM_RINGTONE + " AS " + PhoneLookup.CUSTOM_RINGTONE);
+                "contacts_view." + Contacts.CUSTOM_RINGTONE
+                        + " AS " + PhoneLookup.CUSTOM_RINGTONE);
         sPhoneLookupProjectionMap.put(PhoneLookup.HAS_PHONE_NUMBER,
-                Contacts.HAS_PHONE_NUMBER + " AS " + PhoneLookup.HAS_PHONE_NUMBER);
+                "contacts_view." + Contacts.HAS_PHONE_NUMBER
+                        + " AS " + PhoneLookup.HAS_PHONE_NUMBER);
         sPhoneLookupProjectionMap.put(PhoneLookup.SEND_TO_VOICEMAIL,
-                ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
+                "contacts_view." + Contacts.SEND_TO_VOICEMAIL
                         + " AS " + PhoneLookup.SEND_TO_VOICEMAIL);
         sPhoneLookupProjectionMap.put(PhoneLookup.NUMBER,
                 Phone.NUMBER + " AS " + PhoneLookup.NUMBER);
@@ -970,7 +979,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         protected void fixRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
             if (!isNewRawContact(rawContactId)) {
                 updateRawContactDisplayName(db, rawContactId);
-                mContactAggregator.updateDisplayName(db, rawContactId);
+                mContactAggregator.updateDisplayNameForRawContact(db, rawContactId);
             }
         }
 
@@ -2741,12 +2750,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS: {
                 int numDeletes = 0;
-                Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
+                Cursor c = mDb.query(Tables.RAW_CONTACTS,
+                        new String[]{RawContacts._ID, RawContacts.CONTACT_ID},
                         appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
                         final long rawContactId = c.getLong(0);
-                        numDeletes += deleteRawContact(rawContactId, callerIsSyncAdapter);
+                        long contactId = c.getLong(1);
+                        numDeletes += deleteRawContact(rawContactId, contactId,
+                                callerIsSyncAdapter);
                     }
                 } finally {
                     c.close();
@@ -2756,7 +2768,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS_ID: {
                 final long rawContactId = ContentUris.parseId(uri);
-                return deleteRawContact(rawContactId, callerIsSyncAdapter);
+                return deleteRawContact(rawContactId, mDbHelper.getContactId(rawContactId),
+                        callerIsSyncAdapter);
             }
 
             case DATA: {
@@ -2856,11 +2869,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return mDb.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
     }
 
-    public int deleteRawContact(long rawContactId, boolean callerIsSyncAdapter) {
+    public int deleteRawContact(long rawContactId, long contactId, boolean callerIsSyncAdapter) {
         mContactAggregator.invalidateAggregationExceptionCache();
         if (callerIsSyncAdapter) {
             mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
-            return mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
+            int count = mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
+            mContactAggregator.updateDisplayNameForContact(mDb, contactId);
+            return count;
         } else {
             mDbHelper.removeContactIfSingleton(rawContactId);
             return markRawContactAsDeleted(rawContactId);
@@ -4457,7 +4472,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (mDbHelper.hasAccessToRestrictedData()) {
             return "1";
         } else {
-            return RawContacts.IS_RESTRICTED + "=0";
+            return RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0";
         }
     }
 

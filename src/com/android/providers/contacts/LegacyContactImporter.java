@@ -383,7 +383,7 @@ public class LegacyContactImporter {
                 Contacts.SEND_TO_VOICEMAIL + "," +
                 Contacts.STARRED + "," +
                 Contacts.TIMES_CONTACTED + "," +
-                Contacts.DISPLAY_NAME +
+                Contacts.NAME_RAW_CONTACT_ID +
          ") VALUES (?,?,?,?,?,?,?)";
 
         int ID = 1;
@@ -392,7 +392,7 @@ public class LegacyContactImporter {
         int SEND_TO_VOICEMAIL = 4;
         int STARRED = 5;
         int TIMES_CONTACTED = 6;
-        int DISPLAY_NAME = 7;
+        int NAME_RAW_CONTACT_ID = 7;
     }
 
     private interface StructuredNameInsert {
@@ -518,8 +518,7 @@ public class LegacyContactImporter {
                 c.getLong(PeopleQuery.STARRED));
         insert.bindLong(ContactsInsert.TIMES_CONTACTED,
                 c.getLong(PeopleQuery.TIMES_CONTACTED));
-        bindString(insert, ContactsInsert.DISPLAY_NAME,
-                c.getString(PeopleQuery.NAME));
+        insert.bindLong(ContactsInsert.NAME_RAW_CONTACT_ID, id);
 
         insert(insert);
     }

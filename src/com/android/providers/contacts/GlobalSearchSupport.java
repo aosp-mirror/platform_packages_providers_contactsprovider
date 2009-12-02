@@ -20,6 +20,7 @@ import com.android.internal.database.ArrayListCursor;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.app.SearchManager;
@@ -71,13 +72,11 @@ public class GlobalSearchSupport {
     };
 
     private interface SearchSuggestionQuery {
-        public static final String JOIN_RAW_CONTACTS =
-                " JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) ";
-
-        public static final String JOIN_CONTACTS =
-                " JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
-
-        public static final String TABLE = "data " + JOIN_RAW_CONTACTS + JOIN_CONTACTS;
+        public static final String TABLE = "data "
+                + " JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + " JOIN contacts ON (raw_contacts.contact_id = contacts._id)"
+                + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON ("
+                +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
 
         public static final String PRESENCE_SQL =
                 "(SELECT " + StatusUpdates.PRESENCE_STATUS +
@@ -87,7 +86,8 @@ public class GlobalSearchSupport {
 
         public static final String[] COLUMNS = {
             ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID,
-            ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME,
+            "name_raw_contact." + RawContactsColumns.DISPLAY_NAME
+                    + " AS " + Contacts.DISPLAY_NAME,
             PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE,
             DataColumns.CONCRETE_ID + " AS data_id",
             DataColumns.MIMETYPE_ID,
@@ -262,7 +262,7 @@ public class GlobalSearchSupport {
         StringBuilder sb = new StringBuilder();
         sb.append(mContactsProvider.getContactsRestrictions());
         appendMimeTypeFilter(sb);
-        sb.append(" AND " + RawContacts.CONTACT_ID + "=" + contactId);
+        sb.append(" AND " + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + contactId);
         return buildCursorForSearchSuggestions(db, sb.toString(), projection, null);
     }
 
