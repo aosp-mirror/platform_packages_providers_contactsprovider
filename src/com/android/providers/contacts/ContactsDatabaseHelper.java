@@ -63,7 +63,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 202;
+    private static final int DATABASE_VERSION = 203;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -186,7 +186,7 @@ import java.util.HashMap;
                 + "LEFT OUTER JOIN packages ON (activities.package_id = packages._id) "
                 + "LEFT OUTER JOIN mimetypes ON (activities.mimetype_id = mimetypes._id) "
                 + "LEFT OUTER JOIN raw_contacts ON (activities.author_contact_id = " +
-                		"raw_contacts._id) "
+                        "raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String NAME_LOOKUP_JOIN_RAW_CONTACTS = "name_lookup "
@@ -256,8 +256,6 @@ import java.util.HashMap;
         public static final String LAST_STATUS_UPDATE_ID = "status_update_id";
 
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
-        public static final String CONCRETE_DISPLAY_NAME = Tables.CONTACTS + "."
-                + Contacts.DISPLAY_NAME;
 
         public static final String CONCRETE_TIMES_CONTACTED = Tables.CONTACTS + "."
                 + Contacts.TIMES_CONTACTED;
@@ -301,6 +299,12 @@ import java.util.HashMap;
         public static final String DISPLAY_NAME = "display_name";
         public static final String DISPLAY_NAME_SOURCE = "display_name_source";
         public static final String AGGREGATION_NEEDED = "aggregation_needed";
+        public static final String CONTACT_IN_VISIBLE_GROUP = "contact_in_visible_group";
+
+        public static final String CONCRETE_DISPLAY_NAME =
+                Tables.RAW_CONTACTS + "." + DISPLAY_NAME;
+        public static final String CONCRETE_CONTACT_ID =
+                Tables.RAW_CONTACTS + "." + RawContacts.CONTACT_ID;
     }
 
     /**
@@ -502,6 +506,8 @@ import java.util.HashMap;
     /** Compiled statements for updating {@link Contacts#IN_VISIBLE_GROUP}. */
     private SQLiteStatement mVisibleUpdate;
     private SQLiteStatement mVisibleSpecificUpdate;
+    private SQLiteStatement mVisibleUpdateRawContacts;
+    private SQLiteStatement mVisibleSpecificUpdateRawContacts;
 
     private boolean mReopenDatabase = false;
 
@@ -575,6 +581,18 @@ import java.util.HashMap;
         mVisibleUpdate = db.compileStatement(visibleUpdate);
         mVisibleSpecificUpdate = db.compileStatement(visibleUpdate + " WHERE "
                 + ContactsColumns.CONCRETE_ID + "=?");
+
+        String visibleUpdateRawContacts =
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(" +
+                        "SELECT " + Contacts.IN_VISIBLE_GROUP +
+                        " FROM " + Tables.CONTACTS +
+                        " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")" +
+                " WHERE " + RawContacts.DELETED + "=0";
+
+        mVisibleUpdateRawContacts = db.compileStatement(visibleUpdateRawContacts);
+        mVisibleSpecificUpdateRawContacts = db.compileStatement(visibleUpdateRawContacts +
+                    " AND " + RawContacts.CONTACT_ID + "=?");
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
@@ -651,7 +669,7 @@ import java.util.HashMap;
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                Contacts.DISPLAY_NAME + " TEXT," +
+                Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 Contacts.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
                 Contacts.CUSTOM_RINGTONE + " TEXT," +
                 Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
@@ -666,8 +684,7 @@ import java.util.HashMap;
         ");");
 
         db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
-                Contacts.IN_VISIBLE_GROUP + "," +
-                Contacts.DISPLAY_NAME + " COLLATE LOCALIZED" +
+                Contacts.IN_VISIBLE_GROUP +
         ");");
 
         db.execSQL("CREATE INDEX contacts_has_phone_index ON " + Tables.CONTACTS + " (" +
@@ -676,6 +693,10 @@ import java.util.HashMap;
 
         db.execSQL("CREATE INDEX contacts_restricted_index ON " + Tables.CONTACTS + " (" +
                 ContactsColumns.SINGLE_IS_RESTRICTED +
+        ");");
+
+        db.execSQL("CREATE INDEX contacts_name_raw_contact_id_index ON " + Tables.CONTACTS + " (" +
+                Contacts.NAME_RAW_CONTACT_ID +
         ");");
 
         // Contacts table
@@ -700,6 +721,7 @@ import java.util.HashMap;
                 RawContactsColumns.DISPLAY_NAME + " TEXT," +
                 RawContactsColumns.DISPLAY_NAME_SOURCE + " INTEGER NOT NULL DEFAULT " +
                         DisplayNameSources.UNDEFINED + "," +
+                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
                 RawContacts.SYNC3 + " TEXT, " +
@@ -729,6 +751,11 @@ import java.util.HashMap;
 //        db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
 //                RawContactsColumns.AGGREGATION_NEEDED +
 //        ");");
+
+        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                RawContactsColumns.DISPLAY_NAME + " COLLATE LOCALIZED ASC" +
+        ");");
 
         // Package name mapping table
         db.execSQL("CREATE TABLE " + Tables.PACKAGES + " (" +
@@ -1110,14 +1137,16 @@ import java.util.HashMap;
         String dataSelect = "SELECT "
                 + DataColumns.CONCRETE_ID + " AS " + Data._ID + ","
                 + Data.RAW_CONTACT_ID + ", "
-                + RawContacts.CONTACT_ID + ", "
+                + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
                 + syncColumns + ", "
                 + dataColumns + ", "
                 + contactOptionColumns + ", "
-                + ContactsColumns.CONCRETE_DISPLAY_NAME + " AS " + Contacts.DISPLAY_NAME + ", "
+                + "name_raw_contact." + RawContactsColumns.DISPLAY_NAME
+                        + " AS " + Contacts.DISPLAY_NAME + ", "
+                + "name_raw_contact." + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
+                        + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
-                + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
@@ -1126,7 +1155,9 @@ import java.util.HashMap;
                 + " JOIN " + Tables.RAW_CONTACTS + " ON ("
                 +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
                 + " JOIN " + Tables.CONTACTS + " ON ("
-                +   RawContacts.CONTACT_ID + "=" + Tables.CONTACTS + "." + Contacts._ID + ")"
+                +   RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
+                +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")"
                 + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
                 +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
                 + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
@@ -1136,7 +1167,7 @@ import java.util.HashMap;
 
         db.execSQL("CREATE VIEW " + Views.DATA_ALL + " AS " + dataSelect);
         db.execSQL("CREATE VIEW " + Views.DATA_RESTRICTED + " AS " + dataSelect + " WHERE "
-                + RawContacts.IS_RESTRICTED + "=0");
+                + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
 
         String rawContactOptionColumns =
                 RawContacts.CUSTOM_RINGTONE + ","
@@ -1161,13 +1192,13 @@ import java.util.HashMap;
         String contactsColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
                         + " AS " + Contacts.CUSTOM_RINGTONE + ", "
-                + ContactsColumns.CONCRETE_DISPLAY_NAME
+                + "name_raw_contact." + RawContactsColumns.DISPLAY_NAME
                         + " AS " + Contacts.DISPLAY_NAME + ", "
-                + Contacts.IN_VISIBLE_GROUP + ", "
+                + "name_raw_contact." + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
+                        + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + Contacts.HAS_PHONE_NUMBER + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
-                + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
                         + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
@@ -1181,16 +1212,13 @@ import java.util.HashMap;
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
                 + contactsColumns
-                + " FROM " + Tables.CONTACTS;
-
-        String restrictedContactsSelect = "SELECT "
-                + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + contactsColumns
                 + " FROM " + Tables.CONTACTS
-                + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0";
+                + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
+                +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
-        db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + restrictedContactsSelect);
+        db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + contactsSelect
+                + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0");
     }
 
     private static void createGroupsView(SQLiteDatabase db) {
@@ -1360,6 +1388,12 @@ import java.util.HashMap;
             oldVersion = 202;
         }
 
+        if (oldVersion == 202) {
+            addNameRawContactIdColumn(db);
+            createContactsViews(db);
+            oldVersion++;
+        }
+
         if (oldVersion != newVersion) {
             throw new IllegalStateException(
                     "error upgrading the database to version " + newVersion);
@@ -1402,6 +1436,72 @@ import java.util.HashMap;
         } finally {
             c.close();
         }
+    }
+
+    private static void addNameRawContactIdColumn(SQLiteDatabase db) {
+        db.execSQL(
+                "ALTER TABLE " + Tables.CONTACTS +
+                " ADD " + Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)");
+        db.execSQL(
+                "ALTER TABLE " + Tables.RAW_CONTACTS +
+                " ADD " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
+                        + " INTEGER NOT NULL DEFAULT 0");
+
+        // For each Contact, find the RawContact that contributed the display name
+        db.execSQL(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.NAME_RAW_CONTACT_ID + "=(" +
+                        " SELECT " + RawContacts._ID +
+                        " FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
+                        " AND " + RawContactsColumns.CONCRETE_DISPLAY_NAME + "=" +
+                                Tables.CONTACTS + "." + Contacts.DISPLAY_NAME +
+                        " ORDER BY " + RawContacts._ID +
+                        " LIMIT 1)"
+        );
+
+        db.execSQL("CREATE INDEX contacts_name_raw_contact_id_index ON " + Tables.CONTACTS + " (" +
+                Contacts.NAME_RAW_CONTACT_ID +
+        ");");
+
+        // If for some unknown reason we missed some names, let's make sure there are
+        // no contacts without a name, picking a raw contact "at random".
+        db.execSQL(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.NAME_RAW_CONTACT_ID + "=(" +
+                        " SELECT " + RawContacts._ID +
+                        " FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
+                        " ORDER BY " + RawContacts._ID +
+                        " LIMIT 1)" +
+                " WHERE " + Contacts.NAME_RAW_CONTACT_ID + " IS NULL"
+        );
+
+        // Wipe out DISPLAY_NAME on the Contacts table as it is no longer in use.
+        db.execSQL(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.DISPLAY_NAME + "=NULL"
+        );
+
+        // Copy the IN_VISIBLE_GROUP flag down to all raw contacts to allow
+        // indexing on (display_name, in_visible_group)
+        db.execSQL(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(" +
+                        "SELECT " + Contacts.IN_VISIBLE_GROUP +
+                        " FROM " + Tables.CONTACTS +
+                        " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")"
+        );
+
+        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                RawContactsColumns.DISPLAY_NAME + " COLLATE LOCALIZED ASC" +
+        ");");
+
+        db.execSQL("DROP INDEX contacts_visible_index");
+        db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
+                Contacts.IN_VISIBLE_GROUP +
+        ");");
     }
 
     /**
@@ -1495,8 +1595,6 @@ import java.util.HashMap;
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
-
-        db.execSQL("VACUUM;");
     }
 
     /**
@@ -1614,16 +1712,20 @@ import java.util.HashMap;
         final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         mVisibleUpdate.bindLong(1, groupMembershipMimetypeId);
         mVisibleUpdate.execute();
+        mVisibleUpdateRawContacts.execute();
     }
 
     /**
      * Update {@link Contacts#IN_VISIBLE_GROUP} for a specific contact.
      */
-    public void updateContactVisible(long aggId) {
+    public void updateContactVisible(long contactId) {
         final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         mVisibleSpecificUpdate.bindLong(1, groupMembershipMimetypeId);
-        mVisibleSpecificUpdate.bindLong(2, aggId);
+        mVisibleSpecificUpdate.bindLong(2, contactId);
         mVisibleSpecificUpdate.execute();
+
+        mVisibleSpecificUpdateRawContacts.bindLong(1, contactId);
+        mVisibleSpecificUpdateRawContacts.execute();
     }
 
     /**
@@ -1693,8 +1795,8 @@ import java.util.HashMap;
             boolean joinContacts) {
         sb.append(Tables.RAW_CONTACTS);
         if (joinContacts) {
-            sb.append(" JOIN " + getContactView() + " contacts"
-                    + " ON (contacts._id = raw_contacts.contact_id)");
+            sb.append(" JOIN " + getContactView() + " contacts_view"
+                    + " ON (contacts_view._id = raw_contacts.contact_id)");
         }
         sb.append(", (SELECT data_id FROM phone_lookup "
                 + "WHERE (" + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.MIN_MATCH + " = '");

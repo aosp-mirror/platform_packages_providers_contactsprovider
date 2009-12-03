@@ -1531,7 +1531,7 @@ public class LegacyApiSupport {
         switch (match) {
             case PEOPLE:
             case PEOPLE_ID:
-                count = mContactsProvider.deleteRawContact(id, false);
+                count = mContactsProvider.deleteRawContact(id, mDbHelper.getContactId(id), false);
                 break;
 
             case PEOPLE_PHOTO:
