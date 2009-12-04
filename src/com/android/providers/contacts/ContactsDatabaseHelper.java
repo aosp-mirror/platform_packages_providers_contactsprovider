@@ -100,25 +100,6 @@ import java.util.HashMap;
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
 
-        public static final String DATA_JOIN_RAW_CONTACTS_GROUPS = "data "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)"
-                + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
-                + ")";
-
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS = "data "
-                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + "LEFT OUTER JOIN packages ON (data.package_id = packages._id)";
-
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS = "data "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
-                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
-
-        public static final String RAW_CONTACTS_JOIN_CONTACTS = "raw_contacts "
-                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
-
         // NOTE: This requires late binding of GroupMembership MIME-type
         public static final String RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS = "raw_contacts "
                 + "LEFT OUTER JOIN settings ON ("
@@ -143,21 +124,6 @@ import java.util.HashMap;
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
-        public static final String DATA_INNER_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS = "data "
-                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + "JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
-
-        public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_CONTACTS_GROUPS =
-                "data "
-                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
-                + "LEFT OUTER JOIN groups "
-                + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
-                + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") "
-                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
-
         public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
@@ -168,13 +134,6 @@ import java.util.HashMap;
 
         public static final String GROUPS_JOIN_PACKAGES = "groups "
                 + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id)";
-
-        public static final String GROUPS_JOIN_PACKAGES_DATA_RAW_CONTACTS_CONTACTS = "groups "
-                + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id) "
-                + "LEFT OUTER JOIN data "
-                + "  ON (groups._id = data." + GroupMembership.GROUP_ROW_ID + ") "
-                + "LEFT OUTER JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String ACTIVITIES = "activities";
 
