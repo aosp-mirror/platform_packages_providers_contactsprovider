@@ -317,7 +317,7 @@ public class GlobalSearchSupport {
         sb.append(mContactsProvider.getContactsRestrictions());
         appendMimeTypeFilter(sb);
         sb.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
-        mContactsProvider.appendRawContactsByFilterAsNestedQuery(sb, searchClause, limit);
+        mContactsProvider.appendRawContactsByFilterAsNestedQuery(sb, searchClause);
 
         /*
          *  Prepending "+" to the IN_VISIBLE_GROUP column disables the index on the
