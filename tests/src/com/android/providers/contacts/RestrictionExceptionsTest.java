@@ -225,13 +225,15 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         final long greyContact = mGrey.createContact(true, GENERIC_NAME);
         final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
 
-        final Uri greyUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, greyContact);
-        final Uri redUri = greyUri.buildUpon().appendQueryParameter(
+        Uri greyUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, greyContact);
+        greyUri = Uri.withAppendedPath(greyUri, RawContacts.Entity.CONTENT_DIRECTORY);
+        Uri redUri = greyUri.buildUpon().appendQueryParameter(
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY, mRed.packageName).build();
 
         // When calling normally, we have access to protected
         mGrey.ensureCallingPackage();
-        EntityIterator iterator = mGrey.resolver.queryEntities(greyUri, null, null, null);
+        EntityIterator iterator = RawContacts.newEntityIterator(
+                mGrey.resolver.query(greyUri, null, null, null, null));
         while (iterator.hasNext()) {
             final Entity entity = iterator.next();
             final long rawContactId = entity.getEntityValues().getAsLong(RawContacts._ID);
@@ -240,7 +242,8 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
         // When calling on behalf of another package, protected is omitted
         mGrey.ensureCallingPackage();
-        iterator = mGrey.resolver.queryEntities(redUri, null, null, null);
+        iterator = RawContacts.newEntityIterator(
+                mGrey.resolver.query(redUri, null, null, null, null));
         while (iterator.hasNext()) {
             final Entity entity = iterator.next();
             final long rawContactId = entity.getEntityValues().getAsLong(RawContacts._ID);
