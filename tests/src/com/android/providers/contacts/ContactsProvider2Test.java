@@ -38,6 +38,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -1142,9 +1143,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri id_3_1 = insertEmail(id, "c3@email.com");
         Uri id_3_2 = insertPhoneNumber(id, "5551212c3");
 
-        EntityIterator iterator = mResolver.queryEntities(
-                maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, mAccount),
-                RawContacts.SOURCE_ID + " in ('c1', 'c2', 'c3')", null, null);
+        EntityIterator iterator = RawContacts.newEntityIterator(mResolver.query(
+                maybeAddAccountQueryParameters(RawContactsEntity.CONTENT_URI, mAccount), null,
+                RawContacts.SOURCE_ID + " in ('c1', 'c2', 'c3')", null, null));
         Entity entity;
         ContentValues[] subValues;
         entity = iterator.next();
