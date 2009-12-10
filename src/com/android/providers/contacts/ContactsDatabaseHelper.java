@@ -63,7 +63,7 @@ import java.util.HashMap;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 203;
+    private static final int DATABASE_VERSION = 204;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -687,15 +687,6 @@ import java.util.HashMap;
                 RawContacts.SYNC4 + " TEXT " +
         ");");
 
-        db.execSQL("CREATE TRIGGER raw_contacts_times_contacted UPDATE OF " +
-                    RawContacts.LAST_TIME_CONTACTED + " ON " + Tables.RAW_CONTACTS + " " +
-                "BEGIN " +
-                    "UPDATE " + Tables.RAW_CONTACTS + " SET "
-                        + RawContacts.TIMES_CONTACTED + " = " + "" +
-                            "(new." + RawContacts.TIMES_CONTACTED + " + 1)"
-                        + " WHERE _id = new._id;" +
-                "END");
-
         db.execSQL("CREATE INDEX raw_contacts_contact_id_index ON " + Tables.RAW_CONTACTS + " (" +
                 RawContacts.CONTACT_ID +
         ");");
@@ -974,14 +965,7 @@ import java.util.HashMap;
 
 
         db.execSQL("DROP TRIGGER IF EXISTS contacts_times_contacted;");
-        db.execSQL("CREATE TRIGGER contacts_times_contacted UPDATE OF " +
-                Contacts.LAST_TIME_CONTACTED + " ON " + Tables.CONTACTS + " " +
-            "BEGIN " +
-                "UPDATE " + Tables.CONTACTS + " SET "
-                    + Contacts.TIMES_CONTACTED + " = " + "" +
-                            "(new." + Contacts.TIMES_CONTACTED + " + 1)"
-                    + " WHERE _id = new._id;" +
-            "END");
+        db.execSQL("DROP TRIGGER IF EXISTS raw_contacts_times_contacted;");
 
         /*
          * Triggers that update {@link RawContacts#VERSION} when the contact is
@@ -1350,6 +1334,11 @@ import java.util.HashMap;
         if (oldVersion == 202) {
             addNameRawContactIdColumn(db);
             createContactsViews(db);
+            oldVersion++;
+        }
+
+        if (oldVersion == 203) {
+            createContactsTriggers(db);
             oldVersion++;
         }
 
