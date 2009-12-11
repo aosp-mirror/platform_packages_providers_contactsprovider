@@ -52,11 +52,9 @@ import java.io.IOException;
 @SuppressWarnings("deprecation")
 public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
-    private static final boolean USE_LEGACY_PROVIDER = false;
-
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
-       return USE_LEGACY_PROVIDER ? ContactsProvider.class : SynchronousContactsProvider2.class;
+       return SynchronousContactsProvider2.class;
     }
 
     @Override
@@ -730,23 +728,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
      * Capturing the search suggestion requirements in test cases as a reference.
      */
     public void testSearchSuggestionsNotInMyContacts() throws Exception {
-
         // We don't provide compatibility for search suggestions
-        if (!USE_LEGACY_PROVIDER) {
-            return;
-        }
-
-        ContentValues values = new ContentValues();
-        putContactValues(values);
-        mResolver.insert(People.CONTENT_URI, values);
-
-        Uri searchUri = new Uri.Builder().scheme("content").authority(Contacts.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("D").build();
-
-        // If the contact is not in the "my contacts" group, nothing should be found
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        assertEquals(0, c.getCount());
-        c.close();
+        return;
     }
 
     /**
@@ -755,50 +738,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
     public void testSearchSuggestionsByName() throws Exception {
 
         // We don't provide compatibility for search suggestions
-        if (!USE_LEGACY_PROVIDER) {
-            return;
-        }
-
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                true,  // organization
-                false, // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", "Google");
-
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                false, // organization
-                true,  // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", "1-800-4664-411");
-
-        assertSearchSuggestion(
-                true,  // name
-                true,  // photo
-                false, // organization
-                false, // phone
-                true,  // email
-                "D",   // query
-                true,  // expect icon URI
-                String.valueOf(Presence.getPresenceIconResourceId(Presence.OFFLINE)),
-                "Deer Dough", "foo@acme.com");
-
-        assertSearchSuggestion(
-                true,  // name
-                false, // photo
-                true,  // organization
-                false, // phone
-                false, // email
-                "D",   // query
-                false, // expect icon URI
-                null, "Deer Dough", "Google");
+        return;
     }
 
     private void assertSearchSuggestion(boolean name, boolean photo, boolean organization,
@@ -897,44 +837,8 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
      * Capturing the search suggestion requirements in test cases as a reference.
      */
     public void testSearchSuggestionsByPhoneNumber() throws Exception {
-
         // We don't provide compatibility for search suggestions
-        if (!USE_LEGACY_PROVIDER) {
-            return;
-        }
-
-        ContentValues values = new ContentValues();
-
-        Uri searchUri = new Uri.Builder().scheme("content").authority(Contacts.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("12345").build();
-
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        assertEquals(2, c.getCount());
-        c.moveToFirst();
-
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Execute");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "");
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                String.valueOf(com.android.internal.R.drawable.call_contact));
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-                Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
-        values.putNull(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
-        assertCursorValues(c, values);
-
-        c.moveToNext();
-        values.clear();
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Dial number");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345");
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                String.valueOf(com.android.internal.R.drawable.create_contact));
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-                Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
-        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-                SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
-        assertCursorValues(c, values);
-        c.close();
+        return;
     }
 
     public void testSettings() throws Exception {
