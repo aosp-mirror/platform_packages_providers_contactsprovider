@@ -156,6 +156,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
             + Contacts.STARRED + "=1) + 25";
 
+    private static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
+            "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
+            " CASE WHEN " + Contacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
+            " (" + Contacts.TIMES_CONTACTED + " + 1) END WHERE " + Contacts._ID + "=?";
+
+    private static final String UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE =
+            "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.TIMES_CONTACTED + "=" +
+            " CASE WHEN " + RawContacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
+            " (" + RawContacts.TIMES_CONTACTED + " + 1) END WHERE " + RawContacts.CONTACT_ID + "=?";
+
     private static final int CONTACTS = 1000;
     private static final int CONTACTS_ID = 1001;
     private static final int CONTACTS_LOOKUP = 1002;
@@ -3348,7 +3358,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
 
-        return mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=?", mSelectionArgs1);
+        int rslt = mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=?", mSelectionArgs1);
+        if (values.containsKey(Contacts.LAST_TIME_CONTACTED) &&
+                !values.containsKey(Contacts.TIMES_CONTACTED)) {
+            mDb.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
+            mDb.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
+        }
+        return rslt;
     }
 
     public void updateContactLastContactedTime(long contactId, long lastTimeContacted) {
