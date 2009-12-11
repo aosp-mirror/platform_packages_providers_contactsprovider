@@ -45,6 +45,7 @@ import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.People;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
@@ -187,6 +188,18 @@ public class LegacyApiSupport {
 
     private static final Uri LIVE_FOLDERS_CONTACTS_FAVORITES_URI = Uri.withAppendedPath(
             ContactsContract.AUTHORITY_URI, "live_folders/favorites");
+
+    private static final String CONTACTS_UPDATE_LASTTIMECONTACTED =
+            "UPDATE " + Tables.CONTACTS +
+            " SET " + Contacts.LAST_TIME_CONTACTED + "=? " +
+            "WHERE " + Contacts._ID + "=?";
+    private static final String RAWCONTACTS_UPDATE_LASTTIMECONTACTED =
+            "UPDATE " + Tables.RAW_CONTACTS + " SET "
+            + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
+            + RawContacts._ID + "=?";
+
+    private String[] mSelectionArgs1 = new String[1];
+    private String[] mSelectionArgs2 = new String[2];
 
     public interface LegacyTables {
         public static final String PEOPLE = "view_v1_people";
@@ -484,8 +497,6 @@ public class LegacyApiSupport {
     private final NameSplitter mPhoneticNameSplitter;
     private final GlobalSearchSupport mGlobalSearchSupport;
 
-    /** Precompiled sql statement for incrementing times contacted for a contact */
-    private final SQLiteStatement mLastTimeContactedUpdate;
     private final SQLiteStatement mDataMimetypeQuery;
     private final SQLiteStatement mDataRawContactIdQuery;
 
@@ -512,10 +523,6 @@ public class LegacyApiSupport {
                 .getDefault());
 
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        mLastTimeContactedUpdate = db.compileStatement("UPDATE " + Tables.RAW_CONTACTS + " SET "
-                + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
-                + RawContacts._ID + "=?");
-
         mDataMimetypeQuery = db.compileStatement(
                 "SELECT " + DataColumns.MIMETYPE_ID +
                 " FROM " + Tables.DATA +
@@ -1144,14 +1151,20 @@ public class LegacyApiSupport {
 
         long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
         long contactId = mDbHelper.getContactId(rawContactId);
+        SQLiteDatabase mDb = mDbHelper.getWritableDatabase();
+        mSelectionArgs2[0] = String.valueOf(lastTimeContacted);
         if (contactId != 0) {
-            mContactsProvider.updateContactLastContactedTime(contactId, lastTimeContacted);
+            mSelectionArgs2[1] = String.valueOf(contactId);
+            mDb.execSQL(CONTACTS_UPDATE_LASTTIMECONTACTED, mSelectionArgs2);
+            // increment times_contacted column
+            mSelectionArgs1[0] = String.valueOf(contactId);
+            mDb.execSQL(ContactsProvider2.UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
         }
-
-        mLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
-        mLastTimeContactedUpdate.bindLong(2, rawContactId);
-        mLastTimeContactedUpdate.execute();
-
+        mSelectionArgs2[1] = String.valueOf(rawContactId);
+        mDb.execSQL(RAWCONTACTS_UPDATE_LASTTIMECONTACTED, mSelectionArgs2);
+        // increment times_contacted column
+        mSelectionArgs1[0] = String.valueOf(contactId);
+        mDb.execSQL(ContactsProvider2.UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
         return 1;
     }
 
