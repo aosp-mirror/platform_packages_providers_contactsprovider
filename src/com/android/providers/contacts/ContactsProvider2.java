@@ -156,12 +156,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
             + Contacts.STARRED + "=1) + 25";
 
-    private static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
+    /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
             "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
             " CASE WHEN " + Contacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
             " (" + Contacts.TIMES_CONTACTED + " + 1) END WHERE " + Contacts._ID + "=?";
 
-    private static final String UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE =
+    /* package */ static final String UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE =
             "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.TIMES_CONTACTED + "=" +
             " CASE WHEN " + RawContacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
             " (" + RawContacts.TIMES_CONTACTED + " + 1) END WHERE " + RawContacts.CONTACT_ID + "=?";
@@ -360,8 +360,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mSetPrimaryStatement;
     /** Precompiled sql statement for setting a data record to the super primary. */
     private SQLiteStatement mSetSuperPrimaryStatement;
-    /** Precompiled sql statement for incrementing times contacted for a contact */
-    private SQLiteStatement mContactsLastTimeContactedUpdate;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mRawContactDisplayNameUpdate;
     /** Precompiled sql statement for updating an aggregated status update */
@@ -1671,11 +1669,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 "SELECT " + RawContacts.CONTACT_ID +
                                 " FROM " + Tables.RAW_CONTACTS +
                                 " WHERE " + RawContacts._ID + "=?))");
-
-        mContactsLastTimeContactedUpdate = db.compileStatement(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.LAST_TIME_CONTACTED + "=? " +
-                "WHERE " + Contacts._ID + "=?");
 
         mRawContactDisplayNameUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -3359,18 +3352,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 values, Contacts.STARRED);
 
         int rslt = mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=?", mSelectionArgs1);
+
         if (values.containsKey(Contacts.LAST_TIME_CONTACTED) &&
                 !values.containsKey(Contacts.TIMES_CONTACTED)) {
             mDb.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
             mDb.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
         }
         return rslt;
-    }
-
-    public void updateContactLastContactedTime(long contactId, long lastTimeContacted) {
-        mContactsLastTimeContactedUpdate.bindLong(1, lastTimeContacted);
-        mContactsLastTimeContactedUpdate.bindLong(2, contactId);
-        mContactsLastTimeContactedUpdate.execute();
     }
 
     private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
