@@ -571,7 +571,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
         insertStructuredName(rawContactId, values);
 
-        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr");
+        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr.");
     }
 
     public void testDisplayNameParsingWhenPartsAreNull() {
@@ -581,7 +581,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(StructuredName.GIVEN_NAME);
         values.putNull(StructuredName.FAMILY_NAME);
         insertStructuredName(rawContactId, values);
-        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr");
+        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr.");
     }
 
     public void testDisplayNameParsingWhenPartsSpecified() {
