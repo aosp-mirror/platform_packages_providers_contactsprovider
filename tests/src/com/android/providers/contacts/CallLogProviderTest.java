@@ -43,11 +43,9 @@ import android.test.suitebuilder.annotation.MediumTest;
 @MediumTest
 public class CallLogProviderTest extends BaseContactsProvider2Test {
 
-    private static final boolean USE_LEGACY_PROVIDER = false;
-
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
-       return USE_LEGACY_PROVIDER ? ContactsProvider.class : SynchronousContactsProvider2.class;
+       return SynchronousContactsProvider2.class;
     }
 
     @Override
@@ -58,11 +56,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        if (USE_LEGACY_PROVIDER) {
-            addAuthority(CallLog.AUTHORITY);
-        } else {
-            addProvider(TestCallLogProvider.class, CallLog.AUTHORITY);
-        }
+        addProvider(TestCallLogProvider.class, CallLog.AUTHORITY);
     }
 
     public void testInsert() {
