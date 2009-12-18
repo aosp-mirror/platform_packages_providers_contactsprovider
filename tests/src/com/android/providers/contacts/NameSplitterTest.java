@@ -42,7 +42,7 @@ public class NameSplitterTest extends TestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        createNameSplitter(Locale.getDefault());
+        createNameSplitter(Locale.US);
     }
 
     private void createNameSplitter(Locale locale) {
@@ -191,6 +191,7 @@ public class NameSplitterTest extends TestCase {
     }
 
     public void testGuessFullNameStyleJapanese() {
+        createNameSplitter(Locale.JAPAN);
 
         // Hiragana: always Japanese
         assertFullNameStyle(FullNameStyle.JAPANESE, "\u3042\u3080\u308D\u306A\u307F\u3048");
@@ -201,8 +202,9 @@ public class NameSplitterTest extends TestCase {
         // Half-width Katakana: always Japanese
         assertFullNameStyle(FullNameStyle.JAPANESE, "\uFF71\uFF91\uFF9B \uFF85\uFF90\uFF74");
 
-        // Kanji: we cannot tell if this is Japanese, Chinese or Korean
-        assertFullNameStyle(FullNameStyle.CJK, "\u5B89\u5BA4\u5948\u7F8E\u6075");
+        // Kanji: we cannot tell if this is Japanese, Chinese or Korean, but we are
+        // in Locale.JAPAN, so assume Japanese
+        assertFullNameStyle(FullNameStyle.JAPANESE, "\u5B89\u5BA4\u5948\u7F8E\u6075");
 
         // TODO: mix
 
@@ -216,17 +218,19 @@ public class NameSplitterTest extends TestCase {
     }
 
     public void testGuessFullNameStyleChinese() {
+        createNameSplitter(Locale.CHINA);
 
-        // Hanzi: we cannot tell if this is Chinese, Japanese or Korean
-        assertFullNameStyle(FullNameStyle.CJK, "\u675C\u9D51");
+        // Hanzi: we cannot tell if this is Chinese, Japanese or Korean,
+        // but we are in Locale.CHINA, so assume this is Chinese
+        assertFullNameStyle(FullNameStyle.CHINESE, "\u675C\u9D51");
 
         // Accompanied by a phonetic name in Pinyin, we can safely assume that the
-        // name is Japanese
+        // name is Chinese
         assertFullNameStyle(FullNameStyle.CHINESE, "\u675C\u9D51",
                 "du4", null, "juan1");
 
         // Non-letters don't make a difference. This one starts with a vertical line
-        assertFullNameStyle(FullNameStyle.CJK, "\uFF5C--(\u675C\u9D51)");
+        assertFullNameStyle(FullNameStyle.CHINESE, "\uFF5C--(\u675C\u9D51)");
     }
 
 
@@ -252,7 +256,6 @@ public class NameSplitterTest extends TestCase {
     }
 
     public void testSplitJapaneseName() {
-
         createNameSplitter(Locale.JAPAN);
 
         // One word is interpreted as given name only
@@ -271,7 +274,6 @@ public class NameSplitterTest extends TestCase {
     }
 
     public void testSplitChineseName() {
-
         createNameSplitter(Locale.CHINA);
 
         // Two Hanzi characters: familyName+givenName
@@ -285,7 +287,6 @@ public class NameSplitterTest extends TestCase {
     }
 
     public void testJoinJapaneseName() {
-
         createNameSplitter(Locale.JAPAN);
 
         assertJoinedName("\u3042\u3080\u308D", FullNameStyle.JAPANESE, null, "\u3042\u3080\u308D",
