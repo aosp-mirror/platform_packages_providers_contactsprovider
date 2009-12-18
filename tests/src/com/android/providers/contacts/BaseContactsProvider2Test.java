@@ -814,4 +814,304 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected void assertNetworkNotified(boolean expected) {
         assertEquals(expected, ((SynchronousContactsProvider2)mActor.provider).isNetworkNotified());
     }
+
+    /**
+     * A contact in the database, and the attributes used to create it.  Construct using
+     * {@link GoldenContactBuilder#build()}.
+     */
+    public final class GoldenContact {
+
+        private final long rawContactId;
+
+        private final long contactId;
+
+        private final String givenName;
+
+        private final String familyName;
+
+        private final String nickname;
+
+        private final byte[] photo;
+
+        private final String company;
+
+        private final String title;
+
+        private final String phone;
+
+        private final String email;
+
+        private GoldenContact(GoldenContactBuilder builder, long rawContactId, long contactId) {
+
+            this.rawContactId = rawContactId;
+            this.contactId = contactId;
+            givenName = builder.givenName;
+            familyName = builder.familyName;
+            nickname = builder.nickname;
+            photo = builder.photo;
+            company = builder.company;
+            title = builder.title;
+            phone = builder.phone;
+            email = builder.email;
+        }
+
+        public void delete() {
+            Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+            mResolver.delete(rawContactUri, null, null);
+        }
+
+        /**
+         * Returns the index of the contact in table "raw_contacts"
+         */
+        public long getRawContactId() {
+            return rawContactId;
+        }
+
+        /**
+         * Returns the index of the contact in table "contacts"
+         */
+        public long getContactId() {
+            return contactId;
+        }
+
+        /**
+         * Returns the contact's given name.
+         */
+        public String getGivenName() {
+            return givenName;
+        }
+
+        /**
+         * Returns the contact's family name.
+         */
+        public String getFamilyName() {
+            return familyName;
+        }
+
+        /**
+         * Returns the contact's nickname.
+         */
+        public String getNickname() {
+            return nickname;
+        }
+
+        /**
+         * Return's the contact's photo
+         */
+        public byte[] getPhoto() {
+            return photo;
+        }
+
+        /**
+         * Return's the company at which the contact works.
+         */
+        public String getCompany() {
+            return company;
+        }
+
+        /**
+         * Returns the contact's job title.
+         */
+        public String getTitle() {
+            return title;
+        }
+
+        /**
+         * Returns the contact's phone number
+         */
+        public String getPhone() {
+            return phone;
+        }
+
+        /**
+         * Returns the contact's email address
+         */
+        public String getEmail() {
+            return email;
+        }
+     }
+
+    /**
+     * Builds {@link GoldenContact} objects.  Unspecified boolean objects default to false.
+     * Unspecified String objects default to null.
+     */
+    public final class GoldenContactBuilder {
+
+        private String givenName;
+
+        private String familyName;
+
+        private String nickname;
+
+        private byte[] photo;
+
+        private String company;
+
+        private String title;
+
+        private String phone;
+
+        private String email;
+
+        /**
+         * The contact's given and family names.
+         *
+         * TODO(dplotnikov): inline, or should we require them to set both names if they set either?
+         */
+        public GoldenContactBuilder name(String givenName, String familyName) {
+            return givenName(givenName).familyName(familyName);
+        }
+
+        /**
+         * The contact's given name.
+         */
+        public GoldenContactBuilder givenName(String value) {
+            givenName = value;
+            return this;
+        }
+
+        /**
+         * The contact's family name.
+         */
+        public GoldenContactBuilder familyName(String value) {
+            familyName = value;
+            return this;
+        }
+
+        /**
+         * The contact's nickname.
+         */
+        public GoldenContactBuilder nickname(String value) {
+            nickname = value;
+            return this;
+        }
+
+        /**
+         * The contact's photo.
+         */
+        public GoldenContactBuilder photo(byte[] value) {
+            photo = value;
+            return this;
+        }
+
+        /**
+         * The company at which the contact works.
+         */
+        public GoldenContactBuilder company(String value) {
+            company = value;
+            return this;
+        }
+
+        /**
+         * The contact's job title.
+         */
+        public GoldenContactBuilder title(String value) {
+            title = value;
+            return this;
+        }
+
+        /**
+         * The contact's phone number.
+         */
+        public GoldenContactBuilder phone(String value) {
+            phone = value;
+            return this;
+        }
+
+        /**
+         * The contact's email address; also sets their IM status to {@link StatusUpdates#OFFLINE}
+         * with a presence of "Coding for Android".
+         */
+        public GoldenContactBuilder email(String value) {
+            email = value;
+            return this;
+        }
+
+        /**
+         * Builds the {@link GoldenContact} specified by this builder.
+         */
+        public GoldenContact build() {
+
+            final long groupId = createGroup(mAccount, "gsid1", "title1");
+
+            long rawContactId = createRawContact();
+            insertGroupMembership(rawContactId, groupId);
+
+            if (givenName != null || familyName != null) {
+                insertStructuredName(rawContactId, givenName, familyName);
+            }
+            if (nickname != null) {
+                insertNickname(rawContactId, nickname);
+            }
+            if (photo != null) {
+                insertPhoto(rawContactId);
+            }
+            if (company != null || title != null) {
+                insertOrganization(rawContactId);
+            }
+            if (email != null) {
+                insertEmail(rawContactId);
+            }
+            if (phone != null) {
+                insertPhone(rawContactId);
+            }
+
+            long contactId = queryContactId(rawContactId);
+
+            return new GoldenContact(this, rawContactId, contactId);
+        }
+
+        private void insertPhoto(long rawContactId) {
+            ContentValues values = new ContentValues();
+            values.put(Data.RAW_CONTACT_ID, rawContactId);
+            values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+            values.put(Photo.PHOTO, photo);
+            mResolver.insert(Data.CONTENT_URI, values);
+        }
+
+        private void insertOrganization(long rawContactId) {
+
+            ContentValues values = new ContentValues();
+            values.put(Data.RAW_CONTACT_ID, rawContactId);
+            values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
+            values.put(Organization.TYPE, Organization.TYPE_WORK);
+            if (company != null) {
+                values.put(Organization.COMPANY, company);
+            }
+            if (title != null) {
+                values.put(Organization.TITLE, title);
+            }
+            mResolver.insert(Data.CONTENT_URI, values);
+        }
+
+        private void insertEmail(long rawContactId) {
+
+            ContentValues values = new ContentValues();
+            values.put(Data.RAW_CONTACT_ID, rawContactId);
+            values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+            values.put(Email.TYPE, Email.TYPE_WORK);
+            values.put(Email.DATA, "foo@acme.com");
+            mResolver.insert(Data.CONTENT_URI, values);
+
+            int protocol = Im.PROTOCOL_GOOGLE_TALK;
+
+            values.clear();
+            values.put(StatusUpdates.PROTOCOL, protocol);
+            values.put(StatusUpdates.IM_HANDLE, email);
+            values.put(StatusUpdates.IM_ACCOUNT, "foo");
+            values.put(StatusUpdates.PRESENCE_STATUS, StatusUpdates.OFFLINE);
+            values.put(StatusUpdates.PRESENCE_CUSTOM_STATUS, "Coding for Android");
+            mResolver.insert(StatusUpdates.CONTENT_URI, values);
+        }
+
+        private void insertPhone(long rawContactId) {
+            ContentValues values = new ContentValues();
+            values.put(Data.RAW_CONTACT_ID, rawContactId);
+            values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+            values.put(Data.IS_PRIMARY, 1);
+            values.put(Phone.TYPE, Phone.TYPE_HOME);
+            values.put(Phone.NUMBER, phone);
+            mResolver.insert(Data.CONTENT_URI, values);
+        }
+    }
 }

@@ -24,31 +24,23 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Intents;
-import android.provider.ContactsContract.Presence;
-import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.test.suitebuilder.annotation.LargeTest;
-
-import java.io.IOException;
 
 /**
  * Unit tests for {@link GlobalSearchSupport}.
- *
+ * <p>
  * Run the test like this:
- * <code>
+ * <p>
+ * <code><pre>
  * adb shell am instrument -e class com.android.providers.contacts.GlobalSearchSupportTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
- * </code>
+ * </pre></code>
  */
 @LargeTest
 public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
+
     public void testSearchSuggestionsNotInVisibleGroup() throws Exception {
         Account account = new Account("actname", "acttype");
         long rawContactId = createRawContact(account);
@@ -63,233 +55,61 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         c.close();
     }
 
-    public void testSearchSuggestionsByName() throws Exception {
-        long groupId = createGroup(mAccount, "gsid1", "title1");
-
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                true,  // photo
-                false, // company
-                false, // title
-                false, // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", null);
-
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                true,  // photo
-                true,  // company
-                false, // title
-                false, // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", "Google");
-
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                true,  // photo
-                false, // company
-                false, // title
-                true,  // phone
-                false, // email
-                "D",   // query
-                true,  // expect icon URI
-                null, "Deer Dough", "1-800-4664-411");
-
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                true,  // photo
-                false, // company
-                false, // title
-                false, // phone
-                true,  // email
-                "D",   // query
-                true,  // expect icon URI
-                String.valueOf(StatusUpdates.getPresenceIconResourceId(StatusUpdates.OFFLINE)),
-                "Deer Dough", "foo@acme.com");
-
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                false, // photo
-                true,  // company
-                false, // title
-                false, // phone
-                false, // email
-                "D",   // query
-                false, // expect icon URI
-                null, "Deer Dough", "Google");
-
-        // Nickname is searchale
-        assertSearchSuggestion(groupId,
-                true,  // name
-                true,  // nickname
-                false, // photo
-                true,  // company
-                false, // title
-                false, // phone
-                false, // email
-                "L",   // query
-                false, // expect icon URI
-                null, "Deer Dough", "Google");
-
-        // Company is searchable
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                false, // photo
-                true,  // company
-                false, // title
-                false, // phone
-                false, // email
-                "G",   // query
-                false, // expect icon URI
-                null, "Deer Dough", "Google");
-
-        // Title is searchable
-        assertSearchSuggestion(groupId,
-                true,  // name
-                false, // nickname
-                false, // photo
-                true,  // company
-                true,  // title
-                false, // phone
-                false, // email
-                "S",   // query
-                false, // expect icon URI
-                null, "Deer Dough", "Google");
+    public void testSearchSuggestionsByNameWithPhoto() throws Exception {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
+                loadTestPhoto()).build();
+        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedText1(
+                "Deer Dough").build().test();
     }
 
-    private void assertSearchSuggestion(long groupId, boolean name, boolean nickname, boolean photo,
-            boolean company, boolean title, boolean phone, boolean email, String query,
-            boolean expectIcon1Uri, String expectedIcon2, String expectedText1,
-            String expectedText2) throws IOException {
-        ContentValues values = new ContentValues();
+    public void testSearchSuggestionsByNameWithPhotoAndCompany() throws Exception {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
+                loadTestPhoto()).company("Google").build();
+        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedText1(
+                "Deer Dough").expectedText2("Google").build().test();
+    }
 
-        long rawContactId = createRawContact();
-        insertGroupMembership(rawContactId, groupId);
+    public void testSearchSuggestionsByNameWithPhotoAndPhone() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
+                loadTestPhoto()).phone("1-800-4664-411").build();
+        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedText1(
+                "Deer Dough").expectedText2("1-800-4664-411").build().test();
+    }
 
-        if (name) {
-            insertStructuredName(rawContactId, "Deer", "Dough");
-        }
+    public void testSearchSuggestionsByNameWithPhotoAndEmail() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
+                loadTestPhoto()).email("foo@acme.com").build();
+        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedIcon2(
+                String.valueOf(StatusUpdates.getPresenceIconResourceId(StatusUpdates.OFFLINE)))
+                .expectedText1("Deer Dough").expectedText2("foo@acme.com").build().test();
+    }
 
-        if (nickname) {
-            insertNickname(rawContactId, "Little Fawn");
-        }
+    public void testSearchSuggestionsByNameWithCompany() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").company("Google")
+                .build();
+        new SuggestionTesterBuilder(contact).query("D").expectedText1("Deer Dough").expectedText2(
+                "Google").build().test();
+    }
 
-        final Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
-        if (photo) {
-            values.clear();
-            byte[] photoData = loadTestPhoto();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
-            values.put(Photo.PHOTO, photoData);
-            mResolver.insert(Data.CONTENT_URI, values);
-        }
+    public void testSearchByNicknameWithCompany() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").nickname(
+                "Little Fawn").company("Google").build();
+        new SuggestionTesterBuilder(contact).query("L").expectedText1("Deer Dough").expectedText2(
+                "Google").build().test();
+    }
 
-        if (company || title) {
-            values.clear();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
-            values.put(Organization.TYPE, Organization.TYPE_WORK);
-            if (company) {
-                values.put(Organization.COMPANY, "Google");
-            }
-            if (title) {
-                values.put(Organization.TITLE, "Software Engineer");
-            }
-            mResolver.insert(Data.CONTENT_URI, values);
-        }
+    public void testSearchByCompany() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").company("Google")
+                .build();
+        new SuggestionTesterBuilder(contact).query("G").expectedText1("Deer Dough").expectedText2(
+                "Google").build().test();
+    }
 
-        if (email) {
-            values.clear();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
-            values.put(Email.TYPE, Email.TYPE_WORK);
-            values.put(Email.DATA, "foo@acme.com");
-            mResolver.insert(Data.CONTENT_URI, values);
-
-            int protocol = Im.PROTOCOL_GOOGLE_TALK;
-
-            values.clear();
-            values.put(StatusUpdates.PROTOCOL, protocol);
-            values.put(StatusUpdates.IM_HANDLE, "foo@acme.com");
-            values.put(StatusUpdates.IM_ACCOUNT, "foo");
-            values.put(StatusUpdates.PRESENCE_STATUS, StatusUpdates.OFFLINE);
-            values.put(StatusUpdates.PRESENCE_CUSTOM_STATUS, "Coding for Android");
-            mResolver.insert(StatusUpdates.CONTENT_URI, values);
-        }
-
-        if (phone) {
-            values.clear();
-            values.put(Data.RAW_CONTACT_ID, rawContactId);
-            values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
-            values.put(Data.IS_PRIMARY, 1);
-            values.put(Phone.TYPE, Phone.TYPE_HOME);
-            values.put(Phone.NUMBER, "1-800-4664-411");
-            mResolver.insert(Data.CONTENT_URI, values);
-        }
-
-        long contactId = queryContactId(rawContactId);
-        Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath(query).build();
-
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        assertEquals(1, c.getCount());
-        c.moveToFirst();
-        values.clear();
-
-        // SearchManager does not declare a constant for _id
-        values.put("_id", contactId);
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
-
-        String icon1 = c.getString(c.getColumnIndex(SearchManager.SUGGEST_COLUMN_ICON_1));
-        if (expectIcon1Uri) {
-            assertTrue(icon1.startsWith("content:"));
-        } else {
-            assertEquals(String.valueOf(com.android.internal.R.drawable.ic_contact_picture), icon1);
-        }
-
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, contactId);
-        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contactId);
-        assertCursorValues(c, values);
-        c.close();
-
-        // See if the same result is returned by a shortcut refresh
-        Uri shortcutsUri = ContactsContract.AUTHORITY_URI.buildUpon()
-                .appendPath(SearchManager.SUGGEST_URI_PATH_SHORTCUT).build();
-        Uri refreshUri = ContentUris.withAppendedId(shortcutsUri, contactId);
-
-        String[] projection = new String[]{
-                SearchManager.SUGGEST_COLUMN_ICON_1,
-                SearchManager.SUGGEST_COLUMN_ICON_2,
-                SearchManager.SUGGEST_COLUMN_TEXT_1,
-                SearchManager.SUGGEST_COLUMN_TEXT_2,
-                SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
-                SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-                "_id",
-        };
-
-        c = mResolver.query(refreshUri, projection, null, null, null);
-        try {
-            assertEquals("Record count", 1, c.getCount());
-            c.moveToFirst();
-            assertCursorValues(c, values);
-        } finally {
-            c.close();
-        }
-
-        // Cleanup
-        mResolver.delete(rawContactUri, null, null);
+    public void testSearchByTitleWithCompany() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").company("Google")
+                .title("Software Engineer").build();
+        new SuggestionTesterBuilder(contact).query("S").expectIcon1Uri(false).expectedText1(
+                "Deer Dough").expectedText2("Google").build().test();
     }
 
     public void testSearchSuggestionsByPhoneNumber() throws Exception {
@@ -327,5 +147,163 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         assertCursorValues(c, values);
         c.close();
     }
-}
 
+    /**
+     * Tests that the global search suggestion returns the expected contact
+     * information.
+     */
+    private final class SuggestionTester {
+
+        private final GoldenContact contact;
+
+        private final String query;
+
+        private final boolean expectIcon1Uri;
+
+        private final String expectedIcon2;
+
+        private final String expectedText1;
+
+        private final String expectedText2;
+
+        public SuggestionTester(SuggestionTesterBuilder builder) {
+            contact = builder.contact;
+            query = builder.query;
+            expectIcon1Uri = builder.expectIcon1Uri;
+            expectedIcon2 = builder.expectedIcon2;
+            expectedText1 = builder.expectedText1;
+            expectedText2 = builder.expectedText2;
+        }
+
+        public void test() {
+
+            Uri searchUri = new Uri.Builder().scheme("content").authority(
+                    ContactsContract.AUTHORITY).appendPath(SearchManager.SUGGEST_URI_PATH_QUERY)
+                    .appendPath(query).build();
+
+            Cursor c = mResolver.query(searchUri, null, null, null, null);
+            assertEquals(1, c.getCount());
+            c.moveToFirst();
+
+            // SearchManager does not declare a constant for _id
+            ContentValues values = new ContentValues();
+            values.put("_id", contact.getContactId());
+            values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
+            values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
+
+            String icon1 = c.getString(c.getColumnIndex(SearchManager.SUGGEST_COLUMN_ICON_1));
+            if (expectIcon1Uri) {
+                assertTrue(icon1.startsWith("content:"));
+            } else {
+                assertEquals(String.valueOf(com.android.internal.R.drawable.ic_contact_picture),
+                        icon1);
+            }
+
+            values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
+            values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, contact.getContactId());
+            values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contact.getContactId());
+            assertCursorValues(c, values);
+            c.close();
+
+            // See if the same result is returned by a shortcut refresh
+            Uri shortcutsUri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath(
+                    SearchManager.SUGGEST_URI_PATH_SHORTCUT).build();
+            Uri refreshUri = ContentUris.withAppendedId(shortcutsUri, contact.getContactId());
+
+            String[] projection = new String[] {
+                    SearchManager.SUGGEST_COLUMN_ICON_1, SearchManager.SUGGEST_COLUMN_ICON_2,
+                    SearchManager.SUGGEST_COLUMN_TEXT_1, SearchManager.SUGGEST_COLUMN_TEXT_2,
+                    SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
+                    SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, "_id",
+            };
+
+            c = mResolver.query(refreshUri, projection, null, null, null);
+            try {
+                assertEquals("Record count", 1, c.getCount());
+                c.moveToFirst();
+                assertCursorValues(c, values);
+            } finally {
+                c.close();
+            }
+
+            // Cleanup
+            contact.delete();
+        }
+    }
+
+    /**
+     * Builds {@link SuggestionTester} objects. Unspecified boolean objects default to
+     * false. Unspecified String objects default to null.
+     */
+    private final class SuggestionTesterBuilder {
+
+        private final GoldenContact contact;
+
+        private String query;
+
+        private boolean expectIcon1Uri;
+
+        private String expectedIcon2;
+
+        private String expectedText1;
+
+        private String expectedText2;
+
+        public SuggestionTesterBuilder(GoldenContact contact) {
+            this.contact = contact;
+        }
+
+        /**
+         * Builds the {@link SuggestionTester} specified by this builder.
+         */
+        public SuggestionTester build() {
+            return new SuggestionTester(this);
+        }
+
+        /**
+         * The text of the user's query to global search (i.e., what they typed
+         * in the search box).
+         */
+        public SuggestionTesterBuilder query(String value) {
+            query = value;
+            return this;
+        }
+
+        /**
+         * Whether to set Icon1, which in practice is the contact's photo.
+         * <p>
+         * TODO(tomo): Replace with actual expected value? This might be hard
+         * because the values look non-deterministic, such as
+         * "content://com.android.contacts/contacts/2015/photo"
+         */
+        public SuggestionTesterBuilder expectIcon1Uri(boolean value) {
+            expectIcon1Uri = value;
+            return this;
+        }
+
+        /**
+         * The value for Icon2, which in practice is the contact's Chat status
+         * (available, busy, etc.)
+         */
+        public SuggestionTesterBuilder expectedIcon2(String value) {
+            expectedIcon2 = value;
+            return this;
+        }
+
+        /**
+         * First line of suggestion text expected to be returned (required).
+         */
+        public SuggestionTesterBuilder expectedText1(String value) {
+            expectedText1 = value;
+            return this;
+        }
+
+        /**
+         * Second line of suggestion text expected to return (optional).
+         */
+        public SuggestionTesterBuilder expectedText2(String value) {
+            expectedText2 = value;
+            return this;
+        }
+    }
+}
