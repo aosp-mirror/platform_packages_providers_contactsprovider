@@ -23,8 +23,8 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
@@ -43,10 +43,10 @@ import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
 import android.test.mock.MockPackageManager;
 import android.test.mock.MockResources;
+import android.util.Log;
 import android.util.TypedValue;
 
 import java.util.HashMap;
-import java.util.Locale;
 
 /**
  * Helper class that encapsulates an "actor" which is owned by a specific
@@ -131,11 +131,7 @@ public class ContactsActor {
             mPackageManager.addPackage(3000, PACKAGE_GREEN);
             mPackageManager.addPackage(4000, PACKAGE_BLUE);
 
-            Resources resources = overallContext.getResources();
-            Configuration configuration = new Configuration(resources.getConfiguration());
-            configuration.locale = Locale.US;
-            resources.updateConfiguration(configuration, resources.getDisplayMetrics());
-            mRes = new RestrictionMockResources(resources);
+            mRes = new RestrictionMockResources(overallContext.getResources());
         }
 
         @Override

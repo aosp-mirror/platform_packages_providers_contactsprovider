@@ -20,8 +20,6 @@ import android.accounts.Account;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 
-import java.util.Locale;
-
 /**
  * A version of {@link ContactsProvider2} class that performs aggregation
  * synchronously and wipes all data at construction time.
@@ -88,11 +86,6 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
             mAccount = new Account("androidtest@gmail.com", "com.google");
         }
         return mAccount;
-    }
-
-    @Override
-    protected Locale getLocale() {
-        return Locale.US;
     }
 
     @Override

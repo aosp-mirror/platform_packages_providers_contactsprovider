@@ -42,23 +42,18 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.DisplayNameSources;
-import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.SocialContract.Activities;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.HashMap;
-import java.util.Locale;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -68,7 +63,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 205;
+    private static final int DATABASE_VERSION = 204;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -260,8 +255,8 @@ import java.util.Locale;
         public static final String CONCRETE_IS_RESTRICTED =
                 Tables.RAW_CONTACTS + "." + RawContacts.IS_RESTRICTED;
 
-        public static final String DISPLAY_NAME = RawContacts.DISPLAY_NAME_PRIMARY;
-        public static final String DISPLAY_NAME_SOURCE = RawContacts.DISPLAY_NAME_SOURCE;
+        public static final String DISPLAY_NAME = "display_name";
+        public static final String DISPLAY_NAME_SOURCE = "display_name_source";
         public static final String AGGREGATION_NEEDED = "aggregation_needed";
         public static final String CONTACT_IN_VISIBLE_GROUP = "contact_in_visible_group";
 
@@ -269,6 +264,19 @@ import java.util.Locale;
                 Tables.RAW_CONTACTS + "." + DISPLAY_NAME;
         public static final String CONCRETE_CONTACT_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.CONTACT_ID;
+    }
+
+    /**
+     * Types of data used to produce the display name for a contact. Listed in the order
+     * of increasing priority.
+     */
+    public interface DisplayNameSources {
+        int UNDEFINED = 0;
+        int EMAIL = 10;
+        int PHONE = 20;
+        int ORGANIZATION = 30;
+        int NICKNAME = 35;
+        int STRUCTURED_NAME = 40;
     }
 
     public interface DataColumns {
@@ -669,14 +677,9 @@ import java.util.Locale;
                 RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
                 RawContacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
-                RawContacts.DISPLAY_NAME_PRIMARY + " TEXT," +
-                RawContacts.DISPLAY_NAME_ALTERNATIVE + " TEXT," +
-                RawContacts.DISPLAY_NAME_SOURCE + " INTEGER NOT NULL DEFAULT " +
+                RawContactsColumns.DISPLAY_NAME + " TEXT," +
+                RawContactsColumns.DISPLAY_NAME_SOURCE + " INTEGER NOT NULL DEFAULT " +
                         DisplayNameSources.UNDEFINED + "," +
-                RawContacts.PHONETIC_NAME + " TEXT," +
-                RawContacts.PHONETIC_NAME_STYLE + " TEXT," +
-                RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE LOCALIZED," +
-                RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE LOCALIZED," +
                 RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
@@ -701,12 +704,7 @@ import java.util.Locale;
 
         db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
                 RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
-                RawContacts.SORT_KEY_PRIMARY +
-        ");");
-
-        db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
-                RawContacts.SORT_KEY_ALTERNATIVE +
+                RawContactsColumns.DISPLAY_NAME + " COLLATE LOCALIZED ASC" +
         ");");
 
         // Package name mapping table
@@ -967,6 +965,7 @@ import java.util.Locale;
 
 
         db.execSQL("DROP TRIGGER IF EXISTS contacts_times_contacted;");
+        db.execSQL("DROP TRIGGER IF EXISTS raw_contacts_times_contacted;");
 
         /*
          * Triggers that update {@link RawContacts#VERSION} when the contact is
@@ -1078,24 +1077,6 @@ import java.util.Locale;
                 + ContactsColumns.CONCRETE_STARRED
                         + " AS " + RawContacts.STARRED;
 
-        String contactNameColumns =
-                "name_raw_contact." + RawContacts.DISPLAY_NAME_SOURCE
-                        + " AS " + Contacts.DISPLAY_NAME_SOURCE + ", "
-                + "name_raw_contact." + RawContacts.DISPLAY_NAME_PRIMARY
-                        + " AS " + Contacts.DISPLAY_NAME_PRIMARY + ", "
-                + "name_raw_contact." + RawContacts.DISPLAY_NAME_ALTERNATIVE
-                        + " AS " + Contacts.DISPLAY_NAME_ALTERNATIVE + ", "
-                + "name_raw_contact." + RawContacts.PHONETIC_NAME
-                        + " AS " + Contacts.PHONETIC_NAME + ", "
-                + "name_raw_contact." + RawContacts.PHONETIC_NAME_STYLE
-                        + " AS " + Contacts.PHONETIC_NAME_STYLE + ", "
-                + "name_raw_contact." + RawContacts.SORT_KEY_PRIMARY
-                        + " AS " + Contacts.SORT_KEY_PRIMARY + ", "
-                + "name_raw_contact." + RawContacts.SORT_KEY_ALTERNATIVE
-                        + " AS " + Contacts.SORT_KEY_ALTERNATIVE + ", "
-                + "name_raw_contact." + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
-                        + " AS " + Contacts.IN_VISIBLE_GROUP;
-
         String dataSelect = "SELECT "
                 + DataColumns.CONCRETE_ID + " AS " + Data._ID + ","
                 + Data.RAW_CONTACT_ID + ", "
@@ -1103,7 +1084,10 @@ import java.util.Locale;
                 + syncColumns + ", "
                 + dataColumns + ", "
                 + contactOptionColumns + ", "
-                + contactNameColumns + ", "
+                + "name_raw_contact." + RawContactsColumns.DISPLAY_NAME
+                        + " AS " + Contacts.DISPLAY_NAME + ", "
+                + "name_raw_contact." + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
+                        + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
@@ -1140,13 +1124,6 @@ import java.util.Locale;
                 + RawContacts.CONTACT_ID + ", "
                 + RawContacts.AGGREGATION_MODE + ", "
                 + RawContacts.DELETED + ", "
-                + RawContacts.DISPLAY_NAME_SOURCE  + ", "
-                + RawContacts.DISPLAY_NAME_PRIMARY  + ", "
-                + RawContacts.DISPLAY_NAME_ALTERNATIVE  + ", "
-                + RawContacts.PHONETIC_NAME  + ", "
-                + RawContacts.PHONETIC_NAME_STYLE  + ", "
-                + RawContacts.SORT_KEY_PRIMARY  + ", "
-                + RawContacts.SORT_KEY_ALTERNATIVE + ", "
                 + rawContactOptionColumns + ", "
                 + syncColumns
                 + " FROM " + Tables.RAW_CONTACTS;
@@ -1158,7 +1135,10 @@ import java.util.Locale;
         String contactsColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
                         + " AS " + Contacts.CUSTOM_RINGTONE + ", "
-                + contactNameColumns + ", "
+                + "name_raw_contact." + RawContactsColumns.DISPLAY_NAME
+                        + " AS " + Contacts.DISPLAY_NAME + ", "
+                + "name_raw_contact." + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
+                        + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + Contacts.HAS_PHONE_NUMBER + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
@@ -1347,12 +1327,12 @@ import java.util.Locale;
         }
 
         if (oldVersion == 105) {
-            upgradeToVersion202(db);
+            addColumnPhoneNumberMinMatch(db);
             oldVersion = 202;
         }
 
         if (oldVersion == 202) {
-            upgradeToVersion203(db);
+            addNameRawContactIdColumn(db);
             createContactsViews(db);
             oldVersion++;
         }
@@ -1362,19 +1342,13 @@ import java.util.Locale;
             oldVersion++;
         }
 
-        if (oldVersion == 204) {
-            upgradeToVersion205(db);
-            createContactsViews(db);
-            oldVersion++;
-        }
-
         if (oldVersion != newVersion) {
             throw new IllegalStateException(
                     "error upgrading the database to version " + newVersion);
         }
     }
 
-    private void upgradeToVersion202(SQLiteDatabase db) {
+    private void addColumnPhoneNumberMinMatch(SQLiteDatabase db) {
         db.execSQL(
                 "ALTER TABLE " + Tables.PHONE_LOOKUP +
                 " ADD " + PhoneLookupColumns.MIN_MATCH + " TEXT;");
@@ -1412,7 +1386,7 @@ import java.util.Locale;
         }
     }
 
-    private void upgradeToVersion203(SQLiteDatabase db) {
+    private static void addNameRawContactIdColumn(SQLiteDatabase db) {
         db.execSQL(
                 "ALTER TABLE " + Tables.CONTACTS +
                 " ADD " + Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)");
@@ -1478,274 +1452,6 @@ import java.util.Locale;
         ");");
     }
 
-    private void upgradeToVersion205(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.DISPLAY_NAME_ALTERNATIVE + " TEXT;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.PHONETIC_NAME + " TEXT;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.PHONETIC_NAME_STYLE + " INTEGER;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE LOCALIZED;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE LOCALIZED;");
-
-        final Locale locale = Locale.getDefault();
-
-        NameSplitter splitter = new NameSplitter(
-                mContext.getString(com.android.internal.R.string.common_name_prefixes),
-                mContext.getString(com.android.internal.R.string.common_last_name_prefixes),
-                mContext.getString(com.android.internal.R.string.common_name_suffixes),
-                mContext.getString(com.android.internal.R.string.common_name_conjunctions),
-                locale);
-
-        SQLiteStatement rawContactUpdate = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " +
-                        RawContacts.DISPLAY_NAME_PRIMARY + "=?," +
-                        RawContacts.DISPLAY_NAME_ALTERNATIVE + "=?," +
-                        RawContacts.PHONETIC_NAME + "=?," +
-                        RawContacts.PHONETIC_NAME_STYLE + "=?," +
-                        RawContacts.SORT_KEY_PRIMARY + "=?," +
-                        RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
-                " WHERE " + RawContacts._ID + "=?");
-
-        upgradeStructuredNamesToVersion205(db, rawContactUpdate, splitter);
-        upgradeOrganizationsToVersion205(db, rawContactUpdate, splitter);
-
-        db.execSQL("DROP INDEX raw_contact_sort_key1_index");
-        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
-                RawContacts.SORT_KEY_PRIMARY +
-        ");");
-
-        db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
-                RawContacts.SORT_KEY_ALTERNATIVE +
-        ");");
-    }
-
-    private interface StructName205Query {
-        String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
-
-        String COLUMNS[] = {
-                DataColumns.CONCRETE_ID,
-                Data.RAW_CONTACT_ID,
-                RawContacts.DISPLAY_NAME_SOURCE,
-                RawContacts.DISPLAY_NAME_PRIMARY,
-                StructuredName.PREFIX,
-                StructuredName.GIVEN_NAME,
-                StructuredName.MIDDLE_NAME,
-                StructuredName.FAMILY_NAME,
-                StructuredName.SUFFIX,
-                StructuredName.PHONETIC_FAMILY_NAME,
-                StructuredName.PHONETIC_MIDDLE_NAME,
-                StructuredName.PHONETIC_GIVEN_NAME,
-        };
-
-        int ID = 0;
-        int RAW_CONTACT_ID = 1;
-        int DISPLAY_NAME_SOURCE = 2;
-        int DISPLAY_NAME = 3;
-        int PREFIX = 4;
-        int GIVEN_NAME = 5;
-        int MIDDLE_NAME = 6;
-        int FAMILY_NAME = 7;
-        int SUFFIX = 8;
-        int PHONETIC_FAMILY_NAME = 9;
-        int PHONETIC_MIDDLE_NAME = 10;
-        int PHONETIC_GIVEN_NAME = 11;
-    }
-
-    private void upgradeStructuredNamesToVersion205(SQLiteDatabase db,
-            SQLiteStatement rawContactUpdate, NameSplitter splitter) {
-
-        // Process structured names to detect the style of the full name and phonetic name
-
-        long mMimeType;
-        try {
-            mMimeType = DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + StructuredName.CONTENT_ITEM_TYPE + "'", null);
-        } catch (SQLiteDoneException e) {
-            // No structured names in the database
-            return;
-        }
-
-        SQLiteStatement structuredNameUpdate = db.compileStatement(
-                "UPDATE " + Tables.DATA +
-                " SET " +
-                        StructuredName.FULL_NAME_STYLE + "=?," +
-                        StructuredName.DISPLAY_NAME + "=?," +
-                        StructuredName.PHONETIC_NAME_STYLE + "=?" +
-                " WHERE " + Data._ID + "=?");
-
-        NameSplitter.Name name = new NameSplitter.Name();
-        StringBuilder sb = new StringBuilder();
-        Cursor cursor = db.query(StructName205Query.TABLE,
-                StructName205Query.COLUMNS,
-                DataColumns.MIMETYPE_ID + "=" + mMimeType, null, null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(StructName205Query.ID);
-                long rawContactId = cursor.getLong(StructName205Query.RAW_CONTACT_ID);
-                int displayNameSource = cursor.getInt(StructName205Query.DISPLAY_NAME_SOURCE);
-                String displayName = cursor.getString(StructName205Query.DISPLAY_NAME);
-
-                name.clear();
-                name.prefix = cursor.getString(StructName205Query.PREFIX);
-                name.givenNames = cursor.getString(StructName205Query.GIVEN_NAME);
-                name.middleName = cursor.getString(StructName205Query.MIDDLE_NAME);
-                name.familyName = cursor.getString(StructName205Query.FAMILY_NAME);
-                name.suffix = cursor.getString(StructName205Query.SUFFIX);
-                name.phoneticFamilyName = cursor.getString(StructName205Query.PHONETIC_FAMILY_NAME);
-                name.phoneticMiddleName = cursor.getString(StructName205Query.PHONETIC_MIDDLE_NAME);
-                name.phoneticGivenName = cursor.getString(StructName205Query.PHONETIC_GIVEN_NAME);
-
-                upgradeNameToVersion205(dataId, rawContactId, displayNameSource, displayName, name,
-                        structuredNameUpdate, rawContactUpdate, splitter, sb);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void upgradeNameToVersion205(long dataId, long rawContactId, int displayNameSource,
-            String currentDisplayName, NameSplitter.Name name,
-            SQLiteStatement structuredNameUpdate, SQLiteStatement rawContactUpdate,
-            NameSplitter splitter, StringBuilder sb) {
-
-        splitter.guessNameStyle(name);
-        name.fullNameStyle = splitter.getAdjustedFullNameStyle(name.fullNameStyle);
-        String displayName = splitter.join(name, true);
-
-        structuredNameUpdate.bindLong(1, name.fullNameStyle);
-        DatabaseUtils.bindObjectToProgram(structuredNameUpdate, 2, displayName);
-        structuredNameUpdate.bindLong(3, name.phoneticNameStyle);
-        structuredNameUpdate.bindLong(4, dataId);
-        structuredNameUpdate.execute();
-
-        if (displayNameSource == DisplayNameSources.STRUCTURED_NAME) {
-            String displayNameAlternative = splitter.join(name, false);
-            String phoneticName = splitter.joinPhoneticName(name);
-            String sortKey = null;
-            String sortKeyAlternative = null;
-
-            if (phoneticName != null) {
-                sortKey = sortKeyAlternative = phoneticName;
-            } else if (name.fullNameStyle == FullNameStyle.CHINESE) {
-                sortKey = sortKeyAlternative = splitter.convertHanziToPinyin(displayName);
-            }
-
-            if (sortKey == null) {
-                sortKey = displayName;
-                sortKeyAlternative = displayNameAlternative;
-            }
-
-            updateRawContact205(rawContactUpdate, rawContactId, displayName,
-                    displayNameAlternative, name.phoneticNameStyle, phoneticName, sortKey,
-                    sortKeyAlternative);
-        }
-    }
-
-    private interface Organization205Query {
-        String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
-
-        String COLUMNS[] = {
-                DataColumns.CONCRETE_ID,
-                Data.RAW_CONTACT_ID,
-                Organization.COMPANY,
-                Organization.PHONETIC_NAME,
-        };
-
-        int ID = 0;
-        int RAW_CONTACT_ID = 1;
-        int COMPANY = 2;
-        int PHONETIC_NAME = 3;
-    }
-
-    private void upgradeOrganizationsToVersion205(SQLiteDatabase db,
-            SQLiteStatement rawContactUpdate, NameSplitter splitter) {
-
-        final long mMimeType;
-        try {
-            mMimeType = DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + Organization.CONTENT_ITEM_TYPE + "'", null);
-        } catch (SQLiteDoneException e) {
-            // No organizations in the database
-            return;
-        }
-
-        SQLiteStatement organizationUpdate = db.compileStatement(
-                "UPDATE " + Tables.DATA +
-                " SET " +
-                        Organization.PHONETIC_NAME_STYLE + "=?" +
-                " WHERE " + Data._ID + "=?");
-
-        Cursor cursor = db.query(Organization205Query.TABLE, Organization205Query.COLUMNS,
-                DataColumns.MIMETYPE_ID + "=" + mMimeType + " AND "
-                        + RawContacts.DISPLAY_NAME_SOURCE + "=" + DisplayNameSources.ORGANIZATION,
-                null, null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(Organization205Query.ID);
-                long rawContactId = cursor.getLong(Organization205Query.RAW_CONTACT_ID);
-                String company = cursor.getString(Organization205Query.COMPANY);
-                String phoneticName = cursor.getString(Organization205Query.PHONETIC_NAME);
-
-                int phoneticNameStyle = splitter.guessPhoneticNameStyle(phoneticName);
-
-                organizationUpdate.bindLong(1, phoneticNameStyle);
-                organizationUpdate.bindLong(2, dataId);
-                organizationUpdate.execute();
-
-                String sortKey = null;
-                if (phoneticName == null && company != null) {
-                    int nameStyle = splitter.guessFullNameStyle(company);
-                    nameStyle = splitter.getAdjustedFullNameStyle(nameStyle);
-                    if (nameStyle == FullNameStyle.CHINESE) {
-                        sortKey = splitter.convertHanziToPinyin(company);
-                    }
-                }
-
-                if (sortKey == null) {
-                    sortKey = company;
-                }
-
-                updateRawContact205(rawContactUpdate, rawContactId, company,
-                        company, phoneticNameStyle, phoneticName, sortKey, sortKey);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void updateRawContact205(SQLiteStatement rawContactUpdate, long rawContactId,
-            String displayName, String displayNameAlternative, int phoneticNameStyle,
-            String phoneticName, String sortKeyPrimary, String sortKeyAlternative) {
-        bindString(rawContactUpdate, 1, displayName);
-        bindString(rawContactUpdate, 2, displayNameAlternative);
-        bindString(rawContactUpdate, 3, phoneticName);
-        rawContactUpdate.bindLong(4, phoneticNameStyle);
-        bindString(rawContactUpdate, 5, sortKeyPrimary);
-        bindString(rawContactUpdate, 6, sortKeyAlternative);
-        rawContactUpdate.bindLong(7, rawContactId);
-        rawContactUpdate.execute();
-    }
-
-    private void bindString(SQLiteStatement stmt, int index, String value) {
-        if (value == null) {
-            stmt.bindNull(index);
-        } else {
-            stmt.bindString(index, value);
-        }
-    }
-
     /**
      * Adds index stats into the SQLite database to force it to always use the lookup indexes.
      */
@@ -1800,8 +1506,7 @@ import java.util.Locale;
      * the table.  The following integer(s) are the expected number of records selected with the
      * index.  There should be one integer per indexed column.
      */
-    private void updateIndexStats(SQLiteDatabase db, String table, String index,
-            String stats) {
+    private void updateIndexStats(SQLiteDatabase db, String table, String index, String stats) {
         db.execSQL("DELETE FROM sqlite_stat1 WHERE tbl='" + table + "' AND idx='" + index + "';");
         db.execSQL("INSERT INTO sqlite_stat1 (tbl,idx,stat)"
                 + " VALUES ('" + table + "','" + index + "','" + stats + "');");
@@ -1911,10 +1616,6 @@ import java.util.Locale;
     public long getMimeTypeId(String mimetype) {
         // Make sure compiled statements are ready by opening database
         getReadableDatabase();
-        return getMimeTypeIdNoDbCheck(mimetype);
-    }
-
-    private long getMimeTypeIdNoDbCheck(String mimetype) {
         return getCachedId(mMimetypeQuery, mMimetypeInsert, mimetype, mMimetypeCache);
     }
 

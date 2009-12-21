@@ -15,17 +15,14 @@
  */
 package com.android.providers.contacts;
 
-import com.android.internal.util.HanziToPinyin;
-import com.android.internal.util.HanziToPinyin.Token;
-
 import android.content.ContentValues;
+import android.database.DatabaseUtils;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
 
 import java.lang.Character.UnicodeBlock;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.StringTokenizer;
@@ -159,24 +156,6 @@ public class NameSplitter {
             phoneticGivenName = null;
             phoneticNameStyle = PhoneticNameStyle.UNDEFINED;
         }
-
-        public boolean isEmpty() {
-            return TextUtils.isEmpty(givenNames)
-                    && TextUtils.isEmpty(middleName)
-                    && TextUtils.isEmpty(familyName)
-                    && TextUtils.isEmpty(suffix)
-                    && TextUtils.isEmpty(phoneticFamilyName)
-                    && TextUtils.isEmpty(phoneticMiddleName)
-                    && TextUtils.isEmpty(phoneticGivenName);
-        }
-
-        @Override
-        public String toString() {
-            return "[given: " + givenNames + " middle: " + middleName + " family: " + familyName
-                    + " ph/given: " + phoneticGivenName + " ph/middle: " + phoneticMiddleName
-                    + " ph/family: " + phoneticFamilyName + "]";
-        }
-
     }
 
     private static class NameTokenizer extends StringTokenizer {
@@ -314,8 +293,6 @@ public class NameSplitter {
         if (fullNameStyle == FullNameStyle.CJK) {
             fullNameStyle = getAdjustedFullNameStyle(fullNameStyle);
         }
-
-        name.fullNameStyle = fullNameStyle;
 
         switch (fullNameStyle) {
             case FullNameStyle.CHINESE:
@@ -467,41 +444,6 @@ public class NameSplitter {
                             true, true, true);
                 }
         }
-    }
-
-    /**
-     * Concatenates components of the phonetic name following the CJK tradition:
-     * family name + middle name + given name(s).
-     */
-    public String joinPhoneticName(Name name) {
-        return join(name.phoneticFamilyName, name.phoneticMiddleName,
-                name.phoneticGivenName, null, true, false, false);
-    }
-
-    /**
-     * Given a name in Chinese, returns a Pinyin representation.
-     */
-    public String convertHanziToPinyin(String name) {
-
-        // TODO: move this code to HanziToPinyin and optimize
-        ArrayList<Token> tokens = HanziToPinyin.getInstance().get(name);
-        if (tokens != null) {
-            int size = tokens.size();
-            if (size != 0) {
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < size; i++) {
-                    String pinyin = tokens.get(i).target;
-                    if (!TextUtils.isEmpty(pinyin)) {
-                        if (sb.length() != 0) {
-                            sb.append(' ');
-                        }
-                        sb.append(pinyin);
-                    }
-                }
-                return sb.toString();
-            }
-        }
-        return null;
     }
 
     /**
@@ -805,29 +747,24 @@ public class NameSplitter {
     public void guessNameStyle(Name name) {
         guessFullNameStyle(name);
         guessPhoneticNameStyle(name);
-        name.fullNameStyle = getAdjustedNameStyleBasedOnPhoneticNameStyle(name.fullNameStyle,
-                name.phoneticNameStyle);
-    }
 
-    /**
-     * Updates the display name style according to the phonetic name style if we
-     * were unsure about display name style based on the name components, but
-     * phonetic name makes it more definitive.
-     */
-    public int getAdjustedNameStyleBasedOnPhoneticNameStyle(int nameStyle, int phoneticNameStyle) {
-        if (phoneticNameStyle != PhoneticNameStyle.UNDEFINED) {
-            if (nameStyle == FullNameStyle.UNDEFINED || nameStyle == FullNameStyle.CJK) {
-                if (phoneticNameStyle == PhoneticNameStyle.JAPANESE) {
-                    return FullNameStyle.JAPANESE;
-                } else if (phoneticNameStyle == PhoneticNameStyle.KOREAN) {
-                    return FullNameStyle.KOREAN;
+        // If we were unsure about display name style based on the name components,
+        // but phonetic name makes it more definitive, update the display name style
+        // according to the phonetic name style.
+        if (name.phoneticNameStyle != PhoneticNameStyle.UNDEFINED) {
+            if (name.fullNameStyle == FullNameStyle.UNDEFINED
+                    || name.fullNameStyle == FullNameStyle.CJK) {
+                if (name.phoneticNameStyle == PhoneticNameStyle.JAPANESE) {
+                    name.fullNameStyle = FullNameStyle.JAPANESE;
+                } else if (name.phoneticNameStyle == PhoneticNameStyle.KOREAN) {
+                    name.fullNameStyle = FullNameStyle.KOREAN;
                 }
-                if (nameStyle == FullNameStyle.CJK && phoneticNameStyle == PhoneticNameStyle.PINYIN) {
-                    return FullNameStyle.CHINESE;
+                if (name.fullNameStyle == FullNameStyle.CJK
+                        && name.phoneticNameStyle == PhoneticNameStyle.PINYIN) {
+                    name.fullNameStyle = FullNameStyle.CHINESE;
                 }
             }
         }
-        return nameStyle;
     }
 
     /**
@@ -835,10 +772,6 @@ public class NameSplitter {
      * used in the supplied name.
      */
     private void guessFullNameStyle(NameSplitter.Name name) {
-        if (name.fullNameStyle != FullNameStyle.UNDEFINED) {
-            return;
-        }
-
         int bestGuess = guessFullNameStyle(name.givenNames);
         if (bestGuess != FullNameStyle.UNDEFINED && bestGuess != FullNameStyle.CJK) {
             name.fullNameStyle = bestGuess;
@@ -866,7 +799,7 @@ public class NameSplitter {
         name.fullNameStyle = bestGuess;
     }
 
-    public int guessFullNameStyle(String name) {
+    private int guessFullNameStyle(String name) {
         if (name == null) {
             return FullNameStyle.UNDEFINED;
         }
@@ -925,10 +858,6 @@ public class NameSplitter {
     }
 
     private void guessPhoneticNameStyle(NameSplitter.Name name) {
-        if (name.phoneticNameStyle != PhoneticNameStyle.UNDEFINED) {
-            return;
-        }
-
         int bestGuess = guessPhoneticNameStyle(name.phoneticFamilyName);
         if (bestGuess != FullNameStyle.UNDEFINED && bestGuess != FullNameStyle.CJK) {
             name.phoneticNameStyle = bestGuess;
@@ -954,7 +883,7 @@ public class NameSplitter {
         }
     }
 
-    public int guessPhoneticNameStyle(String name) {
+    private int guessPhoneticNameStyle(String name) {
         if (name == null) {
             return PhoneticNameStyle.UNDEFINED;
         }
