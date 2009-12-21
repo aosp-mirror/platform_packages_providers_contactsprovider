@@ -24,7 +24,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.DisplayNameSources;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
@@ -63,7 +62,6 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteContentHelper;
-import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
@@ -82,8 +80,11 @@ import android.provider.SyncStateContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.DisplayNameSources;
+import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
+import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
@@ -467,7 +468,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         sContactsProjectionMap = new HashMap<String, String>();
         sContactsProjectionMap.put(Contacts._ID, Contacts._ID);
-        sContactsProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
+        sContactsProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME_PRIMARY);
+        sContactsProjectionMap.put(Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_ALTERNATIVE);
+        sContactsProjectionMap.put(Contacts.DISPLAY_NAME_SOURCE, Contacts.DISPLAY_NAME_SOURCE);
+        sContactsProjectionMap.put(Contacts.PHONETIC_NAME, Contacts.PHONETIC_NAME);
+        sContactsProjectionMap.put(Contacts.PHONETIC_NAME_STYLE, Contacts.PHONETIC_NAME_STYLE);
+        sContactsProjectionMap.put(Contacts.SORT_KEY_PRIMARY, Contacts.SORT_KEY_PRIMARY);
+        sContactsProjectionMap.put(Contacts.SORT_KEY_ALTERNATIVE, Contacts.SORT_KEY_ALTERNATIVE);
         sContactsProjectionMap.put(Contacts.LAST_TIME_CONTACTED, Contacts.LAST_TIME_CONTACTED);
         sContactsProjectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
         sContactsProjectionMap.put(Contacts.STARRED, Contacts.STARRED);
@@ -514,6 +522,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sRawContactsProjectionMap.put(RawContacts.VERSION, RawContacts.VERSION);
         sRawContactsProjectionMap.put(RawContacts.DIRTY, RawContacts.DIRTY);
         sRawContactsProjectionMap.put(RawContacts.DELETED, RawContacts.DELETED);
+        sRawContactsProjectionMap.put(RawContacts.DISPLAY_NAME_PRIMARY,
+                RawContacts.DISPLAY_NAME_PRIMARY);
+        sRawContactsProjectionMap.put(RawContacts.DISPLAY_NAME_ALTERNATIVE,
+                RawContacts.DISPLAY_NAME_ALTERNATIVE);
+        sRawContactsProjectionMap.put(RawContacts.DISPLAY_NAME_SOURCE,
+                RawContacts.DISPLAY_NAME_SOURCE);
+        sRawContactsProjectionMap.put(RawContacts.PHONETIC_NAME,
+                RawContacts.PHONETIC_NAME);
+        sRawContactsProjectionMap.put(RawContacts.PHONETIC_NAME_STYLE,
+                RawContacts.PHONETIC_NAME_STYLE);
+        sRawContactsProjectionMap.put(RawContacts.SORT_KEY_PRIMARY,
+                RawContacts.SORT_KEY_PRIMARY);
+        sRawContactsProjectionMap.put(RawContacts.SORT_KEY_ALTERNATIVE,
+                RawContacts.SORT_KEY_ALTERNATIVE);
         sRawContactsProjectionMap.put(RawContacts.TIMES_CONTACTED, RawContacts.TIMES_CONTACTED);
         sRawContactsProjectionMap.put(RawContacts.LAST_TIME_CONTACTED,
                 RawContacts.LAST_TIME_CONTACTED);
@@ -561,6 +583,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(RawContacts.DIRTY, RawContacts.DIRTY);
         sDataProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
         sDataProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
+        sDataProjectionMap.put(Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_ALTERNATIVE);
+        sDataProjectionMap.put(Contacts.DISPLAY_NAME_SOURCE, Contacts.DISPLAY_NAME_SOURCE);
+        sDataProjectionMap.put(Contacts.PHONETIC_NAME, Contacts.PHONETIC_NAME);
+        sDataProjectionMap.put(Contacts.PHONETIC_NAME_STYLE, Contacts.PHONETIC_NAME_STYLE);
+        sDataProjectionMap.put(Contacts.SORT_KEY_PRIMARY, Contacts.SORT_KEY_PRIMARY);
+        sDataProjectionMap.put(Contacts.SORT_KEY_ALTERNATIVE, Contacts.SORT_KEY_ALTERNATIVE);
         sDataProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
         sDataProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sDataProjectionMap.put(Contacts.LAST_TIME_CONTACTED, Contacts.LAST_TIME_CONTACTED);
@@ -673,6 +702,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDistinctDataProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
         sDistinctDataProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
         sDistinctDataProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
+        sDistinctDataProjectionMap.put(Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_ALTERNATIVE);
+        sDistinctDataProjectionMap.put(Contacts.DISPLAY_NAME_SOURCE, Contacts.DISPLAY_NAME_SOURCE);
+        sDistinctDataProjectionMap.put(Contacts.PHONETIC_NAME, Contacts.PHONETIC_NAME);
+        sDistinctDataProjectionMap.put(Contacts.PHONETIC_NAME_STYLE, Contacts.PHONETIC_NAME_STYLE);
+        sDistinctDataProjectionMap.put(Contacts.SORT_KEY_PRIMARY, Contacts.SORT_KEY_PRIMARY);
+        sDistinctDataProjectionMap.put(Contacts.SORT_KEY_ALTERNATIVE,
+                Contacts.SORT_KEY_ALTERNATIVE);
         sDistinctDataProjectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
         sDistinctDataProjectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
         sDistinctDataProjectionMap.put(Contacts.LAST_TIME_CONTACTED, Contacts.LAST_TIME_CONTACTED);
@@ -1108,8 +1145,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // if there are non-null values, we know for a fact that some values are present.
                 NameSplitter.Name name = new NameSplitter.Name();
                 name.fromValues(augmented);
-                final String joined = mSplitter.join(name);
+                if (name.fullNameStyle == FullNameStyle.UNDEFINED) {
+                    mSplitter.guessNameStyle(name);
+                }
+
+                final String joined = mSplitter.join(name, true);
                 update.put(StructuredName.DISPLAY_NAME, joined);
+
+                update.put(StructuredName.FULL_NAME_STYLE, name.fullNameStyle);
+                update.put(StructuredName.PHONETIC_NAME_STYLE, name.phoneticNameStyle);
             }
         }
     }
@@ -1619,6 +1663,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private ContentValues mValues = new ContentValues();
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
+    private NameSplitter.Name mName = new NameSplitter.Name();
 
     private volatile CountDownLatch mAccessLatch;
 
@@ -1672,8 +1717,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         mRawContactDisplayNameUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.DISPLAY_NAME + "=?,"
-                        + RawContactsColumns.DISPLAY_NAME_SOURCE + "=?" +
+                " SET " +
+                        RawContacts.DISPLAY_NAME_SOURCE + "=?," +
+                        RawContacts.DISPLAY_NAME_PRIMARY + "=?," +
+                        RawContacts.DISPLAY_NAME_ALTERNATIVE + "=?," +
+                        RawContacts.PHONETIC_NAME + "=?," +
+                        RawContacts.PHONETIC_NAME_STYLE + "=?," +
+                        RawContacts.SORT_KEY_PRIMARY + "=?," +
+                        RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
                 " WHERE " + RawContacts._ID + "=?");
 
         mLastStatusUpdate = db.compileStatement(
@@ -1693,7 +1744,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         " LIMIT 1)" +
                 " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
-        final Locale locale = Locale.getDefault();
+        final Locale locale = getLocale();
         mNameSplitter = new NameSplitter(
                 context.getString(com.android.internal.R.string.common_name_prefixes),
                 context.getString(com.android.internal.R.string.common_last_name_prefixes),
@@ -1793,6 +1844,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /* package */ NameSplitter getNameSplitter() {
         return mNameSplitter;
+    }
+
+    /* Visible for testing */
+    protected Locale getLocale() {
+        return Locale.getDefault();
     }
 
     protected boolean isLegacyContactImportNeeded() {
@@ -2335,7 +2391,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + DataColumns.MIMETYPE_ID + ","
                         + Data.IS_PRIMARY + ","
                         + Data.DATA1 + ","
-                        + Organization.TITLE +
+                        + Data.DATA2 + ","
+                        + Data.DATA3 + ","
+                        + Data.DATA4 + ","
+                        + Data.DATA5 + ","
+                        + Data.DATA6 + ","
+                        + Data.DATA7 + ","
+                        + Data.DATA8 + ","
+                        + Data.DATA9 + ","
+                        + Data.DATA10 + ","
+                        + Data.DATA11 +
                 " FROM " + Tables.DATA +
                 " WHERE " + Data.RAW_CONTACT_ID + "=?" +
                         " AND (" + Data.DATA1 + " NOT NULL OR " +
@@ -2343,8 +2408,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         public static final int MIMETYPE = 0;
         public static final int IS_PRIMARY = 1;
-        public static final int DATA = 2;
-        public static final int TITLE = 3;
+        public static final int DATA1 = 2;
+        public static final int GIVEN_NAME = 3;                         // data2
+        public static final int FAMILY_NAME = 4;                        // data3
+        public static final int PREFIX = 5;                             // data4
+        public static final int TITLE = 5;                              // data4
+        public static final int MIDDLE_NAME = 6;                        // data5
+        public static final int SUFFIX = 7;                             // data6
+        public static final int PHONETIC_GIVEN_NAME = 8;                // data7
+        public static final int PHONETIC_MIDDLE_NAME = 9;               // data8
+        public static final int ORGANIZATION_PHONETIC_NAME = 9;         // data8
+        public static final int PHONETIC_FAMILY_NAME = 10;              // data9
+        public static final int FULL_NAME_STYLE = 11;                   // data10
+        public static final int ORGANIZATION_PHONETIC_NAME_STYLE = 11;  // data10
+        public static final int PHONETIC_NAME_STYLE = 12;               // data11
     }
 
     /**
@@ -2352,37 +2429,86 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * organization, email etc.
      */
     private void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
-        String bestDisplayName = null;
         int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
+        NameSplitter.Name bestName = null;
+        String bestDisplayName = null;
+        String bestPhoneticName = null;
+        int bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
 
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         Cursor c = db.rawQuery(DisplayNameQuery.RAW_SQL, mSelectionArgs1);
         try {
             while (c.moveToNext()) {
                 int mimeType = c.getInt(DisplayNameQuery.MIMETYPE);
-
-                // Display name is at DATA1 in all type. This is ensured in the
-                // constructor.
-                mCharArrayBuffer.sizeCopied = 0;
-                c.copyStringToBuffer(DisplayNameQuery.DATA, mCharArrayBuffer);
-                if (mimeType == mMimeTypeIdOrganization && mCharArrayBuffer.sizeCopied == 0) {
-                    c.copyStringToBuffer(DisplayNameQuery.TITLE, mCharArrayBuffer);
+                int source = getDisplayNameSource(mimeType);
+                if (source < bestDisplayNameSource || source == DisplayNameSources.UNDEFINED) {
+                    continue;
                 }
 
-                if (mCharArrayBuffer.sizeCopied != 0) {
-                    int source = getDisplayNameSource(mimeType);
-                    if (source > bestDisplayNameSource) {
+                if (source == bestDisplayNameSource && c.getInt(DisplayNameQuery.IS_PRIMARY) == 0) {
+                    continue;
+                }
+
+                if (mimeType == mMimeTypeIdStructuredName) {
+                    NameSplitter.Name name;
+                    if (bestName != null) {
+                        name = new NameSplitter.Name();
+                    } else {
+                        name = mName;
+                        name.clear();
+                    }
+                    name.prefix = c.getString(DisplayNameQuery.PREFIX);
+                    name.givenNames = c.getString(DisplayNameQuery.GIVEN_NAME);
+                    name.middleName = c.getString(DisplayNameQuery.MIDDLE_NAME);
+                    name.familyName = c.getString(DisplayNameQuery.FAMILY_NAME);
+                    name.suffix = c.getString(DisplayNameQuery.SUFFIX);
+                    name.fullNameStyle = c.isNull(DisplayNameQuery.FULL_NAME_STYLE)
+                            ? FullNameStyle.UNDEFINED
+                            : c.getInt(DisplayNameQuery.FULL_NAME_STYLE);
+                    name.phoneticFamilyName = c.getString(DisplayNameQuery.PHONETIC_FAMILY_NAME);
+                    name.phoneticMiddleName = c.getString(DisplayNameQuery.PHONETIC_MIDDLE_NAME);
+                    name.phoneticGivenName = c.getString(DisplayNameQuery.PHONETIC_GIVEN_NAME);
+                    name.phoneticNameStyle = c.isNull(DisplayNameQuery.PHONETIC_NAME_STYLE)
+                            ? PhoneticNameStyle.UNDEFINED
+                            : c.getInt(DisplayNameQuery.PHONETIC_NAME_STYLE);
+                    if (!name.isEmpty()) {
+                        bestDisplayNameSource = source;
+                        bestName = name;
+                    }
+                } else if (mimeType == mMimeTypeIdOrganization) {
+                    mCharArrayBuffer.sizeCopied = 0;
+                    c.copyStringToBuffer(DisplayNameQuery.DATA1, mCharArrayBuffer);
+                    if (mCharArrayBuffer.sizeCopied != 0) {
                         bestDisplayNameSource = source;
                         bestDisplayName = new String(mCharArrayBuffer.data, 0,
                                 mCharArrayBuffer.sizeCopied);
-                    } else if (source == bestDisplayNameSource
-                            && source != DisplayNameSources.UNDEFINED) {
-                        if (mimeType == mMimeTypeIdStructuredName
-                                || c.getInt(DisplayNameQuery.IS_PRIMARY) != 0) {
+                        bestPhoneticName = c.getString(DisplayNameQuery.ORGANIZATION_PHONETIC_NAME);
+                        bestPhoneticNameStyle =
+                                c.isNull(DisplayNameQuery.ORGANIZATION_PHONETIC_NAME_STYLE)
+                                    ? PhoneticNameStyle.UNDEFINED
+                                    : c.getInt(DisplayNameQuery.ORGANIZATION_PHONETIC_NAME_STYLE);
+                    } else {
+                        c.copyStringToBuffer(DisplayNameQuery.TITLE, mCharArrayBuffer);
+                        if (mCharArrayBuffer.sizeCopied != 0) {
                             bestDisplayNameSource = source;
                             bestDisplayName = new String(mCharArrayBuffer.data, 0,
                                     mCharArrayBuffer.sizeCopied);
+                            bestPhoneticName = null;
+                            bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
                         }
+                    }
+                } else {
+                    // Display name is at DATA1 in all other types.
+                    // This is ensured in the constructor.
+
+                    mCharArrayBuffer.sizeCopied = 0;
+                    c.copyStringToBuffer(DisplayNameQuery.DATA1, mCharArrayBuffer);
+                    if (mCharArrayBuffer.sizeCopied != 0) {
+                        bestDisplayNameSource = source;
+                        bestDisplayName = new String(mCharArrayBuffer.data, 0,
+                                mCharArrayBuffer.sizeCopied);
+                        bestPhoneticName = null;
+                        bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
                     }
                 }
             }
@@ -2391,7 +2517,58 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             c.close();
         }
 
-        setDisplayName(rawContactId, bestDisplayName, bestDisplayNameSource);
+        String displayNamePrimary;
+        String displayNameAlternative;
+        String sortKeyPrimary = null;
+        String sortKeyAlternative = null;
+        int displayNameStyle = FullNameStyle.UNDEFINED;
+
+        if (bestDisplayNameSource == DisplayNameSources.STRUCTURED_NAME) {
+            displayNameStyle = bestName.fullNameStyle;
+            if (displayNameStyle == FullNameStyle.CJK
+                    || displayNameStyle == FullNameStyle.UNDEFINED) {
+                displayNameStyle = mNameSplitter.getAdjustedFullNameStyle(displayNameStyle);
+                bestName.fullNameStyle = displayNameStyle;
+            }
+
+            displayNamePrimary = mNameSplitter.join(bestName, true);
+            displayNameAlternative = mNameSplitter.join(bestName, false);
+
+            bestPhoneticName = mNameSplitter.joinPhoneticName(bestName);
+            bestPhoneticNameStyle = bestName.phoneticNameStyle;
+        } else {
+            displayNamePrimary = displayNameAlternative = bestDisplayName;
+        }
+
+        if (bestPhoneticName != null) {
+            sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
+            if (bestPhoneticNameStyle == PhoneticNameStyle.UNDEFINED) {
+                bestPhoneticNameStyle = mNameSplitter.guessPhoneticNameStyle(bestPhoneticName);
+            }
+        } else {
+            if (displayNameStyle == FullNameStyle.UNDEFINED) {
+                displayNameStyle = mNameSplitter.guessFullNameStyle(bestDisplayName);
+                if (displayNameStyle == FullNameStyle.UNDEFINED
+                        || displayNameStyle == FullNameStyle.CJK) {
+                    displayNameStyle = mNameSplitter.getAdjustedNameStyleBasedOnPhoneticNameStyle(
+                            displayNameStyle, bestPhoneticNameStyle);
+                }
+                displayNameStyle = mNameSplitter.getAdjustedFullNameStyle(displayNameStyle);
+            }
+            if (displayNameStyle == FullNameStyle.CHINESE) {
+                sortKeyPrimary = sortKeyAlternative =
+                        mNameSplitter.convertHanziToPinyin(displayNamePrimary);
+            }
+        }
+
+        if (sortKeyPrimary == null) {
+            sortKeyPrimary = displayNamePrimary;
+            sortKeyAlternative = displayNameAlternative;
+        }
+
+        setDisplayName(rawContactId, bestDisplayNameSource, displayNamePrimary,
+                displayNameAlternative, bestPhoneticName, bestPhoneticNameStyle,
+                sortKeyPrimary, sortKeyAlternative);
     }
 
     private int getDisplayNameSource(int mimeTypeId) {
@@ -2667,32 +2844,32 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
                 mStatusUpdateReplace.bindLong(1, dataId);
                 mStatusUpdateReplace.bindLong(2, timestamp);
-                DatabaseUtils.bindObjectToProgram(mStatusUpdateReplace, 3, status);
-                DatabaseUtils.bindObjectToProgram(mStatusUpdateReplace, 4, resPackage);
-                DatabaseUtils.bindObjectToProgram(mStatusUpdateReplace, 5, iconResource);
-                DatabaseUtils.bindObjectToProgram(mStatusUpdateReplace, 6, labelResource);
+                bindString(mStatusUpdateReplace, 3, status);
+                bindString(mStatusUpdateReplace, 4, resPackage);
+                bindLong(mStatusUpdateReplace, 5, iconResource);
+                bindLong(mStatusUpdateReplace, 6, labelResource);
                 mStatusUpdateReplace.execute();
             } else {
 
                 try {
                     mStatusUpdateInsert.bindLong(1, dataId);
-                    DatabaseUtils.bindObjectToProgram(mStatusUpdateInsert, 2, status);
-                    DatabaseUtils.bindObjectToProgram(mStatusUpdateInsert, 3, resPackage);
-                    DatabaseUtils.bindObjectToProgram(mStatusUpdateInsert, 4, iconResource);
-                    DatabaseUtils.bindObjectToProgram(mStatusUpdateInsert, 5, labelResource);
+                    bindString(mStatusUpdateInsert, 2, status);
+                    bindString(mStatusUpdateInsert, 3, resPackage);
+                    bindLong(mStatusUpdateInsert, 4, iconResource);
+                    bindLong(mStatusUpdateInsert, 5, labelResource);
                     mStatusUpdateInsert.executeInsert();
                 } catch (SQLiteConstraintException e) {
                     // The row already exists - update it
                     long timestamp = System.currentTimeMillis();
                     mStatusUpdateAutoTimestamp.bindLong(1, timestamp);
-                    DatabaseUtils.bindObjectToProgram(mStatusUpdateAutoTimestamp, 2, status);
+                    bindString(mStatusUpdateAutoTimestamp, 2, status);
                     mStatusUpdateAutoTimestamp.bindLong(3, dataId);
-                    DatabaseUtils.bindObjectToProgram(mStatusUpdateAutoTimestamp, 4, status);
+                    bindString(mStatusUpdateAutoTimestamp, 4, status);
                     mStatusUpdateAutoTimestamp.execute();
 
-                    DatabaseUtils.bindObjectToProgram(mStatusAttributionUpdate, 1, resPackage);
-                    DatabaseUtils.bindObjectToProgram(mStatusAttributionUpdate, 2, iconResource);
-                    DatabaseUtils.bindObjectToProgram(mStatusAttributionUpdate, 3, labelResource);
+                    bindString(mStatusAttributionUpdate, 1, resPackage);
+                    bindLong(mStatusAttributionUpdate, 2, iconResource);
+                    bindLong(mStatusAttributionUpdate, 3, labelResource);
                     mStatusAttributionUpdate.bindLong(4, dataId);
                     mStatusAttributionUpdate.execute();
                 }
@@ -4619,14 +4796,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private void setDisplayName(long rawContactId, String displayName, int bestDisplayNameSource) {
-        if (displayName != null) {
-            mRawContactDisplayNameUpdate.bindString(1, displayName);
-        } else {
-            mRawContactDisplayNameUpdate.bindNull(1);
-        }
-        mRawContactDisplayNameUpdate.bindLong(2, bestDisplayNameSource);
-        mRawContactDisplayNameUpdate.bindLong(3, rawContactId);
+    private void setDisplayName(long rawContactId, int displayNameSource,
+            String displayNamePrimary, String displayNameAlternative, String phoneticName,
+            int phoneticNameStyle, String sortKeyPrimary, String sortKeyAlternative) {
+        mRawContactDisplayNameUpdate.bindLong(1, displayNameSource);
+        bindString(mRawContactDisplayNameUpdate, 2, displayNamePrimary);
+        bindString(mRawContactDisplayNameUpdate, 3, displayNameAlternative);
+        bindString(mRawContactDisplayNameUpdate, 4, phoneticName);
+        mRawContactDisplayNameUpdate.bindLong(5, phoneticNameStyle);
+        bindString(mRawContactDisplayNameUpdate, 6, sortKeyPrimary);
+        bindString(mRawContactDisplayNameUpdate, 7, sortKeyAlternative);
+        mRawContactDisplayNameUpdate.bindLong(8, rawContactId);
         mRawContactDisplayNameUpdate.execute();
     }
 
@@ -4837,10 +5017,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
      */
     public void insertNameLookup(long rawContactId, long dataId, int lookupType, String name) {
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 1, rawContactId);
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 2, dataId);
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 3, lookupType);
-        DatabaseUtils.bindObjectToProgram(mNameLookupInsert, 4, name);
+        mNameLookupInsert.bindLong(1, rawContactId);
+        mNameLookupInsert.bindLong(2, dataId);
+        mNameLookupInsert.bindLong(3, lookupType);
+        bindString(mNameLookupInsert, 4, name);
         mNameLookupInsert.executeInsert();
     }
 
@@ -4848,7 +5028,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Deletes all {@link Tables#NAME_LOOKUP} table rows associated with the specified data element.
      */
     public void deleteNameLookup(long dataId) {
-        DatabaseUtils.bindObjectToProgram(mNameLookupDelete, 1, dataId);
+        mNameLookupDelete.bindLong(1, dataId);
         mNameLookupDelete.execute();
     }
 
@@ -5018,5 +5198,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return Uri.decode(value);
+    }
+
+    private void bindString(SQLiteStatement stmt, int index, String value) {
+        if (value == null) {
+            stmt.bindNull(index);
+        } else {
+            stmt.bindString(index, value);
+        }
+    }
+
+    private void bindLong(SQLiteStatement stmt, int index, Number value) {
+        if (value == null) {
+            stmt.bindNull(index);
+        } else {
+            stmt.bindLong(index, value.longValue());
+        }
     }
 }

@@ -35,8 +35,10 @@ import android.provider.LiveFolders;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
+import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.Settings;
@@ -51,6 +53,10 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
+
+import java.text.Collator;
+import java.util.Arrays;
+import java.util.Locale;
 
 
 /**
@@ -594,6 +600,125 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStructuredName(rawContactId, null, null, null, "Johnson", null);
     }
 
+    public void testContactWithoutPhoneticName() {
+        final long rawContactId = createRawContact(null);
+
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.PREFIX, "Mr");
+        values.put(StructuredName.GIVEN_NAME, "John");
+        values.put(StructuredName.MIDDLE_NAME, "K.");
+        values.put(StructuredName.FAMILY_NAME, "Doe");
+        values.put(StructuredName.SUFFIX, "Jr.");
+        Uri dataUri = insertStructuredName(rawContactId, values);
+
+        values.clear();
+        values.put(RawContacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
+        values.put(RawContacts.DISPLAY_NAME_PRIMARY, "John K. Doe, Jr.");
+        values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "Doe, John K., Jr.");
+        values.putNull(RawContacts.PHONETIC_NAME);
+        values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
+        values.put(RawContacts.SORT_KEY_PRIMARY, "John K. Doe, Jr.");
+        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "Doe, John K., Jr.");
+
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertStoredValues(rawContactUri, values);
+
+        values.clear();
+        values.put(Contacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
+        values.put(Contacts.DISPLAY_NAME_PRIMARY, "John K. Doe, Jr.");
+        values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "Doe, John K., Jr.");
+        values.putNull(Contacts.PHONETIC_NAME);
+        values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
+        values.put(Contacts.SORT_KEY_PRIMARY, "John K. Doe, Jr.");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "Doe, John K., Jr.");
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId));
+        assertStoredValues(contactUri, values);
+
+        // The same values should be available through a join with Data
+        assertStoredValues(dataUri, values);
+    }
+
+    public void testContactWithChineseName() {
+
+        // Only run this test when Chinese collation is supported
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+            return;
+        }
+
+        long rawContactId = createRawContact(null);
+
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "\u6BB5\u5C0F\u6D9B");
+        Uri dataUri = insertStructuredName(rawContactId, values);
+
+        values.clear();
+        values.put(RawContacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
+        values.put(RawContacts.DISPLAY_NAME_PRIMARY, "\u6BB5\u5C0F\u6D9B");
+        values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
+        values.putNull(RawContacts.PHONETIC_NAME);
+        values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
+        values.put(RawContacts.SORT_KEY_PRIMARY, "DUAN XIAO TAO");
+        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "DUAN XIAO TAO");
+
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertStoredValues(rawContactUri, values);
+
+        values.clear();
+        values.put(Contacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
+        values.put(Contacts.DISPLAY_NAME_PRIMARY, "\u6BB5\u5C0F\u6D9B");
+        values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
+        values.putNull(Contacts.PHONETIC_NAME);
+        values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
+        values.put(Contacts.SORT_KEY_PRIMARY, "DUAN XIAO TAO");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "DUAN XIAO TAO");
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId));
+        assertStoredValues(contactUri, values);
+
+        // The same values should be available through a join with Data
+        assertStoredValues(dataUri, values);
+    }
+
+    public void testContactWithJapaneseName() {
+        long rawContactId = createRawContact(null);
+
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.GIVEN_NAME, "\u7A7A\u6D77");
+        values.put(StructuredName.PHONETIC_GIVEN_NAME, "\u304B\u3044\u304F\u3046");
+        Uri dataUri = insertStructuredName(rawContactId, values);
+
+        values.clear();
+        values.put(RawContacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
+        values.put(RawContacts.DISPLAY_NAME_PRIMARY, "\u7A7A\u6D77");
+        values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "\u7A7A\u6D77");
+        values.put(RawContacts.PHONETIC_NAME, "\u304B\u3044\u304F\u3046");
+        values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.JAPANESE);
+        values.put(RawContacts.SORT_KEY_PRIMARY, "\u304B\u3044\u304F\u3046");
+        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "\u304B\u3044\u304F\u3046");
+
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertStoredValues(rawContactUri, values);
+
+        values.clear();
+        values.put(Contacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
+        values.put(Contacts.DISPLAY_NAME_PRIMARY, "\u7A7A\u6D77");
+        values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "\u7A7A\u6D77");
+        values.put(Contacts.PHONETIC_NAME, "\u304B\u3044\u304F\u3046");
+        values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.JAPANESE);
+        values.put(Contacts.SORT_KEY_PRIMARY, "\u304B\u3044\u304F\u3046");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "\u304B\u3044\u304F\u3046");
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
+                queryContactId(rawContactId));
+        assertStoredValues(contactUri, values);
+
+        // The same values should be available through a join with Data
+        assertStoredValues(dataUri, values);
+    }
+
     public void testDisplayNameUpdate() {
         long rawContactId1 = createRawContact();
         insertEmail(rawContactId1, "potato@acme.com", true);
@@ -629,16 +754,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, "1-800-466-4411");
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "1-800-466-4411");
 
-        // If there is title without company, the title is display name.
-        values.clear();
-        values.put(Organization.TITLE, "Protagonist");
-        Uri organizationUri = insertOrganization(rawContactId, values);
-        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Protagonist");
-
         // If there are title and company, the company is display name.
         values.clear();
         values.put(Organization.COMPANY, "Monsters Inc");
-        mResolver.update(organizationUri, values, null, null);
+        Uri organizationUri = insertOrganization(rawContactId, values);
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "Monsters Inc");
 
         // If there is nickname, that is display name.
@@ -651,7 +770,77 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(StructuredName.MIDDLE_NAME, "P.");
         values.put(StructuredName.FAMILY_NAME, "Sullivan");
         insertStructuredName(rawContactId, values);
-        assertStoredValue(uri, Contacts.DISPLAY_NAME, "James Sullivan");
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "James P. Sullivan");
+    }
+
+    public void testDisplayNameFromOrganizationWithoutPhoneticName() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        // If there is title without company, the title is display name.
+        values.clear();
+        values.put(Organization.TITLE, "Protagonist");
+        Uri organizationUri = insertOrganization(rawContactId, values);
+        assertStoredValue(uri, Contacts.DISPLAY_NAME, "Protagonist");
+
+        // If there are title and company, the company is display name.
+        values.clear();
+        values.put(Organization.COMPANY, "Monsters Inc");
+        mResolver.update(organizationUri, values, null, null);
+
+        values.clear();
+        values.put(Contacts.DISPLAY_NAME, "Monsters Inc");
+        values.putNull(Contacts.PHONETIC_NAME);
+        values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
+        values.put(Contacts.SORT_KEY_PRIMARY, "Monsters Inc");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "Monsters Inc");
+        assertStoredValues(uri, values);
+    }
+
+    public void testDisplayNameFromOrganizationWithJapanesePhoneticName() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        // If there is title without company, the title is display name.
+        values.clear();
+        values.put(Organization.COMPANY, "DoCoMo");
+        values.put(Organization.PHONETIC_NAME, "\u30C9\u30B3\u30E2");
+        Uri organizationUri = insertOrganization(rawContactId, values);
+
+        values.clear();
+        values.put(Contacts.DISPLAY_NAME, "DoCoMo");
+        values.put(Contacts.PHONETIC_NAME, "\u30C9\u30B3\u30E2");
+        values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.JAPANESE);
+        values.put(Contacts.SORT_KEY_PRIMARY, "\u30C9\u30B3\u30E2");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "\u30C9\u30B3\u30E2");
+        assertStoredValues(uri, values);
+    }
+
+    public void testDisplayNameFromOrganizationWithChineseName() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        Uri uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        // If there is title without company, the title is display name.
+        values.clear();
+        values.put(Organization.COMPANY, "\u4E2D\u56FD\u7535\u4FE1");
+        Uri organizationUri = insertOrganization(rawContactId, values);
+
+        values.clear();
+        values.put(Contacts.DISPLAY_NAME, "\u4E2D\u56FD\u7535\u4FE1");
+        values.putNull(Contacts.PHONETIC_NAME);
+        values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
+        values.put(Contacts.SORT_KEY_PRIMARY, "ZHONG GUO DIAN XIN");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "ZHONG GUO DIAN XIN");
+        assertStoredValues(uri, values);
     }
 
     public void testDisplayNameUpdateFromStructuredNameUpdate() {
