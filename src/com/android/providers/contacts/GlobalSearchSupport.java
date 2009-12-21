@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.database.ArrayListCursor;
+import com.android.common.ArrayListCursor;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
