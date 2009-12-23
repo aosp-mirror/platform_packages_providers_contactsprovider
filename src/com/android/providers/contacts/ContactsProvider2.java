@@ -449,7 +449,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 SEARCH_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
                 SEARCH_SUGGESTIONS);
-        matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
+        matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
                 SEARCH_SHORTCUT);
 
         matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts",
@@ -3764,6 +3764,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 String lookupKey = pathSegments.get(2);
                 if (segmentCount == 4) {
+                    // TODO: pull this out into a method and generalize to not require contactId
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
@@ -4176,8 +4177,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case SEARCH_SHORTCUT: {
-                long contactId = ContentUris.parseId(uri);
-                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, contactId, projection);
+                String lookupKey = uri.getLastPathSegment();
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, lookupKey, projection);
             }
 
             case LIVE_FOLDERS_CONTACTS:
@@ -4240,7 +4241,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return c;
     }
 
-    private long lookupContactIdByLookupKey(SQLiteDatabase db, String lookupKey) {
+    /**
+     * Returns the contact Id for the contact identified by the lookupKey.  Robust against changes
+     * in the lookup key:  if the key has changed, will look up the contact by the name encoded in
+     * the lookup key.
+     */
+    public long lookupContactIdByLookupKey(SQLiteDatabase db, String lookupKey) {
         ContactLookupKey key = new ContactLookupKey();
         ArrayList<LookupKeySegment> segments = key.parse(lookupKey);
 
@@ -4787,8 +4793,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS:
-            case CONTACTS_LOOKUP:
                 return Contacts.CONTENT_TYPE;
+            case CONTACTS_LOOKUP:
             case CONTACTS_ID:
             case CONTACTS_LOOKUP_ID:
                 return Contacts.CONTENT_ITEM_TYPE;

@@ -230,6 +230,8 @@ import java.util.Locale;
                 + Contacts.CUSTOM_RINGTONE;
         public static final String CONCRETE_SEND_TO_VOICEMAIL = Tables.CONTACTS + "."
                 + Contacts.SEND_TO_VOICEMAIL;
+        public static final String CONCRETE_LOOKUP_KEY = Tables.CONTACTS + "."
+                + Contacts.LOOKUP_KEY;
     }
 
     public interface RawContactsColumns {

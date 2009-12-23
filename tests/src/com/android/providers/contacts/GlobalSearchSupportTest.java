@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import android.accounts.Account;
 import android.app.SearchManager;
-import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -149,7 +148,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
     }
 
     /**
-     * Tests that the global search suggestion returns the expected contact
+     * Tests that the quick search suggestion returns the expected contact
      * information.
      */
     private final class SuggestionTester {
@@ -175,7 +174,25 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             expectedText2 = builder.expectedText2;
         }
 
+        /**
+         * Tests suggest and refresh queries from quick search box, then deletes the contact from
+         * the data base.
+         */
         public void test() {
+
+            testQsbSuggest();
+            testContactIdQsbRefresh();
+            testLookupKeyQsbRefresh();
+
+            // Cleanup
+            contact.delete();
+        }
+
+        /**
+         * Tests that the contacts provider return the appropriate information from the golden
+         * contact in response to the suggestion query from the quick search box.
+         */
+        private void testQsbSuggest() {
 
             Uri searchUri = new Uri.Builder().scheme("content").authority(
                     ContactsContract.AUTHORITY).appendPath(SearchManager.SUGGEST_URI_PATH_QUERY)
@@ -185,12 +202,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             assertEquals(1, c.getCount());
             c.moveToFirst();
 
-            // SearchManager does not declare a constant for _id
-            ContentValues values = new ContentValues();
-            values.put("_id", contact.getContactId());
-            values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
-            values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
-
             String icon1 = c.getString(c.getColumnIndex(SearchManager.SUGGEST_COLUMN_ICON_1));
             if (expectIcon1Uri) {
                 assertTrue(icon1.startsWith("content:"));
@@ -199,16 +210,40 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                         icon1);
             }
 
-            values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
-            values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, contact.getContactId());
-            values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contact.getContactId());
+            // SearchManager does not declare a constant for _id
+            ContentValues values = getContactValues();
             assertCursorValues(c, values);
             c.close();
+        }
+
+        /**
+         * Returns the expected Quick Search Box content values for the golden contact.
+         */
+        private ContentValues getContactValues() {
+
+            ContentValues values = new ContentValues();
+            values.put("_id", contact.getContactId());
+            values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
+            values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
+
+            values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
+            values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, contact.getLookupKey());
+            values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contact.getLookupKey());
+            return values;
+        }
+
+        /**
+         * Performs the refresh query and returns a cursor to the results.
+         *
+         * @param refreshId the final component path of the refresh query, which identifies which
+         *        contact to refresh.
+         */
+        private Cursor refreshQuery(String refreshId) {
 
             // See if the same result is returned by a shortcut refresh
-            Uri shortcutsUri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath(
-                    SearchManager.SUGGEST_URI_PATH_SHORTCUT).build();
-            Uri refreshUri = ContentUris.withAppendedId(shortcutsUri, contact.getContactId());
+            Uri refershUri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath(
+                    SearchManager.SUGGEST_URI_PATH_SHORTCUT)
+                    .appendPath(refreshId).build();
 
             String[] projection = new String[] {
                     SearchManager.SUGGEST_COLUMN_ICON_1, SearchManager.SUGGEST_COLUMN_ICON_2,
@@ -217,17 +252,43 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                     SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, "_id",
             };
 
-            c = mResolver.query(refreshUri, projection, null, null, null);
+            return mResolver.query(refershUri, projection, null, null, null);
+        }
+
+        /**
+         * Tests that the contacts provider returns an empty result in response to a refresh query
+         * from the quick search box that uses the contact id to identify the contact.  The empty
+         * result indicates that the shortcut is no longer valid, and the QSB will replace it with
+         * a new-style shortcut the next time they click on the contact.
+         *
+         * @see #testLookupKeyQsbRefresh()
+         */
+        private void testContactIdQsbRefresh() {
+
+            Cursor c = refreshQuery(String.valueOf(contact.getContactId()));
             try {
-                assertEquals("Record count", 1, c.getCount());
-                c.moveToFirst();
-                assertCursorValues(c, values);
+                assertEquals("Record count", 0, c.getCount());
             } finally {
                 c.close();
             }
+        }
 
-            // Cleanup
-            contact.delete();
+        /**
+         * Tests that the contacts provider return the appropriate information from the golden
+         * contact in response to the refresh query from the quick search box.  The refresh query
+         * uses the currently-supported mechanism of identifying the contact by the lookup key,
+         * which is more stable than the previously used contact id.
+         */
+        private void testLookupKeyQsbRefresh() {
+
+            Cursor c = refreshQuery(contact.getLookupKey());
+            try {
+                assertEquals("Record count", 1, c.getCount());
+                c.moveToFirst();
+                assertCursorValues(c, getContactValues());
+            } finally {
+                c.close();
+            }
         }
     }
 
@@ -261,7 +322,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         }
 
         /**
-         * The text of the user's query to global search (i.e., what they typed
+         * The text of the user's query to quick search (i.e., what they typed
          * in the search box).
          */
         public SuggestionTesterBuilder query(String value) {

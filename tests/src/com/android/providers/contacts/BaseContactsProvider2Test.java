@@ -409,6 +409,14 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return displayName;
     }
 
+    private String queryLookupKey(long contactId) {
+        Cursor c = queryContact(contactId);
+        assertTrue(c.moveToFirst());
+        String lookupKey = c.getString(c.getColumnIndex(Contacts.LOOKUP_KEY));
+        c.close();
+        return lookupKey;
+    }
+
     protected void assertAggregated(long rawContactId1, long rawContactId2) {
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
@@ -891,6 +899,13 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
          */
         public long getContactId() {
             return contactId;
+        }
+
+        /**
+         * Returns the lookup key for the contact.
+         */
+        public String getLookupKey() {
+            return queryLookupKey(contactId);
         }
 
         /**

@@ -94,6 +94,7 @@ public class GlobalSearchSupport {
             Data.IS_SUPER_PRIMARY,
             Data.DATA1,
             Contacts.PHOTO_ID,
+            Contacts.LOOKUP_KEY,
         };
 
         public static final int CONTACT_ID = 0;
@@ -106,6 +107,7 @@ public class GlobalSearchSupport {
         public static final int EMAIL = 6;
         public static final int PHONE = 6;
         public static final int PHOTO_ID = 7;
+        public static final int LOOKUP_KEY = 8;
     }
 
     private static class SearchSuggestion {
@@ -115,6 +117,7 @@ public class GlobalSearchSupport {
         String email;
         String phoneNumber;
         Uri photoUri;
+        String lookupKey;
         String normalizedName;
         int presence = -1;
         boolean processed;
@@ -162,6 +165,11 @@ public class GlobalSearchSupport {
             processed = true;
         }
 
+        /**
+         * Returns key for sorting search suggestions.
+         *
+         * <p>TODO: switch to new sort key
+         */
         public String getSortKey() {
             if (normalizedName == null) {
                 process();
@@ -181,8 +189,8 @@ public class GlobalSearchSupport {
                 list.add(text2);
                 list.add(icon1);
                 list.add(icon2);
-                list.add(contactId);
-                list.add(contactId);
+                list.add(lookupKey);
+                list.add(lookupKey);
             } else {
                 for (int i = 0; i < projection.length; i++) {
                     addColumnValue(list, projection[i]);
@@ -203,9 +211,9 @@ public class GlobalSearchSupport {
             } else if (SearchManager.SUGGEST_COLUMN_ICON_2.equals(column)) {
                 list.add(icon2);
             } else if (SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID.equals(column)) {
-                list.add(contactId);
+                list.add(lookupKey);
             } else if (SearchManager.SUGGEST_COLUMN_SHORTCUT_ID.equals(column)) {
-                list.add(contactId);
+                list.add(lookupKey);
             } else {
                 throw new IllegalArgumentException("Invalid column name: " + column);
             }
@@ -256,13 +264,29 @@ public class GlobalSearchSupport {
         }
     }
 
-    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, long contactId,
+    /**
+     * Returns a search suggestions cursor for the contact bearing the provided lookup key.  If the
+     * lookup key cannot be found in the database, the contact name is decoded from the lookup key
+     * and used to re-identify the contact.  If the contact still cannot be found, an empty cursor
+     * is returned.
+     *
+     * <p>Note that if {@code lookupKey} is not a valid lookup key, an empty cursor is returned
+     * silently.  This would occur with old-style shortcuts that were created using the contact id
+     * instead of the lookup key.
+     */
+    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, String lookupKey,
             String[] projection) {
         ensureMimetypeIdsLoaded();
+        long contactId;
+        try {
+            contactId = mContactsProvider.lookupContactIdByLookupKey(db, lookupKey);
+        } catch (IllegalArgumentException e) {
+            contactId = -1L;
+        }
         StringBuilder sb = new StringBuilder();
         sb.append(mContactsProvider.getContactsRestrictions());
         appendMimeTypeFilter(sb);
-        sb.append(" AND " + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + contactId);
+        sb.append(" AND " + ContactsColumns.CONCRETE_ID + "=" + contactId);
         return buildCursorForSearchSuggestions(db, sb.toString(), projection, null);
     }
 
@@ -392,6 +416,8 @@ public class GlobalSearchSupport {
                             ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                             Photo.CONTENT_DIRECTORY);
                 }
+
+                suggestion.lookupKey = c.getString(SearchSuggestionQuery.LOOKUP_KEY);
             }
         } finally {
             c.close();

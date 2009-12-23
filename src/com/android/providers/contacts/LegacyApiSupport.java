@@ -348,7 +348,7 @@ public class LegacyApiSupport {
                 SEARCH_SUGGESTIONS);
         matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
                 SEARCH_SUGGESTIONS);
-        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/#",
+        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
                 SEARCH_SHORTCUT);
         matcher.addURI(authority, "settings", SETTINGS);
 
@@ -1870,8 +1870,8 @@ public class LegacyApiSupport {
                 return mGlobalSearchSupport.handleSearchSuggestionsQuery(db, uri, limit);
 
             case SEARCH_SHORTCUT: {
-                long contactId = ContentUris.parseId(uri);
-                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, contactId, projection);
+                String lookupKey = uri.getLastPathSegment();
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, lookupKey, projection);
             }
 
             case LIVE_FOLDERS_PEOPLE:
