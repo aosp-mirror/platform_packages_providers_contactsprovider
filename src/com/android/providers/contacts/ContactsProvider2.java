@@ -511,7 +511,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sContactsVCardProjectionMap = Maps.newHashMap();
         sContactsVCardProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
                 + " || '.vcf' AS " + OpenableColumns.DISPLAY_NAME);
-        sContactsVCardProjectionMap.put(OpenableColumns.SIZE, "0 AS " + OpenableColumns.SIZE);
+        sContactsVCardProjectionMap.put(OpenableColumns.SIZE, "NULL AS " + OpenableColumns.SIZE);
 
         sRawContactsProjectionMap = new HashMap<String, String>();
         sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
