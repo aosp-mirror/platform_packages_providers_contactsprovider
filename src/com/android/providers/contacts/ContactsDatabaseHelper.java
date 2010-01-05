@@ -1310,8 +1310,10 @@ import java.util.Locale;
 
         Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion);
 
+        boolean upgradeViewsAndTriggers = false;
+
         if (oldVersion == 99) {
-            createContactEntitiesView(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
@@ -1323,28 +1325,28 @@ import java.util.Locale;
             updateIndexStats(db, Tables.MIMETYPES,
                     "mimetypes_mimetype_index", "50 1 1");
 
-            createContactsViews(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
         if (oldVersion == 101) {
-            createContactsTriggers(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
         if (oldVersion == 102) {
-            LegacyApiSupport.createViews(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
         if (oldVersion == 103) {
-            createContactEntitiesView(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
         if (oldVersion == 104 || oldVersion == 201) {
-            LegacyApiSupport.createViews(db);
             LegacyApiSupport.createSettingsTable(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
@@ -1355,19 +1357,27 @@ import java.util.Locale;
 
         if (oldVersion == 202) {
             upgradeToVersion203(db);
-            createContactsViews(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
         if (oldVersion == 203) {
-            createContactsTriggers(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
         }
 
         if (oldVersion == 204) {
             upgradeToVersion205(db);
-            createContactsViews(db);
+            upgradeViewsAndTriggers = true;
             oldVersion++;
+        }
+
+        if (upgradeViewsAndTriggers) {
+            createContactsViews(db);
+            createGroupsView(db);
+            createContactEntitiesView(db);
+            createContactsTriggers(db);
+            LegacyApiSupport.createViews(db);
         }
 
         if (oldVersion != newVersion) {
