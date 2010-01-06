@@ -1476,7 +1476,8 @@ import java.util.Locale;
                 " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(" +
                         "SELECT " + Contacts.IN_VISIBLE_GROUP +
                         " FROM " + Tables.CONTACTS +
-                        " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")"
+                        " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")" +
+                " WHERE " + RawContacts.CONTACT_ID + " NOT NULL"
         );
 
         db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
