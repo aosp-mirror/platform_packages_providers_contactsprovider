@@ -3594,25 +3594,48 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case EMAILS_FILTER: {
                 setTablesAndProjectionMapForData(qb, uri, projection, true);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
-                if (uri.getPathSegments().size() > 2) {
-                    String filterParam = uri.getLastPathSegment();
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("(");
+                String filterParam = null;
+                if (uri.getPathSegments().size() > 3) {
+                    filterParam = uri.getLastPathSegment();
+                    if (TextUtils.isEmpty(filterParam)) {
+                        filterParam = null;
+                    }
+                }
 
+                if (filterParam == null) {
+                    // If the filter is unspecified, return nothing
+                    qb.appendWhere(" AND 0");
+                } else {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(" AND " + Data._ID + " IN (");
+                    sb.append(
+                            "SELECT " + Data._ID +
+                            " FROM " + Tables.DATA +
+                            " WHERE " + DataColumns.MIMETYPE_ID + "=" + mMimeTypeIdEmail +
+                            " AND " + Data.DATA1 + " LIKE ");
+                    DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
                     if (!filterParam.contains("@")) {
                         String normalizedName = NameNormalizer.normalize(filterParam);
                         if (normalizedName.length() > 0) {
-                            sb.append(Data.RAW_CONTACT_ID + " IN ");
+
+                            /*
+                             * Using a UNION instead of an "OR" to make SQLite use the right
+                             * indexes. We need it to use the (mimetype,data1) index for the
+                             * email lookup (see above), but not for the name lookup.
+                             * SQLite is not smart enough to use the index on one side of an OR
+                             * but not on the other. Using two separate nested queries
+                             * and a UNION between them does the job.
+                             */
+                            sb.append(
+                                    " UNION SELECT " + Data._ID +
+                                    " FROM " + Tables.DATA +
+                                    " WHERE +" + DataColumns.MIMETYPE_ID + "=" + mMimeTypeIdEmail +
+                                    " AND " + Data.RAW_CONTACT_ID + " IN ");
                             appendRawContactsByNormalizedNameFilter(sb, normalizedName, null, false);
-                            sb.append(" OR ");
                         }
                     }
-
-                    sb.append(Email.DATA + " LIKE ");
-                    sb.append(DatabaseUtils.sqlEscapeString(filterParam + '%'));
                     sb.append(")");
-                    qb.appendWhere(" AND " + sb);
+                    qb.appendWhere(sb);
                 }
                 groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
