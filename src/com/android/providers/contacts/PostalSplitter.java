@@ -25,6 +25,8 @@ import java.util.Locale;
  * Split and join {@link StructuredPostal} fields.
  */
 public class PostalSplitter {
+    private static final String JAPANESE_LANGUAGE = Locale.JAPANESE.getLanguage().toLowerCase();
+
     private final Locale mLocale;
 
     public static class Postal {
@@ -80,11 +82,87 @@ public class PostalSplitter {
      * storage in {@link StructuredPostal#FORMATTED_ADDRESS}.
      */
     public String join(Postal postal) {
+        final String[] values = new String[] {
+                postal.street, postal.pobox, postal.neighborhood, postal.city,
+                postal.region, postal.postcode, postal.country
+        };
         // TODO: split off to handle various locales
-        return joinEnUs(postal);
+        if (mLocale != null &&
+                JAPANESE_LANGUAGE.equals(mLocale.getLanguage()) &&
+                !arePrintableAsciiOnly(values)) {
+            return joinJaJp(postal);
+        } else {
+            return joinEnUs(postal);
+        }
     }
 
-    private String joinEnUs(Postal postal) {
+    private String joinJaJp(final Postal postal) {
+        final boolean hasStreet = !TextUtils.isEmpty(postal.street);
+        final boolean hasPobox = !TextUtils.isEmpty(postal.pobox);
+        final boolean hasNeighborhood = !TextUtils.isEmpty(postal.neighborhood);
+        final boolean hasCity = !TextUtils.isEmpty(postal.city);
+        final boolean hasRegion = !TextUtils.isEmpty(postal.region);
+        final boolean hasPostcode = !TextUtils.isEmpty(postal.postcode);
+        final boolean hasCountry = !TextUtils.isEmpty(postal.country);
+
+        // First block: [country][ ][postcode]
+        // Second block: [region][ ][city][ ][neighborhood]
+        // Third block: [street][ ][pobox]
+
+        final StringBuilder builder = new StringBuilder();
+
+        final boolean hasFirstBlock = hasCountry || hasPostcode;
+        final boolean hasSecondBlock = hasRegion || hasCity || hasNeighborhood;
+        final boolean hasThirdBlock = hasStreet || hasPobox;
+
+        if (hasFirstBlock) {
+            if (hasCountry) {
+                builder.append(postal.country);
+            }
+            if (hasPostcode) {
+                if (hasCountry) builder.append(SPACE);
+                builder.append(postal.postcode);
+            }
+        }
+
+        if (hasSecondBlock) {
+            if (hasFirstBlock) {
+                builder.append(NEWLINE);
+            }
+            if (hasRegion) {
+                builder.append(postal.region);
+            }
+            if (hasCity) {
+                if (hasRegion) builder.append(SPACE);
+                builder.append(postal.city);
+            }
+            if (hasNeighborhood) {
+                if (hasRegion || hasCity) builder.append(SPACE);
+                builder.append(postal.neighborhood);
+            }
+        }
+
+        if (hasThirdBlock) {
+            if (hasFirstBlock || hasSecondBlock) {
+                builder.append(NEWLINE);
+            }
+            if (hasStreet) {
+                builder.append(postal.street);
+            }
+            if (hasPobox) {
+                if (hasStreet) builder.append(SPACE);
+                builder.append(postal.pobox);
+            }
+        }
+
+        if (builder.length() > 0) {
+            return builder.toString();
+        } else {
+            return null;
+        }
+    }
+
+    private String joinEnUs(final Postal postal) {
         final boolean hasStreet = !TextUtils.isEmpty(postal.street);
         final boolean hasPobox = !TextUtils.isEmpty(postal.pobox);
         final boolean hasNeighborhood = !TextUtils.isEmpty(postal.neighborhood);
@@ -148,5 +226,20 @@ public class PostalSplitter {
         } else {
             return null;
         }
+    }
+
+    private static boolean arePrintableAsciiOnly(final String[] values) {
+        if (values == null) {
+            return true;
+        }
+        for (final String value : values) {
+            if (TextUtils.isEmpty(value)) {
+                continue;
+            }
+            if (!TextUtils.isPrintableAsciiOnly(value)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

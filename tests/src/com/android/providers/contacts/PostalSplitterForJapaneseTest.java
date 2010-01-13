@@ -25,23 +25,39 @@ import java.util.Locale;
 import junit.framework.TestCase;
 
 /**
- * Tests for {@link PostalSplitter}, especially for en_US locale.
+ * Tests for {@link PostalSplitter}, especially for ja_JP locale.
+ * This class depends on the assumption that all the tests in {@link NameSplitterTest} pass.
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -e class com.android.providers.contacts.PostalSplitterTest -w \
+ * adb shell am instrument -e class com.android.providers.contacts.PostalSplitterForJapaneseTest -w
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
 @SmallTest
-public class PostalSplitterTest extends TestCase {
+public class PostalSplitterForJapaneseTest extends TestCase {
     private PostalSplitter mPostalSplitter;
+
+    // Postal address for Tokyo Metropolitan City Hall (Tokyo-Tocho) as of 2009 + pseudo PO box.
+    // Japanese don't use neighborhood, so it is not used in this test suite.
+    //
+    // "Nihon" in Kanji
+    private static final String COUNTRY = "\u65E5\u672C";
+    private static final String POSTCODE = "163-8001";
+    // "Tokyo-to" in Kanji
+    private static final String REGION = "\u6771\u4EAC\u90FD";
+    // "Sinjuku-ku" in Kanji
+    private static final String CITY = "\u65B0\u5BBF\u533A";
+    // Nishi-Sinjuku 2-8-1
+    private static final String STREET = "\u897F\u65B0\u5BBF 2-8-1";
+    // Pseudo PO box for test: "Sisyobako 404"
+    private static final String POBOX = "\u79C1\u66F8\u7BB1";
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
-        mPostalSplitter = new PostalSplitter(Locale.US);
+        mPostalSplitter = new PostalSplitter(Locale.JAPAN);
     }
 
     public void testNull() {
@@ -60,39 +76,39 @@ public class PostalSplitterTest extends TestCase {
     }
 
     public void testPobox() {
-        assertJoinedPostal("PO Box 2600\nImaginationland", null, "PO Box 2600", null,
-                "Imaginationland", null, null, null);
+        assertJoinedPostal(CITY + "\n" + POBOX, null, POBOX, null, CITY, null, null, null);
     }
 
     public void testNormal() {
-        assertJoinedPostal("1600 Amphitheatre Parkway\nMountain View, CA 94043",
-                "1600 Amphitheatre Parkway", null, null, "Mountain View", "CA", "94043", null);
+        assertJoinedPostal(POSTCODE + "\n" + REGION + " " + CITY + "\n" + STREET,
+                STREET, null, null, CITY, REGION, POSTCODE, null);
     }
 
     public void testMissingRegion() {
-        assertJoinedPostal("1600 Amphitheatre Parkway\nMountain View 94043",
-                "1600 Amphitheatre Parkway", null, null, "Mountain View", null, "94043", null);
+        assertJoinedPostal(POSTCODE + "\n" + REGION + "\n" + STREET,
+                STREET, null, null, REGION, null, POSTCODE, null);
 
-        assertJoinedPostal("1600 Amphitheatre Parkway\n94043",
-                "1600 Amphitheatre Parkway", null, null, null, null, "94043", null);
+        assertJoinedPostal(POSTCODE + "\n" + STREET,
+                STREET, null, null, null, null, POSTCODE, null);
 
-        assertJoinedPostal("1600 Amphitheatre Parkway\n94043\nUSA",
-                "1600 Amphitheatre Parkway", null, null, null, null, "94043", "USA");
+        assertJoinedPostal(COUNTRY + " " + POSTCODE + "\n" + STREET,
+                STREET, null, null, null, null, POSTCODE, COUNTRY);
     }
 
     public void testMissingPostcode() {
-        assertJoinedPostal("1600 Amphitheatre Parkway\nMountain View, CA",
-                "1600 Amphitheatre Parkway", null, null, "Mountain View", "CA", null, null);
+        assertJoinedPostal(REGION + " " + CITY + "\n" + STREET,
+                STREET, null, null, CITY, REGION, null, null);
 
-        assertJoinedPostal("1600 Amphitheatre Parkway\nMountain View, CA\nUSA",
-                "1600 Amphitheatre Parkway", null, null, "Mountain View", "CA", null, "USA");
+        assertJoinedPostal(COUNTRY + "\n" + REGION + " " + CITY + "\n" + STREET,
+                STREET, null, null, CITY, REGION, null, COUNTRY);
 
-        assertJoinedPostal("1600 Amphitheatre Parkway\nUSA",
-                "1600 Amphitheatre Parkway", null, null, null, null, null, "USA");
+        assertJoinedPostal(COUNTRY + "\n" + STREET,
+                STREET, null, null, null, null, null, COUNTRY);
     }
 
     public void testMissingStreet() {
-        assertJoinedPostal("Mr. Rogers\nUSA", null, null, "Mr. Rogers", null, null, null, "USA");
+        assertJoinedPostal(COUNTRY + "\n" + STREET,
+                null, null, STREET, null, null, null, COUNTRY);
     }
 
     private void assertSplitPostal(String formattedPostal, String street, String pobox,
