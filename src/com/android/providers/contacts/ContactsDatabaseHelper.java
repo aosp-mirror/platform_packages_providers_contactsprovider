@@ -1828,8 +1828,6 @@ import java.util.Locale;
             close();
             db = super.getWritableDatabase();
         }
-        // let {@link SQLiteDatabase} cache my compiled-sql statements.
-        db.setMaxSqlCacheSize(MAX_CACHE_SIZE_FOR_CONTACTS_DB);
         return db;
     }
 
