@@ -1464,7 +1464,7 @@ import java.util.HashMap;
      * @param cache In-memory cache of previous answers.
      * @return An unique integer mapping for the given value.
      */
-    private synchronized long getCachedId(SQLiteStatement query, SQLiteStatement insert,
+    private long getCachedId(SQLiteStatement query, SQLiteStatement insert,
             String value, HashMap<String, Long> cache) {
         // Try an in-memory cache lookup
         if (cache.containsKey(value)) {
