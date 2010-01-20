@@ -22,6 +22,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -639,6 +640,60 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertPhoto(rawContactId3);
 
         assertEquals(cupcakeId, queryPhotoId(queryContactId(rawContactId2)));
+    }
+
+    public void testDisplayNameSources() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+
+        assertNull(queryDisplayName(contactId));
+
+        insertEmail(rawContactId, "eclair@android.com");
+        assertEquals("eclair@android.com", queryDisplayName(contactId));
+
+        insertPhoneNumber(rawContactId, "800-555-5555");
+        assertEquals("800-555-5555", queryDisplayName(contactId));
+
+        ContentValues values = new ContentValues();
+        values.put(Organization.COMPANY, "Android");
+        insertOrganization(rawContactId, values);
+        assertEquals("Android", queryDisplayName(contactId));
+
+        insertNickname(rawContactId, "Dro");
+        assertEquals("Dro", queryDisplayName(contactId));
+
+        values.clear();
+        values.put(StructuredName.GIVEN_NAME, "Eclair");
+        values.put(StructuredName.FAMILY_NAME, "Android");
+        insertStructuredName(rawContactId, values);
+        assertEquals("Eclair Android", queryDisplayName(contactId));
+    }
+
+    public void testVerifiedName() {
+        long rawContactId1 = createRawContactWithName("test1", "TEST1");
+        storeValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.NAME_VERIFIED, "1");
+        long rawContactId2 = createRawContactWithName("test2", "TEST2");
+        long rawContactId3 = createRawContactWithName("test3", "TEST3 LONG");
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId3);
+
+        long contactId = queryContactId(rawContactId1);
+
+        // Should be the verified name
+        assertEquals("test1 TEST1", queryDisplayName(contactId));
+
+        // Mark a different name as verified - this should reset the NAME_VERIFIED field
+        // for the other rawContacts
+        storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.NAME_VERIFIED, "1");
+        assertStoredValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.NAME_VERIFIED, 0);
+        assertEquals("test2 TEST2", queryDisplayName(contactId));
+
+        // Reset the NAME_VERIFIED flag - now the most complex of the three names should win
+        storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.NAME_VERIFIED, "0");
+        assertEquals("test3 TEST3 LONG", queryDisplayName(contactId));
     }
 
     private void assertSuggestions(long contactId, long... suggestions) {

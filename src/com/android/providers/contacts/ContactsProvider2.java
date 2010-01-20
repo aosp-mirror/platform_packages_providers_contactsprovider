@@ -372,6 +372,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mStatusUpdateReplace;
     private SQLiteStatement mStatusAttributionUpdate;
     private SQLiteStatement mStatusUpdateDelete;
+    private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
 
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
@@ -532,6 +533,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 RawContacts.PHONETIC_NAME);
         sRawContactsProjectionMap.put(RawContacts.PHONETIC_NAME_STYLE,
                 RawContacts.PHONETIC_NAME_STYLE);
+        sRawContactsProjectionMap.put(RawContacts.NAME_VERIFIED,
+                RawContacts.NAME_VERIFIED);
         sRawContactsProjectionMap.put(RawContacts.SORT_KEY_PRIMARY,
                 RawContacts.SORT_KEY_PRIMARY);
         sRawContactsProjectionMap.put(RawContacts.SORT_KEY_ALTERNATIVE,
@@ -581,6 +584,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sDataProjectionMap.put(RawContacts.SOURCE_ID, RawContacts.SOURCE_ID);
         sDataProjectionMap.put(RawContacts.VERSION, RawContacts.VERSION);
         sDataProjectionMap.put(RawContacts.DIRTY, RawContacts.DIRTY);
+        sDataProjectionMap.put(RawContacts.NAME_VERIFIED, RawContacts.NAME_VERIFIED);
         sDataProjectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
         sDataProjectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
         sDataProjectionMap.put(Contacts.DISPLAY_NAME_ALTERNATIVE,
@@ -614,6 +618,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         columns.put(RawContacts.SYNC2, RawContacts.SYNC2);
         columns.put(RawContacts.SYNC3, RawContacts.SYNC3);
         columns.put(RawContacts.SYNC4, RawContacts.SYNC4);
+        columns.put(RawContacts.NAME_VERIFIED, RawContacts.NAME_VERIFIED);
         columns.put(Data.RES_PACKAGE, Data.RES_PACKAGE);
         columns.put(Data.MIMETYPE, Data.MIMETYPE);
         columns.put(Data.DATA1, Data.DATA1);
@@ -1797,6 +1802,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mStatusUpdateDelete = db.compileStatement(
                 "DELETE FROM " + Tables.STATUS_UPDATES +
                 " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
+
+        // When setting NAME_VERIFIED to 1 on a raw contact, reset it to 0
+        // on all other raw contacts in the same aggregate
+        mResetNameVerifiedForOtherRawContacts = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.NAME_VERIFIED + "=0" +
+                " WHERE " + RawContacts.CONTACT_ID + "=(" +
+                        "SELECT " + RawContacts.CONTACT_ID +
+                        " FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContacts._ID + "=?)" +
+                " AND " + RawContacts._ID + "!=?");
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
@@ -3403,6 +3419,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
                     ContactsContract.RawContacts.AGGREGATION_MODE_DEFAULT);
         }
+
         int count = mDb.update(Tables.RAW_CONTACTS, values, selection, null);
         if (count != 0) {
             if (values.containsKey(RawContacts.STARRED)) {
@@ -3410,6 +3427,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             if (values.containsKey(RawContacts.SOURCE_ID)) {
                 mContactAggregator.updateLookupKey(mDb, rawContactId);
+            }
+            if (values.containsKey(RawContacts.NAME_VERIFIED)) {
+
+                // If setting NAME_VERIFIED for this raw contact, reset it for all
+                // other raw contacts in the same aggregate
+                if (values.getAsInteger(RawContacts.NAME_VERIFIED) != 0) {
+                    mResetNameVerifiedForOtherRawContacts.bindLong(1, rawContactId);
+                    mResetNameVerifiedForOtherRawContacts.bindLong(2, rawContactId);
+                    mResetNameVerifiedForOtherRawContacts.execute();
+                }
+                mContactAggregator.updateDisplayNameForRawContact(mDb, rawContactId);
             }
             if (requestUndoDelete && previousDeleted == 1) {
                 // undo delete, needs aggregation again.

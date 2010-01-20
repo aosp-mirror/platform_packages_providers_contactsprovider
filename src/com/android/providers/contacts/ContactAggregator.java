@@ -125,7 +125,7 @@ public class ContactAggregator {
     private MatchCandidateList mCandidates = new MatchCandidateList();
     private ContactMatcher mMatcher = new ContactMatcher();
     private ContentValues mValues = new ContentValues();
-
+    private DisplayNameCandidate mDisplayNameCandidate = new DisplayNameCandidate();
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -166,6 +166,28 @@ public class ContactAggregator {
 
         public void clear() {
             mCount = 0;
+        }
+    }
+
+    /**
+     * A convenience class used in the algorithm that figures out which of available
+     * display names to use for an aggregate contact.
+     */
+    private static class DisplayNameCandidate {
+        long rawContactId;
+        String displayName;
+        int displayNameSource;
+        boolean verified;
+
+        public DisplayNameCandidate() {
+            clear();
+        }
+
+        public void clear() {
+            rawContactId = -1;
+            displayName = null;
+            displayNameSource = DisplayNameSources.UNDEFINED;
+            verified = false;
         }
     }
 
@@ -974,6 +996,7 @@ public class ContactAggregator {
                         + RawContacts.TIMES_CONTACTED + ","
                         + RawContacts.STARRED + ","
                         + RawContacts.IS_RESTRICTED + ","
+                        + RawContacts.NAME_VERIFIED + ","
                         + DataColumns.CONCRETE_ID + ","
                         + DataColumns.CONCRETE_MIMETYPE_ID + ","
                         + Data.IS_SUPER_PRIMARY +
@@ -1004,9 +1027,10 @@ public class ContactAggregator {
         int TIMES_CONTACTED = 9;
         int STARRED = 10;
         int IS_RESTRICTED = 11;
-        int DATA_ID = 12;
-        int MIMETYPE_ID = 13;
-        int IS_SUPER_PRIMARY = 14;
+        int NAME_VERIFIED = 12;
+        int DATA_ID = 13;
+        int MIMETYPE_ID = 14;
+        int IS_SUPER_PRIMARY = 15;
     }
 
     private interface ContactReplaceSqlStatement {
@@ -1068,10 +1092,7 @@ public class ContactAggregator {
     private void computeAggregateData(final SQLiteDatabase db, String sql, String[] sqlArgs,
             SQLiteStatement statement) {
         long currentRawContactId = -1;
-        int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
-        String bestDisplayName = null;
         long bestPhotoId = -1;
-        long bestNameRawContactId = -1;
         boolean foundSuperPrimaryPhoto = false;
         String photoAccount = null;
         int totalRowCount = 0;
@@ -1082,6 +1103,8 @@ public class ContactAggregator {
         int contactStarred = 0;
         int singleIsRestricted = 1;
         int hasPhoneNumber = 0;
+
+        mDisplayNameCandidate.clear();
 
         mSb.setLength(0);       // Lookup key
         Cursor c = db.rawQuery(sql, sqlArgs);
@@ -1095,27 +1118,10 @@ public class ContactAggregator {
                     // Display name
                     String displayName = c.getString(RawContactsQuery.DISPLAY_NAME);
                     int displayNameSource = c.getInt(RawContactsQuery.DISPLAY_NAME_SOURCE);
-                    if (!TextUtils.isEmpty(displayName)) {
-                        if (bestDisplayName == null) {
-                            bestDisplayName = displayName;
-                            bestDisplayNameSource = displayNameSource;
-                            bestNameRawContactId = rawContactId;
-                        } else if (bestDisplayNameSource != displayNameSource) {
-                            if (bestDisplayNameSource < displayNameSource) {
-                                bestDisplayName = displayName;
-                                bestDisplayNameSource = displayNameSource;
-                                bestNameRawContactId = rawContactId;
-                            }
-                        } else if (NameNormalizer.compareComplexity(displayName,
-                                bestDisplayName) > 0) {
-                            bestDisplayName = displayName;
-                            bestNameRawContactId = rawContactId;
-                        }
-                    }
+                    int nameVerified = c.getInt(RawContactsQuery.NAME_VERIFIED);
+                    processDisplayNameCanditate(rawContactId, displayName, displayNameSource,
+                            nameVerified != 0);
 
-                    if (bestNameRawContactId == -1) {
-                        bestNameRawContactId = rawContactId;
-                    }
 
                     // Contact options
                     if (!c.isNull(RawContactsQuery.SEND_TO_VOICEMAIL)) {
@@ -1191,7 +1197,8 @@ public class ContactAggregator {
             c.close();
         }
 
-        statement.bindLong(ContactReplaceSqlStatement.NAME_RAW_CONTACT_ID, bestNameRawContactId);
+        statement.bindLong(ContactReplaceSqlStatement.NAME_RAW_CONTACT_ID,
+                mDisplayNameCandidate.rawContactId);
 
         if (bestPhotoId != -1) {
             statement.bindLong(ContactReplaceSqlStatement.PHOTO_ID, bestPhotoId);
@@ -1215,6 +1222,43 @@ public class ContactAggregator {
                 singleIsRestricted);
         statement.bindString(ContactReplaceSqlStatement.LOOKUP_KEY,
                 Uri.encode(mSb.toString()));
+    }
+
+    /**
+     * Uses the supplied values to determine if they represent a "better" display name
+     * for the aggregate contact currently evaluated.  If so, it updates
+     * {@link #mDisplayNameCandidate} with the new values.
+     */
+    private void processDisplayNameCanditate(long rawContactId, String displayName,
+            int displayNameSource, boolean verified) {
+
+        boolean replace = false;
+        if (mDisplayNameCandidate.rawContactId == -1) {
+            // No previous values available
+            replace = true;
+        } else if (!TextUtils.isEmpty(displayName)) {
+            if (!mDisplayNameCandidate.verified && verified) {
+                // A verified name is better than any other name
+                replace = true;
+            } else if (mDisplayNameCandidate.verified == verified) {
+                if (mDisplayNameCandidate.displayNameSource < displayNameSource) {
+                    // New values come from an superior source, e.g. structured name vs phone number
+                    replace = true;
+                } else if (mDisplayNameCandidate.displayNameSource == displayNameSource
+                        && NameNormalizer.compareComplexity(displayName,
+                                mDisplayNameCandidate.displayName) > 0) {
+                    // New name is more complex than the previously found one
+                    replace = true;
+                }
+            }
+        }
+
+        if (replace) {
+            mDisplayNameCandidate.rawContactId = rawContactId;
+            mDisplayNameCandidate.displayName = displayName;
+            mDisplayNameCandidate.displayNameSource = displayNameSource;
+            mDisplayNameCandidate.verified = verified;
+        }
     }
 
     private interface PhotoIdQuery {
@@ -1288,11 +1332,13 @@ public class ContactAggregator {
             RawContacts._ID,
             RawContactsColumns.DISPLAY_NAME,
             RawContactsColumns.DISPLAY_NAME_SOURCE,
+            RawContacts.NAME_VERIFIED,
         };
 
         int _ID = 0;
         int DISPLAY_NAME = 1;
         int DISPLAY_NAME_SOURCE = 2;
+        int NAME_VERIFIED = 3;
     }
 
     public void updateDisplayNameForRawContact(SQLiteDatabase db, long rawContactId) {
@@ -1305,45 +1351,27 @@ public class ContactAggregator {
     }
 
     public void updateDisplayNameForContact(SQLiteDatabase db, long contactId) {
-        int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
-        String bestDisplayName = null;
-        long bestNameRawContactId = -1;
+        mDisplayNameCandidate.clear();
 
         mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(Tables.RAW_CONTACTS, DisplayNameQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
         try {
             while (c.moveToNext()) {
-                long id = c.getLong(DisplayNameQuery._ID);
+                long rawContactId = c.getLong(DisplayNameQuery._ID);
                 String displayName = c.getString(DisplayNameQuery.DISPLAY_NAME);
                 int displayNameSource = c.getInt(DisplayNameQuery.DISPLAY_NAME_SOURCE);
-                if (!TextUtils.isEmpty(displayName)) {
-                    if (bestDisplayName == null) {
-                        bestDisplayName = displayName;
-                        bestDisplayNameSource = displayNameSource;
-                        bestNameRawContactId = id;
-                    } else if (bestDisplayNameSource != displayNameSource) {
-                        if (bestDisplayNameSource < displayNameSource) {
-                            bestDisplayName = displayName;
-                            bestDisplayNameSource = displayNameSource;
-                            bestNameRawContactId = id;
-                        }
-                    } else if (NameNormalizer.compareComplexity(displayName,
-                            bestDisplayName) > 0) {
-                        bestDisplayName = displayName;
-                        bestNameRawContactId = id;
-                    }
-                }
-                if (bestNameRawContactId == -1) {
-                    bestNameRawContactId = id;
-                }
+                int nameVerified = c.getInt(DisplayNameQuery.NAME_VERIFIED);
+
+                processDisplayNameCanditate(rawContactId, displayName, displayNameSource,
+                        nameVerified != 0);
             }
         } finally {
             c.close();
         }
 
-        if (bestNameRawContactId != -1) {
-            mDisplayNameUpdate.bindLong(1, bestNameRawContactId);
+        if (mDisplayNameCandidate.rawContactId != -1) {
+            mDisplayNameUpdate.bindLong(1, mDisplayNameCandidate.rawContactId);
             mDisplayNameUpdate.bindLong(2, contactId);
             mDisplayNameUpdate.execute();
         }

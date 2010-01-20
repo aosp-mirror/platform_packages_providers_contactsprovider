@@ -68,7 +68,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 205;
+    private static final int DATABASE_VERSION = 206;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -271,6 +271,8 @@ import java.util.Locale;
                 Tables.RAW_CONTACTS + "." + DISPLAY_NAME;
         public static final String CONCRETE_CONTACT_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.CONTACT_ID;
+        public static final String CONCRETE_NAME_VERIFIED =
+                Tables.RAW_CONTACTS + "." + RawContacts.NAME_VERIFIED;
     }
 
     public interface DataColumns {
@@ -679,6 +681,7 @@ import java.util.Locale;
                 RawContacts.PHONETIC_NAME_STYLE + " TEXT," +
                 RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE LOCALIZED," +
                 RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE LOCALIZED," +
+                RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
@@ -1061,6 +1064,7 @@ import java.util.Locale;
                 RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
                 + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
+                + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS " + RawContacts.NAME_VERIFIED + ","
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ","
@@ -1226,6 +1230,7 @@ import java.util.Locale;
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
+                + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS " + RawContacts.NAME_VERIFIED + ","
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
                 + RawContacts.CONTACT_ID + ", "
                 + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ", "
@@ -1368,6 +1373,12 @@ import java.util.Locale;
 
         if (oldVersion == 204) {
             upgradeToVersion205(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion++;
+        }
+
+        if (oldVersion == 205) {
+            upgrateToVersion206(db);
             upgradeViewsAndTriggers = true;
             oldVersion++;
         }
@@ -1749,6 +1760,11 @@ import java.util.Locale;
         bindString(rawContactUpdate, 6, sortKeyAlternative);
         rawContactUpdate.bindLong(7, rawContactId);
         rawContactUpdate.execute();
+    }
+
+    private void upgrateToVersion206(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
+                + " ADD " + RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0;");
     }
 
     private void bindString(SQLiteStatement stmt, int index, String value) {

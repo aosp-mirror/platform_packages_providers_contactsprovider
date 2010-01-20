@@ -610,6 +610,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         mResolver.update(ContentUris.withAppendedId(contentUri, id), values, null, null);
     }
 
+    protected void assertStoredValue(Uri contentUri, long id, String column, Object expectedValue) {
+        assertStoredValue(ContentUris.withAppendedId(contentUri, id), column, expectedValue);
+    }
+
     protected void assertStoredValue(Uri rowUri, String column, Object expectedValue) {
         String value = getStoredValue(rowUri, column);
         if (expectedValue == null) {
