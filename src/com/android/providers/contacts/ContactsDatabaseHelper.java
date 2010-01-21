@@ -459,7 +459,6 @@ import java.util.Locale;
 
 
     /** Compiled statements for updating {@link Contacts#IN_VISIBLE_GROUP}. */
-    private SQLiteStatement mVisibleUpdate;
     private SQLiteStatement mVisibleSpecificUpdate;
     private SQLiteStatement mVisibleUpdateRawContacts;
     private SQLiteStatement mVisibleSpecificUpdateRawContacts;
@@ -529,25 +528,33 @@ import java.util.Locale;
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
 
-        // Compile statements for updating visibility
-        final String visibleUpdate = "UPDATE " + Tables.CONTACTS + " SET "
-                + Contacts.IN_VISIBLE_GROUP + "=(" + Clauses.CONTACT_IS_VISIBLE + ")";
+        // Change visibility of a specific contact
+        mVisibleSpecificUpdate = db.compileStatement(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.IN_VISIBLE_GROUP + "=(" + Clauses.CONTACT_IS_VISIBLE + ")" +
+                " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
-        mVisibleUpdate = db.compileStatement(visibleUpdate);
-        mVisibleSpecificUpdate = db.compileStatement(visibleUpdate + " WHERE "
-                + ContactsColumns.CONCRETE_ID + "=?");
+        // Return visibility of the aggregate contact joined with the raw contact
+        String contactVisibility =
+                "SELECT " + Contacts.IN_VISIBLE_GROUP +
+                " FROM " + Tables.CONTACTS +
+                " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID;
 
-        String visibleUpdateRawContacts =
+        // Set visibility of raw contacts to the visibility of corresponding aggregate contacts
+        mVisibleUpdateRawContacts = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(" +
-                        "SELECT " + Contacts.IN_VISIBLE_GROUP +
-                        " FROM " + Tables.CONTACTS +
-                        " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")" +
-                " WHERE " + RawContacts.DELETED + "=0";
+                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=("
+                        + contactVisibility + ")" +
+                " WHERE " + RawContacts.DELETED + "=0" +
+                " AND " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "!=("
+                        + contactVisibility + ")=1");
 
-        mVisibleUpdateRawContacts = db.compileStatement(visibleUpdateRawContacts);
-        mVisibleSpecificUpdateRawContacts = db.compileStatement(visibleUpdateRawContacts +
-                    " AND " + RawContacts.CONTACT_ID + "=?");
+        // Set visibility of a raw contact to the visibility of corresponding aggregate contact
+        mVisibleSpecificUpdateRawContacts = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=("
+                        + contactVisibility + ")" +
+                " WHERE " + RawContacts.DELETED + "=0 AND " + RawContacts.CONTACT_ID + "=?");
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
@@ -1983,10 +1990,54 @@ import java.util.Locale;
      * Update {@link Contacts#IN_VISIBLE_GROUP} for all contacts.
      */
     public void updateAllVisible() {
+        SQLiteDatabase db = getWritableDatabase();
         final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        mVisibleUpdate.bindLong(1, groupMembershipMimetypeId);
-        mVisibleUpdate.execute();
-        mVisibleUpdateRawContacts.execute();
+        String[] selectionArgs = new String[]{String.valueOf(groupMembershipMimetypeId)};
+
+        // There are a couple questions that can be asked regarding the
+        // following two update statements:
+        //
+        // Q: Why do we run these two queries separately? They seem like they could be combined.
+        // A: This is a result of painstaking experimentation.  Turns out that the most
+        // important optimization is to make sure we never update a value to its current value.
+        // Changing 0 to 0 is unexpectedly expensive - SQLite actually writes the unchanged
+        // rows back to disk.  The other consideration is that the CONTACT_IS_VISIBLE condition
+        // is very complex and executing it twice in the same statement ("if contact_visible !=
+        // CONTACT_IS_VISIBLE change it to CONTACT_IS_VISIBLE") is more expensive than running
+        // two update statements.
+        //
+        // Q: How come we are using db.update instead of compiled statements?
+        // A: This is a limitation of the compiled statement API. It does not return the
+        // number of rows changed.  As you will see later in this method we really need
+        // to know how many rows have been changed.
+
+        // First update contacts that are currently marked as invisible, but need to be visible
+        ContentValues values = new ContentValues();
+        values.put(Contacts.IN_VISIBLE_GROUP, 1);
+        int countMadeVisible = db.update(Tables.CONTACTS, values,
+                Contacts.IN_VISIBLE_GROUP + "=0" + " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=1",
+                selectionArgs);
+
+        // Next update contacts that are currently marked as visible, but need to be invisible
+        values.put(Contacts.IN_VISIBLE_GROUP, 0);
+        int countMadeInvisible = db.update(Tables.CONTACTS, values,
+                Contacts.IN_VISIBLE_GROUP + "=1" + " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=0",
+                selectionArgs);
+
+        if (countMadeVisible != 0 || countMadeInvisible != 0) {
+            // TODO break out the fields (contact_in_visible_group, sort_key, sort_key_alt) into
+            // a separate table.
+            // Rationale: The following statement will take a very long time on
+            // a large database even though we are only changing one field from 0 to 1 or from
+            // 1 to 0.  The reason for the slowness is that SQLite will need to write the whole
+            // page even when only one bit on it changes. Changing the visibility of a
+            // significant number of contacts will likely read and write almost the entire
+            // raw_contacts table.  So, the solution is to break out into a separate table
+            // the changing field along with the sort keys used for index-based sorting.
+            // That table will occupy a smaller number of pages, so rewriting it would
+            // not be as expensive.
+            mVisibleUpdateRawContacts.execute();
+        }
     }
 
     /**
