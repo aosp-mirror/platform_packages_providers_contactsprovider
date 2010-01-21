@@ -57,6 +57,7 @@ import android.content.SyncAdapterType;
 import android.content.UriMatcher;
 import android.content.SharedPreferences.Editor;
 import android.content.res.AssetFileDescriptor;
+import android.content.res.Configuration;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -114,6 +115,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1150,15 +1152,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // if there are non-null values, we know for a fact that some values are present.
                 NameSplitter.Name name = new NameSplitter.Name();
                 name.fromValues(augmented);
-                if (name.fullNameStyle == FullNameStyle.UNDEFINED) {
-                    mSplitter.guessNameStyle(name);
-                }
+                // As the name could be changed, let's guess the name style again.
+                name.fullNameStyle = FullNameStyle.UNDEFINED;
+                mSplitter.guessNameStyle(name);
 
                 final String joined = mSplitter.join(name, true);
                 update.put(StructuredName.DISPLAY_NAME, joined);
 
                 update.put(StructuredName.FULL_NAME_STYLE, name.fullNameStyle);
                 update.put(StructuredName.PHONETIC_NAME_STYLE, name.phoneticNameStyle);
+            } else if (touchedUnstruct && touchedStruct){
+                if (TextUtils.isEmpty(update.getAsString(StructuredName.FULL_NAME_STYLE))) {
+                    update.put(StructuredName.FULL_NAME_STYLE, mSplitter.guessFullNameStyle(unstruct));
+                }
+                if (TextUtils.isEmpty(update.getAsString(StructuredName.PHONETIC_NAME_STYLE))) {
+                    update.put(StructuredName.PHONETIC_NAME_STYLE, mSplitter.guessPhoneticNameStyle(unstruct));
+                }
             }
         }
     }
@@ -1681,6 +1690,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private boolean mSyncToNetwork;
 
+    private Locale mCurrentLocale;
     @Override
     public boolean onCreate() {
         super.onCreate();
@@ -1749,15 +1759,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         " LIMIT 1)" +
                 " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
-        final Locale locale = getLocale();
-        mNameSplitter = new NameSplitter(
-                context.getString(com.android.internal.R.string.common_name_prefixes),
-                context.getString(com.android.internal.R.string.common_last_name_prefixes),
-                context.getString(com.android.internal.R.string.common_name_suffixes),
-                context.getString(com.android.internal.R.string.common_name_conjunctions),
-                locale);
-        mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
-        mPostalSplitter = new PostalSplitter(locale);
+        initByLocale(context);
 
         mNameLookupInsert = db.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
@@ -1847,6 +1849,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return (db != null);
     }
 
+    private void initByLocale(Context context) {
+        mCurrentLocale = getLocale();
+        if (mCurrentLocale == null) {
+            return;
+        }
+        mNameSplitter = new NameSplitter(
+                context.getString(com.android.internal.R.string.common_name_prefixes),
+                context.getString(com.android.internal.R.string.common_last_name_prefixes),
+                context.getString(com.android.internal.R.string.common_name_suffixes),
+                context.getString(com.android.internal.R.string.common_name_conjunctions),
+                mCurrentLocale);
+        mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
+        mPostalSplitter = new PostalSplitter(mCurrentLocale);
+    }
+
+    @Override
+    public void onConfigurationChanged (Configuration newConfig) {
+        if (newConfig != null && mCurrentLocale != null
+                && mCurrentLocale.equals(newConfig.locale)) {
+            initByLocale(getContext());
+        }
+    }
     protected void verifyAccounts() {
         AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
         onAccountsUpdated(AccountManager.get(getContext()).getAccounts());
@@ -2587,7 +2611,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             if (displayNameStyle == FullNameStyle.CHINESE) {
                 sortKeyPrimary = sortKeyAlternative =
-                        mNameSplitter.convertHanziToPinyin(displayNamePrimary);
+                        ContactLocaleUtils.getSortKey(displayNamePrimary, FullNameStyle.CHINESE);
             }
         }
 
@@ -4956,6 +4980,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name) {
         mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
+        if (!TextUtils.isEmpty(name)) {
+            Iterator<String> it = ContactLocaleUtils.getNameLookupKeys(name, FullNameStyle.CHINESE);
+            if (it != null) {
+                while(it.hasNext()) {
+                    String key = it.next();
+                    mNameLookupBuilder.insertNameLookup(rawContactId, dataId,
+                            NameLookupType.NAME_SHORTHAND,
+                            mNameLookupBuilder.normalizeName(key));
+                }
+            }
+        }
     }
 
     private interface NicknameLookupPreloadQuery {
@@ -5112,6 +5147,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + NameLookupType.NAME_COLLATION_KEY + ","
                 + NameLookupType.EMAIL_BASED_NICKNAME + ","
                 + NameLookupType.NICKNAME + ","
+                + NameLookupType.NAME_SHORTHAND + ","
                 + NameLookupType.ORGANIZATION + "))");
     }
 
@@ -5136,6 +5172,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
                 + NameLookupType.NAME_COLLATION_KEY + ","
                 + NameLookupType.NICKNAME + ","
+                + NameLookupType.NAME_SHORTHAND + ","
                 + NameLookupType.ORGANIZATION);
         if (allowEmailMatch) {
             sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);

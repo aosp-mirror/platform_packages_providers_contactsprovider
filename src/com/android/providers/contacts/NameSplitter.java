@@ -804,6 +804,9 @@ public class NameSplitter {
      */
     public void guessNameStyle(Name name) {
         guessFullNameStyle(name);
+        if (FullNameStyle.CJK == name.fullNameStyle) {
+            name.fullNameStyle = getAdjustedFullNameStyle(name.fullNameStyle);
+        }
         guessPhoneticNameStyle(name);
         name.fullNameStyle = getAdjustedNameStyleBasedOnPhoneticNameStyle(name.fullNameStyle,
                 name.phoneticNameStyle);
@@ -840,14 +843,17 @@ public class NameSplitter {
         }
 
         int bestGuess = guessFullNameStyle(name.givenNames);
-        if (bestGuess != FullNameStyle.UNDEFINED && bestGuess != FullNameStyle.CJK) {
+        // A mix of Hanzi and latin chars are common in China, so we have to go through all names
+        // if the name is not JANPANESE or KOREAN.
+        if (bestGuess != FullNameStyle.UNDEFINED && bestGuess != FullNameStyle.CJK
+                && bestGuess != FullNameStyle.WESTERN) {
             name.fullNameStyle = bestGuess;
             return;
         }
 
         int guess = guessFullNameStyle(name.familyName);
         if (guess != FullNameStyle.UNDEFINED) {
-            if (guess != FullNameStyle.CJK) {
+            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
                 name.fullNameStyle = guess;
                 return;
             }
@@ -856,7 +862,7 @@ public class NameSplitter {
 
         guess = guessFullNameStyle(name.middleName);
         if (guess != FullNameStyle.UNDEFINED) {
-            if (guess != FullNameStyle.CJK) {
+            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
                 name.fullNameStyle = guess;
                 return;
             }
@@ -879,26 +885,23 @@ public class NameSplitter {
             if (Character.isLetter(codePoint)) {
                 UnicodeBlock unicodeBlock = UnicodeBlock.of(codePoint);
 
-                if (isLatinUnicodeBlock(unicodeBlock)) {
-                    return FullNameStyle.WESTERN;
+                if (!isLatinUnicodeBlock(unicodeBlock)) {
+
+                    if (isCJKUnicodeBlock(unicodeBlock)) {
+                        // We don't know if this is Chinese, Japanese or Korean -
+                        // trying to figure out by looking at other characters in the name
+                        return guessCJKNameStyle(name, offset + Character.charCount(codePoint));
+                    }
+
+                    if (isJapanesePhoneticUnicodeBlock(unicodeBlock)) {
+                        return FullNameStyle.JAPANESE;
+                    }
+
+                    if (isKoreanUnicodeBlock(unicodeBlock)) {
+                        return FullNameStyle.KOREAN;
+                    }
                 }
-
-                if (isCJKUnicodeBlock(unicodeBlock)) {
-
-                    // We don't know if this is Chinese, Japanese or Korean -
-                    // trying to figure out by looking at other characters in the name
-                    return guessCJKNameStyle(name, offset + Character.charCount(codePoint));
-                }
-
-                if (isJapanesePhoneticUnicodeBlock(unicodeBlock)) {
-                    return FullNameStyle.JAPANESE;
-                }
-
-                if (isKoreanUnicodeBlock(unicodeBlock)) {
-                    return FullNameStyle.KOREAN;
-                }
-
-                return FullNameStyle.WESTERN;
+                nameStyle = FullNameStyle.WESTERN;
             }
             offset += Character.charCount(codePoint);
         }

@@ -659,8 +659,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
         values.putNull(RawContacts.PHONETIC_NAME);
         values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
-        values.put(RawContacts.SORT_KEY_PRIMARY, "DUAN XIAO TAO");
-        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "DUAN XIAO TAO");
+        values.put(RawContacts.SORT_KEY_PRIMARY, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
+        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
 
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         assertStoredValues(rawContactUri, values);
@@ -671,8 +671,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
         values.putNull(Contacts.PHONETIC_NAME);
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
-        values.put(Contacts.SORT_KEY_PRIMARY, "DUAN XIAO TAO");
-        values.put(Contacts.SORT_KEY_ALTERNATIVE, "DUAN XIAO TAO");
+        values.put(Contacts.SORT_KEY_PRIMARY, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
 
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId));
@@ -838,8 +838,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.DISPLAY_NAME, "\u4E2D\u56FD\u7535\u4FE1");
         values.putNull(Contacts.PHONETIC_NAME);
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
-        values.put(Contacts.SORT_KEY_PRIMARY, "ZHONG GUO DIAN XIN");
-        values.put(Contacts.SORT_KEY_ALTERNATIVE, "ZHONG GUO DIAN XIN");
+        values.put(Contacts.SORT_KEY_PRIMARY, "ZHONG \u4E2D GUO \u56FD DIAN \u7535 XIN \u4FE1");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "ZHONG \u4E2D GUO \u56FD DIAN \u7535 XIN \u4FE1");
         assertStoredValues(uri, values);
     }
 

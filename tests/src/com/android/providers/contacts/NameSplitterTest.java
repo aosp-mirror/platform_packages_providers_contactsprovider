@@ -180,8 +180,8 @@ public class NameSplitterTest extends TestCase {
         // Latin letters
         assertFullNameStyle(FullNameStyle.WESTERN, "John Doe");
 
-        // Starts with a Latin letter, but contains CJK letters
-        assertFullNameStyle(FullNameStyle.WESTERN, "A\u3080\u308D\u306A\u307F\u3048");
+        // Starts with a Latin letter, but contains Japanese letters
+        assertFullNameStyle(FullNameStyle.JAPANESE, "A\u3080\u308D\u306A\u307F\u3048");
 
         // Starts with an Extended Latin letter "Latin Capital Ligature OE"
         assertFullNameStyle(FullNameStyle.WESTERN, "\u0152uvre");
@@ -213,8 +213,8 @@ public class NameSplitterTest extends TestCase {
         assertFullNameStyle(FullNameStyle.JAPANESE, "\u5B89\u5BA4\u5948\u7F8E\u6075",
                 "\u3042\u3080\u308D", null, "\u306A\u307F\u3048");
 
-        // Starts with a latin letter - not Japanese
-        assertFullNameStyle(FullNameStyle.WESTERN, "A\u3080\u308D\u306A\u307F\u3048");
+        // Starts with a latin letter - not Western
+        assertFullNameStyle(FullNameStyle.JAPANESE, "A\u3080\u308D\u306A\u307F\u3048");
     }
 
     public void testGuessFullNameStyleChinese() {

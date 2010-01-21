@@ -357,9 +357,10 @@ import java.util.Locale;
         public static final int NICKNAME = 3;
         public static final int EMAIL_BASED_NICKNAME = 4;
         public static final int ORGANIZATION = 5;
+        public static final int NAME_SHORTHAND = 6;
 
         // This is the highest name lookup type code plus one
-        public static final int TYPE_COUNT = 6;
+        public static final int TYPE_COUNT = 7;
 
         public static boolean isBasedOnStructuredName(int nameLookupType) {
             return nameLookupType == NameLookupType.NAME_EXACT
