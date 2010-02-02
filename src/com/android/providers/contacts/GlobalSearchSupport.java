@@ -111,7 +111,7 @@ public class GlobalSearchSupport {
     }
 
     private static class SearchSuggestion {
-        String contactId;
+        long contactId;
         boolean titleIsName;
         String organization;
         String email;
@@ -127,7 +127,7 @@ public class GlobalSearchSupport {
         String icon2;
 
         public SearchSuggestion(long contactId) {
-            this.contactId = String.valueOf(contactId);
+            this.contactId = contactId;
         }
 
         private void process() {
