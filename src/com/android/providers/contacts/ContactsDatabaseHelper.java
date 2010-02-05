@@ -68,13 +68,10 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 206;
+    private static final int DATABASE_VERSION = 300;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
-
-    /** size of the compiled-sql statement cache mainatained by {@link SQLiteDatabase} */
-    private static final int MAX_CACHE_SIZE_FOR_CONTACTS_DB = 250;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1391,6 +1388,11 @@ import java.util.Locale;
             oldVersion++;
         }
 
+        if (oldVersion == 206) {
+            upgrateToVersion300(db);
+            oldVersion++;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -1773,6 +1775,81 @@ import java.util.Locale;
     private void upgrateToVersion206(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
                 + " ADD " + RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    private interface Organization300Query {
+        String TABLE = Tables.DATA;
+
+        String SELECTION = DataColumns.MIMETYPE_ID + "=?";
+
+        String COLUMNS[] = {
+                Organization._ID,
+                Organization.RAW_CONTACT_ID,
+                Organization.COMPANY,
+                Organization.TITLE
+        };
+
+        int ID = 0;
+        int RAW_CONTACT_ID = 1;
+        int COMPANY = 2;
+        int TITLE = 3;
+    }
+
+    /**
+     * Fix for the bug where name lookup records for organizations would get removed by
+     * unrelated updates of the data rows.
+     */
+    private void upgrateToVersion300(SQLiteDatabase db) {
+
+        final long mMimeType;
+        try {
+            mMimeType = DatabaseUtils.longForQuery(db,
+                    "SELECT " + MimetypesColumns._ID +
+                    " FROM " + Tables.MIMETYPES +
+                    " WHERE " + MimetypesColumns.MIMETYPE
+                            + "='" + Organization.CONTENT_ITEM_TYPE + "'", null);
+        } catch (SQLiteDoneException e) {
+            // No organizations in the database
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+
+        // Find all data rows with the mime type "organization"
+        Cursor cursor = db.query(Organization300Query.TABLE, Organization300Query.COLUMNS,
+                Organization300Query.SELECTION, new String[] {String.valueOf(mMimeType)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(Organization300Query.ID);
+                long rawContactId = cursor.getLong(Organization300Query.RAW_CONTACT_ID);
+                String company = cursor.getString(Organization300Query.COMPANY);
+                String title = cursor.getString(Organization300Query.TITLE);
+
+                // First delete name lookup if there is any (chances are there won't be)
+                db.delete(Tables.NAME_LOOKUP, NameLookupColumns.DATA_ID + "=?",
+                        new String[]{String.valueOf(dataId)});
+
+                // Now insert two name lookup records: one for company name, one for title
+                values.put(NameLookupColumns.DATA_ID, dataId);
+                values.put(NameLookupColumns.RAW_CONTACT_ID, rawContactId);
+                values.put(NameLookupColumns.NAME_TYPE, NameLookupType.ORGANIZATION);
+
+                if (!TextUtils.isEmpty(company)) {
+                    values.put(NameLookupColumns.NORMALIZED_NAME,
+                            NameNormalizer.normalize(company));
+                    db.insert(Tables.NAME_LOOKUP, null, values);
+                }
+
+                if (!TextUtils.isEmpty(title)) {
+                    values.put(NameLookupColumns.NORMALIZED_NAME,
+                            NameNormalizer.normalize(title));
+                    db.insert(Tables.NAME_LOOKUP, null, values);
+                }
+            }
+        } finally {
+            cursor.close();
+        }
     }
 
     private void bindString(SQLiteStatement stmt, int index, String value) {
