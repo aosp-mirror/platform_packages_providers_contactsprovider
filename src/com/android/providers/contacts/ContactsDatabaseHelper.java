@@ -1390,7 +1390,7 @@ import java.util.Locale;
 
         if (oldVersion == 206) {
             upgrateToVersion300(db);
-            oldVersion++;
+            oldVersion = 300;
         }
 
         if (upgradeViewsAndTriggers) {
