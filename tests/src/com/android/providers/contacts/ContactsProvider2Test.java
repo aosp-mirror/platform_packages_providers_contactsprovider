@@ -843,6 +843,54 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(uri, values);
     }
 
+    public void testLookupByOrganization() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        values.clear();
+        values.put(Organization.COMPANY, "acmecorp");
+        values.put(Organization.TITLE, "president");
+        Uri organizationUri = insertOrganization(rawContactId, values);
+
+        assertContactFilter(contactId, "acmecorp");
+        assertContactFilter(contactId, "president");
+
+        values.clear();
+        values.put(Organization.DEPARTMENT, "software");
+        mResolver.update(organizationUri, values, null, null);
+
+        assertContactFilter(contactId, "acmecorp");
+        assertContactFilter(contactId, "president");
+
+        values.clear();
+        values.put(Organization.COMPANY, "incredibles");
+        mResolver.update(organizationUri, values, null, null);
+
+        assertContactFilter(contactId, "incredibles");
+        assertContactFilter(contactId, "president");
+
+        values.clear();
+        values.put(Organization.TITLE, "director");
+        mResolver.update(organizationUri, values, null, null);
+
+        assertContactFilter(contactId, "incredibles");
+        assertContactFilter(contactId, "director");
+
+        values.clear();
+        values.put(Organization.COMPANY, "monsters");
+        values.put(Organization.TITLE, "scarer");
+        mResolver.update(organizationUri, values, null, null);
+
+        assertContactFilter(contactId, "monsters");
+        assertContactFilter(contactId, "scarer");
+    }
+
+    private void assertContactFilter(long contactId, String filter) {
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filter));
+        assertStoredValue(filterUri, Contacts._ID, contactId);
+    }
+
     public void testDisplayNameUpdateFromStructuredNameUpdate() {
         long rawContactId = createRawContact();
         Uri nameUri = insertStructuredName(rawContactId, "Slinky", "Dog");

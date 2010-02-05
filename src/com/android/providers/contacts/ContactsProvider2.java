@@ -1295,16 +1295,42 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         @Override
         public void update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
-            String company = values.getAsString(Organization.COMPANY);
-            String title = values.getAsString(Organization.TITLE);
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
             super.update(db, values, c, callerIsSyncAdapter);
 
-            fixRawContactDisplayName(db, rawContactId);
-            deleteNameLookup(dataId);
-            insertNameLookupForOrganization(rawContactId, dataId, company, title);
+            boolean containsCompany = values.containsKey(Organization.COMPANY);
+            boolean containsTitle = values.containsKey(Organization.TITLE);
+            if (containsCompany || containsTitle) {
+                String company;
+
+                if (containsCompany) {
+                    company = values.getAsString(Organization.COMPANY);
+                } else {
+                    mSelectionArgs1[0] = String.valueOf(dataId);
+                    company = DatabaseUtils.stringForQuery(db,
+                            "SELECT " + Organization.COMPANY +
+                            " FROM " + Tables.DATA +
+                            " WHERE " + Data._ID + "=?", mSelectionArgs1);
+                }
+
+                String title;
+                if (containsTitle) {
+                    title = values.getAsString(Organization.TITLE);
+                } else {
+                    mSelectionArgs1[0] = String.valueOf(dataId);
+                    title = DatabaseUtils.stringForQuery(db,
+                            "SELECT " + Organization.TITLE +
+                            " FROM " + Tables.DATA +
+                            " WHERE " + Data._ID + "=?", mSelectionArgs1);
+                }
+
+                deleteNameLookup(dataId);
+                insertNameLookupForOrganization(rawContactId, dataId, company, title);
+
+                fixRawContactDisplayName(db, rawContactId);
+            }
         }
 
         @Override
