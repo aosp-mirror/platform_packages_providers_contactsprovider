@@ -46,7 +46,8 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
         assertAggregated(rawContactId1, rawContactId2);
 
         // Normalized display name
-        String expectedLookupKey = "0n3B4537432F4531.0n3B4537432F4531";
+        String normalizedName = NameNormalizer.normalize("johndoe");
+        String expectedLookupKey = "0n" + normalizedName + ".0n" + normalizedName;
 
         long contactId = queryContactId(rawContactId1);
         assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
