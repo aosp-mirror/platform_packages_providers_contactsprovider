@@ -3476,7 +3476,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mContactAggregator.updateStarred(rawContactId);
             }
             if (values.containsKey(RawContacts.SOURCE_ID)) {
-                mContactAggregator.updateLookupKey(mDb, rawContactId);
+                mContactAggregator.updateLookupKeyForRawContact(mDb, rawContactId);
             }
             if (values.containsKey(RawContacts.NAME_VERIFIED)) {
 

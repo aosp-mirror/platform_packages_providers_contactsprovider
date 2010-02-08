@@ -1333,12 +1333,14 @@ public class ContactAggregator {
             RawContactsColumns.DISPLAY_NAME,
             RawContactsColumns.DISPLAY_NAME_SOURCE,
             RawContacts.NAME_VERIFIED,
+            RawContacts.SOURCE_ID
         };
 
         int _ID = 0;
         int DISPLAY_NAME = 1;
         int DISPLAY_NAME_SOURCE = 2;
         int NAME_VERIFIED = 3;
+        int SOURCE_ID = 4;
     }
 
     public void updateDisplayNameForRawContact(SQLiteDatabase db, long rawContactId) {
@@ -1351,6 +1353,8 @@ public class ContactAggregator {
     }
 
     public void updateDisplayNameForContact(SQLiteDatabase db, long contactId) {
+        boolean lookupKeyUpdateNeeded = false;
+
         mDisplayNameCandidate.clear();
 
         mSelectionArgs1[0] = String.valueOf(contactId);
@@ -1365,6 +1369,10 @@ public class ContactAggregator {
 
                 processDisplayNameCanditate(rawContactId, displayName, displayNameSource,
                         nameVerified != 0);
+
+                // If the raw contact has no source id, the lookup key is based on the display
+                // name, so the lookup key needs to be updated.
+                lookupKeyUpdateNeeded |= c.isNull(DisplayNameQuery.SOURCE_ID);
             }
         } finally {
             c.close();
@@ -1374,6 +1382,10 @@ public class ContactAggregator {
             mDisplayNameUpdate.bindLong(1, mDisplayNameCandidate.rawContactId);
             mDisplayNameUpdate.bindLong(2, contactId);
             mDisplayNameUpdate.execute();
+        }
+
+        if (lookupKeyUpdateNeeded) {
+            updateLookupKeyForContact(db, contactId);
         }
     }
 
@@ -1408,12 +1420,16 @@ public class ContactAggregator {
         int SOURCE_ID = 3;
     }
 
-    public void updateLookupKey(SQLiteDatabase db, long rawContactId) {
+    public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
         }
 
+        updateLookupKeyForContact(db, contactId);
+    }
+
+    public void updateLookupKeyForContact(SQLiteDatabase db, long contactId) {
         mSb.setLength(0);
         mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(Tables.RAW_CONTACTS, LookupKeyQuery.COLUMNS,
