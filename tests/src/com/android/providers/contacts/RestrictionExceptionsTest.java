@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 import static com.android.providers.contacts.ContactsActor.PACKAGE_RED;
-
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -195,6 +194,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         in.read(buf);
         in.close();
         final String card = new String(buf);
+        assertNotSame(0, card.length());
 
         // Make sure that only unrestricted phones appear
         assertTrue(card.indexOf(PHONE_RED) != -1);
