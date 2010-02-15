@@ -72,6 +72,7 @@ import android.os.MemoryFile;
 import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.pim.vcard.VCardComposer;
+import android.pim.vcard.VCardConfig;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
@@ -4818,7 +4819,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";
-    private static final String VCARD_TYPE_DEFAULT = "default";
 
     /**
      * Build a {@link AssetFileDescriptor} through a {@link MemoryFile} with the
@@ -4851,12 +4851,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void outputRawContactsAsVCard(OutputStream stream, String selection,
             String[] selectionArgs) {
         final Context context = this.getContext();
-        final VCardComposer composer = new VCardComposer(context, VCARD_TYPE_DEFAULT, false);
+        final VCardComposer composer =
+                new VCardComposer(context, VCardConfig.VCARD_TYPE_DEFAULT, false);
         composer.addHandler(composer.new HandlerForOutputStream(stream));
 
         // No extra checks since composer always uses restricted views
-        if (!composer.init(selection, selectionArgs))
+        if (!composer.init(selection, selectionArgs)) {
+            Log.w(TAG, "Failed to init VCardComposer");
             return;
+        }
 
         while (!composer.isAfterLast()) {
             if (!composer.createOneEntry()) {
