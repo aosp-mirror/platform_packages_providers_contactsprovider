@@ -28,11 +28,13 @@ import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DisplayNameSources;
@@ -1919,6 +1921,48 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             assertEquals(expected[i * 2 + 1], c.getString(1));
         }
         c.close();
+    }
+
+    public void testContactCounts() {
+        Uri uri = Contacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
+
+        createRawContact();
+        createRawContactWithName("James", "Sullivan");
+        createRawContactWithName("The Abominable", "Snowman");
+        createRawContactWithName("Mike", "Wazowski");
+        createRawContactWithName("randall", "boggs");
+        createRawContactWithName("Boo", null);
+        createRawContactWithName("Mary", null);
+        createRawContactWithName("Roz", null);
+
+        Cursor cursor = mResolver.query(uri,
+                new String[]{Contacts.DISPLAY_NAME},
+                null, null, Contacts.SORT_KEY_PRIMARY + " COLLATE LOCALIZED");
+
+        assertFirstLetterValues(cursor, null, "B", "J", "M", "R", "T");
+        assertFirstLetterCounts(cursor,    1,   1,   1,   2,   2,   1);
+        cursor.close();
+
+        cursor = mResolver.query(uri,
+                new String[]{Contacts.DISPLAY_NAME},
+                null, null, Contacts.SORT_KEY_ALTERNATIVE + " COLLATE LOCALIZED DESC");
+
+        assertFirstLetterValues(cursor, "W", "S", "R", "M", "B", null);
+        assertFirstLetterCounts(cursor,   1,   2,   1,   1,   2,    1);
+        cursor.close();
+    }
+
+    private void assertFirstLetterValues(Cursor cursor, String... expected) {
+        String[] actual = cursor.getExtras()
+                .getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES);
+        MoreAsserts.assertEquals(expected, actual);
+    }
+
+    private void assertFirstLetterCounts(Cursor cursor, int... expected) {
+        int[] actual = cursor.getExtras()
+                .getIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS);
+        MoreAsserts.assertEquals(expected, actual);
     }
 
     public void testReadBooleanQueryParameter() {

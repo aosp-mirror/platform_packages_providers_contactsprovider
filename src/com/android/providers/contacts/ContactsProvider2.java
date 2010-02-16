@@ -60,6 +60,7 @@ import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
+import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteContentHelper;
@@ -80,6 +81,7 @@ import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DisplayNameSources;
@@ -891,7 +893,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Contacts._ID + " AS " + LiveFolders._ID);
         sLiveFoldersProjectionMap.put(LiveFolders.NAME,
                 Contacts.DISPLAY_NAME + " AS " + LiveFolders.NAME);
-
         // TODO: Put contact photo back when we have a way to display a default icon
         // for contacts without a photo
         // sLiveFoldersProjectionMap.put(LiveFolders.ICON_BITMAP,
@@ -4302,7 +4303,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         sortOrder, limit);
         }
 
-        return query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
+        Cursor cursor =
+                query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
+        if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
+            cursor = bundleLetterCountExtras(cursor, db, qb, selection, selectionArgs, sortOrder);
+        }
+        return cursor;
     }
 
     private Cursor query(final SQLiteDatabase db, SQLiteQueryBuilder qb, String[] projection,
@@ -4318,6 +4324,78 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
         return c;
+    }
+
+    private interface AddressBookIndexQuery {
+        String TITLE = "title";
+        String COUNT = "count";
+
+        String[] COLUMNS = new String[] {
+                TITLE, COUNT
+        };
+
+        // TODO change to LOCALIZED2 once that becomes available
+        String ORDER_BY = TITLE + " COLLATE LOCALIZED";
+    }
+
+    /**
+     * Computes counts by the address book index titles and adds the resulting tally
+     * to the returned cursor as a bundle of extras.
+     */
+    private Cursor bundleLetterCountExtras(Cursor cursor, final SQLiteDatabase db,
+            SQLiteQueryBuilder qb, String selection, String[] selectionArgs, String sortOrder) {
+        String sortKey;
+
+        // The sort order suffix could be something like "DESC".
+        // We want to preserve it in the query even though we will change
+        // the sort column itself.
+        String sortOrderSuffix = "";
+        if (sortOrder != null) {
+            int spaceIndex = sortOrder.indexOf(' ');
+            if (spaceIndex != -1) {
+                sortKey = sortOrder.substring(0, spaceIndex);
+                sortOrderSuffix = sortOrder.substring(spaceIndex);
+            } else {
+                sortKey = sortOrder;
+            }
+        } else {
+            sortKey = Contacts.SORT_KEY_PRIMARY;
+        }
+
+        HashMap<String, String> projectionMap = Maps.newHashMap();
+        projectionMap.put(AddressBookIndexQuery.TITLE,
+                "UPPER(SUBSTR(" + sortKey + ",1,1)) AS " + AddressBookIndexQuery.TITLE);
+        projectionMap.put(AddressBookIndexQuery.COUNT,
+                "COUNT(" + Contacts._ID + ") AS " + AddressBookIndexQuery.COUNT);
+        qb.setProjectionMap(projectionMap);
+
+        Cursor letterCursor = qb.query(db, AddressBookIndexQuery.COLUMNS, selection, selectionArgs,
+                AddressBookIndexQuery.ORDER_BY, null /* having */,
+                AddressBookIndexQuery.ORDER_BY + sortOrderSuffix);
+
+        try {
+            int groupCount = letterCursor.getCount();
+            String titles[] = new String[groupCount];
+            int counts[] = new int[groupCount];
+            for (int i = 0; i < groupCount; i++) {
+                letterCursor.moveToNext();
+                titles[i] = letterCursor.getString(0);
+                counts[i] = letterCursor.getInt(1);
+            }
+
+            final Bundle bundle = new Bundle();
+            bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
+            bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, counts);
+            return new CursorWrapper(cursor) {
+
+                @Override
+                public Bundle getExtras() {
+                    return bundle;
+                }
+            };
+        } finally {
+            letterCursor.close();
+        }
     }
 
     /**
