@@ -4369,23 +4369,23 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 "COUNT(" + Contacts._ID + ") AS " + AddressBookIndexQuery.COUNT);
         qb.setProjectionMap(projectionMap);
 
-        Cursor letterCursor = qb.query(db, AddressBookIndexQuery.COLUMNS, selection, selectionArgs,
+        Cursor indexCursor = qb.query(db, AddressBookIndexQuery.COLUMNS, selection, selectionArgs,
                 AddressBookIndexQuery.ORDER_BY, null /* having */,
                 AddressBookIndexQuery.ORDER_BY + sortOrderSuffix);
 
         try {
-            int groupCount = letterCursor.getCount();
+            int groupCount = indexCursor.getCount();
             String titles[] = new String[groupCount];
             int counts[] = new int[groupCount];
             for (int i = 0; i < groupCount; i++) {
-                letterCursor.moveToNext();
-                titles[i] = letterCursor.getString(0);
-                counts[i] = letterCursor.getInt(1);
+                indexCursor.moveToNext();
+                titles[i] = indexCursor.getString(0);
+                counts[i] = indexCursor.getInt(1);
             }
 
             final Bundle bundle = new Bundle();
             bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
-            bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, counts);
+            bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
             return new CursorWrapper(cursor) {
 
                 @Override
@@ -4394,7 +4394,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
             };
         } finally {
-            letterCursor.close();
+            indexCursor.close();
         }
     }
 
