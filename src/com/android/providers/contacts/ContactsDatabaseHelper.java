@@ -68,7 +68,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 300;
+    private static final int DATABASE_VERSION = 301;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -977,6 +977,7 @@ import java.util.Locale;
 
 
         db.execSQL("DROP TRIGGER IF EXISTS contacts_times_contacted;");
+        db.execSQL("DROP TRIGGER IF EXISTS raw_contacts_times_contacted;");
 
         /*
          * Triggers that update {@link RawContacts#VERSION} when the contact is
@@ -1391,6 +1392,11 @@ import java.util.Locale;
         if (oldVersion == 206) {
             upgrateToVersion300(db);
             oldVersion = 300;
+        }
+
+        if (oldVersion == 300) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 301;
         }
 
         if (upgradeViewsAndTriggers) {
