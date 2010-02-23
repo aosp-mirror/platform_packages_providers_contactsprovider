@@ -129,10 +129,6 @@ public class SocialProvider extends ContentProvider {
     public boolean onCreate() {
         final Context context = getContext();
         mDbHelper = ContactsDatabaseHelper.getInstance(context);
-
-        // TODO remove this, it's here to force opening the database on boot for testing
-        mDbHelper.getReadableDatabase();
-
         return true;
     }
 
