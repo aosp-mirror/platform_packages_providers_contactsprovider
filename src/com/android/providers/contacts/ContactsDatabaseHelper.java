@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 304;
+    private static final int DATABASE_VERSION = 305;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -360,6 +360,7 @@ import java.util.Locale;
         public static final int EMAIL_BASED_NICKNAME = 4;
         public static final int ORGANIZATION = 5;
         public static final int NAME_SHORTHAND = 6;
+        public static final int NAME_CONSONANTS = 7;
 
         // This is the highest name lookup type code plus one
         public static final int TYPE_COUNT = 7;
@@ -1432,6 +1433,11 @@ import java.util.Locale;
         if (oldVersion == 303) {
             upgradeToVersion304(db);
             oldVersion = 304;
+        }
+
+        if (oldVersion == 304) {
+            upgradeNameLookup = true;
+            oldVersion = 305;
         }
 
         if (upgradeViewsAndTriggers) {
