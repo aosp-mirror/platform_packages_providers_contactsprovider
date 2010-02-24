@@ -698,8 +698,10 @@ import java.util.Locale;
                         DisplayNameSources.UNDEFINED + "," +
                 RawContacts.PHONETIC_NAME + " TEXT," +
                 RawContacts.PHONETIC_NAME_STYLE + " TEXT," +
-                RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE LOCALIZED," +
-                RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE LOCALIZED," +
+                RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE " +
+                        ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
+                RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE " +
+                        ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
                 RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
@@ -1613,9 +1615,11 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
                 + " ADD " + RawContacts.PHONETIC_NAME_STYLE + " INTEGER;");
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE LOCALIZED;");
+                + " ADD " + RawContacts.SORT_KEY_PRIMARY
+                + " TEXT COLLATE " + ContactsProvider2.PHONEBOOK_COLLATOR_NAME + ";");
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE LOCALIZED;");
+                + " ADD " + RawContacts.SORT_KEY_ALTERNATIVE
+                + " TEXT COLLATE " + ContactsProvider2.PHONEBOOK_COLLATOR_NAME + ";");
 
         final Locale locale = Locale.getDefault();
 

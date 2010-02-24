@@ -179,6 +179,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             " CASE WHEN " + RawContacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
             " (" + RawContacts.TIMES_CONTACTED + " + 1) END WHERE " + RawContacts.CONTACT_ID + "=?";
 
+    /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
+
     private static final int CONTACTS = 1000;
     private static final int CONTACTS_ID = 1001;
     private static final int CONTACTS_LOOKUP = 1002;
@@ -4643,8 +4645,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public static final int COLUMN_TITLE = 1;
         public static final int COLUMN_COUNT = 2;
 
-        // TODO change to LOCALIZED2 once that becomes available
-        public static final String ORDER_BY = LETTER + " COLLATE LOCALIZED";
+        public static final String ORDER_BY = LETTER + " COLLATE " + PHONEBOOK_COLLATOR_NAME;
     }
 
     /**
