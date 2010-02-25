@@ -256,13 +256,19 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected Uri insertEmail(long rawContactId, String email, boolean primary) {
+        return insertEmail(rawContactId, email, primary, Email.TYPE_HOME, null);
+    }
+
+    protected Uri insertEmail(long rawContactId, String email, boolean primary, int type,
+            String label) {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
         values.put(Email.DATA, email);
-        values.put(Email.TYPE, Email.TYPE_HOME);
+        values.put(Email.TYPE, type);
+        values.put(Email.LABEL, label);
         if (primary) {
-            values.put(Data.IS_PRIMARY, true);
+            values.put(Data.IS_PRIMARY, 1);
         }
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);

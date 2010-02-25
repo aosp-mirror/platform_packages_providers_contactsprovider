@@ -68,7 +68,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 301;
+    private static final int DATABASE_VERSION = 302;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -809,12 +809,6 @@ import java.util.Locale;
                         + NameLookupColumns.NAME_TYPE + ")" +
         ");");
 
-        db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
-                NameLookupColumns.NORMALIZED_NAME + "," +
-                NameLookupColumns.NAME_TYPE + ", " +
-                NameLookupColumns.RAW_CONTACT_ID +
-        ");");
-
         db.execSQL("CREATE INDEX name_lookup_raw_contact_id_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.RAW_CONTACT_ID +
         ");");
@@ -931,6 +925,7 @@ import java.util.Locale;
         createGroupsView(db);
         createContactEntitiesView(db);
         createContactsTriggers(db);
+        createContactsIndexes(db);
 
         loadNicknameLookupTable(db);
 
@@ -951,7 +946,7 @@ import java.util.Locale;
                 ContactsContract.AUTHORITY, new Bundle());
     }
 
-    private void createContactsTriggers(SQLiteDatabase db) {
+    private static void createContactsTriggers(SQLiteDatabase db) {
 
         /*
          * Automatically delete Data rows when a raw contact is deleted.
@@ -1030,6 +1025,16 @@ import java.util.Locale;
                 +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1"
                 + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
                 + " END");
+    }
+
+    private static void createContactsIndexes(SQLiteDatabase db) {
+        db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
+        db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
+                NameLookupColumns.NORMALIZED_NAME + "," +
+                NameLookupColumns.NAME_TYPE + ", " +
+                NameLookupColumns.RAW_CONTACT_ID + ", " +
+                NameLookupColumns.DATA_ID +
+        ");");
     }
 
     private static void createContactsViews(SQLiteDatabase db) {
@@ -1399,12 +1404,20 @@ import java.util.Locale;
             oldVersion = 301;
         }
 
+        if (oldVersion == 301) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 302;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
             createContactEntitiesView(db);
             createContactsTriggers(db);
+            createContactsIndexes(db);
             LegacyApiSupport.createViews(db);
+            updateSqliteStats(db);
+            mReopenDatabase = true;
         }
 
         if (oldVersion != newVersion) {
@@ -1888,7 +1901,7 @@ import java.util.Locale;
             updateIndexStats(db, Tables.NAME_LOOKUP,
                     "name_lookup_raw_contact_id_index", "10000 3");
             updateIndexStats(db, Tables.NAME_LOOKUP,
-                    "name_lookup_index", "10000 3 2 2");
+                    "name_lookup_index", "10000 3 2 2 1");
             updateIndexStats(db, Tables.NAME_LOOKUP,
                     "sqlite_autoindex_name_lookup_1", "10000 3 2 1");
 

@@ -90,6 +90,7 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
@@ -324,10 +325,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             " SET " + RawContacts.VERSION + " = " + RawContacts.VERSION + " + 1" +
             " WHERE " + RawContacts._ID + " IN (";
 
+    /** Name lookup types used for contact filtering */
+    private static final String CONTACT_LOOKUP_NAME_TYPES =
+            NameLookupType.NAME_COLLATION_KEY + "," +
+            NameLookupType.EMAIL_BASED_NICKNAME + "," +
+            NameLookupType.NICKNAME + "," +
+            NameLookupType.NAME_SHORTHAND + "," +
+            NameLookupType.ORGANIZATION;
+
+
     /** Contains just BaseColumns._COUNT */
     private static final HashMap<String, String> sCountProjectionMap;
     /** Contains just the contacts columns */
     private static final HashMap<String, String> sContactsProjectionMap;
+    /** Contains just the contacts columns */
+    private static final HashMap<String, String> sContactsProjectionWithSnippetMap;
+
     /** Used for pushing starred contacts to the top of a times contacted list **/
     private static final HashMap<String, String> sStrequentStarredProjectionMap;
     private static final HashMap<String, String> sStrequentFrequentProjectionMap;
@@ -505,6 +518,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL);
         addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_ICON,
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON);
+
+        sContactsProjectionWithSnippetMap = new HashMap<String, String>();
+        sContactsProjectionWithSnippetMap.putAll(sContactsProjectionMap);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_MIMETYPE,
+                SearchSnippetColumns.SNIPPET_MIMETYPE);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA_ID,
+                SearchSnippetColumns.SNIPPET_DATA_ID);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA,
+                SearchSnippetColumns.SNIPPET_DATA);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_TYPE,
+                SearchSnippetColumns.SNIPPET_TYPE);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_LABEL,
+                SearchSnippetColumns.SNIPPET_LABEL);
 
         sStrequentStarredProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
         sStrequentStarredProjectionMap.put(TIMES_CONTACED_SORT_COLUMN,
@@ -3886,14 +3912,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_FILTER: {
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                String filterParam = "";
                 if (uri.getPathSegments().size() > 2) {
-                    String filterParam = uri.getLastPathSegment();
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(Contacts._ID + " IN ");
-                    appendContactFilterAsNestedQuery(sb, filterParam);
-                    qb.appendWhere(sb.toString());
+                    filterParam = uri.getLastPathSegment();
                 }
+                setTablesAndProjectionMapForContactsWithSnippet(qb, uri, projection, filterParam);
                 break;
             }
 
@@ -4590,6 +4613,74 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
             String[] projection) {
         StringBuilder sb = new StringBuilder();
+        appendContactsTables(sb, uri, projection);
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(sContactsProjectionMap);
+    }
+
+    /**
+     * Finds name lookup records matching the supplied filter, picks one arbitrary match per
+     * contact and joins that with other contacts tables.
+     */
+    private void setTablesAndProjectionMapForContactsWithSnippet(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection, String filter) {
+
+        StringBuilder sb = new StringBuilder();
+        appendContactsTables(sb, uri, projection);
+
+        sb.append(" JOIN (SELECT " +
+                RawContacts.CONTACT_ID + " AS snippet_contact_id");
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA_ID)) {
+            sb.append(", " + DataColumns.CONCRETE_ID + " AS "
+                    + SearchSnippetColumns.SNIPPET_DATA_ID);
+        }
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA)) {
+            sb.append(", " + Data.DATA1 + " AS " + SearchSnippetColumns.SNIPPET_DATA);
+        }
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_TYPE)) {
+            sb.append(", " + Data.DATA2 + " AS " + SearchSnippetColumns.SNIPPET_TYPE);
+        }
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_LABEL)) {
+            sb.append(", " + Data.DATA3 + " AS " + SearchSnippetColumns.SNIPPET_LABEL);
+        }
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_MIMETYPE)) {
+            sb.append(", (" +
+                    "SELECT " + MimetypesColumns.MIMETYPE +
+                    " FROM " + Tables.MIMETYPES +
+                    " WHERE " + MimetypesColumns._ID + "=" + DataColumns.MIMETYPE_ID +
+                    ") AS " + SearchSnippetColumns.SNIPPET_MIMETYPE);
+        }
+
+        sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
+                " WHERE " + DataColumns.CONCRETE_ID +
+                " IN (");
+
+        // Construct a query that gives us exactly one data _id per matching contact.
+        // MIN stands in for ANY in this context.
+        sb.append(
+                "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
+                " FROM " + Tables.NAME_LOOKUP +
+                " JOIN " + Tables.RAW_CONTACTS +
+                " ON (" + RawContactsColumns.CONCRETE_ID
+                        + "=" + Tables.NAME_LOOKUP + "." + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
+        sb.append(NameNormalizer.normalize(filter));
+        sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                    " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
+                " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID);
+
+        sb.append(")) ON (" + Contacts._ID + "=snippet_contact_id)");
+
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(sContactsProjectionWithSnippetMap);
+    }
+
+    private void appendContactsTables(StringBuilder sb, Uri uri, String[] projection) {
         boolean excludeRestrictedData = false;
         String requestingPackage = getQueryParameter(uri,
                 ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
@@ -4613,8 +4704,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     " ON (" + ContactsColumns.LAST_STATUS_UPDATE_ID + "="
                             + ContactsStatusUpdatesColumns.CONCRETE_DATA_ID + ")");
         }
-        qb.setTables(sb.toString());
-        qb.setProjectionMap(sContactsProjectionMap);
     }
 
     private void setTablesAndProjectionMapForRawContacts(SQLiteQueryBuilder qb, Uri uri) {
@@ -5250,12 +5339,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + NameLookupColumns.RAW_CONTACT_ID + ")" +
                 " WHERE normalized_name GLOB '");
         sb.append(NameNormalizer.normalize(filterParam));
-        sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN("
-                + NameLookupType.NAME_COLLATION_KEY + ","
-                + NameLookupType.EMAIL_BASED_NICKNAME + ","
-                + NameLookupType.NICKNAME + ","
-                + NameLookupType.NAME_SHORTHAND + ","
-                + NameLookupType.ORGANIZATION + "))");
+        sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                    " IN(" + CONTACT_LOOKUP_NAME_TYPES + "))");
     }
 
     public String getRawContactsByFilterAsNestedQuery(String filterParam) {

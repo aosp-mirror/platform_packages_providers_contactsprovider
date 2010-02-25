@@ -28,7 +28,6 @@ import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
@@ -43,11 +42,13 @@ import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
+import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
@@ -891,6 +892,75 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private void assertContactFilter(long contactId, String filter) {
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filter));
         assertStoredValue(filterUri, Contacts._ID, contactId);
+    }
+
+    public void testSearchSnippetOrganization() throws Exception {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+
+        // Some random data element
+        insertEmail(rawContactId, "inc@corp.com");
+
+        ContentValues values = new ContentValues();
+        values.clear();
+        values.put(Organization.COMPANY, "acmecorp");
+        Uri organizationUri = insertOrganization(rawContactId, values);
+
+        // Add another matching organization
+        values.put(Organization.COMPANY, "acmeinc");
+        insertOrganization(rawContactId, values);
+
+        // Add another non-matching organization
+        values.put(Organization.COMPANY, "corpacme");
+        insertOrganization(rawContactId, values);
+
+        // And another data element
+        insertEmail(rawContactId, "emca@corp.com", true, Email.TYPE_CUSTOM, "Custom");
+
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("acme"));
+
+        values.clear();
+        values.put(Contacts._ID, contactId);
+        values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(organizationUri));
+        values.put(SearchSnippetColumns.SNIPPET_DATA, "acmecorp");
+        values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Organization.CONTENT_ITEM_TYPE);
+        assertStoredValues(filterUri, values);
+    }
+
+    public void testSearchSnippetEmail() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        Uri dataUri = insertEmail(rawContactId, "acme@corp.com", true, Email.TYPE_CUSTOM, "Custom");
+
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("acme"));
+
+        values.clear();
+        values.put(Contacts._ID, contactId);
+        values.put(SearchSnippetColumns.SNIPPET_DATA, "acme@corp.com");
+        values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(dataUri));
+        values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        values.put(SearchSnippetColumns.SNIPPET_TYPE, Email.TYPE_CUSTOM);
+        values.put(SearchSnippetColumns.SNIPPET_LABEL, "Custom");
+        assertStoredValues(filterUri, values);
+    }
+
+    public void testSearchSnippetNickname() throws Exception {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        Uri dataUri = insertNickname(rawContactId, "Incredible");
+
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("inc"));
+
+        values.clear();
+        values.put(Contacts._ID, contactId);
+        values.put(SearchSnippetColumns.SNIPPET_DATA, "Incredible");
+        values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(dataUri));
+        values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
+        assertStoredValues(filterUri, values);
     }
 
     public void testDisplayNameUpdateFromStructuredNameUpdate() {
