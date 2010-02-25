@@ -2121,7 +2121,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         for (Map.Entry<Long, Object> entry : mUpdatedSyncStates.entrySet()) {
             long id = entry.getKey();
-            mDbHelper.getSyncState().update(mDb, id, entry.getValue());
+            if (mDbHelper.getSyncState().update(mDb, id, entry.getValue()) <= 0) {
+                throw new IllegalStateException(
+                        "unable to update sync state, does it still exist?");
+            }
         }
 
         clearTransactionalChanges();
