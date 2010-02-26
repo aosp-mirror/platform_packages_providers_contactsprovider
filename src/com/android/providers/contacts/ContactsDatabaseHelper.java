@@ -48,13 +48,17 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.SocialContract.Activities;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
+import android.text.util.Rfc822Token;
+import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -68,7 +72,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 302;
+    private static final int DATABASE_VERSION = 303;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1395,7 +1399,7 @@ import java.util.Locale;
         }
 
         if (oldVersion == 206) {
-            upgrateToVersion300(db);
+            upgradeToVersion300(db);
             oldVersion = 300;
         }
 
@@ -1407,6 +1411,12 @@ import java.util.Locale;
         if (oldVersion == 301) {
             upgradeViewsAndTriggers = true;
             oldVersion = 302;
+        }
+
+        if (oldVersion == 302) {
+            upgradeEmailToVersion303(db);
+            upgradeNicknameToVersion303(db);
+            oldVersion = 303;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -1721,18 +1731,7 @@ import java.util.Locale;
 
     private void upgradeOrganizationsToVersion205(SQLiteDatabase db,
             SQLiteStatement rawContactUpdate, NameSplitter splitter) {
-
-        final long mMimeType;
-        try {
-            mMimeType = DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + Organization.CONTENT_ITEM_TYPE + "'", null);
-        } catch (SQLiteDoneException e) {
-            // No organizations in the database
-            return;
-        }
+        final long mimeType = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
 
         SQLiteStatement organizationUpdate = db.compileStatement(
                 "UPDATE " + Tables.DATA +
@@ -1741,7 +1740,7 @@ import java.util.Locale;
                 " WHERE " + Data._ID + "=?");
 
         Cursor cursor = db.query(Organization205Query.TABLE, Organization205Query.COLUMNS,
-                DataColumns.MIMETYPE_ID + "=" + mMimeType + " AND "
+                DataColumns.MIMETYPE_ID + "=" + mimeType + " AND "
                         + RawContacts.DISPLAY_NAME_SOURCE + "=" + DisplayNameSources.ORGANIZATION,
                 null, null, null, null);
         try {
@@ -1818,17 +1817,9 @@ import java.util.Locale;
      * Fix for the bug where name lookup records for organizations would get removed by
      * unrelated updates of the data rows.
      */
-    private void upgrateToVersion300(SQLiteDatabase db) {
-
-        final long mMimeType;
-        try {
-            mMimeType = DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + Organization.CONTENT_ITEM_TYPE + "'", null);
-        } catch (SQLiteDoneException e) {
-            // No organizations in the database
+    private void upgradeToVersion300(SQLiteDatabase db) {
+        final long mimeType = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
+        if (mimeType == -1) {
             return;
         }
 
@@ -1836,7 +1827,7 @@ import java.util.Locale;
 
         // Find all data rows with the mime type "organization"
         Cursor cursor = db.query(Organization300Query.TABLE, Organization300Query.COLUMNS,
-                Organization300Query.SELECTION, new String[] {String.valueOf(mMimeType)},
+                Organization300Query.SELECTION, new String[] {String.valueOf(mimeType)},
                 null, null, null);
         try {
             while (cursor.moveToNext()) {
@@ -1868,6 +1859,122 @@ import java.util.Locale;
             }
         } finally {
             cursor.close();
+        }
+    }
+
+    private static final class Upgrade303Query {
+        public static final String TABLE = Tables.DATA;
+
+        public static final String SELECTION =
+                DataColumns.MIMETYPE_ID + "=?" +
+        		" AND " + Data._ID + " NOT IN " +
+        		"(SELECT " + NameLookupColumns.DATA_ID + " FROM " + Tables.NAME_LOOKUP + ")" +
+        		" AND " + Data.DATA1 + " NOT NULL";
+
+        public static final String COLUMNS[] = {
+                Data._ID,
+                Data.RAW_CONTACT_ID,
+                Data.DATA1,
+        };
+
+        public static final int ID = 0;
+        public static final int RAW_CONTACT_ID = 1;
+        public static final int DATA1 = 2;
+    }
+
+    /**
+     * The {@link ContactsProvider2#update} method was deleting name lookup for new
+     * emails during the sync.  We need to restore the lost name lookup rows.
+     */
+    private void upgradeEmailToVersion303(SQLiteDatabase db) {
+        final long mimeTypeId = lookupMimeTypeId(db, Email.CONTENT_ITEM_TYPE);
+        if (mimeTypeId == -1) {
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+
+        // Find all data rows with the mime type "email" that are missing name lookup
+        Cursor cursor = db.query(Upgrade303Query.TABLE, Upgrade303Query.COLUMNS,
+                Upgrade303Query.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(Upgrade303Query.ID);
+                long rawContactId = cursor.getLong(Upgrade303Query.RAW_CONTACT_ID);
+                String value = cursor.getString(Upgrade303Query.DATA1);
+                value = extractHandleFromEmailAddress(value);
+
+                if (value != null) {
+                    values.put(NameLookupColumns.DATA_ID, dataId);
+                    values.put(NameLookupColumns.RAW_CONTACT_ID, rawContactId);
+                    values.put(NameLookupColumns.NAME_TYPE, NameLookupType.EMAIL_BASED_NICKNAME);
+                    values.put(NameLookupColumns.NORMALIZED_NAME, NameNormalizer.normalize(value));
+                    db.insert(Tables.NAME_LOOKUP, null, values);
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    /**
+     * The {@link ContactsProvider2#update} method was deleting name lookup for new
+     * nicknames during the sync.  We need to restore the lost name lookup rows.
+     */
+    private void upgradeNicknameToVersion303(SQLiteDatabase db) {
+        final long mimeTypeId = lookupMimeTypeId(db, Nickname.CONTENT_ITEM_TYPE);
+        if (mimeTypeId == -1) {
+            return;
+        }
+
+        ContentValues values = new ContentValues();
+
+        // Find all data rows with the mime type "nickname" that are missing name lookup
+        Cursor cursor = db.query(Upgrade303Query.TABLE, Upgrade303Query.COLUMNS,
+                Upgrade303Query.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(Upgrade303Query.ID);
+                long rawContactId = cursor.getLong(Upgrade303Query.RAW_CONTACT_ID);
+                String value = cursor.getString(Upgrade303Query.DATA1);
+
+                values.put(NameLookupColumns.DATA_ID, dataId);
+                values.put(NameLookupColumns.RAW_CONTACT_ID, rawContactId);
+                values.put(NameLookupColumns.NAME_TYPE, NameLookupType.NICKNAME);
+                values.put(NameLookupColumns.NORMALIZED_NAME, NameNormalizer.normalize(value));
+                db.insert(Tables.NAME_LOOKUP, null, values);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    public String extractHandleFromEmailAddress(String email) {
+        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
+        if (tokens.length == 0) {
+            return null;
+        }
+
+        String address = tokens[0].getAddress();
+        int at = address.indexOf('@');
+        if (at != -1) {
+            return address.substring(0, at);
+        }
+        return null;
+    }
+
+    private long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
+        try {
+            return DatabaseUtils.longForQuery(db,
+                    "SELECT " + MimetypesColumns._ID +
+                    " FROM " + Tables.MIMETYPES +
+                    " WHERE " + MimetypesColumns.MIMETYPE
+                            + "='" + mimeType + "'", null);
+        } catch (SQLiteDoneException e) {
+            // No rows of this type in the database
+            return -1;
         }
     }
 

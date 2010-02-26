@@ -1412,13 +1412,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-            String address = values.getAsString(Email.DATA);
 
             super.update(db, values, c, callerIsSyncAdapter);
 
-            deleteNameLookup(dataId);
-            insertNameLookupForEmail(rawContactId, dataId, address);
-            fixRawContactDisplayName(db, rawContactId);
+            if (values.containsKey(Email.DATA)) {
+                String address = values.getAsString(Email.DATA);
+                deleteNameLookup(dataId);
+                insertNameLookupForEmail(rawContactId, dataId, address);
+                fixRawContactDisplayName(db, rawContactId);
+            }
         }
 
         @Override
@@ -1467,13 +1469,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-            String nickname = values.getAsString(Nickname.NAME);
 
             super.update(db, values, c, callerIsSyncAdapter);
 
-            deleteNameLookup(dataId);
-            insertNameLookupForNickname(rawContactId, dataId, nickname);
-            fixRawContactDisplayName(db, rawContactId);
+            if (values.containsKey(Nickname.NAME)) {
+                String nickname = values.getAsString(Nickname.NAME);
+                deleteNameLookup(dataId);
+                insertNameLookupForNickname(rawContactId, dataId, nickname);
+                fixRawContactDisplayName(db, rawContactId);
+            }
         }
 
         @Override
@@ -5144,15 +5148,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return;
         }
 
-        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
-        if (tokens.length == 0) {
+        String address = mDbHelper.extractHandleFromEmailAddress(email);
+        if (address == null) {
             return;
-        }
-
-        String address = tokens[0].getAddress();
-        int at = address.indexOf('@');
-        if (at != -1) {
-            address = address.substring(0, at);
         }
 
         insertNameLookup(rawContactId, dataId,
