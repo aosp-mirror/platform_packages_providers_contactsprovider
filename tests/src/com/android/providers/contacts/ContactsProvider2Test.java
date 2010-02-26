@@ -904,6 +904,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.clear();
         values.put(Organization.COMPANY, "acmecorp");
+        values.put(Organization.TITLE, "engineer");
         Uri organizationUri = insertOrganization(rawContactId, values);
 
         // Add another matching organization
@@ -922,7 +923,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.clear();
         values.put(Contacts._ID, contactId);
         values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(organizationUri));
-        values.put(SearchSnippetColumns.SNIPPET_DATA, "acmecorp");
+        values.put(SearchSnippetColumns.SNIPPET_DATA1, "acmecorp");
+        values.put(SearchSnippetColumns.SNIPPET_DATA4, "engineer");
         values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Organization.CONTENT_ITEM_TYPE);
         assertStoredValues(filterUri, values);
     }
@@ -938,11 +940,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET_DATA, "acme@corp.com");
+        values.put(SearchSnippetColumns.SNIPPET_DATA1, "acme@corp.com");
         values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(dataUri));
         values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Email.CONTENT_ITEM_TYPE);
-        values.put(SearchSnippetColumns.SNIPPET_TYPE, Email.TYPE_CUSTOM);
-        values.put(SearchSnippetColumns.SNIPPET_LABEL, "Custom");
+        values.put(SearchSnippetColumns.SNIPPET_DATA2, Email.TYPE_CUSTOM);
+        values.put(SearchSnippetColumns.SNIPPET_DATA3, "Custom");
         assertStoredValues(filterUri, values);
     }
 
@@ -957,7 +959,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET_DATA, "Incredible");
+        values.put(SearchSnippetColumns.SNIPPET_DATA1, "Incredible");
         values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(dataUri));
         values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
         assertStoredValues(filterUri, values);

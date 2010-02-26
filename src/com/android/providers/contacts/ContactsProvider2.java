@@ -525,12 +525,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 SearchSnippetColumns.SNIPPET_MIMETYPE);
         sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA_ID,
                 SearchSnippetColumns.SNIPPET_DATA_ID);
-        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA,
-                SearchSnippetColumns.SNIPPET_DATA);
-        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_TYPE,
-                SearchSnippetColumns.SNIPPET_TYPE);
-        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_LABEL,
-                SearchSnippetColumns.SNIPPET_LABEL);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA1,
+                SearchSnippetColumns.SNIPPET_DATA1);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA2,
+                SearchSnippetColumns.SNIPPET_DATA2);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA3,
+                SearchSnippetColumns.SNIPPET_DATA3);
+        sContactsProjectionWithSnippetMap.put(SearchSnippetColumns.SNIPPET_DATA4,
+                SearchSnippetColumns.SNIPPET_DATA4);
 
         sStrequentStarredProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
         sStrequentStarredProjectionMap.put(TIMES_CONTACED_SORT_COLUMN,
@@ -4639,16 +4641,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + SearchSnippetColumns.SNIPPET_DATA_ID);
         }
 
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA)) {
-            sb.append(", " + Data.DATA1 + " AS " + SearchSnippetColumns.SNIPPET_DATA);
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA1)) {
+            sb.append(", " + Data.DATA1 + " AS " + SearchSnippetColumns.SNIPPET_DATA1);
         }
 
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_TYPE)) {
-            sb.append(", " + Data.DATA2 + " AS " + SearchSnippetColumns.SNIPPET_TYPE);
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA2)) {
+            sb.append(", " + Data.DATA2 + " AS " + SearchSnippetColumns.SNIPPET_DATA2);
         }
 
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_LABEL)) {
-            sb.append(", " + Data.DATA3 + " AS " + SearchSnippetColumns.SNIPPET_LABEL);
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA3)) {
+            sb.append(", " + Data.DATA3 + " AS " + SearchSnippetColumns.SNIPPET_DATA3);
+        }
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA4)) {
+            sb.append(", " + Data.DATA4 + " AS " + SearchSnippetColumns.SNIPPET_DATA4);
         }
 
         if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_MIMETYPE)) {
