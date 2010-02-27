@@ -1718,12 +1718,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private NameSplitter mNameSplitter;
     private NameLookupBuilder mNameLookupBuilder;
 
-    // We will use this much memory (in bits) to optimize the nickname cluster lookup
-    private static final int NICKNAME_BLOOM_FILTER_SIZE = 0x1FFF;   // =long[128]
-    private BitSet mNicknameBloomFilter;
-
-    private HashMap<String, SoftReference<String[]>> mNicknameClusterCache = Maps.newHashMap();
-
     private PostalSplitter mPostalSplitter;
 
     // We don't need a soft cache for groups - the assumption is that there will only
@@ -1734,6 +1728,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private ContactAggregator mContactAggregator;
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
+    private CommonNicknameCache mCommonNicknameCache;
 
     private ContentValues mValues = new ContentValues();
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
@@ -1751,6 +1746,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean mSyncToNetwork;
 
     private Locale mCurrentLocale;
+
     @Override
     public boolean onCreate() {
         super.onCreate();
@@ -1771,6 +1767,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
+
+        mCommonNicknameCache = new CommonNicknameCache(db);
 
         mSetPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA +
@@ -1905,7 +1903,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMimeTypeIdOrganization = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
         mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-        preloadNicknameBloomFilter();
+        mCommonNicknameCache.preloadNicknameBloomFilter();
         return (db != null);
     }
 
@@ -5183,121 +5181,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name) {
         mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
-        if (!TextUtils.isEmpty(name)) {
-            Iterator<String> it = ContactLocaleUtils.getNameLookupKeys(name, FullNameStyle.CHINESE);
-            if (it != null) {
-                while(it.hasNext()) {
-                    String key = it.next();
-                    mNameLookupBuilder.insertNameLookup(rawContactId, dataId,
-                            NameLookupType.NAME_SHORTHAND,
-                            mNameLookupBuilder.normalizeName(key));
-                }
-            }
-        }
-    }
-
-    private interface NicknameLookupPreloadQuery {
-        String TABLE = Tables.NICKNAME_LOOKUP;
-
-        String[] COLUMNS = new String[] {
-            NicknameLookupColumns.NAME
-        };
-
-        int NAME = 0;
-    }
-
-    /**
-     * Read all known common nicknames from the database and populate a Bloom
-     * filter using the corresponding hash codes. The idea is to eliminate most
-     * of unnecessary database lookups for nicknames. Given a name, we will take
-     * its hash code and see if it is set in the Bloom filter. If not, we will know
-     * that the name is not in the database. If it is, we still need to run a
-     * query.
-     * <p>
-     * Given the size of the filter and the expected size of the nickname table,
-     * we should expect the combination of the Bloom filter and cache will
-     * prevent around 98-99% of unnecessary queries from running.
-     */
-    private void preloadNicknameBloomFilter() {
-        mNicknameBloomFilter = new BitSet(NICKNAME_BLOOM_FILTER_SIZE + 1);
-        SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        Cursor cursor = db.query(NicknameLookupPreloadQuery.TABLE,
-                NicknameLookupPreloadQuery.COLUMNS,
-                null, null, null, null, null);
-        try {
-            int count = cursor.getCount();
-            for (int i = 0; i < count; i++) {
-                cursor.moveToNext();
-                String normalizedName = cursor.getString(NicknameLookupPreloadQuery.NAME);
-                int hashCode = normalizedName.hashCode();
-                mNicknameBloomFilter.set(hashCode & NICKNAME_BLOOM_FILTER_SIZE);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-
-    /**
-     * Returns nickname cluster IDs or null. Maintains cache.
-     */
-    protected String[] getCommonNicknameClusters(String normalizedName) {
-        int hashCode = normalizedName.hashCode();
-        if (!mNicknameBloomFilter.get(hashCode & NICKNAME_BLOOM_FILTER_SIZE)) {
-            return null;
-        }
-
-        SoftReference<String[]> ref;
-        String[] clusters = null;
-        synchronized (mNicknameClusterCache) {
-            if (mNicknameClusterCache.containsKey(normalizedName)) {
-                ref = mNicknameClusterCache.get(normalizedName);
-                if (ref == null) {
-                    return null;
-                }
-                clusters = ref.get();
-            }
-        }
-
-        if (clusters == null) {
-            clusters = loadNicknameClusters(normalizedName);
-            ref = clusters == null ? null : new SoftReference<String[]>(clusters);
-            synchronized (mNicknameClusterCache) {
-                mNicknameClusterCache.put(normalizedName, ref);
-            }
-        }
-        return clusters;
-    }
-
-    private interface NicknameLookupQuery {
-        String TABLE = Tables.NICKNAME_LOOKUP;
-
-        String[] COLUMNS = new String[] {
-            NicknameLookupColumns.CLUSTER
-        };
-
-        int CLUSTER = 0;
-    }
-
-    protected String[] loadNicknameClusters(String normalizedName) {
-        SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        String[] clusters = null;
-        Cursor cursor = db.query(NicknameLookupQuery.TABLE, NicknameLookupQuery.COLUMNS,
-                NicknameLookupColumns.NAME + "=?", new String[] { normalizedName },
-                null, null, null);
-        try {
-            int count = cursor.getCount();
-            if (count > 0) {
-                clusters = new String[count];
-                for (int i = 0; i < count; i++) {
-                    cursor.moveToNext();
-                    clusters[i] = cursor.getString(NicknameLookupQuery.CLUSTER);
-                }
-            }
-        } finally {
-            cursor.close();
-        }
-        return clusters;
+        mNameLookupBuilder.insertNameShorthandLookup(rawContactId, dataId, name);
     }
 
     private class StructuredNameLookupBuilder extends NameLookupBuilder {
@@ -5314,7 +5198,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         protected String[] getCommonNicknameClusters(String normalizedName) {
-            return ContactsProvider2.this.getCommonNicknameClusters(normalizedName);
+            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
         }
     }
 

@@ -18,8 +18,12 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 
+import android.provider.ContactsContract.FullNameStyle;
+import android.text.TextUtils;
+
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Iterator;
 
 /**
  * Given a full name, constructs all possible variants of the name.
@@ -193,6 +197,19 @@ public abstract class NameLookupBuilder {
                     insertNicknamePermutations(rawContactId, dataId, i + 1, tokenCount);
                 }
                 mNames[i] = token;
+            }
+        }
+    }
+
+    public void insertNameShorthandLookup(long rawContactId, long dataId, String name) {
+        if (!TextUtils.isEmpty(name)) {
+            Iterator<String> it = ContactLocaleUtils.getNameLookupKeys(name, FullNameStyle.CHINESE);
+            if (it != null) {
+                while (it.hasNext()) {
+                    String key = it.next();
+                    insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
+                            normalizeName(key));
+                }
             }
         }
     }
