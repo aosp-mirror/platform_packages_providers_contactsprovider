@@ -66,7 +66,7 @@ public class CommonNicknameCache  {
      * we should expect the combination of the Bloom filter and cache will
      * prevent around 98-99% of unnecessary queries from running.
      */
-    public void preloadNicknameBloomFilter() {
+    private void preloadNicknameBloomFilter() {
         mNicknameBloomFilter = new BitSet(NICKNAME_BLOOM_FILTER_SIZE + 1);
         Cursor cursor = mDb.query(NicknameLookupPreloadQuery.TABLE,
                 NicknameLookupPreloadQuery.COLUMNS,
@@ -88,6 +88,10 @@ public class CommonNicknameCache  {
      * Returns nickname cluster IDs or null. Maintains cache.
      */
     protected String[] getCommonNicknameClusters(String normalizedName) {
+        if (mNicknameBloomFilter == null) {
+            preloadNicknameBloomFilter();
+        }
+
         int hashCode = normalizedName.hashCode();
         if (!mNicknameBloomFilter.get(hashCode & NICKNAME_BLOOM_FILTER_SIZE)) {
             return null;

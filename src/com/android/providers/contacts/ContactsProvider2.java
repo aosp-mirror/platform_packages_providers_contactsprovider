@@ -28,7 +28,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
-import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
@@ -105,21 +104,16 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
-import android.text.util.Rfc822Token;
-import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.lang.ref.SoftReference;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1767,6 +1761,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        initForDefaultLocale();
 
         mCommonNicknameCache = new CommonNicknameCache(db);
 
@@ -1816,8 +1811,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 + StatusUpdates.STATUS +
                         " LIMIT 1)" +
                 " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
-
-        initByLocale(context);
 
         mNameLookupInsert = db.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
@@ -1903,21 +1896,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMimeTypeIdOrganization = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
         mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-        mCommonNicknameCache.preloadNicknameBloomFilter();
+
         return (db != null);
     }
 
-    private void initByLocale(Context context) {
+    private void initForDefaultLocale() {
         mCurrentLocale = getLocale();
-        if (mCurrentLocale == null) {
-            return;
-        }
-        mNameSplitter = new NameSplitter(
-                context.getString(com.android.internal.R.string.common_name_prefixes),
-                context.getString(com.android.internal.R.string.common_last_name_prefixes),
-                context.getString(com.android.internal.R.string.common_name_suffixes),
-                context.getString(com.android.internal.R.string.common_name_conjunctions),
-                mCurrentLocale);
+        mNameSplitter = mDbHelper.createNameSplitter();
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
     }
@@ -1925,8 +1910,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     public void onConfigurationChanged (Configuration newConfig) {
         if (newConfig != null && mCurrentLocale != null
-                && mCurrentLocale.equals(newConfig.locale)) {
-            initByLocale(getContext());
+                && !mCurrentLocale.equals(newConfig.locale)) {
+            initForDefaultLocale();
+            // TODO rebuild name lookup for the new locale
         }
     }
     protected void verifyAccounts() {
@@ -5181,7 +5167,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name) {
         mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
-        mNameLookupBuilder.insertNameShorthandLookup(rawContactId, dataId, name);
     }
 
     private class StructuredNameLookupBuilder extends NameLookupBuilder {

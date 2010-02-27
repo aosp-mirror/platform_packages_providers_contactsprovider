@@ -713,16 +713,6 @@ import java.util.Locale;
 //                RawContactsColumns.AGGREGATION_NEEDED +
 //        ");");
 
-        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
-                RawContacts.SORT_KEY_PRIMARY +
-        ");");
-
-        db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
-                RawContacts.SORT_KEY_ALTERNATIVE +
-        ");");
-
         // Package name mapping table
         db.execSQL("CREATE TABLE " + Tables.PACKAGES + " (" +
                 PackagesColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -1039,6 +1029,18 @@ import java.util.Locale;
                 NameLookupColumns.RAW_CONTACT_ID + ", " +
                 NameLookupColumns.DATA_ID +
         ");");
+
+        db.execSQL("DROP INDEX IF EXISTS raw_contact_sort_key1_index");
+        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                RawContacts.SORT_KEY_PRIMARY +
+        ");");
+
+        db.execSQL("DROP INDEX IF EXISTS raw_contact_sort_key2_index");
+        db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
+                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                RawContacts.SORT_KEY_ALTERNATIVE +
+        ");");
     }
 
     private static void createContactsViews(SQLiteDatabase db) {
@@ -1331,6 +1333,7 @@ import java.util.Locale;
         Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion);
 
         boolean upgradeViewsAndTriggers = false;
+        boolean upgradeNameLookup = false;
 
         if (oldVersion == 99) {
             upgradeViewsAndTriggers = true;
@@ -1372,6 +1375,7 @@ import java.util.Locale;
 
         if (oldVersion == 105) {
             upgradeToVersion202(db);
+            upgradeNameLookup = true;
             oldVersion = 202;
         }
 
@@ -1428,6 +1432,10 @@ import java.util.Locale;
             LegacyApiSupport.createViews(db);
             updateSqliteStats(db);
             mReopenDatabase = true;
+        }
+
+        if (upgradeNameLookup) {
+            rebuildNameLookup(db);
         }
 
         if (oldVersion != newVersion) {
@@ -1951,6 +1959,246 @@ import java.util.Locale;
         }
     }
 
+    /**
+     * Regenerate all rows in the nickname_lookup and name_lookup tables,
+     * because sort key generation algorithm has been modified, e.g. as a result of
+     * locale change.
+     */
+    private void rebuildNameLookup(SQLiteDatabase db) {
+        db.execSQL("DELETE FROM " + Tables.NICKNAME_LOOKUP);
+        loadNicknameLookupTable(db);
+
+        db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
+        db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP);
+
+        SQLiteStatement nameLookupInsert = db.compileStatement(
+                "INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
+                        + NameLookupColumns.RAW_CONTACT_ID + ","
+                        + NameLookupColumns.DATA_ID + ","
+                        + NameLookupColumns.NAME_TYPE + ","
+                        + NameLookupColumns.NORMALIZED_NAME +
+                ") VALUES (?,?,?,?)");
+
+        insertStructuredNameLookup(db, nameLookupInsert);
+        insertOrganizationLookup(db, nameLookupInsert);
+        insertEmailLookup(db, nameLookupInsert);
+        insertNicknameLookup(db, nameLookupInsert);
+
+        createContactsIndexes(db);
+    }
+
+    private static final class StructuredNameQuery {
+        public static final String TABLE = Tables.DATA;
+
+        public static final String SELECTION =
+                DataColumns.MIMETYPE_ID + "=? AND " + Data.DATA1 + " NOT NULL";
+
+        public static final String COLUMNS[] = {
+                StructuredName._ID,
+                StructuredName.RAW_CONTACT_ID,
+                StructuredName.DISPLAY_NAME,
+        };
+
+        public static final int ID = 0;
+        public static final int RAW_CONTACT_ID = 1;
+        public static final int DISPLAY_NAME = 2;
+    }
+
+    private class StructuredNameLookupBuilder extends NameLookupBuilder {
+
+        private final SQLiteStatement mNameLookupInsert;
+        private final CommonNicknameCache mCommonNicknameCache;
+
+        public StructuredNameLookupBuilder(NameSplitter splitter,
+                CommonNicknameCache commonNicknameCache, SQLiteStatement nameLookupInsert) {
+            super(splitter);
+            this.mCommonNicknameCache = commonNicknameCache;
+            this.mNameLookupInsert = nameLookupInsert;
+        }
+
+        @Override
+        protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
+                String name) {
+            if (!TextUtils.isEmpty(name)) {
+                ContactsDatabaseHelper.this.insertNormalizedNameLookup(mNameLookupInsert,
+                        rawContactId, dataId, lookupType, name);
+            }
+        }
+
+        @Override
+        protected String[] getCommonNicknameClusters(String normalizedName) {
+            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
+        }
+    }
+
+    /**
+     * Inserts name lookup rows for all structured names in the database.
+     */
+    private void insertStructuredNameLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
+        NameLookupBuilder nameLookupBuilder = new StructuredNameLookupBuilder(createNameSplitter(),
+                new CommonNicknameCache(db), nameLookupInsert);
+        final long mimeTypeId = lookupMimeTypeId(db, StructuredName.CONTENT_ITEM_TYPE);
+        Cursor cursor = db.query(StructuredNameQuery.TABLE, StructuredNameQuery.COLUMNS,
+                StructuredNameQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(StructuredNameQuery.ID);
+                long rawContactId = cursor.getLong(StructuredNameQuery.RAW_CONTACT_ID);
+                String name = cursor.getString(StructuredNameQuery.DISPLAY_NAME);
+                nameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private static final class OrganizationQuery {
+        public static final String TABLE = Tables.DATA;
+
+        public static final String SELECTION =
+                DataColumns.MIMETYPE_ID + "=? AND " + Data.DATA1 + " NOT NULL";
+
+        public static final String COLUMNS[] = {
+                Organization._ID,
+                Organization.RAW_CONTACT_ID,
+                Organization.COMPANY,
+                Organization.TITLE,
+        };
+
+        public static final int ID = 0;
+        public static final int RAW_CONTACT_ID = 1;
+        public static final int COMPANY = 2;
+        public static final int TITLE = 3;
+    }
+
+    /**
+     * Inserts name lookup rows for all organizations in the database.
+     */
+    private void insertOrganizationLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
+        final long mimeTypeId = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
+        Cursor cursor = db.query(OrganizationQuery.TABLE, OrganizationQuery.COLUMNS,
+                OrganizationQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(OrganizationQuery.ID);
+                long rawContactId = cursor.getLong(OrganizationQuery.RAW_CONTACT_ID);
+                String organization = cursor.getString(OrganizationQuery.COMPANY);
+                String title = cursor.getString(OrganizationQuery.TITLE);
+                insertNameLookup(nameLookupInsert, rawContactId, dataId,
+                        NameLookupType.ORGANIZATION, organization);
+                insertNameLookup(nameLookupInsert, rawContactId, dataId,
+                        NameLookupType.ORGANIZATION, title);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private static final class EmailQuery {
+        public static final String TABLE = Tables.DATA;
+
+        public static final String SELECTION =
+                DataColumns.MIMETYPE_ID + "=? AND " + Data.DATA1 + " NOT NULL";
+
+        public static final String COLUMNS[] = {
+                Email._ID,
+                Email.RAW_CONTACT_ID,
+                Email.ADDRESS,
+        };
+
+        public static final int ID = 0;
+        public static final int RAW_CONTACT_ID = 1;
+        public static final int ADDRESS = 2;
+    }
+
+    /**
+     * Inserts name lookup rows for all email addresses in the database.
+     */
+    private void insertEmailLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
+        final long mimeTypeId = lookupMimeTypeId(db, Email.CONTENT_ITEM_TYPE);
+        Cursor cursor = db.query(EmailQuery.TABLE, EmailQuery.COLUMNS,
+                EmailQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(EmailQuery.ID);
+                long rawContactId = cursor.getLong(EmailQuery.RAW_CONTACT_ID);
+                String address = cursor.getString(EmailQuery.ADDRESS);
+                address = extractHandleFromEmailAddress(address);
+                insertNameLookup(nameLookupInsert, rawContactId, dataId,
+                        NameLookupType.EMAIL_BASED_NICKNAME, address);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private static final class NicknameQuery {
+        public static final String TABLE = Tables.DATA;
+
+        public static final String SELECTION =
+                DataColumns.MIMETYPE_ID + "=? AND " + Data.DATA1 + " NOT NULL";
+
+        public static final String COLUMNS[] = {
+                Nickname._ID,
+                Nickname.RAW_CONTACT_ID,
+                Nickname.NAME,
+        };
+
+        public static final int ID = 0;
+        public static final int RAW_CONTACT_ID = 1;
+        public static final int NAME = 2;
+    }
+
+    /**
+     * Inserts name lookup rows for all nicknames in the database.
+     */
+    private void insertNicknameLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
+        final long mimeTypeId = lookupMimeTypeId(db, Nickname.CONTENT_ITEM_TYPE);
+        Cursor cursor = db.query(NicknameQuery.TABLE, NicknameQuery.COLUMNS,
+                NicknameQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long dataId = cursor.getLong(NicknameQuery.ID);
+                long rawContactId = cursor.getLong(NicknameQuery.RAW_CONTACT_ID);
+                String nickname = cursor.getString(NicknameQuery.NAME);
+                insertNameLookup(nameLookupInsert, rawContactId, dataId,
+                        NameLookupType.NICKNAME, nickname);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    /**
+     * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
+     */
+    public void insertNameLookup(SQLiteStatement stmt, long rawContactId, long dataId,
+            int lookupType, String name) {
+        if (TextUtils.isEmpty(name)) {
+            return;
+        }
+
+        String normalized = NameNormalizer.normalize(name);
+        if (TextUtils.isEmpty(normalized)) {
+            return;
+        }
+
+        insertNormalizedNameLookup(stmt, rawContactId, dataId, lookupType, normalized);
+    }
+
+    private void insertNormalizedNameLookup(SQLiteStatement stmt, long rawContactId, long dataId,
+            int lookupType, String normalizedName) {
+        stmt.bindLong(1, rawContactId);
+        stmt.bindLong(2, dataId);
+        stmt.bindLong(3, lookupType);
+        stmt.bindString(4, normalizedName);
+        stmt.executeInsert();
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2076,6 +2324,15 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
+    }
+
+    public NameSplitter createNameSplitter() {
+        return new NameSplitter(
+                mContext.getString(com.android.internal.R.string.common_name_prefixes),
+                mContext.getString(com.android.internal.R.string.common_last_name_prefixes),
+                mContext.getString(com.android.internal.R.string.common_name_suffixes),
+                mContext.getString(com.android.internal.R.string.common_name_conjunctions),
+                Locale.getDefault());
     }
 
     /**
