@@ -826,6 +826,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDisplayNameFromOrganizationWithChineseName() {
+        boolean hasChineseCollator = false;
+        final Locale locale[] = Collator.getAvailableLocales();
+        for (int i = 0; i < locale.length; i++) {
+            if (locale[i].equals(Locale.CHINA)) {
+                hasChineseCollator = true;
+                break;
+            }
+        }
+
+        if (!hasChineseCollator) {
+            return;
+        }
+
         long rawContactId = createRawContact();
         long contactId = queryContactId(rawContactId);
         ContentValues values = new ContentValues();

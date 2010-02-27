@@ -16,15 +16,15 @@
 
 package com.android.providers.contacts;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Iterator;
-
-import com.android.providers.contacts.ContactLocaleUtils;
-
 import android.provider.ContactsContract.FullNameStyle;
 import android.test.AndroidTestCase;
 import android.util.Log;
+
+import java.text.Collator;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Locale;
 
 public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String LATIN_NAME = "John Smith";
@@ -37,7 +37,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "D \u675C\u9D51", "JUAN", "DUJUAN", "J", "DJ", "D DUJUAN", "DDJ"};
     private static final String[] CHINESE_LATIN_MIX_NAME_2_KEY = {"\u9D51", "\u675C\u9D51",
         "MARY \u675C\u9D51", "JUAN", "DUJUAN", "MARY DUJUAN", "J", "DJ", "MDJ"};
-    
+
 
     public void testContactLocaleUtilsBase() throws Exception {
         assertEquals(ContactLocaleUtils.getSortKey(LATIN_NAME, FullNameStyle.UNDEFINED),
@@ -47,6 +47,19 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testChineseContactLocaleUtils() throws Exception {
+        boolean hasChineseCollator = false;
+        final Locale locale[] = Collator.getAvailableLocales();
+        for (int i = 0; i < locale.length; i++) {
+            if (locale[i].equals(Locale.CHINA)) {
+                hasChineseCollator = true;
+                break;
+            }
+        }
+
+        if (!hasChineseCollator) {
+            return;
+        }
+
         assertTrue(ContactLocaleUtils.getSortKey(CHINESE_NAME,
                 FullNameStyle.CHINESE).equalsIgnoreCase("DU \u675C JUAN \u9D51"));
 
