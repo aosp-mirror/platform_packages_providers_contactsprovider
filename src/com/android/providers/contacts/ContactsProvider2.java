@@ -3132,8 +3132,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int deleteContact(long contactId) {
+        mSelectionArgs1[0] = Long.toString(contactId);
         Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=?", mSelectionArgs1,
+                null, null, null);
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(0);
@@ -3469,7 +3471,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int updateRawContact(long rawContactId, ContentValues values) {
-        final String selection = RawContacts._ID + " = " + rawContactId;
+        final String selection = RawContacts._ID + " = ?";
+        mSelectionArgs1[0] = Long.toString(rawContactId);
         final boolean requestUndoDelete = (values.containsKey(RawContacts.DELETED)
                 && values.getAsInteger(RawContacts.DELETED) == 0);
         int previousDeleted = 0;
@@ -3477,7 +3480,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String accountName = null;
         if (requestUndoDelete) {
             Cursor cursor = mDb.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS, selection,
-                    null, null, null, null);
+                    mSelectionArgs1, null, null, null);
             try {
                 if (cursor.moveToFirst()) {
                     previousDeleted = cursor.getInt(RawContactsQuery.DELETED);
@@ -3491,7 +3494,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     ContactsContract.RawContacts.AGGREGATION_MODE_DEFAULT);
         }
 
-        int count = mDb.update(Tables.RAW_CONTACTS, values, selection, null);
+        int count = mDb.update(Tables.RAW_CONTACTS, values, selection, mSelectionArgs1);
         if (count != 0) {
             if (values.containsKey(RawContacts.STARRED)) {
                 mContactAggregator.updateStarred(rawContactId);
