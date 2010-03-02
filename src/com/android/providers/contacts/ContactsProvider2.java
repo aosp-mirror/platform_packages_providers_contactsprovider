@@ -3133,7 +3133,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private int deleteContact(long contactId) {
         Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+                RawContacts.CONTACT_ID + "=?", new String[]{ Long.toString(contactId) },
+                null, null, null);
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(0);
@@ -3469,7 +3470,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int updateRawContact(long rawContactId, ContentValues values) {
-        final String selection = RawContacts._ID + " = " + rawContactId;
+        final String selection = RawContacts._ID + " = ?";
         final boolean requestUndoDelete = (values.containsKey(RawContacts.DELETED)
                 && values.getAsInteger(RawContacts.DELETED) == 0);
         int previousDeleted = 0;
@@ -3477,7 +3478,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String accountName = null;
         if (requestUndoDelete) {
             Cursor cursor = mDb.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS, selection,
-                    null, null, null, null);
+                    new String[]{ Long.toString(rawContactId) }, null, null, null);
             try {
                 if (cursor.moveToFirst()) {
                     previousDeleted = cursor.getInt(RawContactsQuery.DELETED);
