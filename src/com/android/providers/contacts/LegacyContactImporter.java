@@ -23,14 +23,12 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentResolver;
-import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
-import android.net.Uri;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -404,8 +402,13 @@ public class LegacyContactImporter {
                 StructuredName.GIVEN_NAME + "," +
                 StructuredName.MIDDLE_NAME + "," +
                 StructuredName.FAMILY_NAME + "," +
-                StructuredName.SUFFIX +
-         ") VALUES (?,?,?,?,?,?,?,?)";
+                StructuredName.SUFFIX + "," +
+                StructuredName.FULL_NAME_STYLE + "," +
+                StructuredName.PHONETIC_FAMILY_NAME + "," +
+                StructuredName.PHONETIC_MIDDLE_NAME + "," +
+                StructuredName.PHONETIC_GIVEN_NAME + "," +
+                StructuredName.PHONETIC_NAME_STYLE +
+         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int MIMETYPE_ID = 2;
@@ -415,6 +418,11 @@ public class LegacyContactImporter {
         int MIDDLE_NAME = 6;
         int FAMILY_NAME = 7;
         int SUFFIX = 8;
+        int FULL_NAME_STYLE = 9;
+        int PHONETIC_FAMILY_NAME = 10;
+        int PHONETIC_MIDDLE_NAME = 11;
+        int PHONETIC_GIVEN_NAME = 12;
+        int PHONETIC_NAME_STYLE = 13;
     }
 
     private interface NoteInsert {
@@ -458,10 +466,14 @@ public class LegacyContactImporter {
         c = mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NOT NULL", null, null, null, null);
         try {
             while (c.moveToNext()) {
-                insertRawContact(c, rawContactInsert);
+                long id = insertRawContact(c, rawContactInsert);
                 insertContact(c, contactInsert);
                 insertStructuredName(c, structuredNameInsert);
                 insertNote(c, noteInsert);
+
+                // Compute display names, sort keys, lookup key, etc.
+                mContactsProvider.updateRawContactDisplayName(mTargetDb, id);
+                mContactsProvider.updateLookupKeyForRawContact(mTargetDb, id);
                 mContactCount++;
             }
         } finally {
@@ -469,7 +481,7 @@ public class LegacyContactImporter {
         }
     }
 
-    private void insertRawContact(Cursor c, SQLiteStatement insert) {
+    private long insertRawContact(Cursor c, SQLiteStatement insert) {
         long id = c.getLong(PeopleQuery._ID);
         insert.bindLong(RawContactsInsert.ID, id);
         insert.bindLong(RawContactsInsert.CONTACT_ID, id);
@@ -503,6 +515,7 @@ public class LegacyContactImporter {
             insert.bindNull(RawContactsInsert.SOURCE_ID);
         }
         insert(insert);
+        return id;
     }
 
     private void insertContact(Cursor c, SQLiteStatement insert) {
@@ -538,16 +551,44 @@ public class LegacyContactImporter {
         NameSplitter.Name splitName = new NameSplitter.Name();
         mNameSplitter.split(splitName, name);
 
-        bindString(insert, StructuredNameInsert.PREFIX, splitName.getPrefix());
-        bindString(insert, StructuredNameInsert.GIVEN_NAME, splitName.getGivenNames());
-        bindString(insert, StructuredNameInsert.MIDDLE_NAME, splitName.getMiddleName());
-        bindString(insert, StructuredNameInsert.FAMILY_NAME, splitName.getFamilyName());
-        bindString(insert, StructuredNameInsert.SUFFIX, splitName.getSuffix());
+        bindString(insert, StructuredNameInsert.PREFIX,
+                splitName.getPrefix());
+        bindString(insert, StructuredNameInsert.GIVEN_NAME,
+                splitName.getGivenNames());
+        bindString(insert, StructuredNameInsert.MIDDLE_NAME,
+                splitName.getMiddleName());
+        bindString(insert, StructuredNameInsert.FAMILY_NAME,
+                splitName.getFamilyName());
+        bindString(insert, StructuredNameInsert.SUFFIX,
+                splitName.getSuffix());
+        final String joined = mNameSplitter.join(splitName, true);
+        bindString(insert, StructuredNameInsert.DISPLAY_NAME, joined);
 
         if (mPhoneticNameAvailable) {
-            // TODO: add the ability to insert an unstructured phonetic name
             String phoneticName = c.getString(PeopleQuery.PHONETIC_NAME);
+            if (phoneticName != null) {
+                int index = phoneticName.indexOf(' ');
+                if (index == -1) {
+                    splitName.phoneticFamilyName = phoneticName;
+                } else {
+                    splitName.phoneticFamilyName = phoneticName.substring(0, index).trim();
+                    splitName.phoneticGivenName = phoneticName.substring(index + 1).trim();
+                }
+            }
         }
+
+        mNameSplitter.guessNameStyle(splitName);
+
+        insert.bindLong(StructuredNameInsert.FULL_NAME_STYLE,
+                splitName.getFullNameStyle());
+        bindString(insert, StructuredNameInsert.PHONETIC_FAMILY_NAME,
+                splitName.getPhoneticFamilyName());
+        bindString(insert, StructuredNameInsert.PHONETIC_MIDDLE_NAME,
+                splitName.getPhoneticMiddleName());
+        bindString(insert, StructuredNameInsert.PHONETIC_GIVEN_NAME,
+                splitName.getPhoneticGivenName());
+        insert.bindLong(StructuredNameInsert.PHONETIC_NAME_STYLE,
+                splitName.getPhoneticNameStyle());
 
         long dataId = insert(insert);
 

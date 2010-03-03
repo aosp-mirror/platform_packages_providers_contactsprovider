@@ -119,7 +119,8 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
 
         assertQueryResults("expected_contacts.txt", Contacts.CONTENT_URI, new String[]{
                 Contacts._ID,
-                Contacts.DISPLAY_NAME,
+                Contacts.DISPLAY_NAME_PRIMARY,
+                Contacts.SORT_KEY_PRIMARY,
                 Contacts.PHOTO_ID,
                 Contacts.TIMES_CONTACTED,
                 Contacts.LAST_TIME_CONTACTED,
@@ -128,6 +129,7 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.HAS_PHONE_NUMBER,
+                Contacts.LOOKUP_KEY,
         });
 
         assertQueryResults("expected_raw_contacts.txt", RawContacts.CONTENT_URI, new String[]{
@@ -142,6 +144,11 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 RawContacts.SYNC2,
                 RawContacts.SYNC3,
                 RawContacts.SYNC4,
+                RawContacts.DISPLAY_NAME_SOURCE,
+                RawContacts.DISPLAY_NAME_PRIMARY,
+                RawContacts.DISPLAY_NAME_ALTERNATIVE,
+                RawContacts.SORT_KEY_PRIMARY,
+                RawContacts.SORT_KEY_ALTERNATIVE,
         });
 
         assertQueryResults("expected_data.txt", Data.CONTENT_URI, new String[]{
@@ -182,19 +189,6 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Calls.CACHED_NAME,
                 Calls.CACHED_NUMBER_LABEL,
                 Calls.CACHED_NUMBER_TYPE,
-        });
-
-        assertQueryResults("expected_contacts.txt", Contacts.CONTENT_URI, new String[]{
-                Contacts._ID,
-                Contacts.DISPLAY_NAME,
-                Contacts.PHOTO_ID,
-                Contacts.TIMES_CONTACTED,
-                Contacts.LAST_TIME_CONTACTED,
-                Contacts.CUSTOM_RINGTONE,
-                Contacts.SEND_TO_VOICEMAIL,
-                Contacts.STARRED,
-                Contacts.IN_VISIBLE_GROUP,
-                Contacts.HAS_PHONE_NUMBER,
         });
     }
 

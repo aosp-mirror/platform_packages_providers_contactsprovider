@@ -11,8 +11,8 @@
 11    data7=null
 12    data8=null
 13    data9=null
-14    data10=null
-15    data11=null
+14    data10=1
+15    data11=0
 16    data12=null
 17    data13=null
 18    data14=null
@@ -38,8 +38,8 @@
 38    data7=null
 39    data8=null
 40    data9=null
-41    data10=null
-42    data11=null
+41    data10=1
+42    data11=0
 43    data12=null
 44    data13=null
 45    data14=null
@@ -65,8 +65,8 @@
 65    data7=null
 66    data8=null
 67    data9=null
-68    data10=null
-69    data11=null
+68    data10=1
+69    data11=0
 70    data12=null
 71    data13=null
 72    data14=null
@@ -118,9 +118,9 @@
 118    data6=null
 119    data7=null
 120    data8=null
-121    data9=null
-122    data10=null
-123    data11=null
+121    data9=
+122    data10=1
+123    data11=0
 124    data12=null
 125    data13=null
 126    data14=null

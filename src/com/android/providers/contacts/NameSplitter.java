@@ -110,6 +110,26 @@ public class NameSplitter {
             return suffix;
         }
 
+        public int getFullNameStyle() {
+            return fullNameStyle;
+        }
+
+        public String getPhoneticFamilyName() {
+            return phoneticFamilyName;
+        }
+
+        public String getPhoneticMiddleName() {
+            return phoneticMiddleName;
+        }
+
+        public String getPhoneticGivenName() {
+            return phoneticGivenName;
+        }
+
+        public int getPhoneticNameStyle() {
+            return phoneticNameStyle;
+        }
+
         public void fromValues(ContentValues values) {
             prefix = values.getAsString(StructuredName.PREFIX);
             givenNames = values.getAsString(StructuredName.GIVEN_NAME);

@@ -2529,7 +2529,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Updates a raw contact display name based on data rows, e.g. structured name,
      * organization, email etc.
      */
-    private void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
+    public void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
         int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
         NameSplitter.Name bestName = null;
         String bestDisplayName = null;
@@ -4569,6 +4569,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return getMostReferencedContactId(segments);
+    }
+
+    public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
+        mContactAggregator.updateLookupKeyForRawContact(db, rawContactId);
     }
 
     /**
