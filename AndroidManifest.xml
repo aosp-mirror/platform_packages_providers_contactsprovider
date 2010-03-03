@@ -29,6 +29,9 @@
             <path-permission
                     android:pathPrefix="/search_suggest_shortcut"
                     android:readPermission="android.permission.GLOBAL_SEARCH" />
+            <path-permission
+                    android:pathPattern="/contacts/.*/photo"
+                    android:readPermission="android.permission.GLOBAL_SEARCH" />
         </provider>
 
         <provider android:name="CallLogProvider"
