@@ -1182,7 +1182,7 @@ public class ContactAggregator {
                         if (!foundSuperPrimaryPhoto
                                 && (superprimary
                                         || photoAccount == null
-                                        || account.compareToIgnoreCase(photoAccount) < 0)) {
+                                        || photoAccount.compareToIgnoreCase(account) >= 0)) {
                             photoAccount = account;
                             bestPhotoId = dataId;
                             foundSuperPrimaryPhoto |= superprimary;
