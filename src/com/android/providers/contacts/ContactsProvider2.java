@@ -4345,16 +4345,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return c;
     }
 
-    private interface AddressBookIndexQuery {
-        String TITLE = "title";
-        String COUNT = "count";
+    private static final class AddressBookIndexQuery {
+        public static final String LETTER = "letter";
+        public static final String TITLE = "title";
+        public static final String COUNT = "count";
 
-        String[] COLUMNS = new String[] {
-                TITLE, COUNT
+        public static final String[] COLUMNS = new String[] {
+                LETTER, TITLE, COUNT
         };
 
+        public static final int COLUMN_LETTER = 0;
+        public static final int COLUMN_TITLE = 1;
+        public static final int COLUMN_COUNT = 2;
+
         // TODO change to LOCALIZED2 once that becomes available
-        String ORDER_BY = TITLE + " COLLATE LOCALIZED";
+        public static final String ORDER_BY = LETTER + " COLLATE LOCALIZED";
     }
 
     /**
@@ -4381,9 +4386,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             sortKey = Contacts.SORT_KEY_PRIMARY;
         }
 
+        String locale = getLocale().toString();
         HashMap<String, String> projectionMap = Maps.newHashMap();
+        projectionMap.put(AddressBookIndexQuery.LETTER,
+                "SUBSTR(" + sortKey + ",1,1) AS " + AddressBookIndexQuery.LETTER);
+
+        /**
+         * Use the GET_PHONEBOOK_INDEX function, which is an android extension for SQLite3,
+         * to map the first letter of the sort key to a character that is traditionally
+         * used in phonebooks to represent that letter.  For example, in Korean it will
+         * be the first consonant in the letter; for Japanese it will be Hiragana rather
+         * than Katakana.
+         */
         projectionMap.put(AddressBookIndexQuery.TITLE,
-                "UPPER(SUBSTR(" + sortKey + ",1,1)) AS " + AddressBookIndexQuery.TITLE);
+                "GET_PHONEBOOK_INDEX(SUBSTR(" + sortKey + ",1,1),'" + locale + "')"
+                        + " AS " + AddressBookIndexQuery.TITLE);
         projectionMap.put(AddressBookIndexQuery.COUNT,
                 "COUNT(" + Contacts._ID + ") AS " + AddressBookIndexQuery.COUNT);
         qb.setProjectionMap(projectionMap);
@@ -4396,10 +4413,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             int groupCount = indexCursor.getCount();
             String titles[] = new String[groupCount];
             int counts[] = new int[groupCount];
+            int indexCount = 0;
+            String currentTitle = null;
+
+            // Since GET_PHONEBOOK_INDEX is a many-to-1 function, we may end up
+            // with multiple entries for the same title.  The following code
+            // collapses those duplicates.
             for (int i = 0; i < groupCount; i++) {
                 indexCursor.moveToNext();
-                titles[i] = indexCursor.getString(0);
-                counts[i] = indexCursor.getInt(1);
+                String title = indexCursor.getString(AddressBookIndexQuery.COLUMN_TITLE);
+                int count = indexCursor.getInt(AddressBookIndexQuery.COLUMN_COUNT);
+                if (indexCount == 0 || !TextUtils.equals(title, currentTitle)) {
+                    titles[indexCount] = currentTitle = title;
+                    counts[indexCount] = count;
+                    indexCount++;
+                } else {
+                    counts[indexCount - 1] += count;
+                }
+            }
+
+            if (indexCount < groupCount) {
+                String[] newTitles = new String[indexCount];
+                System.arraycopy(titles, 0, newTitles, 0, indexCount);
+                titles = newTitles;
+
+                int[] newCounts = new int[indexCount];
+                System.arraycopy(counts, 0, newCounts, 0, indexCount);
+                counts = newCounts;
             }
 
             final Bundle bundle = new Bundle();
