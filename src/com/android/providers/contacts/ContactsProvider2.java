@@ -2253,8 +2253,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         if (partialUri || partialValues) {
             // Throw when either account is incomplete
-            throw new IllegalArgumentException("Must specify both or neither of"
-                    + " ACCOUNT_NAME and ACCOUNT_TYPE");
+            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
         // Accounts are valid by only checking one parameter, since we've
@@ -2267,8 +2267,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             final boolean accountMatch = TextUtils.equals(accountName, valueAccountName)
                     && TextUtils.equals(accountType, valueAccountType);
             if (!accountMatch) {
-                throw new IllegalArgumentException("When both specified, "
-                        + " ACCOUNT_NAME and ACCOUNT_TYPE must match");
+                throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                        "When both specified, ACCOUNT_NAME and ACCOUNT_TYPE must match", uri));
             }
         } else if (validUri) {
             // Fill values from Uri when not present
@@ -3017,7 +3017,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
-                    throw new IllegalArgumentException("URI " + uri + " is missing a lookup key");
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Missing a lookup key", uri));
                 }
                 final String lookupKey = pathSegments.get(2);
                 final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
@@ -3264,7 +3265,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
-                    throw new IllegalArgumentException("URI " + uri + " is missing a lookup key");
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Missing a lookup key", uri));
                 }
                 final String lookupKey = pathSegments.get(2);
                 final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
@@ -3894,7 +3896,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
-                    throw new IllegalArgumentException("URI " + uri + " is missing a lookup key");
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Missing a lookup key", uri));
                 }
                 String lookupKey = pathSegments.get(2);
                 if (segmentCount == 4) {
@@ -4906,8 +4909,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
         if (partialUri) {
             // Throw when either account is incomplete
-            throw new IllegalArgumentException("Must specify both or neither of"
-                    + " ACCOUNT_NAME and ACCOUNT_TYPE");
+            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
         // Accounts are valid by only checking one parameter, since we've
@@ -4930,8 +4933,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
         if (partialUri) {
             // Throw when either account is incomplete
-            throw new IllegalArgumentException("Must specify both or neither of"
-                    + " ACCOUNT_NAME and ACCOUNT_TYPE");
+            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
         // Accounts are valid by only checking one parameter, since we've
@@ -5031,7 +5034,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         switch (match) {
             case CONTACTS_PHOTO: {
                 if (!"r".equals(mode)) {
-                    throw new FileNotFoundException("Mode " + mode + " not supported.");
+                    throw new FileNotFoundException(mDbHelper.exceptionMessage("Mode " + mode
+                            + " not supported.", uri));
                 }
 
                 String sql =
@@ -5057,7 +5061,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             default:
-                throw new FileNotFoundException("No file at: " + uri);
+                throw new FileNotFoundException(mDbHelper.exceptionMessage("File does not exist",
+                        uri));
         }
     }
 

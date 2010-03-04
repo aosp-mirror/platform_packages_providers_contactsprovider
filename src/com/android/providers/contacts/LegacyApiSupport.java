@@ -836,7 +836,7 @@ public class LegacyApiSupport {
             }
 
             default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
         }
 
         if (id < 0) {
@@ -964,7 +964,7 @@ public class LegacyApiSupport {
             case GROUPMEMBERSHIP:
             case GROUPMEMBERSHIP_ID:
             case -1: {
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
             }
 
             default: {
@@ -1518,7 +1518,7 @@ public class LegacyApiSupport {
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         final int match = sUriMatcher.match(uri);
         if (match == -1 || match == SETTINGS) {
-            throw new UnsupportedOperationException("Unknown uri: " + uri);
+            throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
         }
 
         Cursor c = query(uri, IdQuery.COLUMNS, selection, selectionArgs, null, null);
@@ -1589,7 +1589,7 @@ public class LegacyApiSupport {
                 break;
 
             default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
+                throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
         }
 
         return count;
@@ -1893,7 +1893,7 @@ public class LegacyApiSupport {
 
             case DELETED_PEOPLE:
             case DELETED_GROUPS:
-                throw new UnsupportedOperationException();
+                throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
 
             case SETTINGS:
                 copySettingsToLegacySettings();
@@ -1901,7 +1901,7 @@ public class LegacyApiSupport {
                 break;
 
             default:
-                throw new IllegalArgumentException("Unknown URL " + uri);
+                throw new IllegalArgumentException(mDbHelper.exceptionMessage(uri));
         }
 
         // Perform the query and set the notification uri
@@ -2045,7 +2045,7 @@ public class LegacyApiSupport {
             case SEARCH_SHORTCUT:
                 return SearchManager.SHORTCUT_MIME_TYPE;
             default:
-                throw new IllegalArgumentException("Unknown URI");
+                throw new IllegalArgumentException(mDbHelper.exceptionMessage(uri));
         }
     }
 

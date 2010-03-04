@@ -34,6 +34,7 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
 import android.provider.BaseColumns;
@@ -2785,5 +2786,53 @@ import java.util.Locale;
             }
         }
         return false;
+    }
+
+    /**
+     * Returns a detailed exception message for the supplied URI.  It includes the calling
+     * user and calling package(s).
+     */
+    public String exceptionMessage(Uri uri) {
+        return exceptionMessage(null, uri);
+    }
+
+    /**
+     * Returns a detailed exception message for the supplied URI.  It includes the calling
+     * user and calling package(s).
+     */
+    public String exceptionMessage(String message, Uri uri) {
+        StringBuilder sb = new StringBuilder();
+        if (message != null) {
+            sb.append(message).append("; ");
+        }
+        sb.append("URI: ").append(uri);
+        final PackageManager pm = mContext.getPackageManager();
+        int callingUid = Binder.getCallingUid();
+        sb.append(", calling user: ");
+        String userName = pm.getNameForUid(callingUid);
+        if (userName != null) {
+            sb.append(userName);
+        } else {
+            sb.append(callingUid);
+        }
+
+        final String[] callerPackages = pm.getPackagesForUid(callingUid);
+        if (callerPackages != null && callerPackages.length > 0) {
+            if (callerPackages.length == 1) {
+                sb.append(", calling package:");
+                sb.append(callerPackages[0]);
+            } else {
+                sb.append(", calling package is one of: [");
+                for (int i = 0; i < callerPackages.length; i++) {
+                    if (i != 0) {
+                        sb.append(", ");
+                    }
+                    sb.append(callerPackages[i]);
+                }
+                sb.append("]");
+            }
+        }
+
+        return sb.toString();
     }
 }
