@@ -1815,6 +1815,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(version, getVersion(uri));
     }
 
+    public void testDeleteContactWithoutName() {
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        Uri phoneUri = insertPhoneNumber(rawContactId, "555-123-45678", true);
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri lookupUri = Contacts.getLookupUri(mResolver, contactUri);
+
+        int numDeleted = mResolver.delete(lookupUri, null, null);
+        assertEquals(1, numDeleted);
+    }
+
+    public void testDeleteContactWithoutAnyData() {
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri lookupUri = Contacts.getLookupUri(mResolver, contactUri);
+
+        int numDeleted = mResolver.delete(lookupUri, null, null);
+        assertEquals(1, numDeleted);
+    }
+
     public void testGetPhotoUri() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);

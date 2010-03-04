@@ -3013,8 +3013,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return deleteContact(contactId);
             }
 
-            case CONTACTS_LOOKUP:
-            case CONTACTS_LOOKUP_ID: {
+            case CONTACTS_LOOKUP: {
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
@@ -3023,6 +3022,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final String lookupKey = pathSegments.get(2);
                 final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
                 return deleteContact(contactId);
+            }
+
+            case CONTACTS_LOOKUP_ID: {
+                // lookup contact by id and lookup key to see if they still match the actual record
+                long contactId = ContentUris.parseId(uri);
+                final List<String> pathSegments = uri.getPathSegments();
+                final String lookupKey = pathSegments.get(2);
+                SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
+                setTablesAndProjectionMapForContacts(lookupQb, uri, null);
+                String[] args;
+                if (selectionArgs == null) {
+                    args = new String[2];
+                } else {
+                    args = new String[selectionArgs.length + 2];
+                    System.arraycopy(selectionArgs, 0, args, 2, selectionArgs.length);
+                }
+                args[0] = String.valueOf(contactId);
+                args[1] = lookupKey;
+                lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
+                final SQLiteDatabase db = mDbHelper.getReadableDatabase();
+                Cursor c = query(db, lookupQb, null, selection, args, null, null, null);
+                try {
+                    if (c.getCount() == 1) {
+                        // contact was unmodified so go ahead and delete it
+                        return deleteContact(contactId);
+                    } else {
+                        // row was changed (e.g. the merging might have changed), we got multiple
+                        // rows or the supplied selection filtered the record out
+                        return 0;
+                    }
+                } finally {
+                    c.close();
+                }
             }
 
             case RAW_CONTACTS: {
