@@ -5145,6 +5145,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return Phone.CONTENT_TYPE;
             case PHONES_ID:
                 return Phone.CONTENT_ITEM_TYPE;
+            case PHONE_LOOKUP:
+                return PhoneLookup.CONTENT_TYPE;
             case EMAILS:
                 return Email.CONTENT_TYPE;
             case EMAILS_ID:
