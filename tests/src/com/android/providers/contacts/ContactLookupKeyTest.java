@@ -47,7 +47,8 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
 
         // Normalized display name
         String normalizedName = NameNormalizer.normalize("johndoe");
-        String expectedLookupKey = "0n" + normalizedName + ".0n" + normalizedName;
+        String expectedLookupKey = "0r" + rawContactId1 + "-" + normalizedName + ".0r"
+                + rawContactId2 + "-" + normalizedName;
 
         long contactId = queryContactId(rawContactId1);
         assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
@@ -174,24 +175,33 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
     public void testParseLookupKey() {
         assertLookupKey("123n1248AC",
                 new int[]{123},
-                new boolean[]{false},
+                new int[]{ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME},
+                new String[]{"1248AC"});
+        assertLookupKey("123r20-1248AC",
+                new int[]{123},
+                new int[]{ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID},
                 new String[]{"1248AC"});
         assertLookupKey("0i1248AC",
                 new int[]{0},
-                new boolean[]{true},
+                new int[]{ContactLookupKey.LOOKUP_TYPE_SOURCE_ID},
                 new String[]{"1248AC"});
         assertLookupKey("432e12..48AC",
                 new int[]{432},
-                new boolean[]{true},
+                new int[]{ContactLookupKey.LOOKUP_TYPE_SOURCE_ID},
                 new String[]{"12.48AC"});
 
         assertLookupKey("123n1248AC.0i1248AC.432e12..48AC.123n1248AC",
                 new int[]{123, 0, 432, 123},
-                new boolean[]{false, true, true, false},
+                new int[] {
+                        ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME,
+                        ContactLookupKey.LOOKUP_TYPE_SOURCE_ID,
+                        ContactLookupKey.LOOKUP_TYPE_SOURCE_ID,
+                        ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME,
+                },
                 new String[]{"1248AC", "1248AC", "12.48AC", "1248AC"});
     }
 
-    private void assertLookupKey(String lookupKey, int[] accountHashCodes, boolean[] types,
+    private void assertLookupKey(String lookupKey, int[] accountHashCodes, int[] types,
             String[] keys) {
         ContactLookupKey key = new ContactLookupKey();
         ArrayList<LookupKeySegment> list = key.parse(lookupKey);
@@ -200,7 +210,7 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
         for (int i = 0; i < accountHashCodes.length; i++) {
             LookupKeySegment segment = list.get(i);
             assertEquals(accountHashCodes[i], segment.accountHashCode);
-            assertEquals(types[i], segment.sourceIdLookup);
+            assertEquals(types[i], segment.lookupType);
             assertEquals(keys[i], segment.key);
         }
     }

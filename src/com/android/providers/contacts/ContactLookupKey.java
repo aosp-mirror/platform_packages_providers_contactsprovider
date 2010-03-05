@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import android.net.Uri;
-import android.text.TextUtils;
 
 import java.util.ArrayList;
 
@@ -27,9 +26,14 @@ import java.util.ArrayList;
  */
 public class ContactLookupKey {
 
+    public static final int LOOKUP_TYPE_SOURCE_ID = 0;
+    public static final int LOOKUP_TYPE_DISPLAY_NAME = 1;
+    public static final int LOOKUP_TYPE_RAW_CONTACT_ID = 2;
+
     public static class LookupKeySegment implements Comparable<LookupKeySegment> {
         public int accountHashCode;
-        public boolean sourceIdLookup;
+        public int lookupType;
+        public String rawContactId;
         public String key;
         public long contactId;
 
@@ -57,7 +61,7 @@ public class ContactLookupKey {
     }
 
     public static void appendToLookupKey(StringBuilder lookupKey, String accountType,
-            String accountName, String sourceId, String displayName) {
+            String accountName, long rawContactId, String sourceId, String displayName) {
         if (displayName == null) {
             displayName = "";
         }
@@ -68,7 +72,8 @@ public class ContactLookupKey {
 
         lookupKey.append(getAccountHashCode(accountType, accountName));
         if (sourceId == null) {
-            lookupKey.append('n').append(NameNormalizer.normalize(displayName));
+            lookupKey.append('r').append(rawContactId).append('-').append(
+                    NameNormalizer.normalize(displayName));
         } else {
             int pos = lookupKey.length();
             lookupKey.append('i');
@@ -103,8 +108,9 @@ public class ContactLookupKey {
         int offset = 0;
         int length = string.length();
         int hashCode = 0;
-        boolean sourceIdLookup = false;
+        int lookupType = -1;
         boolean escaped;
+        String rawContactId = null;
         String key;
 
         while (offset < length) {
@@ -121,15 +127,18 @@ public class ContactLookupKey {
             }
 
             // Parse segment type
-            if (c == 'n') {
-                sourceIdLookup = false;
-                escaped = false;
-            } else if (c == 'i') {
-                sourceIdLookup = true;
+            if (c == 'i') {
+                lookupType = LOOKUP_TYPE_SOURCE_ID;
                 escaped = false;
             } else if (c == 'e') {
-                sourceIdLookup = true;
+                lookupType = LOOKUP_TYPE_SOURCE_ID;
                 escaped = true;
+            } else if (c == 'n') {
+                lookupType = LOOKUP_TYPE_DISPLAY_NAME;
+                escaped = false;
+            } else if (c == 'r') {
+                lookupType = LOOKUP_TYPE_RAW_CONTACT_ID;
+                escaped = false;
             } else {
                 throw new IllegalArgumentException("Invalid lookup id: " + lookupKey);
             }
@@ -158,13 +167,21 @@ public class ContactLookupKey {
                 }
                 key = sb.toString();
             } else {
+                int dash = -1;
                 int start = offset;
                 while (offset < length) {
-                    c = string.charAt(offset++);
-
+                    c = string.charAt(offset);
+                    if (c == '-' && dash == -1) {
+                        dash = offset;
+                    }
+                    offset++;
                     if (c == '.') {
                         break;
                     }
+                }
+                if (dash != -1) {
+                    rawContactId = string.substring(start, dash);
+                    start = dash + 1;
                 }
                 if (offset == length) {
                     key = string.substring(start);
@@ -175,8 +192,9 @@ public class ContactLookupKey {
 
             LookupKeySegment segment = new LookupKeySegment();
             segment.accountHashCode = hashCode;
+            segment.lookupType = lookupType;
+            segment.rawContactId = rawContactId;
             segment.key = key;
-            segment.sourceIdLookup = sourceIdLookup;
             segment.contactId = -1;
             list.add(segment);
         }

@@ -4502,16 +4502,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Returns the contact Id for the contact identified by the lookupKey.  Robust against changes
-     * in the lookup key:  if the key has changed, will look up the contact by the name encoded in
-     * the lookup key.
+     * Returns the contact Id for the contact identified by the lookupKey.
+     * Robust against changes in the lookup key: if the key has changed, will
+     * look up the contact by the raw contact IDs or name encoded in the lookup
+     * key.
      */
     public long lookupContactIdByLookupKey(SQLiteDatabase db, String lookupKey) {
         ContactLookupKey key = new ContactLookupKey();
         ArrayList<LookupKeySegment> segments = key.parse(lookupKey);
 
-        long contactId = lookupContactIdBySourceIds(db, segments);
-        if (contactId == -1) {
+        long contactId = -1;
+        if (lookupKeyContainsType(segments, ContactLookupKey.LOOKUP_TYPE_SOURCE_ID)) {
+            contactId = lookupContactIdBySourceIds(db, segments);
+            if (contactId != -1) {
+                return contactId;
+            }
+        }
+
+        boolean hasRawContactIds =
+                lookupKeyContainsType(segments, ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID);
+        if (hasRawContactIds) {
+            contactId = lookupContactIdByRawContactIds(db, segments);
+            if (contactId != -1) {
+                return contactId;
+            }
+        }
+
+        if (hasRawContactIds
+                || lookupKeyContainsType(segments, ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME)) {
             contactId = lookupContactIdByDisplayNames(db, segments);
         }
 
@@ -4536,24 +4554,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private long lookupContactIdBySourceIds(SQLiteDatabase db,
                 ArrayList<LookupKeySegment> segments) {
-        int sourceIdCount = 0;
-        for (int i = 0; i < segments.size(); i++) {
-            LookupKeySegment segment = segments.get(i);
-            if (segment.sourceIdLookup) {
-                sourceIdCount++;
-            }
-        }
-
-        if (sourceIdCount == 0) {
-            return -1;
-        }
-
-        // First try sync ids
         StringBuilder sb = new StringBuilder();
         sb.append(RawContacts.SOURCE_ID + " IN (");
         for (int i = 0; i < segments.size(); i++) {
             LookupKeySegment segment = segments.get(i);
-            if (segment.sourceIdLookup) {
+            if (segment.lookupType == ContactLookupKey.LOOKUP_TYPE_SOURCE_ID) {
                 DatabaseUtils.appendEscapedSQLString(sb, segment.key);
                 sb.append(",");
             }
@@ -4572,9 +4577,66 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String sourceId = c.getString(LookupBySourceIdQuery.SOURCE_ID);
                 for (int i = 0; i < segments.size(); i++) {
                     LookupKeySegment segment = segments.get(i);
-                    if (segment.sourceIdLookup && accountHashCode == segment.accountHashCode
+                    if (segment.lookupType == ContactLookupKey.LOOKUP_TYPE_SOURCE_ID
+                            && accountHashCode == segment.accountHashCode
                             && segment.key.equals(sourceId)) {
                         segment.contactId = c.getLong(LookupBySourceIdQuery.CONTACT_ID);
+                        break;
+                    }
+                }
+            }
+        } finally {
+            c.close();
+        }
+
+        return getMostReferencedContactId(segments);
+    }
+
+    private interface LookupByRawContactIdQuery {
+        String TABLE = Tables.RAW_CONTACTS;
+
+        String COLUMNS[] = {
+                RawContacts.CONTACT_ID,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_NAME,
+                RawContacts._ID,
+        };
+
+        int CONTACT_ID = 0;
+        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_NAME = 2;
+        int ID = 3;
+    }
+
+    private long lookupContactIdByRawContactIds(SQLiteDatabase db,
+            ArrayList<LookupKeySegment> segments) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(RawContacts._ID + " IN (");
+        for (int i = 0; i < segments.size(); i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (segment.lookupType == ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID) {
+                sb.append(segment.rawContactId);
+                sb.append(",");
+            }
+        }
+        sb.setLength(sb.length() - 1);      // Last comma
+        sb.append(") AND " + RawContacts.CONTACT_ID + " NOT NULL");
+
+        Cursor c = db.query(LookupByRawContactIdQuery.TABLE, LookupByRawContactIdQuery.COLUMNS,
+                 sb.toString(), null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                String accountType = c.getString(LookupByRawContactIdQuery.ACCOUNT_TYPE);
+                String accountName = c.getString(LookupByRawContactIdQuery.ACCOUNT_NAME);
+                int accountHashCode =
+                        ContactLookupKey.getAccountHashCode(accountType, accountName);
+                String rawContactId = c.getString(LookupByRawContactIdQuery.ID);
+                for (int i = 0; i < segments.size(); i++) {
+                    LookupKeySegment segment = segments.get(i);
+                    if (segment.lookupType == ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID
+                            && accountHashCode == segment.accountHashCode
+                            && segment.rawContactId.equals(rawContactId)) {
+                        segment.contactId = c.getLong(LookupByRawContactIdQuery.CONTACT_ID);
                         break;
                     }
                 }
@@ -4604,24 +4666,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private long lookupContactIdByDisplayNames(SQLiteDatabase db,
                 ArrayList<LookupKeySegment> segments) {
-        int displayNameCount = 0;
-        for (int i = 0; i < segments.size(); i++) {
-            LookupKeySegment segment = segments.get(i);
-            if (!segment.sourceIdLookup) {
-                displayNameCount++;
-            }
-        }
-
-        if (displayNameCount == 0) {
-            return -1;
-        }
-
-        // First try sync ids
         StringBuilder sb = new StringBuilder();
         sb.append(NameLookupColumns.NORMALIZED_NAME + " IN (");
         for (int i = 0; i < segments.size(); i++) {
             LookupKeySegment segment = segments.get(i);
-            if (!segment.sourceIdLookup) {
+            if (segment.lookupType == ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME
+                    || segment.lookupType == ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID) {
                 DatabaseUtils.appendEscapedSQLString(sb, segment.key);
                 sb.append(",");
             }
@@ -4641,7 +4691,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String name = c.getString(LookupByDisplayNameQuery.NORMALIZED_NAME);
                 for (int i = 0; i < segments.size(); i++) {
                     LookupKeySegment segment = segments.get(i);
-                    if (!segment.sourceIdLookup && accountHashCode == segment.accountHashCode
+                    if ((segment.lookupType == ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME
+                            || segment.lookupType == ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID)
+                            && accountHashCode == segment.accountHashCode
                             && segment.key.equals(name)) {
                         segment.contactId = c.getLong(LookupByDisplayNameQuery.CONTACT_ID);
                         break;
@@ -4653,6 +4705,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return getMostReferencedContactId(segments);
+    }
+
+    private boolean lookupKeyContainsType(ArrayList<LookupKeySegment> segments, int lookupType) {
+        for (int i = 0; i < segments.size(); i++) {
+            LookupKeySegment segment = segments.get(i);
+            if (segment.lookupType == lookupType) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {

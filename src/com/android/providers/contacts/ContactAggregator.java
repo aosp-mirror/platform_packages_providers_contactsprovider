@@ -1167,6 +1167,7 @@ public class ContactAggregator {
                     ContactLookupKey.appendToLookupKey(mSb,
                             c.getString(RawContactsQuery.ACCOUNT_TYPE),
                             c.getString(RawContactsQuery.ACCOUNT_NAME),
+                            rawContactId,
                             c.getString(RawContactsQuery.SOURCE_ID),
                             displayName);
                 }
@@ -1408,16 +1409,18 @@ public class ContactAggregator {
 
     private interface LookupKeyQuery {
         String[] COLUMNS = new String[] {
+            RawContacts._ID,
             RawContactsColumns.DISPLAY_NAME,
             RawContacts.ACCOUNT_TYPE,
             RawContacts.ACCOUNT_NAME,
             RawContacts.SOURCE_ID,
         };
 
-        int DISPLAY_NAME = 0;
-        int ACCOUNT_TYPE = 1;
-        int ACCOUNT_NAME = 2;
-        int SOURCE_ID = 3;
+        int ID = 0;
+        int DISPLAY_NAME = 1;
+        int ACCOUNT_TYPE = 2;
+        int ACCOUNT_NAME = 3;
+        int SOURCE_ID = 4;
     }
 
     public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
@@ -1439,6 +1442,7 @@ public class ContactAggregator {
                 ContactLookupKey.appendToLookupKey(mSb,
                         c.getString(LookupKeyQuery.ACCOUNT_TYPE),
                         c.getString(LookupKeyQuery.ACCOUNT_NAME),
+                        c.getLong(LookupKeyQuery.ID),
                         c.getString(LookupKeyQuery.SOURCE_ID),
                         c.getString(LookupKeyQuery.DISPLAY_NAME));
             }
