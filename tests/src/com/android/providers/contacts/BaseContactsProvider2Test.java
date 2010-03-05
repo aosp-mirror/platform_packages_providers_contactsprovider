@@ -98,6 +98,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
+    @Override
+    protected void tearDown() throws Exception {
+        if (mActor.provider instanceof SynchronousContactsProvider2) {
+            ((SynchronousContactsProvider2) mActor.provider)
+                    .getDatabaseHelper(mActor.context).close();
+        }
+        super.tearDown();
+    }
+
     public Context getMockContext() {
         return mActor.context;
     }
@@ -226,7 +235,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
         values.put(Organization.TYPE, Organization.TYPE_WORK);
         if (primary) {
-            values.put(Data.IS_PRIMARY, true);
+            values.put(Data.IS_PRIMARY, 1);
         }
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
@@ -244,7 +253,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Phone.NUMBER, phoneNumber);
         values.put(Phone.TYPE, Phone.TYPE_HOME);
         if (primary) {
-            values.put(Data.IS_PRIMARY, true);
+            values.put(Data.IS_PRIMARY, 1);
         }
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);

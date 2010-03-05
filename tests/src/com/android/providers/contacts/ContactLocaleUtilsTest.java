@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import android.provider.ContactsContract.FullNameStyle;
 import android.test.AndroidTestCase;
-import android.util.Log;
 
 import java.text.Collator;
 import java.util.Arrays;
@@ -79,21 +78,12 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         verifyKeys(keys, CHINESE_LATIN_MIX_NAME_2_KEY);
     }
 
-    private void verifyKeys(final Iterator<String> resultKeys, final String[] expectedKeys) throws Exception {
+    private void verifyKeys(final Iterator<String> resultKeys, final String[] expectedKeys)
+            throws Exception {
         HashSet<String> allKeys = new HashSet<String>();
         while (resultKeys.hasNext()) {
             allKeys.add(resultKeys.next());
         }
-        Iterator<String> ks = allKeys.iterator();
-        Log.d("ContactLocaleUtilsTest", "Result keys");
-        while(ks.hasNext()) {
-            Log.d("ContactLocaleUtilsTest", ks.next());
-        }
-        Log.d("ContactLocaleUtilsTest", "Expected keys");
-        for(String ekey : expectedKeys) {
-            Log.d("ContactLocaleUtilsTest", ekey);
-        }
-        assertEquals(allKeys.size(), expectedKeys.length);
-        assertTrue(allKeys.containsAll(Arrays.asList(expectedKeys)));
+        assertEquals(allKeys, new HashSet<String>(Arrays.asList(expectedKeys)));
     }
 }

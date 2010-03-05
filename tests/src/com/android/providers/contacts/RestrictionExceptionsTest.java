@@ -239,6 +239,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
             final long rawContactId = entity.getEntityValues().getAsLong(RawContacts._ID);
             assertTrue(rawContactId == greyContact);
         }
+        iterator.close();
 
         // When calling on behalf of another package, protected is omitted
         mGrey.ensureCallingPackage();
@@ -249,6 +250,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
             final long rawContactId = entity.getEntityValues().getAsLong(RawContacts._ID);
             assertTrue(rawContactId != greyContact);
         }
+        iterator.close();
     }
 
     public void testRestrictedEmailLookupRestricted() {

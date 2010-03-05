@@ -113,6 +113,8 @@ public class ContactAggregatorPerformanceTest extends AndroidTestCase {
                 rawContactCount,
                 contactCount,
                 ((double)(end-start)/rawContactCount)));
+
+        provider.getDatabaseHelper().close();
     }
 }
 

@@ -190,6 +190,8 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Calls.CACHED_NUMBER_LABEL,
                 Calls.CACHED_NUMBER_TYPE,
         });
+
+        provider.getDatabaseHelper().close();
     }
 
     private void assertQueryResults(String fileName, Uri uri, String[] projection) throws Exception {

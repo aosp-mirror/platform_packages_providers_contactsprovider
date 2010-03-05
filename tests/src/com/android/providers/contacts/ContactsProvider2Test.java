@@ -1332,6 +1332,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.moveToFirst();
         assertEquals(StatusUpdates.INVISIBLE, c.getInt(0));
         assertEquals("Red", c.getString(1));
+        c.close();
     }
 
     private void updateSendToVoicemailAndRingtone(long contactId, boolean sendToVoicemail,
@@ -1947,6 +1948,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.MIMETYPE + "=?", new String[] {Photo.CONTENT_ITEM_TYPE}, null);
         storedPhoto.moveToFirst();
         MoreAsserts.assertEquals(loadTestPhoto(), storedPhoto.getBlob(0));
+        storedPhoto.close();
     }
 
     public void testUpdateRawContactSetStarred() {

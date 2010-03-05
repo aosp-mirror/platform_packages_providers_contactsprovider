@@ -238,6 +238,7 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            insert.close();
         }
     }
 
@@ -443,41 +444,48 @@ public class LegacyContactImporter {
         SQLiteStatement structuredNameInsert =
                 mTargetDb.compileStatement(StructuredNameInsert.INSERT_SQL);
         SQLiteStatement noteInsert = mTargetDb.compileStatement(NoteInsert.INSERT_SQL);
-
-        String[] columns = mPhoneticNameAvailable
-                ? PeopleQuery.COLUMNS_WITH_DISPLAY_NAME_WITH_PHONETIC_NAME
-                : PeopleQuery.COLUMNS_WITH_DISPLAY_NAME_WITHOUT_PHONETIC_NAME;
-        Cursor c =
-                mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NULL", null, null, null, null);
         try {
-            while (c.moveToNext()) {
-                insertRawContact(c, rawContactInsert);
-                insertContact(c, contactInsert);
-                insertNote(c, noteInsert);
-                mContactCount++;
+            String[] columns = mPhoneticNameAvailable
+                    ? PeopleQuery.COLUMNS_WITH_DISPLAY_NAME_WITH_PHONETIC_NAME
+                    : PeopleQuery.COLUMNS_WITH_DISPLAY_NAME_WITHOUT_PHONETIC_NAME;
+            Cursor c = mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NULL", null, null,
+                    null, null);
+            try {
+                while (c.moveToNext()) {
+                    insertRawContact(c, rawContactInsert);
+                    insertContact(c, contactInsert);
+                    insertNote(c, noteInsert);
+                    mContactCount++;
+                }
+            } finally {
+                c.close();
+            }
+
+            columns = mPhoneticNameAvailable
+                    ? PeopleQuery.COLUMNS_WITH_PHONETIC_NAME
+                    : PeopleQuery.COLUMNS_WITHOUT_PHONETIC_NAME;
+            c = mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NOT NULL", null, null, null,
+                    null);
+            try {
+                while (c.moveToNext()) {
+                    long id = insertRawContact(c, rawContactInsert);
+                    insertContact(c, contactInsert);
+                    insertStructuredName(c, structuredNameInsert);
+                    insertNote(c, noteInsert);
+
+                    // Compute display names, sort keys, lookup key, etc.
+                    mContactsProvider.updateRawContactDisplayName(mTargetDb, id);
+                    mContactsProvider.updateLookupKeyForRawContact(mTargetDb, id);
+                    mContactCount++;
+                }
+            } finally {
+                c.close();
             }
         } finally {
-            c.close();
-        }
-
-        columns = mPhoneticNameAvailable
-                ? PeopleQuery.COLUMNS_WITH_PHONETIC_NAME
-                : PeopleQuery.COLUMNS_WITHOUT_PHONETIC_NAME;
-        c = mSourceDb.query(PeopleQuery.TABLE, columns, "name IS NOT NULL", null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                long id = insertRawContact(c, rawContactInsert);
-                insertContact(c, contactInsert);
-                insertStructuredName(c, structuredNameInsert);
-                insertNote(c, noteInsert);
-
-                // Compute display names, sort keys, lookup key, etc.
-                mContactsProvider.updateRawContactDisplayName(mTargetDb, id);
-                mContactsProvider.updateLookupKeyForRawContact(mTargetDb, id);
-                mContactCount++;
-            }
-        } finally {
-            c.close();
+            rawContactInsert.close();
+            contactInsert.close();
+            structuredNameInsert.close();
+            noteInsert.close();
         }
     }
 
@@ -655,6 +663,7 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            insert.close();
         }
     }
 
@@ -772,7 +781,11 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            emailInsert.close();
+            imInsert.close();
+            postalInsert.close();
         }
+
     }
 
     private void insertEmail(Cursor c, SQLiteStatement insert) {
@@ -886,6 +899,9 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            phoneInsert.close();
+            phoneLookupInsert.close();
+            hasPhoneUpdate.close();
         }
     }
 
@@ -969,6 +985,8 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            insert.close();
+            photoIdUpdate.close();
         }
     }
 
@@ -1031,6 +1049,7 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            insert.close();
         }
     }
 
@@ -1161,6 +1180,7 @@ public class LegacyContactImporter {
             }
         } finally {
             c.close();
+            insert.close();
         }
     }
 

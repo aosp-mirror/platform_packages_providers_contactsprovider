@@ -139,7 +139,7 @@ public class GroupsTest extends BaseContactsProvider2Test {
                 fail("Unrecognized group in summary cursor");
             }
         }
-
+        cursor.close();
     }
 
     @MediumTest
