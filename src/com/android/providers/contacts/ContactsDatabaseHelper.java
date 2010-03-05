@@ -2036,7 +2036,8 @@ import java.util.Locale;
      * Inserts name lookup rows for all structured names in the database.
      */
     private void insertStructuredNameLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
-        NameLookupBuilder nameLookupBuilder = new StructuredNameLookupBuilder(createNameSplitter(),
+        NameSplitter nameSplitter = createNameSplitter();
+        NameLookupBuilder nameLookupBuilder = new StructuredNameLookupBuilder(nameSplitter,
                 new CommonNicknameCache(db), nameLookupInsert);
         final long mimeTypeId = lookupMimeTypeId(db, StructuredName.CONTENT_ITEM_TYPE);
         Cursor cursor = db.query(StructuredNameQuery.TABLE, StructuredNameQuery.COLUMNS,
@@ -2047,7 +2048,8 @@ import java.util.Locale;
                 long dataId = cursor.getLong(StructuredNameQuery.ID);
                 long rawContactId = cursor.getLong(StructuredNameQuery.RAW_CONTACT_ID);
                 String name = cursor.getString(StructuredNameQuery.DISPLAY_NAME);
-                nameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
+                int fullNameStyle = nameSplitter.guessFullNameStyle(name);
+                nameLookupBuilder.insertNameLookup(rawContactId, dataId, name, fullNameStyle);
             }
         } finally {
             cursor.close();

@@ -241,6 +241,11 @@ public class ContactsActor {
         }
 
         @Override
+        public String getNameForUid(int uid) {
+            return "name-for-uid";
+        }
+
+        @Override
         public String[] getPackagesForUid(int uid) {
             return new String[] { sCallingPackage };
         }

@@ -60,7 +60,7 @@ public abstract class NameLookupBuilder {
     /**
      * Inserts name lookup records for the given structured name.
      */
-    public void insertNameLookup(long rawContactId, long dataId, String name) {
+    public void insertNameLookup(long rawContactId, long dataId, String name, int fullNameStyle) {
         int tokenCount = mSplitter.tokenize(mNames, name);
         if (tokenCount == 0) {
             return;
@@ -101,7 +101,7 @@ public abstract class NameLookupBuilder {
 
         insertNameVariants(rawContactId, dataId, 0, tokenCount, !tooManyTokens, true);
         insertNicknamePermutations(rawContactId, dataId, 0, tokenCount);
-        insertNameShorthandLookup(rawContactId, dataId, name);
+        insertNameShorthandLookup(rawContactId, dataId, name, fullNameStyle);
     }
 
     protected String normalizeName(String name) {
@@ -201,8 +201,9 @@ public abstract class NameLookupBuilder {
         }
     }
 
-    private void insertNameShorthandLookup(long rawContactId, long dataId, String name) {
-        Iterator<String> it = ContactLocaleUtils.getNameLookupKeys(name, FullNameStyle.CHINESE);
+    private void insertNameShorthandLookup(long rawContactId, long dataId, String name,
+            int fullNameStyle) {
+        Iterator<String> it = ContactLocaleUtils.getNameLookupKeys(name, fullNameStyle);
         if (it != null) {
             while (it.hasNext()) {
                 String key = it.next();

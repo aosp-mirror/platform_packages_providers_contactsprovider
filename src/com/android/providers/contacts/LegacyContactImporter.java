@@ -579,8 +579,9 @@ public class LegacyContactImporter {
 
         mNameSplitter.guessNameStyle(splitName);
 
+        int fullNameStyle = splitName.getFullNameStyle();
         insert.bindLong(StructuredNameInsert.FULL_NAME_STYLE,
-                splitName.getFullNameStyle());
+                fullNameStyle);
         bindString(insert, StructuredNameInsert.PHONETIC_FAMILY_NAME,
                 splitName.getPhoneticFamilyName());
         bindString(insert, StructuredNameInsert.PHONETIC_MIDDLE_NAME,
@@ -592,7 +593,7 @@ public class LegacyContactImporter {
 
         long dataId = insert(insert);
 
-        mContactsProvider.insertNameLookupForStructuredName(id, dataId, name);
+        mContactsProvider.insertNameLookupForStructuredName(id, dataId, name, fullNameStyle);
     }
 
     private void insertNote(Cursor c, SQLiteStatement insert) {

@@ -1108,7 +1108,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = super.insert(db, rawContactId, values);
 
             String name = values.getAsString(StructuredName.DISPLAY_NAME);
-            insertNameLookupForStructuredName(rawContactId, dataId, name);
+            Integer fullNameStyle = values.getAsInteger(StructuredName.FULL_NAME_STYLE);
+            insertNameLookupForStructuredName(rawContactId, dataId, name,
+                    fullNameStyle != null ? fullNameStyle : FullNameStyle.UNDEFINED);
             fixRawContactDisplayName(db, rawContactId);
             return dataId;
         }
@@ -1127,7 +1129,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (values.containsKey(StructuredName.DISPLAY_NAME)) {
                 String name = values.getAsString(StructuredName.DISPLAY_NAME);
                 deleteNameLookup(dataId);
-                insertNameLookupForStructuredName(rawContactId, dataId, name);
+                Integer fullNameStyle = values.getAsInteger(StructuredName.FULL_NAME_STYLE);
+                insertNameLookupForStructuredName(rawContactId, dataId, name,
+                        fullNameStyle != null ? fullNameStyle : FullNameStyle.UNDEFINED);
             }
             fixRawContactDisplayName(db, rawContactId);
         }
@@ -1186,11 +1190,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 update.put(StructuredName.FULL_NAME_STYLE, name.fullNameStyle);
                 update.put(StructuredName.PHONETIC_NAME_STYLE, name.phoneticNameStyle);
             } else if (touchedUnstruct && touchedStruct){
-                if (TextUtils.isEmpty(update.getAsString(StructuredName.FULL_NAME_STYLE))) {
-                    update.put(StructuredName.FULL_NAME_STYLE, mSplitter.guessFullNameStyle(unstruct));
+                if (!update.containsKey(StructuredName.FULL_NAME_STYLE)) {
+                    update.put(StructuredName.FULL_NAME_STYLE,
+                            mSplitter.guessFullNameStyle(unstruct));
                 }
-                if (TextUtils.isEmpty(update.getAsString(StructuredName.PHONETIC_NAME_STYLE))) {
-                    update.put(StructuredName.PHONETIC_NAME_STYLE, mSplitter.guessPhoneticNameStyle(unstruct));
+                if (!update.containsKey(StructuredName.PHONETIC_NAME_STYLE)) {
+                    update.put(StructuredName.PHONETIC_NAME_STYLE,
+                            mSplitter.guessPhoneticNameStyle(unstruct));
                 }
             }
         }
@@ -5159,6 +5165,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return SearchManager.SUGGEST_MIME_TYPE;
             case SEARCH_SHORTCUT:
                 return SearchManager.SHORTCUT_MIME_TYPE;
+
             default:
                 return mLegacyApiSupport.getType(uri);
         }
@@ -5249,8 +5256,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name) {
-        mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name);
+    public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name,
+            int fullNameStyle) {
+        mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name, fullNameStyle);
     }
 
     private class StructuredNameLookupBuilder extends NameLookupBuilder {

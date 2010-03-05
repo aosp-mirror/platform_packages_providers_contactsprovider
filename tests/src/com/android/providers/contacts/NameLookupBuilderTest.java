@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.provider.ContactsContract.FullNameStyle;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import java.util.Locale;
@@ -80,27 +81,27 @@ public class NameLookupBuilderTest extends TestCase {
     }
 
     public void testEmptyName() {
-        mBuilder.insertNameLookup(0, 0, "");
+        mBuilder.insertNameLookup(0, 0, "", FullNameStyle.UNDEFINED);
         assertEquals("", mBuilder.inserted());
     }
 
     public void testSingleUniqueName() {
-        mBuilder.insertNameLookup(0, 0, "Foo");
+        mBuilder.insertNameLookup(0, 0, "Foo", FullNameStyle.UNDEFINED);
         assertEquals("(0:Foo)(2:Foo)", mBuilder.inserted());
     }
 
     public void testSingleUniqueNameWithPrefix() {
-        mBuilder.insertNameLookup(0, 0, "Mr. Foo");
+        mBuilder.insertNameLookup(0, 0, "Mr. Foo", FullNameStyle.UNDEFINED);
         assertEquals("(0:Foo)(2:Foo)", mBuilder.inserted());
     }
 
     public void testTwoUniqueNames() {
-        mBuilder.insertNameLookup(0, 0, "Foo Bar");
+        mBuilder.insertNameLookup(0, 0, "Foo Bar", FullNameStyle.UNDEFINED);
         assertEquals("(0:Foo.Bar)(2:FooBar)(1:Bar.Foo)(2:BarFoo)", mBuilder.inserted());
     }
 
     public void testThreeUniqueNames() {
-        mBuilder.insertNameLookup(0, 0, "Foo Bar Baz");
+        mBuilder.insertNameLookup(0, 0, "Foo Bar Baz", FullNameStyle.UNDEFINED);
 
         // All permutations
         assertEquals(
@@ -115,7 +116,7 @@ public class NameLookupBuilderTest extends TestCase {
     }
 
     public void testFourUniqueNames() {
-        mBuilder.insertNameLookup(0, 0, "Foo Bar Baz Biz");
+        mBuilder.insertNameLookup(0, 0, "Foo Bar Baz Biz", FullNameStyle.UNDEFINED);
 
         // All permutations
         assertEquals(
@@ -149,17 +150,17 @@ public class NameLookupBuilderTest extends TestCase {
     }
 
     public void testSingleNickname() {
-        mBuilder.insertNameLookup(0, 0, "Bill");
+        mBuilder.insertNameLookup(0, 0, "Bill", FullNameStyle.UNDEFINED);
         assertEquals("(0:Bill)(2:Bill)(1:*William)", mBuilder.inserted());
     }
 
     public void testSingleNameWithTwoNicknames() {
-        mBuilder.insertNameLookup(0, 0, "Al");
+        mBuilder.insertNameLookup(0, 0, "Al", FullNameStyle.UNDEFINED);
         assertEquals("(0:Al)(2:Al)(1:*Alex)(1:*Alice)", mBuilder.inserted());
     }
 
     public void testTwoNamesOneOfWhichIsNickname() {
-        mBuilder.insertNameLookup(0, 0, "Foo Al");
+        mBuilder.insertNameLookup(0, 0, "Foo Al", FullNameStyle.UNDEFINED);
         assertEquals(
                 "(0:Foo.Al)(2:FooAl)" +
                 "(1:Al.Foo)(2:AlFoo)" +
@@ -168,7 +169,7 @@ public class NameLookupBuilderTest extends TestCase {
     }
 
     public void testTwoNamesBothNickname() {
-        mBuilder.insertNameLookup(0, 0, "Bill Al");
+        mBuilder.insertNameLookup(0, 0, "Bill Al", FullNameStyle.UNDEFINED);
         assertEquals(
                 "(0:Bill.Al)(2:BillAl)" +
                 "(1:Al.Bill)(2:AlBill)" +
@@ -179,8 +180,21 @@ public class NameLookupBuilderTest extends TestCase {
                 "(1:Bill.*Alice)(1:*Alice.Bill)", mBuilder.inserted());
     }
 
+    public void testChineseName() {
+        mBuilder.insertNameLookup(0, 0, "\u695A\u8FAD", FullNameStyle.CHINESE);
+        assertEquals(
+                "(0:\u695A\u8FAD)" +
+                "(2:\u695A\u8FAD)" +
+                "(6:\u695A\u8FAD)" +
+                "(6:CI)" +
+                "(6:\u8FAD)" +
+                "(6:CHUCI)" +
+                "(6:CC)" +
+                "(6:C)", mBuilder.inserted());
+    }
+
     public void testMultiwordName() {
-        mBuilder.insertNameLookup(0, 0, "Jo Jeffrey John Jessy Longname");
+        mBuilder.insertNameLookup(0, 0, "Jo Jeffrey John Jessy Longname", FullNameStyle.UNDEFINED);
         String actual = mBuilder.inserted();
 
         // Exact name
