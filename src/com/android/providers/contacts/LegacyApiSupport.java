@@ -1077,6 +1077,11 @@ public class LegacyApiSupport {
             }
         }
 
+        if (values.containsKey(People.LAST_TIME_CONTACTED) &&
+                !values.containsKey(People.TIMES_CONTACTED)) {
+            updateContactTime(rawContactId, values);
+        }
+
         return count;
     }
 
@@ -1139,9 +1144,12 @@ public class LegacyApiSupport {
     }
 
     private int updateContactTime(Uri uri, ContentValues values) {
+        long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+        updateContactTime(rawContactId, values);
+        return 1;
+    }
 
-        // TODO check sanctions
-
+    private void updateContactTime(long rawContactId, ContentValues values) {
         long lastTimeContacted;
         if (values.containsKey(People.LAST_TIME_CONTACTED)) {
             lastTimeContacted = values.getAsLong(People.LAST_TIME_CONTACTED);
@@ -1149,7 +1157,7 @@ public class LegacyApiSupport {
             lastTimeContacted = System.currentTimeMillis();
         }
 
-        long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+        // TODO check sanctions
         long contactId = mDbHelper.getContactId(rawContactId);
         SQLiteDatabase mDb = mDbHelper.getWritableDatabase();
         mSelectionArgs2[0] = String.valueOf(lastTimeContacted);
@@ -1165,7 +1173,6 @@ public class LegacyApiSupport {
         // increment times_contacted column
         mSelectionArgs1[0] = String.valueOf(contactId);
         mDb.execSQL(ContactsProvider2.UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
-        return 1;
     }
 
     private int updatePhoto(long rawContactId, ContentValues values) {
