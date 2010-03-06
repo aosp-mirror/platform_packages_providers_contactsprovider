@@ -4109,8 +4109,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
-                    selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                    qb.appendWhere(" AND " + Email.DATA + "=?");
+                    String email = uri.getLastPathSegment();
+                    String address = mDbHelper.extractAddressFromEmailAddress(email);
+                    selectionArgs = insertSelectionArg(selectionArgs, address);
+                    qb.appendWhere(" AND UPPER(" + Email.DATA + ")=UPPER(?)");
                 }
                 break;
             }

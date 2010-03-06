@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 303;
+    private static final int DATABASE_VERSION = 304;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -724,6 +724,11 @@ import java.util.Locale;
         db.execSQL("CREATE TABLE " + Tables.MIMETYPES + " (" +
                 MimetypesColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 MimetypesColumns.MIMETYPE + " TEXT NOT NULL" +
+        ");");
+
+        // Mimetype table requires an index on mime type
+        db.execSQL("CREATE UNIQUE INDEX mime_type ON " + Tables.MIMETYPES + " (" +
+                MimetypesColumns.MIMETYPE +
         ");");
 
         // Public generic data table
@@ -1424,6 +1429,11 @@ import java.util.Locale;
             oldVersion = 303;
         }
 
+        if (oldVersion == 303) {
+            upgradeToVersion304(db);
+            oldVersion = 304;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -1443,6 +1453,13 @@ import java.util.Locale;
             throw new IllegalStateException(
                     "error upgrading the database to version " + newVersion);
         }
+    }
+
+    private void upgradeToVersion304(SQLiteDatabase db) {
+        // Mimetype table requires an index on mime type
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS mime_type ON " + Tables.MIMETYPES + " (" +
+                MimetypesColumns.MIMETYPE +
+        ");");
     }
 
     private void upgradeToVersion202(SQLiteDatabase db) {
@@ -2214,6 +2231,15 @@ import java.util.Locale;
             return address.substring(0, at);
         }
         return null;
+    }
+
+    public String extractAddressFromEmailAddress(String email) {
+        Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
+        if (tokens.length == 0) {
+            return null;
+        }
+
+        return tokens[0].getAddress();
     }
 
     private long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {

@@ -322,8 +322,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(Email.LABEL);
         assertStoredValues(filterUri1, values);
 
-        Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, "encilada@acme.com");
-        assertEquals(0, getCount(filterUri2, null, null));
+        Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, "Ta<TaMale@acme.com>");
+        assertStoredValues(filterUri2, values);
+
+        Uri filterUri3 = Uri.withAppendedPath(Email.CONTENT_LOOKUP_URI, "encilada@acme.com");
+        assertEquals(0, getCount(filterUri3, null, null));
     }
 
     public void testEmailsFilterQuery() {
