@@ -83,6 +83,10 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
+    protected void verifyLocale() {
+    }
+
+    @Override
     protected Account getDefaultAccount() {
         if (mAccount == null) {
             mAccount = new Account("androidtest@gmail.com", "com.google");
