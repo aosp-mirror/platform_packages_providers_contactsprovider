@@ -69,6 +69,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.MemoryFile;
 import android.os.RemoteException;
@@ -146,6 +147,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private static final String PREF_CONTACTS_IMPORTED = "contacts_imported_v1";
     private static final int PREF_CONTACTS_IMPORT_VERSION = 1;
+    private static final String PREF_LOCALE = "locale";
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
@@ -376,6 +378,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             " ON " + StatusUpdatesColumns.DATA_ID + " = " + StatusUpdates.DATA_ID + " WHERE ";
 
     private static final String[] EMPTY_STRING_ARRAY = new String[0];
+
 
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
@@ -1121,7 +1124,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String name = values.getAsString(StructuredName.DISPLAY_NAME);
             Integer fullNameStyle = values.getAsInteger(StructuredName.FULL_NAME_STYLE);
             insertNameLookupForStructuredName(rawContactId, dataId, name,
-                    fullNameStyle != null ? fullNameStyle : FullNameStyle.UNDEFINED);
+                    fullNameStyle != null
+                            ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
+                            : FullNameStyle.UNDEFINED);
             fixRawContactDisplayName(db, rawContactId);
             return dataId;
         }
@@ -1142,7 +1147,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 deleteNameLookup(dataId);
                 Integer fullNameStyle = values.getAsInteger(StructuredName.FULL_NAME_STYLE);
                 insertNameLookupForStructuredName(rawContactId, dataId, name,
-                        fullNameStyle != null ? fullNameStyle : FullNameStyle.UNDEFINED);
+                        fullNameStyle != null
+                                ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
+                                : FullNameStyle.UNDEFINED);
             }
             fixRawContactDisplayName(db, rawContactId);
         }
@@ -1780,9 +1787,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        initForDefaultLocale();
 
-        mCommonNicknameCache = new CommonNicknameCache(db);
+        initForDefaultLocale();
 
         mSetPrimaryStatement = db.compileStatement(
                 "UPDATE " + Tables.DATA +
@@ -1908,6 +1914,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         verifyAccounts();
+        verifyLocale();
 
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         mMimeTypeIdIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
@@ -1919,24 +1926,73 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return (db != null);
     }
 
+    /**
+     * (Re)allocates all locale-sensitive structures.
+     */
     private void initForDefaultLocale() {
         mCurrentLocale = getLocale();
         mNameSplitter = mDbHelper.createNameSplitter();
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
+        mCommonNicknameCache = new CommonNicknameCache(mDbHelper.getReadableDatabase());
     }
 
     @Override
-    public void onConfigurationChanged (Configuration newConfig) {
-        if (newConfig != null && mCurrentLocale != null
-                && !mCurrentLocale.equals(newConfig.locale)) {
-            initForDefaultLocale();
-            // TODO rebuild name lookup for the new locale
-        }
+    public void onConfigurationChanged(Configuration newConfig) {
+        initForDefaultLocale();
+        verifyLocale();
     }
+
     protected void verifyAccounts() {
         AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
         onAccountsUpdated(AccountManager.get(getContext()).getAccounts());
+    }
+
+    /**
+     * Verifies that the contacts database is properly configured for the current locale.
+     * If not, changes the database locale to the current locale using an asynchronous task.
+     * This needs to be done asynchronously because the process involves rebuilding
+     * large data structures (name lookup, sort keys), which can take minutes on
+     * a large set of contacts.
+     */
+    protected void verifyLocale() {
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        final String providerLocale = prefs.getString(PREF_LOCALE, null);
+        if (providerLocale == null) {
+            // The provider has just been created for the first time. There are no
+            // contacts in the database, so we can safely set locale on the UI thread.
+            mDbHelper.setLocale(ContactsProvider2.this, mCurrentLocale);
+            prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
+            return;
+        }
+
+        final Locale currentLocale = mCurrentLocale;
+        if (currentLocale.toString().equals(providerLocale)) {
+            return;
+        }
+
+        int providerStatus = mProviderStatus;
+        setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
+
+        AsyncTask<Integer, Void, Void> task = new AsyncTask<Integer, Void, Void>() {
+
+            int savedProviderStatus;
+
+            @Override
+            protected Void doInBackground(Integer... params) {
+                savedProviderStatus = params[0];
+                mDbHelper.setLocale(ContactsProvider2.this, currentLocale);
+                return null;
+            }
+
+            @Override
+            protected void onPostExecute(Void result) {
+                prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
+                setProviderStatus(savedProviderStatus);
+            }
+        };
+
+        task.execute(providerStatus);
     }
 
     /* Visible for testing */
@@ -2160,6 +2216,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     protected void notifyChange(boolean syncToNetwork) {
         getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
                 syncToNetwork);
+    }
+
+    protected void setProviderStatus(int status) {
+        mProviderStatus = status;
+        getContext().getContentResolver().notifyChange(ContactsContract.ProviderStatus.CONTENT_URI,
+                null, false);
     }
 
     private boolean isNewRawContact(long rawContactId) {

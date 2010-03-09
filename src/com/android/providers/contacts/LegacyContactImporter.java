@@ -601,7 +601,8 @@ public class LegacyContactImporter {
 
         long dataId = insert(insert);
 
-        mContactsProvider.insertNameLookupForStructuredName(id, dataId, name, fullNameStyle);
+        mContactsProvider.insertNameLookupForStructuredName(id, dataId, name,
+                mNameSplitter.getAdjustedFullNameStyle(fullNameStyle));
     }
 
     private void insertNote(Cursor c, SQLiteStatement insert) {

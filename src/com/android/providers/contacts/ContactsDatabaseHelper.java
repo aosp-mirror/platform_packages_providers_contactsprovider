@@ -1461,13 +1461,6 @@ import java.util.Locale;
         }
     }
 
-    private void upgradeToVersion304(SQLiteDatabase db) {
-        // Mimetype table requires an index on mime type
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS mime_type ON " + Tables.MIMETYPES + " (" +
-                MimetypesColumns.MIMETYPE +
-        ");");
-    }
-
     private void upgradeToVersion202(SQLiteDatabase db) {
         db.execSQL(
                 "ALTER TABLE " + Tables.PHONE_LOOKUP +
@@ -1587,12 +1580,7 @@ import java.util.Locale;
 
         final Locale locale = Locale.getDefault();
 
-        NameSplitter splitter = new NameSplitter(
-                mContext.getString(com.android.internal.R.string.common_name_prefixes),
-                mContext.getString(com.android.internal.R.string.common_last_name_prefixes),
-                mContext.getString(com.android.internal.R.string.common_name_suffixes),
-                mContext.getString(com.android.internal.R.string.common_name_conjunctions),
-                locale);
+        NameSplitter splitter = createNameSplitter();
 
         SQLiteStatement rawContactUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -1983,16 +1971,63 @@ import java.util.Locale;
         }
     }
 
-    /**
-     * Regenerate all rows in the nickname_lookup and name_lookup tables,
-     * because sort key generation algorithm has been modified, e.g. as a result of
-     * locale change.
-     */
-    private void rebuildNameLookup(SQLiteDatabase db) {
-        db.execSQL("DELETE FROM " + Tables.NICKNAME_LOOKUP);
-        loadNicknameLookupTable(db);
+    private void upgradeToVersion304(SQLiteDatabase db) {
+        // Mimetype table requires an index on mime type
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS mime_type ON " + Tables.MIMETYPES + " (" +
+                MimetypesColumns.MIMETYPE +
+        ");");
+    }
 
+    private void rebuildNameLookup(SQLiteDatabase db) {
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
+        insertNameLookup(db);
+        createContactsIndexes(db);
+    }
+
+    /**
+     * Regenerates all locale-sensitive data: nickname_lookup, name_lookup and sort keys.
+     */
+    public void setLocale(ContactsProvider2 provider, Locale locale) {
+        Log.i(TAG, "Switching to locale " + locale);
+
+        long start = System.currentTimeMillis();
+        SQLiteDatabase db = getWritableDatabase();
+        db.setLocale(locale);
+        db.beginTransaction();
+        try {
+            db.execSQL("DROP INDEX raw_contact_sort_key1_index");
+            db.execSQL("DROP INDEX raw_contact_sort_key2_index");
+            db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
+
+            loadNicknameLookupTable(db);
+            insertNameLookup(db);
+            rebuildSortKeys(db, provider);
+            createContactsIndexes(db);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+
+        Log.i(TAG, "Locale change completed in " + (System.currentTimeMillis() - start) + "ms");
+    }
+
+    /**
+     * Regenerates sort keys for all contacts.
+     */
+    private void rebuildSortKeys(SQLiteDatabase db, ContactsProvider2 provider) {
+        Cursor cursor = db.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
+                null, null, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long rawContactId = cursor.getLong(0);
+                provider.updateRawContactDisplayName(db, rawContactId);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private void insertNameLookup(SQLiteDatabase db) {
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP);
 
         SQLiteStatement nameLookupInsert = db.compileStatement(
@@ -2003,12 +2038,14 @@ import java.util.Locale;
                         + NameLookupColumns.NORMALIZED_NAME +
                 ") VALUES (?,?,?,?)");
 
-        insertStructuredNameLookup(db, nameLookupInsert);
-        insertOrganizationLookup(db, nameLookupInsert);
-        insertEmailLookup(db, nameLookupInsert);
-        insertNicknameLookup(db, nameLookupInsert);
-
-        createContactsIndexes(db);
+        try {
+            insertStructuredNameLookup(db, nameLookupInsert);
+            insertOrganizationLookup(db, nameLookupInsert);
+            insertEmailLookup(db, nameLookupInsert);
+            insertNicknameLookup(db, nameLookupInsert);
+        } finally {
+            nameLookupInsert.close();
+        }
     }
 
     private static final class StructuredNameQuery {
@@ -2072,6 +2109,7 @@ import java.util.Locale;
                 long rawContactId = cursor.getLong(StructuredNameQuery.RAW_CONTACT_ID);
                 String name = cursor.getString(StructuredNameQuery.DISPLAY_NAME);
                 int fullNameStyle = nameSplitter.guessFullNameStyle(name);
+                fullNameStyle = nameSplitter.getAdjustedFullNameStyle(fullNameStyle);
                 nameLookupBuilder.insertNameLookup(rawContactId, dataId, name, fullNameStyle);
             }
         } finally {
@@ -2640,6 +2678,8 @@ import java.util.Locale;
      * Loads common nickname mappings into the database.
      */
     private void loadNicknameLookupTable(SQLiteDatabase db) {
+        db.execSQL("DELETE FROM " + Tables.NICKNAME_LOOKUP);
+
         String[] strings = mContext.getResources().getStringArray(
                 com.android.internal.R.array.common_nicknames);
         if (strings == null || strings.length == 0) {
@@ -2650,21 +2690,25 @@ import java.util.Locale;
                 + Tables.NICKNAME_LOOKUP + "(" + NicknameLookupColumns.NAME + ","
                 + NicknameLookupColumns.CLUSTER + ") VALUES (?,?)");
 
-        for (int clusterId = 0; clusterId < strings.length; clusterId++) {
-            String[] names = strings[clusterId].split(",");
-            for (int j = 0; j < names.length; j++) {
-                String name = NameNormalizer.normalize(names[j]);
-                try {
-                    DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 1, name);
-                    DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 2,
-                            String.valueOf(clusterId));
-                    nicknameLookupInsert.executeInsert();
-                } catch (SQLiteException e) {
+        try {
+            for (int clusterId = 0; clusterId < strings.length; clusterId++) {
+                String[] names = strings[clusterId].split(",");
+                for (int j = 0; j < names.length; j++) {
+                    String name = NameNormalizer.normalize(names[j]);
+                    try {
+                        DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 1, name);
+                        DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 2,
+                                String.valueOf(clusterId));
+                        nicknameLookupInsert.executeInsert();
+                    } catch (SQLiteException e) {
 
-                    // Print the exception and keep going - this is not a fatal error
-                    Log.e(TAG, "Cannot insert nickname: " + names[j], e);
+                        // Print the exception and keep going - this is not a fatal error
+                        Log.e(TAG, "Cannot insert nickname: " + names[j], e);
+                    }
                 }
             }
+        } finally {
+            nicknameLookupInsert.close();
         }
     }
 
