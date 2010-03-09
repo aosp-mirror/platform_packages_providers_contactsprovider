@@ -5497,11 +5497,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + NameLookupType.NICKNAME + ","
                 + NameLookupType.NAME_SHORTHAND + ","
                 + NameLookupType.ORGANIZATION + ","
-                + NameLookupType.NAME_CONSONANTS + "))");
+                + NameLookupType.NAME_CONSONANTS + ")");
         if (allowEmailMatch) {
             sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
         }
-        sb.append("))");
+        sb.append(")");
     }
 
     /**
