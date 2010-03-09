@@ -61,6 +61,8 @@ import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
+import android.database.MatrixCursor;
+import android.database.MatrixCursor.RowBuilder;
 import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteContentHelper;
 import android.database.sqlite.SQLiteDatabase;
@@ -88,6 +90,7 @@ import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
+import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
@@ -224,6 +227,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int LIVE_FOLDERS_CONTACTS_GROUP_NAME = 14003;
 
     private static final int RAW_CONTACT_ENTITIES = 15001;
+
+    private static final int PROVIDER_STATUS = 16001;
 
     private interface DataContactsQuery {
         public static final String TABLE = "data "
@@ -477,6 +482,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 LIVE_FOLDERS_CONTACTS_WITH_PHONES);
         matcher.addURI(ContactsContract.AUTHORITY, "live_folders/favorites",
                 LIVE_FOLDERS_CONTACTS_FAVORITES);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "provider_status", PROVIDER_STATUS);
     }
 
     static {
@@ -1738,6 +1745,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
     private NameSplitter.Name mName = new NameSplitter.Name();
 
+    private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
+    private long mEstimatedStorageRequirement = 0;
     private volatile CountDownLatch mAccessLatch;
 
     private HashMap<Long, Account> mInsertedRawContacts = Maps.newHashMap();
@@ -4364,6 +4373,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case PROVIDER_STATUS: {
+                return queryProviderStatus(uri, projection);
+            }
+
             default:
                 return mLegacyApiSupport.query(uri, projection, selection, selectionArgs,
                         sortOrder, limit);
@@ -4391,6 +4404,23 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         return c;
     }
+
+    /**
+     * Creates a single-row cursor containing the current status of the provider.
+     */
+    private Cursor queryProviderStatus(Uri uri, String[] projection) {
+        MatrixCursor cursor = new MatrixCursor(projection);
+        RowBuilder row = cursor.newRow();
+        for (int i = 0; i < projection.length; i++) {
+            if (ProviderStatus.STATUS.equals(projection[i])) {
+                row.add(mProviderStatus);
+            } else if (ProviderStatus.DATA1.equals(projection[i])) {
+                row.add(mEstimatedStorageRequirement);
+            }
+        }
+        return cursor;
+    }
+
 
     private static final class AddressBookIndexQuery {
         public static final String LETTER = "letter";

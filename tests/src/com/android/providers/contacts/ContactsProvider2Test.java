@@ -40,6 +40,7 @@ import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
+import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippetColumns;
@@ -2140,6 +2141,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         } catch (IllegalArgumentException e) {
             // Expected behavior.
         }
+    }
+
+    public void testProviderStatus() throws Exception {
+        Cursor cursor = mResolver.query(ProviderStatus.CONTENT_URI,
+                new String[]{ProviderStatus.DATA1, ProviderStatus.STATUS}, null, null, null);
+        assertTrue(cursor.moveToFirst());
+        assertEquals(0, cursor.getLong(0));
+        assertEquals(ProviderStatus.STATUS_NORMAL, cursor.getInt(1));
+        cursor.close();
     }
 
     private void assertQueryParameter(String uriString, String parameter, String expectedValue) {
