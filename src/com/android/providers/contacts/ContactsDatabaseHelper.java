@@ -363,7 +363,7 @@ import java.util.Locale;
         public static final int NAME_CONSONANTS = 7;
 
         // This is the highest name lookup type code plus one
-        public static final int TYPE_COUNT = 7;
+        public static final int TYPE_COUNT = 8;
 
         public static boolean isBasedOnStructuredName(int nameLookupType) {
             return nameLookupType == NameLookupType.NAME_EXACT
