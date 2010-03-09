@@ -1935,6 +1935,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
         mCommonNicknameCache = new CommonNicknameCache(mDbHelper.getReadableDatabase());
+        ContactLocaleUtils.getIntance().setLocale(mCurrentLocale);
     }
 
     @Override
@@ -2739,7 +2740,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             if (displayNameStyle == FullNameStyle.CHINESE) {
                 sortKeyPrimary = sortKeyAlternative =
-                        ContactLocaleUtils.getSortKey(displayNamePrimary, FullNameStyle.CHINESE);
+                        ContactLocaleUtils.getIntance().getSortKey(
+                                displayNamePrimary, FullNameStyle.CHINESE);
             }
         }
 

@@ -302,7 +302,8 @@ public abstract class NameLookupBuilder {
 
     private void insertNameShorthandLookup(long rawContactId, long dataId, String name,
             int fullNameStyle) {
-        Iterator<String> it = ContactLocaleUtils.getNameLookupKeys(name, fullNameStyle);
+        Iterator<String> it =
+                ContactLocaleUtils.getIntance().getNameLookupKeys(name, fullNameStyle);
         if (it != null) {
             while (it.hasNext()) {
                 String key = it.next();

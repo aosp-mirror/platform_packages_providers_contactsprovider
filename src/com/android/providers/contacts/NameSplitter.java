@@ -443,32 +443,13 @@ public class NameSplitter {
     }
 
     /**
-     * Flattens the given {@link Name} into a single field, usually for storage
-     * in {@link StructuredName#DISPLAY_NAME}.
-     */
-    public String join(Name name) {
-        final boolean hasGiven = !TextUtils.isEmpty(name.givenNames);
-        final boolean hasFamily = !TextUtils.isEmpty(name.familyName);
-
-        // TODO: write locale-specific blending logic here
-        if (hasGiven && hasFamily) {
-            return name.givenNames + " " + name.familyName;
-        } else if (hasFamily) {
-            return name.familyName;
-        } else if (hasGiven) {
-            return name.givenNames;
-        } else {
-            return null;
-        }
-    }
-
-    /**
      * Concatenates components of a name according to the rules dictated by the name style.
      *
      * @param givenNameFirst is ignored for CJK display name styles
      */
     public String join(Name name, boolean givenNameFirst) {
         switch (name.fullNameStyle) {
+            case FullNameStyle.CJK:
             case FullNameStyle.CHINESE:
             case FullNameStyle.KOREAN:
                 return join(name.familyName, name.middleName, name.givenNames, name.suffix,
