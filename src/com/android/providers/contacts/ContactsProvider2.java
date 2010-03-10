@@ -1957,6 +1957,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * a large set of contacts.
      */
     protected void verifyLocale() {
+
+        // The process is already running - postpone the change
+        if (mProviderStatus == ProviderStatus.STATUS_CHANGING_LOCALE) {
+            return;
+        }
+
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
         final String providerLocale = prefs.getString(PREF_LOCALE, null);
         if (providerLocale == null) {
@@ -1990,6 +1996,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             protected void onPostExecute(Void result) {
                 prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
                 setProviderStatus(savedProviderStatus);
+
+                // Recursive invocation, needed to cover the case where locale
+                // changes once and then changes again before the db upgrade is completed.
+                verifyLocale();
             }
         };
 
