@@ -1909,19 +1909,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
         mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
 
-        if (isLegacyContactImportNeeded()) {
-            importLegacyContactsAsync();
-        }
-
-        verifyAccounts();
-        verifyLocale();
-
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         mMimeTypeIdIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
         mMimeTypeIdStructuredName = mDbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
         mMimeTypeIdOrganization = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
         mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+
+        if (isLegacyContactImportNeeded()) {
+            importLegacyContactsAsync();
+        }
+
+        verifyAccounts();
+        verifyLocale();
 
         return (db != null);
     }
