@@ -1846,6 +1846,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, numDeleted);
     }
 
+    public void testDeleteContactWithEscapedUri() {
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.SOURCE_ID, "!@#$%^&*()_+=-/.,<>?;'\":[]}{\\|`~");
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri lookupUri = Contacts.getLookupUri(mResolver, contactUri);
+        assertEquals(1, mResolver.delete(lookupUri, null, null));
+    }
+
+    public void testQueryContactWithEscapedUri() {
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.SOURCE_ID, "!@#$%^&*()_+=-/.,<>?;'\":[]}{\\|`~");
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri lookupUri = Contacts.getLookupUri(mResolver, contactUri);
+        Cursor c = mResolver.query(lookupUri, null, null, null, "");
+        assertEquals(1, c.getCount());
+        c.close();
+    }
+
     public void testGetPhotoUri() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);

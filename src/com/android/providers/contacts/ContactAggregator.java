@@ -1436,7 +1436,7 @@ public class ContactAggregator {
         mSb.setLength(0);
         mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(Tables.RAW_CONTACTS, LookupKeyQuery.COLUMNS,
-                RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
+                RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, RawContacts._ID);
         try {
             while (c.moveToNext()) {
                 ContactLookupKey.appendToLookupKey(mSb,
@@ -1453,9 +1453,10 @@ public class ContactAggregator {
         if (mSb.length() == 0) {
             mLookupKeyUpdate.bindNull(1);
         } else {
-            mLookupKeyUpdate.bindString(1, mSb.toString());
+            mLookupKeyUpdate.bindString(1, Uri.encode(mSb.toString()));
         }
         mLookupKeyUpdate.bindLong(2, contactId);
+
         mLookupKeyUpdate.execute();
     }
 

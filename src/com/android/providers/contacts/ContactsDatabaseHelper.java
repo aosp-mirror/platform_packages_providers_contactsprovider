@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 305;
+    private static final int DATABASE_VERSION = 306;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1440,6 +1440,11 @@ import java.util.Locale;
             oldVersion = 305;
         }
 
+        if (oldVersion == 305) {
+            upgradeToVersion306(db);
+            oldVersion = 306;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -1976,6 +1981,57 @@ import java.util.Locale;
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS mime_type ON " + Tables.MIMETYPES + " (" +
                 MimetypesColumns.MIMETYPE +
         ");");
+    }
+
+    private void upgradeToVersion306(SQLiteDatabase db) {
+        // Fix invalid lookup that was used for Exchange contacts (it was not escaped)
+        // It happened when a new contact was created AND synchronized
+        final StringBuilder lookupKeyBuilder = new StringBuilder();
+        final SQLiteStatement updateStatement = db.compileStatement(
+                "UPDATE contacts " +
+                "SET lookup=? " +
+                "WHERE _id=?");
+        final Cursor contactIdCursor = db.rawQuery(
+                "SELECT DISTINCT contact_id " +
+                "FROM raw_contacts " +
+                "WHERE deleted=0 AND account_type='com.android.exchange'",
+                null);
+        try {
+            while (contactIdCursor.moveToNext()) {
+                final long contactId = contactIdCursor.getLong(0);
+                lookupKeyBuilder.setLength(0);
+                final Cursor c = db.rawQuery(
+                        "SELECT account_type, account_name, _id, sourceid, display_name " +
+                        "FROM raw_contacts " +
+                        "WHERE contact_id=? " +
+                        "ORDER BY _id",
+                        new String[] { String.valueOf(contactId) });
+                try {
+                    while (c.moveToNext()) {
+                        ContactLookupKey.appendToLookupKey(lookupKeyBuilder,
+                                c.getString(0),
+                                c.getString(1),
+                                c.getLong(2),
+                                c.getString(3),
+                                c.getString(4));
+                    }
+                } finally {
+                    c.close();
+                }
+
+                if (lookupKeyBuilder.length() == 0) {
+                    updateStatement.bindNull(1);
+                } else {
+                    updateStatement.bindString(1, Uri.encode(lookupKeyBuilder.toString()));
+                }
+                updateStatement.bindLong(2, contactId);
+
+                updateStatement.execute();
+            }
+        } finally {
+            updateStatement.close();
+            contactIdCursor.close();
+        }
     }
 
     private void rebuildNameLookup(SQLiteDatabase db) {

@@ -3123,7 +3123,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     System.arraycopy(selectionArgs, 0, args, 2, selectionArgs.length);
                 }
                 args[0] = String.valueOf(contactId);
-                args[1] = lookupKey;
+                args[1] = Uri.encode(lookupKey);
                 lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
                 final SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 Cursor c = query(db, lookupQb, null, selection, args, null, null, null);
@@ -3996,7 +3996,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         System.arraycopy(selectionArgs, 0, args, 2, selectionArgs.length);
                     }
                     args[0] = String.valueOf(contactId);
-                    args[1] = lookupKey;
+                    args[1] = Uri.encode(lookupKey);
                     lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
                     Cursor c = query(db, lookupQb, projection, selection, args, sortOrder,
                             groupBy, limit);
