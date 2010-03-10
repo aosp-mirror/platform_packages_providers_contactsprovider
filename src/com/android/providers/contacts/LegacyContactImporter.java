@@ -591,18 +591,26 @@ public class LegacyContactImporter {
         insert.bindLong(StructuredNameInsert.FULL_NAME_STYLE,
                 fullNameStyle);
         bindString(insert, StructuredNameInsert.PHONETIC_FAMILY_NAME,
-                splitName.getPhoneticFamilyName());
+                splitName.phoneticFamilyName);
         bindString(insert, StructuredNameInsert.PHONETIC_MIDDLE_NAME,
-                splitName.getPhoneticMiddleName());
+                splitName.phoneticMiddleName);
         bindString(insert, StructuredNameInsert.PHONETIC_GIVEN_NAME,
-                splitName.getPhoneticGivenName());
+                splitName.phoneticGivenName);
         insert.bindLong(StructuredNameInsert.PHONETIC_NAME_STYLE,
-                splitName.getPhoneticNameStyle());
+                splitName.phoneticNameStyle);
 
         long dataId = insert(insert);
 
         mContactsProvider.insertNameLookupForStructuredName(id, dataId, name,
                 mNameSplitter.getAdjustedFullNameStyle(fullNameStyle));
+        if (splitName.phoneticFamilyName != null
+                || splitName.phoneticMiddleName != null
+                || splitName.phoneticGivenName != null) {
+            mContactsProvider.insertNameLookupForPhoneticName(id, dataId,
+                    splitName.phoneticFamilyName,
+                    splitName.phoneticMiddleName,
+                    splitName.phoneticGivenName);
+        }
     }
 
     private void insertNote(Cursor c, SQLiteStatement insert) {

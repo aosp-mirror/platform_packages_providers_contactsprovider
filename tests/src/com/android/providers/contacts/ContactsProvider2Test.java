@@ -399,13 +399,24 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelectionWithProjection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
     }
 
-    public void testQueryContactFilterData() {
+    public void testQueryContactFilter() {
         ContentValues values = new ContentValues();
-        createContact(values, "Stu", "Goulash", "18004664411",
+        long rawContactId = createRawContact(values, "18004664411",
                 "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
+
+        ContentValues nameValues = new ContentValues();
+        nameValues.put(StructuredName.GIVEN_NAME, "Stu");
+        nameValues.put(StructuredName.FAMILY_NAME, "Goulash");
+        nameValues.put(StructuredName.PHONETIC_FAMILY_NAME, "goo-LASH");
+        insertStructuredName(rawContactId, nameValues);
+
+        long contactId = queryContactId(rawContactId);
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
+
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goulash");
         assertStoredValuesWithProjection(filterUri1, values);
+
+        assertContactFilter(contactId, "goolash");
 
         Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goolish");
         assertEquals(0, getCount(filterUri2, null, null));
@@ -2186,6 +2197,21 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private long createContact(ContentValues values, String firstName, String givenName,
             String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
             long groupId) {
+        return queryContactId(createRawContact(values, firstName, givenName, phoneNumber, email,
+                presenceStatus, timesContacted, starred, groupId));
+    }
+
+    private long createRawContact(ContentValues values, String firstName, String givenName,
+            String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
+            long groupId) {
+        long rawContactId = createRawContact(values, phoneNumber, email, presenceStatus,
+                timesContacted, starred, groupId);
+        insertStructuredName(rawContactId, firstName, givenName);
+        return rawContactId;
+    }
+
+    private long createRawContact(ContentValues values, String phoneNumber, String email,
+            int presenceStatus, int timesContacted, int starred, long groupId) {
         values.put(RawContacts.STARRED, starred);
         values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(RawContacts.CUSTOM_RINGTONE, "beethoven5");
@@ -2193,7 +2219,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.TIMES_CONTACTED, timesContacted);
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
         long rawContactId = ContentUris.parseId(rawContactUri);
-        insertStructuredName(rawContactId, firstName, givenName);
         Uri photoUri = insertPhoto(rawContactId);
         long photoId = ContentUris.parseId(photoUri);
         values.put(Contacts.PHOTO_ID, photoId);
@@ -2205,8 +2230,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);
         }
-
-        return queryContactId(rawContactId);
+        return rawContactId;
     }
 
     private void putDataValues(ContentValues values, long rawContactId) {

@@ -1127,6 +1127,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     fullNameStyle != null
                             ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
                             : FullNameStyle.UNDEFINED);
+            insertNameLookupForPhoneticName(rawContactId, dataId, values);
             fixRawContactDisplayName(db, rawContactId);
             return dataId;
         }
@@ -1150,6 +1151,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         fullNameStyle != null
                                 ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
                                 : FullNameStyle.UNDEFINED);
+                insertNameLookupForPhoneticName(rawContactId, dataId, values);
             }
             fixRawContactDisplayName(db, rawContactId);
         }
@@ -5451,6 +5453,37 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         @Override
         protected String[] getCommonNicknameClusters(String normalizedName) {
             return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
+        }
+    }
+
+    public void insertNameLookupForPhoneticName(long rawContactId, long dataId,
+            ContentValues values) {
+        if (values.containsKey(StructuredName.PHONETIC_FAMILY_NAME)
+                || values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)
+                || values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME)) {
+            insertNameLookupForPhoneticName(rawContactId, dataId,
+                    values.getAsString(StructuredName.PHONETIC_FAMILY_NAME),
+                    values.getAsString(StructuredName.PHONETIC_MIDDLE_NAME),
+                    values.getAsString(StructuredName.PHONETIC_GIVEN_NAME));
+        }
+    }
+
+    public void insertNameLookupForPhoneticName(long rawContactId, long dataId, String familyName,
+            String middleName, String givenName) {
+        mSb.setLength(0);
+        if (familyName != null) {
+            mSb.append(familyName.trim());
+        }
+        if (middleName != null) {
+            mSb.append(middleName.trim());
+        }
+        if (givenName != null) {
+            mSb.append(givenName.trim());
+        }
+
+        if (mSb.length() > 0) {
+            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
+                    NameNormalizer.normalize(mSb.toString()));
         }
     }
 
