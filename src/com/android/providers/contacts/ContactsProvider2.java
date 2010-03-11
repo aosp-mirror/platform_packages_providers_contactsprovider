@@ -3901,6 +3901,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
             }
 
+            mDbHelper.updateAllVisible();
+
             mDbHelper.getSyncState().onAccountsChanged(mDb, accounts);
             mDb.setTransactionSuccessful();
         } finally {
