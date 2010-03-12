@@ -27,11 +27,13 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.provider.LiveFolders;
+import android.provider.OpenableColumns;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
@@ -57,7 +59,10 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.util.Log;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.text.Collator;
 import java.util.Arrays;
 import java.util.Locale;
@@ -2187,6 +2192,145 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, cursor.getLong(0));
         assertEquals(ProviderStatus.STATUS_NORMAL, cursor.getInt(1));
         cursor.close();
+    }
+
+    private class VCardTestUriCreator {
+        private String mLookup1;
+        private String mLookup2;
+
+        public VCardTestUriCreator(String lookup1, String lookup2) {
+            super();
+            mLookup1 = lookup1;
+            mLookup2 = lookup2;
+        }
+
+        public Uri getUri1() {
+            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup1);
+        }
+
+        public Uri getUri2() {
+            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup2);
+        }
+
+        public Uri getCombinedUri() {
+            return Uri.withAppendedPath(Contacts.CONTENT_MULTI_VCARD_URI,
+                    Uri.encode(mLookup1 + ":" + mLookup2));
+        }
+    }
+
+    private VCardTestUriCreator createVCardTestContacts() {
+        final long rawContactId1 = createRawContact(mAccount, RawContacts.SOURCE_ID, "4:12");
+        insertStructuredName(rawContactId1, "John", "Doe");
+
+        final long rawContactId2 = createRawContact(mAccount, RawContacts.SOURCE_ID, "3:4%121");
+        insertStructuredName(rawContactId2, "Jane", "Doh");
+
+        final long contactId1 = queryContactId(rawContactId1);
+        final long contactId2 = queryContactId(rawContactId2);
+        final Uri contact1Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId1);
+        final Uri contact2Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId2);
+        final String lookup1 =
+            Uri.encode(Contacts.getLookupUri(mResolver, contact1Uri).getPathSegments().get(2));
+        final String lookup2 =
+            Uri.encode(Contacts.getLookupUri(mResolver, contact2Uri).getPathSegments().get(2));
+        return new VCardTestUriCreator(lookup1, lookup2);
+    }
+
+    public void testQueryMultiVCard() {
+        // No need to create any contacts here, because the query for multiple vcards
+        // does not go into the database at all
+        Uri uri = Uri.withAppendedPath(Contacts.CONTENT_MULTI_VCARD_URI, Uri.encode("123:456"));
+        Cursor cursor = mResolver.query(uri, null, null, null, null);
+        assertEquals(1, cursor.getCount());
+        assertTrue(cursor.moveToFirst());
+        assertTrue(cursor.isNull(cursor.getColumnIndex(OpenableColumns.SIZE)));
+        String filename = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+
+        // The resulting name contains date and time. Ensure that before and after are correct
+        assertTrue(filename.startsWith("vcards_"));
+        assertTrue(filename.endsWith(".vcf"));
+        cursor.close();
+    }
+
+    public void testQueryFileSingleVCard() {
+        final VCardTestUriCreator contacts = createVCardTestContacts();
+
+        {
+            Cursor cursor = mResolver.query(contacts.getUri1(), null, null, null, null);
+            assertEquals(1, cursor.getCount());
+            assertTrue(cursor.moveToFirst());
+            assertTrue(cursor.isNull(cursor.getColumnIndex(OpenableColumns.SIZE)));
+            String filename = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+            assertEquals("John Doe.vcf", filename);
+            cursor.close();
+        }
+
+        {
+            Cursor cursor = mResolver.query(contacts.getUri2(), null, null, null, null);
+            assertEquals(1, cursor.getCount());
+            assertTrue(cursor.moveToFirst());
+            assertTrue(cursor.isNull(cursor.getColumnIndex(OpenableColumns.SIZE)));
+            String filename = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+            assertEquals("Jane Doh.vcf", filename);
+            cursor.close();
+        }
+    }
+
+
+    public void testOpenAssetFileMultiVCard() throws IOException {
+        final VCardTestUriCreator contacts = createVCardTestContacts();
+
+        final AssetFileDescriptor descriptor =
+            mResolver.openAssetFileDescriptor(contacts.getCombinedUri(), "r");
+        final FileInputStream inputStream = descriptor.createInputStream();
+        String data = readToEnd(inputStream);
+        inputStream.close();
+        descriptor.close();
+
+        // Ensure that the resulting VCard has both contacts
+        assertTrue(data.contains("N:Doe;John;;;"));
+        assertTrue(data.contains("N:Doh;Jane;;;"));
+    }
+
+    public void testOpenAssetFileSingleVCard() throws IOException {
+        final VCardTestUriCreator contacts = createVCardTestContacts();
+
+        // Ensure that the right VCard is being created in each case
+        {
+            final AssetFileDescriptor descriptor =
+                mResolver.openAssetFileDescriptor(contacts.getUri1(), "r");
+            final FileInputStream inputStream = descriptor.createInputStream();
+            final String data = readToEnd(inputStream);
+            assertTrue(data.contains("N:Doe;John;;;"));
+            assertFalse(data.contains("N:Doh;Jane;;;"));
+
+            inputStream.close();
+            descriptor.close();
+        }
+
+        {
+            final AssetFileDescriptor descriptor =
+                mResolver.openAssetFileDescriptor(contacts.getUri2(), "r");
+            final FileInputStream inputStream = descriptor.createInputStream();
+            final String data = readToEnd(inputStream);
+            inputStream.close();
+            descriptor.close();
+
+            assertFalse(data.contains("N:Doe;John;;;"));
+            assertTrue(data.contains("N:Doh;Jane;;;"));
+        }
+    }
+
+    private String readToEnd(FileInputStream inputStream) {
+        try {
+            int ch;
+            StringBuilder stringBuilder = new StringBuilder();
+            while ((ch = inputStream.read()) != -1)
+                stringBuilder.append((char)ch);
+            return stringBuilder.toString();
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     private void assertQueryParameter(String uriString, String parameter, String expectedValue) {

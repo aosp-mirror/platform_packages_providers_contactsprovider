@@ -108,14 +108,17 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
+import android.text.format.DateFormat;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -183,6 +186,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_GROUP = 1008;
     private static final int CONTACTS_PHOTO = 1009;
     private static final int CONTACTS_AS_VCARD = 1010;
+    private static final int CONTACTS_AS_MULTI_VCARD = 1011;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -425,6 +429,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_vcard/*", CONTACTS_AS_VCARD);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_multi_vcard/*",
+                CONTACTS_AS_MULTI_VCARD);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/", CONTACTS_STREQUENT);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/filter/*",
                 CONTACTS_STREQUENT_FILTER);
@@ -4030,13 +4036,23 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_AS_VCARD: {
                 // When reading as vCard always use restricted view
-                final String lookupKey = uri.getPathSegments().get(2);
+                final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
                 qb.setTables(mDbHelper.getContactView(true /* require restricted */));
                 qb.setProjectionMap(sContactsVCardProjectionMap);
                 selectionArgs = insertSelectionArg(selectionArgs,
                         String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
                 qb.appendWhere(Contacts._ID + "=?");
                 break;
+            }
+
+            case CONTACTS_AS_MULTI_VCARD: {
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+                String currentDateString = dateFormat.format(new Date()).toString();
+                return db.rawQuery(
+                    "SELECT" +
+                    " 'vcards_' || ? || '.vcf' AS " + OpenableColumns.DISPLAY_NAME + "," +
+                    " NULL AS " + OpenableColumns.SIZE,
+                    new String[] { currentDateString });
             }
 
             case CONTACTS_FILTER: {
@@ -5231,15 +5247,42 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_AS_VCARD: {
-                final String lookupKey = uri.getPathSegments().get(2);
-                final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
-                final String selection = Contacts._ID + "=" + contactId;
+                final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
+                mSelectionArgs1[0] = String.valueOf(lookupContactIdByLookupKey(mDb, lookupKey));
+                final String selection = Contacts._ID + "=?";
 
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
-                outputRawContactsAsVCard(localStream, selection, null);
+                outputRawContactsAsVCard(localStream, selection, mSelectionArgs1);
+                return buildAssetFileDescriptor(localStream);
+            }
+
+            case CONTACTS_AS_MULTI_VCARD: {
+                final String lookupKeys = uri.getPathSegments().get(2);
+                final String[] loopupKeyList = lookupKeys.split(":");
+                final StringBuilder inBuilder = new StringBuilder();
+                int index = 0;
+                String[] selectionArgs = new String[loopupKeyList.length];
+                for (String lookupKey : loopupKeyList) {
+                    selectionArgs[index] =
+                        String.valueOf(lookupContactIdByLookupKey(mDb, lookupKey));
+                    if (index == 0) {
+                        inBuilder.append("(?");
+                    } else {
+                        inBuilder.append(",?");
+                    }
+                    index++;
+                }
+                inBuilder.append(')');
+                final String selection = Contacts._ID + " IN " + inBuilder.toString();
+
+                // When opening a contact as file, we pass back contents as a
+                // vCard-encoded stream. We build into a local buffer first,
+                // then pipe into MemoryFile once the exact size is known.
+                final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
+                outputRawContactsAsVCard(localStream, selection, selectionArgs);
                 return buildAssetFileDescriptor(localStream);
             }
 
@@ -5311,6 +5354,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_LOOKUP_ID:
                 return Contacts.CONTENT_ITEM_TYPE;
             case CONTACTS_AS_VCARD:
+            case CONTACTS_AS_MULTI_VCARD:
                 return Contacts.CONTENT_VCARD_TYPE;
             case RAW_CONTACTS:
                 return RawContacts.CONTENT_TYPE;
