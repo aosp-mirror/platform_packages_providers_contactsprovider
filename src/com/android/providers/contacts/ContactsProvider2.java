@@ -42,6 +42,9 @@ import com.google.android.collect.Sets;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -50,6 +53,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.IContentService;
+import android.content.Intent;
 import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
@@ -89,6 +93,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.ProviderStatus;
@@ -383,6 +388,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final String[] EMPTY_STRING_ARRAY = new String[0];
 
+    /**
+     * Notification ID for failure to import contacts.
+     */
+    private static final int LEGACY_IMPORT_FAILED_NOTIFICATION = 1;
 
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
@@ -1924,12 +1933,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
+        verifyAccounts();
+        verifyLocale();
+
         if (isLegacyContactImportNeeded()) {
             importLegacyContactsAsync();
         }
-
-        verifyAccounts();
-        verifyLocale();
 
         return (db != null);
     }
@@ -2043,20 +2052,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * all other access to the contacts is blocked.
      */
     private void importLegacyContactsAsync() {
-        mAccessLatch = new CountDownLatch(1);
+        Log.v(TAG, "Importing legacy contacts");
+        setProviderStatus(ProviderStatus.STATUS_UPGRADING);
+        if (mAccessLatch == null) {
+            mAccessLatch = new CountDownLatch(1);
+        }
 
         Thread importThread = new Thread("LegacyContactImport") {
             @Override
             public void run() {
-                if (importLegacyContacts()) {
-                    // TODO aggregate all newly added raw contacts
-
-                    /*
-                     * When the import process is done, we can unlock the provider and
-                     * start aggregating the imported contacts asynchronously.
-                     */
-                    mAccessLatch.countDown();
-                    mAccessLatch = null;
+                LegacyContactImporter importer = getLegacyContactImporter();
+                if (importLegacyContacts(importer)) {
+                    onLegacyContactImportSuccess();
+                } else {
+                    onLegacyContactImportFailure();
                 }
             }
         };
@@ -2064,17 +2073,46 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         importThread.start();
     }
 
-    private boolean importLegacyContacts() {
-        LegacyContactImporter importer = getLegacyContactImporter();
-        if (importLegacyContacts(importer)) {
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-            Editor editor = prefs.edit();
-            editor.putInt(PREF_CONTACTS_IMPORTED, PREF_CONTACTS_IMPORT_VERSION);
-            editor.commit();
-            return true;
-        } else {
-            return false;
-        }
+    /**
+     * Unlocks the provider and declares that the import process is complete.
+     */
+    private void onLegacyContactImportSuccess() {
+        NotificationManager nm =
+            (NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        nm.cancel(LEGACY_IMPORT_FAILED_NOTIFICATION);
+
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        Editor editor = prefs.edit();
+        editor.putInt(PREF_CONTACTS_IMPORTED, PREF_CONTACTS_IMPORT_VERSION);
+        editor.commit();
+        setProviderStatus(ProviderStatus.STATUS_NORMAL);
+        mAccessLatch.countDown();
+        mAccessLatch = null;
+        Log.v(TAG, "Completed import of legacy contacts");
+    }
+
+    /**
+     * Announces the provider status and keeps the provider locked.
+     */
+    private void onLegacyContactImportFailure() {
+        Context context = getContext();
+        NotificationManager nm =
+            (NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        // Show a notification
+        Notification n = new Notification(android.R.drawable.stat_notify_error,
+                context.getString(R.string.upgrade_out_of_memory_notification_ticker),
+                System.currentTimeMillis());
+        n.setLatestEventInfo(context,
+                context.getString(R.string.upgrade_out_of_memory_notification_title),
+                context.getString(R.string.upgrade_out_of_memory_notification_text),
+                PendingIntent.getActivity(context, 0, new Intent(Intents.UI.LIST_DEFAULT), 0));
+        n.flags |= Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
+
+        nm.notify(LEGACY_IMPORT_FAILED_NOTIFICATION, n);
+
+        setProviderStatus(ProviderStatus.STATUS_UPGRADE_OUT_OF_MEMORY);
+        Log.v(TAG, "Failed to import legacy contacts");
     }
 
     /* Visible for testing */
@@ -2082,13 +2120,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         boolean aggregatorEnabled = mContactAggregator.isEnabled();
         mContactAggregator.setEnabled(false);
         try {
-            importer.importContacts();
-            mContactAggregator.setEnabled(aggregatorEnabled);
-            return true;
+            if (importer.importContacts()) {
+
+                // TODO aggregate all newly added raw contacts
+                mContactAggregator.setEnabled(aggregatorEnabled);
+                return true;
+            }
         } catch (Throwable e) {
            Log.e(TAG, "Legacy contact import failed", e);
-           return false;
         }
+        mEstimatedStorageRequirement = importer.getEstimatedStorageRequirement();
+        return false;
     }
 
     /**
@@ -2128,6 +2170,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        if (mAccessLatch != null) {
+            // We are stuck trying to upgrade contacts db.  The only update request
+            // allowed in this case is an update of provider status, which will trigger
+            // an attempt to upgrade contacts again.
+            int match = sUriMatcher.match(uri);
+            if (match == PROVIDER_STATUS && isLegacyContactImportNeeded()) {
+                Integer newStatus = values.getAsInteger(ProviderStatus.STATUS);
+                if (newStatus != null && newStatus == ProviderStatus.STATUS_UPGRADING) {
+                    importLegacyContactsAsync();
+                    return 1;
+                } else {
+                    return 0;
+                }
+            }
+        }
         waitForAccess();
         return super.update(uri, values, selection, selectionArgs);
     }

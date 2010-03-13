@@ -22,5 +22,14 @@
 
     <!-- What to show in messaging that refers to this provider, e.g. AccountSyncSettings -->
     <string name="provider_label">Contacts</string>
+    
+    <!-- Ticker for the notification shown when updating contacts fails because of memory shortage -->
+    <string name="upgrade_out_of_memory_notification_ticker">Contact upgrade needs more memory</string>
+
+    <!-- Title for the notification shown when updating contacts fails because of memory shortage -->
+    <string name="upgrade_out_of_memory_notification_title">Upgrading contact storage</string>
+
+    <!-- Text for the notification shown when updating contacts fails because of memory shortage -->
+    <string name="upgrade_out_of_memory_notification_text">Select to complete the upgrade.</string>
 
 </resources>

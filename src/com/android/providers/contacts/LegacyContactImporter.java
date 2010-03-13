@@ -26,6 +26,7 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
@@ -61,6 +62,16 @@ public class LegacyContactImporter {
 
     private static final int INSERT_BATCH_SIZE = 200;
 
+    /**
+     * Estimated increase in database size after import.
+     */
+    private static final long DATABASE_SIZE_MULTIPLIER = 4;
+
+    /**
+     * Estimated minimum database size in megabytes.
+     */
+    private static final long DATABASE_MIN_SIZE = 5;
+
     private final Context mContext;
     private final ContactsProvider2 mContactsProvider;
     private ContactsDatabaseHelper mDbHelper;
@@ -86,6 +97,7 @@ public class LegacyContactImporter {
     private long mPhotoMimetypeId;
     private long mGroupMembershipMimetypeId;
 
+    private long mEstimatedStorageRequirement;
 
     public LegacyContactImporter(Context context, ContactsProvider2 contactsProvider) {
         mContext = context;
@@ -93,14 +105,15 @@ public class LegacyContactImporter {
         mResolver = mContactsProvider.getContext().getContentResolver();
     }
 
-    public void importContacts() throws Exception {
+    public boolean importContacts() throws Exception {
         String path = mContext.getDatabasePath(DATABASE_NAME).getPath();
-        Log.w(TAG, "Importing contacts from " + path);
-
-        if (!new File(path).exists()) {
-            Log.i(TAG, "Legacy contacts database does not exist");
-            return;
+        File file = new File(path);
+        if (!file.exists()) {
+            Log.i(TAG, "Legacy contacts database does not exist at " + path);
+            return true;
         }
+
+        Log.w(TAG, "Importing contacts from " + path);
 
         for (int i = 0; i < MAX_ATTEMPTS; i++) {
             try {
@@ -108,7 +121,7 @@ public class LegacyContactImporter {
                 importContactsFromLegacyDb();
                 Log.i(TAG, "Imported legacy contacts: " + mContactCount);
                 mContactsProvider.notifyChange();
-                return;
+                return true;
 
             } catch (SQLiteException e) {
                 Log.e(TAG, "Database import exception. Will retry in " + DELAY_BETWEEN_ATTEMPTS
@@ -124,6 +137,18 @@ public class LegacyContactImporter {
                 }
             }
         }
+
+        long oldDatabaseSize = file.length();
+        mEstimatedStorageRequirement = oldDatabaseSize * DATABASE_SIZE_MULTIPLIER / 1024 / 1024;
+        if (mEstimatedStorageRequirement < DATABASE_MIN_SIZE) {
+            mEstimatedStorageRequirement = DATABASE_MIN_SIZE;
+        }
+
+        return false;
+    }
+
+    public long getEstimatedStorageRequirement() {
+        return mEstimatedStorageRequirement;
     }
 
     private void importContactsFromLegacyDb() {
@@ -142,14 +167,6 @@ public class LegacyContactImporter {
         mDbHelper = (ContactsDatabaseHelper)mContactsProvider.getDatabaseHelper();
         mTargetDb = mDbHelper.getWritableDatabase();
 
-        /*
-         * At this point there should be no data in the contacts provider, but in case
-         * some was inserted by mistake, we should remove it.  The main reason for this
-         * is that we will be preserving original contact IDs and don't want to run into
-         * any collisions.
-         */
-        mContactsProvider.wipeData();
-
         mStructuredNameMimetypeId = mDbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
         mNoteMimetypeId = mDbHelper.getMimeTypeId(Note.CONTENT_ITEM_TYPE);
         mOrganizationMimetypeId = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
@@ -164,25 +181,51 @@ public class LegacyContactImporter {
         mNameSplitter = mContactsProvider.getNameSplitter();
 
         mTargetDb.beginTransaction();
-        importGroups();
-        importPeople();
-        importOrganizations();
-        importPhones();
-        importContactMethods();
-        importPhotos();
-        importGroupMemberships();
+        try {
+            checkForImportFailureTest();
 
-        // Deleted contacts should be inserted after everything else, because
-        // the legacy table does not provide an _ID field - the _ID field
-        // will be autoincremented
-        importDeletedPeople();
+            /*
+             * At this point there should be no data in the contacts provider, but in case
+             * some was inserted by mistake, we should remove it.  The main reason for this
+             * is that we will be preserving original contact IDs and don't want to run into
+             * any collisions.
+             */
+            mContactsProvider.wipeData();
 
-        mDbHelper.updateAllVisible();
+            importGroups();
+            importPeople();
+            importOrganizations();
+            importPhones();
+            importContactMethods();
+            importPhotos();
+            importGroupMemberships();
 
-        mTargetDb.setTransactionSuccessful();
-        mTargetDb.endTransaction();
+            // Deleted contacts should be inserted after everything else, because
+            // the legacy table does not provide an _ID field - the _ID field
+            // will be autoincremented
+            importDeletedPeople();
+
+            mDbHelper.updateAllVisible();
+
+            mTargetDb.setTransactionSuccessful();
+        } finally {
+            mTargetDb.endTransaction();
+        }
 
         importCalls();
+    }
+
+    /**
+     * This is used for simulating an import failure. Insert a row into the "settings"
+     * table with key='TEST' and then proceed with the upgrade.  Remove the record
+     * after verifying the failure handling.
+     */
+    private void checkForImportFailureTest() {
+        long isTest = DatabaseUtils.longForQuery(mSourceDb,
+                "SELECT COUNT(*) FROM settings WHERE key='TEST'", null);
+        if (isTest != 0) {
+            throw new SQLiteException("Testing import failure.");
+        }
     }
 
     private interface GroupsQuery {
@@ -677,7 +720,6 @@ public class LegacyContactImporter {
     }
 
     private void insertOrganization(Cursor c, SQLiteStatement insert) {
-
         long id = c.getLong(OrganizationsQuery.PERSON);
         insert.bindLong(OrganizationInsert.RAW_CONTACT_ID, id);
         insert.bindLong(OrganizationInsert.MIMETYPE_ID, mOrganizationMimetypeId);
