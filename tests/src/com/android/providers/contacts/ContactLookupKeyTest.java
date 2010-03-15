@@ -173,32 +173,41 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
     }
 
     public void testParseLookupKey() {
+        // Display name
         assertLookupKey("123n1248AC",
                 new int[]{123},
                 new int[]{ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME},
                 new String[]{"1248AC"});
+
+        // Raw contact ID + display name
         assertLookupKey("123r20-1248AC",
                 new int[]{123},
                 new int[]{ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID},
                 new String[]{"1248AC"});
-        assertLookupKey("0i1248AC",
+
+        // Unescaped source ID
+        assertLookupKey("0i1248AC-X",
                 new int[]{0},
                 new int[]{ContactLookupKey.LOOKUP_TYPE_SOURCE_ID},
-                new String[]{"1248AC"});
+                new String[]{"1248AC-X"});
+
+        // Escaped source ID
         assertLookupKey("432e12..48AC",
                 new int[]{432},
                 new int[]{ContactLookupKey.LOOKUP_TYPE_SOURCE_ID},
                 new String[]{"12.48AC"});
 
-        assertLookupKey("123n1248AC.0i1248AC.432e12..48AC.123n1248AC",
+        // Compound lookup key
+        assertLookupKey("123n1248AC.0i1248AC.432e12..48AC.123n1248AC.123r30-2184CA",
                 new int[]{123, 0, 432, 123},
                 new int[] {
                         ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME,
                         ContactLookupKey.LOOKUP_TYPE_SOURCE_ID,
                         ContactLookupKey.LOOKUP_TYPE_SOURCE_ID,
                         ContactLookupKey.LOOKUP_TYPE_DISPLAY_NAME,
+                        ContactLookupKey.LOOKUP_TYPE_RAW_CONTACT_ID,
                 },
-                new String[]{"1248AC", "1248AC", "12.48AC", "1248AC"});
+                new String[]{"1248AC", "1248AC", "12.48AC", "1248AC", "2184CA"});
     }
 
     private void assertLookupKey(String lookupKey, int[] accountHashCodes, int[] types,

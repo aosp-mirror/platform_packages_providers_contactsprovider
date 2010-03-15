@@ -109,7 +109,7 @@ public class ContactLookupKey {
         int length = string.length();
         int hashCode = 0;
         int lookupType = -1;
-        boolean escaped;
+        boolean escaped = false;
         String rawContactId = null;
         String key;
 
@@ -135,59 +135,96 @@ public class ContactLookupKey {
                 escaped = true;
             } else if (c == 'n') {
                 lookupType = LOOKUP_TYPE_DISPLAY_NAME;
-                escaped = false;
             } else if (c == 'r') {
                 lookupType = LOOKUP_TYPE_RAW_CONTACT_ID;
-                escaped = false;
             } else {
                 throw new IllegalArgumentException("Invalid lookup id: " + lookupKey);
             }
 
             // Parse the source ID or normalized display name
-            if (escaped) {
-                StringBuffer sb = new StringBuffer();
-                while (offset < length) {
-                    c = string.charAt(offset++);
+            switch (lookupType) {
+                case LOOKUP_TYPE_SOURCE_ID: {
+                    if (escaped) {
+                        StringBuffer sb = new StringBuffer();
+                        while (offset < length) {
+                            c = string.charAt(offset++);
 
-                    if (c == '.') {
-                        if (offset == length) {
-                            throw new IllegalArgumentException("Invalid lookup id: " + lookupKey);
+                            if (c == '.') {contactId
+                                if (offset == length) {
+                                    throw new IllegalArgumentException("Invalid lookup id: " +
+                                            lookupKey);
+                                }
+                                c = string.charAt(offset);
+
+                                if (c == '.') {
+                                    sb.append('.');
+                                    offset++;
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                sb.append(c);
+                            }
                         }
-                        c = string.charAt(offset);
-
-                        if (c == '.') {
-                            sb.append('.');
-                            offset++;
+                        key = sb.toString();
+                    } else {
+                        int start = offset;
+                        while (offset < length) {
+                            c = string.charAt(offset++);
+                            if (c == '.') {
+                                break;
+                            }
+                        }
+                        if (offset == length) {
+                            key = string.substring(start);
                         } else {
+                            key = string.substring(start, offset - 1);
+                        }
+                    }
+                    break;
+                }
+                case LOOKUP_TYPE_DISPLAY_NAME: {
+                    int start = offset;
+                    while (offset < length) {
+                        c = string.charAt(offset++);
+                        if (c == '.') {
                             break;
                         }
+                    }
+                    if (offset == length) {
+                        key = string.substring(start);
                     } else {
-                        sb.append(c);
+                        key = string.substring(start, offset - 1);
                     }
+                    break;
                 }
-                key = sb.toString();
-            } else {
-                int dash = -1;
-                int start = offset;
-                while (offset < length) {
-                    c = string.charAt(offset);
-                    if (c == '-' && dash == -1) {
-                        dash = offset;
+                case LOOKUP_TYPE_RAW_CONTACT_ID: {
+                    int dash = -1;
+                    int start = offset;
+                    while (offset < length) {
+                        c = string.charAt(offset);
+                        if (c == '-' && dash == -1) {
+                            dash = offset;
+                        }
+                        offset++;
+                        if (c == '.') {
+                            break;
+                        }
                     }
-                    offset++;
-                    if (c == '.') {
-                        break;
+                    if (dash != -1) {
+                        rawContactId = string.substring(start, dash);
+                        start = dash + 1;
                     }
+                    if (offset == length) {
+                        key = string.substring(start);
+                    } else {
+                        key = string.substring(start, offset - 1);
+                    }
+                    break;
                 }
-                if (dash != -1) {
-                    rawContactId = string.substring(start, dash);
-                    start = dash + 1;
-                }
-                if (offset == length) {
-                    key = string.substring(start);
-                } else {
-                    key = string.substring(start, offset - 1);
-                }
+                default:
+                    // Will never happen
+                    throw new IllegalStateException();
             }
 
             LookupKeySegment segment = new LookupKeySegment();
