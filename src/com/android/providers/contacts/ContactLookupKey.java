@@ -149,7 +149,7 @@ public class ContactLookupKey {
                         while (offset < length) {
                             c = string.charAt(offset++);
 
-                            if (c == '.') {contactId
+                            if (c == '.') {
                                 if (offset == length) {
                                     throw new IllegalArgumentException("Invalid lookup id: " +
                                             lookupKey);
