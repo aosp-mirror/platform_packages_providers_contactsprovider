@@ -2478,7 +2478,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         long rawContactId = mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, mValues);
-        mContactAggregator.markNewForAggregation(rawContactId);
+        int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
+        if (mValues.containsKey(RawContacts.AGGREGATION_MODE)) {
+            aggregationMode = mValues.getAsInteger(RawContacts.AGGREGATION_MODE);
+        }
+        mContactAggregator.markNewForAggregation(rawContactId, aggregationMode);
 
         // Trigger creation of a Contact based on this RawContact at the end of transaction
         mInsertedRawContacts.put(rawContactId, account);
@@ -2539,7 +2543,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
 
             case RawContacts.AGGREGATION_MODE_DEFAULT: {
-                mContactAggregator.markForAggregation(rawContactId);
+                mContactAggregator.markForAggregation(rawContactId, aggregationMode);
                 break;
             }
 
@@ -3688,6 +3692,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         int count = mDb.update(Tables.RAW_CONTACTS, values, selection, mSelectionArgs1);
         if (count != 0) {
+            if (values.containsKey(RawContacts.AGGREGATION_MODE)) {
+                int aggregationMode = values.getAsInteger(RawContacts.AGGREGATION_MODE);
+
+                // As per ContactsContract documentation, changing aggregation mode
+                // to DEFAULT should not trigger aggregation
+                if (aggregationMode != RawContacts.AGGREGATION_MODE_DEFAULT) {
+                    mContactAggregator.markForAggregation(rawContactId, aggregationMode);
+                }
+            }
             if (values.containsKey(RawContacts.STARRED)) {
                 mContactAggregator.updateStarred(rawContactId);
             }
@@ -3873,8 +3886,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         mContactAggregator.invalidateAggregationExceptionCache();
-        mContactAggregator.markForAggregation(rawContactId1);
-        mContactAggregator.markForAggregation(rawContactId2);
+        mContactAggregator.markForAggregation(rawContactId1, RawContacts.AGGREGATION_MODE_DEFAULT);
+        mContactAggregator.markForAggregation(rawContactId2, RawContacts.AGGREGATION_MODE_DEFAULT);
 
         long contactId1 = mDbHelper.getContactId(rawContactId1);
         mContactAggregator.aggregateContact(db, rawContactId1, contactId1);

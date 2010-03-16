@@ -619,10 +619,25 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void storeValue(Uri contentUri, long id, String column, String value) {
+        storeValue(ContentUris.withAppendedId(contentUri, id), column, value);
+    }
+
+    protected void storeValue(Uri contentUri, String column, String value) {
         ContentValues values = new ContentValues();
         values.put(column, value);
 
-        mResolver.update(ContentUris.withAppendedId(contentUri, id), values, null, null);
+        mResolver.update(contentUri, values, null, null);
+    }
+
+    protected void storeValue(Uri contentUri, long id, String column, long value) {
+        storeValue(ContentUris.withAppendedId(contentUri, id), column, value);
+    }
+
+    protected void storeValue(Uri contentUri, String column, long value) {
+        ContentValues values = new ContentValues();
+        values.put(column, value);
+
+        mResolver.update(contentUri, values, null, null);
     }
 
     protected void assertStoredValue(Uri contentUri, long id, String column, Object expectedValue) {

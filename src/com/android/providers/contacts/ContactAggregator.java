@@ -49,6 +49,7 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -111,7 +112,7 @@ public class ContactAggregator {
     private SQLiteStatement mContactUpdate;
     private SQLiteStatement mContactInsert;
 
-    private HashSet<Long> mRawContactsMarkedForAggregation = new HashSet<Long>();
+    private HashMap<Long, Integer> mRawContactsMarkedForAggregation = new HashMap<Long, Integer>();
 
     private String[] mSelectionArgs1 = new String[1];
     private String[] mSelectionArgs2 = new String[2];
@@ -340,7 +341,7 @@ public class ContactAggregator {
         int index = 0;
         mSb.setLength(0);
         mSb.append(AggregationQuery.SQL);
-        for (long rawContactId : mRawContactsMarkedForAggregation) {
+        for (long rawContactId : mRawContactsMarkedForAggregation.keySet()) {
             if (index > 0) {
                 mSb.append(',');
             }
@@ -382,16 +383,23 @@ public class ContactAggregator {
         mRawContactsMarkedForAggregation.clear();
     }
 
-    public void markNewForAggregation(long rawContactId) {
-        mRawContactsMarkedForAggregation.add(rawContactId);
+    public void markNewForAggregation(long rawContactId, int aggregationMode) {
+        mRawContactsMarkedForAggregation.put(rawContactId, aggregationMode);
     }
 
-    public void markForAggregation(long rawContactId) {
-        if (!mRawContactsMarkedForAggregation.contains(rawContactId)) {
-            mRawContactsMarkedForAggregation.add(rawContactId);
+    public void markForAggregation(long rawContactId, int aggregationMode) {
+        if (mRawContactsMarkedForAggregation.containsKey(rawContactId)) {
+            // As per ContactsContract documentation, default aggregation mode
+            // does not override a previously set mode
+            if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {
+                aggregationMode = mRawContactsMarkedForAggregation.get(rawContactId);
+            }
+        } else {
             mMarkForAggregation.bindLong(1, rawContactId);
             mMarkForAggregation.execute();
         }
+
+        mRawContactsMarkedForAggregation.put(rawContactId, aggregationMode);
     }
 
     /**
@@ -448,14 +456,23 @@ public class ContactAggregator {
             long currentContactId, MatchCandidateList candidates, ContactMatcher matcher,
             ContentValues values) {
 
-        mRawContactsMarkedForAggregation.remove(rawContactId);
+        int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
 
-        candidates.clear();
-        matcher.clear();
+        Integer aggModeObject = mRawContactsMarkedForAggregation.remove(rawContactId);
+        if (aggModeObject != null) {
+            aggregationMode = aggModeObject;
+        }
 
-        long contactId = pickBestMatchBasedOnExceptions(db, rawContactId, matcher);
-        if (contactId == -1) {
-            contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
+        long contactId = -1;
+
+        if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {
+            candidates.clear();
+            matcher.clear();
+
+            contactId = pickBestMatchBasedOnExceptions(db, rawContactId, matcher);
+            if (contactId == -1) {
+                contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
+            }
         }
 
         long currentContactContentsCount = 0;
