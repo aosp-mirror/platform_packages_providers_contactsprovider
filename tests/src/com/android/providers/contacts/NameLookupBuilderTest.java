@@ -19,6 +19,8 @@ package com.android.providers.contacts;
 import android.provider.ContactsContract.FullNameStyle;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import java.text.Collator;
+import java.util.Arrays;
 import java.util.Locale;
 
 import junit.framework.TestCase;
@@ -181,6 +183,11 @@ public class NameLookupBuilderTest extends TestCase {
     }
 
     public void testChineseName() {
+        // Only run this test when Chinese collation is supported
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+            return;
+        }
+
         mBuilder.insertNameLookup(0, 0, "\u695A\u8FAD", FullNameStyle.CHINESE);
         assertEquals(
                 "(0:\u695A\u8FAD)" +
