@@ -21,7 +21,6 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
-import android.os.FileUtils;
 import android.provider.BaseColumns;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
@@ -69,15 +68,47 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
         }
     }
 
-    private LegacyMockContext createLegacyMockContext() throws IOException {
+    private LegacyMockContext createLegacyMockContext(String folder) throws IOException {
         Context context = getTestContext();
-        InputStream input = context.getAssets().open("legacy_contacts.db");
         File tempDb = new File(context.getFilesDir(), "legacy_contacts.db");
-        if (!FileUtils.copyToFile(input, tempDb)) {
-            fail("Could not create test contacts database");
+        if (tempDb.exists()) {
+            tempDb.delete();
         }
-
+        createSQLiteDatabaseFromDumpFile(tempDb.getPath(),
+                new File(folder, "legacy_contacts.sql").getPath());
         return new LegacyMockContext(tempDb.getPath());
+    }
+
+    private void createSQLiteDatabaseFromDumpFile(String tempDbPath, String dumpFileAssetPath)
+        throws IOException {
+
+        final String[] ignoredTables = new String[] {"android_metadata", "sqlite_sequence"};
+
+        Context context = getTestContext();
+        SQLiteDatabase database = SQLiteDatabase.openOrCreateDatabase(tempDbPath, null);
+        try {
+            String data = readAssetAsString(dumpFileAssetPath);
+            String[] commands = data.split(";\r|;\n|;\r\n");
+            for (String command : commands) {
+                boolean ignore = false;
+                for (String ignoredTable : ignoredTables) {
+                    if (command.contains(ignoredTable)) {
+                        ignore = true;
+                        break;
+                    }
+                }
+                if (!ignore) {
+                    database.execSQL(command);
+                }
+            }
+
+            assertTrue(
+                    "Database Version not set. Be sure to add " +
+                    "'PRAGMA user_version = <number>;' to the SQL Script",
+                    database.getVersion() != 0);
+        } finally {
+            database.close();
+        }
     }
 
     @Override
@@ -93,13 +124,25 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
         SynchronousContactsProvider2.resetOpenHelper();
     }
 
-    public void testContactImport() throws Exception {
+    public void testContactUpgrade1() throws Exception {
+        testAssetSet("test1");
+    }
+
+    public void testSyncedContactsUpgrade() throws Exception {
+        testAssetSet("testSynced");
+    }
+
+    public void testUnsyncedContactsUpgrade() throws Exception {
+        testAssetSet("testUnsynced");
+    }
+
+    private void testAssetSet(String folder) throws Exception {
         ContactsProvider2 provider = (ContactsProvider2)getProvider();
         LegacyContactImporter importer =
-                new LegacyContactImporter(createLegacyMockContext(), provider);
+                new LegacyContactImporter(createLegacyMockContext(folder), provider);
         provider.importLegacyContacts(importer);
 
-        assertQueryResults("expected_groups.txt", Groups.CONTENT_URI, new String[]{
+        assertQueryResults(folder + "/expected_groups.txt", Groups.CONTENT_URI, new String[]{
                 Groups._ID,
                 Groups.ACCOUNT_NAME,
                 Groups.ACCOUNT_TYPE,
@@ -117,7 +160,7 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Groups.SYNC4,
         });
 
-        assertQueryResults("expected_contacts.txt", Contacts.CONTENT_URI, new String[]{
+        assertQueryResults(folder + "/expected_contacts.txt", Contacts.CONTENT_URI, new String[]{
                 Contacts._ID,
                 Contacts.DISPLAY_NAME_PRIMARY,
                 Contacts.SORT_KEY_PRIMARY,
@@ -132,26 +175,27 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Contacts.LOOKUP_KEY,
         });
 
-        assertQueryResults("expected_raw_contacts.txt", RawContacts.CONTENT_URI, new String[]{
-                RawContacts._ID,
-                RawContacts.ACCOUNT_NAME,
-                RawContacts.ACCOUNT_TYPE,
-                RawContacts.DELETED,
-                RawContacts.DIRTY,
-                RawContacts.SOURCE_ID,
-                RawContacts.VERSION,
-                RawContacts.SYNC1,
-                RawContacts.SYNC2,
-                RawContacts.SYNC3,
-                RawContacts.SYNC4,
-                RawContacts.DISPLAY_NAME_SOURCE,
-                RawContacts.DISPLAY_NAME_PRIMARY,
-                RawContacts.DISPLAY_NAME_ALTERNATIVE,
-                RawContacts.SORT_KEY_PRIMARY,
-                RawContacts.SORT_KEY_ALTERNATIVE,
+        assertQueryResults(folder + "/expected_raw_contacts.txt", RawContacts.CONTENT_URI,
+                new String[]{
+                    RawContacts._ID,
+                    RawContacts.ACCOUNT_NAME,
+                    RawContacts.ACCOUNT_TYPE,
+                    RawContacts.DELETED,
+                    RawContacts.DIRTY,
+                    RawContacts.SOURCE_ID,
+                    RawContacts.VERSION,
+                    RawContacts.SYNC1,
+                    RawContacts.SYNC2,
+                    RawContacts.SYNC3,
+                    RawContacts.SYNC4,
+                    RawContacts.DISPLAY_NAME_SOURCE,
+                    RawContacts.DISPLAY_NAME_PRIMARY,
+                    RawContacts.DISPLAY_NAME_ALTERNATIVE,
+                    RawContacts.SORT_KEY_PRIMARY,
+                    RawContacts.SORT_KEY_ALTERNATIVE,
         });
 
-        assertQueryResults("expected_data.txt", Data.CONTENT_URI, new String[]{
+        assertQueryResults(folder + "/expected_data.txt", Data.CONTENT_URI, new String[]{
                 Data._ID,
                 Data.RAW_CONTACT_ID,
                 Data.MIMETYPE,
@@ -179,7 +223,7 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Data.SYNC4,
         });
 
-        assertQueryResults("expected_calls.txt", Calls.CONTENT_URI, new String[]{
+        assertQueryResults(folder + "/expected_calls.txt", Calls.CONTENT_URI, new String[]{
                 Calls._ID,
                 Calls.NUMBER,
                 Calls.DATE,
@@ -194,7 +238,8 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
         provider.getDatabaseHelper().close();
     }
 
-    private void assertQueryResults(String fileName, Uri uri, String[] projection) throws Exception {
+    private void assertQueryResults(String fileName, Uri uri, String[] projection)
+            throws Exception {
         String expected = readAssetAsString(fileName).trim();
         String actual = dumpCursorToString(uri, projection).trim();
         assertEquals("Checking golden file " + fileName, expected, actual);

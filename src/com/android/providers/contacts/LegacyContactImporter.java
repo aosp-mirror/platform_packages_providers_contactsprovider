@@ -186,7 +186,7 @@ public class LegacyContactImporter {
 
             /*
              * At this point there should be no data in the contacts provider, but in case
-             * some was inserted by mistake, we should remove it.  The main reason for this
+             * some was inserted by mistake, we should remove it. The main reason for this
              * is that we will be preserving original contact IDs and don't want to run into
              * any collisions.
              */
@@ -199,6 +199,7 @@ public class LegacyContactImporter {
             importContactMethods();
             importPhotos();
             importGroupMemberships();
+            updateDisplayNamesAndLookupKeys();
 
             // Deleted contacts should be inserted after everything else, because
             // the legacy table does not provide an _ID field - the _ID field
@@ -398,8 +399,9 @@ public class LegacyContactImporter {
                 RawContacts.ACCOUNT_NAME + "," +
                 RawContacts.ACCOUNT_TYPE + "," +
                 RawContacts.SOURCE_ID + "," +
-                RawContactsColumns.DISPLAY_NAME +
-         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                RawContactsColumns.DISPLAY_NAME + "," +
+                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP +
+         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
         int ID = 1;
         int CONTACT_ID = 2;
@@ -415,6 +417,7 @@ public class LegacyContactImporter {
         int ACCOUNT_TYPE = 12;
         int SOURCE_ID = 13;
         int DISPLAY_NAME = 14;
+        int CONTACT_IN_VISIBLE_GROUP = 15;
     }
 
     private interface ContactsInsert {
@@ -425,8 +428,9 @@ public class LegacyContactImporter {
                 Contacts.SEND_TO_VOICEMAIL + "," +
                 Contacts.STARRED + "," +
                 Contacts.TIMES_CONTACTED + "," +
-                Contacts.NAME_RAW_CONTACT_ID +
-         ") VALUES (?,?,?,?,?,?,?)";
+                Contacts.NAME_RAW_CONTACT_ID + "," +
+                Contacts.IN_VISIBLE_GROUP +
+         ") VALUES (?,?,?,?,?,?,?,?)";
 
         int ID = 1;
         int CUSTOM_RINGTONE = 2;
@@ -435,6 +439,7 @@ public class LegacyContactImporter {
         int STARRED = 5;
         int TIMES_CONTACTED = 6;
         int NAME_RAW_CONTACT_ID = 7;
+        int IN_VISIBLE_GROUP = 8;
     }
 
     private interface StructuredNameInsert {
@@ -515,10 +520,6 @@ public class LegacyContactImporter {
                     insertContact(c, contactInsert);
                     insertStructuredName(c, structuredNameInsert);
                     insertNote(c, noteInsert);
-
-                    // Compute display names, sort keys, lookup key, etc.
-                    mContactsProvider.updateRawContactDisplayName(mTargetDb, id);
-                    mContactsProvider.updateLookupKeyForRawContact(mTargetDb, id);
                     mContactCount++;
                 }
             } finally {
@@ -554,6 +555,7 @@ public class LegacyContactImporter {
                 c.getString(PeopleQuery._SYNC_LOCAL_ID));
         bindString(insert, RawContactsInsert.DISPLAY_NAME,
                 c.getString(PeopleQuery.NAME));
+        insert.bindLong(RawContactsInsert.CONTACT_IN_VISIBLE_GROUP, 1);
 
         String account = c.getString(PeopleQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
@@ -583,6 +585,7 @@ public class LegacyContactImporter {
         insert.bindLong(ContactsInsert.TIMES_CONTACTED,
                 c.getLong(PeopleQuery.TIMES_CONTACTED));
         insert.bindLong(ContactsInsert.NAME_RAW_CONTACT_ID, id);
+        insert.bindLong(ContactsInsert.IN_VISIBLE_GROUP, 1);
 
         insert(insert);
     }
@@ -1191,6 +1194,21 @@ public class LegacyContactImporter {
         // TODO: confirm that we can use the CallLogProvider at this point, that it is guaranteed
         // to have been registered.
         mResolver.insert(Calls.CONTENT_URI, mValues);
+    }
+
+    private void updateDisplayNamesAndLookupKeys() {
+        // Compute display names, sort keys, lookup key, etc. for all Raw Cont
+        Cursor cursor = mResolver.query(RawContacts.CONTENT_URI,
+                new String[] { RawContacts._ID }, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                long rawContactId = cursor.getLong(0);
+                mContactsProvider.updateRawContactDisplayName(mTargetDb, rawContactId);
+                mContactsProvider.updateLookupKeyForRawContact(mTargetDb, rawContactId);
+            }
+        } finally {
+            cursor.close();
+        }
     }
 
     private interface DeletedPeopleQuery {

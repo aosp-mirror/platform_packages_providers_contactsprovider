@@ -1,0 +1,168 @@
+1 0 {
+2    _id=1
+3    display_name=Lemmy Test
+4    sort_key=Lemmy Test
+5    photo_id=null
+6    times_contacted=0
+7    last_time_contacted=0
+8    custom_ringtone=null
+9    send_to_voicemail=0
+10    starred=0
+11    in_visible_group=0
+12    has_phone_number=0
+13    lookup=2273r1-423444445C52345052
+14 }
+15 1 {
+16    _id=2
+17    display_name=698-147-02
+18    sort_key=698-147-02
+19    photo_id=null
+20    times_contacted=0
+21    last_time_contacted=0
+22    custom_ringtone=null
+23    send_to_voicemail=0
+24    starred=0
+25    in_visible_group=1
+26    has_phone_number=1
+27    lookup=389i561d08a30def1f46
+28 }
+29 2 {
+30    _id=3
+31    display_name=Mail
+32    sort_key=Mail
+33    photo_id=null
+34    times_contacted=0
+35    last_time_contacted=0
+36    custom_ringtone=null
+37    send_to_voicemail=0
+38    starred=0
+39    in_visible_group=1
+40    has_phone_number=0
+41    lookup=389i506b6479896c635d
+42 }
+43 3 {
+44    _id=4
+45    display_name=mail@dom.com
+46    sort_key=mail@dom.com
+47    photo_id=null
+48    times_contacted=0
+49    last_time_contacted=0
+50    custom_ringtone=null
+51    send_to_voicemail=0
+52    starred=0
+53    in_visible_group=1
+54    has_phone_number=0
+55    lookup=389i192ec38f0de81866
+56 }
+57 4 {
+58    _id=5
+59    display_name=Number
+60    sort_key=Number
+61    photo_id=null
+62    times_contacted=0
+63    last_time_contacted=0
+64    custom_ringtone=null
+65    send_to_voicemail=0
+66    starred=0
+67    in_visible_group=1
+68    has_phone_number=1
+69    lookup=389i3e879d80b2673fc
+70 }
+71 5 {
+72    _id=6
+73    display_name=Number And Mail
+74    sort_key=Number And Mail
+75    photo_id=null
+76    times_contacted=0
+77    last_time_contacted=0
+78    custom_ringtone=null
+79    send_to_voicemail=0
+80    starred=0
+81    in_visible_group=1
+82    has_phone_number=1
+83    lookup=389i4413217a0a1f5437
+84 }
+85 6 {
+86    _id=7
+87    display_name=Not Synced Number
+88    sort_key=Not Synced Number
+89    photo_id=null
+90    times_contacted=0
+91    last_time_contacted=0
+92    custom_ringtone=null
+93    send_to_voicemail=0
+94    starred=0
+95    in_visible_group=1
+96    has_phone_number=1
+97    lookup=389r7-464852505C463034324654442E344E
+98 }
+99 7 {
+100    _id=8
+101    display_name=Not Synced NumberMail
+102    sort_key=Not Synced NumberMail
+103    photo_id=null
+104    times_contacted=0
+105    last_time_contacted=0
+106    custom_ringtone=null
+107    send_to_voicemail=0
+108    starred=0
+109    in_visible_group=1
+110    has_phone_number=1
+111    lookup=389r8-464852505C463034324654442E344E442C3C42
+112 }
+113 8 {
+114    _id=9
+115    display_name=Not Synced Mail
+116    sort_key=Not Synced Mail
+117    photo_id=null
+118    times_contacted=0
+119    last_time_contacted=0
+120    custom_ringtone=null
+121    send_to_voicemail=0
+122    starred=0
+123    in_visible_group=1
+124    has_phone_number=0
+125    lookup=389r9-464852505C46303432442C3C42
+126 }
+127 9 {
+128    _id=10
+129    display_name=Not Synced
+130    sort_key=Not Synced
+131    photo_id=null
+132    times_contacted=0
+133    last_time_contacted=0
+134    custom_ringtone=null
+135    send_to_voicemail=0
+136    starred=0
+137    in_visible_group=1
+138    has_phone_number=0
+139    lookup=389r10-464852505C46303432
+140 }
+141 10 {
+142    _id=11
+143    display_name=1111111111
+144    sort_key=1111111111
+145    photo_id=null
+146    times_contacted=0
+147    last_time_contacted=0
+148    custom_ringtone=null
+149    send_to_voicemail=0
+150    starred=0
+151    in_visible_group=1
+152    has_phone_number=1
+153    lookup=389r11-297E297E297E297E297E297E297E297E297E297E
+154 }
+155 11 {
+156    _id=12
+157    display_name=notsynced@gmail.com
+158    sort_key=notsynced@gmail.com
+159    photo_id=null
+160    times_contacted=0
+161    last_time_contacted=0
+162    custom_ringtone=null
+163    send_to_voicemail=0
+164    starred=0
+165    in_visible_group=1
+166    has_phone_number=0
+167    lookup=389r12-464852505C4630343238442C3C42304844
+168 }
