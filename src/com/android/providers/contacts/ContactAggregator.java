@@ -484,7 +484,11 @@ public class ContactAggregator {
         }
 
         // If there are no other raw contacts in the current aggregate, we might as well reuse it.
-        if (contactId == -1 && currentContactId != 0 && currentContactContentsCount == 0) {
+        // Also, if the aggregation mode is SUSPENDED, we must reuse the same aggregate.
+        if (contactId == -1
+                && currentContactId != 0
+                && (currentContactContentsCount == 0
+                        || aggregationMode == RawContacts.AGGREGATION_MODE_SUSPENDED)) {
             contactId = currentContactId;
         }
 
