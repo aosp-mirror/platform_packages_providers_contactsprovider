@@ -59,7 +59,6 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.util.Log;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -2192,6 +2191,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, cursor.getLong(0));
         assertEquals(ProviderStatus.STATUS_NORMAL, cursor.getInt(1));
         cursor.close();
+    }
+
+    public void testProperties() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2)mActor.provider;
+        ContactsDatabaseHelper helper = (ContactsDatabaseHelper)provider.getDatabaseHelper();
+        assertNull(helper.getProperty("non-existent", null));
+        assertEquals("default", helper.getProperty("non-existent", "default"));
+
+        helper.setProperty("existent1", "string1");
+        helper.setProperty("existent2", "string2");
+        assertEquals("string1", helper.getProperty("existent1", "default"));
+        assertEquals("string2", helper.getProperty("existent2", "default"));
+        helper.setProperty("existent1", null);
+        assertEquals("default", helper.getProperty("existent1", "default"));
     }
 
     private class VCardTestUriCreator {

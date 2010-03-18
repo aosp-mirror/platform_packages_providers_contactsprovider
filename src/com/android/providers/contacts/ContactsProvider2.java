@@ -148,12 +148,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
     /**
-     * Shared preference key for the legacy contact import version. The need for a version
+     * Property key for the legacy contact import version. The need for a version
      * as opposed to a boolean flag is that if we discover bugs in the contact import process,
      * we can trigger re-import by incrementing the import version.
      */
-    private static final String PREF_CONTACTS_IMPORTED = "contacts_imported_v1";
-    private static final int PREF_CONTACTS_IMPORT_VERSION = 1;
+    private static final String PROPERTY_CONTACTS_IMPORTED = "contacts_imported_v1";
+    private static final int PROPERTY_CONTACTS_IMPORT_VERSION = 1;
     private static final String PREF_LOCALE = "locale";
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
@@ -1852,17 +1852,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator = new ContactAggregator(this, mDbHelper);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
-        final SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        mDb = mDbHelper.getWritableDatabase();
 
         initForDefaultLocale();
 
-        mSetPrimaryStatement = db.compileStatement(
+        mSetPrimaryStatement = mDb.compileStatement(
                 "UPDATE " + Tables.DATA +
                 " SET " + Data.IS_PRIMARY + "=(_id=?)" +
                 " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
                 "   AND " + Data.RAW_CONTACT_ID + "=?");
 
-        mSetSuperPrimaryStatement = db.compileStatement(
+        mSetSuperPrimaryStatement = mDb.compileStatement(
                 "UPDATE " + Tables.DATA +
                 " SET " + Data.IS_SUPER_PRIMARY + "=(" + Data._ID + "=?)" +
                 " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
@@ -1874,7 +1874,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 " FROM " + Tables.RAW_CONTACTS +
                                 " WHERE " + RawContacts._ID + "=?))");
 
-        mRawContactDisplayNameUpdate = db.compileStatement(
+        mRawContactDisplayNameUpdate = mDb.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
                 " SET " +
                         RawContacts.DISPLAY_NAME_SOURCE + "=?," +
@@ -1886,7 +1886,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
                 " WHERE " + RawContacts._ID + "=?");
 
-        mLastStatusUpdate = db.compileStatement(
+        mLastStatusUpdate = mDb.compileStatement(
                 "UPDATE " + Tables.CONTACTS +
                 " SET " + ContactsColumns.LAST_STATUS_UPDATE_ID + "=" +
                         "(SELECT " + DataColumns.CONCRETE_ID +
@@ -1903,14 +1903,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         " LIMIT 1)" +
                 " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
-        mNameLookupInsert = db.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
+        mNameLookupInsert = mDb.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
                 + NameLookupColumns.NAME_TYPE + "," + NameLookupColumns.NORMALIZED_NAME
                 + ") VALUES (?,?,?,?)");
-        mNameLookupDelete = db.compileStatement("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
+        mNameLookupDelete = mDb.compileStatement("DELETE FROM " + Tables.NAME_LOOKUP + " WHERE "
                 + NameLookupColumns.DATA_ID + "=?");
 
-        mStatusUpdateInsert = db.compileStatement(
+        mStatusUpdateInsert = mDb.compileStatement(
                 "INSERT INTO " + Tables.STATUS_UPDATES + "("
                         + StatusUpdatesColumns.DATA_ID + ", "
                         + StatusUpdates.STATUS + ","
@@ -1919,7 +1919,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + StatusUpdates.STATUS_LABEL + ")" +
                 " VALUES (?,?,?,?,?)");
 
-        mStatusUpdateReplace = db.compileStatement(
+        mStatusUpdateReplace = mDb.compileStatement(
                 "INSERT OR REPLACE INTO " + Tables.STATUS_UPDATES + "("
                         + StatusUpdatesColumns.DATA_ID + ", "
                         + StatusUpdates.STATUS_TIMESTAMP + ","
@@ -1929,27 +1929,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + StatusUpdates.STATUS_LABEL + ")" +
                 " VALUES (?,?,?,?,?,?)");
 
-        mStatusUpdateAutoTimestamp = db.compileStatement(
+        mStatusUpdateAutoTimestamp = mDb.compileStatement(
                 "UPDATE " + Tables.STATUS_UPDATES +
                 " SET " + StatusUpdates.STATUS_TIMESTAMP + "=?,"
                         + StatusUpdates.STATUS + "=?" +
                 " WHERE " + StatusUpdatesColumns.DATA_ID + "=?"
                         + " AND " + StatusUpdates.STATUS + "!=?");
 
-        mStatusAttributionUpdate = db.compileStatement(
+        mStatusAttributionUpdate = mDb.compileStatement(
                 "UPDATE " + Tables.STATUS_UPDATES +
                 " SET " + StatusUpdates.STATUS_RES_PACKAGE + "=?,"
                         + StatusUpdates.STATUS_ICON + "=?,"
                         + StatusUpdates.STATUS_LABEL + "=?" +
                 " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
 
-        mStatusUpdateDelete = db.compileStatement(
+        mStatusUpdateDelete = mDb.compileStatement(
                 "DELETE FROM " + Tables.STATUS_UPDATES +
                 " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
 
         // When setting NAME_VERIFIED to 1 on a raw contact, reset it to 0
         // on all other raw contacts in the same aggregate
-        mResetNameVerifiedForOtherRawContacts = db.compileStatement(
+        mResetNameVerifiedForOtherRawContacts = mDb.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
                 " SET " + RawContacts.NAME_VERIFIED + "=0" +
                 " WHERE " + RawContacts.CONTACT_ID + "=(" +
@@ -1989,7 +1989,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             importLegacyContactsAsync();
         }
 
-        return (db != null);
+        return (mDb != null);
     }
 
     /**
@@ -2088,8 +2088,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     protected boolean isLegacyContactImportNeeded() {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        return prefs.getInt(PREF_CONTACTS_IMPORTED, 0) < PREF_CONTACTS_IMPORT_VERSION;
+        int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_CONTACTS_IMPORTED, "0"));
+        return version < PROPERTY_CONTACTS_IMPORT_VERSION;
     }
 
     protected LegacyContactImporter getLegacyContactImporter() {
@@ -2130,10 +2130,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             (NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE);
         nm.cancel(LEGACY_IMPORT_FAILED_NOTIFICATION);
 
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        Editor editor = prefs.edit();
-        editor.putInt(PREF_CONTACTS_IMPORTED, PREF_CONTACTS_IMPORT_VERSION);
-        editor.commit();
+        // Store a property in the database indicating that the conversion process succeeded
+        mDbHelper.setProperty(PROPERTY_CONTACTS_IMPORTED,
+                String.valueOf(PROPERTY_CONTACTS_IMPORT_VERSION));
         setProviderStatus(ProviderStatus.STATUS_NORMAL);
         mAccessLatch.countDown();
         mAccessLatch = null;
@@ -3936,9 +3935,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void onAccountsUpdated(Account[] accounts) {
-        mDb = mDbHelper.getWritableDatabase();
-        if (mDb == null) return;
-
         HashSet<Account> existingAccounts = new HashSet<Account>();
         boolean hasUnassignedContacts[] = new boolean[]{false};
         mDb.beginTransaction();
