@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 307;
+    private static final int DATABASE_VERSION = 308;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -97,6 +97,7 @@ import java.util.Locale;
         public static final String CONTACT_ENTITIES_RESTRICTED = "contact_entities_view_restricted";
         public static final String STATUS_UPDATES = "status_updates";
         public static final String PROPERTIES = "properties";
+        public static final String ACCOUNTS = "accounts";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -934,6 +935,17 @@ import java.util.Locale;
                 PropertiesColumns.PROPERTY_VALUE + " TEXT " +
         ");");
 
+        db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
+                RawContacts.ACCOUNT_NAME + " TEXT, " +
+                RawContacts.ACCOUNT_TYPE + " TEXT " +
+        ");");
+
+        // Allow contacts without any account to be created for now.  Achieve that
+        // by inserting a fake account with both type and name as NULL.
+        // This "account" should be eliminated as soon as the first real writable account
+        // is added to the phone.
+        db.execSQL("INSERT INTO accounts VALUES(NULL, NULL)");
+
         createContactsViews(db);
         createGroupsView(db);
         createContactEntitiesView(db);
@@ -1460,6 +1472,11 @@ import java.util.Locale;
         if (oldVersion == 306) {
             upgradeToVersion307(db);
             oldVersion = 307;
+        }
+
+        if (oldVersion == 307) {
+            upgradeToVersion308(db);
+            oldVersion = 308;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2056,6 +2073,16 @@ import java.util.Locale;
                 "property_key TEXT PRIMARY_KEY, " +
                 "property_value TEXT" +
         ");");
+    }
+
+    private void upgradeToVersion308(SQLiteDatabase db) {
+            db.execSQL("CREATE TABLE accounts (" +
+                    "account_name TEXT, " +
+                    "account_type TEXT " +
+            ");");
+
+            db.execSQL("INSERT INTO accounts " +
+                    "SELECT DISTINCT account_name, account_type FROM raw_contacts");
     }
 
     private void rebuildNameLookup(SQLiteDatabase db) {

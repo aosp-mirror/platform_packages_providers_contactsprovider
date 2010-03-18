@@ -3939,15 +3939,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         boolean hasUnassignedContacts[] = new boolean[]{false};
         mDb.beginTransaction();
         try {
-            findValidAccounts(existingAccounts, hasUnassignedContacts,
-                    Tables.RAW_CONTACTS, RawContacts.ACCOUNT_NAME, RawContacts.ACCOUNT_TYPE);
-            findValidAccounts(existingAccounts, hasUnassignedContacts,
-                    Tables.GROUPS, Groups.ACCOUNT_NAME, Groups.ACCOUNT_TYPE);
-            findValidAccounts(existingAccounts, hasUnassignedContacts,
-                    Tables.SETTINGS, Settings.ACCOUNT_NAME, Settings.ACCOUNT_TYPE);
+            findValidAccounts(existingAccounts, hasUnassignedContacts);
+
+            // Add a row to the ACCOUNTS table for each new account
+            for (Account account : accounts) {
+                if (!existingAccounts.contains(account)) {
+                    mDb.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
+                            + ", " + RawContacts.ACCOUNT_TYPE + ") VALUES (?, ?)",
+                            new String[] {account.name, account.type});
+                }
+            }
 
             // Remove all valid accounts from the existing account set. What is left
-            // in the existingAccounts set will be extra accounts whose data must be deleted.
+            // in the accountsToDelete set will be extra accounts whose data must be deleted.
             HashSet<Account> accountsToDelete = new HashSet<Account>(existingAccounts);
             for (Account account : accounts) {
                 accountsToDelete.remove(account);
@@ -3975,6 +3979,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         "DELETE FROM " + Tables.SETTINGS +
                         " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
                         " AND " + Settings.ACCOUNT_TYPE + " = ?", params);
+                mDb.execSQL(
+                        "DELETE FROM " + Tables.ACCOUNTS +
+                        " WHERE " + RawContacts.ACCOUNT_NAME + "=?" +
+                        " AND " + RawContacts.ACCOUNT_TYPE + "=?", params);
             }
 
             if (hasUnassignedContacts[0]) {
@@ -4005,6 +4013,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                     + Groups.ACCOUNT_TYPE + "=?" +
                             " WHERE " + Groups.ACCOUNT_NAME + " IS NULL" +
                             " AND " + Groups.ACCOUNT_TYPE + " IS NULL", params);
+
+                    mDb.execSQL(
+                            "DELETE FROM " + Tables.ACCOUNTS +
+                            " WHERE " + RawContacts.ACCOUNT_NAME + " IS NULL" +
+                            " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL");
                 }
             }
 
@@ -4020,10 +4033,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Finds all distinct accounts present in the specified table.
      */
-    private void findValidAccounts(Set<Account> validAccounts, boolean[] hasUnassignedContacts,
-            String table, String accountNameColumn, String accountTypeColumn) {
-        Cursor c = mDb.rawQuery("SELECT DISTINCT " + accountNameColumn + "," + accountTypeColumn
-                + " FROM " + table, null);
+    private void findValidAccounts(Set<Account> validAccounts, boolean[] hasUnassignedContacts) {
+        Cursor c = mDb.rawQuery(
+                "SELECT " + RawContacts.ACCOUNT_NAME + "," + RawContacts.ACCOUNT_TYPE +
+                " FROM " + Tables.ACCOUNTS, null);
         try {
             while (c.moveToNext()) {
                 if (c.isNull(0) && c.isNull(1)) {

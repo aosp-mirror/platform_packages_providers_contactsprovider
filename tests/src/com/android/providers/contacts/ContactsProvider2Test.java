@@ -1708,6 +1708,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testAccountsUpdated() {
+        // This is to ensure we do not delete contacts with null, null (account name, type)
+        // accidentally.
+        long rawContactId3 = createRawContactWithName("James", "Sullivan");
+        insertPhoneNumber(rawContactId3, "5234567890");
+        Uri rawContact3 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId3);
+        assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
+
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.onAccountsUpdated(new Account[]{mAccount, mAccountTwo});
+        assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, "account1");
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, "account type1");
+
         long rawContactId1 = createRawContact(mAccount);
         insertEmail(rawContactId1, "account1@email.com");
         long rawContactId2 = createRawContact(mAccountTwo);
@@ -1716,21 +1729,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
                 StatusUpdates.AVAILABLE, null);
 
-        // This is to ensure we do not delete contacts with null, null (account name, type)
-        // accidentally.
-        long rawContactId3 = createRawContactWithName("James", "Sullivan");
-        insertPhoneNumber(rawContactId3, "5234567890");
-        Uri rawContact3 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId3);
-
-        ContactsProvider2 cp = (ContactsProvider2) getProvider();
-
-        Account accountRemaining = new Account("account1", "account type1");
-        cp.onAccountsUpdated(new Account[]{accountRemaining});
+        cp.onAccountsUpdated(new Account[]{mAccount});
         assertEquals(2, getCount(RawContacts.CONTENT_URI, null, null));
         assertEquals(0, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
                 + rawContactId2, null));
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, "account1");
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, "account type1");
     }
 
     public void testContactDeletion() {
@@ -2194,7 +2196,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testProperties() throws Exception {
-        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2)mActor.provider;
+        ContactsProvider2 provider = (ContactsProvider2)getProvider();
         ContactsDatabaseHelper helper = (ContactsDatabaseHelper)provider.getDatabaseHelper();
         assertNull(helper.getProperty("non-existent", null));
         assertEquals("default", helper.getProperty("non-existent", "default"));
