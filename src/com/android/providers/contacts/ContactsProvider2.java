@@ -113,7 +113,6 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
-import android.text.format.DateFormat;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
@@ -999,8 +998,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         /**
          * Validates data and updates a {@link Data} row using the cursor, which contains
          * the current data.
+         *
+         * @return true if update changed something
          */
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
@@ -1028,6 +1029,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (!callerIsSyncAdapter) {
                 setRawContactDirty(rawContactId);
             }
+
+            return true;
         }
 
         public int delete(SQLiteDatabase db, Cursor c) {
@@ -1086,16 +1089,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         }
 
-        public boolean isAggregationRequired() {
-            return true;
-        }
-
         /**
          * Return set of values, using current values at given {@link Data#_ID}
-         * as baseline, but augmented with any updates.
+         * as baseline, but augmented with any updates.  Returns null if there is
+         * no change.
          */
         public ContentValues getAugmentedValues(SQLiteDatabase db, long dataId,
                 ContentValues update) {
+            boolean changing = false;
             final ContentValues values = new ContentValues();
             mSelectionArgs1[0] = String.valueOf(dataId);
             final Cursor cursor = db.query(Tables.DATA, null, Data._ID + "=?",
@@ -1104,12 +1105,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (cursor.moveToFirst()) {
                     for (int i = 0; i < cursor.getColumnCount(); i++) {
                         final String key = cursor.getColumnName(i);
-                        values.put(key, cursor.getString(i));
+                        final String value = cursor.getString(i);
+                        if (!changing && update.containsKey(key)) {
+                            Object newValue = update.get(key);
+                            String newString = newValue == null ? null : newValue.toString();
+                            changing |= !TextUtils.equals(newString, value);
+                        }
+                        values.put(key, value);
                     }
                 }
             } finally {
                 cursor.close();
             }
+            if (!changing) {
+                return null;
+            }
+
             values.putAll(update);
             return values;
         }
@@ -1144,20 +1155,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             : FullNameStyle.UNDEFINED);
             insertNameLookupForPhoneticName(rawContactId, dataId, values);
             fixRawContactDisplayName(db, rawContactId);
+            triggerAggregation(rawContactId);
             return dataId;
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             final long dataId = c.getLong(DataUpdateQuery._ID);
             final long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
             final ContentValues augmented = getAugmentedValues(db, dataId, values);
+            if (augmented == null) {  // No change
+                return false;
+            }
+
             fixStructuredNameComponents(augmented, values);
 
             super.update(db, values, c, callerIsSyncAdapter);
-
             if (values.containsKey(StructuredName.DISPLAY_NAME)) {
                 String name = values.getAsString(StructuredName.DISPLAY_NAME);
                 deleteNameLookup(dataId);
@@ -1169,6 +1184,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 insertNameLookupForPhoneticName(rawContactId, dataId, values);
             }
             fixRawContactDisplayName(db, rawContactId);
+            triggerAggregation(rawContactId);
+            return true;
         }
 
         @Override
@@ -1180,6 +1197,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             deleteNameLookup(dataId);
             fixRawContactDisplayName(db, rawContactId);
+            triggerAggregation(rawContactId);
             return count;
         }
 
@@ -1252,12 +1270,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             final long dataId = c.getLong(DataUpdateQuery._ID);
             final ContentValues augmented = getAugmentedValues(db, dataId, values);
+            if (augmented == null) {    // No change
+                return false;
+            }
+
             fixStructuredPostalComponents(augmented, values);
             super.update(db, values, c, callerIsSyncAdapter);
+            return true;
         }
 
         /**
@@ -1314,12 +1337,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             final long dataId = c.getLong(DataUpdateQuery._ID);
             final ContentValues augmented = getAugmentedValues(db, dataId, values);
+            if (augmented == null) {        // No change
+                return false;
+            }
             enforceTypeAndLabel(augmented, values);
-            super.update(db, values, c, callerIsSyncAdapter);
+            return super.update(db, values, c, callerIsSyncAdapter);
         }
 
         /**
@@ -1358,16 +1384,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
-            long dataId = c.getLong(DataUpdateQuery._ID);
-            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-
-            super.update(db, values, c, callerIsSyncAdapter);
+            if (!super.update(db, values, c, callerIsSyncAdapter)) {
+                return false;
+            }
 
             boolean containsCompany = values.containsKey(Organization.COMPANY);
             boolean containsTitle = values.containsKey(Organization.TITLE);
             if (containsCompany || containsTitle) {
+                long dataId = c.getLong(DataUpdateQuery._ID);
+                long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+
                 String company;
 
                 if (containsCompany) {
@@ -1396,6 +1424,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 fixRawContactDisplayName(db, rawContactId);
             }
+            return true;
         }
 
         @Override
@@ -1418,11 +1447,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 default: return 1000;
             }
         }
-
-        @Override
-        public boolean isAggregationRequired() {
-            return false;
-        }
     }
 
     public class EmailDataRowHandler extends CommonDataRowHandler {
@@ -1433,29 +1457,37 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         @Override
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
-            String address = values.getAsString(Email.DATA);
+            String email = values.getAsString(Email.DATA);
 
             long dataId = super.insert(db, rawContactId, values);
 
             fixRawContactDisplayName(db, rawContactId);
-            insertNameLookupForEmail(rawContactId, dataId, address);
+            String address = insertNameLookupForEmail(rawContactId, dataId, email);
+            if (address != null) {
+                triggerAggregation(rawContactId);
+            }
             return dataId;
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
-            long dataId = c.getLong(DataUpdateQuery._ID);
-            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-
-            super.update(db, values, c, callerIsSyncAdapter);
+            if (!super.update(db, values, c, callerIsSyncAdapter)) {
+                return false;
+            }
 
             if (values.containsKey(Email.DATA)) {
+                long dataId = c.getLong(DataUpdateQuery._ID);
+                long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+
                 String address = values.getAsString(Email.DATA);
                 deleteNameLookup(dataId);
                 insertNameLookupForEmail(rawContactId, dataId, address);
                 fixRawContactDisplayName(db, rawContactId);
+                triggerAggregation(rawContactId);
             }
+
+            return true;
         }
 
         @Override
@@ -1467,6 +1499,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             deleteNameLookup(dataId);
             fixRawContactDisplayName(db, rawContactId);
+            triggerAggregation(rawContactId);
             return count;
         }
 
@@ -1494,25 +1527,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             long dataId = super.insert(db, rawContactId, values);
 
-            fixRawContactDisplayName(db, rawContactId);
-            insertNameLookupForNickname(rawContactId, dataId, nickname);
+            if (!TextUtils.isEmpty(nickname)) {
+                fixRawContactDisplayName(db, rawContactId);
+                insertNameLookupForNickname(rawContactId, dataId, nickname);
+                triggerAggregation(rawContactId);
+            }
             return dataId;
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
-            super.update(db, values, c, callerIsSyncAdapter);
+            if (!super.update(db, values, c, callerIsSyncAdapter)) {
+                return false;
+            }
 
             if (values.containsKey(Nickname.NAME)) {
                 String nickname = values.getAsString(Nickname.NAME);
                 deleteNameLookup(dataId);
                 insertNameLookupForNickname(rawContactId, dataId, nickname);
                 fixRawContactDisplayName(db, rawContactId);
+                triggerAggregation(rawContactId);
             }
+
+            return true;
         }
 
         @Override
@@ -1524,6 +1565,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             deleteNameLookup(dataId);
             fixRawContactDisplayName(db, rawContactId);
+            triggerAggregation(rawContactId);
             return count;
         }
     }
@@ -1539,13 +1581,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId;
             if (values.containsKey(Phone.NUMBER)) {
                 String number = values.getAsString(Phone.NUMBER);
-                String normalizedNumber = computeNormalizedNumber(number, values);
-
+                String normalizedNumber = computeNormalizedNumber(number);
+                values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
                 dataId = super.insert(db, rawContactId, values);
 
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
                 mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
+                if (normalizedNumber != null) {
+                    triggerAggregation(rawContactId);
+                }
             } else {
                 dataId = super.insert(db, rawContactId, values);
             }
@@ -1553,22 +1598,29 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
-            long dataId = c.getLong(DataUpdateQuery._ID);
-            long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
+            String number = null;
+            String normalizedNumber = null;
             if (values.containsKey(Phone.NUMBER)) {
-                String number = values.getAsString(Phone.NUMBER);
-                String normalizedNumber = computeNormalizedNumber(number, values);
+                number = values.getAsString(Phone.NUMBER);
+                normalizedNumber = computeNormalizedNumber(number);
+                values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
+            }
 
-                super.update(db, values, c, callerIsSyncAdapter);
+            if (!super.update(db, values, c, callerIsSyncAdapter)) {
+                return false;
+            }
 
+            if (values.containsKey(Phone.NUMBER)) {
+                long dataId = c.getLong(DataUpdateQuery._ID);
+                long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
                 updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
                 mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
-            } else {
-                super.update(db, values, c, callerIsSyncAdapter);
+                triggerAggregation(rawContactId);
             }
+            return true;
         }
 
         @Override
@@ -1581,15 +1633,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             updatePhoneLookup(db, rawContactId, dataId, null, null);
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, rawContactId);
+            triggerAggregation(rawContactId);
             return count;
         }
 
-        private String computeNormalizedNumber(String number, ContentValues values) {
+        private String computeNormalizedNumber(String number) {
             String normalizedNumber = null;
             if (number != null) {
                 normalizedNumber = PhoneNumberUtils.getStrippedReversed(number);
             }
-            values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
             return normalizedNumber;
         }
 
@@ -1641,12 +1693,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             resolveGroupSourceIdInValues(rawContactId, db, values, false);
-            super.update(db, values, c, callerIsSyncAdapter);
+            if (!super.update(db, values, c, callerIsSyncAdapter)) {
+                return false;
+            }
             updateVisibility(rawContactId);
+            return true;
         }
 
         @Override
@@ -1692,11 +1747,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 values.put(GroupMembership.GROUP_ROW_ID, groupId);
             }
         }
-
-        @Override
-        public boolean isAggregationRequired() {
-            return false;
-        }
     }
 
     public class PhotoDataRowHandler extends DataRowHandler {
@@ -1715,11 +1765,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         @Override
-        public void update(SQLiteDatabase db, ContentValues values, Cursor c,
+        public boolean update(SQLiteDatabase db, ContentValues values, Cursor c,
                 boolean callerIsSyncAdapter) {
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-            super.update(db, values, c, callerIsSyncAdapter);
+            if (!super.update(db, values, c, callerIsSyncAdapter)) {
+                return false;
+            }
+
             mContactAggregator.updatePhotoId(db, rawContactId);
+            return true;
         }
 
         @Override
@@ -1728,11 +1782,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             int count = super.delete(db, c);
             mContactAggregator.updatePhotoId(db, rawContactId);
             return count;
-        }
-
-        @Override
-        public boolean isAggregationRequired() {
-            return false;
         }
     }
 
@@ -2525,10 +2574,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             setRawContactDirty(rawContactId);
         }
         mUpdatedRawContacts.add(rawContactId);
-
-        if (rowHandler.isAggregationRequired()) {
-            triggerAggregation(rawContactId);
-        }
         return id;
     }
 
@@ -2867,9 +2912,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 count += rowHandler.delete(mDb, c);
                 if (!callerIsSyncAdapter) {
                     setRawContactDirty(rawContactId);
-                    if (rowHandler.isAggregationRequired()) {
-                        triggerAggregation(rawContactId);
-                    }
                 }
             }
         } finally {
@@ -2910,12 +2952,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             DataRowHandler rowHandler = getDataRowHandler(mimeType);
-            int count = rowHandler.delete(mDb, c);
-            long rawContactId = c.getLong(DataDeleteQuery.RAW_CONTACT_ID);
-            if (rowHandler.isAggregationRequired()) {
-                triggerAggregation(rawContactId);
-            }
-            return count;
+            return rowHandler.delete(mDb, c);
         } finally {
             c.close();
         }
@@ -3777,13 +3814,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         final String mimeType = c.getString(DataUpdateQuery.MIMETYPE);
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
-        rowHandler.update(mDb, values, c, callerIsSyncAdapter);
-        long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-        if (rowHandler.isAggregationRequired()) {
-            triggerAggregation(rawContactId);
+        if (rowHandler.update(mDb, values, c, callerIsSyncAdapter)) {
+            return 1;
+        } else {
+            return 0;
         }
-
-        return 1;
     }
 
     private int updateContactOptions(ContentValues values, String selection,
@@ -5511,18 +5546,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mSetSuperPrimaryStatement.execute();
     }
 
-    public void insertNameLookupForEmail(long rawContactId, long dataId, String email) {
+    public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {
         if (TextUtils.isEmpty(email)) {
-            return;
+            return null;
         }
 
         String address = mDbHelper.extractHandleFromEmailAddress(email);
         if (address == null) {
-            return;
+            return null;
         }
 
         insertNameLookup(rawContactId, dataId,
                 NameLookupType.EMAIL_BASED_NICKNAME, NameNormalizer.normalize(address));
+        return address;
     }
 
     /**
