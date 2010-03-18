@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 306;
+    private static final int DATABASE_VERSION = 307;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -96,6 +96,7 @@ import java.util.Locale;
         public static final String CONTACT_ENTITIES = "contact_entities_view";
         public static final String CONTACT_ENTITIES_RESTRICTED = "contact_entities_view_restricted";
         public static final String STATUS_UPDATES = "status_updates";
+        public static final String PROPERTIES = "properties";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -141,6 +142,7 @@ import java.util.Locale;
 
         public static final String GROUPS_JOIN_PACKAGES = "groups "
                 + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id)";
+
 
         public static final String ACTIVITIES = "activities";
 
@@ -440,6 +442,11 @@ import java.util.Locale;
         String CONCRETE_STATUS_RES_PACKAGE = ALIAS + "." + StatusUpdates.STATUS_RES_PACKAGE;
         String CONCRETE_STATUS_LABEL = ALIAS + "." + StatusUpdates.STATUS_LABEL;
         String CONCRETE_STATUS_ICON = ALIAS + "." + StatusUpdates.STATUS_ICON;
+    }
+
+    public interface PropertiesColumns {
+        String PROPERTY_KEY = "property_key";
+        String PROPERTY_VALUE = "property_value";
     }
 
     /** In-memory cache of previously found MIME-type mappings */
@@ -920,6 +927,11 @@ import java.util.Locale;
                 StatusUpdates.STATUS_RES_PACKAGE + " TEXT, " +
                 StatusUpdates.STATUS_LABEL + " INTEGER, " +
                 StatusUpdates.STATUS_ICON + " INTEGER" +
+        ");");
+
+        db.execSQL("CREATE TABLE " + Tables.PROPERTIES + " (" +
+                PropertiesColumns.PROPERTY_KEY + " TEXT PRIMARY KEY, " +
+                PropertiesColumns.PROPERTY_VALUE + " TEXT " +
         ");");
 
         createContactsViews(db);
@@ -1445,6 +1457,11 @@ import java.util.Locale;
             oldVersion = 306;
         }
 
+        if (oldVersion == 306) {
+            upgradeToVersion307(db);
+            oldVersion = 307;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -1892,9 +1909,9 @@ import java.util.Locale;
 
         public static final String SELECTION =
                 DataColumns.MIMETYPE_ID + "=?" +
-        		" AND " + Data._ID + " NOT IN " +
-        		"(SELECT " + NameLookupColumns.DATA_ID + " FROM " + Tables.NAME_LOOKUP + ")" +
-        		" AND " + Data.DATA1 + " NOT NULL";
+                    " AND " + Data._ID + " NOT IN " +
+                    "(SELECT " + NameLookupColumns.DATA_ID + " FROM " + Tables.NAME_LOOKUP + ")" +
+                    " AND " + Data.DATA1 + " NOT NULL";
 
         public static final String COLUMNS[] = {
                 Data._ID,
@@ -2032,6 +2049,13 @@ import java.util.Locale;
             updateStatement.close();
             contactIdCursor.close();
         }
+    }
+
+    private void upgradeToVersion307(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE properties (" +
+                "property_key TEXT PRIMARY_KEY, " +
+                "property_value TEXT" +
+        ");");
     }
 
     private void rebuildNameLookup(SQLiteDatabase db) {
@@ -2820,6 +2844,36 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.CONTACTS
                 + " WHERE " + Contacts._ID + "=" + contactIdFromRawContactId
                 + " AND NOT EXISTS " + otherRawContacts + ";");
+    }
+
+    /**
+     * Returns the value from the {@link Tables#PROPERTIES} table.
+     */
+    public String getProperty(String key, String defaultValue) {
+        Cursor cursor = getReadableDatabase().query(Tables.PROPERTIES,
+                new String[]{PropertiesColumns.PROPERTY_VALUE},
+                PropertiesColumns.PROPERTY_KEY + "=?",
+                new String[]{key}, null, null, null);
+        String value = null;
+        try {
+            if (cursor.moveToFirst()) {
+                value = cursor.getString(0);
+            }
+        } finally {
+            cursor.close();
+        }
+
+        return value != null ? value : defaultValue;
+    }
+
+    /**
+     * Stores a key-value pair in the {@link Tables#PROPERTIES} table.
+     */
+    public void setProperty(String key, String value) {
+        ContentValues values = new ContentValues();
+        values.put(PropertiesColumns.PROPERTY_KEY, key);
+        values.put(PropertiesColumns.PROPERTY_VALUE, value);
+        getWritableDatabase().replace(Tables.PROPERTIES, null, values);
     }
 
     /**
