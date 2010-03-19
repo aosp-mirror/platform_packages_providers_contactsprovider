@@ -5379,15 +5379,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final String[] loopupKeyList = lookupKeys.split(":");
                 final StringBuilder inBuilder = new StringBuilder();
                 int index = 0;
-                String[] selectionArgs = new String[loopupKeyList.length];
+                // SQLite has limits on how many parameters can be used
+                // so the IDs are concatenated to a query string here instead
                 for (String lookupKey : loopupKeyList) {
-                    selectionArgs[index] =
-                        String.valueOf(lookupContactIdByLookupKey(mDb, lookupKey));
                     if (index == 0) {
-                        inBuilder.append("(?");
+                        inBuilder.append("(");
                     } else {
-                        inBuilder.append(",?");
+                        inBuilder.append(",");
                     }
+                    inBuilder.append(lookupContactIdByLookupKey(mDb, lookupKey));
                     index++;
                 }
                 inBuilder.append(')');
@@ -5397,7 +5397,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
-                outputRawContactsAsVCard(localStream, selection, selectionArgs);
+                outputRawContactsAsVCard(localStream, selection, null);
                 return buildAssetFileDescriptor(localStream);
             }
 
