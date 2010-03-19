@@ -1819,6 +1819,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private ContentValues mValues = new ContentValues();
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
     private NameSplitter.Name mName = new NameSplitter.Name();
+    private HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
 
     private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
     private long mEstimatedStorageRequirement = 0;
@@ -1834,6 +1835,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean mSyncToNetwork;
 
     private Locale mCurrentLocale;
+
 
     @Override
     public boolean onCreate() {
@@ -3991,7 +3993,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 Account primaryAccount = null;
                 for (Account account : accounts) {
-                    if (isWritableAccount(account)) {
+                    if (isWritableAccount(account.type)) {
                         primaryAccount = account;
                         break;
                     }
@@ -4030,6 +4032,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         } finally {
             mDb.endTransaction();
         }
+        mAccountWritability.clear();
     }
 
     /**
@@ -5751,19 +5754,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return null;
     }
 
-    protected boolean isWritableAccount(Account account) {
+    /**
+     * Returns true if the specified account type is writable.
+     */
+    protected boolean isWritableAccount(String accountType) {
+        Boolean writable = mAccountWritability.get(accountType);
+        if (writable != null) {
+            return writable;
+        }
+
         IContentService contentService = ContentResolver.getContentService();
         try {
             for (SyncAdapterType sync : contentService.getSyncAdapterTypes()) {
                 if (ContactsContract.AUTHORITY.equals(sync.authority) &&
-                        account.type.equals(sync.accountType)) {
-                    return sync.supportsUploading();
+                        accountType.equals(sync.accountType)) {
+                    writable = sync.supportsUploading();
+                    break;
                 }
             }
         } catch (RemoteException e) {
             Log.e(TAG, "Could not acquire sync adapter types");
         }
-        return false;
+
+        if (writable == null) {
+            writable = false;
+        }
+
+        mAccountWritability.put(accountType, writable);
+        return writable;
     }
 
     /* package */ static boolean readBooleanQueryParameter(Uri uri, String parameter,

@@ -66,6 +66,8 @@ import java.util.Map.Entry;
 public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected static final String PACKAGE = "ContactsProvider2Test";
+    public static final String READ_ONLY_ACCOUNT_TYPE =
+            SynchronousContactsProvider2.READ_ONLY_ACCOUNT_TYPE;
 
     protected ContactsActor mActor;
     protected MockContentResolver mResolver;

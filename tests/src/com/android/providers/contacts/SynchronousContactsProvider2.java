@@ -27,6 +27,8 @@ import java.util.Locale;
  * synchronously and wipes all data at construction time.
  */
 public class SynchronousContactsProvider2 extends ContactsProvider2 {
+    public static final String READ_ONLY_ACCOUNT_TYPE = "ro";
+
     private static Boolean sDataWiped = false;
     private static ContactsDatabaseHelper mDbHelper;
     private boolean mDataWipeEnabled = true;
@@ -100,8 +102,8 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
-    protected boolean isWritableAccount(Account account) {
-        return true;
+    protected boolean isWritableAccount(String accountType) {
+        return !READ_ONLY_ACCOUNT_TYPE.equals(accountType);
     }
 
     public void prepareForFullAggregation(int maxContact) {

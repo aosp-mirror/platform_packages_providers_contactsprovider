@@ -179,6 +179,7 @@ public class ContactAggregator {
         String displayName;
         int displayNameSource;
         boolean verified;
+        boolean writableAccount;
 
         public DisplayNameCandidate() {
             clear();
@@ -189,6 +190,7 @@ public class ContactAggregator {
             displayName = null;
             displayNameSource = DisplayNameSources.UNDEFINED;
             verified = false;
+            writableAccount = false;
         }
     }
 
@@ -1142,8 +1144,9 @@ public class ContactAggregator {
                     String displayName = c.getString(RawContactsQuery.DISPLAY_NAME);
                     int displayNameSource = c.getInt(RawContactsQuery.DISPLAY_NAME_SOURCE);
                     int nameVerified = c.getInt(RawContactsQuery.NAME_VERIFIED);
+                    String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
                     processDisplayNameCanditate(rawContactId, displayName, displayNameSource,
-                            nameVerified != 0);
+                            mContactsProvider.isWritableAccount(accountType), nameVerified != 0);
 
 
                     // Contact options
@@ -1254,7 +1257,7 @@ public class ContactAggregator {
      * {@link #mDisplayNameCandidate} with the new values.
      */
     private void processDisplayNameCanditate(long rawContactId, String displayName,
-            int displayNameSource, boolean verified) {
+            int displayNameSource, boolean writableAccount, boolean verified) {
 
         boolean replace = false;
         if (mDisplayNameCandidate.rawContactId == -1) {
@@ -1268,11 +1271,16 @@ public class ContactAggregator {
                 if (mDisplayNameCandidate.displayNameSource < displayNameSource) {
                     // New values come from an superior source, e.g. structured name vs phone number
                     replace = true;
-                } else if (mDisplayNameCandidate.displayNameSource == displayNameSource
-                        && NameNormalizer.compareComplexity(displayName,
+                } else if (mDisplayNameCandidate.displayNameSource == displayNameSource) {
+                    if (!mDisplayNameCandidate.writableAccount && writableAccount) {
+                        replace = true;
+                    } else if (mDisplayNameCandidate.writableAccount == writableAccount) {
+                        if (NameNormalizer.compareComplexity(displayName,
                                 mDisplayNameCandidate.displayName) > 0) {
-                    // New name is more complex than the previously found one
-                    replace = true;
+                            // New name is more complex than the previously found one
+                            replace = true;
+                        }
+                    }
                 }
             }
         }
@@ -1282,6 +1290,7 @@ public class ContactAggregator {
             mDisplayNameCandidate.displayName = displayName;
             mDisplayNameCandidate.displayNameSource = displayNameSource;
             mDisplayNameCandidate.verified = verified;
+            mDisplayNameCandidate.writableAccount = writableAccount;
         }
     }
 
@@ -1357,7 +1366,8 @@ public class ContactAggregator {
             RawContactsColumns.DISPLAY_NAME,
             RawContactsColumns.DISPLAY_NAME_SOURCE,
             RawContacts.NAME_VERIFIED,
-            RawContacts.SOURCE_ID
+            RawContacts.SOURCE_ID,
+            RawContacts.ACCOUNT_TYPE,
         };
 
         int _ID = 0;
@@ -1365,6 +1375,7 @@ public class ContactAggregator {
         int DISPLAY_NAME_SOURCE = 2;
         int NAME_VERIFIED = 3;
         int SOURCE_ID = 4;
+        int ACCOUNT_TYPE = 5;
     }
 
     public void updateDisplayNameForRawContact(SQLiteDatabase db, long rawContactId) {
@@ -1390,9 +1401,10 @@ public class ContactAggregator {
                 String displayName = c.getString(DisplayNameQuery.DISPLAY_NAME);
                 int displayNameSource = c.getInt(DisplayNameQuery.DISPLAY_NAME_SOURCE);
                 int nameVerified = c.getInt(DisplayNameQuery.NAME_VERIFIED);
+                String accountType = c.getString(DisplayNameQuery.ACCOUNT_TYPE);
 
                 processDisplayNameCanditate(rawContactId, displayName, displayNameSource,
-                        nameVerified != 0);
+                        mContactsProvider.isWritableAccount(accountType), nameVerified != 0);
 
                 // If the raw contact has no source id, the lookup key is based on the display
                 // name, so the lookup key needs to be updated.

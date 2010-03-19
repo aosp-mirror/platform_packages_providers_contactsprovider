@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import com.google.android.collect.Lists;
 
+import android.accounts.Account;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
@@ -185,6 +186,16 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "helene bjorn", null);
 
         assertAggregated(rawContactId1, rawContactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
+    }
+
+    public void testAggregationOfNormalizedFullNameMatchWithReadOnlyAccount() {
+        long rawContactId1 = createRawContact(new Account("acct", READ_ONLY_ACCOUNT_TYPE));
+        insertStructuredName(rawContactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
+
+        long rawContactId2 = createRawContact();
+        insertStructuredName(rawContactId2, "helene bjorn", null);
+
+        assertAggregated(rawContactId1, rawContactId2, "helene bjorn");
     }
 
     public void testAggregationOfNumericNames() {
