@@ -473,6 +473,8 @@ public class ContactAggregator {
             if (contactId == -1) {
                 contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
             }
+        } else if (aggregationMode == RawContacts.AGGREGATION_MODE_DISABLED) {
+            return;
         }
 
         long currentContactContentsCount = 0;
