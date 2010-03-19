@@ -1206,10 +1206,10 @@ public class ContactAggregator {
 
                         // For now, just choose the first photo in a list sorted by account name.
                         String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
-                        if (!foundSuperPrimaryPhoto
-                                && (superprimary
-                                        || photoAccount == null
-                                        || photoAccount.compareToIgnoreCase(account) >= 0)) {
+                        if (!foundSuperPrimaryPhoto && (
+                                superprimary || photoAccount == null ||
+                                (account != null &&
+                                photoAccount.compareToIgnoreCase(account) >= 0))) {
                             photoAccount = account;
                             bestPhotoId = dataId;
                             foundSuperPrimaryPhoto |= superprimary;
