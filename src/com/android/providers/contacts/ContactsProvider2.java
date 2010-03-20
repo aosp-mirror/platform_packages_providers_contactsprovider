@@ -5771,6 +5771,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Returns true if the specified account type is writable.
      */
     protected boolean isWritableAccount(String accountType) {
+        if (accountType == null) {
+            return true;
+        }
+
         Boolean writable = mAccountWritability.get(accountType);
         if (writable != null) {
             return writable;
