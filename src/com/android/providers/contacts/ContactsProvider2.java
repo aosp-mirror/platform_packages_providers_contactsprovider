@@ -5350,17 +5350,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS_PHOTO: {
-                if (!"r".equals(mode)) {
-                    throw new FileNotFoundException(mDbHelper.exceptionMessage("Mode " + mode
-                            + " not supported.", uri));
-                }
+                return openPhotoAssetFile(uri, mode,
+                        Data._ID + "=" + Contacts.PHOTO_ID + " AND " + RawContacts.CONTACT_ID + "=?",
+                        new String[]{uri.getPathSegments().get(1)});
+            }
 
-                String sql =
-                        "SELECT " + Photo.PHOTO + " FROM " + mDbHelper.getDataView() +
-                        " WHERE " + Data._ID + "=" + Contacts.PHOTO_ID
-                                + " AND " + RawContacts.CONTACT_ID + "=?";
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
-                return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql,
+            case DATA_ID: {
+                return openPhotoAssetFile(uri, mode,
+                        Data._ID + "=? AND " + Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'",
                         new String[]{uri.getPathSegments().get(1)});
             }
 
@@ -5408,6 +5405,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 throw new FileNotFoundException(mDbHelper.exceptionMessage("File does not exist",
                         uri));
         }
+    }
+
+    private AssetFileDescriptor openPhotoAssetFile(Uri uri, String mode, String selection,
+            String[] selectionArgs)
+            throws FileNotFoundException {
+        if (!"r".equals(mode)) {
+            throw new FileNotFoundException(mDbHelper.exceptionMessage("Mode " + mode
+                    + " not supported.", uri));
+        }
+
+        String sql =
+                "SELECT " + Photo.PHOTO + " FROM " + mDbHelper.getDataView() +
+                " WHERE " + selection;
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql,
+                selectionArgs);
     }
 
     private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";

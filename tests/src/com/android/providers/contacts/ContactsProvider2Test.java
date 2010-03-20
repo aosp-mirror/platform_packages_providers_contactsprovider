@@ -1903,6 +1903,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(ContentUris.parseId(photoUri), twigId);
     }
 
+    public void testOpenAssertFileDescriptorForPhoto() throws Exception {
+        long rawContactId = createRawContact();
+        Uri photoUri = insertPhoto(rawContactId);
+        AssetFileDescriptor fd = mResolver.openAssetFileDescriptor(photoUri, "r");
+        assertEquals(loadTestPhoto().length, fd.getLength());
+
+        Uri contactPhotoUri = Uri.withAppendedPath(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId)),
+                Contacts.Photo.CONTENT_DIRECTORY);
+        fd = mResolver.openAssetFileDescriptor(contactPhotoUri, "r");
+        assertEquals(loadTestPhoto().length, fd.getLength());
+    }
+
     public void testSuperPrimaryPhoto() {
         long rawContactId1 = createRawContact(new Account("a", "a"));
         Uri photoUri1 = insertPhoto(rawContactId1);
