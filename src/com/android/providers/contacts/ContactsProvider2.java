@@ -5663,6 +5663,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
                     NameNormalizer.normalize(mSb.toString()));
         }
+
+        if (givenName != null) {
+            // We want the phonetic given name to be used for search, but not for aggregation,
+            // which is why we are using NAME_SHORTHAND rather than NAME_COLLATION_KEY
+            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
+                    NameNormalizer.normalize(givenName.trim()));
+        }
     }
 
     /**
