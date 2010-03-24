@@ -178,7 +178,9 @@ public class CallLogProvider extends ContentProvider {
         }
 
         int count = db.update(Tables.CALLS, values, where, selectionArgs);
-        notifyChange();
+        if (count > 0) {
+            notifyChange();
+        }
         return count;
     }
 
@@ -190,7 +192,9 @@ public class CallLogProvider extends ContentProvider {
         switch (matchedUriId) {
             case CALLS:
                 int count = db.delete(Tables.CALLS, selection, selectionArgs);
-                notifyChange();
+                if (count > 0) {
+                    notifyChange();
+                }
                 return count;
 
             default:
