@@ -693,19 +693,21 @@ public class LegacyContactImporter {
                 Data.RAW_CONTACT_ID + "," +
                 DataColumns.MIMETYPE_ID + "," +
                 Data.IS_PRIMARY + "," +
+                Data.IS_SUPER_PRIMARY + "," +
                 Organization.COMPANY + "," +
                 Organization.TITLE + "," +
                 Organization.TYPE + "," +
                 Organization.LABEL +
-         ") VALUES (?,?,?,?,?,?,?)";
+         ") VALUES (?,?,?,?,?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int MIMETYPE_ID = 2;
         int IS_PRIMARY = 3;
-        int COMPANY = 4;
-        int TITLE = 5;
-        int TYPE = 6;
-        int LABEL = 7;
+        int IS_SUPER_PRIMARY = 4;
+        int COMPANY = 5;
+        int TITLE = 6;
+        int TYPE = 7;
+        int LABEL = 8;
     }
 
     private void importOrganizations() {
@@ -727,6 +729,8 @@ public class LegacyContactImporter {
         insert.bindLong(OrganizationInsert.RAW_CONTACT_ID, id);
         insert.bindLong(OrganizationInsert.MIMETYPE_ID, mOrganizationMimetypeId);
         bindString(insert, OrganizationInsert.IS_PRIMARY, c.getString(OrganizationsQuery.ISPRIMARY));
+        bindString(insert, OrganizationInsert.IS_SUPER_PRIMARY,
+                c.getString(OrganizationsQuery.ISPRIMARY));
         bindString(insert, OrganizationInsert.COMPANY, c.getString(OrganizationsQuery.COMPANY));
         bindString(insert, OrganizationInsert.TITLE, c.getString(OrganizationsQuery.TITLE));
         bindString(insert, OrganizationInsert.TYPE, c.getString(OrganizationsQuery.TYPE));
@@ -755,19 +759,21 @@ public class LegacyContactImporter {
                 Data.RAW_CONTACT_ID + "," +
                 DataColumns.MIMETYPE_ID + "," +
                 Data.IS_PRIMARY + "," +
+                Data.IS_SUPER_PRIMARY + "," +
                 Email.DATA + "," +
                 Email.TYPE + "," +
                 Email.LABEL + "," +
                 Data.DATA14 +
-         ") VALUES (?,?,?,?,?,?,?)";
+         ") VALUES (?,?,?,?,?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int MIMETYPE_ID = 2;
         int IS_PRIMARY = 3;
-        int DATA = 4;
-        int TYPE = 5;
-        int LABEL = 6;
-        int AUX_DATA = 7;
+        int IS_SUPER_PRIMARY = 4;
+        int DATA = 5;
+        int TYPE = 6;
+        int LABEL = 7;
+        int AUX_DATA = 8;
     }
 
     private interface ImInsert {
@@ -775,19 +781,21 @@ public class LegacyContactImporter {
                 Data.RAW_CONTACT_ID + "," +
                 DataColumns.MIMETYPE_ID + "," +
                 Data.IS_PRIMARY + "," +
+                Data.IS_SUPER_PRIMARY + "," +
                 Im.DATA + "," +
                 Im.TYPE + "," +
                 Im.LABEL + "," +
                 Data.DATA14 +
-         ") VALUES (?,?,?,?,?,?,?)";
+         ") VALUES (?,?,?,?,?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int MIMETYPE_ID = 2;
         int IS_PRIMARY = 3;
-        int DATA = 4;
-        int TYPE = 5;
-        int LABEL = 6;
-        int AUX_DATA = 7;
+        int IS_SUPER_PRIMARY = 4;
+        int DATA = 5;
+        int TYPE = 6;
+        int LABEL = 7;
+        int AUX_DATA = 8;
     }
 
     private interface PostalInsert {
@@ -795,19 +803,21 @@ public class LegacyContactImporter {
                 Data.RAW_CONTACT_ID + "," +
                 DataColumns.MIMETYPE_ID + "," +
                 Data.IS_PRIMARY + "," +
+                Data.IS_SUPER_PRIMARY + "," +
                 StructuredPostal.FORMATTED_ADDRESS + "," +
                 StructuredPostal.TYPE + "," +
                 StructuredPostal.LABEL + "," +
                 Data.DATA14 +
-         ") VALUES (?,?,?,?,?,?,?)";
+         ") VALUES (?,?,?,?,?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int MIMETYPE_ID = 2;
         int IS_PRIMARY = 3;
-        int DATA = 4;
-        int TYPE = 5;
-        int LABEL = 6;
-        int AUX_DATA = 7;
+        int IS_SUPER_PRIMARY = 4;
+        int DATA = 5;
+        int TYPE = 6;
+        int LABEL = 7;
+        int AUX_DATA = 8;
     }
 
     private void importContactMethods() {
@@ -849,6 +859,7 @@ public class LegacyContactImporter {
         insert.bindLong(EmailInsert.RAW_CONTACT_ID, personId);
         insert.bindLong(EmailInsert.MIMETYPE_ID, mEmailMimetypeId);
         bindString(insert, EmailInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
+        bindString(insert, EmailInsert.IS_SUPER_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
         bindString(insert, EmailInsert.DATA, email);
         bindString(insert, EmailInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
         bindString(insert, EmailInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
@@ -864,6 +875,7 @@ public class LegacyContactImporter {
         insert.bindLong(ImInsert.RAW_CONTACT_ID, personId);
         insert.bindLong(ImInsert.MIMETYPE_ID, mImMimetypeId);
         bindString(insert, ImInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
+        bindString(insert, ImInsert.IS_SUPER_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
         bindString(insert, ImInsert.DATA, c.getString(ContactMethodsQuery.DATA));
         bindString(insert, ImInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
         bindString(insert, ImInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
@@ -877,6 +889,8 @@ public class LegacyContactImporter {
         insert.bindLong(PostalInsert.RAW_CONTACT_ID, personId);
         insert.bindLong(PostalInsert.MIMETYPE_ID, mPostalMimetypeId);
         bindString(insert, PostalInsert.IS_PRIMARY, c.getString(ContactMethodsQuery.ISPRIMARY));
+        bindString(insert, PostalInsert.IS_SUPER_PRIMARY,
+                c.getString(ContactMethodsQuery.ISPRIMARY));
         bindString(insert, PostalInsert.DATA, c.getString(ContactMethodsQuery.DATA));
         bindString(insert, PostalInsert.AUX_DATA, c.getString(ContactMethodsQuery.AUX_DATA));
         bindString(insert, PostalInsert.TYPE, c.getString(ContactMethodsQuery.TYPE));
@@ -903,19 +917,21 @@ public class LegacyContactImporter {
                 Data.RAW_CONTACT_ID + "," +
                 DataColumns.MIMETYPE_ID + "," +
                 Data.IS_PRIMARY + "," +
+                Data.IS_SUPER_PRIMARY + "," +
                 Phone.NUMBER + "," +
                 Phone.TYPE + "," +
                 Phone.LABEL + "," +
                 PhoneColumns.NORMALIZED_NUMBER +
-         ") VALUES (?,?,?,?,?,?,?)";
+         ") VALUES (?,?,?,?,?,?,?,?)";
 
         int RAW_CONTACT_ID = 1;
         int MIMETYPE_ID = 2;
         int IS_PRIMARY = 3;
-        int NUMBER = 4;
-        int TYPE = 5;
-        int LABEL = 6;
-        int NORMALIZED_NUMBER = 7;
+        int IS_SUPER_PRIMARY = 4;
+        int NUMBER = 5;
+        int TYPE = 6;
+        int LABEL = 7;
+        int NORMALIZED_NUMBER = 8;
     }
 
     private interface PhoneLookupInsert {
@@ -971,6 +987,7 @@ public class LegacyContactImporter {
         phoneInsert.bindLong(PhoneInsert.RAW_CONTACT_ID, id);
         phoneInsert.bindLong(PhoneInsert.MIMETYPE_ID, mPhoneMimetypeId);
         bindString(phoneInsert, PhoneInsert.IS_PRIMARY, c.getString(PhonesQuery.ISPRIMARY));
+        bindString(phoneInsert, PhoneInsert.IS_SUPER_PRIMARY, c.getString(PhonesQuery.ISPRIMARY));
         bindString(phoneInsert, PhoneInsert.NUMBER, number);
         bindString(phoneInsert, PhoneInsert.TYPE, c.getString(PhonesQuery.TYPE));
         bindString(phoneInsert, PhoneInsert.LABEL, c.getString(PhonesQuery.LABEL));

@@ -234,7 +234,7 @@
 234    data14=null
 235    data15=null
 236    is_primary=1
-237    is_super_primary=0
+237    is_super_primary=1
 238    data_version=0
 239    data_sync1=null
 240    data_sync2=null
@@ -261,7 +261,7 @@
 261    data14=null
 262    data15=null
 263    is_primary=1
-264    is_super_primary=0
+264    is_super_primary=1
 265    data_version=0
 266    data_sync1=null
 267    data_sync2=null
@@ -288,7 +288,7 @@
 288    data14=null
 289    data15=null
 290    is_primary=1
-291    is_super_primary=0
+291    is_super_primary=1
 292    data_version=0
 293    data_sync1=null
 294    data_sync2=null
@@ -315,7 +315,7 @@
 315    data14=null
 316    data15=null
 317    is_primary=1
-318    is_super_primary=0
+318    is_super_primary=1
 319    data_version=0
 320    data_sync1=null
 321    data_sync2=null
@@ -342,7 +342,7 @@
 342    data14=null
 343    data15=null
 344    is_primary=1
-345    is_super_primary=0
+345    is_super_primary=1
 346    data_version=0
 347    data_sync1=null
 348    data_sync2=null
@@ -369,7 +369,7 @@
 369    data14=null
 370    data15=null
 371    is_primary=1
-372    is_super_primary=0
+372    is_super_primary=1
 373    data_version=0
 374    data_sync1=null
 375    data_sync2=null
@@ -396,7 +396,7 @@
 396    data14=null
 397    data15=null
 398    is_primary=1
-399    is_super_primary=0
+399    is_super_primary=1
 400    data_version=0
 401    data_sync1=null
 402    data_sync2=null
@@ -423,7 +423,7 @@
 423    data14=null
 424    data15=null
 425    is_primary=1
-426    is_super_primary=0
+426    is_super_primary=1
 427    data_version=0
 428    data_sync1=null
 429    data_sync2=null
@@ -450,7 +450,7 @@
 450    data14=null
 451    data15=null
 452    is_primary=1
-453    is_super_primary=0
+453    is_super_primary=1
 454    data_version=0
 455    data_sync1=null
 456    data_sync2=null
@@ -477,7 +477,7 @@
 477    data14=null
 478    data15=null
 479    is_primary=1
-480    is_super_primary=0
+480    is_super_primary=1
 481    data_version=0
 482    data_sync1=null
 483    data_sync2=null
@@ -504,7 +504,7 @@
 504    data14=null
 505    data15=null
 506    is_primary=1
-507    is_super_primary=0
+507    is_super_primary=1
 508    data_version=0
 509    data_sync1=null
 510    data_sync2=null
