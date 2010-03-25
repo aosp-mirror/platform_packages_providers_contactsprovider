@@ -555,8 +555,8 @@ import java.util.Locale;
         // Set visibility of raw contacts to the visibility of corresponding aggregate contacts
         mVisibleUpdateRawContacts = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=("
-                        + contactVisibility + ")" +
+                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(CASE WHEN ("
+                        + contactVisibility + ")=1 THEN 1 ELSE 0 END)" +
                 " WHERE " + RawContacts.DELETED + "=0" +
                 " AND " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "!=("
                         + contactVisibility + ")=1");
