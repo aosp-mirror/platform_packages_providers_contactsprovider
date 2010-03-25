@@ -147,6 +147,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
+    private static final String GOOGLE_MY_CONTACTS_GROUP_TITLE = "My Contacts";
     /**
      * Property key for the legacy contact import version. The need for a version
      * as opposed to a boolean flag is that if we discover bugs in the contact import process,
@@ -3947,7 +3948,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return 1;
     }
 
+    /**
+     * Check whether GOOGLE_MY_CONTACTS_GROUP exists, otherwise create it.
+     *
+     * @return the group id
+     */
+    private long getOrCreateMyContactsGroupInTransaction(String accountName, String accountType) {
+        Cursor cursor = mDb.query(Tables.GROUPS, new String[] {"_id"},
+                Groups.ACCOUNT_NAME + " =? AND " + Groups.ACCOUNT_TYPE + " =? AND "
+                    + Groups.TITLE + " =?",
+                new String[] {accountName, accountType, GOOGLE_MY_CONTACTS_GROUP_TITLE},
+                null, null, null);
+        try {
+            if(cursor.moveToNext()) {
+                return cursor.getLong(0);
+            }
+        } finally {
+            cursor.close();
+        }
+
+        ContentValues values = new ContentValues();
+        values.put(Groups.TITLE, GOOGLE_MY_CONTACTS_GROUP_TITLE);
+        values.put(Groups.ACCOUNT_NAME, accountName);
+        values.put(Groups.ACCOUNT_TYPE, accountType);
+        values.put(Groups.GROUP_VISIBLE, "1");
+        return mDb.insert(Tables.GROUPS, null, values);
+    }
+
     public void onAccountsUpdated(Account[] accounts) {
+        // TODO : Check the unit test.
         HashSet<Account> existingAccounts = new HashSet<Account>();
         boolean hasUnassignedContacts[] = new boolean[]{false};
         mDb.beginTransaction();
@@ -4010,7 +4039,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 if (primaryAccount != null) {
                     String[] params = new String[] {primaryAccount.name, primaryAccount.type};
-
+                    if (primaryAccount.type.equals(DEFAULT_ACCOUNT_TYPE)) {
+                        long groupId = getOrCreateMyContactsGroupInTransaction(
+                                primaryAccount.name, primaryAccount.type);
+                        if (groupId != -1) {
+                            long mimeTypeId = mDbHelper.getMimeTypeId(
+                                    GroupMembership.CONTENT_ITEM_TYPE);
+                            mDb.execSQL(
+                                    "INSERT INTO " + Tables.DATA + "(" + DataColumns.MIMETYPE_ID +
+                                        ", " + Data.RAW_CONTACT_ID + ", "
+                                        + GroupMembership.GROUP_ROW_ID + ") " +
+                                    "SELECT " + mimeTypeId + ", " + Data._ID + ", " + groupId +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContacts.ACCOUNT_NAME + " IS NULL" +
+                                    " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL" +
+                                    " AND " + Data._ID + " NOT EXIST (" +
+                                        "SELECT " + Data.RAW_CONTACT_ID +
+                                        " FROM " + Tables.DATA +
+                                        " WHERE " + DataColumns.MIMETYPE_ID + " = " + mimeTypeId +
+                                        ")"
+                            );
+                        }
+                    }
                     mDb.execSQL(
                             "UPDATE " + Tables.RAW_CONTACTS +
                             " SET " + RawContacts.ACCOUNT_NAME + "=?,"
