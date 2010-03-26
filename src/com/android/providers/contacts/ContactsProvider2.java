@@ -1177,15 +1177,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             fixStructuredNameComponents(augmented, values);
 
             super.update(db, values, c, callerIsSyncAdapter);
-            if (values.containsKey(StructuredName.DISPLAY_NAME)) {
-                String name = values.getAsString(StructuredName.DISPLAY_NAME);
+            if (values.containsKey(StructuredName.DISPLAY_NAME) ||
+                    values.containsKey(StructuredName.PHONETIC_FAMILY_NAME) ||
+                    values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME) ||
+                    values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)) {
+                augmented.putAll(values);
+                String name = augmented.getAsString(StructuredName.DISPLAY_NAME);
                 deleteNameLookup(dataId);
-                Integer fullNameStyle = values.getAsInteger(StructuredName.FULL_NAME_STYLE);
+                Integer fullNameStyle = augmented.getAsInteger(StructuredName.FULL_NAME_STYLE);
                 insertNameLookupForStructuredName(rawContactId, dataId, name,
                         fullNameStyle != null
                                 ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
                                 : FullNameStyle.UNDEFINED);
-                insertNameLookupForPhoneticName(rawContactId, dataId, values);
+                insertNameLookupForPhoneticName(rawContactId, dataId, augmented);
             }
             fixRawContactDisplayName(db, rawContactId);
             triggerAggregation(rawContactId);

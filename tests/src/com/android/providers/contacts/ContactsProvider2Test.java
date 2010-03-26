@@ -413,7 +413,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         nameValues.put(StructuredName.FAMILY_NAME, "Goulash");
         nameValues.put(StructuredName.PHONETIC_FAMILY_NAME, "goo");
         nameValues.put(StructuredName.PHONETIC_GIVEN_NAME, "LASH");
-        insertStructuredName(rawContactId, nameValues);
+        Uri nameUri = insertStructuredName(rawContactId, nameValues);
 
         long contactId = queryContactId(rawContactId);
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
@@ -430,6 +430,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Phonetic name with given/family reversed should not match
         Uri filterUri3 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "lashgoo");
         assertEquals(0, getCount(filterUri3, null, null));
+
+        nameValues.clear();
+        nameValues.put(StructuredName.PHONETIC_FAMILY_NAME, "ga");
+        nameValues.put(StructuredName.PHONETIC_GIVEN_NAME, "losh");
+
+        mResolver.update(nameUri, nameValues, null, null);
+
+        assertContactFilter(contactId, "galosh");
+
+        Uri filterUri4 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goolish");
+        assertEquals(0, getCount(filterUri4, null, null));
     }
 
     public void testQueryContactStrequent() {
