@@ -92,6 +92,7 @@ public class ContactAggregator {
 
     private final ContactsProvider2 mContactsProvider;
     private final ContactsDatabaseHelper mDbHelper;
+    private PhotoPriorityResolver mPhotoPriorityResolver;
     private boolean mEnabled = true;
 
     /** Precompiled sql statement for setting an aggregated presence */
@@ -198,9 +199,11 @@ public class ContactAggregator {
      * Constructor.
      */
     public ContactAggregator(ContactsProvider2 contactsProvider,
-            ContactsDatabaseHelper contactsDatabaseHelper) {
+            ContactsDatabaseHelper contactsDatabaseHelper,
+            PhotoPriorityResolver photoPriorityResolver) {
         mContactsProvider = contactsProvider;
         mDbHelper = contactsDatabaseHelper;
+        mPhotoPriorityResolver = photoPriorityResolver;
 
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
@@ -1119,7 +1122,7 @@ public class ContactAggregator {
         long currentRawContactId = -1;
         long bestPhotoId = -1;
         boolean foundSuperPrimaryPhoto = false;
-        String photoAccount = null;
+        int photoPriority = -1;
         int totalRowCount = 0;
         int contactSendToVoicemail = 0;
         String contactCustomRingtone = null;
@@ -1201,24 +1204,21 @@ public class ContactAggregator {
                 if (!c.isNull(RawContactsQuery.DATA_ID)) {
                     long dataId = c.getLong(RawContactsQuery.DATA_ID);
                     int mimetypeId = c.getInt(RawContactsQuery.MIMETYPE_ID);
-                    boolean superprimary = c.getInt(RawContactsQuery.IS_SUPER_PRIMARY) != 0;
+                    boolean superPrimary = c.getInt(RawContactsQuery.IS_SUPER_PRIMARY) != 0;
                     if (mimetypeId == mMimeTypeIdPhoto) {
-
-                        // For now, just choose the first photo in a list sorted by account name.
-                        String account = c.getString(RawContactsQuery.ACCOUNT_NAME);
-                        if (!foundSuperPrimaryPhoto && (
-                                superprimary || photoAccount == null ||
-                                (account != null &&
-                                photoAccount.compareToIgnoreCase(account) >= 0))) {
-                            photoAccount = account;
-                            bestPhotoId = dataId;
-                            foundSuperPrimaryPhoto |= superprimary;
+                        if (!foundSuperPrimaryPhoto) {
+                            String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
+                            int priority = mPhotoPriorityResolver.getPhotoPriority(accountType);
+                            if (superPrimary || priority > photoPriority) {
+                                photoPriority = priority;
+                                bestPhotoId = dataId;
+                                foundSuperPrimaryPhoto |= superPrimary;
+                            }
                         }
                     } else if (mimetypeId == mMimeTypeIdPhone) {
                         hasPhoneNumber = 1;
                     }
                 }
-
             }
         } finally {
             c.close();
@@ -1296,12 +1296,12 @@ public class ContactAggregator {
 
     private interface PhotoIdQuery {
         String[] COLUMNS = new String[] {
-            RawContacts.ACCOUNT_NAME,
+            RawContacts.ACCOUNT_TYPE,
             DataColumns.CONCRETE_ID,
             Data.IS_SUPER_PRIMARY,
         };
 
-        int ACCOUNT_NAME = 0;
+        int ACCOUNT_TYPE = 0;
         int DATA_ID = 1;
         int IS_SUPER_PRIMARY = 2;
     }
@@ -1314,7 +1314,7 @@ public class ContactAggregator {
         }
 
         long bestPhotoId = -1;
-        String photoAccount = null;
+        int photoPriority = -1;
 
         long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
 
@@ -1335,16 +1335,11 @@ public class ContactAggregator {
                     break;
                 }
 
-                // For now, just choose the first photo in a list sorted by account name.
-                String account = c.getString(PhotoIdQuery.ACCOUNT_NAME);
-                if (photoAccount == null) {
-                    photoAccount = account;
+                String accountType = c.getString(PhotoIdQuery.ACCOUNT_TYPE);
+                int priority = mPhotoPriorityResolver.getPhotoPriority(accountType);
+                if (priority > photoPriority) {
+                    photoPriority = priority;
                     bestPhotoId = dataId;
-                } else {
-                    if (account.compareToIgnoreCase(photoAccount) < 0) {
-                        photoAccount = account;
-                        bestPhotoId = dataId;
-                    }
                 }
             }
         } finally {

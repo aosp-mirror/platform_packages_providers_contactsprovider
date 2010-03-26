@@ -641,21 +641,41 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertSuggestions(contactId1, "eddie");
     }
 
-    public void testChoosePhoto() {
+    public void testChoosePhotoSetBeforeAggregation() {
         long rawContactId1 = createRawContact();
-        setContactAccountName(rawContactId1, "donut");
+        setContactAccount(rawContactId1, "donut", "donut_act");
+        insertPhoto(rawContactId1);
+
+        long rawContactId2 = createRawContact();
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
+        long cupcakeId = ContentUris.parseId(insertPhoto(rawContactId2));
+
+        long rawContactId3 = createRawContact();
+        setContactAccount(rawContactId3, "froyo", "froyo_act");
+        insertPhoto(rawContactId3);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId3);
+        assertEquals(cupcakeId, queryPhotoId(queryContactId(rawContactId2)));
+    }
+
+    public void testChoosePhotoSetAfterAggregation() {
+        long rawContactId1 = createRawContact();
+        setContactAccount(rawContactId1, "donut", "donut_act");
         insertPhoto(rawContactId1);
 
         long rawContactId2 = createRawContact();
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
-        setContactAccountName(rawContactId2, "cupcake");
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         long cupcakeId = ContentUris.parseId(insertPhoto(rawContactId2));
 
         long rawContactId3 = createRawContact();
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId3);
-        setContactAccountName(rawContactId3, "flan");
+        setContactAccount(rawContactId3, "froyo", "froyo_act");
         insertPhoto(rawContactId3);
 
         assertEquals(cupcakeId, queryPhotoId(queryContactId(rawContactId2)));

@@ -23,10 +23,16 @@
 
     <application>
         <uses-library android:name="android.test.runner" />
+        
+        <!-- Mock contacts sync adapter -->
+        <service android:name=".MockSyncAdapter" android:exported="true">
+            <meta-data android:name="android.provider.CONTACTS_STRUCTURE"
+                android:resource="@xml/contacts" />
+        </service>
     </application>
 
     <!--
-    The test delcared in this instrumentation will be run along with tests declared by
+    The test declared in this instrumentation will be run along with tests declared by
     all other applications via the command: "adb shell itr".
     The "itr" command will find all tests declared by all applications. If you want to run just these
     tests on their own then use the command:

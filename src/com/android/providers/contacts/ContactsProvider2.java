@@ -1854,7 +1854,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
-        mContactAggregator = new ContactAggregator(this, mDbHelper);
+        mContactAggregator = new ContactAggregator(this, mDbHelper,
+                createPhotoPriorityResolver(context));
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
         mDb = mDbHelper.getWritableDatabase();
@@ -1995,6 +1996,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return (mDb != null);
+    }
+
+    /**
+     * Visible for testing.
+     */
+    /* package */ PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
+        return new PhotoPriorityResolver(context);
     }
 
     /**

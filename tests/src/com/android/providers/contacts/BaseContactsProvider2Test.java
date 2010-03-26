@@ -371,8 +371,9 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
-    protected void setContactAccountName(long rawContactId, String accountName) {
+    protected void setContactAccount(long rawContactId, String accountType, String accountName) {
         ContentValues values = new ContentValues();
+        values.put(RawContacts.ACCOUNT_TYPE, accountType);
         values.put(RawContacts.ACCOUNT_NAME, accountName);
 
         mResolver.update(ContentUris.withAppendedId(
