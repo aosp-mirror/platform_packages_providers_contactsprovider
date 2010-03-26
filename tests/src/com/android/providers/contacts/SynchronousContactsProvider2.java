@@ -96,6 +96,28 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return mAccount;
     }
 
+    /**
+     * Creates a mock PhotoPriorityResolver
+     */
+    @Override
+    PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
+        return new PhotoPriorityResolver(context) {
+            @Override
+            public synchronized int getPhotoPriority(String accountType) {
+                if ("cupcake".equals(accountType)) {
+                    return 3;
+                }
+                if ("donut".equals(accountType)) {
+                    return 2;
+                }
+                if ("froyo".equals(accountType)) {
+                    return 1;
+                }
+                return 0;
+            }
+        };
+    }
+
     @Override
     protected Locale getLocale() {
         return Locale.US;
