@@ -4053,15 +4053,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                     "INSERT INTO " + Tables.DATA + "(" + DataColumns.MIMETYPE_ID +
                                         ", " + Data.RAW_CONTACT_ID + ", "
                                         + GroupMembership.GROUP_ROW_ID + ") " +
-                                    "SELECT " + mimeTypeId + ", " + Data._ID + ", " + groupId +
+                                    "SELECT " + mimeTypeId + ", "
+                                            + RawContacts._ID + ", " + groupId +
                                     " FROM " + Tables.RAW_CONTACTS +
                                     " WHERE " + RawContacts.ACCOUNT_NAME + " IS NULL" +
-                                    " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL" +
-                                    " AND " + Data._ID + " NOT EXIST (" +
-                                        "SELECT " + Data.RAW_CONTACT_ID +
-                                        " FROM " + Tables.DATA +
-                                        " WHERE " + DataColumns.MIMETYPE_ID + " = " + mimeTypeId +
-                                        ")"
+                                    " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL"
                             );
                         }
                     }
