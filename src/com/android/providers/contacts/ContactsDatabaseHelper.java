@@ -2502,6 +2502,9 @@ import java.util.Locale;
     public void wipeData() {
         SQLiteDatabase db = getWritableDatabase();
 
+        db.execSQL("DELETE FROM " + Tables.ACCOUNTS + ";");
+        db.execSQL("INSERT INTO accounts VALUES(NULL, NULL)");
+
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");

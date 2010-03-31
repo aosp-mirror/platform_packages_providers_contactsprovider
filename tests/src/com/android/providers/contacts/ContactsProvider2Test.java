@@ -1752,6 +1752,46 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 + rawContactId2, null));
     }
 
+    public void testAccountDeletion() {
+        Account readOnlyAccount = new Account("act", READ_ONLY_ACCOUNT_TYPE);
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.onAccountsUpdated(new Account[]{readOnlyAccount, mAccount});
+
+        long rawContactId1 = createRawContactWithName("John", "Doe", readOnlyAccount);
+        Uri photoUri1 = insertPhoto(rawContactId1);
+        long rawContactId2 = createRawContactWithName("john", "doe", mAccount);
+        Uri photoUri2 = insertPhoto(rawContactId2);
+        storeValue(photoUri2, Photo.IS_SUPER_PRIMARY, "1");
+
+        assertAggregated(rawContactId1, rawContactId2);
+
+        long contactId = queryContactId(rawContactId1);
+
+        // The display name should come from the writable account
+        assertStoredValue(Uri.withAppendedPath(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.Data.CONTENT_DIRECTORY),
+                Contacts.DISPLAY_NAME, "john doe");
+
+        // The photo should be the one we marked as super-primary
+        assertStoredValue(Contacts.CONTENT_URI, contactId,
+                Contacts.PHOTO_ID, ContentUris.parseId(photoUri2));
+
+        // Remove the writable account
+        cp.onAccountsUpdated(new Account[]{readOnlyAccount});
+
+        // The display name should come from the remaining account
+        assertStoredValue(Uri.withAppendedPath(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.Data.CONTENT_DIRECTORY),
+                Contacts.DISPLAY_NAME, "John Doe");
+
+        // The photo should be the remaining one
+        assertStoredValue(Contacts.CONTENT_URI, contactId,
+                Contacts.PHOTO_ID, ContentUris.parseId(photoUri1));
+
+    }
+
     public void testContactDeletion() {
         long rawContactId1 = createRawContactWithName("John", "Doe");
         long rawContactId2 = createRawContactWithName("John", "Doe");

@@ -4031,6 +4031,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         " AND " + RawContacts.ACCOUNT_TYPE + "=?", params);
             }
 
+            if (!accountsToDelete.isEmpty()) {
+                // Find all aggregated contacts that used to contain the raw contacts
+                // we have just deleted and see if they are still referencing the deleted
+                // names of photos.  If so, fix up those contacts.
+                HashSet<Long> orphanContactIds = Sets.newHashSet();
+                Cursor cursor = mDb.rawQuery("SELECT " + Contacts._ID +
+                        " FROM " + Tables.CONTACTS +
+                        " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
+                                Contacts.NAME_RAW_CONTACT_ID + " NOT IN" +
+                                        " (SELECT " + RawContacts._ID +
+                                		" FROM " + Tables.RAW_CONTACTS + "))" +
+                        " OR (" + Contacts.PHOTO_ID + " NOT NULL AND " +
+                                Contacts.PHOTO_ID + " NOT IN " +
+                                		"(SELECT " + Data._ID +
+                                		" FROM " + Tables.DATA + "))", null);
+                try {
+                    while (cursor.moveToNext()) {
+                        orphanContactIds.add(cursor.getLong(0));
+                    }
+                } finally {
+                    cursor.close();
+                }
+
+                for (Long contactId : orphanContactIds) {
+                    mContactAggregator.updateAggregateData(contactId);
+                }
+            }
+
             if (hasUnassignedContacts[0]) {
 
                 Account primaryAccount = null;
