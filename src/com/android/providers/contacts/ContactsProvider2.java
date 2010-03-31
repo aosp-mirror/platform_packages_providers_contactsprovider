@@ -2605,7 +2605,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
 
             case RawContacts.AGGREGATION_MODE_DEFAULT: {
-                mContactAggregator.markForAggregation(rawContactId, aggregationMode);
+                mContactAggregator.markForAggregation(rawContactId, aggregationMode, false);
                 break;
             }
 
@@ -3752,7 +3752,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // As per ContactsContract documentation, changing aggregation mode
                 // to DEFAULT should not trigger aggregation
                 if (aggregationMode != RawContacts.AGGREGATION_MODE_DEFAULT) {
-                    mContactAggregator.markForAggregation(rawContactId, aggregationMode);
+                    mContactAggregator.markForAggregation(rawContactId, aggregationMode, false);
                 }
             }
             if (values.containsKey(RawContacts.STARRED)) {
@@ -3938,8 +3938,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         mContactAggregator.invalidateAggregationExceptionCache();
-        mContactAggregator.markForAggregation(rawContactId1, RawContacts.AGGREGATION_MODE_DEFAULT);
-        mContactAggregator.markForAggregation(rawContactId2, RawContacts.AGGREGATION_MODE_DEFAULT);
+        mContactAggregator.markForAggregation(rawContactId1,
+                RawContacts.AGGREGATION_MODE_DEFAULT, true);
+        mContactAggregator.markForAggregation(rawContactId2,
+                RawContacts.AGGREGATION_MODE_DEFAULT, true);
 
         long contactId1 = mDbHelper.getContactId(rawContactId1);
         mContactAggregator.aggregateContact(db, rawContactId1, contactId1);
@@ -4039,13 +4041,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Cursor cursor = mDb.rawQuery("SELECT " + Contacts._ID +
                         " FROM " + Tables.CONTACTS +
                         " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
-                                Contacts.NAME_RAW_CONTACT_ID + " NOT IN" +
-                                        " (SELECT " + RawContacts._ID +
-                                		" FROM " + Tables.RAW_CONTACTS + "))" +
+                                Contacts.NAME_RAW_CONTACT_ID + " NOT IN " +
+                                        "(SELECT " + RawContacts._ID +
+                                        " FROM " + Tables.RAW_CONTACTS + "))" +
                         " OR (" + Contacts.PHOTO_ID + " NOT NULL AND " +
                                 Contacts.PHOTO_ID + " NOT IN " +
-                                		"(SELECT " + Data._ID +
-                                		" FROM " + Tables.DATA + "))", null);
+                                        "(SELECT " + Data._ID +
+                                        " FROM " + Tables.DATA + "))", null);
                 try {
                     while (cursor.moveToNext()) {
                         orphanContactIds.add(cursor.getLong(0));

@@ -392,8 +392,8 @@ public class ContactAggregator {
         mRawContactsMarkedForAggregation.put(rawContactId, aggregationMode);
     }
 
-    public void markForAggregation(long rawContactId, int aggregationMode) {
-        if (mRawContactsMarkedForAggregation.containsKey(rawContactId)) {
+    public void markForAggregation(long rawContactId, int aggregationMode, boolean force) {
+        if (!force && mRawContactsMarkedForAggregation.containsKey(rawContactId)) {
             // As per ContactsContract documentation, default aggregation mode
             // does not override a previously set mode
             if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {

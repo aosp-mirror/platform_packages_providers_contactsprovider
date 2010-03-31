@@ -2503,7 +2503,7 @@ import java.util.Locale;
         SQLiteDatabase db = getWritableDatabase();
 
         db.execSQL("DELETE FROM " + Tables.ACCOUNTS + ";");
-        db.execSQL("INSERT INTO accounts VALUES(NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL)");
 
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");

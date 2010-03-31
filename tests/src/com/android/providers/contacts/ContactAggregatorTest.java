@@ -23,10 +23,8 @@ import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
@@ -844,6 +842,55 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = ContentUris.parseId(results[2].uri);
 
         assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationModeSuspendedOverriddenByAggException() throws Exception {
+        ContentProviderOperation cpo1 = ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
+                .withValues(new ContentValues())
+                .build();
+        ContentProviderOperation cpo2 = ContentProviderOperation.newInsert(Data.CONTENT_URI)
+                .withValueBackReference(Data.RAW_CONTACT_ID, 0)
+                .withValue(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE)
+                .withValue(StructuredName.GIVEN_NAME, "John")
+                .withValue(StructuredName.FAMILY_NAME, "Doe")
+                .build();
+        ContentProviderOperation cpo3 = ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
+                .withValues(new ContentValues())
+                .build();
+        ContentProviderOperation cpo4 = ContentProviderOperation.newInsert(Data.CONTENT_URI)
+                .withValueBackReference(Data.RAW_CONTACT_ID, 2)
+                .withValue(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE)
+                .withValue(StructuredName.GIVEN_NAME, "John")
+                .withValue(StructuredName.FAMILY_NAME, "Doe")
+                .build();
+        ContentProviderOperation cpo5 = ContentProviderOperation.newUpdate(RawContacts.CONTENT_URI)
+                .withSelection(RawContacts._ID + "=?", new String[1])
+                .withSelectionBackReference(0, 0)
+                .withValue(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_SUSPENDED)
+                .build();
+        ContentProviderOperation cpo6 = ContentProviderOperation.newUpdate(RawContacts.CONTENT_URI)
+                .withSelection(RawContacts._ID + "=?", new String[1])
+                .withSelectionBackReference(0, 2)
+                .withValue(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_SUSPENDED)
+                .build();
+
+        // Checking that aggregation mode SUSPENDED should be overridden by inserting
+        // an explicit aggregation exception
+        ContentProviderOperation cpo7 =
+                ContentProviderOperation.newUpdate(AggregationExceptions.CONTENT_URI)
+                .withValueBackReference(AggregationExceptions.RAW_CONTACT_ID1, 0)
+                .withValueBackReference(AggregationExceptions.RAW_CONTACT_ID2, 2)
+                .withValue(AggregationExceptions.TYPE, AggregationExceptions.TYPE_KEEP_TOGETHER)
+                .build();
+
+        ContentProviderResult[] results =
+                mResolver.applyBatch(ContactsContract.AUTHORITY,
+                        Lists.newArrayList(cpo1, cpo2, cpo3, cpo4, cpo5, cpo6, cpo7));
+
+        long rawContactId1 = ContentUris.parseId(results[0].uri);
+        long rawContactId2 = ContentUris.parseId(results[2].uri);
+
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     private void assertSuggestions(long contactId, long... suggestions) {
