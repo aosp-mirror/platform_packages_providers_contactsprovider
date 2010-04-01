@@ -147,7 +147,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
-    private static final String GOOGLE_MY_CONTACTS_GROUP_TITLE = "My Contacts";
+    private static final String GOOGLE_MY_CONTACTS_GROUP_TITLE = "System Group: My Contacts";
     /**
      * Property key for the legacy contact import version. The need for a version
      * as opposed to a boolean flag is that if we discover bugs in the contact import process,
