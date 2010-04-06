@@ -297,11 +297,10 @@ public class LegacyContactImporter {
         insert.bindLong(GroupsInsert.GROUP_VISIBLE, 1);
 
         String account = c.getString(GroupsQuery._SYNC_ACCOUNT);
-        String syncId = c.getString(GroupsQuery._SYNC_ID);
-        if (!TextUtils.isEmpty(account) && !TextUtils.isEmpty(syncId)) {
+        if (!TextUtils.isEmpty(account)) {
             bindString(insert, GroupsInsert.ACCOUNT_NAME, account);
             bindString(insert, GroupsInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
-            bindString(insert, GroupsInsert.SOURCE_ID, syncId);
+            bindString(insert, GroupsInsert.SOURCE_ID, c.getString(GroupsQuery._SYNC_ID));
         } else {
             insert.bindNull(GroupsInsert.ACCOUNT_NAME);
             insert.bindNull(GroupsInsert.ACCOUNT_TYPE);
@@ -559,11 +558,10 @@ public class LegacyContactImporter {
         insert.bindLong(RawContactsInsert.CONTACT_IN_VISIBLE_GROUP, 1);
 
         String account = c.getString(PeopleQuery._SYNC_ACCOUNT);
-        String syncId = c.getString(PeopleQuery._SYNC_ID);
-        if (!TextUtils.isEmpty(account) && !TextUtils.isEmpty(syncId)) {
+        if (!TextUtils.isEmpty(account)) {
             bindString(insert, RawContactsInsert.ACCOUNT_NAME, account);
             bindString(insert, RawContactsInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
-            bindString(insert, RawContactsInsert.SOURCE_ID, syncId);
+            bindString(insert, RawContactsInsert.SOURCE_ID, c.getString(PeopleQuery._SYNC_ID));
         } else {
             insert.bindNull(RawContactsInsert.ACCOUNT_NAME);
             insert.bindNull(RawContactsInsert.ACCOUNT_TYPE);
@@ -1075,9 +1073,8 @@ public class LegacyContactImporter {
         insert.bindBlob(PhotoInsert.PHOTO, c.getBlob(PhotosQuery.DATA));
 
         String account = c.getString(PhotosQuery._SYNC_ACCOUNT);
-        String syncId = c.getString(PhotosQuery._SYNC_ID);
-        if (!TextUtils.isEmpty(account) && !TextUtils.isEmpty(syncId)) {
-            insert.bindString(PhotoInsert.SYNC1, syncId);
+        if (!TextUtils.isEmpty(account)) {
+            bindString(insert, PhotoInsert.SYNC1, c.getString(PhotosQuery._SYNC_ID));
         } else {
             insert.bindNull(PhotoInsert.SYNC1);
         }
@@ -1133,8 +1130,9 @@ public class LegacyContactImporter {
         long groupId = 0;
         if (c.isNull(GroupMembershipQuery.GROUP_ID)) {
             String account = c.getString(GroupMembershipQuery.GROUP_SYNC_ACCOUNT);
-            String syncId = c.getString(GroupMembershipQuery.GROUP_SYNC_ID);
-            if (!TextUtils.isEmpty(account) && !TextUtils.isEmpty(syncId)) {
+            if (!TextUtils.isEmpty(account)) {
+                String syncId = c.getString(GroupMembershipQuery.GROUP_SYNC_ID);
+
                 Cursor cursor = mTargetDb.query(Tables.GROUPS,
                         new String[]{Groups._ID}, Groups.SOURCE_ID + "=?", new String[]{syncId},
                         null, null, null);
@@ -1274,14 +1272,14 @@ public class LegacyContactImporter {
 
     private void insertDeletedPerson(Cursor c, SQLiteStatement insert) {
         String account = c.getString(DeletedPeopleQuery._SYNC_ACCOUNT);
-        String syncId = c.getString(DeletedPeopleQuery._SYNC_ID);
-        if (TextUtils.isEmpty(account) || TextUtils.isEmpty(syncId)) {
+        if (account == null) {
             return;
         }
 
         insert.bindString(DeletedRawContactInsert.ACCOUNT_NAME, account);
         insert.bindString(DeletedRawContactInsert.ACCOUNT_TYPE, DEFAULT_ACCOUNT_TYPE);
-        insert.bindString(DeletedRawContactInsert.SOURCE_ID, syncId);
+        bindString(insert, DeletedRawContactInsert.SOURCE_ID,
+                c.getString(DeletedPeopleQuery._SYNC_ID));
         insert.bindLong(DeletedRawContactInsert.DELETED, 1);
         insert.bindLong(DeletedRawContactInsert.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_DISABLED);
