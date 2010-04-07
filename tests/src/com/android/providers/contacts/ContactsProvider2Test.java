@@ -209,6 +209,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri filterUri4 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "encilada");
         assertEquals(0, getCount(filterUri4, null, null));
+
+        Uri filterUri5 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "*");
+        assertEquals(0, getCount(filterUri5, null, null));
     }
 
     public void testPhoneLookup() {

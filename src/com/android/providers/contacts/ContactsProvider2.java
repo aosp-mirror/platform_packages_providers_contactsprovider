@@ -4372,12 +4372,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     StringBuilder sb = new StringBuilder();
                     sb.append(" AND (");
 
+                    boolean hasCondition = false;
                     boolean orNeeded = false;
                     String normalizedName = NameNormalizer.normalize(filterParam);
                     if (normalizedName.length() > 0) {
                         sb.append(Data.RAW_CONTACT_ID + " IN ");
                         appendRawContactsByNormalizedNameFilter(sb, normalizedName, false);
                         orNeeded = true;
+                        hasCondition = true;
                     }
 
                     if (isPhoneNumber(filterParam)) {
@@ -4392,6 +4394,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                   + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '%");
                         sb.append(reversed);
                         sb.append("')");
+                        hasCondition = true;
+                    }
+
+                    if (!hasCondition) {
+                        // If it is neither a phone number nor a name, the query should return
+                        // an empty cursor.  Let's ensure that.
+                        sb.append("0");
                     }
                     sb.append(")");
                     qb.appendWhere(sb);
