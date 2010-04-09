@@ -1750,10 +1750,13 @@ import java.util.Locale;
             NameSplitter splitter, StringBuilder sb) {
 
         splitter.guessNameStyle(name);
+        int unadjustedFullNameStyle = name.fullNameStyle;
         name.fullNameStyle = splitter.getAdjustedFullNameStyle(name.fullNameStyle);
         String displayName = splitter.join(name, true);
 
-        structuredNameUpdate.bindLong(1, name.fullNameStyle);
+        // Don't update database with the adjusted fullNameStyle as it is locale
+        // related
+        structuredNameUpdate.bindLong(1, unadjustedFullNameStyle);
         DatabaseUtils.bindObjectToProgram(structuredNameUpdate, 2, displayName);
         structuredNameUpdate.bindLong(3, name.phoneticNameStyle);
         structuredNameUpdate.bindLong(4, dataId);
@@ -1767,8 +1770,10 @@ import java.util.Locale;
 
             if (phoneticName != null) {
                 sortKey = sortKeyAlternative = phoneticName;
-            } else if (name.fullNameStyle == FullNameStyle.CHINESE) {
-                sortKey = sortKeyAlternative = splitter.convertHanziToPinyin(displayName);
+            } else if (name.fullNameStyle == FullNameStyle.CHINESE ||
+                    name.fullNameStyle == FullNameStyle.CJK) {
+                sortKey = sortKeyAlternative = ContactLocaleUtils.getIntance()
+                        .getSortKey(displayName, name.fullNameStyle);
             }
 
             if (sortKey == null) {
@@ -1829,8 +1834,10 @@ import java.util.Locale;
                 if (phoneticName == null && company != null) {
                     int nameStyle = splitter.guessFullNameStyle(company);
                     nameStyle = splitter.getAdjustedFullNameStyle(nameStyle);
-                    if (nameStyle == FullNameStyle.CHINESE) {
-                        sortKey = splitter.convertHanziToPinyin(company);
+                    if (nameStyle == FullNameStyle.CHINESE ||
+                            nameStyle == FullNameStyle.CJK ) {
+                        sortKey = ContactLocaleUtils.getIntance()
+                                .getSortKey(company, nameStyle);
                     }
                 }
 

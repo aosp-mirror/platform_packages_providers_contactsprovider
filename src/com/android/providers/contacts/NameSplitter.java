@@ -480,32 +480,6 @@ public class NameSplitter {
     }
 
     /**
-     * Given a name in Chinese, returns a Pinyin representation.
-     */
-    public String convertHanziToPinyin(String name) {
-
-        // TODO: move this code to HanziToPinyin and optimize
-        ArrayList<Token> tokens = HanziToPinyin.getInstance().get(name);
-        if (tokens != null) {
-            int size = tokens.size();
-            if (size != 0) {
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < size; i++) {
-                    String pinyin = tokens.get(i).target;
-                    if (!TextUtils.isEmpty(pinyin)) {
-                        if (sb.length() != 0) {
-                            sb.append(' ');
-                        }
-                        sb.append(pinyin);
-                    }
-                }
-                return sb.toString();
-            }
-        }
-        return null;
-    }
-
-    /**
      * Concatenates parts of a full name inserting spaces and commas as specified.
      */
     private String join(String part1, String part2, String part3, String suffix,
@@ -805,9 +779,6 @@ public class NameSplitter {
      */
     public void guessNameStyle(Name name) {
         guessFullNameStyle(name);
-        if (FullNameStyle.CJK == name.fullNameStyle) {
-            name.fullNameStyle = getAdjustedFullNameStyle(name.fullNameStyle);
-        }
         guessPhoneticNameStyle(name);
         name.fullNameStyle = getAdjustedNameStyleBasedOnPhoneticNameStyle(name.fullNameStyle,
                 name.phoneticNameStyle);

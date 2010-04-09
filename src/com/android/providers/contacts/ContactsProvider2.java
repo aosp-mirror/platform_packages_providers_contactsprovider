@@ -1244,11 +1244,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // As the name could be changed, let's guess the name style again.
                 name.fullNameStyle = FullNameStyle.UNDEFINED;
                 mSplitter.guessNameStyle(name);
-
+                int unadjustedFullNameStyle = name.fullNameStyle;
+                name.fullNameStyle = mSplitter.getAdjustedFullNameStyle(name.fullNameStyle);
                 final String joined = mSplitter.join(name, true);
                 update.put(StructuredName.DISPLAY_NAME, joined);
 
-                update.put(StructuredName.FULL_NAME_STYLE, name.fullNameStyle);
+                update.put(StructuredName.FULL_NAME_STYLE, unadjustedFullNameStyle);
                 update.put(StructuredName.PHONETIC_NAME_STYLE, name.phoneticNameStyle);
             } else if (touchedUnstruct && touchedStruct){
                 if (!update.containsKey(StructuredName.FULL_NAME_STYLE)) {
@@ -1969,23 +1970,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         " WHERE " + RawContacts._ID + "=?)" +
                 " AND " + RawContacts._ID + "!=?");
 
-        mDataRowHandlers = new HashMap<String, DataRowHandler>();
-
-        mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE, new EmailDataRowHandler());
-        mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
-                new CommonDataRowHandler(Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
-        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new CommonDataRowHandler(
-                StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE, StructuredPostal.LABEL));
-        mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE, new OrganizationDataRowHandler());
-        mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE, new PhoneDataRowHandler());
-        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new NicknameDataRowHandler());
-        mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
-                new StructuredNameRowHandler(mNameSplitter));
-        mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
-                new StructuredPostalRowHandler(mPostalSplitter));
-        mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
-        mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
-
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         mMimeTypeIdIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
         mMimeTypeIdStructuredName = mDbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
@@ -2003,6 +1987,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return (mDb != null);
     }
 
+    private void initDataRowHandlers() {
+      mDataRowHandlers = new HashMap<String, DataRowHandler>();
+
+      mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE, new EmailDataRowHandler());
+      mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
+              new CommonDataRowHandler(Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
+      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new CommonDataRowHandler(
+              StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE, StructuredPostal.LABEL));
+      mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE, new OrganizationDataRowHandler());
+      mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE, new PhoneDataRowHandler());
+      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new NicknameDataRowHandler());
+      mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
+              new StructuredNameRowHandler(mNameSplitter));
+      mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
+              new StructuredPostalRowHandler(mPostalSplitter));
+      mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
+      mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
+    }
     /**
      * Visible for testing.
      */
@@ -2020,6 +2022,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
         mCommonNicknameCache = new CommonNicknameCache(mDbHelper.getReadableDatabase());
         ContactLocaleUtils.getIntance().setLocale(mCurrentLocale);
+        initDataRowHandlers();
     }
 
     @Override
@@ -2879,10 +2882,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 displayNameStyle = mNameSplitter.getAdjustedFullNameStyle(displayNameStyle);
             }
-            if (displayNameStyle == FullNameStyle.CHINESE) {
+            if (displayNameStyle == FullNameStyle.CHINESE ||
+                    displayNameStyle == FullNameStyle.CJK) {
                 sortKeyPrimary = sortKeyAlternative =
                         ContactLocaleUtils.getIntance().getSortKey(
-                                displayNamePrimary, FullNameStyle.CHINESE);
+                                displayNamePrimary, displayNameStyle);
             }
         }
 
