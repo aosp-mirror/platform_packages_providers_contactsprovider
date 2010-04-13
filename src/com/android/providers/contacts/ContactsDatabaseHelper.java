@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 310;
+    private static final int DATABASE_VERSION = 311;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -850,6 +850,8 @@ import java.util.Locale;
                 Groups.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.GROUP_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1," +
+                Groups.AUTO_ADD + " INTEGER NOT NULL DEFAULT 0," +
+                Groups.FAVORITES + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.SYNC1 + " TEXT, " +
                 Groups.SYNC2 + " TEXT, " +
                 Groups.SYNC3 + " TEXT, " +
@@ -1257,6 +1259,8 @@ import java.util.Locale;
                 + Groups.DELETED + ","
                 + Groups.GROUP_VISIBLE + ","
                 + Groups.SHOULD_SYNC + ","
+                + Groups.AUTO_ADD + ","
+                + Groups.FAVORITES + ","
                 + Groups.SYNC1 + ","
                 + Groups.SYNC2 + ","
                 + Groups.SYNC3 + ","
@@ -1492,6 +1496,12 @@ import java.util.Locale;
             // Add column NAME_RAW_CONTACT_ID
             upgradeViewsAndTriggers = true;
             oldVersion = 310;
+        }
+
+        if (oldVersion == 310) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion311(db);
+            oldVersion = 311;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2107,6 +2117,13 @@ import java.util.Locale;
 
             db.execSQL("INSERT INTO accounts " +
                     "SELECT DISTINCT account_name, account_type FROM raw_contacts");
+    }
+
+    private void upgradeToVersion311(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE " + Tables.GROUPS
+                + " ADD " + Groups.FAVORITES + " INTEGER NOT NULL DEFAULT 0;");
+        db.execSQL("ALTER TABLE " + Tables.GROUPS
+                + " ADD " + Groups.AUTO_ADD + " INTEGER NOT NULL DEFAULT 0;");
     }
 
     private void rebuildNameLookup(SQLiteDatabase db) {

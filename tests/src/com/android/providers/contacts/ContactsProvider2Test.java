@@ -29,6 +29,7 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
@@ -59,6 +60,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.util.Log;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -1738,8 +1740,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContactsProvider2 cp = (ContactsProvider2) getProvider();
         cp.onAccountsUpdated(new Account[]{mAccount, mAccountTwo});
         assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, "account1");
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, "account type1");
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, null);
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, null);
 
         long rawContactId1 = createRawContact(mAccount);
         insertEmail(rawContactId1, "account1@email.com");
@@ -2407,6 +2409,298 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             assertFalse(data.contains("N:Doe;John;;;"));
             assertTrue(data.contains("N:Doh;Jane;;;"));
         }
+    }
+
+    public void testAutoGroupMembership() {
+        long g1 = createGroup(mAccount, "g1", "t1", 0, true /* autoAdd */, false /* favorite */);
+        long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false /* favorite */);
+        long g3 = createGroup(mAccountTwo, "g3", "t3", 0, true /* autoAdd */, false /* favorite */);
+        long g4 = createGroup(mAccountTwo, "g4", "t4", 0, false /* autoAdd */, false/* favorite */);
+        long r1 = createRawContact(mAccount);
+        long r2 = createRawContact(mAccountTwo);
+        long r3 = createRawContact(null);
+
+        Cursor c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        c = queryGroupMemberships(mAccountTwo);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g3, c.getLong(0));
+            assertEquals(r2, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+    }
+
+    public void testNoAutoAddMembershipAfterGroupCreation() {
+        long r1 = createRawContact(mAccount);
+        long r2 = createRawContact(mAccount);
+        long r3 = createRawContact(mAccount);
+        long r4 = createRawContact(mAccountTwo);
+        long r5 = createRawContact(mAccountTwo);
+        long r6 = createRawContact(null);
+
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+
+        long g1 = createGroup(mAccount, "g1", "t1", 0, true /* autoAdd */, false /* favorite */);
+        long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false /* favorite */);
+        long g3 = createGroup(mAccountTwo, "g3", "t3", 0, true /* autoAdd */, false/* favorite */);
+
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+    }
+
+    // create some starred and non-starred contacts, some associated with account, some not
+    // favorites group created
+    // the starred contacts should be added to group
+    // favorites group removed
+    // no change to starred status
+    public void testFavoritesMembershipAfterGroupCreation() {
+        long r1 = createRawContact(mAccount, RawContacts.STARRED, "1");
+        long r2 = createRawContact(mAccount);
+        long r3 = createRawContact(mAccount, RawContacts.STARRED, "1");
+        long r4 = createRawContact(mAccountTwo, RawContacts.STARRED, "1");
+        long r5 = createRawContact(mAccountTwo);
+        long r6 = createRawContact(null, RawContacts.STARRED, "1");
+        long r7 = createRawContact(null);
+
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+
+        long g1 = createGroup(mAccount, "g1", "t1", 0, false /* autoAdd */, true /* favorite */);
+        long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false /* favorite */);
+        long g3 = createGroup(mAccountTwo, "g3", "t3", 0, false /* autoAdd */, false/* favorite */);
+
+        assertTrue(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertTrue(queryRawContactIsStarred(r3));
+        assertTrue(queryRawContactIsStarred(r4));
+        assertFalse(queryRawContactIsStarred(r5));
+        assertTrue(queryRawContactIsStarred(r6));
+        assertFalse(queryRawContactIsStarred(r7));
+
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+        Cursor c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r3, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        updateItem(RawContacts.CONTENT_URI, r6,
+                RawContacts.ACCOUNT_NAME, mAccount.name,
+                RawContacts.ACCOUNT_TYPE, mAccount.type);
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+        c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r3, c.getLong(1));
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r6, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        mResolver.delete(ContentUris.withAppendedId(Groups.CONTENT_URI, g1), null, null);
+
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+
+        assertTrue(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertTrue(queryRawContactIsStarred(r3));
+        assertTrue(queryRawContactIsStarred(r4));
+        assertFalse(queryRawContactIsStarred(r5));
+        assertTrue(queryRawContactIsStarred(r6));
+        assertFalse(queryRawContactIsStarred(r7));
+    }
+
+    public void testFavoritesGroupMembershipChangeAfterStarChange() {
+        long g1 = createGroup(mAccount, "g1", "t1", 0, false /* autoAdd */, true /* favorite */);
+        long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false/* favorite */);
+        long g4 = createGroup(mAccountTwo, "g4", "t4", 0, false /* autoAdd */, true /* favorite */);
+        long g5 = createGroup(mAccountTwo, "g5", "t5", 0, false /* autoAdd */, false/* favorite */);
+        long r1 = createRawContact(mAccount, RawContacts.STARRED, "1");
+        long r2 = createRawContact(mAccount);
+        long r3 = createRawContact(mAccountTwo);
+
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+        Cursor c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        // remove the star from r1
+        assertEquals(1, updateItem(RawContacts.CONTENT_URI, r1, RawContacts.STARRED, "0"));
+
+        // Since no raw contacts are starred, there should be no group memberships.
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+
+        // mark r1 as starred
+        assertEquals(1, updateItem(RawContacts.CONTENT_URI, r1, RawContacts.STARRED, "1"));
+        // Now that r1 is starred it should have a membership in the one groups from mAccount
+        // that is marked as a favorite.
+        // There should be no memberships in mAccountTwo since it has no starred raw contacts.
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+        c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        // remove the star from r1
+        assertEquals(1, updateItem(RawContacts.CONTENT_URI, r1, RawContacts.STARRED, "0"));
+        // Since no raw contacts are starred, there should be no group memberships.
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+
+        Uri contactUri = findContactUriByRawContactUri(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, r1));
+        assertNotNull(contactUri);
+
+        // mark r1 as starred via its contact lookup uri
+        assertEquals(1, updateItem(contactUri, Contacts.STARRED, "1"));
+        // Now that r1 is starred it should have a membership in the one groups from mAccount
+        // that is marked as a favorite.
+        // There should be no memberships in mAccountTwo since it has no starred raw contacts.
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+        c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        // remove the star from r1
+        updateItem(contactUri, Contacts.STARRED, "0");
+        // Since no raw contacts are starred, there should be no group memberships.
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+    }
+
+    private Uri findContactUriByRawContactUri(Uri uri) {
+        Cursor c = mResolver.query(uri,
+                new String[]{RawContacts.CONTACT_ID},
+                null,
+                null,
+                null);
+        if (c.moveToNext()) {
+            return ContentUris.withAppendedId(Contacts.CONTENT_URI, c.getLong(0));
+        }
+        return null;
+    }
+
+    public void testStarChangedAfterGroupMembershipChange() {
+        long g1 = createGroup(mAccount, "g1", "t1", 0, false /* autoAdd */, true /* favorite */);
+        long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false/* favorite */);
+        long g4 = createGroup(mAccountTwo, "g4", "t4", 0, false /* autoAdd */, true /* favorite */);
+        long g5 = createGroup(mAccountTwo, "g5", "t5", 0, false /* autoAdd */, false/* favorite */);
+        long r1 = createRawContact(mAccount);
+        long r2 = createRawContact(mAccount);
+        long r3 = createRawContact(mAccountTwo);
+
+        assertFalse(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertFalse(queryRawContactIsStarred(r3));
+
+        Cursor c;
+
+        // add r1 to one favorites group
+        // r1's star should automatically be set
+        // r1 should automatically be added to the other favorites group
+        Uri urir1g1 = insertGroupMembership(r1, g1);
+        assertTrue(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertFalse(queryRawContactIsStarred(r3));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+        c = queryGroupMemberships(mAccount);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g1, c.getLong(0));
+            assertEquals(r1, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        // remove r1 from one favorites group
+        mResolver.delete(urir1g1, null, null);
+        // r1's star should no longer be set
+        assertFalse(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertFalse(queryRawContactIsStarred(r3));
+        // there should be no membership rows
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+
+        // add r3 to the one favorites group for that account
+        // r3's star should automatically be set
+        Uri urir3g4 = insertGroupMembership(r3, g4);
+        assertFalse(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertTrue(queryRawContactIsStarred(r3));
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        c = queryGroupMemberships(mAccountTwo);
+        try {
+            assertTrue(c.moveToNext());
+            assertEquals(g4, c.getLong(0));
+            assertEquals(r3, c.getLong(1));
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
+        }
+
+        // remove r3 from the favorites group
+        mResolver.delete(urir3g4, null, null);
+        // r3's star should automatically be cleared
+        assertFalse(queryRawContactIsStarred(r1));
+        assertFalse(queryRawContactIsStarred(r2));
+        assertFalse(queryRawContactIsStarred(r3));
+        assertNoRowsAndClose(queryGroupMemberships(mAccount));
+        assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
+    }
+
+    private Cursor queryGroupMemberships(Account account) {
+        Cursor c = mResolver.query(maybeAddAccountQueryParameters(Data.CONTENT_URI, account),
+                new String[]{GroupMembership.GROUP_ROW_ID, GroupMembership.RAW_CONTACT_ID},
+                Data.MIMETYPE + "=?", new String[]{GroupMembership.CONTENT_ITEM_TYPE},
+                GroupMembership.GROUP_SOURCE_ID);
+        return c;
     }
 
     private String readToEnd(FileInputStream inputStream) {

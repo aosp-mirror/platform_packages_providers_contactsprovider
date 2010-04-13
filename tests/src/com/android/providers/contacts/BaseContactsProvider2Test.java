@@ -171,24 +171,46 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected long createRawContact(Account account, String... extras) {
         ContentValues values = new ContentValues();
-        for (int i = 0; i < extras.length; ) {
-            values.put(extras[i], extras[i + 1]);
-            i += 2;
-        }
+        extrasVarArgsToValues(values, extras);
         final Uri uri = maybeAddAccountQueryParameters(RawContacts.CONTENT_URI, account);
         Uri contactUri = mResolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
     }
 
+    protected int updateItem(Uri uri, long id, String... extras) {
+        Uri itemUri = ContentUris.withAppendedId(uri, id);
+        return updateItem(itemUri, extras);
+    }
+
+    protected int updateItem(Uri uri, String... extras) {
+        ContentValues values = new ContentValues();
+        extrasVarArgsToValues(values, extras);
+        return mResolver.update(uri, values, null, null);
+    }
+
+    private static void extrasVarArgsToValues(ContentValues values, String... extras) {
+        for (int i = 0; i < extras.length; ) {
+            values.put(extras[i], extras[i + 1]);
+            i += 2;
+        }
+    }
+
     protected long createGroup(Account account, String sourceId, String title) {
-        return createGroup(account, sourceId, title, 1);
+        return createGroup(account, sourceId, title, 1, false, false);
     }
 
     protected long createGroup(Account account, String sourceId, String title, int visible) {
+        return createGroup(account, sourceId, title, visible, false, false);
+    }
+
+    protected long createGroup(Account account, String sourceId, String title,
+            int visible, boolean autoAdd, boolean favorite) {
         ContentValues values = new ContentValues();
         values.put(Groups.SOURCE_ID, sourceId);
         values.put(Groups.TITLE, title);
         values.put(Groups.GROUP_VISIBLE, visible);
+        values.put(Groups.AUTO_ADD, autoAdd ? 1 : 0);
+        values.put(Groups.FAVORITES, favorite ? 1 : 0);
         final Uri uri = maybeAddAccountQueryParameters(Groups.CONTENT_URI, account);
         return ContentUris.parseId(mResolver.insert(uri, values));
     }
@@ -419,6 +441,16 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return photoId;
     }
 
+    protected boolean queryRawContactIsStarred(long rawContactId) {
+        Cursor c = queryRawContact(rawContactId);
+        try {
+            assertTrue(c.moveToFirst());
+            return c.getLong(c.getColumnIndex(RawContacts.STARRED)) != 0;
+        } finally {
+            c.close();
+        }
+    }
+
     protected String queryDisplayName(long contactId) {
         Cursor c = queryContact(contactId);
         assertTrue(c.moveToFirst());
@@ -574,6 +606,14 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 assertEquals("mismatch at " + columnName + " from " + actual.toString(),
                         expectedValue, actual.get(columnName));
             }
+        }
+    }
+
+    protected void assertNoRowsAndClose(Cursor c) {
+        try {
+            assertFalse(c.moveToNext());
+        } finally {
+            c.close();
         }
     }
 
