@@ -326,4 +326,13 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         // Generic query can read generic status
         assertStatus(mRed, aggId, GENERIC_STATUS);
     }
+
+    public void testStrictProjectionMap() {
+        try {
+            mGrey.provider.query(ContactsContract.Contacts.CONTENT_URI,
+                    new String[] { "_id as noname, * FROM contacts--" }, null, null, null);
+            fail();
+        } catch (Exception e) {
+        }
+    }
 }

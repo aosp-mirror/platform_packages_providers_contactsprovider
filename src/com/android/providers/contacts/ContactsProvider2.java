@@ -4697,6 +4697,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         sortOrder, limit);
         }
 
+        qb.setStrictProjectionMap(true);
+
         Cursor cursor =
                 query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
