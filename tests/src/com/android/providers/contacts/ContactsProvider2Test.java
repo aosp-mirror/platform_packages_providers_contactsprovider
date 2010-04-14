@@ -63,6 +63,7 @@ import android.test.suitebuilder.annotation.LargeTest;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.Collator;
 import java.util.Arrays;
 import java.util.Locale;
@@ -2707,17 +2708,28 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(ContentUris.parseId(photoUri), twigId);
     }
 
-    public void testOpenAssertFileDescriptorForPhoto() throws Exception {
+    public void testInputStreamForPhoto() throws Exception {
         long rawContactId = createRawContact();
         Uri photoUri = insertPhoto(rawContactId);
-        AssetFileDescriptor fd = mResolver.openAssetFileDescriptor(photoUri, "r");
-        assertEquals(loadTestPhoto().length, fd.getLength());
+        assertInputStreamContent(loadTestPhoto(), mResolver.openInputStream(photoUri));
 
         Uri contactPhotoUri = Uri.withAppendedPath(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId)),
                 Contacts.Photo.CONTENT_DIRECTORY);
-        fd = mResolver.openAssetFileDescriptor(contactPhotoUri, "r");
-        assertEquals(loadTestPhoto().length, fd.getLength());
+        assertInputStreamContent(loadTestPhoto(), mResolver.openInputStream(contactPhotoUri));
+    }
+
+    private static void assertInputStreamContent(byte[] expected, InputStream is)
+            throws IOException {
+        try {
+            byte[] observed = new byte[expected.length];
+            int count = is.read(observed);
+            assertEquals(expected.length, count);
+            assertEquals(-1, is.read());
+            MoreAsserts.assertEquals(expected, observed);
+        } finally {
+            is.close();
+        }
     }
 
     public void testSuperPrimaryPhoto() {

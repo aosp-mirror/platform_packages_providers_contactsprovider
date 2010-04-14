@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 import static com.android.providers.contacts.ContactsActor.PACKAGE_RED;
+
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -35,6 +36,8 @@ import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 
 /**
@@ -190,15 +193,27 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
         final Uri shareUri = Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, lookupKey);
         final AssetFileDescriptor file = mRed.resolver.openAssetFileDescriptor(shareUri, "r");
         final InputStream in = file.createInputStream();
-        final byte[] buf = new byte[in.available()];
-        in.read(buf);
-        in.close();
+        final byte[] buf = readInputStream(in);
         final String card = new String(buf);
         assertNotSame(0, card.length());
 
         // Make sure that only unrestricted phones appear
         assertTrue(card.indexOf(PHONE_RED) != -1);
         assertTrue(card.indexOf(PHONE_GREY) == -1);
+    }
+
+    private static byte[] readInputStream(InputStream in) throws IOException {
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int count;
+            while ((count = in.read(buf)) != -1) {
+                out.write(buf, 0, count);
+            }
+            return out.toByteArray();
+        } finally {
+            in.close();
+        }
     }
 
     public void testContactsLiveFolder() {

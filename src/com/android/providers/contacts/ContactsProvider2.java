@@ -70,7 +70,6 @@ import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
 import android.database.sqlite.SQLiteConstraintException;
-import android.database.sqlite.SQLiteContentHelper;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
@@ -84,6 +83,7 @@ import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.MemoryFile;
 import android.os.Process;
+import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
@@ -5761,17 +5761,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     @Override
-    public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
+    public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS_ID_PHOTO: {
-                return openPhotoAssetFile(uri, mode,
+                return openPhotoFile(uri, mode,
                         Data._ID + "=" + Contacts.PHOTO_ID + " AND " + RawContacts.CONTACT_ID + "=?",
                         new String[]{uri.getPathSegments().get(1)});
             }
 
             case DATA_ID: {
-                return openPhotoAssetFile(uri, mode,
+                return openPhotoFile(uri, mode,
                         Data._ID + "=? AND " + Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'",
                         new String[]{uri.getPathSegments().get(1)});
             }
@@ -5786,7 +5786,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
                 outputRawContactsAsVCard(localStream, selection, mSelectionArgs1);
-                return buildAssetFileDescriptor(localStream);
+                return buildFileDescriptor(localStream);
             }
 
             case CONTACTS_AS_MULTI_VCARD: {
@@ -5813,7 +5813,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
                 outputRawContactsAsVCard(localStream, selection, null);
-                return buildAssetFileDescriptor(localStream);
+                return buildFileDescriptor(localStream);
             }
 
             default:
@@ -5822,7 +5822,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private AssetFileDescriptor openPhotoAssetFile(Uri uri, String mode, String selection,
+    private ParcelFileDescriptor openPhotoFile(Uri uri, String mode, String selection,
             String[] selectionArgs)
             throws FileNotFoundException {
         if (!"r".equals(mode)) {
@@ -5834,33 +5834,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 "SELECT " + Photo.PHOTO + " FROM " + mDbHelper.getDataView() +
                 " WHERE " + selection;
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        return SQLiteContentHelper.getBlobColumnAsAssetFile(db, sql,
-                selectionArgs);
+        return DatabaseUtils.blobFileDescriptorForQuery(db, sql, selectionArgs);
     }
 
     private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";
 
     /**
-     * Build a {@link AssetFileDescriptor} through a {@link MemoryFile} with the
+     * Returns a {@link ParcelFileDescriptor} backed by the
      * contents of the given {@link ByteArrayOutputStream}.
      */
-    private AssetFileDescriptor buildAssetFileDescriptor(ByteArrayOutputStream stream) {
-        AssetFileDescriptor fd = null;
+    private ParcelFileDescriptor buildFileDescriptor(ByteArrayOutputStream stream) {
         try {
             stream.flush();
 
             final byte[] byteData = stream.toByteArray();
-            final int size = byteData.length;
 
-            final MemoryFile memoryFile = new MemoryFile(CONTACT_MEMORY_FILE_NAME, size);
-            memoryFile.writeBytes(byteData, 0, 0, size);
-            memoryFile.deactivate();
-
-            fd = AssetFileDescriptor.fromMemoryFile(memoryFile);
+            return ParcelFileDescriptor.fromData(byteData, CONTACT_MEMORY_FILE_NAME);
         } catch (IOException e) {
-            Log.w(TAG, "Problem writing stream into an AssetFileDescriptor: " + e.toString());
+            Log.w(TAG, "Problem writing stream into an ParcelFileDescriptor: " + e.toString());
+            return null;
         }
-        return fd;
     }
 
     /**
