@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 309;
+    private static final int DATABASE_VERSION = 310;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1227,7 +1227,8 @@ import java.util.Locale;
                         + " AS " + Contacts.STARRED + ", "
                 + ContactsColumns.CONCRETE_TIMES_CONTACTED
                         + " AS " + Contacts.TIMES_CONTACTED + ", "
-                + ContactsColumns.LAST_STATUS_UPDATE_ID;
+                + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
+                + Contacts.NAME_RAW_CONTACT_ID;
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
@@ -1485,6 +1486,12 @@ import java.util.Locale;
         if (oldVersion == 308) {
             upgradeViewsAndTriggers = true;
             oldVersion = 309;
+        }
+
+        if (oldVersion == 309) {
+            // Add column NAME_RAW_CONTACT_ID
+            upgradeViewsAndTriggers = true;
+            oldVersion = 310;
         }
 
         if (upgradeViewsAndTriggers) {
