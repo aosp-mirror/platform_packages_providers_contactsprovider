@@ -18,10 +18,7 @@
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_label" msgid="3389954322874982620">"Archiviazione contatti"</string>
     <string name="provider_label" msgid="6012150850819899907">"Contatti"</string>
-    <!-- no translation found for upgrade_out_of_memory_notification_ticker (4089605622758004662) -->
-    <skip />
-    <!-- no translation found for upgrade_out_of_memory_notification_title (7849508493764133004) -->
-    <skip />
-    <!-- no translation found for upgrade_out_of_memory_notification_text (3967762223137708403) -->
-    <skip />
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"L\'aggiornamento dei contatti richiede più memoria"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Aggiornamento dell\'archivio contatti"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Seleziona per completare l\'aggiornamento."</string>
 </resources>
