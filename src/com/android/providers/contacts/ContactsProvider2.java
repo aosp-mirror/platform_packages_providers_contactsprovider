@@ -192,6 +192,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_PHOTO = 1009;
     private static final int CONTACTS_AS_VCARD = 1010;
     private static final int CONTACTS_AS_MULTI_VCARD = 1011;
+    private static final int CONTACTS_LOOKUP_DATA = 1012;
+    private static final int CONTACTS_LOOKUP_ID_DATA = 1013;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -464,7 +466,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/data", CONTACTS_LOOKUP_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/data",
+                CONTACTS_LOOKUP_ID_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_vcard/*", CONTACTS_AS_VCARD);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_multi_vcard/*",
                 CONTACTS_AS_MULTI_VCARD);
@@ -4362,6 +4367,48 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 selectionArgs = insertSelectionArg(selectionArgs,
                         String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
                 qb.appendWhere(Contacts._ID + "=?");
+                break;
+            }
+
+            case CONTACTS_LOOKUP_DATA:
+            case CONTACTS_LOOKUP_ID_DATA: {
+                List<String> pathSegments = uri.getPathSegments();
+                int segmentCount = pathSegments.size();
+                if (segmentCount < 4) {
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Missing a lookup key", uri));
+                }
+                String lookupKey = pathSegments.get(2);
+                if (segmentCount == 5) {
+                    long contactId = Long.parseLong(pathSegments.get(3));
+                    SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
+                    setTablesAndProjectionMapForData(lookupQb, uri, projection, false);
+                    String[] args;
+                    if (selectionArgs == null) {
+                        args = new String[2];
+                    } else {
+                        args = new String[selectionArgs.length + 2];
+                        System.arraycopy(selectionArgs, 0, args, 2, selectionArgs.length);
+                    }
+                    args[0] = String.valueOf(contactId);
+                    args[1] = Uri.encode(lookupKey);
+                    lookupQb.appendWhere(" AND " + Data.CONTACT_ID + "=?"
+                            + " AND " + Data.LOOKUP_KEY + "=?");
+                    Cursor c = query(db, lookupQb, projection, selection, args, sortOrder,
+                            groupBy, limit);
+                    if (c.getCount() != 0) {
+                        return c;
+                    }
+
+                    c.close();
+
+                    // TODO see if the contact exists but has no data rows (rare)
+                }
+
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
+                selectionArgs = insertSelectionArg(selectionArgs,
+                        String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
+                qb.appendWhere(" AND " + Data.CONTACT_ID + "=?");
                 break;
             }
 

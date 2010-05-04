@@ -29,7 +29,6 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
@@ -60,7 +59,6 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.util.Log;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -106,6 +104,51 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(rowUri, values);
         assertSelection(RawContacts.CONTENT_URI, values, RawContacts._ID, rawContactId);
         assertNetworkNotified(true);
+    }
+
+    public void testDataDirectoryWithLookupUri() {
+        ContentValues values = new ContentValues();
+
+        long rawContactId = createRawContactWithName();
+        insertPhoneNumber(rawContactId, "555-GOOG-411");
+        insertEmail(rawContactId, "google@android.com");
+
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+
+        // Complete and valid lookup URI
+        Uri lookupUri = ContactsContract.Contacts.getLookupUri(contactId, lookupKey);
+        Uri dataUri = Uri.withAppendedPath(lookupUri, Contacts.Data.CONTENT_DIRECTORY);
+
+        assertDataRows(dataUri, values);
+
+        // Complete but stale lookup URI
+        lookupUri = ContactsContract.Contacts.getLookupUri(contactId + 1, lookupKey);
+        dataUri = Uri.withAppendedPath(lookupUri, Contacts.Data.CONTENT_DIRECTORY);
+        assertDataRows(dataUri, values);
+
+        // Incomplete lookup URI (lookup key only, no contact ID)
+        dataUri = Uri.withAppendedPath(Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI,
+                lookupKey), Contacts.Data.CONTENT_DIRECTORY);
+        assertDataRows(dataUri, values);
+    }
+
+    private void assertDataRows(Uri dataUri, ContentValues values) {
+        Cursor cursor = mResolver.query(dataUri, new String[]{ Data.DATA1 }, null, null, Data._ID);
+        assertEquals(3, cursor.getCount());
+        cursor.moveToFirst();
+        values.put(Data.DATA1, "John Doe");
+        assertCursorValues(cursor, values);
+
+        cursor.moveToNext();
+        values.put(Data.DATA1, "555-GOOG-411");
+        assertCursorValues(cursor, values);
+
+        cursor.moveToNext();
+        values.put(Data.DATA1, "google@android.com");
+        assertCursorValues(cursor, values);
+
+        cursor.close();
     }
 
     public void testDataInsert() {

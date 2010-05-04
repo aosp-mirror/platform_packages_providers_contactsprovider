@@ -459,7 +459,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return displayName;
     }
 
-    private String queryLookupKey(long contactId) {
+    protected String queryLookupKey(long contactId) {
         Cursor c = queryContact(contactId);
         assertTrue(c.moveToFirst());
         String lookupKey = c.getString(c.getColumnIndex(Contacts.LOOKUP_KEY));
