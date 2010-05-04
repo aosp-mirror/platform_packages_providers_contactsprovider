@@ -461,6 +461,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions/*",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
@@ -5274,25 +5275,30 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     ") AS " + SearchSnippetColumns.SNIPPET_MIMETYPE);
         }
 
-        sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
-                " WHERE " + DataColumns.CONCRETE_ID +
-                " IN (");
+        sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS + " WHERE ");
 
-        // Construct a query that gives us exactly one data _id per matching contact.
-        // MIN stands in for ANY in this context.
-        sb.append(
-                "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
-                " FROM " + Tables.NAME_LOOKUP +
-                " JOIN " + Tables.RAW_CONTACTS +
-                " ON (" + RawContactsColumns.CONCRETE_ID
-                        + "=" + Tables.NAME_LOOKUP + "." + NameLookupColumns.RAW_CONTACT_ID + ")" +
-                " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
-        sb.append(NameNormalizer.normalize(filter));
-        sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                    " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
-                " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID);
+        if (!TextUtils.isEmpty(filter)) {
+            sb.append(DataColumns.CONCRETE_ID + " IN (");
 
-        sb.append(")) ON (" + Contacts._ID + "=snippet_contact_id)");
+            // Construct a query that gives us exactly one data _id per matching contact.
+            // MIN stands in for ANY in this context.
+            sb.append(
+                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
+                    " FROM " + Tables.NAME_LOOKUP +
+                    " JOIN " + Tables.RAW_CONTACTS +
+                    " ON (" + RawContactsColumns.CONCRETE_ID
+                            + "=" + Tables.NAME_LOOKUP + "." + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
+            sb.append(NameNormalizer.normalize(filter));
+            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
+                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                    ")");
+        } else {
+            sb.append("0");     // Empty filter - return an empty set
+        }
+
+        sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionWithSnippetMap);
