@@ -2629,8 +2629,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNoRowsAndClose(queryGroupMemberships(mAccount));
         assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
 
-        Uri contactUri = findContactUriByRawContactUri(
-                ContentUris.withAppendedId(RawContacts.CONTENT_URI, r1));
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(r1));
         assertNotNull(contactUri);
 
         // mark r1 as starred via its contact lookup uri
@@ -2654,18 +2653,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Since no raw contacts are starred, there should be no group memberships.
         assertNoRowsAndClose(queryGroupMemberships(mAccount));
         assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
-    }
-
-    private Uri findContactUriByRawContactUri(Uri uri) {
-        Cursor c = mResolver.query(uri,
-                new String[]{RawContacts.CONTACT_ID},
-                null,
-                null,
-                null);
-        if (c.moveToNext()) {
-            return ContentUris.withAppendedId(Contacts.CONTENT_URI, c.getLong(0));
-        }
-        return null;
     }
 
     public void testStarChangedAfterGroupMembershipChange() {

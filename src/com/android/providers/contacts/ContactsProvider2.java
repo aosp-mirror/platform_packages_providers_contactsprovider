@@ -4167,6 +4167,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public void onAccountsUpdated(Account[] accounts) {
         // TODO : Check the unit test.
+        boolean accountsChanged = false;
         HashSet<Account> existingAccounts = new HashSet<Account>();
         mDb.beginTransaction();
         try {
@@ -4175,6 +4176,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // Add a row to the ACCOUNTS table for each new account
             for (Account account : accounts) {
                 if (!existingAccounts.contains(account)) {
+                    accountsChanged = true;
                     mDb.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
                             + ", " + RawContacts.ACCOUNT_TYPE + ") VALUES (?, ?)",
                             new String[] {account.name, account.type});
@@ -4188,38 +4190,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 accountsToDelete.remove(account);
             }
 
-            for (Account account : accountsToDelete) {
-                Log.d(TAG, "removing data for removed account " + account);
-                String[] params = new String[] {account.name, account.type};
-                mDb.execSQL(
-                        "DELETE FROM " + Tables.GROUPS +
-                        " WHERE " + Groups.ACCOUNT_NAME + " = ?" +
-                                " AND " + Groups.ACCOUNT_TYPE + " = ?", params);
-                mDb.execSQL(
-                        "DELETE FROM " + Tables.PRESENCE +
-                        " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
-                                "SELECT " + RawContacts._ID +
-                                " FROM " + Tables.RAW_CONTACTS +
-                                " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
-                                " AND " + RawContacts.ACCOUNT_TYPE + " = ?)", params);
-                mDb.execSQL(
-                        "DELETE FROM " + Tables.RAW_CONTACTS +
-                        " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
-                        " AND " + RawContacts.ACCOUNT_TYPE + " = ?", params);
-                mDb.execSQL(
-                        "DELETE FROM " + Tables.SETTINGS +
-                        " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
-                        " AND " + Settings.ACCOUNT_TYPE + " = ?", params);
-                mDb.execSQL(
-                        "DELETE FROM " + Tables.ACCOUNTS +
-                        " WHERE " + RawContacts.ACCOUNT_NAME + "=?" +
-                        " AND " + RawContacts.ACCOUNT_TYPE + "=?", params);
-            }
-
             if (!accountsToDelete.isEmpty()) {
+                accountsChanged = true;
+                for (Account account : accountsToDelete) {
+                    Log.d(TAG, "removing data for removed account " + account);
+                    String[] params = new String[] {account.name, account.type};
+                    mDb.execSQL(
+                            "DELETE FROM " + Tables.GROUPS +
+                            " WHERE " + Groups.ACCOUNT_NAME + " = ?" +
+                                    " AND " + Groups.ACCOUNT_TYPE + " = ?", params);
+                    mDb.execSQL(
+                            "DELETE FROM " + Tables.PRESENCE +
+                            " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
+                                    "SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
+                                    " AND " + RawContacts.ACCOUNT_TYPE + " = ?)", params);
+                    mDb.execSQL(
+                            "DELETE FROM " + Tables.RAW_CONTACTS +
+                            " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
+                            " AND " + RawContacts.ACCOUNT_TYPE + " = ?", params);
+                    mDb.execSQL(
+                            "DELETE FROM " + Tables.SETTINGS +
+                            " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
+                            " AND " + Settings.ACCOUNT_TYPE + " = ?", params);
+                    mDb.execSQL(
+                            "DELETE FROM " + Tables.ACCOUNTS +
+                            " WHERE " + RawContacts.ACCOUNT_NAME + "=?" +
+                            " AND " + RawContacts.ACCOUNT_TYPE + "=?", params);
+                }
+
                 // Find all aggregated contacts that used to contain the raw contacts
                 // we have just deleted and see if they are still referencing the deleted
-                // names of photos.  If so, fix up those contacts.
+                // names or photos.  If so, fix up those contacts.
                 HashSet<Long> orphanContactIds = Sets.newHashSet();
                 Cursor cursor = mDb.rawQuery("SELECT " + Contacts._ID +
                         " FROM " + Tables.CONTACTS +
@@ -4242,11 +4245,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 for (Long contactId : orphanContactIds) {
                     mContactAggregator.updateAggregateData(contactId);
                 }
+                mDbHelper.updateAllVisible();
             }
 
-            mDbHelper.updateAllVisible();
-
-            mDbHelper.getSyncState().onAccountsChanged(mDb, accounts);
+            if (accountsChanged) {
+                mDbHelper.getSyncState().onAccountsChanged(mDb, accounts);
+            }
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
