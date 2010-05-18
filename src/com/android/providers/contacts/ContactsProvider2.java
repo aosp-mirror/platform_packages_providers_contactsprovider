@@ -16,29 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.content.SyncStateContentProviderHelper;
-import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
-import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.google.android.collect.Lists;
-import com.google.android.collect.Maps;
-import com.google.android.collect.Sets;
-
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -77,8 +54,6 @@ import android.os.Bundle;
 import android.os.MemoryFile;
 import android.os.RemoteException;
 import android.os.SystemProperties;
-import android.pim.vcard.VCardComposer;
-import android.pim.vcard.VCardConfig;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
@@ -113,6 +88,33 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
+
+import com.google.android.collect.Lists;
+import com.google.android.collect.Maps;
+import com.google.android.collect.Sets;
+
+import com.android.internal.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.vcard.VCardComposer;
+import com.android.vcard.VCardConfig;
+import com.android.vcard.VCardComposer.HandlerForOutputStream;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
