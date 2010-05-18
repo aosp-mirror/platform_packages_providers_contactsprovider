@@ -1088,9 +1088,8 @@ public class ContactAggregator {
                         + Contacts.STARRED + ", "
                         + Contacts.HAS_PHONE_NUMBER + ", "
                         + ContactsColumns.SINGLE_IS_RESTRICTED + ", "
-                        + Contacts.LOOKUP_KEY + ", "
-                        + Contacts.IN_VISIBLE_GROUP + ") " +
-                " VALUES (?,?,?,?,?,?,?,?,?,?,0)";
+                        + Contacts.LOOKUP_KEY + ") " +
+                " VALUES (?,?,?,?,?,?,?,?,?,?)";
 
         int NAME_RAW_CONTACT_ID = 1;
         int PHOTO_ID = 2;

@@ -399,9 +399,8 @@ public class LegacyContactImporter {
                 RawContacts.ACCOUNT_NAME + "," +
                 RawContacts.ACCOUNT_TYPE + "," +
                 RawContacts.SOURCE_ID + "," +
-                RawContactsColumns.DISPLAY_NAME + "," +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP +
-         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                RawContactsColumns.DISPLAY_NAME +
+         ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
         int ID = 1;
         int CONTACT_ID = 2;
@@ -417,7 +416,6 @@ public class LegacyContactImporter {
         int ACCOUNT_TYPE = 12;
         int SOURCE_ID = 13;
         int DISPLAY_NAME = 14;
-        int CONTACT_IN_VISIBLE_GROUP = 15;
     }
 
     private interface ContactsInsert {
@@ -428,9 +426,8 @@ public class LegacyContactImporter {
                 Contacts.SEND_TO_VOICEMAIL + "," +
                 Contacts.STARRED + "," +
                 Contacts.TIMES_CONTACTED + "," +
-                Contacts.NAME_RAW_CONTACT_ID + "," +
-                Contacts.IN_VISIBLE_GROUP +
-         ") VALUES (?,?,?,?,?,?,?,?)";
+                Contacts.NAME_RAW_CONTACT_ID +
+         ") VALUES (?,?,?,?,?,?,?)";
 
         int ID = 1;
         int CUSTOM_RINGTONE = 2;
@@ -439,7 +436,6 @@ public class LegacyContactImporter {
         int STARRED = 5;
         int TIMES_CONTACTED = 6;
         int NAME_RAW_CONTACT_ID = 7;
-        int IN_VISIBLE_GROUP = 8;
     }
 
     private interface StructuredNameInsert {
@@ -555,7 +551,6 @@ public class LegacyContactImporter {
                 c.getString(PeopleQuery._SYNC_LOCAL_ID));
         bindString(insert, RawContactsInsert.DISPLAY_NAME,
                 c.getString(PeopleQuery.NAME));
-        insert.bindLong(RawContactsInsert.CONTACT_IN_VISIBLE_GROUP, 1);
 
         String account = c.getString(PeopleQuery._SYNC_ACCOUNT);
         if (!TextUtils.isEmpty(account)) {
@@ -585,7 +580,6 @@ public class LegacyContactImporter {
         insert.bindLong(ContactsInsert.TIMES_CONTACTED,
                 c.getLong(PeopleQuery.TIMES_CONTACTED));
         insert.bindLong(ContactsInsert.NAME_RAW_CONTACT_ID, id);
-        insert.bindLong(ContactsInsert.IN_VISIBLE_GROUP, 1);
 
         insert(insert);
     }

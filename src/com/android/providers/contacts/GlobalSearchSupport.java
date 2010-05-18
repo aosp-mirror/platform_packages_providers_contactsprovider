@@ -27,6 +27,7 @@ import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.res.Resources;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.provider.Contacts.Intents;
@@ -74,7 +75,8 @@ public class GlobalSearchSupport {
     private interface SearchSuggestionQuery {
         public static final String TABLE = "data "
                 + " JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + " JOIN contacts ON (raw_contacts.contact_id = contacts._id)"
+                + " JOIN visible_contacts on (raw_contacts.contact_id = visible_contacts._id) "
+                + " JOIN contacts ON (visible_contacts._id = contacts._id) "
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON ("
                 +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
 
@@ -342,18 +344,6 @@ public class GlobalSearchSupport {
         appendMimeTypeFilter(sb);
         sb.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
         mContactsProvider.appendRawContactsByFilterAsNestedQuery(sb, searchClause);
-
-        /*
-         *  Prepending "+" to the IN_VISIBLE_GROUP column disables the index on the
-         *  that column.  The logic is this:  let's say we have 10,000 contacts
-         *  of which 500 are visible.  The first letter we type narrows this down
-         *  to 10,000/26 = 384, which is already less than 500 that we would get
-         *  from the IN_VISIBLE_GROUP index.  Typing the second letter will narrow
-         *  the search down to 10,000/26/26 = 14 contacts. And a lot of people
-         *  will have more that 5% of their contacts visible, while the alphabet
-         *  will always have 26 letters.
-         */
-        sb.append(" AND " + "+" + Contacts.IN_VISIBLE_GROUP + "=1");
         String selection = sb.toString();
 
         return buildCursorForSearchSuggestions(db, selection, null, limit);

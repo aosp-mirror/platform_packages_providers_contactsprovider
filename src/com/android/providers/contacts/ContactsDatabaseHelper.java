@@ -73,7 +73,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 311;
+    private static final int DATABASE_VERSION = 401;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -98,6 +98,7 @@ import java.util.Locale;
         public static final String STATUS_UPDATES = "status_updates";
         public static final String PROPERTIES = "properties";
         public static final String ACCOUNTS = "accounts";
+        public static final String VISIBLE_CONTACTS = "visible_contacts";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -213,6 +214,11 @@ import java.util.Locale;
 
         final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
                 + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=?";
+
+        public static final String CONTACT_VISIBLE =
+            "EXISTS (SELECT _id FROM " + Tables.VISIBLE_CONTACTS
+                + " WHERE " + Tables.CONTACTS +"." + Contacts._ID
+                        + "=" + Tables.VISIBLE_CONTACTS +"." + Contacts._ID + ")";
     }
 
     public interface ContactsColumns {
@@ -270,7 +276,6 @@ import java.util.Locale;
         public static final String DISPLAY_NAME = RawContacts.DISPLAY_NAME_PRIMARY;
         public static final String DISPLAY_NAME_SOURCE = RawContacts.DISPLAY_NAME_SOURCE;
         public static final String AGGREGATION_NEEDED = "aggregation_needed";
-        public static final String CONTACT_IN_VISIBLE_GROUP = "contact_in_visible_group";
 
         public static final String CONCRETE_DISPLAY_NAME =
                 Tables.RAW_CONTACTS + "." + DISPLAY_NAME;
@@ -469,12 +474,6 @@ import java.util.Locale;
     private final Context mContext;
     private final SyncStateContentProviderHelper mSyncState;
 
-
-    /** Compiled statements for updating {@link Contacts#IN_VISIBLE_GROUP}. */
-    private SQLiteStatement mVisibleSpecificUpdate;
-    private SQLiteStatement mVisibleUpdateRawContacts;
-    private SQLiteStatement mVisibleSpecificUpdateRawContacts;
-
     private boolean mReopenDatabase = false;
 
     private static ContactsDatabaseHelper sSingleton = null;
@@ -539,34 +538,6 @@ import java.util.Locale;
         mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns.MIMETYPE
                 + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
                 + Activities._ID + "=?");
-
-        // Change visibility of a specific contact
-        mVisibleSpecificUpdate = db.compileStatement(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.IN_VISIBLE_GROUP + "=(" + Clauses.CONTACT_IS_VISIBLE + ")" +
-                " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
-
-        // Return visibility of the aggregate contact joined with the raw contact
-        String contactVisibility =
-                "SELECT " + Contacts.IN_VISIBLE_GROUP +
-                " FROM " + Tables.CONTACTS +
-                " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID;
-
-        // Set visibility of raw contacts to the visibility of corresponding aggregate contacts
-        mVisibleUpdateRawContacts = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(CASE WHEN ("
-                        + contactVisibility + ")=1 THEN 1 ELSE 0 END)" +
-                " WHERE " + RawContacts.DELETED + "=0" +
-                " AND " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "!=("
-                        + contactVisibility + ")=1");
-
-        // Set visibility of a raw contact to the visibility of corresponding aggregate contact
-        mVisibleSpecificUpdateRawContacts = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=("
-                        + contactVisibility + ")" +
-                " WHERE " + RawContacts.DELETED + "=0 AND " + RawContacts.CONTACT_ID + "=?");
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
@@ -650,15 +621,10 @@ import java.util.Locale;
                 Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LAST_TIME_CONTACTED + " INTEGER," +
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 1," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LOOKUP_KEY + " TEXT," +
                 ContactsColumns.LAST_STATUS_UPDATE_ID + " INTEGER REFERENCES data(_id)," +
                 ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
-        ");");
-
-        db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
-                Contacts.IN_VISIBLE_GROUP +
         ");");
 
         db.execSQL("CREATE INDEX contacts_has_phone_index ON " + Tables.CONTACTS + " (" +
@@ -703,7 +669,6 @@ import java.util.Locale;
                 RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE " +
                         ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
                 RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0," +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
                 RawContacts.SYNC3 + " TEXT, " +
@@ -894,6 +859,10 @@ import java.util.Locale;
                     Settings.ACCOUNT_TYPE + ") ON CONFLICT REPLACE" +
         ");");
 
+        db.execSQL("CREATE TABLE " + Tables.VISIBLE_CONTACTS + " (" +
+                Contacts._ID + " INTEGER PRIMARY KEY" +
+        ");");
+
         // The table for recent calls is here so we can do table joins
         // on people, phones, and calls all in one place.
         db.execSQL("CREATE TABLE " + Tables.CALLS + " (" +
@@ -1067,13 +1036,11 @@ import java.util.Locale;
 
         db.execSQL("DROP INDEX IF EXISTS raw_contact_sort_key1_index");
         db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
                 RawContacts.SORT_KEY_PRIMARY +
         ");");
 
         db.execSQL("DROP INDEX IF EXISTS raw_contact_sort_key2_index");
         db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
                 RawContacts.SORT_KEY_ALTERNATIVE +
         ");");
     }
@@ -1150,9 +1117,7 @@ import java.util.Locale;
                 + "name_raw_contact." + RawContacts.SORT_KEY_PRIMARY
                         + " AS " + Contacts.SORT_KEY_PRIMARY + ", "
                 + "name_raw_contact." + RawContacts.SORT_KEY_ALTERNATIVE
-                        + " AS " + Contacts.SORT_KEY_ALTERNATIVE + ", "
-                + "name_raw_contact." + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
-                        + " AS " + Contacts.IN_VISIBLE_GROUP;
+                        + " AS " + Contacts.SORT_KEY_ALTERNATIVE;
 
         String dataSelect = "SELECT "
                 + DataColumns.CONCRETE_ID + " AS " + Data._ID + ","
@@ -1164,7 +1129,8 @@ import java.util.Locale;
                 + contactNameColumns + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
-                + Contacts.NAME_RAW_CONTACT_ID + ","
+                + Contacts.NAME_RAW_CONTACT_ID + ", "
+                + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
@@ -1230,7 +1196,9 @@ import java.util.Locale;
                 + ContactsColumns.CONCRETE_TIMES_CONTACTED
                         + " AS " + Contacts.TIMES_CONTACTED + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
-                + Contacts.NAME_RAW_CONTACT_ID;
+                + Contacts.NAME_RAW_CONTACT_ID + ", "
+                + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP;
+
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
@@ -1504,6 +1472,12 @@ import java.util.Locale;
             oldVersion = 311;
         }
 
+        if (oldVersion == 311) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion401(db);
+            oldVersion = 401;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -1569,8 +1543,7 @@ import java.util.Locale;
                 " ADD " + Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)");
         db.execSQL(
                 "ALTER TABLE " + Tables.RAW_CONTACTS +
-                " ADD " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP
-                        + " INTEGER NOT NULL DEFAULT 0");
+                " ADD contact_in_visible_group INTEGER NOT NULL DEFAULT 0");
 
         // For each Contact, find the RawContact that contributed the display name
         db.execSQL(
@@ -1612,7 +1585,7 @@ import java.util.Locale;
         // indexing on (display_name, in_visible_group)
         db.execSQL(
                 "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "=(" +
+                " SET contact_in_visible_group=(" +
                         "SELECT " + Contacts.IN_VISIBLE_GROUP +
                         " FROM " + Tables.CONTACTS +
                         " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")" +
@@ -1620,7 +1593,7 @@ import java.util.Locale;
         );
 
         db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                "contact_in_visible_group" + "," +
                 RawContactsColumns.DISPLAY_NAME + " COLLATE LOCALIZED ASC" +
         ");");
 
@@ -1664,12 +1637,12 @@ import java.util.Locale;
 
         db.execSQL("DROP INDEX raw_contact_sort_key1_index");
         db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                "contact_in_visible_group" + "," +
                 RawContacts.SORT_KEY_PRIMARY +
         ");");
 
         db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContactsColumns.CONTACT_IN_VISIBLE_GROUP + "," +
+                "contact_in_visible_group" + "," +
                 RawContacts.SORT_KEY_ALTERNATIVE +
         ");");
     }
@@ -2110,13 +2083,13 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion308(SQLiteDatabase db) {
-            db.execSQL("CREATE TABLE accounts (" +
-                    "account_name TEXT, " +
-                    "account_type TEXT " +
-            ");");
+        db.execSQL("CREATE TABLE accounts (" +
+                "account_name TEXT, " +
+                "account_type TEXT " +
+        ");");
 
-            db.execSQL("INSERT INTO accounts " +
-                    "SELECT DISTINCT account_name, account_type FROM raw_contacts");
+        db.execSQL("INSERT INTO accounts " +
+                "SELECT DISTINCT account_name, account_type FROM raw_contacts");
     }
 
     private void upgradeToVersion311(SQLiteDatabase db) {
@@ -2411,6 +2384,20 @@ import java.util.Locale;
         stmt.executeInsert();
     }
 
+    /**
+     * Changing the VISIBLE bit from a field on both RawContacts and Contacts to a separate table.
+     */
+    private void upgradeToVersion401(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE " + Tables.VISIBLE_CONTACTS + " (" +
+                Contacts._ID + " INTEGER PRIMARY KEY" +
+        ");");
+        db.execSQL("INSERT INTO " + Tables.VISIBLE_CONTACTS +
+                " SELECT " + Contacts._ID +
+                " FROM " + Tables.CONTACTS +
+                " WHERE " + Contacts.IN_VISIBLE_GROUP + "!=0");
+        db.execSQL("DROP INDEX contacts_visible_index");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2466,8 +2453,6 @@ import java.util.Locale;
                     "contacts_restricted_index", "10000 9000");
             updateIndexStats(db, Tables.CONTACTS,
                     "contacts_has_phone_index", "10000 500");
-            updateIndexStats(db, Tables.CONTACTS,
-                    "contacts_visible_index", "10000 500 1");
 
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contacts_source_id_index", "10000 1 1 1");
@@ -2675,67 +2660,39 @@ import java.util.Locale;
      * Update {@link Contacts#IN_VISIBLE_GROUP} for all contacts.
      */
     public void updateAllVisible() {
-        SQLiteDatabase db = getWritableDatabase();
-        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        String[] selectionArgs = new String[]{String.valueOf(groupMembershipMimetypeId)};
-
-        // There are a couple questions that can be asked regarding the
-        // following two update statements:
-        //
-        // Q: Why do we run these two queries separately? They seem like they could be combined.
-        // A: This is a result of painstaking experimentation.  Turns out that the most
-        // important optimization is to make sure we never update a value to its current value.
-        // Changing 0 to 0 is unexpectedly expensive - SQLite actually writes the unchanged
-        // rows back to disk.  The other consideration is that the CONTACT_IS_VISIBLE condition
-        // is very complex and executing it twice in the same statement ("if contact_visible !=
-        // CONTACT_IS_VISIBLE change it to CONTACT_IS_VISIBLE") is more expensive than running
-        // two update statements.
-        //
-        // Q: How come we are using db.update instead of compiled statements?
-        // A: This is a limitation of the compiled statement API. It does not return the
-        // number of rows changed.  As you will see later in this method we really need
-        // to know how many rows have been changed.
-
-        // First update contacts that are currently marked as invisible, but need to be visible
-        ContentValues values = new ContentValues();
-        values.put(Contacts.IN_VISIBLE_GROUP, 1);
-        int countMadeVisible = db.update(Tables.CONTACTS, values,
-                Contacts.IN_VISIBLE_GROUP + "=0" + " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=1",
-                selectionArgs);
-
-        // Next update contacts that are currently marked as visible, but need to be invisible
-        values.put(Contacts.IN_VISIBLE_GROUP, 0);
-        int countMadeInvisible = db.update(Tables.CONTACTS, values,
-                Contacts.IN_VISIBLE_GROUP + "=1" + " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=0",
-                selectionArgs);
-
-        if (countMadeVisible != 0 || countMadeInvisible != 0) {
-            // TODO break out the fields (contact_in_visible_group, sort_key, sort_key_alt) into
-            // a separate table.
-            // Rationale: The following statement will take a very long time on
-            // a large database even though we are only changing one field from 0 to 1 or from
-            // 1 to 0.  The reason for the slowness is that SQLite will need to write the whole
-            // page even when only one bit on it changes. Changing the visibility of a
-            // significant number of contacts will likely read and write almost the entire
-            // raw_contacts table.  So, the solution is to break out into a separate table
-            // the changing field along with the sort keys used for index-based sorting.
-            // That table will occupy a smaller number of pages, so rewriting it would
-            // not be as expensive.
-            mVisibleUpdateRawContacts.execute();
-        }
+        updateContactVisibility("");
     }
 
     /**
      * Update {@link Contacts#IN_VISIBLE_GROUP} for a specific contact.
      */
     public void updateContactVisible(long contactId) {
-        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        mVisibleSpecificUpdate.bindLong(1, groupMembershipMimetypeId);
-        mVisibleSpecificUpdate.bindLong(2, contactId);
-        mVisibleSpecificUpdate.execute();
+        updateContactVisibility(" AND " + Contacts._ID + "=" + contactId);
+    }
 
-        mVisibleSpecificUpdateRawContacts.bindLong(1, contactId);
-        mVisibleSpecificUpdateRawContacts.execute();
+    private void updateContactVisibility(String selection) {
+        SQLiteDatabase db = getWritableDatabase();
+
+        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+        String[] selectionArgs = new String[]{String.valueOf(groupMembershipMimetypeId)};
+
+        // First delete what needs to be deleted, then insert what needs to be added.
+        // Since flash writes are very expensive, this approach is much better than
+        // delete-all-insert-all.
+        db.execSQL("DELETE FROM " + Tables.VISIBLE_CONTACTS +
+                   " WHERE " + "_id NOT IN" +
+                        "(SELECT " + Contacts._ID +
+                        " FROM " + Tables.CONTACTS +
+                        " WHERE (" + Clauses.CONTACT_IS_VISIBLE + ")=1) " + selection,
+                selectionArgs);
+
+        db.execSQL("INSERT INTO " + Tables.VISIBLE_CONTACTS +
+                   " SELECT " + Contacts._ID +
+                   " FROM " + Tables.CONTACTS +
+                   " WHERE " + Contacts._ID +
+                   " NOT IN " + Tables.VISIBLE_CONTACTS +
+                           " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=1 " + selection,
+                selectionArgs);
     }
 
     /**
