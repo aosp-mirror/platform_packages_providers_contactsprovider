@@ -961,6 +961,11 @@ import java.util.Locale;
                                 + "=OLD." + RawContacts._ID
                 + "        OR " + AggregationExceptions.RAW_CONTACT_ID2
                                 + "=OLD." + RawContacts._ID + ";"
+                + "   DELETE FROM " + Tables.VISIBLE_CONTACTS
+                + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
+                + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
+                + "            WHERE " + RawContacts.CONTACT_ID + "=OLD." + RawContacts.CONTACT_ID
+                + "           )=1;"
                 + "   DELETE FROM " + Tables.CONTACTS
                 + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
                 + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
