@@ -1543,6 +1543,15 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion203(SQLiteDatabase db) {
+        // Garbage-collect first. A bug in Eclair was sometimes leaving
+        // raw_contacts in the database that no longer had contacts associated
+        // with them.  To avoid failures during this database upgrade, drop
+        // the orphaned raw_contacts.
+        db.execSQL(
+                "DELETE FROM raw_contacts" +
+                " WHERE contact_id NOT NULL" +
+                " AND contact_id NOT IN (SELECT _id FROM contacts)");
+
         db.execSQL(
                 "ALTER TABLE " + Tables.CONTACTS +
                 " ADD " + Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)");
