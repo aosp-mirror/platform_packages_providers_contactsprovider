@@ -2924,7 +2924,9 @@ import java.util.Locale;
      */
     boolean hasAccessToRestrictedData() {
         final PackageManager pm = mContext.getPackageManager();
-        final String[] callerPackages = pm.getPackagesForUid(Binder.getCallingUid());
+        int caller = Binder.getCallingUid();
+        if (caller == 0) return true; // root can do anything
+        final String[] callerPackages = pm.getPackagesForUid(caller);
 
         // Has restricted access if caller matches any packages
         for (String callerPackage : callerPackages) {
