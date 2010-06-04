@@ -58,7 +58,6 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
-import android.content.SharedPreferences.Editor;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
 import android.database.CharArrayBuffer;
@@ -2052,14 +2051,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
         final String providerLocale = prefs.getString(PREF_LOCALE, null);
-        if (providerLocale == null) {
-            // The provider has just been created for the first time. There are no
-            // contacts in the database, so we can safely set locale on the UI thread.
-            mDbHelper.setLocale(ContactsProvider2.this, mCurrentLocale);
-            prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
-            return;
-        }
-
         final Locale currentLocale = mCurrentLocale;
         if (currentLocale.toString().equals(providerLocale)) {
             return;
