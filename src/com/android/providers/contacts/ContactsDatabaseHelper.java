@@ -37,6 +37,7 @@ import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
@@ -2125,7 +2126,7 @@ import java.util.Locale;
     public void setLocale(ContactsProvider2 provider, Locale locale) {
         Log.i(TAG, "Switching to locale " + locale);
 
-        long start = System.currentTimeMillis();
+        long start = SystemClock.uptimeMillis();
         SQLiteDatabase db = getWritableDatabase();
         db.setLocale(locale);
         db.beginTransaction();
@@ -2143,7 +2144,7 @@ import java.util.Locale;
             db.endTransaction();
         }
 
-        Log.i(TAG, "Locale change completed in " + (System.currentTimeMillis() - start) + "ms");
+        Log.i(TAG, "Locale change completed in " + (SystemClock.uptimeMillis() - start) + "ms");
     }
 
     /**
