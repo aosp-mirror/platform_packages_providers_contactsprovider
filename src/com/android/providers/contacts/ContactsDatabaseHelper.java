@@ -44,6 +44,7 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
@@ -74,7 +75,7 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    static final int DATABASE_VERSION = 401;
+    static final int DATABASE_VERSION = 402;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -100,6 +101,7 @@ import java.util.Locale;
         public static final String PROPERTIES = "properties";
         public static final String ACCOUNTS = "accounts";
         public static final String VISIBLE_CONTACTS = "visible_contacts";
+        public static final String DIRECTORIES = "directories";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -920,6 +922,8 @@ import java.util.Locale;
         // is added to the phone.
         db.execSQL("INSERT INTO accounts VALUES(NULL, NULL)");
 
+        createDirectoriesTable(db);
+
         createContactsViews(db);
         createGroupsView(db);
         createContactEntitiesView(db);
@@ -943,6 +947,43 @@ import java.util.Locale;
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
+    }
+
+    private void createDirectoriesTable(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE " + Tables.DIRECTORIES + "(" +
+                Directory._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                Directory.PACKAGE_NAME + " TEXT NOT NULL," +
+                Directory.DIRECTORY_AUTHORITY + " TEXT NOT NULL," +
+                Directory.TYPE_RESOURCE_ID + " INTEGER," +
+                Directory.ACCOUNT_TYPE + " TEXT," +
+                Directory.ACCOUNT_NAME + " TEXT," +
+                Directory.DISPLAY_NAME + " TEXT, " +
+                Directory.EXPORT_SUPPORT + " INTEGER NOT NULL" +
+                		" DEFAULT " + Directory.EXPORT_SUPPORT_NONE +
+        ");");
+
+        insertDefaultDirectory(db);
+        insertLocalInvisibleDirectory(db);
+    }
+
+    private void insertDefaultDirectory(SQLiteDatabase db) {
+        ContentValues values = new ContentValues();
+        values.put(Directory._ID, Directory.DEFAULT);
+        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
+        values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
+        values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
+        values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
+        db.insert(Tables.DIRECTORIES, null, values);
+    }
+
+    private void insertLocalInvisibleDirectory(SQLiteDatabase db) {
+        ContentValues values = new ContentValues();
+        values.put(Directory._ID, Directory.LOCAL_INVISIBLE);
+        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
+        values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
+        values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
+        values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
+        db.insert(Tables.DIRECTORIES, null, values);
     }
 
     private static void createContactsTriggers(SQLiteDatabase db) {
@@ -1482,6 +1523,11 @@ import java.util.Locale;
             upgradeViewsAndTriggers = true;
             upgradeToVersion401(db);
             oldVersion = 401;
+        }
+
+        if (oldVersion == 401) {
+            upgradeToVersion402(db);
+            oldVersion = 402;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2411,6 +2457,13 @@ import java.util.Locale;
                 " FROM " + Tables.CONTACTS +
                 " WHERE " + Contacts.IN_VISIBLE_GROUP + "!=0");
         db.execSQL("DROP INDEX contacts_visible_index");
+    }
+
+    /**
+     * Introducing a new table: directories.
+     */
+    private void upgradeToVersion402(SQLiteDatabase db) {
+        createDirectoriesTable(db);
     }
 
     public String extractHandleFromEmailAddress(String email) {

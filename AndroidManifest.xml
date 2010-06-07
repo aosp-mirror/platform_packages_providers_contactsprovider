@@ -58,5 +58,13 @@
                 <action android:name="android.intent.action.PRE_BOOT_COMPLETED"/>
             </intent-filter>
         </receiver>
+
+        <receiver android:name="PackageUninstallReceiver">
+            <!-- Clear out directory data for uninstalled packages -->          
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

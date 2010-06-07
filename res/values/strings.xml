@@ -31,5 +31,11 @@
 
     <!-- Text for the notification shown when updating contacts fails because of memory shortage -->
     <string name="upgrade_out_of_memory_notification_text">Select to complete the upgrade.</string>
+    
+    <!-- The name of the default contact directory -->
+    <string name="default_directory">Contacts</string>
+
+    <!-- The name of the invisible local contact directory -->
+    <string name="local_invisible_directory">Other</string>
 
 </resources>
