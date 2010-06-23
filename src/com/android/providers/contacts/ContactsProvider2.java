@@ -1977,10 +1977,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
         verifyAccounts();
-        verifyLocale();
 
         if (isLegacyContactImportNeeded()) {
             importLegacyContactsAsync();
+        } else {
+            verifyLocale();
         }
 
         return (mDb != null);
@@ -2122,6 +2123,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Thread importThread = new Thread("LegacyContactImport") {
             @Override
             public void run() {
+                final SharedPreferences prefs =
+                    PreferenceManager.getDefaultSharedPreferences(getContext());
+                mDbHelper.setLocale(ContactsProvider2.this, mCurrentLocale);
+                prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
+
                 LegacyContactImporter importer = getLegacyContactImporter();
                 if (importLegacyContacts(importer)) {
                     onLegacyContactImportSuccess();
