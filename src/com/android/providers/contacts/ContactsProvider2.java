@@ -2027,6 +2027,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
+        if (mProviderStatus != ProviderStatus.STATUS_NORMAL) {
+            return;
+        }
+
         initForDefaultLocale();
         verifyLocale();
     }
