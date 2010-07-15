@@ -333,18 +333,19 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
-            int presence, String status) {
-        return insertStatusUpdate(protocol, customProtocol, handle, presence, status, 0);
+            int presence, String status, int chatMode) {
+        return insertStatusUpdate(protocol, customProtocol, handle, presence, status, 0, chatMode);
     }
 
     protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
-            int presence, String status, long timestamp) {
+            int presence, String status, long timestamp, int chatMode) {
         ContentValues values = new ContentValues();
         values.put(StatusUpdates.PROTOCOL, protocol);
         values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
         values.put(StatusUpdates.IM_HANDLE, handle);
         if (presence != 0) {
             values.put(StatusUpdates.PRESENCE, presence);
+            values.put(StatusUpdates.CHAT_CAPABILITY, chatMode);
         }
         if (status != null) {
             values.put(StatusUpdates.STATUS, status);
@@ -1171,6 +1172,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
             values.put(StatusUpdates.IM_HANDLE, email);
             values.put(StatusUpdates.IM_ACCOUNT, "foo");
             values.put(StatusUpdates.PRESENCE_STATUS, StatusUpdates.OFFLINE);
+            values.put(StatusUpdates.CHAT_CAPABILITY, StatusUpdates.CAPABILITY_HAS_CAMERA);
             values.put(StatusUpdates.PRESENCE_CUSTOM_STATUS, "Coding for Android");
             mResolver.insert(StatusUpdates.CONTENT_URI, values);
         }

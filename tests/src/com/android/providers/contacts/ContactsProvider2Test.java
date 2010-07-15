@@ -389,7 +389,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactData() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
-                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         assertStoredValues(contactUri, values);
@@ -399,8 +400,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactWithStatusUpdate() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
-                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
+        values.put(Contacts.CONTACT_CHAT_CAPABILITY, StatusUpdates.CAPABILITY_HAS_CAMERA);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         assertStoredValuesWithProjection(contactUri, values);
         assertSelectionWithProjection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
@@ -409,7 +412,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactFilter() {
         ContentValues values = new ContentValues();
         long rawContactId = createRawContact(values, "18004664411",
-                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0);
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY |
+                StatusUpdates.CAPABILITY_HAS_VOICE);
 
         ContentValues nameValues = new ContentValues();
         nameValues.put(StructuredName.GIVEN_NAME, "Stu");
@@ -449,16 +454,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactStrequent() {
         ContentValues values1 = new ContentValues();
         createContact(values1, "Noah", "Tever", "18004664411",
-                "a@acme.com", StatusUpdates.OFFLINE, 0, 0, 0);
+                "a@acme.com", StatusUpdates.OFFLINE, 0, 0, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
         ContentValues values2 = new ContentValues();
         createContact(values2, "Sam", "Times", "18004664412",
-                "b@acme.com", StatusUpdates.INVISIBLE, 3, 0, 0);
+                "b@acme.com", StatusUpdates.INVISIBLE, 3, 0, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
         ContentValues values3 = new ContentValues();
         createContact(values3, "Lotta", "Calling", "18004664413",
-                "c@acme.com", StatusUpdates.AWAY, 5, 0, 0);
+                "c@acme.com", StatusUpdates.AWAY, 5, 0, 0,
+                StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
         ContentValues values4 = new ContentValues();
         createContact(values4, "Fay", "Veritt", "18004664414",
-                "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0);
+                "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY | StatusUpdates.CAPABILITY_HAS_VOICE);
 
         Cursor c = mResolver.query(Contacts.CONTENT_STREQUENT_URI, null, null, null,
                 Contacts._ID);
@@ -484,11 +493,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues values1 = new ContentValues();
         createContact(values1, "Best", "West", "18004664411",
-                "west@acme.com", StatusUpdates.OFFLINE, 0, 0, groupId);
+                "west@acme.com", StatusUpdates.OFFLINE, 0, 0, groupId,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
 
         ContentValues values2 = new ContentValues();
         createContact(values2, "Rest", "East", "18004664422",
-                "east@acme.com", StatusUpdates.AVAILABLE, 0, 0, 0);
+                "east@acme.com", StatusUpdates.AVAILABLE, 0, 0, 0,
+                StatusUpdates.CAPABILITY_HAS_VOICE);
 
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_GROUP_URI, "Test Group");
         Cursor c = mResolver.query(filterUri1, null, null, null, Contacts._ID);
@@ -524,9 +535,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "goog412@acme.com");
 
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "goog411@acme.com",
-                StatusUpdates.INVISIBLE, "Bad");
+                StatusUpdates.INVISIBLE, "Bad",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "goog412@acme.com",
-                StatusUpdates.AVAILABLE, "Good");
+                StatusUpdates.AVAILABLE, "Good",
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VOICE);
         long contactId = queryContactId(rawContactId);
 
         Uri uri = Data.CONTENT_URI;
@@ -1220,16 +1233,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "m@acme.com");
 
         // Match on IM (standard)
-        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available");
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
 
         // Match on IM (custom)
-        insertStatusUpdate(Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im", StatusUpdates.IDLE, "Idle");
+        insertStatusUpdate(Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im", StatusUpdates.IDLE, "Idle",
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
 
         // Match on Email
-        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "m@acme.com", StatusUpdates.AWAY, "Away");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "m@acme.com", StatusUpdates.AWAY, "Away",
+                StatusUpdates.CAPABILITY_HAS_VOICE);
 
         // No match
-        insertStatusUpdate(Im.PROTOCOL_ICQ, null, "12345", StatusUpdates.DO_NOT_DISTURB, "Go away");
+        insertStatusUpdate(Im.PROTOCOL_ICQ, null, "12345", StatusUpdates.DO_NOT_DISTURB, "Go away",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
 
         Cursor c = mResolver.query(StatusUpdates.CONTENT_URI, new String[] {
                 StatusUpdates.DATA_ID, StatusUpdates.PROTOCOL, StatusUpdates.CUSTOM_PROTOCOL,
@@ -1265,10 +1282,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(Contacts.CONTACT_STATUS);
         assertStoredValuesWithProjection(contactUri, values);
 
-        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AWAY, "BUSY");
-        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.DO_NOT_DISTURB, "GO AWAY");
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AWAY, "BUSY",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.DO_NOT_DISTURB, "GO AWAY",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
         Uri statusUri =
-            insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available");
+            insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available",
+                    StatusUpdates.CAPABILITY_HAS_CAMERA);
         long statusId = ContentUris.parseId(statusUri);
 
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
@@ -1332,9 +1352,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         long contactId = queryContactId(rawContactId);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
-        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Offline", 80);
-        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Available", 100);
-        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", 0, "Busy", 90);
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Offline", 80,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Available", 100,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", 0, "Busy", 90,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
 
         // Should return the latest status
         ContentValues values = new ContentValues();
@@ -1360,9 +1383,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId1 = createRawContact();
         insertImHandle(rawContactId1, protocol1, null, handle1);
 
-        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AVAILABLE, "Green");
-        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AWAY, "Yellow");
-        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.INVISIBLE, "Red");
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AVAILABLE, "Green",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AWAY, "Yellow",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.INVISIBLE, "Red",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
 
         Cursor c = queryContact(queryContactId(rawContactId1),
                 new String[] {Contacts.CONTACT_PRESENCE, Contacts.CONTACT_STATUS});
@@ -1654,7 +1680,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
-                StatusUpdates.AVAILABLE, null);
+                StatusUpdates.AVAILABLE, null,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
         long contactId = queryContactId(rawContactId);
 
         assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
@@ -1700,7 +1727,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         insertImHandle(rawContactId, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
-                StatusUpdates.AVAILABLE, null);
+                StatusUpdates.AVAILABLE, null,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
         assertEquals(1, getCount(Uri.withAppendedPath(uri, RawContacts.Data.CONTENT_DIRECTORY),
                 null, null));
         assertEquals(1, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
@@ -1747,7 +1775,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertEmail(rawContactId2, "account2@email.com");
         insertImHandle(rawContactId2, Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com");
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "deleteme@android.com",
-                StatusUpdates.AVAILABLE, null);
+                StatusUpdates.AVAILABLE, null,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
 
         cp.onAccountsUpdated(new Account[]{mAccount});
         assertEquals(2, getCount(RawContacts.CONTENT_URI, null, null));
@@ -2428,22 +2457,22 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private long createContact(ContentValues values, String firstName, String givenName,
             String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
-            long groupId) {
+            long groupId, int chatMode) {
         return queryContactId(createRawContact(values, firstName, givenName, phoneNumber, email,
-                presenceStatus, timesContacted, starred, groupId));
+                presenceStatus, timesContacted, starred, groupId, chatMode));
     }
 
     private long createRawContact(ContentValues values, String firstName, String givenName,
             String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
-            long groupId) {
+            long groupId, int chatMode) {
         long rawContactId = createRawContact(values, phoneNumber, email, presenceStatus,
-                timesContacted, starred, groupId);
+                timesContacted, starred, groupId, chatMode);
         insertStructuredName(rawContactId, firstName, givenName);
         return rawContactId;
     }
 
     private long createRawContact(ContentValues values, String phoneNumber, String email,
-            int presenceStatus, int timesContacted, int starred, long groupId) {
+            int presenceStatus, int timesContacted, int starred, long groupId, int chatMode) {
         values.put(RawContacts.STARRED, starred);
         values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(RawContacts.CUSTOM_RINGTONE, "beethoven5");
@@ -2457,7 +2486,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, phoneNumber);
         insertEmail(rawContactId, email);
 
-        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, email, presenceStatus, "hacking");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, email, presenceStatus, "hacking",
+                chatMode);
 
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);

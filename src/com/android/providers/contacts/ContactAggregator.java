@@ -209,13 +209,27 @@ public class ContactAggregator {
 
         // Since we have no way of determining which custom status was set last,
         // we'll just pick one randomly.  We are using MAX as an approximation of randomness
-        mAggregatedPresenceReplace = db.compileStatement(
+        final String replaceAggregatePresenceSql =
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
-                        + AggregatedPresenceColumns.CONTACT_ID + ", "
-                        + StatusUpdates.PRESENCE_STATUS
-                + ") SELECT ?, MAX(" + StatusUpdates.PRESENCE_STATUS + ") "
-                        + " FROM " + Tables.PRESENCE
-                        + " WHERE " + PresenceColumns.CONTACT_ID + "=?");
+                + AggregatedPresenceColumns.CONTACT_ID + ", "
+                + StatusUpdates.PRESENCE_STATUS + ", "
+                + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " SELECT " + PresenceColumns.CONTACT_ID + ","
+                + StatusUpdates.PRESENCE_STATUS + ","
+                + StatusUpdates.CHAT_CAPABILITY
+                + " FROM " + Tables.PRESENCE
+                + " WHERE "
+                + " (" + StatusUpdates.PRESENCE_STATUS
+                +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " = (SELECT "
+                + "MAX (" + StatusUpdates.PRESENCE_STATUS
+                +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " FROM " + Tables.PRESENCE
+                + " WHERE " + PresenceColumns.CONTACT_ID
+                + "=?)"
+                + " AND " + PresenceColumns.CONTACT_ID
+                + "=?;";
+        mAggregatedPresenceReplace = db.compileStatement(replaceAggregatePresenceSql);
 
         mRawContactCountQuery = db.compileStatement(
                 "SELECT COUNT(" + RawContacts._ID + ")" +
