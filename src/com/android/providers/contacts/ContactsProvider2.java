@@ -16,6 +16,31 @@
 
 package com.android.providers.contacts;
 
+import com.android.internal.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.vcard.VCardComposer;
+import com.android.vcard.VCardConfig;
+import com.google.android.collect.Lists;
+import com.google.android.collect.Maps;
+import com.google.android.collect.Sets;
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -60,10 +85,17 @@ import android.os.SystemProperties;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
-import android.provider.LiveFolders;
-import android.provider.OpenableColumns;
-import android.provider.SyncStateContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -79,46 +111,12 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.LiveFolders;
+import android.provider.OpenableColumns;
+import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.util.Log;
-
-import com.google.android.collect.Lists;
-import com.google.android.collect.Maps;
-import com.google.android.collect.Sets;
-
-import com.android.internal.content.SyncStateContentProviderHelper;
-import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
-import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.vcard.VCardComposer;
-import com.android.vcard.VCardConfig;
-import com.android.vcard.VCardComposer.HandlerForOutputStream;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -3950,6 +3948,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     "in content values. Contact IDs are assigned automatically");
         }
 
+        if (!callerIsSyncAdapter) {
+            selection = DatabaseUtils.concatenateWhere(selection,
+                    RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0");
+        }
+
         int count = 0;
         Cursor cursor = mDb.query(mDbHelper.getRawContactView(),
                 new String[] { RawContacts._ID }, selection,
@@ -4078,6 +4081,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mValues.remove(Data.IS_PRIMARY);
         }
 
+        if (!callerIsSyncAdapter) {
+            selection = DatabaseUtils.concatenateWhere(selection,
+                    Data.IS_READ_ONLY + "=0");
+        }
+
         int count = 0;
 
         // Note that the query will return data according to the access restrictions,
@@ -4153,7 +4161,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         mSelectionArgs1[0] = String.valueOf(contactId);
-        mDb.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?", mSelectionArgs1);
+        mDb.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?"
+                + " AND " + RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0", mSelectionArgs1);
 
         if (mValues.containsKey(RawContacts.STARRED) && !callerIsSyncAdapter) {
             Cursor cursor = mDb.query(mDbHelper.getRawContactView(),

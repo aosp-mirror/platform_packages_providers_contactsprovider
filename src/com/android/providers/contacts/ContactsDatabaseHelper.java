@@ -75,7 +75,19 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-    static final int DATABASE_VERSION = 402;
+
+    /**
+     * Contacts DB versions:
+     * <pre>
+     *   0-98    Cupcake/Donut
+     *   100-199 Eclair
+     *   200-299 Eclair-MR1
+     *   300-349 Froyo
+     *   350-399 Gingerbread
+     *   400-499 Honeycomb
+     * </pre>
+     */
+    static final int DATABASE_VERSION = 403;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -501,7 +513,6 @@ import java.util.Locale;
      */
     ContactsDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
-        if (false) Log.i(TAG, "Creating OpenHelper");
         Resources resources = context.getResources();
 
         mContext = context;
@@ -563,7 +574,7 @@ import java.util.Locale;
                         + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
                 AggregatedPresenceColumns.CONTACT_ID
                         + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
-                StatusUpdates.PRESENCE_STATUS + " INTEGER" +
+                StatusUpdates.PRESENCE + " INTEGER" +
         ");");
 
 
@@ -588,9 +599,9 @@ import java.util.Locale;
         String replaceAggregatePresenceSql =
             "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                     + AggregatedPresenceColumns.CONTACT_ID + ", "
-                    + StatusUpdates.PRESENCE_STATUS + ")" +
+                    + StatusUpdates.PRESENCE + ")" +
             " SELECT " + PresenceColumns.CONTACT_ID + ","
-                        + "MAX(" + StatusUpdates.PRESENCE_STATUS + ")" +
+                        + "MAX(" + StatusUpdates.PRESENCE + ")" +
                     " FROM " + Tables.PRESENCE +
                     " WHERE " + PresenceColumns.CONTACT_ID
                         + "=NEW." + PresenceColumns.CONTACT_ID + ";";
@@ -649,6 +660,7 @@ import java.util.Locale;
                 RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 RawContacts.SOURCE_ID + " TEXT," +
+                RawContacts.RAW_CONTACT_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.DELETED + " INTEGER NOT NULL DEFAULT 0," +
@@ -716,6 +728,7 @@ import java.util.Locale;
                 DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Data.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
+                Data.IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.IS_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.IS_SUPER_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.DATA_VERSION + " INTEGER NOT NULL DEFAULT 0," +
@@ -959,7 +972,9 @@ import java.util.Locale;
                 Directory.ACCOUNT_NAME + " TEXT," +
                 Directory.DISPLAY_NAME + " TEXT, " +
                 Directory.EXPORT_SUPPORT + " INTEGER NOT NULL" +
-                		" DEFAULT " + Directory.EXPORT_SUPPORT_NONE +
+                        " DEFAULT " + Directory.EXPORT_SUPPORT_NONE + "," +
+                Directory.SHORTCUT_SUPPORT + " INTEGER NOT NULL" +
+                        " DEFAULT " + Directory.SHORTCUT_SUPPORT_NONE +
         ");");
 
         insertDefaultDirectory(db);
@@ -973,6 +988,7 @@ import java.util.Locale;
         values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
         values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
         values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
+        values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
         db.insert(Tables.DIRECTORIES, null, values);
     }
 
@@ -983,6 +999,7 @@ import java.util.Locale;
         values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
         values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
         values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
+        values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
         db.insert(Tables.DIRECTORIES, null, values);
     }
 
@@ -1106,6 +1123,7 @@ import java.util.Locale;
                 + Data.DATA_VERSION + ", "
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
                 + MimetypesColumns.MIMETYPE + " AS " + Data.MIMETYPE + ", "
+                + Data.IS_READ_ONLY + ", "
                 + Data.DATA1 + ", "
                 + Data.DATA2 + ", "
                 + Data.DATA3 + ", "
@@ -1211,6 +1229,7 @@ import java.util.Locale;
                 + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ","
                 + RawContacts.CONTACT_ID + ", "
                 + RawContacts.AGGREGATION_MODE + ", "
+                + RawContacts.RAW_CONTACT_IS_READ_ONLY + ", "
                 + RawContacts.DELETED + ", "
                 + RawContacts.DISPLAY_NAME_SOURCE  + ", "
                 + RawContacts.DISPLAY_NAME_PRIMARY  + ", "
@@ -1528,6 +1547,12 @@ import java.util.Locale;
         if (oldVersion == 401) {
             upgradeToVersion402(db);
             oldVersion = 402;
+        }
+
+        if (oldVersion == 402) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion403(db);
+            oldVersion = 403;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2464,6 +2489,17 @@ import java.util.Locale;
      */
     private void upgradeToVersion402(SQLiteDatabase db) {
         createDirectoriesTable(db);
+    }
+
+    private void upgradeToVersion403(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS directories;");
+        createDirectoriesTable(db);
+
+        db.execSQL("ALTER TABLE raw_contacts"
+                + " ADD raw_contact_is_read_only INTEGER NOT NULL DEFAULT 0;");
+
+        db.execSQL("ALTER TABLE data"
+                + " ADD is_read_only INTEGER NOT NULL DEFAULT 0;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

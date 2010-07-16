@@ -2725,6 +2725,62 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
     }
 
+    public void testReadOnlyRawContact() {
+        long rawContactId = createRawContact();
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        storeValue(rawContactUri, RawContacts.CUSTOM_RINGTONE, "first");
+        storeValue(rawContactUri, RawContacts.RAW_CONTACT_IS_READ_ONLY, 1);
+
+        storeValue(rawContactUri, RawContacts.CUSTOM_RINGTONE, "second");
+        assertStoredValue(rawContactUri, RawContacts.CUSTOM_RINGTONE, "first");
+
+        Uri syncAdapterUri = rawContactUri.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "1")
+                .build();
+        storeValue(syncAdapterUri, RawContacts.CUSTOM_RINGTONE, "third");
+        assertStoredValue(rawContactUri, RawContacts.CUSTOM_RINGTONE, "third");
+    }
+
+    public void testReadOnlyDataRow() {
+        long rawContactId = createRawContact();
+        Uri emailUri = insertEmail(rawContactId, "email");
+        Uri phoneUri = insertPhoneNumber(rawContactId, "555-1111");
+
+        storeValue(emailUri, Data.IS_READ_ONLY, "1");
+        storeValue(emailUri, Email.ADDRESS, "changed");
+        storeValue(phoneUri, Phone.NUMBER, "555-2222");
+        assertStoredValue(emailUri, Email.ADDRESS, "email");
+        assertStoredValue(phoneUri, Phone.NUMBER, "555-2222");
+
+        Uri syncAdapterUri = emailUri.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "1")
+                .build();
+        storeValue(syncAdapterUri, Email.ADDRESS, "changed");
+        assertStoredValue(emailUri, Email.ADDRESS, "changed");
+    }
+
+    public void testContactWithReadOnlyRawContact() {
+        long rawContactId1 = createRawContact();
+        Uri rawContactUri1 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
+        storeValue(rawContactUri1, RawContacts.CUSTOM_RINGTONE, "first");
+
+        long rawContactId2 = createRawContact();
+        Uri rawContactUri2 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2);
+        storeValue(rawContactUri2, RawContacts.CUSTOM_RINGTONE, "second");
+        storeValue(rawContactUri2, RawContacts.RAW_CONTACT_IS_READ_ONLY, 1);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        long contactId = queryContactId(rawContactId1);
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        storeValue(contactUri, Contacts.CUSTOM_RINGTONE, "rt");
+        assertStoredValue(contactUri, Contacts.CUSTOM_RINGTONE, "rt");
+        assertStoredValue(rawContactUri1, RawContacts.CUSTOM_RINGTONE, "rt");
+        assertStoredValue(rawContactUri2, RawContacts.CUSTOM_RINGTONE, "second");
+    }
+
     private Cursor queryGroupMemberships(Account account) {
         Cursor c = mResolver.query(maybeAddAccountQueryParameters(Data.CONTENT_URI, account),
                 new String[]{GroupMembership.GROUP_ROW_ID, GroupMembership.RAW_CONTACT_ID},
