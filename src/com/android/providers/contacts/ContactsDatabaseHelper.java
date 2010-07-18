@@ -563,6 +563,7 @@ import java.util.Locale;
                 PresenceColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 PresenceColumns.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 StatusUpdates.PRESENCE + " INTEGER," +
+                StatusUpdates.CHAT_CAPABILITY + " INTEGER NOT NULL DEFAULT 0," +
                 "UNIQUE(" + StatusUpdates.PROTOCOL + ", " + StatusUpdates.CUSTOM_PROTOCOL
                     + ", " + StatusUpdates.IM_HANDLE + ", " + StatusUpdates.IM_ACCOUNT + ")" +
         ");");
@@ -571,10 +572,11 @@ import java.util.Locale;
                 + Tables.PRESENCE + " (" + PresenceColumns.RAW_CONTACT_ID + ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS "
-                        + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
+                + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
                 AggregatedPresenceColumns.CONTACT_ID
                         + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
                 StatusUpdates.PRESENCE + " INTEGER" +
+                StatusUpdates.CHAT_CAPABILITY + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
 
@@ -596,15 +598,26 @@ import java.util.Locale;
                                         + "!=OLD." + PresenceColumns.RAW_CONTACT_ID + "));"
                 + " END");
 
-        String replaceAggregatePresenceSql =
-            "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
-                    + AggregatedPresenceColumns.CONTACT_ID + ", "
-                    + StatusUpdates.PRESENCE + ")" +
-            " SELECT " + PresenceColumns.CONTACT_ID + ","
-                        + "MAX(" + StatusUpdates.PRESENCE + ")" +
-                    " FROM " + Tables.PRESENCE +
-                    " WHERE " + PresenceColumns.CONTACT_ID
-                        + "=NEW." + PresenceColumns.CONTACT_ID + ";";
+        final String replaceAggregatePresenceSql =
+                "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
+                + AggregatedPresenceColumns.CONTACT_ID + ", "
+                + StatusUpdates.PRESENCE_STATUS + ", "
+                + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " SELECT " + PresenceColumns.CONTACT_ID + ","
+                + StatusUpdates.PRESENCE_STATUS + ","
+                + StatusUpdates.CHAT_CAPABILITY
+                + " FROM " + Tables.PRESENCE
+                + " WHERE "
+                + " (" + StatusUpdates.PRESENCE_STATUS
+                +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " = (SELECT "
+                + "MAX (" + StatusUpdates.PRESENCE_STATUS
+                +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " FROM " + Tables.PRESENCE
+                + " WHERE " + PresenceColumns.CONTACT_ID
+                + "=NEW." + PresenceColumns.CONTACT_ID + ")"
+                + " AND " + PresenceColumns.CONTACT_ID
+                + "=NEW." + PresenceColumns.CONTACT_ID + ";";
 
         db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_inserted"
                 + " AFTER INSERT ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE

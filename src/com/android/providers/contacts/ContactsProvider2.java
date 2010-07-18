@@ -577,6 +577,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Contacts-level statuses
         addProjection(sContactsProjectionMap, Contacts.CONTACT_PRESENCE,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_CHAT_CAPABILITY,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS,
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS);
         addProjection(sContactsProjectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
@@ -754,6 +756,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Contacts-level statuses
         addProjection(sDataProjectionMap, Contacts.CONTACT_PRESENCE,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sContactsProjectionMap, Contacts.CONTACT_CHAT_CAPABILITY,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS,
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS);
         addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
@@ -768,6 +772,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Data-level statuses
         addProjection(sDataProjectionMap, Data.PRESENCE,
                 Tables.PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDataProjectionMap, Data.CONTACT_CHAT_CAPABILITY,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sDataProjectionMap, Data.STATUS,
                 StatusUpdatesColumns.CONCRETE_STATUS);
         addProjection(sDataProjectionMap, Data.STATUS_TIMESTAMP,
@@ -831,6 +837,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Contacts-level statuses
         addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_PRESENCE,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_CHAT_CAPABILITY,
+                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS,
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS);
         addProjection(sDistinctDataProjectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
@@ -845,6 +853,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Data-level statuses
         addProjection(sDistinctDataProjectionMap, Data.PRESENCE,
                 Tables.PRESENCE + "." + StatusUpdates.PRESENCE);
+        addProjection(sDistinctDataProjectionMap, Data.CHAT_CAPABILITY,
+                Tables.PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sDistinctDataProjectionMap, Data.STATUS,
                 StatusUpdatesColumns.CONCRETE_STATUS);
         addProjection(sDistinctDataProjectionMap, Data.STATUS_TIMESTAMP,
@@ -980,6 +990,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + "='' THEN NULL ELSE " + StatusUpdates.CUSTOM_PROTOCOL + " END) AS "
                 + StatusUpdates.CUSTOM_PROTOCOL);
         columns.put(StatusUpdates.PRESENCE, StatusUpdates.PRESENCE);
+        columns.put(StatusUpdates.CHAT_CAPABILITY, StatusUpdates.CHAT_CAPABILITY);
         columns.put(StatusUpdates.STATUS, StatusUpdates.STATUS);
         columns.put(StatusUpdates.STATUS_TIMESTAMP, StatusUpdates.STATUS_TIMESTAMP);
         columns.put(StatusUpdates.STATUS_RES_PACKAGE, StatusUpdates.STATUS_RES_PACKAGE);
@@ -3358,6 +3369,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             mValues.put(StatusUpdates.PRESENCE,
                     values.getAsString(StatusUpdates.PRESENCE));
+            mValues.put(StatusUpdates.CHAT_CAPABILITY,
+                    values.getAsString(StatusUpdates.CHAT_CAPABILITY));
 
             // Insert the presence update
             mDb.replace(Tables.PRESENCE, null, mValues);
@@ -3885,6 +3898,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.clear();
         ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.PRESENCE, values,
             StatusUpdates.PRESENCE);
+        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.CHAT_CAPABILITY, values,
+                StatusUpdates.CHAT_CAPABILITY);
         return mValues;
     }
 
