@@ -575,7 +575,7 @@ import java.util.Locale;
                 + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
                 AggregatedPresenceColumns.CONTACT_ID
                         + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
-                StatusUpdates.PRESENCE + " INTEGER" +
+                StatusUpdates.PRESENCE + " INTEGER," +
                 StatusUpdates.CHAT_CAPABILITY + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
