@@ -36,7 +36,7 @@ public abstract class NameLookupBuilder {
     private StringBuilder mStringBuilder = new StringBuilder();
     private String[] mNames = new String[NameSplitter.MAX_TOKENS];
 
-    private static int[] KOREAN_JAUM_CONVERT_MAP = {
+    private static final int[] KOREAN_JAUM_CONVERT_MAP = {
         // JAUM in Hangul Compatibility Jamo area 0x3131 ~ 0x314E to
         // in Hangul Jamo area 0x1100 ~ 0x1112
         0x1100, // 0x3131 HANGUL LETTER KIYEOK
@@ -70,8 +70,6 @@ public abstract class NameLookupBuilder {
         0x1111, // 0x314D HANGUL LETTER PHIEUPH
         0x1112  // 0x314E HANGUL LETTER HIEUH
     };
-    private static int KOREAN_JAUM_CONVERT_MAP_COUNT = 30;
-
 
     public NameLookupBuilder(NameSplitter splitter) {
         mSplitter = splitter;
@@ -139,13 +137,23 @@ public abstract class NameLookupBuilder {
         insertNameVariants(rawContactId, dataId, 0, tokenCount, !tooManyTokens, true);
         insertNicknamePermutations(rawContactId, dataId, 0, tokenCount);
         insertNameShorthandLookup(rawContactId, dataId, name, fullNameStyle);
-        insertLocaleBasedSpecificLookup(rawContactId, dataId, name, fullNameStyle);
+        insertNameLookupForLocaleBasedName(rawContactId, dataId, name, fullNameStyle);
     }
 
-    private void insertLocaleBasedSpecificLookup(long rawContactId, long dataId, String name,
-            int fullNameStyle) {
+    /**
+     * Insert more name indexes according to locale specifies.
+     */
+    private void insertNameLookupForLocaleBasedName(long rawContactId, long dataId,
+            String fullName, int fullNameStyle) {
         if (fullNameStyle == FullNameStyle.KOREAN) {
-            insertKoreanNameConsonantsLookup(rawContactId, dataId, name);
+            NameSplitter.Name name = new NameSplitter.Name();
+            mSplitter.split(name, fullName, fullNameStyle);
+            if (name.givenNames != null) {
+                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
+                        normalizeName(name.givenNames));
+                insertKoreanNameConsonantsLookup(rawContactId, dataId, name.givenNames);
+            }
+            insertKoreanNameConsonantsLookup(rawContactId, dataId, fullName);
         }
     }
 
@@ -161,8 +169,8 @@ public abstract class NameLookupBuilder {
         mStringBuilder.setLength(0);
         do {
             character = name.codePointAt(position++);
-            if (character == 0x20) {
-                // Skip spaces.
+            if ((character == 0x20) || (character == 0x2c) || (character == 0x2E)) {
+                // Skip spaces, commas and periods.
                 continue;
             }
             // Exclude characters that are not in Korean leading consonants area
@@ -181,7 +189,7 @@ public abstract class NameLookupBuilder {
             } else if (character >= 0x3131) {
                 // Hangul Compatibility Jamo area 0x3131 ~ 0x314E :
                 // Convert to Hangul Jamo area 0x1100 ~ 0x1112
-                if (character - 0x3131 >= KOREAN_JAUM_CONVERT_MAP_COUNT) {
+                if (character - 0x3131 >= KOREAN_JAUM_CONVERT_MAP.length) {
                     // This is not lead-consonant
                     break;
                 }

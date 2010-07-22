@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 413;
+    static final int DATABASE_VERSION = 414;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1654,6 +1654,11 @@ import java.util.Locale;
         if (oldVersion == 412) {
             upgradeToVersion413(db);
             oldVersion = 413;
+        }
+
+        if (oldVersion == 413) {
+            upgradeNameLookup = true;
+            oldVersion = 414;
         }
 
         if (upgradeViewsAndTriggers) {
