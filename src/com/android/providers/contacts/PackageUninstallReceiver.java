@@ -32,6 +32,8 @@ public class PackageUninstallReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction())) {
+            // Don't treat this as a removal if the package is being replaced
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
             // TODO: do the work in an IntentService
             Uri packageUri = intent.getData();
             String packageName = packageUri.getSchemeSpecificPart();
