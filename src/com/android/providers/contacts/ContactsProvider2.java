@@ -163,10 +163,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
-    private static final String TIMES_CONTACED_SORT_COLUMN = "times_contacted_sort";
+    private static final String TIMES_CONTACTED_SORT_COLUMN = "times_contacted_sort";
 
     private static final String STREQUENT_ORDER_BY = Contacts.STARRED + " DESC, "
-            + TIMES_CONTACED_SORT_COLUMN + " DESC, "
+            + TIMES_CONTACTED_SORT_COLUMN + " DESC, "
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
     private static final String STREQUENT_LIMIT =
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
@@ -606,12 +606,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 SearchSnippetColumns.SNIPPET_DATA4);
 
         sStrequentStarredProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
-        sStrequentStarredProjectionMap.put(TIMES_CONTACED_SORT_COLUMN,
-                  Long.MAX_VALUE + " AS " + TIMES_CONTACED_SORT_COLUMN);
+        sStrequentStarredProjectionMap.put(TIMES_CONTACTED_SORT_COLUMN,
+                  Long.MAX_VALUE + " AS " + TIMES_CONTACTED_SORT_COLUMN);
 
         sStrequentFrequentProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
-        sStrequentFrequentProjectionMap.put(TIMES_CONTACED_SORT_COLUMN,
-                  Contacts.TIMES_CONTACTED + " AS " + TIMES_CONTACED_SORT_COLUMN);
+        sStrequentFrequentProjectionMap.put(TIMES_CONTACTED_SORT_COLUMN,
+                  Contacts.TIMES_CONTACTED + " AS " + TIMES_CONTACTED_SORT_COLUMN);
 
         sContactsVCardProjectionMap = Maps.newHashMap();
         sContactsVCardProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
@@ -756,7 +756,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Contacts-level statuses
         addProjection(sDataProjectionMap, Contacts.CONTACT_PRESENCE,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
-        addProjection(sContactsProjectionMap, Contacts.CONTACT_CHAT_CAPABILITY,
+        addProjection(sDataProjectionMap, Contacts.CONTACT_CHAT_CAPABILITY,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sDataProjectionMap, Contacts.CONTACT_STATUS,
                 ContactsStatusUpdatesColumns.CONCRETE_STATUS);
@@ -772,7 +772,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Handle projections for Data-level statuses
         addProjection(sDataProjectionMap, Data.PRESENCE,
                 Tables.PRESENCE + "." + StatusUpdates.PRESENCE);
-        addProjection(sDataProjectionMap, Data.CONTACT_CHAT_CAPABILITY,
+        addProjection(sDataProjectionMap, Data.CHAT_CAPABILITY,
                 Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
         addProjection(sDataProjectionMap, Data.STATUS,
                 StatusUpdatesColumns.CONCRETE_STATUS);
@@ -4674,8 +4674,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String[] starredProjection = null;
                 String[] frequentProjection = null;
                 if (projection != null) {
-                    starredProjection = appendProjectionArg(projection, TIMES_CONTACED_SORT_COLUMN);
-                    frequentProjection = appendProjectionArg(projection, TIMES_CONTACED_SORT_COLUMN);
+                    starredProjection =
+                            appendProjectionArg(projection, TIMES_CONTACTED_SORT_COLUMN);
+                    frequentProjection =
+                            appendProjectionArg(projection, TIMES_CONTACTED_SORT_COLUMN);
                 }
 
                 // Build the first query for starred

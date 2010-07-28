@@ -17,8 +17,10 @@
 package com.android.providers.contacts;
 
 import com.android.internal.util.ArrayUtils;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.google.android.collect.Lists;
+import com.google.android.collect.Sets;
 
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
@@ -32,12 +34,20 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
-import android.provider.LiveFolders;
-import android.provider.OpenableColumns;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
@@ -48,15 +58,8 @@ import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
-import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.LiveFolders;
+import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 
@@ -65,7 +68,6 @@ import java.io.IOException;
 import java.text.Collator;
 import java.util.Arrays;
 import java.util.Locale;
-
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -78,6 +80,425 @@ import java.util.Locale;
  */
 @LargeTest
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
+
+    public void testContactsProjection() {
+        assertProjection(Contacts.CONTENT_URI, new String[]{
+                Contacts._ID,
+                Contacts.DISPLAY_NAME_PRIMARY,
+                Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_SOURCE,
+                Contacts.PHONETIC_NAME,
+                Contacts.PHONETIC_NAME_STYLE,
+                Contacts.SORT_KEY_PRIMARY,
+                Contacts.SORT_KEY_ALTERNATIVE,
+                Contacts.LAST_TIME_CONTACTED,
+                Contacts.TIMES_CONTACTED,
+                Contacts.STARRED,
+                Contacts.IN_VISIBLE_GROUP,
+                Contacts.PHOTO_ID,
+                Contacts.CUSTOM_RINGTONE,
+                Contacts.HAS_PHONE_NUMBER,
+                Contacts.SEND_TO_VOICEMAIL,
+                Contacts.LOOKUP_KEY,
+                Contacts.NAME_RAW_CONTACT_ID,
+                Contacts.CONTACT_PRESENCE,
+                Contacts.CONTACT_CHAT_CAPABILITY,
+                Contacts.CONTACT_STATUS,
+                Contacts.CONTACT_STATUS_TIMESTAMP,
+                Contacts.CONTACT_STATUS_RES_PACKAGE,
+                Contacts.CONTACT_STATUS_LABEL,
+                Contacts.CONTACT_STATUS_ICON,
+        });
+    }
+
+    public void testContactsWithSnippetProjection() {
+        assertProjection(Contacts.CONTENT_FILTER_URI.buildUpon().appendPath("nothing").build(),
+            new String[]{
+                Contacts._ID,
+                Contacts.DISPLAY_NAME_PRIMARY,
+                Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_SOURCE,
+                Contacts.PHONETIC_NAME,
+                Contacts.PHONETIC_NAME_STYLE,
+                Contacts.SORT_KEY_PRIMARY,
+                Contacts.SORT_KEY_ALTERNATIVE,
+                Contacts.LAST_TIME_CONTACTED,
+                Contacts.TIMES_CONTACTED,
+                Contacts.STARRED,
+                Contacts.IN_VISIBLE_GROUP,
+                Contacts.PHOTO_ID,
+                Contacts.CUSTOM_RINGTONE,
+                Contacts.HAS_PHONE_NUMBER,
+                Contacts.SEND_TO_VOICEMAIL,
+                Contacts.LOOKUP_KEY,
+                Contacts.NAME_RAW_CONTACT_ID,
+                Contacts.CONTACT_PRESENCE,
+                Contacts.CONTACT_CHAT_CAPABILITY,
+                Contacts.CONTACT_STATUS,
+                Contacts.CONTACT_STATUS_TIMESTAMP,
+                Contacts.CONTACT_STATUS_RES_PACKAGE,
+                Contacts.CONTACT_STATUS_LABEL,
+                Contacts.CONTACT_STATUS_ICON,
+
+                SearchSnippetColumns.SNIPPET_MIMETYPE,
+                SearchSnippetColumns.SNIPPET_DATA_ID,
+                SearchSnippetColumns.SNIPPET_DATA1,
+                SearchSnippetColumns.SNIPPET_DATA2,
+                SearchSnippetColumns.SNIPPET_DATA3,
+                SearchSnippetColumns.SNIPPET_DATA4,
+        });
+    }
+
+    public void testRawContactsProjection() {
+        assertProjection(RawContacts.CONTENT_URI, new String[]{
+                RawContacts._ID,
+                RawContacts.CONTACT_ID,
+                RawContacts.ACCOUNT_NAME,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.SOURCE_ID,
+                RawContacts.VERSION,
+                RawContacts.DIRTY,
+                RawContacts.DELETED,
+                RawContacts.DISPLAY_NAME_PRIMARY,
+                RawContacts.DISPLAY_NAME_ALTERNATIVE,
+                RawContacts.DISPLAY_NAME_SOURCE,
+                RawContacts.PHONETIC_NAME,
+                RawContacts.PHONETIC_NAME_STYLE,
+                RawContacts.NAME_VERIFIED,
+                RawContacts.SORT_KEY_PRIMARY,
+                RawContacts.SORT_KEY_ALTERNATIVE,
+                RawContacts.TIMES_CONTACTED,
+                RawContacts.LAST_TIME_CONTACTED,
+                RawContacts.CUSTOM_RINGTONE,
+                RawContacts.SEND_TO_VOICEMAIL,
+                RawContacts.STARRED,
+                RawContacts.AGGREGATION_MODE,
+                RawContacts.SYNC1,
+                RawContacts.SYNC2,
+                RawContacts.SYNC3,
+                RawContacts.SYNC4,
+        });
+    }
+
+    public void testDataProjection() {
+        assertProjection(Data.CONTENT_URI, new String[]{
+                Data._ID,
+                Data.RAW_CONTACT_ID,
+                Data.DATA_VERSION,
+                Data.IS_PRIMARY,
+                Data.IS_SUPER_PRIMARY,
+                Data.RES_PACKAGE,
+                Data.MIMETYPE,
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+                Data.DATA4,
+                Data.DATA5,
+                Data.DATA6,
+                Data.DATA7,
+                Data.DATA8,
+                Data.DATA9,
+                Data.DATA10,
+                Data.DATA11,
+                Data.DATA12,
+                Data.DATA13,
+                Data.DATA14,
+                Data.DATA15,
+                Data.SYNC1,
+                Data.SYNC2,
+                Data.SYNC3,
+                Data.SYNC4,
+                Data.CONTACT_ID,
+                Data.PRESENCE,
+                Data.CHAT_CAPABILITY,
+                Data.STATUS,
+                Data.STATUS_TIMESTAMP,
+                Data.STATUS_RES_PACKAGE,
+                Data.STATUS_LABEL,
+                Data.STATUS_ICON,
+                RawContacts.ACCOUNT_NAME,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.SOURCE_ID,
+                RawContacts.VERSION,
+                RawContacts.DIRTY,
+                RawContacts.NAME_VERIFIED,
+                Contacts._ID,
+                Contacts.DISPLAY_NAME_PRIMARY,
+                Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_SOURCE,
+                Contacts.PHONETIC_NAME,
+                Contacts.PHONETIC_NAME_STYLE,
+                Contacts.SORT_KEY_PRIMARY,
+                Contacts.SORT_KEY_ALTERNATIVE,
+                Contacts.LAST_TIME_CONTACTED,
+                Contacts.TIMES_CONTACTED,
+                Contacts.STARRED,
+                Contacts.IN_VISIBLE_GROUP,
+                Contacts.PHOTO_ID,
+                Contacts.CUSTOM_RINGTONE,
+                Contacts.SEND_TO_VOICEMAIL,
+                Contacts.LOOKUP_KEY,
+                Contacts.NAME_RAW_CONTACT_ID,
+                Contacts.CONTACT_PRESENCE,
+                Contacts.CONTACT_CHAT_CAPABILITY,
+                Contacts.CONTACT_STATUS,
+                Contacts.CONTACT_STATUS_TIMESTAMP,
+                Contacts.CONTACT_STATUS_RES_PACKAGE,
+                Contacts.CONTACT_STATUS_LABEL,
+                Contacts.CONTACT_STATUS_ICON,
+                GroupMembership.GROUP_SOURCE_ID,
+        });
+    }
+
+    public void testDistinctDataProjection() {
+        assertProjection(Phone.CONTENT_FILTER_URI.buildUpon().appendPath("123").build(),
+            new String[]{
+                Data._ID,
+                Data.DATA_VERSION,
+                Data.IS_PRIMARY,
+                Data.IS_SUPER_PRIMARY,
+                Data.RES_PACKAGE,
+                Data.MIMETYPE,
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+                Data.DATA4,
+                Data.DATA5,
+                Data.DATA6,
+                Data.DATA7,
+                Data.DATA8,
+                Data.DATA9,
+                Data.DATA10,
+                Data.DATA11,
+                Data.DATA12,
+                Data.DATA13,
+                Data.DATA14,
+                Data.DATA15,
+                Data.SYNC1,
+                Data.SYNC2,
+                Data.SYNC3,
+                Data.SYNC4,
+                Data.CONTACT_ID,
+                Data.PRESENCE,
+                Data.CHAT_CAPABILITY,
+                Data.STATUS,
+                Data.STATUS_TIMESTAMP,
+                Data.STATUS_RES_PACKAGE,
+                Data.STATUS_LABEL,
+                Data.STATUS_ICON,
+                Contacts._ID,
+                Contacts.DISPLAY_NAME_PRIMARY,
+                Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_SOURCE,
+                Contacts.PHONETIC_NAME,
+                Contacts.PHONETIC_NAME_STYLE,
+                Contacts.SORT_KEY_PRIMARY,
+                Contacts.SORT_KEY_ALTERNATIVE,
+                Contacts.LAST_TIME_CONTACTED,
+                Contacts.TIMES_CONTACTED,
+                Contacts.STARRED,
+                Contacts.IN_VISIBLE_GROUP,
+                Contacts.PHOTO_ID,
+                Contacts.CUSTOM_RINGTONE,
+                Contacts.SEND_TO_VOICEMAIL,
+                Contacts.LOOKUP_KEY,
+                Contacts.CONTACT_PRESENCE,
+                Contacts.CONTACT_CHAT_CAPABILITY,
+                Contacts.CONTACT_STATUS,
+                Contacts.CONTACT_STATUS_TIMESTAMP,
+                Contacts.CONTACT_STATUS_RES_PACKAGE,
+                Contacts.CONTACT_STATUS_LABEL,
+                Contacts.CONTACT_STATUS_ICON,
+                GroupMembership.GROUP_SOURCE_ID,
+        });
+    }
+
+    public void testRawEntityProjection() {
+        assertProjection(RawContactsEntity.CONTENT_URI, new String[]{
+                RawContacts.Entity.DATA_ID,
+                RawContacts._ID,
+                RawContacts.CONTACT_ID,
+                RawContacts.ACCOUNT_NAME,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.SOURCE_ID,
+                RawContacts.VERSION,
+                RawContacts.DIRTY,
+                RawContacts.NAME_VERIFIED,
+                RawContacts.DELETED,
+                RawContacts.IS_RESTRICTED,
+                RawContacts.SYNC1,
+                RawContacts.SYNC2,
+                RawContacts.SYNC3,
+                RawContacts.SYNC4,
+                RawContacts.STARRED,
+                Data.DATA_VERSION,
+                Data.IS_PRIMARY,
+                Data.IS_SUPER_PRIMARY,
+                Data.RES_PACKAGE,
+                Data.MIMETYPE,
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+                Data.DATA4,
+                Data.DATA5,
+                Data.DATA6,
+                Data.DATA7,
+                Data.DATA8,
+                Data.DATA9,
+                Data.DATA10,
+                Data.DATA11,
+                Data.DATA12,
+                Data.DATA13,
+                Data.DATA14,
+                Data.DATA15,
+                Data.SYNC1,
+                Data.SYNC2,
+                Data.SYNC3,
+                Data.SYNC4,
+                GroupMembership.GROUP_SOURCE_ID,
+        });
+    }
+
+    public void testPhoneLookupProjection() {
+        assertProjection(PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath("123").build(),
+            new String[]{
+                PhoneLookup._ID,
+                PhoneLookup.LOOKUP_KEY,
+                PhoneLookup.DISPLAY_NAME,
+                PhoneLookup.LAST_TIME_CONTACTED,
+                PhoneLookup.TIMES_CONTACTED,
+                PhoneLookup.STARRED,
+                PhoneLookup.IN_VISIBLE_GROUP,
+                PhoneLookup.PHOTO_ID,
+                PhoneLookup.CUSTOM_RINGTONE,
+                PhoneLookup.HAS_PHONE_NUMBER,
+                PhoneLookup.SEND_TO_VOICEMAIL,
+                PhoneLookup.NUMBER,
+                PhoneLookup.TYPE,
+                PhoneLookup.LABEL,
+        });
+    }
+
+    public void testGroupsProjection() {
+        assertProjection(Groups.CONTENT_URI, new String[]{
+                Groups._ID,
+                Groups.ACCOUNT_NAME,
+                Groups.ACCOUNT_TYPE,
+                Groups.SOURCE_ID,
+                Groups.DIRTY,
+                Groups.VERSION,
+                Groups.RES_PACKAGE,
+                Groups.TITLE,
+                Groups.TITLE_RES,
+                Groups.GROUP_VISIBLE,
+                Groups.SYSTEM_ID,
+                Groups.DELETED,
+                Groups.NOTES,
+                Groups.SHOULD_SYNC,
+                Groups.FAVORITES,
+                Groups.AUTO_ADD,
+                Groups.SYNC1,
+                Groups.SYNC2,
+                Groups.SYNC3,
+                Groups.SYNC4,
+        });
+    }
+
+    public void testGroupsSummaryProjection() {
+        assertProjection(Groups.CONTENT_SUMMARY_URI, new String[]{
+                Groups._ID,
+                Groups.ACCOUNT_NAME,
+                Groups.ACCOUNT_TYPE,
+                Groups.SOURCE_ID,
+                Groups.DIRTY,
+                Groups.VERSION,
+                Groups.RES_PACKAGE,
+                Groups.TITLE,
+                Groups.TITLE_RES,
+                Groups.GROUP_VISIBLE,
+                Groups.SYSTEM_ID,
+                Groups.DELETED,
+                Groups.NOTES,
+                Groups.SHOULD_SYNC,
+                Groups.FAVORITES,
+                Groups.AUTO_ADD,
+                Groups.SYNC1,
+                Groups.SYNC2,
+                Groups.SYNC3,
+                Groups.SYNC4,
+                Groups.SUMMARY_COUNT,
+                Groups.SUMMARY_WITH_PHONES,
+        });
+    }
+
+    public void testAggregateExceptionProjection() {
+        assertProjection(AggregationExceptions.CONTENT_URI, new String[]{
+                AggregationExceptionColumns._ID,
+                AggregationExceptions.TYPE,
+                AggregationExceptions.RAW_CONTACT_ID1,
+                AggregationExceptions.RAW_CONTACT_ID2,
+        });
+    }
+
+    public void testSettingsProjection() {
+        assertProjection(Settings.CONTENT_URI, new String[]{
+                Settings.ACCOUNT_NAME,
+                Settings.ACCOUNT_TYPE,
+                Settings.UNGROUPED_VISIBLE,
+                Settings.SHOULD_SYNC,
+                Settings.ANY_UNSYNCED,
+                Settings.UNGROUPED_COUNT,
+                Settings.UNGROUPED_WITH_PHONES,
+        });
+    }
+
+    public void testStatusUpdatesProjection() {
+        assertProjection(StatusUpdates.CONTENT_URI, new String[]{
+                PresenceColumns.RAW_CONTACT_ID,
+                StatusUpdates.DATA_ID,
+                StatusUpdates.IM_ACCOUNT,
+                StatusUpdates.IM_HANDLE,
+                StatusUpdates.PROTOCOL,
+                StatusUpdates.CUSTOM_PROTOCOL,
+                StatusUpdates.PRESENCE,
+                StatusUpdates.CHAT_CAPABILITY,
+                StatusUpdates.STATUS,
+                StatusUpdates.STATUS_TIMESTAMP,
+                StatusUpdates.STATUS_RES_PACKAGE,
+                StatusUpdates.STATUS_ICON,
+                StatusUpdates.STATUS_LABEL,
+        });
+    }
+
+    public void testLiveFoldersProjection() {
+        assertProjection(
+            Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "live_folders/contacts"),
+            new String[]{
+                LiveFolders._ID,
+                LiveFolders.NAME,
+        });
+    }
+
+    public void testDirectoryProjection() {
+        assertProjection(Directory.CONTENT_URI, new String[]{
+                Directory._ID,
+                Directory.PACKAGE_NAME,
+                Directory.TYPE_RESOURCE_ID,
+                Directory.DISPLAY_NAME,
+                Directory.DIRECTORY_AUTHORITY,
+                Directory.ACCOUNT_TYPE,
+                Directory.ACCOUNT_NAME,
+                Directory.EXPORT_SUPPORT,
+        });
+    }
+
+    private void assertProjection(Uri uri, String[] expectedProjection) {
+        Cursor cursor = mResolver.query(uri, null, "0", null, null);
+        String[] actualProjection = cursor.getColumnNames();
+        MoreAsserts.assertEquals("Incorrect projection for URI: " + uri,
+                Sets.newHashSet(expectedProjection), Sets.newHashSet(actualProjection));
+        cursor.close();
+    }
 
     public void testRawContactsInsert() {
         ContentValues values = new ContentValues();
