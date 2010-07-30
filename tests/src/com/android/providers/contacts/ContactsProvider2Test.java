@@ -31,8 +31,8 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.net.Uri;
-import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -313,6 +313,86 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    public void testEntityProjection() {
+        assertProjection(
+            Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI, 0),
+                    Contacts.Entity.CONTENT_DIRECTORY),
+            new String[]{
+                Contacts.Entity._ID,
+                Contacts.Entity.DATA_ID,
+                Contacts.Entity.RAW_CONTACT_ID,
+                Data.DATA_VERSION,
+                Data.IS_PRIMARY,
+                Data.IS_SUPER_PRIMARY,
+                Data.RES_PACKAGE,
+                Data.MIMETYPE,
+                Data.DATA1,
+                Data.DATA2,
+                Data.DATA3,
+                Data.DATA4,
+                Data.DATA5,
+                Data.DATA6,
+                Data.DATA7,
+                Data.DATA8,
+                Data.DATA9,
+                Data.DATA10,
+                Data.DATA11,
+                Data.DATA12,
+                Data.DATA13,
+                Data.DATA14,
+                Data.DATA15,
+                Data.SYNC1,
+                Data.SYNC2,
+                Data.SYNC3,
+                Data.SYNC4,
+                Data.CONTACT_ID,
+                Data.PRESENCE,
+                Data.CHAT_CAPABILITY,
+                Data.STATUS,
+                Data.STATUS_TIMESTAMP,
+                Data.STATUS_RES_PACKAGE,
+                Data.STATUS_LABEL,
+                Data.STATUS_ICON,
+                RawContacts.ACCOUNT_NAME,
+                RawContacts.ACCOUNT_TYPE,
+                RawContacts.SOURCE_ID,
+                RawContacts.VERSION,
+                RawContacts.DELETED,
+                RawContacts.DIRTY,
+                RawContacts.NAME_VERIFIED,
+                RawContacts.SYNC1,
+                RawContacts.SYNC2,
+                RawContacts.SYNC3,
+                RawContacts.SYNC4,
+                RawContacts.IS_RESTRICTED,
+                Contacts._ID,
+                Contacts.DISPLAY_NAME_PRIMARY,
+                Contacts.DISPLAY_NAME_ALTERNATIVE,
+                Contacts.DISPLAY_NAME_SOURCE,
+                Contacts.PHONETIC_NAME,
+                Contacts.PHONETIC_NAME_STYLE,
+                Contacts.SORT_KEY_PRIMARY,
+                Contacts.SORT_KEY_ALTERNATIVE,
+                Contacts.LAST_TIME_CONTACTED,
+                Contacts.TIMES_CONTACTED,
+                Contacts.STARRED,
+                Contacts.IN_VISIBLE_GROUP,
+                Contacts.PHOTO_ID,
+                Contacts.CUSTOM_RINGTONE,
+                Contacts.SEND_TO_VOICEMAIL,
+                Contacts.LOOKUP_KEY,
+                Contacts.NAME_RAW_CONTACT_ID,
+                Contacts.CONTACT_PRESENCE,
+                Contacts.CONTACT_CHAT_CAPABILITY,
+                Contacts.CONTACT_STATUS,
+                Contacts.CONTACT_STATUS_TIMESTAMP,
+                Contacts.CONTACT_STATUS_RES_PACKAGE,
+                Contacts.CONTACT_STATUS_LABEL,
+                Contacts.CONTACT_STATUS_ICON,
+                GroupMembership.GROUP_SOURCE_ID,
+        });
+    }
+
     public void testRawEntityProjection() {
         assertProjection(RawContactsEntity.CONTENT_URI, new String[]{
                 RawContacts.Entity.DATA_ID,
@@ -567,6 +647,124 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         cursor.moveToNext();
         values.put(Data.DATA1, "google@android.com");
+        assertCursorValues(cursor, values);
+
+        cursor.close();
+    }
+
+    public void testContactEntitiesWithIdBasedUri() {
+        ContentValues values = new ContentValues();
+        Account account1 = new Account("act1", "actype1");
+        Account account2 = new Account("act2", "actype2");
+
+        long rawContactId1 = createRawContactWithName(account1);
+        insertImHandle(rawContactId1, Im.PROTOCOL_GOOGLE_TALK, null, "gtalk");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", StatusUpdates.IDLE, "Busy", 90,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+
+        long rawContactId2 = createRawContact(account2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
+
+        long contactId = queryContactId(rawContactId1);
+
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri entityUri = Uri.withAppendedPath(contactUri, Contacts.Entity.CONTENT_DIRECTORY);
+
+        assertEntityRows(entityUri, contactId, rawContactId1, rawContactId2);
+    }
+
+    public void testContactEntitiesWithLookupUri() {
+        ContentValues values = new ContentValues();
+        Account account1 = new Account("act1", "actype1");
+        Account account2 = new Account("act2", "actype2");
+
+        long rawContactId1 = createRawContactWithName(account1);
+        insertImHandle(rawContactId1, Im.PROTOCOL_GOOGLE_TALK, null, "gtalk");
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", StatusUpdates.IDLE, "Busy", 90,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+
+        long rawContactId2 = createRawContact(account2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
+
+        long contactId = queryContactId(rawContactId1);
+        String lookupKey = queryLookupKey(contactId);
+
+        // First try with a matching contact ID
+        Uri contactLookupUri = ContactsContract.Contacts.getLookupUri(contactId, lookupKey);
+        Uri entityUri = Uri.withAppendedPath(contactLookupUri, Contacts.Entity.CONTENT_DIRECTORY);
+        assertEntityRows(entityUri, contactId, rawContactId1, rawContactId2);
+
+        // Now try with a contact ID mismatch
+        contactLookupUri = ContactsContract.Contacts.getLookupUri(contactId + 1, lookupKey);
+        entityUri = Uri.withAppendedPath(contactLookupUri, Contacts.Entity.CONTENT_DIRECTORY);
+        assertEntityRows(entityUri, contactId, rawContactId1, rawContactId2);
+
+        // Now try without an ID altogether
+        contactLookupUri = Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey);
+        entityUri = Uri.withAppendedPath(contactLookupUri, Contacts.Entity.CONTENT_DIRECTORY);
+        assertEntityRows(entityUri, contactId, rawContactId1, rawContactId2);
+    }
+
+    private void assertEntityRows(Uri entityUri, long contactId, long rawContactId1,
+            long rawContactId2) {
+        ContentValues values = new ContentValues();
+
+        Cursor cursor = mResolver.query(entityUri, null, null, null,
+                Contacts.Entity.RAW_CONTACT_ID + "," + Contacts.Entity.DATA_ID);
+        assertEquals(3, cursor.getCount());
+
+        // First row - name
+        cursor.moveToFirst();
+        values.put(Contacts.Entity.CONTACT_ID, contactId);
+        values.put(Contacts.Entity.RAW_CONTACT_ID, rawContactId1);
+        values.put(Contacts.Entity.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
+        values.put(Contacts.Entity.DATA1, "John Doe");
+        values.put(Contacts.Entity.ACCOUNT_NAME, "act1");
+        values.put(Contacts.Entity.ACCOUNT_TYPE, "actype1");
+        values.put(Contacts.Entity.DISPLAY_NAME, "John Doe");
+        values.put(Contacts.Entity.DISPLAY_NAME_ALTERNATIVE, "Doe, John");
+        values.put(Contacts.Entity.NAME_RAW_CONTACT_ID, rawContactId1);
+        values.put(Contacts.Entity.CONTACT_CHAT_CAPABILITY, StatusUpdates.CAPABILITY_HAS_CAMERA);
+        values.put(Contacts.Entity.CONTACT_PRESENCE, StatusUpdates.IDLE);
+        values.put(Contacts.Entity.CONTACT_STATUS, "Busy");
+        values.putNull(Contacts.Entity.PRESENCE);
+        assertCursorValues(cursor, values);
+
+        // Second row - IM
+        cursor.moveToNext();
+        values.put(Contacts.Entity.CONTACT_ID, contactId);
+        values.put(Contacts.Entity.RAW_CONTACT_ID, rawContactId1);
+        values.put(Contacts.Entity.MIMETYPE, Im.CONTENT_ITEM_TYPE);
+        values.put(Contacts.Entity.DATA1, "gtalk");
+        values.put(Contacts.Entity.ACCOUNT_NAME, "act1");
+        values.put(Contacts.Entity.ACCOUNT_TYPE, "actype1");
+        values.put(Contacts.Entity.DISPLAY_NAME, "John Doe");
+        values.put(Contacts.Entity.DISPLAY_NAME_ALTERNATIVE, "Doe, John");
+        values.put(Contacts.Entity.NAME_RAW_CONTACT_ID, rawContactId1);
+        values.put(Contacts.Entity.CONTACT_CHAT_CAPABILITY, StatusUpdates.CAPABILITY_HAS_CAMERA);
+        values.put(Contacts.Entity.CONTACT_PRESENCE, StatusUpdates.IDLE);
+        values.put(Contacts.Entity.CONTACT_STATUS, "Busy");
+        values.put(Contacts.Entity.PRESENCE, StatusUpdates.IDLE);
+        assertCursorValues(cursor, values);
+
+        // Third row - second raw contact, not data
+        cursor.moveToNext();
+        values.put(Contacts.Entity.CONTACT_ID, contactId);
+        values.put(Contacts.Entity.RAW_CONTACT_ID, rawContactId2);
+        values.putNull(Contacts.Entity.MIMETYPE);
+        values.putNull(Contacts.Entity.DATA_ID);
+        values.putNull(Contacts.Entity.DATA1);
+        values.put(Contacts.Entity.ACCOUNT_NAME, "act2");
+        values.put(Contacts.Entity.ACCOUNT_TYPE, "actype2");
+        values.put(Contacts.Entity.DISPLAY_NAME, "John Doe");
+        values.put(Contacts.Entity.DISPLAY_NAME_ALTERNATIVE, "Doe, John");
+        values.put(Contacts.Entity.NAME_RAW_CONTACT_ID, rawContactId1);
+        values.put(Contacts.Entity.CONTACT_CHAT_CAPABILITY, StatusUpdates.CAPABILITY_HAS_CAMERA);
+        values.put(Contacts.Entity.CONTACT_PRESENCE, StatusUpdates.IDLE);
+        values.put(Contacts.Entity.CONTACT_STATUS, "Busy");
+        values.putNull(Contacts.Entity.PRESENCE);
         assertCursorValues(cursor, values);
 
         cursor.close();
@@ -1837,7 +2035,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(StatusUpdates.PROTOCOL, protocol);
         values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
-        values.put(StatusUpdates.PRESENCE_STATUS, presence);
+        values.put(StatusUpdates.PRESENCE, presence);
         values.put(StatusUpdates.STATUS, status);
         assertCursorValues(c, values);
     }
@@ -1971,7 +2169,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null, Contacts.IN_VISIBLE_GROUP, expectedValue);
     }
 
-    public void testContentEntityIterator() throws RemoteException {
+    public void testContentEntityIterator() {
         // create multiple contacts and check that the selected ones are returned
         long id;
 

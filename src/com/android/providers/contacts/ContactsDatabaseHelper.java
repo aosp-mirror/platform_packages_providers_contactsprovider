@@ -39,9 +39,15 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.BaseColumns;
-import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
@@ -51,12 +57,6 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.SocialContract.Activities;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
@@ -87,7 +87,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 403;
+    static final int DATABASE_VERSION = 404;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -107,8 +107,6 @@ import java.util.Locale;
         public static final String AGGREGATED_PRESENCE = "agg_presence";
         public static final String NICKNAME_LOOKUP = "nickname_lookup";
         public static final String CALLS = "calls";
-        public static final String CONTACT_ENTITIES = "contact_entities_view";
-        public static final String CONTACT_ENTITIES_RESTRICTED = "contact_entities_view_restricted";
         public static final String STATUS_UPDATES = "status_updates";
         public static final String PROPERTIES = "properties";
         public static final String ACCOUNTS = "accounts";
@@ -187,6 +185,12 @@ import java.util.Locale;
 
         public static final String CONTACTS_ALL = "view_contacts";
         public static final String CONTACTS_RESTRICTED = "view_contacts_restricted";
+
+        public static final String ENTITIES = "view_entities";
+        public static final String ENTITIES_RESTRICTED = "view_entities_restricted";
+
+        public static final String RAW_ENTITIES = "view_raw_entities";
+        public static final String RAW_ENTITIES_RESTRICTED = "view_raw_entities_restricted";
 
         public static final String GROUPS_ALL = "view_groups";
     }
@@ -601,17 +605,17 @@ import java.util.Locale;
         final String replaceAggregatePresenceSql =
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                 + AggregatedPresenceColumns.CONTACT_ID + ", "
-                + StatusUpdates.PRESENCE_STATUS + ", "
+                + StatusUpdates.PRESENCE + ", "
                 + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " SELECT " + PresenceColumns.CONTACT_ID + ","
-                + StatusUpdates.PRESENCE_STATUS + ","
+                + StatusUpdates.PRESENCE + ","
                 + StatusUpdates.CHAT_CAPABILITY
                 + " FROM " + Tables.PRESENCE
                 + " WHERE "
-                + " (" + StatusUpdates.PRESENCE_STATUS
+                + " (" + StatusUpdates.PRESENCE
                 +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " = (SELECT "
-                + "MAX (" + StatusUpdates.PRESENCE_STATUS
+                + "MAX (" + StatusUpdates.PRESENCE
                 +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " FROM " + Tables.PRESENCE
                 + " WHERE " + PresenceColumns.CONTACT_ID
@@ -952,7 +956,6 @@ import java.util.Locale;
 
         createContactsViews(db);
         createGroupsView(db);
-        createContactEntitiesView(db);
         createContactsTriggers(db);
         createContactsIndexes(db);
 
@@ -1129,6 +1132,10 @@ import java.util.Locale;
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES_RESTRICTED + ";");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1289,6 +1296,75 @@ import java.util.Locale;
         db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
         db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + contactsSelect
                 + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0");
+
+        String rawEntitiesSelect = "SELECT "
+                + RawContacts.CONTACT_ID + ", "
+                + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
+                + dataColumns + ", "
+                + syncColumns + ", "
+                + Data.SYNC1 + ", "
+                + Data.SYNC2 + ", "
+                + Data.SYNC3 + ", "
+                + Data.SYNC4 + ", "
+                + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ", "
+                + DataColumns.CONCRETE_ID + " AS " + RawContacts.Entity.DATA_ID + ","
+                + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
+                + RawContactsColumns.CONCRETE_IS_RESTRICTED + " AS "
+                        + RawContacts.IS_RESTRICTED + ","
+                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
+                + " FROM " + Tables.RAW_CONTACTS
+                + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
+                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
+                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
+                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                +   "' AND " + GroupsColumns.CONCRETE_ID + "="
+                + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
+
+        db.execSQL("CREATE VIEW " + Views.RAW_ENTITIES + " AS "
+                + rawEntitiesSelect);
+        db.execSQL("CREATE VIEW " + Views.RAW_ENTITIES_RESTRICTED + " AS "
+                + rawEntitiesSelect + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
+
+        String entitiesSelect = "SELECT "
+                + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + Contacts._ID + ", "
+                + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
+                + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
+                + RawContactsColumns.CONCRETE_IS_RESTRICTED
+                        + " AS " + RawContacts.IS_RESTRICTED + ","
+                + dataColumns + ", "
+                + syncColumns + ", "
+                + contactsColumns + ", "
+                + Data.SYNC1 + ", "
+                + Data.SYNC2 + ", "
+                + Data.SYNC3 + ", "
+                + Data.SYNC4 + ", "
+                + RawContactsColumns.CONCRETE_ID + " AS " + Contacts.Entity.RAW_CONTACT_ID + ", "
+                + DataColumns.CONCRETE_ID + " AS " + Contacts.Entity.DATA_ID + ","
+                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
+                + " FROM " + Tables.RAW_CONTACTS
+                + " JOIN " + Tables.CONTACTS + " ON ("
+                +   RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
+                +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")"
+                + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
+                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
+                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
+                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
+                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
+                +   "' AND " + GroupsColumns.CONCRETE_ID + "="
+                + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
+
+        db.execSQL("CREATE VIEW " + Views.ENTITIES + " AS "
+                + entitiesSelect);
+        db.execSQL("CREATE VIEW " + Views.ENTITIES_RESTRICTED + " AS "
+                + entitiesSelect + " WHERE " + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
     }
 
     private static void createGroupsView(SQLiteDatabase db) {
@@ -1320,71 +1396,6 @@ import java.util.Locale;
                 + " FROM " + Tables.GROUPS_JOIN_PACKAGES;
 
         db.execSQL("CREATE VIEW " + Views.GROUPS_ALL + " AS " + groupsSelect);
-    }
-
-    private static void createContactEntitiesView(SQLiteDatabase db) {
-        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Tables.CONTACT_ENTITIES_RESTRICTED + ";");
-
-        String contactEntitiesSelect = "SELECT "
-                + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
-                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
-                + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
-                + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
-                + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
-                + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
-                + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS " + RawContacts.NAME_VERIFIED + ","
-                + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
-                + RawContacts.CONTACT_ID + ", "
-                + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ", "
-                + RawContactsColumns.CONCRETE_SYNC2 + " AS " + RawContacts.SYNC2 + ", "
-                + RawContactsColumns.CONCRETE_SYNC3 + " AS " + RawContacts.SYNC3 + ", "
-                + RawContactsColumns.CONCRETE_SYNC4 + " AS " + RawContacts.SYNC4 + ", "
-                + Data.MIMETYPE + ", "
-                + Data.DATA1 + ", "
-                + Data.DATA2 + ", "
-                + Data.DATA3 + ", "
-                + Data.DATA4 + ", "
-                + Data.DATA5 + ", "
-                + Data.DATA6 + ", "
-                + Data.DATA7 + ", "
-                + Data.DATA8 + ", "
-                + Data.DATA9 + ", "
-                + Data.DATA10 + ", "
-                + Data.DATA11 + ", "
-                + Data.DATA12 + ", "
-                + Data.DATA13 + ", "
-                + Data.DATA14 + ", "
-                + Data.DATA15 + ", "
-                + Data.SYNC1 + ", "
-                + Data.SYNC2 + ", "
-                + Data.SYNC3 + ", "
-                + Data.SYNC4 + ", "
-                + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ", "
-                + Data.IS_PRIMARY + ", "
-                + Data.IS_SUPER_PRIMARY + ", "
-                + Data.DATA_VERSION + ", "
-                + DataColumns.CONCRETE_ID + " AS " + RawContacts.Entity.DATA_ID + ","
-                + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
-                + RawContactsColumns.CONCRETE_IS_RESTRICTED + " AS "
-                        + RawContacts.IS_RESTRICTED + ","
-                + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
-                + " FROM " + Tables.RAW_CONTACTS
-                + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
-                +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
-                +   DataColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.MIMETYPES + " ON ("
-                +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
-                + " LEFT OUTER JOIN " + Tables.GROUPS + " ON ("
-                +   MimetypesColumns.CONCRETE_MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
-                +   "' AND " + GroupsColumns.CONCRETE_ID + "="
-                + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
-
-        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES + " AS "
-                + contactEntitiesSelect);
-        db.execSQL("CREATE VIEW " + Tables.CONTACT_ENTITIES_RESTRICTED + " AS "
-                + contactEntitiesSelect + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
     }
 
     @Override
@@ -1568,10 +1579,14 @@ import java.util.Locale;
             oldVersion = 403;
         }
 
+        if (oldVersion == 403) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 404;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
-            createContactEntitiesView(db);
             createContactsTriggers(db);
             createContactsIndexes(db);
             LegacyApiSupport.createViews(db);
@@ -3086,13 +3101,22 @@ import java.util.Locale;
         return Views.GROUPS_ALL;
     }
 
-    public String getContactEntitiesView() {
-        return getContactEntitiesView(false);
+    public String getRawEntitiesView() {
+        return getRawEntitiesView(false);
     }
 
-    public String getContactEntitiesView(boolean requireRestrictedView) {
+    public String getRawEntitiesView(boolean requireRestrictedView) {
         return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Tables.CONTACT_ENTITIES : Tables.CONTACT_ENTITIES_RESTRICTED;
+                Views.RAW_ENTITIES : Views.RAW_ENTITIES_RESTRICTED;
+    }
+
+    public String getEntitiesView() {
+        return getEntitiesView(false);
+    }
+
+    public String getEntitiesView(boolean requireRestrictedView) {
+        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
+                Views.ENTITIES : Views.ENTITIES_RESTRICTED;
     }
 
     /**
