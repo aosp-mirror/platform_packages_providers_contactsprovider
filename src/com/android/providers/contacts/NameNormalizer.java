@@ -16,8 +16,10 @@
 package com.android.providers.contacts;
 
 import com.ibm.icu4jni.text.CollationAttribute;
+import com.ibm.icu4jni.text.CollationKey; // TODO: java.text.CollationKey post-froyo
 import com.ibm.icu4jni.text.Collator;
 import com.ibm.icu4jni.text.RuleBasedCollator;
+import java.util.Locale;
 
 /**
  * Converts a name to a normalized form by removing all non-letter characters and normalizing
@@ -27,14 +29,14 @@ public class NameNormalizer {
 
     private static final RuleBasedCollator sCompressingCollator;
     static {
-        sCompressingCollator = (RuleBasedCollator)Collator.getInstance(null);
+        sCompressingCollator = (RuleBasedCollator)Collator.getInstance(Locale.getDefault());
         sCompressingCollator.setStrength(Collator.PRIMARY);
         sCompressingCollator.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
     }
 
     private static final RuleBasedCollator sComplexityCollator;
     static {
-        sComplexityCollator = (RuleBasedCollator)Collator.getInstance(null);
+        sComplexityCollator = (RuleBasedCollator)Collator.getInstance(Locale.getDefault());
         sComplexityCollator.setStrength(Collator.TERTIARY);
         sComplexityCollator.setAttribute(CollationAttribute.CASE_FIRST,
                 CollationAttribute.VALUE_LOWER_FIRST);
@@ -45,7 +47,8 @@ public class NameNormalizer {
      * of names.  It ignores non-letter characters and removes accents.
      */
     public static String normalize(String name) {
-        return Hex.encodeHex(sCompressingCollator.getSortKey(lettersAndDigitsOnly(name)), true);
+        CollationKey key = sCompressingCollator.getCollationKey(lettersAndDigitsOnly(name));
+        return Hex.encodeHex(key.toByteArray(), true);
     }
 
     /**
