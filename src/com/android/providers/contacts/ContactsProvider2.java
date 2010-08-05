@@ -60,7 +60,6 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
-import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
 import android.database.CharArrayBuffer;
@@ -77,7 +76,6 @@ import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.net.Uri.Builder;
 import android.os.AsyncTask;
-import android.os.Binder;
 import android.os.Bundle;
 import android.os.MemoryFile;
 import android.os.RemoteException;
@@ -1852,6 +1850,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     // is a list of groups with this group id.
     private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
 
+    private ContactDirectoryManager mContactDirectoryManager;
     private ContactAggregator mContactAggregator;
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
@@ -1878,6 +1877,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private Locale mCurrentLocale;
 
 
+
     @Override
     public boolean onCreate() {
         super.onCreate();
@@ -1892,6 +1892,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean initialize() {
         final Context context = getContext();
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
+        mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
         mContactAggregator = new ContactAggregator(this, mDbHelper,
@@ -2019,6 +2020,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             verifyLocale();
         }
 
+        startContactDirectoryManager();
+
         return (mDb != null);
     }
 
@@ -2040,6 +2043,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
       mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
       mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
     }
+
     /**
      * Visible for testing.
      */
@@ -2135,8 +2139,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /* Visible for testing */
+    public ContactDirectoryManager getContactDirectoryManager() {
+        return mContactDirectoryManager;
+    }
+
+    /* Visible for testing */
     protected Locale getLocale() {
         return Locale.getDefault();
+    }
+
+    /* Visible for testing */
+    protected void startContactDirectoryManager() {
+        getContactDirectoryManager().start();
     }
 
     protected boolean isLegacyContactImportNeeded() {
@@ -2476,11 +2490,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case DIRECTORIES: {
-                id = insertDirectory(uri, values);
-                break;
-            }
-
             default:
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.insert(uri, values);
@@ -2556,23 +2565,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return mAccount;
-    }
-
-    private long insertDirectory(Uri uri, ContentValues values) {
-        String packageName = values.getAsString(Directory.PACKAGE_NAME);
-        if (packageName == null) {
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                    "The Directory.PACKAGE_NAME field is required", uri));
-        }
-
-        if (!verifyCallingPackage(packageName)) {
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                    "The supplied package name " + packageName
-                            + " does not match the name of the calling package", uri));
-        }
-
-        mDirectoryCache = null;
-        return mDb.insert(Tables.DIRECTORIES, null, values);
     }
 
     /**
@@ -3499,22 +3491,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return deleteStatusUpdates(selection, selectionArgs);
             }
 
-            case DIRECTORIES_ID: {
-                return deleteDirectory(uri);
-            }
-
             default: {
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
             }
         }
-    }
-
-    private int deleteDirectory(Uri uri) {
-        mDirectoryCache = null;
-        verifyCallingPackageForDirectory(uri);
-        mSelectionArgs1[0] = String.valueOf(ContentUris.parseId(uri));
-        return mDb.delete(Tables.DIRECTORIES, Directory._ID + "=?", mSelectionArgs1);
     }
 
     public int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
@@ -3745,8 +3726,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case DIRECTORIES_ID: {
-                count = updateDirectory(uri, values, selection, selectionArgs);
+            case DIRECTORIES: {
+                mContactDirectoryManager.scheduleDirectoryUpdateForCaller();
+                count = 1;
                 break;
             }
 
@@ -4179,21 +4161,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return 1;
     }
 
-    private int updateDirectory(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
-
-        verifyCallingPackageForDirectory(uri);
-
-        mDirectoryCache = null;
-
-        mValues.clear();
-        mValues.putAll(values);
-        mValues.remove(Directory.PACKAGE_NAME);
-
-        mSelectionArgs1[0] = String.valueOf(ContentUris.parseId(uri));
-        return mDb.update(Tables.DIRECTORIES, mValues, Directory._ID + "=?", mSelectionArgs1);
-    }
-
     public void onAccountsUpdated(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
@@ -4292,20 +4259,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mAccountWritability.clear();
     }
 
-    public void onPackageUninstalled(String packageName) {
-        mDb.beginTransaction();
-        try {
-            mSelectionArgs1[0] = packageName;
-            int count =
-                    mDb.delete(Tables.DIRECTORIES, Directory.PACKAGE_NAME + "=?", mSelectionArgs1);
-            if (count != 0) {
-                Log.i(TAG, "Removed contact directories for package " + packageName);
-            }
-            mDb.setTransactionSuccessful();
-        } finally {
-            mDirectoryCache = null;
-            mDb.endTransaction();
-        }
+    public void onPackageChanged(String packageName) {
+        mContactDirectoryManager.onPackageChanged(packageName);
     }
 
     /**
@@ -4419,6 +4374,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return mDirectoryCache.get(directoryId);
+    }
+
+    public void resetDirectoryCache() {
+        mDirectoryCache = null;
     }
 
     public Cursor queryLocal(Uri uri, String[] projection, String selection, String[] selectionArgs,
@@ -6277,48 +6236,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return writable;
     }
 
-    private void verifyCallingPackageForDirectory(Uri uri) {
-        String packageName = null;
-        mSelectionArgs1[0] = String.valueOf(ContentUris.parseId(uri));
-        Cursor cursor = mDb.query(Tables.DIRECTORIES,
-                new String[] { Directory.PACKAGE_NAME }, Directory._ID + "=?",
-                mSelectionArgs1, null, null, null);
-        try {
-            if (cursor.moveToFirst()) {
-                packageName = cursor.getString(0);
-            }
-        } finally {
-            cursor.close();
-        }
-
-        if (packageName == null) {
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                    "Directory not found", uri));
-        }
-
-        if (!verifyCallingPackage(packageName)) {
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                    "The supplied package name " + packageName
-                            + " does not match the name of the calling package", uri));
-        }
-    }
-
-    /**
-     * Returns true iff the package is one of the packages owned by the caller.
-     */
-    private boolean verifyCallingPackage(String packageName) {
-        final PackageManager pm = getContext().getPackageManager();
-        final int callingUid = Binder.getCallingUid();
-        final String[] callerPackages = pm.getPackagesForUid(callingUid);
-        if (callerPackages != null) {
-            for (int i = 0; i < callerPackages.length; i++) {
-                if (packageName.equals(callerPackages[i])) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     /* package */ static boolean readBooleanQueryParameter(Uri uri, String parameter,
             boolean defaultValue) {

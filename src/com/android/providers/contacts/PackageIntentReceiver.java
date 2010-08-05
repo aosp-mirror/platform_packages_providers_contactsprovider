@@ -25,24 +25,20 @@ import android.net.Uri;
 import android.provider.ContactsContract;
 
 /**
- * Package uninstall receiver whose job is to remove orphaned contact directories.
+ * Package intent receiver that invokes {@link ContactsProvider2#onPackageChanged} to update
+ * the contact directory list.
  */
-public class PackageUninstallReceiver extends BroadcastReceiver {
+public class PackageIntentReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction())) {
-            // Don't treat this as a removal if the package is being replaced
-            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
-            // TODO: do the work in an IntentService
-            Uri packageUri = intent.getData();
-            String packageName = packageUri.getSchemeSpecificPart();
-            IContentProvider iprovider =
-                    context.getContentResolver().acquireProvider(ContactsContract.AUTHORITY);
-            ContentProvider provider = ContentProvider.coerceToLocalContentProvider(iprovider);
-            if (provider instanceof ContactsProvider2) {
-                ((ContactsProvider2)provider).onPackageUninstalled(packageName);
-            }
+        Uri packageUri = intent.getData();
+        String packageName = packageUri.getSchemeSpecificPart();
+        IContentProvider iprovider =
+            context.getContentResolver().acquireProvider(ContactsContract.AUTHORITY);
+        ContentProvider provider = ContentProvider.coerceToLocalContentProvider(iprovider);
+        if (provider instanceof ContactsProvider2) {
+            ((ContactsProvider2)provider).onPackageChanged(packageName);
         }
     }
 }

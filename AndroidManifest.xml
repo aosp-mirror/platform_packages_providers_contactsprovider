@@ -59,10 +59,21 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="PackageUninstallReceiver">
-            <!-- Clear out directory data for uninstalled packages -->          
+        <receiver android:name="PackageIntentReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <data android:scheme="package" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+                <data android:scheme="package" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.PACKAGE_REMOVED" />
+                <data android:scheme="package" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_CHANGED" />
                 <data android:scheme="package" />
             </intent-filter>
         </receiver>

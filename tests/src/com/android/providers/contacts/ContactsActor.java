@@ -23,11 +23,11 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Binder;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds;
@@ -41,11 +41,9 @@ import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
-import android.test.mock.MockPackageManager;
 import android.test.mock.MockResources;
 import android.util.TypedValue;
 
-import java.util.HashMap;
 import java.util.Locale;
 
 /**
@@ -94,7 +92,9 @@ public class ContactsActor {
     public ContentProvider addProvider(Class<? extends ContentProvider> providerClass,
             String authority) throws Exception {
         ContentProvider provider = providerClass.newInstance();
-        provider.attachInfo(mProviderContext, null);
+        ProviderInfo info = new ProviderInfo();
+        info.authority = authority;
+        provider.attachInfo(mProviderContext, info);
         resolver.addProvider(authority, provider);
         return provider;
     }
@@ -112,7 +112,7 @@ public class ContactsActor {
     private static class RestrictionMockContext extends MockContext {
         private final Context mOverallContext;
         private final String mReportedPackageName;
-        private final RestrictionMockPackageManager mPackageManager;
+        private final ContactsMockPackageManager mPackageManager;
         private final ContentResolver mResolver;
         private final Resources mRes;
 
@@ -125,7 +125,7 @@ public class ContactsActor {
             mReportedPackageName = reportedPackageName;
             mResolver = resolver;
 
-            mPackageManager = new RestrictionMockPackageManager();
+            mPackageManager = new ContactsMockPackageManager();
             mPackageManager.addPackage(1000, PACKAGE_GREY);
             mPackageManager.addPackage(2000, PACKAGE_RED);
             mPackageManager.addPackage(3000, PACKAGE_GREEN);
@@ -220,50 +220,10 @@ public class ContactsActor {
         }
     }
 
-    private static String sCallingPackage = null;
+    static String sCallingPackage = null;
 
     void ensureCallingPackage() {
         sCallingPackage = this.packageName;
-    }
-
-    /**
-     * Mock {@link PackageManager} that knows about a specific set of packages
-     * to help test security models. Because {@link Binder#getCallingUid()}
-     * can't be mocked, you'll have to find your mock-UID manually using your
-     * {@link Context#getPackageName()}.
-     */
-    private static class RestrictionMockPackageManager extends MockPackageManager {
-        private final HashMap<Integer, String> mForward = new HashMap<Integer, String>();
-        private final HashMap<String, Integer> mReverse = new HashMap<String, Integer>();
-
-        public RestrictionMockPackageManager() {
-        }
-
-        /**
-         * Add a UID-to-package mapping, which is then stored internally.
-         */
-        public void addPackage(int packageUid, String packageName) {
-            mForward.put(packageUid, packageName);
-            mReverse.put(packageName, packageUid);
-        }
-
-        @Override
-        public String getNameForUid(int uid) {
-            return "name-for-uid";
-        }
-
-        @Override
-        public String[] getPackagesForUid(int uid) {
-            return new String[] { sCallingPackage };
-        }
-
-        @Override
-        public ApplicationInfo getApplicationInfo(String packageName, int flags) {
-            ApplicationInfo info = new ApplicationInfo();
-            Integer uid = mReverse.get(packageName);
-            info.uid = (uid != null) ? uid : -1;
-            return info;
-        }
     }
 
     public long createContact(boolean isRestricted, String name) {

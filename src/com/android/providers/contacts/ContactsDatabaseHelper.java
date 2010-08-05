@@ -2663,6 +2663,10 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.SETTINGS + ";");
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
+        db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
+
+        insertDefaultDirectory(db);
+        insertLocalInvisibleDirectory(db);
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
