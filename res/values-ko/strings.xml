@@ -21,4 +21,6 @@
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"연락처를 업그레이드하려면 메모리가 더 필요합니다."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"연락처 저장소 업그레이드"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"업그레이드를 완료하려면 선택하세요."</string>
+    <string name="default_directory" msgid="93961630309570294">"주소록"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"기타"</string>
 </resources>

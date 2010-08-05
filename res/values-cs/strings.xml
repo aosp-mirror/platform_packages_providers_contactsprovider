@@ -21,4 +21,6 @@
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Upgrade kontaktu vyžaduje více paměti"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Nedostatek paměti pro upgrade kontaktu"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Výběrem této možnosti dokončíte upgrade."</string>
+    <string name="default_directory" msgid="93961630309570294">"Kontakty"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Jiné"</string>
 </resources>

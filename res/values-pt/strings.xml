@@ -21,4 +21,6 @@
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"A atualização de contatos precisa de mais memória"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Armazenamento de atualização de contatos"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Selecione para concluir a atualização."</string>
+    <string name="default_directory" msgid="93961630309570294">"Contatos"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Outros"</string>
 </resources>
