@@ -20,7 +20,6 @@ import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.google.android.collect.Lists;
-import com.google.android.collect.Sets;
 
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
@@ -31,7 +30,6 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -570,14 +568,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Directory.ACCOUNT_NAME,
                 Directory.EXPORT_SUPPORT,
         });
-    }
-
-    private void assertProjection(Uri uri, String[] expectedProjection) {
-        Cursor cursor = mResolver.query(uri, null, "0", null, null);
-        String[] actualProjection = cursor.getColumnNames();
-        MoreAsserts.assertEquals("Incorrect projection for URI: " + uri,
-                Sets.newHashSet(expectedProjection), Sets.newHashSet(actualProjection));
-        cursor.close();
     }
 
     public void testRawContactsInsert() {

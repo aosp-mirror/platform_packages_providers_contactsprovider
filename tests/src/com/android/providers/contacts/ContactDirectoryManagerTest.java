@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.google.android.collect.Lists;
 
 import android.accounts.Account;
@@ -28,6 +29,7 @@ import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.RawContacts;
@@ -36,7 +38,10 @@ import android.test.suitebuilder.annotation.LargeTest;
 
 /**
  * Unit tests for {@link ContactDirectoryManager}. Run the test like this:
- * <code>adb shell am instrument -e class com.android.providers.contacts.ContactsProvider2Test -w \ * com.android.providers.contacts.tests/android.test.InstrumentationTestRunner * </code>
+ * <code>
+ *   adb shell am instrument -e class com.android.providers.contacts.ContactDirectoryManagerTest
+ *       -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * </code>
  */
 @LargeTest
 public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
@@ -86,6 +91,9 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                     uri.getQueryParameter(RawContacts.ACCOUNT_TYPE),
                 });
                 return cursor;
+            } else if (uri.toString().startsWith(
+                    "content://" + mAuthority + "/aggregation_exceptions")) {
+                return new MatrixCursor(projection);
             }
 
             fail("Unexpected uri: " + uri);
@@ -383,6 +391,38 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         assertEquals("account-name1", cursor.getString(cursor.getColumnIndex("accountName")));
         assertEquals("account-type1", cursor.getString(cursor.getColumnIndex("accountType")));
         cursor.close();
+    }
+
+    public void testProjectionPopulated() throws Exception {
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+
+        MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
+                MockContactDirectoryProvider.class, "authority1");
+
+        MatrixCursor response1 = provider1.createResponseCursor();
+        addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+
+        mDirectoryManager.scanAllPackages();
+
+        Cursor cursor = mResolver.query(
+                Directory.CONTENT_URI, new String[] { Directory._ID }, null, null, null);
+        cursor.moveToPosition(2);
+        long directoryId = cursor.getLong(0);
+        cursor.close();
+
+        Uri contentUri = AggregationExceptions.CONTENT_URI.buildUpon().appendQueryParameter(
+                ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(directoryId)).build();
+
+        // The request should be forwarded to TestProvider, which will return an empty cursor
+        // but the projection should be correctly populated by ContactProvider
+        assertProjection(contentUri, new String[]{
+                AggregationExceptionColumns._ID,
+                AggregationExceptions.TYPE,
+                AggregationExceptions.RAW_CONTACT_ID1,
+                AggregationExceptions.RAW_CONTACT_ID2,
+        });
     }
 
     protected PackageInfo createProviderPackage(String packageName, String authority) {

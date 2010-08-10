@@ -18,6 +18,8 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
+import com.google.android.collect.Sets;
+
 import android.accounts.Account;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -30,12 +32,6 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.Settings;
-import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -45,7 +41,14 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.StatusUpdates;
 import android.test.AndroidTestCase;
+import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
 
@@ -57,8 +60,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -918,6 +921,14 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected void assertNetworkNotified(boolean expected) {
         assertEquals(expected, ((SynchronousContactsProvider2)mActor.provider).isNetworkNotified());
+    }
+
+    protected void assertProjection(Uri uri, String[] expectedProjection) {
+        Cursor cursor = mResolver.query(uri, null, "0", null, null);
+        String[] actualProjection = cursor.getColumnNames();
+        MoreAsserts.assertEquals("Incorrect projection for URI: " + uri,
+                Sets.newHashSet(expectedProjection), Sets.newHashSet(actualProjection));
+        cursor.close();
     }
 
     /**

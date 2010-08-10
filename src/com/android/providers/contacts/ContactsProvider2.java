@@ -4289,6 +4289,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             builder.appendQueryParameter(RawContacts.ACCOUNT_TYPE, directoryInfo.accountType);
         }
         Uri directoryUri = builder.build();
+
+        if (projection == null) {
+            projection = getDefaultProjection(uri);
+        }
+
         return getContext().getContentResolver().query(directoryUri, projection, selection,
                 selectionArgs, sortOrder);
     }
@@ -5909,6 +5914,52 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return Directory.CONTENT_ITEM_TYPE;
             default:
                 return mLegacyApiSupport.getType(uri);
+        }
+    }
+
+    public String[] getDefaultProjection(Uri uri) {
+        final int match = sUriMatcher.match(uri);
+        switch (match) {
+            case CONTACTS:
+            case CONTACTS_LOOKUP:
+            case CONTACTS_ID:
+            case CONTACTS_LOOKUP_ID:
+            case AGGREGATION_SUGGESTIONS:
+                return sContactsProjectionMap.getColumnNames();
+
+            case CONTACTS_AS_VCARD:
+            case CONTACTS_AS_MULTI_VCARD:
+                return sContactsVCardProjectionMap.getColumnNames();
+
+            case RAW_CONTACTS:
+            case RAW_CONTACTS_ID:
+                return sRawContactsProjectionMap.getColumnNames();
+
+            case DATA_ID:
+            case PHONES:
+            case PHONES_ID:
+            case EMAILS:
+            case EMAILS_ID:
+            case POSTALS:
+            case POSTALS_ID:
+                return sDataProjectionMap.getColumnNames();
+
+            case PHONE_LOOKUP:
+                return sPhoneLookupProjectionMap.getColumnNames();
+
+            case AGGREGATION_EXCEPTIONS:
+            case AGGREGATION_EXCEPTION_ID:
+                return sAggregationExceptionsProjectionMap.getColumnNames();
+
+            case SETTINGS:
+                return sSettingsProjectionMap.getColumnNames();
+
+            case DIRECTORIES:
+            case DIRECTORIES_ID:
+                return sDirectoryProjectionMap.getColumnNames();
+
+            default:
+                return null;
         }
     }
 
