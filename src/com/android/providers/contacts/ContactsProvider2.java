@@ -382,44 +382,381 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             NameLookupType.NAME_CONSONANTS;
 
 
+    private static final ProjectionMap sContactsColumns = ProjectionMap.builder()
+            .add(Contacts.CUSTOM_RINGTONE)
+            .add(Contacts.DISPLAY_NAME)
+            .add(Contacts.DISPLAY_NAME_ALTERNATIVE)
+            .add(Contacts.DISPLAY_NAME_SOURCE)
+            .add(Contacts.IN_VISIBLE_GROUP)
+            .add(Contacts.LAST_TIME_CONTACTED)
+            .add(Contacts.LOOKUP_KEY)
+            .add(Contacts.PHONETIC_NAME)
+            .add(Contacts.PHONETIC_NAME_STYLE)
+            .add(Contacts.PHOTO_ID)
+            .add(Contacts.SEND_TO_VOICEMAIL)
+            .add(Contacts.SORT_KEY_ALTERNATIVE)
+            .add(Contacts.SORT_KEY_PRIMARY)
+            .add(Contacts.STARRED)
+            .add(Contacts.TIMES_CONTACTED)
+            .build();
+
+    private static final ProjectionMap sContactsPresenceColumns = ProjectionMap.builder()
+            .add(Contacts.CONTACT_PRESENCE,
+                    Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE)
+            .add(Contacts.CONTACT_CHAT_CAPABILITY,
+                    Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY)
+            .add(Contacts.CONTACT_STATUS,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS)
+            .add(Contacts.CONTACT_STATUS_TIMESTAMP,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP)
+            .add(Contacts.CONTACT_STATUS_RES_PACKAGE,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE)
+            .add(Contacts.CONTACT_STATUS_LABEL,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL)
+            .add(Contacts.CONTACT_STATUS_ICON,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON)
+            .build();
+
+    private static final ProjectionMap sSnippetColumns = ProjectionMap.builder()
+            .add(SearchSnippetColumns.SNIPPET_MIMETYPE)
+            .add(SearchSnippetColumns.SNIPPET_DATA_ID)
+            .add(SearchSnippetColumns.SNIPPET_DATA1)
+            .add(SearchSnippetColumns.SNIPPET_DATA2)
+            .add(SearchSnippetColumns.SNIPPET_DATA3)
+            .add(SearchSnippetColumns.SNIPPET_DATA4)
+            .build();
+
+
+    private static final ProjectionMap sRawContactColumns = ProjectionMap.builder()
+            .add(RawContacts.ACCOUNT_NAME)
+            .add(RawContacts.ACCOUNT_TYPE)
+            .add(RawContacts.DIRTY)
+            .add(RawContacts.NAME_VERIFIED)
+            .add(RawContacts.SOURCE_ID)
+            .add(RawContacts.VERSION)
+            .build();
+
+    private static final ProjectionMap sRawContactSyncColumns = ProjectionMap.builder()
+            .add(RawContacts.SYNC1)
+            .add(RawContacts.SYNC2)
+            .add(RawContacts.SYNC3)
+            .add(RawContacts.SYNC4)
+            .build();
+
+    private static final ProjectionMap sDataColumns = ProjectionMap.builder()
+            .add(Data.DATA1)
+            .add(Data.DATA2)
+            .add(Data.DATA3)
+            .add(Data.DATA4)
+            .add(Data.DATA5)
+            .add(Data.DATA6)
+            .add(Data.DATA7)
+            .add(Data.DATA8)
+            .add(Data.DATA9)
+            .add(Data.DATA10)
+            .add(Data.DATA11)
+            .add(Data.DATA12)
+            .add(Data.DATA13)
+            .add(Data.DATA14)
+            .add(Data.DATA15)
+            .add(Data.DATA_VERSION)
+            .add(Data.IS_PRIMARY)
+            .add(Data.IS_SUPER_PRIMARY)
+            .add(Data.MIMETYPE)
+            .add(Data.RES_PACKAGE)
+            .add(Data.SYNC1)
+            .add(Data.SYNC2)
+            .add(Data.SYNC3)
+            .add(Data.SYNC4)
+            .add(GroupMembership.GROUP_SOURCE_ID)
+            .build();
+
+    private static final ProjectionMap sContactPresenceColumns = ProjectionMap.builder()
+            .add(Contacts.CONTACT_PRESENCE,
+                    Tables.AGGREGATED_PRESENCE + '.' + StatusUpdates.PRESENCE)
+            .add(Contacts.CONTACT_CHAT_CAPABILITY,
+                    Tables.AGGREGATED_PRESENCE + '.' + StatusUpdates.CHAT_CAPABILITY)
+            .add(Contacts.CONTACT_STATUS,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS)
+            .add(Contacts.CONTACT_STATUS_TIMESTAMP,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP)
+            .add(Contacts.CONTACT_STATUS_RES_PACKAGE,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE)
+            .add(Contacts.CONTACT_STATUS_LABEL,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL)
+            .add(Contacts.CONTACT_STATUS_ICON,
+                    ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON)
+            .build();
+
+    private static final ProjectionMap sDataPresenceColumns = ProjectionMap.builder()
+            .add(Data.PRESENCE, Tables.PRESENCE + "." + StatusUpdates.PRESENCE)
+            .add(Data.CHAT_CAPABILITY, Tables.PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY)
+            .add(Data.STATUS, StatusUpdatesColumns.CONCRETE_STATUS)
+            .add(Data.STATUS_TIMESTAMP, StatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP)
+            .add(Data.STATUS_RES_PACKAGE, StatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE)
+            .add(Data.STATUS_LABEL, StatusUpdatesColumns.CONCRETE_STATUS_LABEL)
+            .add(Data.STATUS_ICON, StatusUpdatesColumns.CONCRETE_STATUS_ICON)
+            .build();
+
     /** Contains just BaseColumns._COUNT */
-    private static final HashMap<String, String> sCountProjectionMap;
+    private static final ProjectionMap sCountProjectionMap = ProjectionMap.builder()
+            .add(BaseColumns._COUNT, "COUNT(*)")
+            .build();
+
     /** Contains just the contacts columns */
-    private static final HashMap<String, String> sContactsProjectionMap;
+    private static final ProjectionMap sContactsProjectionMap = ProjectionMap.builder()
+            .add(Contacts._ID)
+            .add(Contacts.HAS_PHONE_NUMBER)
+            .add(Contacts.NAME_RAW_CONTACT_ID)
+            .addAll(sContactsColumns)
+            .addAll(sContactsPresenceColumns)
+            .build();
+
     /** Contains just the contacts columns */
-    private static final HashMap<String, String> sContactsProjectionWithSnippetMap;
+    private static final ProjectionMap sContactsProjectionWithSnippetMap = ProjectionMap.builder()
+            .addAll(sContactsProjectionMap)
+            .addAll(sSnippetColumns)
+            .build();
 
     /** Used for pushing starred contacts to the top of a times contacted list **/
-    private static final HashMap<String, String> sStrequentStarredProjectionMap;
-    private static final HashMap<String, String> sStrequentFrequentProjectionMap;
+    private static final ProjectionMap sStrequentStarredProjectionMap = ProjectionMap.builder()
+            .addAll(sContactsProjectionMap)
+            .add(TIMES_CONTACTED_SORT_COLUMN, String.valueOf(Long.MAX_VALUE))
+            .build();
+
+    private static final ProjectionMap sStrequentFrequentProjectionMap = ProjectionMap.builder()
+            .addAll(sContactsProjectionMap)
+            .add(TIMES_CONTACTED_SORT_COLUMN, Contacts.TIMES_CONTACTED)
+            .build();
+
     /** Contains just the contacts vCard columns */
-    private static final HashMap<String, String> sContactsVCardProjectionMap;
+    private static final ProjectionMap sContactsVCardProjectionMap = ProjectionMap.builder()
+            .add(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME + " || '.vcf'")
+            .add(OpenableColumns.SIZE, "NULL")
+            .build();
+
     /** Contains just the raw contacts columns */
-    private static final HashMap<String, String> sRawContactsProjectionMap;
+    private static final ProjectionMap sRawContactsProjectionMap = ProjectionMap.builder()
+            .add(RawContacts._ID)
+            .add(RawContacts.CONTACT_ID)
+            .add(RawContacts.DELETED)
+            .add(RawContacts.DISPLAY_NAME_PRIMARY)
+            .add(RawContacts.DISPLAY_NAME_ALTERNATIVE)
+            .add(RawContacts.DISPLAY_NAME_SOURCE)
+            .add(RawContacts.PHONETIC_NAME)
+            .add(RawContacts.PHONETIC_NAME_STYLE)
+            .add(RawContacts.SORT_KEY_PRIMARY)
+            .add(RawContacts.SORT_KEY_ALTERNATIVE)
+            .add(RawContacts.TIMES_CONTACTED)
+            .add(RawContacts.LAST_TIME_CONTACTED)
+            .add(RawContacts.CUSTOM_RINGTONE)
+            .add(RawContacts.SEND_TO_VOICEMAIL)
+            .add(RawContacts.STARRED)
+            .add(RawContacts.AGGREGATION_MODE)
+            .addAll(sRawContactColumns)
+            .addAll(sRawContactSyncColumns)
+            .build();
+
     /** Contains the columns from the raw entity view*/
-    private static final HashMap<String, String> sRawEntityProjectionMap;
+    private static final ProjectionMap sRawEntityProjectionMap = ProjectionMap.builder()
+            .add(RawContacts._ID)
+            .add(RawContacts.CONTACT_ID)
+            .add(RawContacts.Entity.DATA_ID)
+            .add(RawContacts.IS_RESTRICTED)
+            .add(RawContacts.DELETED)
+            .add(RawContacts.STARRED)
+            .addAll(sRawContactColumns)
+            .addAll(sRawContactSyncColumns)
+            .addAll(sDataColumns)
+            .build();
+
     /** Contains the columns from the contact entity view*/
-    private static final HashMap<String, String> sEntityProjectionMap;
+    private static final ProjectionMap sEntityProjectionMap = ProjectionMap.builder()
+            .add(Contacts.Entity._ID)
+            .add(Contacts.Entity.CONTACT_ID)
+            .add(Contacts.Entity.RAW_CONTACT_ID)
+            .add(Contacts.Entity.DATA_ID)
+            .add(Contacts.Entity.NAME_RAW_CONTACT_ID)
+            .add(Contacts.Entity.DELETED)
+            .add(Contacts.Entity.IS_RESTRICTED)
+            .addAll(sContactsColumns)
+            .addAll(sContactPresenceColumns)
+            .addAll(sRawContactColumns)
+            .addAll(sRawContactSyncColumns)
+            .addAll(sDataColumns)
+            .addAll(sDataPresenceColumns)
+            .build();
+
     /** Contains columns from the data view */
-    private static final HashMap<String, String> sDataProjectionMap;
+    private static final ProjectionMap sDataProjectionMap = ProjectionMap.builder()
+            .add(Data._ID)
+            .add(Data.RAW_CONTACT_ID)
+            .add(Data.CONTACT_ID)
+            .add(Data.NAME_RAW_CONTACT_ID)
+            .addAll(sDataColumns)
+            .addAll(sDataPresenceColumns)
+            .addAll(sRawContactColumns)
+            .addAll(sContactsColumns)
+            .addAll(sContactPresenceColumns)
+            .build();
+
     /** Contains columns from the data view */
-    private static final HashMap<String, String> sDistinctDataProjectionMap;
+    private static final ProjectionMap sDistinctDataProjectionMap = ProjectionMap.builder()
+            .add(Data._ID, "MIN(" + Data._ID + ")")
+            .add(RawContacts.CONTACT_ID)
+            .addAll(sDataColumns)
+            .addAll(sDataPresenceColumns)
+            .addAll(sContactsColumns)
+            .addAll(sContactPresenceColumns)
+            .build();
+
     /** Contains the data and contacts columns, for joined tables */
-    private static final HashMap<String, String> sPhoneLookupProjectionMap;
+    private static final ProjectionMap sPhoneLookupProjectionMap = ProjectionMap.builder()
+            .add(PhoneLookup._ID, "contacts_view." + Contacts._ID)
+            .add(PhoneLookup.LOOKUP_KEY, "contacts_view." + Contacts.LOOKUP_KEY)
+            .add(PhoneLookup.DISPLAY_NAME, "contacts_view." + Contacts.DISPLAY_NAME)
+            .add(PhoneLookup.LAST_TIME_CONTACTED, "contacts_view." + Contacts.LAST_TIME_CONTACTED)
+            .add(PhoneLookup.TIMES_CONTACTED, "contacts_view." + Contacts.TIMES_CONTACTED)
+            .add(PhoneLookup.STARRED, "contacts_view." + Contacts.STARRED)
+            .add(PhoneLookup.IN_VISIBLE_GROUP, "contacts_view." + Contacts.IN_VISIBLE_GROUP)
+            .add(PhoneLookup.PHOTO_ID, "contacts_view." + Contacts.PHOTO_ID)
+            .add(PhoneLookup.CUSTOM_RINGTONE, "contacts_view." + Contacts.CUSTOM_RINGTONE)
+            .add(PhoneLookup.HAS_PHONE_NUMBER, "contacts_view." + Contacts.HAS_PHONE_NUMBER)
+            .add(PhoneLookup.SEND_TO_VOICEMAIL, "contacts_view." + Contacts.SEND_TO_VOICEMAIL)
+            .add(PhoneLookup.NUMBER, Phone.NUMBER)
+            .add(PhoneLookup.TYPE, Phone.TYPE)
+            .add(PhoneLookup.LABEL, Phone.LABEL)
+            .build();
+
     /** Contains the just the {@link Groups} columns */
-    private static final HashMap<String, String> sGroupsProjectionMap;
+    private static final ProjectionMap sGroupsProjectionMap = ProjectionMap.builder()
+            .add(Groups._ID)
+            .add(Groups.ACCOUNT_NAME)
+            .add(Groups.ACCOUNT_TYPE)
+            .add(Groups.SOURCE_ID)
+            .add(Groups.DIRTY)
+            .add(Groups.VERSION)
+            .add(Groups.RES_PACKAGE)
+            .add(Groups.TITLE)
+            .add(Groups.TITLE_RES)
+            .add(Groups.GROUP_VISIBLE)
+            .add(Groups.SYSTEM_ID)
+            .add(Groups.DELETED)
+            .add(Groups.NOTES)
+            .add(Groups.SHOULD_SYNC)
+            .add(Groups.FAVORITES)
+            .add(Groups.AUTO_ADD)
+            .add(Groups.SYNC1)
+            .add(Groups.SYNC2)
+            .add(Groups.SYNC3)
+            .add(Groups.SYNC4)
+            .build();
+
     /** Contains {@link Groups} columns along with summary details */
-    private static final HashMap<String, String> sGroupsSummaryProjectionMap;
+    private static final ProjectionMap sGroupsSummaryProjectionMap = ProjectionMap.builder()
+            .addAll(sGroupsProjectionMap)
+            .add(Groups.SUMMARY_COUNT,
+                    "(SELECT COUNT(DISTINCT " + ContactsColumns.CONCRETE_ID
+                    + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS
+                    + " WHERE " + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP
+                    + " AND " + Clauses.BELONGS_TO_GROUP
+                    + ")")
+            .add(Groups.SUMMARY_WITH_PHONES,
+                    "(SELECT COUNT(DISTINCT " + ContactsColumns.CONCRETE_ID
+                    + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS
+                    + " WHERE " + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP
+                    + " AND " + Clauses.BELONGS_TO_GROUP
+                    + " AND " + Contacts.HAS_PHONE_NUMBER + ")")
+            .build();
+
     /** Contains the agg_exceptions columns */
-    private static final HashMap<String, String> sAggregationExceptionsProjectionMap;
+    private static final ProjectionMap sAggregationExceptionsProjectionMap = ProjectionMap.builder()
+            .add(AggregationExceptionColumns._ID, Tables.AGGREGATION_EXCEPTIONS + "._id")
+            .add(AggregationExceptions.TYPE)
+            .add(AggregationExceptions.RAW_CONTACT_ID1)
+            .add(AggregationExceptions.RAW_CONTACT_ID2)
+            .build();
+
     /** Contains the agg_exceptions columns */
-    private static final HashMap<String, String> sSettingsProjectionMap;
+    private static final ProjectionMap sSettingsProjectionMap = ProjectionMap.builder()
+            .add(Settings.ACCOUNT_NAME)
+            .add(Settings.ACCOUNT_TYPE)
+            .add(Settings.UNGROUPED_VISIBLE)
+            .add(Settings.SHOULD_SYNC)
+            .add(Settings.ANY_UNSYNCED,
+                    "(CASE WHEN MIN(" + Settings.SHOULD_SYNC
+                        + ",(SELECT "
+                                + "(CASE WHEN MIN(" + Groups.SHOULD_SYNC + ") IS NULL"
+                                + " THEN 1"
+                                + " ELSE MIN(" + Groups.SHOULD_SYNC + ")"
+                                + " END)"
+                            + " FROM " + Tables.GROUPS
+                            + " WHERE " + GroupsColumns.CONCRETE_ACCOUNT_NAME + "="
+                                    + SettingsColumns.CONCRETE_ACCOUNT_NAME
+                                + " AND " + GroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
+                                    + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "))=0"
+                    + " THEN 1"
+                    + " ELSE 0"
+                    + " END)")
+            .add(Settings.UNGROUPED_COUNT,
+                    "(SELECT COUNT(*)"
+                    + " FROM (SELECT 1"
+                            + " FROM " + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS
+                            + " GROUP BY " + Clauses.GROUP_BY_ACCOUNT_CONTACT_ID
+                            + " HAVING " + Clauses.HAVING_NO_GROUPS
+                    + "))")
+            .add(Settings.UNGROUPED_WITH_PHONES,
+                    "(SELECT COUNT(*)"
+                    + " FROM (SELECT 1"
+                            + " FROM " + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS
+                            + " WHERE " + Contacts.HAS_PHONE_NUMBER
+                            + " GROUP BY " + Clauses.GROUP_BY_ACCOUNT_CONTACT_ID
+                            + " HAVING " + Clauses.HAVING_NO_GROUPS
+                    + "))")
+            .build();
+
     /** Contains StatusUpdates columns */
-    private static final HashMap<String, String> sStatusUpdatesProjectionMap;
+    private static final ProjectionMap sStatusUpdatesProjectionMap = ProjectionMap.builder()
+            .add(PresenceColumns.RAW_CONTACT_ID)
+            .add(StatusUpdates.DATA_ID, DataColumns.CONCRETE_ID)
+            .add(StatusUpdates.IM_ACCOUNT)
+            .add(StatusUpdates.IM_HANDLE)
+            .add(StatusUpdates.PROTOCOL)
+            // We cannot allow a null in the custom protocol field, because SQLite3 does not
+            // properly enforce uniqueness of null values
+            .add(StatusUpdates.CUSTOM_PROTOCOL,
+                    "(CASE WHEN " + StatusUpdates.CUSTOM_PROTOCOL + "=''"
+                    + " THEN NULL"
+                    + " ELSE " + StatusUpdates.CUSTOM_PROTOCOL + " END)")
+            .add(StatusUpdates.PRESENCE)
+            .add(StatusUpdates.CHAT_CAPABILITY)
+            .add(StatusUpdates.STATUS)
+            .add(StatusUpdates.STATUS_TIMESTAMP)
+            .add(StatusUpdates.STATUS_RES_PACKAGE)
+            .add(StatusUpdates.STATUS_ICON)
+            .add(StatusUpdates.STATUS_LABEL)
+            .build();
+
     /** Contains Live Folders columns */
-    private static final HashMap<String, String> sLiveFoldersProjectionMap;
+    private static final ProjectionMap sLiveFoldersProjectionMap = ProjectionMap.builder()
+            .add(LiveFolders._ID, Contacts._ID)
+            .add(LiveFolders.NAME, Contacts.DISPLAY_NAME)
+            // TODO: Put contact photo back when we have a way to display a default icon
+            // for contacts without a photo
+            // .add(LiveFolders.ICON_BITMAP, Photos.DATA)
+            .build();
+
     /** Contains {@link Directory} columns */
-    private static final HashMap<String, String> sDirectoryProjectionMap;
+    private static final ProjectionMap sDirectoryProjectionMap = ProjectionMap.builder()
+            .add(Directory._ID)
+            .add(Directory.PACKAGE_NAME)
+            .add(Directory.TYPE_RESOURCE_ID)
+            .add(Directory.DISPLAY_NAME)
+            .add(Directory.DIRECTORY_AUTHORITY)
+            .add(Directory.ACCOUNT_TYPE)
+            .add(Directory.ACCOUNT_NAME)
+            .add(Directory.EXPORT_SUPPORT)
+            .build();
 
     // where clause to update the status_updates table
     private static final String WHERE_CLAUSE_FOR_STATUS_UPDATES_TABLE =
@@ -555,386 +892,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         matcher.addURI(ContactsContract.AUTHORITY, "directories", DIRECTORIES);
         matcher.addURI(ContactsContract.AUTHORITY, "directories/#", DIRECTORIES_ID);
-    }
-
-    static {
-        sCountProjectionMap = new HashMap<String, String>();
-        sCountProjectionMap.put(BaseColumns._COUNT, "COUNT(*)");
-
-        sContactsProjectionMap = new HashMap<String, String>();
-        sContactsProjectionMap.put(Contacts._ID, Contacts._ID);
-        sContactsProjectionMap.put(Contacts.HAS_PHONE_NUMBER, Contacts.HAS_PHONE_NUMBER);
-        sContactsProjectionMap.put(Contacts.NAME_RAW_CONTACT_ID, Contacts.NAME_RAW_CONTACT_ID);
-        addContactProjection(sContactsProjectionMap);
-        addContactPresenceProjection(sContactsProjectionMap);
-
-        sContactsProjectionWithSnippetMap = new HashMap<String, String>();
-        sContactsProjectionWithSnippetMap.putAll(sContactsProjectionMap);
-        addSnippetProjection(sContactsProjectionWithSnippetMap);
-
-        sStrequentStarredProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
-        sStrequentStarredProjectionMap.put(TIMES_CONTACTED_SORT_COLUMN,
-                  Long.MAX_VALUE + " AS " + TIMES_CONTACTED_SORT_COLUMN);
-
-        sStrequentFrequentProjectionMap = new HashMap<String, String>(sContactsProjectionMap);
-        sStrequentFrequentProjectionMap.put(TIMES_CONTACTED_SORT_COLUMN,
-                  Contacts.TIMES_CONTACTED + " AS " + TIMES_CONTACTED_SORT_COLUMN);
-
-        sContactsVCardProjectionMap = new HashMap<String, String>();
-        sContactsVCardProjectionMap.put(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME
-                + " || '.vcf' AS " + OpenableColumns.DISPLAY_NAME);
-        sContactsVCardProjectionMap.put(OpenableColumns.SIZE, "NULL AS " + OpenableColumns.SIZE);
-
-        sRawContactsProjectionMap = new HashMap<String, String>();
-        sRawContactsProjectionMap.put(RawContacts._ID, RawContacts._ID);
-        sRawContactsProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
-        sRawContactsProjectionMap.put(RawContacts.DELETED, RawContacts.DELETED);
-        sRawContactsProjectionMap.put(RawContacts.DISPLAY_NAME_PRIMARY,
-                RawContacts.DISPLAY_NAME_PRIMARY);
-        sRawContactsProjectionMap.put(RawContacts.DISPLAY_NAME_ALTERNATIVE,
-                RawContacts.DISPLAY_NAME_ALTERNATIVE);
-        sRawContactsProjectionMap.put(RawContacts.DISPLAY_NAME_SOURCE,
-                RawContacts.DISPLAY_NAME_SOURCE);
-        sRawContactsProjectionMap.put(RawContacts.PHONETIC_NAME,
-                RawContacts.PHONETIC_NAME);
-        sRawContactsProjectionMap.put(RawContacts.PHONETIC_NAME_STYLE,
-                RawContacts.PHONETIC_NAME_STYLE);
-        sRawContactsProjectionMap.put(RawContacts.SORT_KEY_PRIMARY,
-                RawContacts.SORT_KEY_PRIMARY);
-        sRawContactsProjectionMap.put(RawContacts.SORT_KEY_ALTERNATIVE,
-                RawContacts.SORT_KEY_ALTERNATIVE);
-        sRawContactsProjectionMap.put(RawContacts.TIMES_CONTACTED, RawContacts.TIMES_CONTACTED);
-        sRawContactsProjectionMap.put(RawContacts.LAST_TIME_CONTACTED,
-                RawContacts.LAST_TIME_CONTACTED);
-        sRawContactsProjectionMap.put(RawContacts.CUSTOM_RINGTONE, RawContacts.CUSTOM_RINGTONE);
-        sRawContactsProjectionMap.put(RawContacts.SEND_TO_VOICEMAIL, RawContacts.SEND_TO_VOICEMAIL);
-        sRawContactsProjectionMap.put(RawContacts.STARRED, RawContacts.STARRED);
-        sRawContactsProjectionMap.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE);
-        addRawContactProjection(sRawContactsProjectionMap, true);
-
-        sDataProjectionMap = new HashMap<String, String>();
-        sDataProjectionMap.put(Data._ID, Data._ID);
-        sDataProjectionMap.put(Data.RAW_CONTACT_ID, Data.RAW_CONTACT_ID);
-        sDataProjectionMap.put(Data.CONTACT_ID, Data.CONTACT_ID);
-        sDataProjectionMap.put(Data.NAME_RAW_CONTACT_ID, Data.NAME_RAW_CONTACT_ID);
-        addDataProjection(sDataProjectionMap);
-        addDataPresenceProjection(sDataProjectionMap);
-        addRawContactProjection(sDataProjectionMap, false);
-        addContactProjection(sDataProjectionMap);
-        addContactPresenceProjection(sDataProjectionMap);
-
-        // Projection map for data grouped by contact (not raw contact) and some data field(s)
-        sDistinctDataProjectionMap = new HashMap<String, String>();
-        sDistinctDataProjectionMap.put(Data._ID, "MIN(" + Data._ID + ") AS " + Data._ID);
-        sDistinctDataProjectionMap.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
-        addDataProjection(sDistinctDataProjectionMap);
-        addDataPresenceProjection(sDistinctDataProjectionMap);
-        addContactProjection(sDistinctDataProjectionMap);
-        addContactPresenceProjection(sDistinctDataProjectionMap);
-
-        HashMap<String, String> columns;
-        columns = new HashMap<String, String>();
-        columns.put(RawContacts._ID, RawContacts._ID);
-        columns.put(RawContacts.CONTACT_ID, RawContacts.CONTACT_ID);
-        columns.put(RawContacts.Entity.DATA_ID, RawContacts.Entity.DATA_ID);
-        columns.put(RawContacts.IS_RESTRICTED, RawContacts.IS_RESTRICTED);
-        columns.put(RawContacts.DELETED, RawContacts.DELETED);
-        columns.put(RawContacts.STARRED, RawContacts.STARRED);
-        addRawContactProjection(columns, true);
-        addDataProjection(columns);
-        sRawEntityProjectionMap = columns;
-
-        sEntityProjectionMap = new HashMap<String, String>();
-        sEntityProjectionMap.put(Contacts.Entity._ID, Contacts.Entity._ID);
-        sEntityProjectionMap.put(Contacts.Entity.CONTACT_ID, Contacts.Entity.CONTACT_ID);
-        sEntityProjectionMap.put(Contacts.Entity.RAW_CONTACT_ID, Contacts.Entity.RAW_CONTACT_ID);
-        sEntityProjectionMap.put(Contacts.Entity.DATA_ID, Contacts.Entity.DATA_ID);
-        sEntityProjectionMap.put(Contacts.Entity.NAME_RAW_CONTACT_ID,
-                Contacts.Entity.NAME_RAW_CONTACT_ID);
-        sEntityProjectionMap.put(Contacts.Entity.DELETED,
-                Contacts.Entity.DELETED);
-        sEntityProjectionMap.put(Contacts.Entity.IS_RESTRICTED,
-                Contacts.Entity.IS_RESTRICTED);
-        addContactProjection(sEntityProjectionMap);
-        addContactPresenceProjection(sEntityProjectionMap);
-        addRawContactProjection(sEntityProjectionMap, true);
-        addDataProjection(sEntityProjectionMap);
-        addDataPresenceProjection(sEntityProjectionMap);
-
-        sPhoneLookupProjectionMap = new HashMap<String, String>();
-        sPhoneLookupProjectionMap.put(PhoneLookup._ID,
-                "contacts_view." + Contacts._ID
-                        + " AS " + PhoneLookup._ID);
-        sPhoneLookupProjectionMap.put(PhoneLookup.LOOKUP_KEY,
-                "contacts_view." + Contacts.LOOKUP_KEY
-                        + " AS " + PhoneLookup.LOOKUP_KEY);
-        sPhoneLookupProjectionMap.put(PhoneLookup.DISPLAY_NAME,
-                "contacts_view." + Contacts.DISPLAY_NAME
-                        + " AS " + PhoneLookup.DISPLAY_NAME);
-        sPhoneLookupProjectionMap.put(PhoneLookup.LAST_TIME_CONTACTED,
-                "contacts_view." + Contacts.LAST_TIME_CONTACTED
-                        + " AS " + PhoneLookup.LAST_TIME_CONTACTED);
-        sPhoneLookupProjectionMap.put(PhoneLookup.TIMES_CONTACTED,
-                "contacts_view." + Contacts.TIMES_CONTACTED
-                        + " AS " + PhoneLookup.TIMES_CONTACTED);
-        sPhoneLookupProjectionMap.put(PhoneLookup.STARRED,
-                "contacts_view." + Contacts.STARRED
-                        + " AS " + PhoneLookup.STARRED);
-        sPhoneLookupProjectionMap.put(PhoneLookup.IN_VISIBLE_GROUP,
-                "contacts_view." + Contacts.IN_VISIBLE_GROUP
-                        + " AS " + PhoneLookup.IN_VISIBLE_GROUP);
-        sPhoneLookupProjectionMap.put(PhoneLookup.PHOTO_ID,
-                "contacts_view." + Contacts.PHOTO_ID
-                        + " AS " + PhoneLookup.PHOTO_ID);
-        sPhoneLookupProjectionMap.put(PhoneLookup.CUSTOM_RINGTONE,
-                "contacts_view." + Contacts.CUSTOM_RINGTONE
-                        + " AS " + PhoneLookup.CUSTOM_RINGTONE);
-        sPhoneLookupProjectionMap.put(PhoneLookup.HAS_PHONE_NUMBER,
-                "contacts_view." + Contacts.HAS_PHONE_NUMBER
-                        + " AS " + PhoneLookup.HAS_PHONE_NUMBER);
-        sPhoneLookupProjectionMap.put(PhoneLookup.SEND_TO_VOICEMAIL,
-                "contacts_view." + Contacts.SEND_TO_VOICEMAIL
-                        + " AS " + PhoneLookup.SEND_TO_VOICEMAIL);
-        sPhoneLookupProjectionMap.put(PhoneLookup.NUMBER,
-                Phone.NUMBER + " AS " + PhoneLookup.NUMBER);
-        sPhoneLookupProjectionMap.put(PhoneLookup.TYPE,
-                Phone.TYPE + " AS " + PhoneLookup.TYPE);
-        sPhoneLookupProjectionMap.put(PhoneLookup.LABEL,
-                Phone.LABEL + " AS " + PhoneLookup.LABEL);
-
-        // Groups projection map
-        columns = new HashMap<String, String>();
-        columns.put(Groups._ID, Groups._ID);
-        columns.put(Groups.ACCOUNT_NAME, Groups.ACCOUNT_NAME);
-        columns.put(Groups.ACCOUNT_TYPE, Groups.ACCOUNT_TYPE);
-        columns.put(Groups.SOURCE_ID, Groups.SOURCE_ID);
-        columns.put(Groups.DIRTY, Groups.DIRTY);
-        columns.put(Groups.VERSION, Groups.VERSION);
-        columns.put(Groups.RES_PACKAGE, Groups.RES_PACKAGE);
-        columns.put(Groups.TITLE, Groups.TITLE);
-        columns.put(Groups.TITLE_RES, Groups.TITLE_RES);
-        columns.put(Groups.GROUP_VISIBLE, Groups.GROUP_VISIBLE);
-        columns.put(Groups.SYSTEM_ID, Groups.SYSTEM_ID);
-        columns.put(Groups.DELETED, Groups.DELETED);
-        columns.put(Groups.NOTES, Groups.NOTES);
-        columns.put(Groups.SHOULD_SYNC, Groups.SHOULD_SYNC);
-        columns.put(Groups.FAVORITES, Groups.FAVORITES);
-        columns.put(Groups.AUTO_ADD, Groups.AUTO_ADD);
-        columns.put(Groups.SYNC1, Groups.SYNC1);
-        columns.put(Groups.SYNC2, Groups.SYNC2);
-        columns.put(Groups.SYNC3, Groups.SYNC3);
-        columns.put(Groups.SYNC4, Groups.SYNC4);
-        sGroupsProjectionMap = columns;
-
-        // RawContacts and groups projection map
-        columns = new HashMap<String, String>();
-        columns.putAll(sGroupsProjectionMap);
-        columns.put(Groups.SUMMARY_COUNT, "(SELECT COUNT(DISTINCT " + ContactsColumns.CONCRETE_ID
-                + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS + " WHERE "
-                + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
-                + ") AS " + Groups.SUMMARY_COUNT);
-        columns.put(Groups.SUMMARY_WITH_PHONES, "(SELECT COUNT(DISTINCT "
-                + ContactsColumns.CONCRETE_ID + ") FROM "
-                + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS + " WHERE "
-                + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP + " AND " + Clauses.BELONGS_TO_GROUP
-                + " AND " + Contacts.HAS_PHONE_NUMBER + ") AS " + Groups.SUMMARY_WITH_PHONES);
-        sGroupsSummaryProjectionMap = columns;
-
-        // Aggregate exception projection map
-        columns = new HashMap<String, String>();
-        columns.put(AggregationExceptionColumns._ID, Tables.AGGREGATION_EXCEPTIONS + "._id AS _id");
-        columns.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE);
-        columns.put(AggregationExceptions.RAW_CONTACT_ID1, AggregationExceptions.RAW_CONTACT_ID1);
-        columns.put(AggregationExceptions.RAW_CONTACT_ID2, AggregationExceptions.RAW_CONTACT_ID2);
-        sAggregationExceptionsProjectionMap = columns;
-
-        // Settings projection map
-        columns = new HashMap<String, String>();
-        columns.put(Settings.ACCOUNT_NAME, Settings.ACCOUNT_NAME);
-        columns.put(Settings.ACCOUNT_TYPE, Settings.ACCOUNT_TYPE);
-        columns.put(Settings.UNGROUPED_VISIBLE, Settings.UNGROUPED_VISIBLE);
-        columns.put(Settings.SHOULD_SYNC, Settings.SHOULD_SYNC);
-        columns.put(Settings.ANY_UNSYNCED, "(CASE WHEN MIN(" + Settings.SHOULD_SYNC
-                + ",(SELECT (CASE WHEN MIN(" + Groups.SHOULD_SYNC + ") IS NULL THEN 1 ELSE MIN("
-                + Groups.SHOULD_SYNC + ") END) FROM " + Tables.GROUPS + " WHERE "
-                + GroupsColumns.CONCRETE_ACCOUNT_NAME + "=" + SettingsColumns.CONCRETE_ACCOUNT_NAME
-                + " AND " + GroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
-                + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "))=0 THEN 1 ELSE 0 END) AS "
-                + Settings.ANY_UNSYNCED);
-        columns.put(Settings.UNGROUPED_COUNT, "(SELECT COUNT(*) FROM (SELECT 1 FROM "
-                + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " GROUP BY "
-                + Clauses.GROUP_BY_ACCOUNT_CONTACT_ID + " HAVING " + Clauses.HAVING_NO_GROUPS
-                + ")) AS " + Settings.UNGROUPED_COUNT);
-        columns.put(Settings.UNGROUPED_WITH_PHONES, "(SELECT COUNT(*) FROM (SELECT 1 FROM "
-                + Tables.SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS + " WHERE "
-                + Contacts.HAS_PHONE_NUMBER + " GROUP BY " + Clauses.GROUP_BY_ACCOUNT_CONTACT_ID
-                + " HAVING " + Clauses.HAVING_NO_GROUPS + ")) AS "
-                + Settings.UNGROUPED_WITH_PHONES);
-        sSettingsProjectionMap = columns;
-
-        columns = new HashMap<String, String>();
-        columns.put(PresenceColumns.RAW_CONTACT_ID, PresenceColumns.RAW_CONTACT_ID);
-        columns.put(StatusUpdates.DATA_ID,
-                DataColumns.CONCRETE_ID + " AS " + StatusUpdates.DATA_ID);
-        columns.put(StatusUpdates.IM_ACCOUNT, StatusUpdates.IM_ACCOUNT);
-        columns.put(StatusUpdates.IM_HANDLE, StatusUpdates.IM_HANDLE);
-        columns.put(StatusUpdates.PROTOCOL, StatusUpdates.PROTOCOL);
-        // We cannot allow a null in the custom protocol field, because SQLite3 does not
-        // properly enforce uniqueness of null values
-        columns.put(StatusUpdates.CUSTOM_PROTOCOL, "(CASE WHEN " + StatusUpdates.CUSTOM_PROTOCOL
-                + "='' THEN NULL ELSE " + StatusUpdates.CUSTOM_PROTOCOL + " END) AS "
-                + StatusUpdates.CUSTOM_PROTOCOL);
-        columns.put(StatusUpdates.PRESENCE, StatusUpdates.PRESENCE);
-        columns.put(StatusUpdates.CHAT_CAPABILITY, StatusUpdates.CHAT_CAPABILITY);
-        columns.put(StatusUpdates.STATUS, StatusUpdates.STATUS);
-        columns.put(StatusUpdates.STATUS_TIMESTAMP, StatusUpdates.STATUS_TIMESTAMP);
-        columns.put(StatusUpdates.STATUS_RES_PACKAGE, StatusUpdates.STATUS_RES_PACKAGE);
-        columns.put(StatusUpdates.STATUS_ICON, StatusUpdates.STATUS_ICON);
-        columns.put(StatusUpdates.STATUS_LABEL, StatusUpdates.STATUS_LABEL);
-        sStatusUpdatesProjectionMap = columns;
-
-        // Live folder projection
-        sLiveFoldersProjectionMap = new HashMap<String, String>();
-        sLiveFoldersProjectionMap.put(LiveFolders._ID,
-                Contacts._ID + " AS " + LiveFolders._ID);
-        sLiveFoldersProjectionMap.put(LiveFolders.NAME,
-                Contacts.DISPLAY_NAME + " AS " + LiveFolders.NAME);
-        // TODO: Put contact photo back when we have a way to display a default icon
-        // for contacts without a photo
-        // sLiveFoldersProjectionMap.put(LiveFolders.ICON_BITMAP,
-        //      Photos.DATA + " AS " + LiveFolders.ICON_BITMAP);
-
-        sDirectoryProjectionMap = new HashMap<String, String>();
-        sDirectoryProjectionMap.put(Directory._ID, Directory._ID);
-        sDirectoryProjectionMap.put(Directory.PACKAGE_NAME, Directory.PACKAGE_NAME);
-        sDirectoryProjectionMap.put(Directory.TYPE_RESOURCE_ID, Directory.TYPE_RESOURCE_ID);
-        sDirectoryProjectionMap.put(Directory.DISPLAY_NAME, Directory.DISPLAY_NAME);
-        sDirectoryProjectionMap.put(Directory.DIRECTORY_AUTHORITY, Directory.DIRECTORY_AUTHORITY);
-        sDirectoryProjectionMap.put(Directory.ACCOUNT_TYPE, Directory.ACCOUNT_TYPE);
-        sDirectoryProjectionMap.put(Directory.ACCOUNT_NAME, Directory.ACCOUNT_NAME);
-        sDirectoryProjectionMap.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT);
-    }
-
-    private static void addContactProjection(Map<String, String> projectionMap) {
-        projectionMap.put(Contacts.CUSTOM_RINGTONE, Contacts.CUSTOM_RINGTONE);
-        projectionMap.put(Contacts.DISPLAY_NAME, Contacts.DISPLAY_NAME);
-        projectionMap.put(Contacts.DISPLAY_NAME_ALTERNATIVE,
-                Contacts.DISPLAY_NAME_ALTERNATIVE);
-        projectionMap.put(Contacts.DISPLAY_NAME_SOURCE, Contacts.DISPLAY_NAME_SOURCE);
-        projectionMap.put(Contacts.IN_VISIBLE_GROUP, Contacts.IN_VISIBLE_GROUP);
-        projectionMap.put(Contacts.LAST_TIME_CONTACTED, Contacts.LAST_TIME_CONTACTED);
-        projectionMap.put(Contacts.LOOKUP_KEY, Contacts.LOOKUP_KEY);
-        projectionMap.put(Contacts.PHONETIC_NAME, Contacts.PHONETIC_NAME);
-        projectionMap.put(Contacts.PHONETIC_NAME_STYLE, Contacts.PHONETIC_NAME_STYLE);
-        projectionMap.put(Contacts.PHOTO_ID, Contacts.PHOTO_ID);
-        projectionMap.put(Contacts.SEND_TO_VOICEMAIL, Contacts.SEND_TO_VOICEMAIL);
-        projectionMap.put(Contacts.SORT_KEY_ALTERNATIVE, Contacts.SORT_KEY_ALTERNATIVE);
-        projectionMap.put(Contacts.SORT_KEY_PRIMARY, Contacts.SORT_KEY_PRIMARY);
-        projectionMap.put(Contacts.STARRED, Contacts.STARRED);
-        projectionMap.put(Contacts.TIMES_CONTACTED, Contacts.TIMES_CONTACTED);
-    }
-
-    private static void addRawContactProjection(Map<String, String> projectionMap,
-            boolean includeSync) {
-        projectionMap.put(RawContacts.ACCOUNT_NAME, RawContacts.ACCOUNT_NAME);
-        projectionMap.put(RawContacts.ACCOUNT_TYPE, RawContacts.ACCOUNT_TYPE);
-        projectionMap.put(RawContacts.DIRTY, RawContacts.DIRTY);
-        projectionMap.put(RawContacts.NAME_VERIFIED, RawContacts.NAME_VERIFIED);
-        projectionMap.put(RawContacts.SOURCE_ID, RawContacts.SOURCE_ID);
-        projectionMap.put(RawContacts.VERSION, RawContacts.VERSION);
-        if (includeSync) {
-            projectionMap.put(RawContacts.SYNC1, RawContacts.SYNC1);
-            projectionMap.put(RawContacts.SYNC2, RawContacts.SYNC2);
-            projectionMap.put(RawContacts.SYNC3, RawContacts.SYNC3);
-            projectionMap.put(RawContacts.SYNC4, RawContacts.SYNC4);
-        }
-    }
-
-    private static void addDataProjection(Map<String, String> projectionMap) {
-        projectionMap.put(Data.DATA1, Data.DATA1);
-        projectionMap.put(Data.DATA2, Data.DATA2);
-        projectionMap.put(Data.DATA3, Data.DATA3);
-        projectionMap.put(Data.DATA4, Data.DATA4);
-        projectionMap.put(Data.DATA5, Data.DATA5);
-        projectionMap.put(Data.DATA6, Data.DATA6);
-        projectionMap.put(Data.DATA7, Data.DATA7);
-        projectionMap.put(Data.DATA8, Data.DATA8);
-        projectionMap.put(Data.DATA9, Data.DATA9);
-        projectionMap.put(Data.DATA10, Data.DATA10);
-        projectionMap.put(Data.DATA11, Data.DATA11);
-        projectionMap.put(Data.DATA12, Data.DATA12);
-        projectionMap.put(Data.DATA13, Data.DATA13);
-        projectionMap.put(Data.DATA14, Data.DATA14);
-        projectionMap.put(Data.DATA15, Data.DATA15);
-        projectionMap.put(Data.DATA_VERSION, Data.DATA_VERSION);
-        projectionMap.put(Data.IS_PRIMARY, Data.IS_PRIMARY);
-        projectionMap.put(Data.IS_SUPER_PRIMARY, Data.IS_SUPER_PRIMARY);
-        projectionMap.put(Data.MIMETYPE, Data.MIMETYPE);
-        projectionMap.put(Data.RES_PACKAGE, Data.RES_PACKAGE);
-        projectionMap.put(Data.SYNC1, Data.SYNC1);
-        projectionMap.put(Data.SYNC2, Data.SYNC2);
-        projectionMap.put(Data.SYNC3, Data.SYNC3);
-        projectionMap.put(Data.SYNC4, Data.SYNC4);
-        projectionMap.put(GroupMembership.GROUP_SOURCE_ID, GroupMembership.GROUP_SOURCE_ID);
-    }
-
-    /**
-     * Adds projections for Contacts-level statuses
-     */
-    private static void addContactPresenceProjection(Map<String, String> projectionMap) {
-        addProjection(projectionMap, Contacts.CONTACT_PRESENCE,
-                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.PRESENCE);
-        addProjection(projectionMap, Contacts.CONTACT_CHAT_CAPABILITY,
-                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
-        addProjection(projectionMap, Contacts.CONTACT_STATUS,
-                ContactsStatusUpdatesColumns.CONCRETE_STATUS);
-        addProjection(projectionMap, Contacts.CONTACT_STATUS_TIMESTAMP,
-                ContactsStatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
-        addProjection(projectionMap, Contacts.CONTACT_STATUS_RES_PACKAGE,
-                ContactsStatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
-        addProjection(projectionMap, Contacts.CONTACT_STATUS_LABEL,
-                ContactsStatusUpdatesColumns.CONCRETE_STATUS_LABEL);
-        addProjection(projectionMap, Contacts.CONTACT_STATUS_ICON,
-                ContactsStatusUpdatesColumns.CONCRETE_STATUS_ICON);
-    }
-
-    /**
-     * Adds projections for Data-level statuses
-     */
-    private static void addDataPresenceProjection(Map<String, String> projectionMap) {
-        addProjection(projectionMap, Data.PRESENCE,
-                Tables.PRESENCE + "." + StatusUpdates.PRESENCE);
-        addProjection(projectionMap, Data.CHAT_CAPABILITY,
-                Tables.AGGREGATED_PRESENCE + "." + StatusUpdates.CHAT_CAPABILITY);
-        addProjection(projectionMap, Data.STATUS,
-                StatusUpdatesColumns.CONCRETE_STATUS);
-        addProjection(projectionMap, Data.STATUS_TIMESTAMP,
-                StatusUpdatesColumns.CONCRETE_STATUS_TIMESTAMP);
-        addProjection(projectionMap, Data.STATUS_RES_PACKAGE,
-                StatusUpdatesColumns.CONCRETE_STATUS_RES_PACKAGE);
-        addProjection(projectionMap, Data.STATUS_LABEL,
-                StatusUpdatesColumns.CONCRETE_STATUS_LABEL);
-        addProjection(projectionMap, Data.STATUS_ICON,
-                StatusUpdatesColumns.CONCRETE_STATUS_ICON);
-    }
-
-    private static void addSnippetProjection(Map<String, String> projectionMap) {
-        projectionMap.put(SearchSnippetColumns.SNIPPET_MIMETYPE,
-                SearchSnippetColumns.SNIPPET_MIMETYPE);
-        projectionMap.put(SearchSnippetColumns.SNIPPET_DATA_ID,
-                SearchSnippetColumns.SNIPPET_DATA_ID);
-        projectionMap.put(SearchSnippetColumns.SNIPPET_DATA1,
-                SearchSnippetColumns.SNIPPET_DATA1);
-        projectionMap.put(SearchSnippetColumns.SNIPPET_DATA2,
-                SearchSnippetColumns.SNIPPET_DATA2);
-        projectionMap.put(SearchSnippetColumns.SNIPPET_DATA3,
-                SearchSnippetColumns.SNIPPET_DATA3);
-        projectionMap.put(SearchSnippetColumns.SNIPPET_DATA4,
-                SearchSnippetColumns.SNIPPET_DATA4);
-    }
-
-    private static void addProjection(Map<String, String> map, String toField, String fromField) {
-        map.put(toField, fromField + " AS " + toField);
     }
 
     private static class DirectoryInfo {
@@ -5912,6 +5869,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_AS_VCARD:
             case CONTACTS_AS_MULTI_VCARD:
                 return Contacts.CONTENT_VCARD_TYPE;
+            case CONTACTS_ID_PHOTO:
+                return "image/png";
             case RAW_CONTACTS:
                 return RawContacts.CONTENT_TYPE;
             case RAW_CONTACTS_ID:
