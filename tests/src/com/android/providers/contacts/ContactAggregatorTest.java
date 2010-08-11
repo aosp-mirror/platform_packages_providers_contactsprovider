@@ -28,6 +28,7 @@ import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
@@ -891,6 +892,54 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = ContentUris.parseId(results[2].uri);
 
         assertAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationSuggestionsQueryBuilderWithContactId() throws Exception {
+        Uri uri = AggregationSuggestions.builder().setContactId(12).setLimit(7).build();
+        assertEquals("content://com.android.contacts/contacts/12/suggestions?limit=7",
+                uri.toString());
+    }
+
+    public void testAggregationSuggestionsQueryBuilderWithValues() throws Exception {
+        Uri uri = AggregationSuggestions.builder()
+                .addParameter(AggregationSuggestions.MATCH_NAME, "name1")
+                .addParameter(AggregationSuggestions.MATCH_NAME, "name2")
+                .addParameter(AggregationSuggestions.MATCH_EMAIL, "email1")
+                .addParameter(AggregationSuggestions.MATCH_EMAIL, "email2")
+                .addParameter(AggregationSuggestions.MATCH_PHONE, "phone1")
+                .addParameter(AggregationSuggestions.MATCH_NICKNAME, "nickname1")
+                .setLimit(7)
+                .build();
+        assertEquals("content://com.android.contacts/contacts/-1/suggestions?"
+                + "limit=7"
+                + "&query=name%3Aname1"
+                + "&query=name%3Aname2"
+                + "&query=email%3Aemail1"
+                + "&query=email%3Aemail2"
+                + "&query=phone%3Aphone1"
+                + "&query=nickname%3Anickname1", uri.toString());
+    }
+
+    public void testAggregationSuggestionsByName() throws Exception {
+        long rawContactId1 = createRawContactWithName("first1", "last1");
+        long rawContactId2 = createRawContactWithName("first2", "last2");
+
+        Uri uri = AggregationSuggestions.builder()
+                .addParameter(AggregationSuggestions.MATCH_NAME, "last1 first1")
+                .build();
+
+        Cursor cursor = mResolver.query(
+                uri, new String[] { Contacts._ID, Contacts.DISPLAY_NAME }, null, null, null);
+
+        assertEquals(1, cursor.getCount());
+
+        cursor.moveToFirst();
+
+        ContentValues values = new ContentValues();
+        values.put(Contacts._ID, queryContactId(rawContactId1));
+        values.put(Contacts.DISPLAY_NAME, "first1 last1");
+        assertCursorValues(cursor, values);
+        cursor.close();
     }
 
     private void assertSuggestions(long contactId, long... suggestions) {

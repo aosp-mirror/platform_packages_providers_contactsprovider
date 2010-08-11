@@ -35,14 +35,16 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.DisplayNameSources;
-import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Contacts.AggregationSuggestions;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.DisplayNameSources;
+import android.provider.ContactsContract.FullNameStyle;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
 import android.util.EventLog;
 import android.util.Log;
@@ -93,6 +95,9 @@ public class ContactAggregator {
     private final ContactsProvider2 mContactsProvider;
     private final ContactsDatabaseHelper mDbHelper;
     private PhotoPriorityResolver mPhotoPriorityResolver;
+    private final NameSplitter mNameSplitter;
+    private final CommonNicknameCache mCommonNicknameCache;
+
     private boolean mEnabled = true;
 
     /** Precompiled sql statement for setting an aggregated presence */
@@ -128,6 +133,19 @@ public class ContactAggregator {
     private ContactMatcher mMatcher = new ContactMatcher();
     private ContentValues mValues = new ContentValues();
     private DisplayNameCandidate mDisplayNameCandidate = new DisplayNameCandidate();
+
+    /**
+     * Parameter for the suggestion lookup query.
+     */
+    public static final class AggregationSuggestionParameter {
+        public final String kind;
+        public final String value;
+
+        public AggregationSuggestionParameter(String kind, String value) {
+            this.kind = kind;
+            this.value = value;
+        }
+    }
 
     /**
      * Captures a potential match for a given name. The matching algorithm
@@ -169,6 +187,10 @@ public class ContactAggregator {
         public void clear() {
             mCount = 0;
         }
+
+        public boolean isEmpty() {
+            return mCount == 0;
+        }
     }
 
     /**
@@ -200,10 +222,13 @@ public class ContactAggregator {
      */
     public ContactAggregator(ContactsProvider2 contactsProvider,
             ContactsDatabaseHelper contactsDatabaseHelper,
-            PhotoPriorityResolver photoPriorityResolver) {
+            PhotoPriorityResolver photoPriorityResolver, NameSplitter nameSplitter,
+            CommonNicknameCache commonNicknameCache) {
         mContactsProvider = contactsProvider;
         mDbHelper = contactsDatabaseHelper;
         mPhotoPriorityResolver = photoPriorityResolver;
+        mNameSplitter = nameSplitter;
+        mCommonNicknameCache = commonNicknameCache;
 
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
@@ -212,17 +237,17 @@ public class ContactAggregator {
         final String replaceAggregatePresenceSql =
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                 + AggregatedPresenceColumns.CONTACT_ID + ", "
-                + StatusUpdates.PRESENCE_STATUS + ", "
+                + StatusUpdates.STATUS + ", "
                 + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " SELECT " + PresenceColumns.CONTACT_ID + ","
-                + StatusUpdates.PRESENCE_STATUS + ","
+                + StatusUpdates.STATUS + ","
                 + StatusUpdates.CHAT_CAPABILITY
                 + " FROM " + Tables.PRESENCE
                 + " WHERE "
-                + " (" + StatusUpdates.PRESENCE_STATUS
+                + " (" + StatusUpdates.STATUS
                 +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " = (SELECT "
-                + "MAX (" + StatusUpdates.PRESENCE_STATUS
+                + "MAX (" + StatusUpdates.STATUS
                 +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " FROM " + Tables.PRESENCE
                 + " WHERE " + PresenceColumns.CONTACT_ID
@@ -848,6 +873,9 @@ public class ContactAggregator {
         int NAME_TYPE_B = 3;
     }
 
+    /**
+     * Finds contacts with names matching the name of the specified raw contact.
+     */
     private void updateMatchScoresBasedOnNameMatches(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
         mSelectionArgs1[0] = String.valueOf(rawContactId);
@@ -864,6 +892,101 @@ public class ContactAggregator {
                         nameTypeB, name, ContactMatcher.MATCHING_ALGORITHM_EXACT);
                 if (nameTypeA == NameLookupType.NICKNAME &&
                         nameTypeB == NameLookupType.NICKNAME) {
+                    matcher.updateScoreWithNicknameMatch(contactId);
+                }
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    private interface NameLookupMatchQueryWithParameter {
+        String TABLE = Tables.NAME_LOOKUP
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (" + NameLookupColumns.RAW_CONTACT_ID + " = "
+                        + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        String[] COLUMNS = new String[] {
+            RawContacts.CONTACT_ID,
+            NameLookupColumns.NORMALIZED_NAME,
+            NameLookupColumns.NAME_TYPE,
+        };
+
+        int CONTACT_ID = 0;
+        int NAME = 1;
+        int NAME_TYPE = 2;
+    }
+
+    private final class NameLookupSelectionBuilder extends NameLookupBuilder {
+
+        private final MatchCandidateList mCandidates;
+
+        private StringBuilder mSelection = new StringBuilder(
+                NameLookupColumns.NORMALIZED_NAME + " IN(");
+
+
+        public NameLookupSelectionBuilder(NameSplitter splitter, MatchCandidateList candidates) {
+            super(splitter);
+            this.mCandidates = candidates;
+        }
+
+        @Override
+        protected String[] getCommonNicknameClusters(String normalizedName) {
+            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
+        }
+
+        @Override
+        protected void insertNameLookup(
+                long rawContactId, long dataId, int lookupType, String string) {
+            mCandidates.add(string, lookupType);
+            DatabaseUtils.appendEscapedSQLString(mSelection, string);
+            mSelection.append(',');
+        }
+
+        public boolean isEmpty() {
+            return mCandidates.isEmpty();
+        }
+
+        public String getSelection() {
+            mSelection.setLength(mSelection.length() - 1);      // Strip last comma
+            mSelection.append(')');
+            return mSelection.toString();
+        }
+
+        public int getLookupType(String name) {
+            for (int i = 0; i < mCandidates.mCount; i++) {
+                if (mCandidates.mList.get(i).mName.equals(name)) {
+                    return mCandidates.mList.get(i).mLookupType;
+                }
+            }
+            throw new IllegalStateException();
+        }
+    }
+
+    /**
+     * Finds contacts with names matching the specified name.
+     */
+    private void updateMatchScoresBasedOnNameMatches(SQLiteDatabase db, String query,
+            MatchCandidateList candidates, ContactMatcher matcher) {
+        NameLookupSelectionBuilder builder = new NameLookupSelectionBuilder(
+                mNameSplitter, candidates);
+        builder.insertNameLookup(0, 0, query, FullNameStyle.UNDEFINED);
+        if (builder.isEmpty()) {
+            return;
+        }
+
+        Cursor c = db.query(NameLookupMatchQueryWithParameter.TABLE,
+                NameLookupMatchQueryWithParameter.COLUMNS, builder.getSelection(), null, null, null,
+                null, PRIMARY_HIT_LIMIT_STRING);
+        try {
+            while (c.moveToNext()) {
+                long contactId = c.getLong(NameLookupMatchQueryWithParameter.CONTACT_ID);
+                String name = c.getString(NameLookupMatchQueryWithParameter.NAME);
+                int nameTypeA = builder.getLookupType(name);
+                int nameTypeB = c.getInt(NameLookupMatchQueryWithParameter.NAME_TYPE);
+                matcher.matchName(contactId, nameTypeA, name, nameTypeB, name,
+                        ContactMatcher.MATCHING_ALGORITHM_EXACT);
+                if (nameTypeA == NameLookupType.NICKNAME && nameTypeB == NameLookupType.NICKNAME) {
                     matcher.updateScoreWithNicknameMatch(contactId);
                 }
             }
@@ -1521,10 +1644,11 @@ public class ContactAggregator {
      * Finds matching contacts and returns a cursor on those.
      */
     public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb, String[] projection,
-            long contactId, int maxSuggestions, String filter) {
+            long contactId, int maxSuggestions, String filter,
+            ArrayList<AggregationSuggestionParameter> parameters) {
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
-        List<MatchScore> bestMatches = findMatchingContacts(db, contactId);
+        List<MatchScore> bestMatches = findMatchingContacts(db, contactId, parameters);
         return queryMatchingContacts(qb, db, contactId, projection, bestMatches, maxSuggestions,
                 filter);
     }
@@ -1634,8 +1758,10 @@ public class ContactAggregator {
     /**
      * Finds contacts with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
+     * @param parameters
      */
-    private List<MatchScore> findMatchingContacts(final SQLiteDatabase db, long contactId) {
+    private List<MatchScore> findMatchingContacts(final SQLiteDatabase db, long contactId,
+            ArrayList<AggregationSuggestionParameter> parameters) {
 
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
@@ -1643,16 +1769,21 @@ public class ContactAggregator {
         // Don't aggregate a contact with itself
         matcher.keepOut(contactId);
 
-        final Cursor c = db.query(RawContactIdQuery.TABLE, RawContactIdQuery.COLUMNS,
-                RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                long rawContactId = c.getLong(RawContactIdQuery._ID);
-                updateMatchScoresForSuggestionsBasedOnDataMatches(db, rawContactId, candidates,
-                        matcher);
+        if (parameters.size() == 0) {
+            final Cursor c = db.query(RawContactIdQuery.TABLE, RawContactIdQuery.COLUMNS,
+                    RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
+            try {
+                while (c.moveToNext()) {
+                    long rawContactId = c.getLong(RawContactIdQuery._ID);
+                    updateMatchScoresForSuggestionsBasedOnDataMatches(db, rawContactId, candidates,
+                            matcher);
+                }
+            } finally {
+                c.close();
             }
-        } finally {
-            c.close();
+        } else {
+            updateMatchScoresForSuggestionsBasedOnDataMatches(db, candidates,
+                    matcher, parameters);
         }
 
         return matcher.pickBestMatches(ContactMatcher.SCORE_THRESHOLD_SUGGEST);
@@ -1669,5 +1800,17 @@ public class ContactAggregator {
         updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
         loadNameMatchCandidates(db, rawContactId, candidates, false);
         lookupApproximateNameMatches(db, candidates, matcher);
+    }
+
+    private void updateMatchScoresForSuggestionsBasedOnDataMatches(SQLiteDatabase db,
+            MatchCandidateList candidates, ContactMatcher matcher,
+            ArrayList<AggregationSuggestionParameter> parameters) {
+        for (AggregationSuggestionParameter parameter : parameters) {
+            if (AggregationSuggestions.MATCH_NAME.equals(parameter.kind)) {
+                updateMatchScoresBasedOnNameMatches(db, parameter.value, candidates, matcher);
+            }
+
+            // TODO: add support for other
+        }
     }
 }

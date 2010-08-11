@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.internal.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
@@ -96,6 +97,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
@@ -1852,10 +1854,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
-        mContactAggregator = new ContactAggregator(this, mDbHelper,
-                createPhotoPriorityResolver(context));
-        mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
-
         mDb = mDbHelper.getWritableDatabase();
 
         initForDefaultLocale();
@@ -2018,6 +2016,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
         mCommonNicknameCache = new CommonNicknameCache(mDbHelper.getReadableDatabase());
         ContactLocaleUtils.getIntance().setLocale(mCurrentLocale);
+        mContactAggregator = new ContactAggregator(this, mDbHelper,
+                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
+        mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+
         initDataRowHandlers();
     }
 
@@ -4840,10 +4842,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     maxSuggestions = DEFAULT_MAX_SUGGESTIONS;
                 }
 
+                ArrayList<AggregationSuggestionParameter> parameters = null;
+                List<String> query = uri.getQueryParameters("query");
+                if (query != null && !query.isEmpty()) {
+                    parameters = new ArrayList<AggregationSuggestionParameter>(query.size());
+                    for (String parameter : query) {
+                        int offset = parameter.indexOf(':');
+                        parameters.add(offset == -1
+                                ? new AggregationSuggestionParameter(
+                                        AggregationSuggestions.MATCH_NAME,
+                                        parameter)
+                                : new AggregationSuggestionParameter(
+                                        parameter.substring(0, offset),
+                                        parameter.substring(offset + 1)));
+                    }
+                }
+
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
 
                 return mContactAggregator.queryAggregationSuggestions(qb, projection, contactId,
-                        maxSuggestions, filter);
+                        maxSuggestions, filter, parameters);
             }
 
             case SETTINGS: {
