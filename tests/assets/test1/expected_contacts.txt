@@ -10,7 +10,7 @@
 10    starred=0
 11    in_visible_group=0
 12    has_phone_number=0
-13    lookup=2273r1-523450522C46324E483C32
+13    lookup=2273r1-533551532D47334F493D33
 14 }
 15 1 {
 16    _id=2
@@ -52,5 +52,5 @@
 52    starred=0
 53    in_visible_group=1
 54    has_phone_number=1
-55    lookup=2187r11-2C3232343248462C46324E483C32
+55    lookup=2187r11-2D3333353349472D47334F493D33
 56 }

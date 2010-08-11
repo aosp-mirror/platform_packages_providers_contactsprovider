@@ -10,7 +10,7 @@
 10    starred=0
 11    in_visible_group=1
 12    has_phone_number=1
-13    lookup=0r1-4654442E344E2C4632442C3C42
+13    lookup=0r1-4755452F354F2D4733452D3D43
 14 }
 15 1 {
 16    _id=2
@@ -24,7 +24,7 @@
 24    starred=0
 25    in_visible_group=1
 26    has_phone_number=1
-27    lookup=0r2-4654442E344E
+27    lookup=0r2-4755452F354F
 28 }
 29 2 {
 30    _id=3
@@ -38,7 +38,7 @@
 38    starred=0
 39    in_visible_group=1
 40    has_phone_number=0
-41    lookup=0r3-442C3C42
+41    lookup=0r3-452D3D43
 42 }
 43 3 {
 44    _id=4
@@ -52,7 +52,7 @@
 52    starred=0
 53    in_visible_group=1
 54    has_phone_number=1
-55    lookup=0r4-2988298E298C297E2984298A297C2980
+55    lookup=0r4-2A9A2AA02A9E2A902A962A9C2A8E2A92
 56 }
 57 4 {
 58    _id=5
@@ -66,5 +66,5 @@
 66    starred=0
 67    in_visible_group=1
 68    has_phone_number=0
-69    lookup=0r5-442C3C42324844304844
+69    lookup=0r5-452D3D43334945314945
 70 }
