@@ -1105,7 +1105,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
                 "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
-                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         assertStoredValues(contactUri, values);
@@ -1128,7 +1128,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         long rawContactId = createRawContact(values, "18004664411",
                 "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
-                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY |
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO |
                 StatusUpdates.CAPABILITY_HAS_VOICE);
 
         ContentValues nameValues = new ContentValues();
@@ -1170,7 +1170,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values1 = new ContentValues();
         createContact(values1, "Noah", "Tever", "18004664411",
                 "a@acme.com", StatusUpdates.OFFLINE, 0, 0, 0,
-                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
         ContentValues values2 = new ContentValues();
         createContact(values2, "Sam", "Times", "18004664412",
                 "b@acme.com", StatusUpdates.INVISIBLE, 3, 0, 0,
@@ -1178,11 +1178,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values3 = new ContentValues();
         createContact(values3, "Lotta", "Calling", "18004664413",
                 "c@acme.com", StatusUpdates.AWAY, 5, 0, 0,
-                StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
+                StatusUpdates.CAPABILITY_HAS_VIDEO);
         ContentValues values4 = new ContentValues();
         createContact(values4, "Fay", "Veritt", "18004664414",
                 "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0,
-                StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY | StatusUpdates.CAPABILITY_HAS_VOICE);
+                StatusUpdates.CAPABILITY_HAS_VIDEO | StatusUpdates.CAPABILITY_HAS_VOICE);
 
         Cursor c = mResolver.query(Contacts.CONTENT_STREQUENT_URI, null, null, null,
                 Contacts._ID);
@@ -1953,7 +1953,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Match on IM (custom)
         insertStatusUpdate(Im.PROTOCOL_CUSTOM, "my_im_proto", "my_im", StatusUpdates.IDLE, "Idle",
-                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO_PLAYBACK_ONLY);
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
 
         // Match on Email
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "m@acme.com", StatusUpdates.AWAY, "Away",
