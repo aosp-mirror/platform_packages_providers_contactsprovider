@@ -237,17 +237,17 @@ public class ContactAggregator {
         final String replaceAggregatePresenceSql =
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
                 + AggregatedPresenceColumns.CONTACT_ID + ", "
-                + StatusUpdates.STATUS + ", "
+                + StatusUpdates.PRESENCE + ", "
                 + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " SELECT " + PresenceColumns.CONTACT_ID + ","
-                + StatusUpdates.STATUS + ","
+                + StatusUpdates.PRESENCE + ","
                 + StatusUpdates.CHAT_CAPABILITY
                 + " FROM " + Tables.PRESENCE
                 + " WHERE "
-                + " (" + StatusUpdates.STATUS
+                + " (" + StatusUpdates.PRESENCE
                 +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " = (SELECT "
-                + "MAX (" + StatusUpdates.STATUS
+                + "MAX (" + StatusUpdates.PRESENCE
                 +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
                 + " FROM " + Tables.PRESENCE
                 + " WHERE " + PresenceColumns.CONTACT_ID
@@ -1769,7 +1769,7 @@ public class ContactAggregator {
         // Don't aggregate a contact with itself
         matcher.keepOut(contactId);
 
-        if (parameters.size() == 0) {
+        if (parameters == null || parameters.size() == 0) {
             final Cursor c = db.query(RawContactIdQuery.TABLE, RawContactIdQuery.COLUMNS,
                     RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
             try {
@@ -1810,7 +1810,7 @@ public class ContactAggregator {
                 updateMatchScoresBasedOnNameMatches(db, parameter.value, candidates, matcher);
             }
 
-            // TODO: add support for other
+            // TODO: add support for other parameter kinds
         }
     }
 }

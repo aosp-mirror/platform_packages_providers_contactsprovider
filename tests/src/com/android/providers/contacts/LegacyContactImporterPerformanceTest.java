@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.content.ContentProvider;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.content.res.Resources;
 import android.os.Debug;
 import android.provider.CallLog;
@@ -71,6 +72,13 @@ public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
             @Override
             public String getPackageName() {
                 return "no.package";
+            }
+
+            @Override
+            public ApplicationInfo getApplicationInfo() {
+                ApplicationInfo ai = new ApplicationInfo();
+                ai.packageName = "contactsTestPackage";
+                return ai;
             }
         };
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,

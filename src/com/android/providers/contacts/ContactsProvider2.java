@@ -5945,6 +5945,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case AGGREGATION_SUGGESTIONS:
                 return sContactsProjectionMap.getColumnNames();
 
+            case CONTACTS_ID_ENTITIES:
+                return sEntityProjectionMap.getColumnNames();
+
             case CONTACTS_AS_VCARD:
             case CONTACTS_AS_MULTI_VCARD:
                 return sContactsVCardProjectionMap.getColumnNames();

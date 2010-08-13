@@ -910,7 +910,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
                 .addParameter(AggregationSuggestions.PARAMETER_MATCH_NICKNAME, "nickname1")
                 .setLimit(7)
                 .build();
-        assertEquals("content://com.android.contacts/contacts/-1/suggestions?"
+        assertEquals("content://com.android.contacts/contacts/0/suggestions?"
                 + "limit=7"
                 + "&query=name%3Aname1"
                 + "&query=name%3Aname2"
