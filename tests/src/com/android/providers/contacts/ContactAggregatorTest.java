@@ -902,12 +902,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testAggregationSuggestionsQueryBuilderWithValues() throws Exception {
         Uri uri = AggregationSuggestions.builder()
-                .addParameter(AggregationSuggestions.MATCH_NAME, "name1")
-                .addParameter(AggregationSuggestions.MATCH_NAME, "name2")
-                .addParameter(AggregationSuggestions.MATCH_EMAIL, "email1")
-                .addParameter(AggregationSuggestions.MATCH_EMAIL, "email2")
-                .addParameter(AggregationSuggestions.MATCH_PHONE, "phone1")
-                .addParameter(AggregationSuggestions.MATCH_NICKNAME, "nickname1")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "name1")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "name2")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_EMAIL, "email1")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_EMAIL, "email2")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_PHONE, "phone1")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NICKNAME, "nickname1")
                 .setLimit(7)
                 .build();
         assertEquals("content://com.android.contacts/contacts/-1/suggestions?"
@@ -925,7 +925,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContactWithName("first2", "last2");
 
         Uri uri = AggregationSuggestions.builder()
-                .addParameter(AggregationSuggestions.MATCH_NAME, "last1 first1")
+                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "last1 first1")
                 .build();
 
         Cursor cursor = mResolver.query(

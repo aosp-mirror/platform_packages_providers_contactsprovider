@@ -1806,7 +1806,7 @@ public class ContactAggregator {
             MatchCandidateList candidates, ContactMatcher matcher,
             ArrayList<AggregationSuggestionParameter> parameters) {
         for (AggregationSuggestionParameter parameter : parameters) {
-            if (AggregationSuggestions.MATCH_NAME.equals(parameter.kind)) {
+            if (AggregationSuggestions.PARAMETER_MATCH_NAME.equals(parameter.kind)) {
                 updateMatchScoresBasedOnNameMatches(db, parameter.value, candidates, matcher);
             }
 

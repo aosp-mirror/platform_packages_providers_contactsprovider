@@ -4850,7 +4850,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         int offset = parameter.indexOf(':');
                         parameters.add(offset == -1
                                 ? new AggregationSuggestionParameter(
-                                        AggregationSuggestions.MATCH_NAME,
+                                        AggregationSuggestions.PARAMETER_MATCH_NAME,
                                         parameter)
                                 : new AggregationSuggestionParameter(
                                         parameter.substring(0, offset),
