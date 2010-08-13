@@ -392,19 +392,22 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(Phones.ISPRIMARY, 1);
 
         Uri uri = mResolver.insert(Phones.CONTENT_URI, values);
-
+        ContentValues expectedResults[] = new ContentValues[2];
         // Adding another value to assert
-        values.put(Phones.NUMBER_KEY, "11446640081");
-
+        expectedResults[0] = new ContentValues(values);
+        expectedResults[0].put(Phones.NUMBER_KEY, "+18004664411");
+        expectedResults[1] = values;
+        expectedResults[1].put(Phones.NUMBER_KEY, "18004664411");
         // The result is joined with People
-        putContactValues(values);
-        assertStoredValues(uri, values);
+        putContactValues(expectedResults[0]);
+        putContactValues(expectedResults[1]);
+        assertStoredValues(uri, expectedResults);
         assertSelection(Phones.CONTENT_URI, values, "phones",
                 Phones._ID, ContentUris.parseId(uri));
 
         // Access the phone through People
         Uri twigUri = Uri.withAppendedPath(personUri, People.Phones.CONTENT_DIRECTORY);
-        assertStoredValues(twigUri, values);
+        assertStoredValues(twigUri, expectedResults);
 
         // Now the person should be joined with Phone
         values.clear();
@@ -443,7 +446,12 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         mResolver.update(uri, values, null, null);
 
-        assertStoredValues(uri, values);
+        ContentValues[] expectedValues = new ContentValues[2];
+        expectedValues[0] = values;
+        expectedValues[0].put(Phones.NUMBER_KEY, "18005554663");
+        expectedValues[1] = new ContentValues(values);
+        expectedValues[1].put(Phones.NUMBER_KEY, "+18005554663");
+        assertStoredValues(uri, expectedValues);
     }
 
     public void testPhonesFilterQuery() {
@@ -456,13 +464,18 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(Phones.PERSON_ID, personId);
         values.put(Phones.TYPE, Phones.TYPE_CUSTOM);
         values.put(Phones.LABEL, "Directory");
-        values.put(Phones.NUMBER, "1-800-4664-411");
+        values.put(Phones.NUMBER, "800-4664-411");
         values.put(Phones.ISPRIMARY, 1);
 
         Uri uri = mResolver.insert(Phones.CONTENT_URI, values);
 
-        Uri filterUri1 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "8004664411");
-        assertStoredValues(filterUri1, values);
+        Uri filterUri1 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "18004664411");
+        ContentValues[] expectedValues = new ContentValues[2];
+        expectedValues[0] = values;
+        expectedValues[0].put(Phones.NUMBER_KEY, "8004664411");
+        expectedValues[1] = new ContentValues(values);
+        expectedValues[1].put(Phones.NUMBER_KEY, "+18004664411");
+        assertStoredValues(filterUri1, expectedValues);
 
         Uri filterUri2 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "7773334444");
         assertEquals(0, getCount(filterUri2, null, null));

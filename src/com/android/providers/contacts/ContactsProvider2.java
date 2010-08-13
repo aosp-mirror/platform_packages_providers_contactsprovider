@@ -74,11 +74,16 @@ import android.database.sqlite.SQLiteContentHelper;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.location.Country;
+import android.location.CountryDetector;
+import android.location.CountryListener;
 import android.net.Uri;
 import android.net.Uri.Builder;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.HandlerThread;
 import android.os.MemoryFile;
+import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
@@ -1540,14 +1545,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId;
             if (values.containsKey(Phone.NUMBER)) {
                 String number = values.getAsString(Phone.NUMBER);
-                String normalizedNumber = computeNormalizedNumber(number);
-                values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
+                String numberE164 =
+                    PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                if (numberE164 != null) {
+                    values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
+                }
                 dataId = super.insert(db, rawContactId, values);
 
-                updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+                updatePhoneLookup(db, rawContactId, dataId, number, numberE164);
                 mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
-                if (normalizedNumber != null) {
+                if (numberE164 != null) {
                     triggerAggregation(rawContactId);
                 }
             } else {
@@ -1561,10 +1569,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 boolean callerIsSyncAdapter) {
             String number = null;
             String normalizedNumber = null;
+            String numberE164 = null;
             if (values.containsKey(Phone.NUMBER)) {
                 number = values.getAsString(Phone.NUMBER);
-                normalizedNumber = computeNormalizedNumber(number);
-                values.put(PhoneColumns.NORMALIZED_NUMBER, normalizedNumber);
+                if (number != null) {
+                    numberE164 =
+                        PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                }
+                if (numberE164 != null) {
+                    values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
+                }
             }
 
             if (!super.update(db, values, c, callerIsSyncAdapter)) {
@@ -1574,7 +1588,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (values.containsKey(Phone.NUMBER)) {
                 long dataId = c.getLong(DataUpdateQuery._ID);
                 long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-                updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
+                updatePhoneLookup(db, rawContactId, dataId, number, numberE164);
                 mContactAggregator.updateHasPhoneNumber(db, rawContactId);
                 fixRawContactDisplayName(db, rawContactId);
                 triggerAggregation(rawContactId);
@@ -1596,28 +1610,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return count;
         }
 
-        private String computeNormalizedNumber(String number) {
-            String normalizedNumber = null;
-            if (number != null) {
-                normalizedNumber = PhoneNumberUtils.getStrippedReversed(number);
-            }
-            return normalizedNumber;
-        }
-
         private void updatePhoneLookup(SQLiteDatabase db, long rawContactId, long dataId,
-                String number, String normalizedNumber) {
+                String number, String numberE164) {
+            mSelectionArgs1[0] = String.valueOf(dataId);
+            db.delete(Tables.PHONE_LOOKUP, PhoneLookupColumns.DATA_ID + "=?", mSelectionArgs1);
             if (number != null) {
-                ContentValues phoneValues = new ContentValues();
-                phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactId);
-                phoneValues.put(PhoneLookupColumns.DATA_ID, dataId);
-                phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
-                phoneValues.put(PhoneLookupColumns.MIN_MATCH,
-                        PhoneNumberUtils.toCallerIDMinMatch(number));
+                String normalizedNumber = PhoneNumberUtils.normalizeNumber(number);
+                if (!TextUtils.isEmpty(normalizedNumber)) {
+                    ContentValues phoneValues = new ContentValues();
+                    phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactId);
+                    phoneValues.put(PhoneLookupColumns.DATA_ID, dataId);
+                    phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
+                    phoneValues.put(PhoneLookupColumns.MIN_MATCH,
+                            PhoneNumberUtils.toCallerIDMinMatch(normalizedNumber));
+                    db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
 
-                db.replace(Tables.PHONE_LOOKUP, null, phoneValues);
-            } else {
-                mSelectionArgs1[0] = String.valueOf(dataId);
-                db.delete(Tables.PHONE_LOOKUP, PhoneLookupColumns.DATA_ID + "=?", mSelectionArgs1);
+                    if (numberE164 != null && !numberE164.equals(normalizedNumber)) {
+                        phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, numberE164);
+                        phoneValues.put(PhoneLookupColumns.MIN_MATCH,
+                                PhoneNumberUtils.toCallerIDMinMatch(numberE164));
+                        db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+                    }
+                }
             }
         }
 
@@ -1835,6 +1849,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private Locale mCurrentLocale;
 
+    private String mCurrentCountryIso;
 
 
     @Override
@@ -1978,6 +1993,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         startContactDirectoryManager();
 
         return (mDb != null);
+    }
+
+    protected synchronized String getCurrentCountryIso() {
+        if (mCurrentCountryIso == null) {
+            final CountryDetector countryDetector =
+                (CountryDetector)getContext().getSystemService(Context.COUNTRY_DETECTOR);
+            mCurrentCountryIso = countryDetector.detectCountry().getCountryIso();
+            // Start a new thread to listen to the country change.
+            (new HandlerThread("country listener", Process.THREAD_PRIORITY_BACKGROUND) {
+                @Override
+                protected void onLooperPrepared() {
+                    countryDetector.addCountryListener(new CountryListener() {
+                        public void onCountryDetected(Country country) {
+                            mCurrentCountryIso = country.getCountryIso();
+                        }
+                    }, null);
+                }
+            }).start();
+        }
+        return mCurrentCountryIso;
     }
 
     private void initDataRowHandlers() {
@@ -3091,12 +3126,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Cursor c = mDb.query(Tables.RAW_CONTACTS,
                     new String[]{RawContacts._ID, RawContacts.STARRED},
                     selection, selectionArgs, null, null, null);
-            while (c.moveToNext()) {
-                if (c.getLong(1) != 0) {
-                    final long rawContactId = c.getLong(0);
-                    insertDataGroupMembership(rawContactId, result);
-                    setRawContactDirty(rawContactId);
+            try {
+                while (c.moveToNext()) {
+                    if (c.getLong(1) != 0) {
+                        final long rawContactId = c.getLong(0);
+                        insertDataGroupMembership(rawContactId, result);
+                        setRawContactDirty(rawContactId);
+                    }
                 }
+            } finally {
+                c.close();
             }
         }
 
@@ -4625,18 +4664,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         hasCondition = true;
                     }
 
-                    if (isPhoneNumber(filterParam)) {
+                    String number = PhoneNumberUtils.normalizeNumber(filterParam);
+                    if (!TextUtils.isEmpty(number)) {
                         if (orNeeded) {
                             sb.append(" OR ");
                         }
-                        String number = PhoneNumberUtils.convertKeypadLettersToDigits(filterParam);
-                        String reversed = PhoneNumberUtils.getStrippedReversed(number);
                         sb.append(Data._ID +
-                                " IN (SELECT " + PhoneLookupColumns.DATA_ID
-                                  + " FROM " + Tables.PHONE_LOOKUP
-                                  + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '%");
-                        sb.append(reversed);
-                        sb.append("')");
+                                " IN (SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
+                                + " FROM " + Tables.PHONE_LOOKUP
+                                + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                        sb.append(number);
+                        sb.append("%')");
                         hasCondition = true;
                     }
 
@@ -4787,13 +4825,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (TextUtils.isEmpty(sortOrder)) {
                     // Default the sort order to something reasonable so we get consistent
                     // results when callers don't request an ordering
-                    sortOrder = RawContactsColumns.CONCRETE_ID;
+                    sortOrder = " length(lookup.normalized_number) DESC";
                 }
 
                 String number = uri.getPathSegments().size() > 1 ? uri.getLastPathSegment() : "";
-                mDbHelper.buildPhoneLookupAndContactQuery(qb, number);
+                String numberE164 =
+                        PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                String normalizedNumber =
+                        PhoneNumberUtils.normalizeNumber(number);
+                mDbHelper.buildPhoneLookupAndContactQuery(qb, normalizedNumber, numberE164);
                 qb.setProjectionMap(sPhoneLookupProjectionMap);
-
                 // Phone lookup cannot be combined with a selection
                 selection = null;
                 selectionArgs = null;
@@ -5701,36 +5742,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.w(TAG, "Invalid limit parameter: " + limitParam);
             return null;
         }
-    }
-
-    /**
-     * Returns true if all the characters are meaningful as digits
-     * in a phone number -- letters, digits, and a few punctuation marks.
-     */
-    private boolean isPhoneNumber(CharSequence cons) {
-        int len = cons.length();
-
-        for (int i = 0; i < len; i++) {
-            char c = cons.charAt(i);
-
-            if ((c >= '0') && (c <= '9')) {
-                continue;
-            }
-            if ((c == ' ') || (c == '-') || (c == '(') || (c == ')') || (c == '.') || (c == '+')
-                    || (c == '#') || (c == '*')) {
-                continue;
-            }
-            if ((c >= 'A') && (c <= 'Z')) {
-                continue;
-            }
-            if ((c >= 'a') && (c <= 'z')) {
-                continue;
-            }
-
-            return false;
-        }
-
-        return true;
     }
 
     String getContactsRestrictions() {

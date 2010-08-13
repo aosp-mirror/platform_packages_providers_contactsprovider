@@ -34,6 +34,7 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.location.CountryDetector;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
@@ -87,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 404;
+    static final int DATABASE_VERSION = 405;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -785,7 +786,7 @@ import java.util.Locale;
         // Private phone numbers table used for lookup
         db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
                 PhoneLookupColumns.DATA_ID
-                        + " INTEGER PRIMARY KEY REFERENCES data(_id) NOT NULL," +
+                        + " INTEGER REFERENCES data(_id) NOT NULL," +
                 PhoneLookupColumns.RAW_CONTACT_ID
                         + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
                 PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL," +
@@ -1582,6 +1583,12 @@ import java.util.Locale;
         if (oldVersion == 403) {
             upgradeViewsAndTriggers = true;
             oldVersion = 404;
+        }
+
+        if (oldVersion == 404) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion405(db);
+            oldVersion = 405;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2530,6 +2537,72 @@ import java.util.Locale;
                 + " ADD is_read_only INTEGER NOT NULL DEFAULT 0;");
     }
 
+    private void upgradeToVersion405(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS phone_lookup;");
+        // Private phone numbers table used for lookup
+        db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
+                PhoneLookupColumns.DATA_ID
+                + " INTEGER REFERENCES data(_id) NOT NULL," +
+                PhoneLookupColumns.RAW_CONTACT_ID
+                + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
+                PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL," +
+                PhoneLookupColumns.MIN_MATCH + " TEXT NOT NULL" +
+        ");");
+
+        db.execSQL("CREATE INDEX phone_lookup_index ON " + Tables.PHONE_LOOKUP + " (" +
+                PhoneLookupColumns.NORMALIZED_NUMBER + "," +
+                PhoneLookupColumns.RAW_CONTACT_ID + "," +
+                PhoneLookupColumns.DATA_ID +
+        ");");
+
+        db.execSQL("CREATE INDEX phone_lookup_min_match_index ON " + Tables.PHONE_LOOKUP + " (" +
+                PhoneLookupColumns.MIN_MATCH + "," +
+                PhoneLookupColumns.RAW_CONTACT_ID + "," +
+                PhoneLookupColumns.DATA_ID +
+        ");");
+
+        final long mimeTypeId = lookupMimeTypeId(db, Phone.CONTENT_ITEM_TYPE);
+        if (mimeTypeId == -1) {
+            return;
+        }
+
+        String mCountryIso = getCountryIso();
+        Cursor cursor = db.rawQuery(
+                    "SELECT _id, " + Phone.RAW_CONTACT_ID + ", " + Phone.NUMBER +
+                    " FROM " + Tables.DATA +
+                    " WHERE " + DataColumns.MIMETYPE_ID + "=" + mimeTypeId
+                            + " AND " + Phone.NUMBER + " NOT NULL", null);
+
+        ContentValues phoneValues = new ContentValues();
+        try {
+            while (cursor.moveToNext()) {
+                long dataID = cursor.getLong(0);
+                long rawContactID = cursor.getLong(1);
+                String number = cursor.getString(2);
+                String numberE164 = PhoneNumberUtils.formatNumberToE164(number, mCountryIso);
+                String normalizedNumber = PhoneNumberUtils.normalizeNumber(number);
+                if (!TextUtils.isEmpty(normalizedNumber)) {
+                    phoneValues.clear();
+                    phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactID);
+                    phoneValues.put(PhoneLookupColumns.DATA_ID, dataID);
+                    phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
+                    phoneValues.put(PhoneLookupColumns.MIN_MATCH,
+                            PhoneNumberUtils.toCallerIDMinMatch(normalizedNumber));
+                    db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+
+                    if (numberE164 != null && !numberE164.equals(normalizedNumber)) {
+                        phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, numberE164);
+                        phoneValues.put(PhoneLookupColumns.MIN_MATCH,
+                                PhoneNumberUtils.toCallerIDMinMatch(numberE164));
+                        db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
+                    }
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2856,30 +2929,15 @@ import java.util.Locale;
         }
     }
 
-    public void buildPhoneLookupAndRawContactQuery(SQLiteQueryBuilder qb, String number) {
-        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
-        qb.setTables(Tables.DATA_JOIN_RAW_CONTACTS +
-                " JOIN " + Tables.PHONE_LOOKUP
-                + " ON(" + DataColumns.CONCRETE_ID + "=" + PhoneLookupColumns.DATA_ID + ")");
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(PhoneLookupColumns.MIN_MATCH + "='");
-        sb.append(minMatch);
-        sb.append("' AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
-        DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0)");
-
-        qb.appendWhere(sb.toString());
-    }
-
-    public void buildPhoneLookupAndContactQuery(SQLiteQueryBuilder qb, String number) {
-        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
+    public void buildPhoneLookupAndContactQuery(
+            SQLiteQueryBuilder qb, String normalizedNumber, String numberE164) {
+        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(normalizedNumber);
         StringBuilder sb = new StringBuilder();
         appendPhoneLookupTables(sb, minMatch, true);
         qb.setTables(sb.toString());
 
         sb = new StringBuilder();
-        appendPhoneLookupSelection(sb, number);
+        appendPhoneLookupSelection(sb, normalizedNumber, numberE164);
         qb.appendWhere(sb.toString());
     }
 
@@ -2889,7 +2947,7 @@ import java.util.Locale;
         sb.append("(SELECT DISTINCT raw_contact_id" + " FROM ");
         appendPhoneLookupTables(sb, minMatch, false);
         sb.append(" WHERE ");
-        appendPhoneLookupSelection(sb, number);
+        appendPhoneLookupSelection(sb, number, null);
         sb.append(")");
         return sb.toString();
     }
@@ -2901,17 +2959,38 @@ import java.util.Locale;
             sb.append(" JOIN " + getContactView() + " contacts_view"
                     + " ON (contacts_view._id = raw_contacts.contact_id)");
         }
-        sb.append(", (SELECT data_id FROM phone_lookup "
-                + "WHERE (" + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.MIN_MATCH + " = '");
+        sb.append(", (SELECT data_id, normalized_number, length(normalized_number) as len "
+                + " FROM phone_lookup " + " WHERE (" + Tables.PHONE_LOOKUP + "."
+                + PhoneLookupColumns.MIN_MATCH + " = '");
         sb.append(minMatch);
         sb.append("')) AS lookup, " + Tables.DATA);
     }
 
-    private void appendPhoneLookupSelection(StringBuilder sb, String number) {
-        sb.append("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id"
-                + " AND PHONE_NUMBERS_EQUAL(data." + Phone.NUMBER + ", ");
-        DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0)");
+    private void appendPhoneLookupSelection(StringBuilder sb, String number, String numberE164) {
+        sb.append("lookup.data_id=data._id AND data.raw_contact_id=raw_contacts._id");
+        boolean hasNumberE164 = !TextUtils.isEmpty(numberE164);
+        boolean hasNumber = !TextUtils.isEmpty(number);
+        if (hasNumberE164 || hasNumber) {
+            sb.append(" AND ( ");
+            if (hasNumberE164) {
+                sb.append(" lookup.normalized_number = ");
+                DatabaseUtils.appendEscapedSQLString(sb, numberE164);
+            }
+            if (hasNumberE164 && hasNumber) {
+                sb.append(" OR ");
+            }
+            if (hasNumber) {
+                int numberLen = number.length();
+                sb.append(" lookup.len <= ");
+                sb.append(numberLen);
+                sb.append(" AND substr(");
+                DatabaseUtils.appendEscapedSQLString(sb, number);
+                sb.append(',');
+                sb.append(numberLen);
+                sb.append(" - lookup.len + 1) = lookup.normalized_number");
+            }
+            sb.append(')');
+        }
     }
 
     public String getUseStrictPhoneNumberComparisonParameter() {
@@ -3197,5 +3276,11 @@ import java.util.Locale;
         }
 
         return sb.toString();
+    }
+
+    protected String getCountryIso() {
+        CountryDetector detector =
+            (CountryDetector) mContext.getSystemService(Context.COUNTRY_DETECTOR);
+        return detector.detectCountry().getCountryIso();
     }
 }

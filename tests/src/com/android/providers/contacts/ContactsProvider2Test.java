@@ -891,16 +891,77 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(PhoneLookup.SEND_TO_VOICEMAIL, 1);
         assertStoredValues(lookupUri1, values);
 
-        // The strict comparation, adopted in Donut, does not allow the behavior like
-        // "8004664411 == 4664411", while the loose comparation, which had been used in Cupcake
-        // and reverted back into the default in Eclair, allows it. Hmm...
-        final boolean useStrictComparation =
-            mContext.getResources().getBoolean(
-                    com.android.internal.R.bool.config_use_strict_phone_number_comparation);
-        final int expectedResult = (useStrictComparation ? 0 : 1);
-
+        // In the context that 8004664411 is a valid number, "4664411" as a
+        // call id should not match to "8004664411"
         Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "4664411");
-        assertEquals(expectedResult, getCount(lookupUri2, null, null));
+        assertEquals(0, getCount(lookupUri2, null, null));
+    }
+
+    public void testPhoneLookupUseCases() {
+        ContentValues values = new ContentValues();
+        Uri rawContactUri;
+        long rawContactId;
+        Uri lookupUri2;
+
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+
+        // International format in contacts
+        rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Hot", "Tamale");
+        insertPhoneNumber(rawContactId, "+1-650-861-0000");
+
+        values.clear();
+
+        // match with international format
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "+1 650 861 0000");
+        assertEquals(1, getCount(lookupUri2, null, null));
+
+        // match with national format
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "650 861 0000");
+        assertEquals(1, getCount(lookupUri2, null, null));
+
+        // National format in contacts
+        values.clear();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Hot1", "Tamale");
+        insertPhoneNumber(rawContactId, "650-861-0001");
+
+        values.clear();
+
+        // match with international format
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "+1 650 861 0001");
+        assertEquals(2, getCount(lookupUri2, null, null));
+
+        // match with national format
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "650 861 0001");
+        assertEquals(2, getCount(lookupUri2, null, null));
+
+        // Local format in contacts
+        values.clear();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        rawContactId = ContentUris.parseId(rawContactUri);
+
+        insertStructuredName(rawContactId, "Hot2", "Tamale");
+        insertPhoneNumber(rawContactId, "861-0002");
+
+        values.clear();
+
+        // match with international format
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "+1 650 861 0002");
+        assertEquals(1, getCount(lookupUri2, null, null));
+
+        // match with national format
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "650 861 0002");
+        assertEquals(1, getCount(lookupUri2, null, null));
     }
 
     public void testPhoneUpdate() {

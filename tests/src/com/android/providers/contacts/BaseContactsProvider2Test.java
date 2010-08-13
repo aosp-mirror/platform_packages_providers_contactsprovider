@@ -732,6 +732,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         assertStoredValues(rowUri, null, null, expectedValues);
     }
 
+    protected void assertStoredValues(Uri rowUri, ContentValues[] expectedValues) {
+        assertStoredValues(rowUri, null, null, expectedValues);
+    }
+
     protected void assertStoredValues(Uri rowUri, String selection, String[] selectionArgs,
             ContentValues expectedValues) {
         Cursor c = mResolver.query(rowUri, null, selection, selectionArgs, null);
@@ -749,6 +753,17 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         try {
             assertEquals("Record count", 1, c.getCount());
             c.moveToFirst();
+            assertCursorValues(c, expectedValues);
+        } finally {
+            c.close();
+        }
+    }
+
+    protected void assertStoredValues(
+            Uri rowUri, String selection, String[] selectionArgs, ContentValues[] expectedValues) {
+        Cursor c = mResolver.query(rowUri, null, selection, selectionArgs, null);
+        try {
+            assertEquals("Record count", expectedValues.length, c.getCount());
             assertCursorValues(c, expectedValues);
         } finally {
             c.close();
@@ -804,11 +819,36 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void assertCursorValues(Cursor cursor, ContentValues expectedValues) {
+        StringBuilder message = new StringBuilder();
+        boolean result = equalsWithExpectedValues(cursor, expectedValues, message);
+        assertTrue(message.toString(), result);
+    }
+
+    protected void assertCursorValues(Cursor cursor, ContentValues[] expectedValues) {
+        StringBuilder message = new StringBuilder();
+        for (ContentValues v : expectedValues) {
+            boolean found = false;
+            cursor.moveToPosition(-1);
+            while (cursor.moveToNext()) {
+                found = equalsWithExpectedValues(cursor, v, message);
+                if (found) {
+                    break;
+                }
+            }
+            assertTrue("Expected values can not be found " + v + message.toString(), found);
+        }
+    }
+
+    private boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
+            StringBuilder msgBuffer) {
         Set<Map.Entry<String, Object>> entries = expectedValues.valueSet();
         for (Map.Entry<String, Object> entry : entries) {
             String column = entry.getKey();
             int index = cursor.getColumnIndex(column);
-            assertTrue("No such column: " + column, index != -1);
+            if (index == -1) {
+                msgBuffer.append("No such column: ").append(column);
+                return false;
+            }
             Object expectedValue = expectedValues.get(column);
             String value;
             if (expectedValue instanceof byte[]) {
@@ -818,8 +858,20 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 expectedValue = expectedValues.getAsString(column);
                 value = cursor.getString(index);
             }
-            assertEquals("Column value " + column, expectedValue, value);
+            if (expectedValue != null && !expectedValue.equals(value) || value != null
+                    && !value.equals(expectedValue)) {
+                msgBuffer
+                        .append("Column value ")
+                        .append(column)
+                        .append(" expected <")
+                        .append(expectedValue)
+                        .append(">, but was <")
+                        .append(value)
+                        .append('>');
+                return false;
+            }
         }
+        return true;
     }
 
     private String[] buildProjection(ContentValues values) {
