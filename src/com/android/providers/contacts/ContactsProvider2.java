@@ -2058,8 +2058,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         initDataRowHandlers();
     }
 
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
+    public void onLocaleChanged() {
         if (mProviderStatus != ProviderStatus.STATUS_NORMAL) {
             return;
         }
