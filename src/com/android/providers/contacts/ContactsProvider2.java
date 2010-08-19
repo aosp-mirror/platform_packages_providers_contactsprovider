@@ -258,6 +258,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int DIRECTORIES = 17001;
     private static final int DIRECTORIES_ID = 17002;
 
+    private static final int COMPLETE_NAME = 18000;
+
     private static final String SELECTION_FAVORITES_GROUPS_BY_RAW_CONTACT_ID =
             RawContactsColumns.CONCRETE_ID + "=? AND "
                     + GroupsColumns.CONCRETE_ACCOUNT_NAME
@@ -899,6 +901,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         matcher.addURI(ContactsContract.AUTHORITY, "directories", DIRECTORIES);
         matcher.addURI(ContactsContract.AUTHORITY, "directories/#", DIRECTORIES_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "complete_name", COMPLETE_NAME);
     }
 
     private static class DirectoryInfo {
@@ -1178,7 +1182,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
          * is not provided, generate one by concatenating first name and last
          * name.
          */
-        private void fixStructuredNameComponents(ContentValues augmented, ContentValues update) {
+        public void fixStructuredNameComponents(ContentValues augmented, ContentValues update) {
             final String unstruct = update.getAsString(StructuredName.DISPLAY_NAME);
 
             final boolean touchedUnstruct = !TextUtils.isEmpty(unstruct);
@@ -5002,6 +5006,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case COMPLETE_NAME: {
+                return completeName(uri, projection);
+            }
+
             default:
                 return mLegacyApiSupport.query(uri, projection, selection, selectionArgs,
                         sortOrder, limit);
@@ -6195,6 +6203,54 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         sb.append("))");
     }
+
+    /**
+     * Takes components of a name from the query parameters and returns a cursor with those
+     * components as well as all missing components.  There is no database activity involved
+     * in this so the call can be made on the UI thread.
+     */
+    private Cursor completeName(Uri uri, String[] projection) {
+        if (projection == null) {
+            projection = sDataProjectionMap.getColumnNames();
+        }
+
+        ContentValues values = new ContentValues();
+        StructuredNameRowHandler handler =
+                (StructuredNameRowHandler) getDataRowHandler(StructuredName.CONTENT_ITEM_TYPE);
+
+        copyQueryParamsToContentValues(values, uri,
+                StructuredName.DISPLAY_NAME,
+                StructuredName.PREFIX,
+                StructuredName.GIVEN_NAME,
+                StructuredName.MIDDLE_NAME,
+                StructuredName.FAMILY_NAME,
+                StructuredName.SUFFIX,
+                StructuredName.PHONETIC_NAME,
+                StructuredName.PHONETIC_FAMILY_NAME,
+                StructuredName.PHONETIC_MIDDLE_NAME,
+                StructuredName.PHONETIC_GIVEN_NAME
+        );
+
+        handler.fixStructuredNameComponents(values, values);
+
+        MatrixCursor cursor = new MatrixCursor(projection);
+        Object[] row = new Object[projection.length];
+        for (int i = 0; i < projection.length; i++) {
+            row[i] = values.get(projection[i]);
+        }
+        cursor.addRow(row);
+        return cursor;
+    }
+
+    private void copyQueryParamsToContentValues(ContentValues values, Uri uri, String... columns) {
+        for (String column : columns) {
+            String param = uri.getQueryParameter(column);
+            if (param != null) {
+                values.put(column, param);
+            }
+        }
+    }
+
 
     /**
      * Inserts an argument at the beginning of the selection arg list.

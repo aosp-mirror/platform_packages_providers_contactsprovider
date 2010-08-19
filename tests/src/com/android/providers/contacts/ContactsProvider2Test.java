@@ -47,6 +47,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
+import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
@@ -3490,6 +3491,45 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(contactUri, Contacts.CUSTOM_RINGTONE, "rt");
         assertStoredValue(rawContactUri1, RawContacts.CUSTOM_RINGTONE, "rt");
         assertStoredValue(rawContactUri2, RawContacts.CUSTOM_RINGTONE, "second");
+    }
+
+    public void testNameParsingQuery() {
+        Uri uri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath("complete_name")
+                .appendQueryParameter(StructuredName.DISPLAY_NAME, "Mr. John Q. Doe Jr.").build();
+        Cursor cursor = mResolver.query(uri, null, null, null, null);
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "Mr. John Q. Doe Jr.");
+        values.put(StructuredName.PREFIX, "Mr");
+        values.put(StructuredName.GIVEN_NAME, "John");
+        values.put(StructuredName.MIDDLE_NAME, "Q.");
+        values.put(StructuredName.FAMILY_NAME, "Doe");
+        values.put(StructuredName.SUFFIX, "Jr.");
+        values.put(StructuredName.FULL_NAME_STYLE, FullNameStyle.WESTERN);
+        assertTrue(cursor.moveToFirst());
+        assertCursorValues(cursor, values);
+        cursor.close();
+    }
+
+    public void testNameConcatenationQuery() {
+        Uri uri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath("complete_name")
+                .appendQueryParameter(StructuredName.PREFIX, "Mr")
+                .appendQueryParameter(StructuredName.GIVEN_NAME, "John")
+                .appendQueryParameter(StructuredName.MIDDLE_NAME, "Q.")
+                .appendQueryParameter(StructuredName.FAMILY_NAME, "Doe")
+                .appendQueryParameter(StructuredName.SUFFIX, "Jr.")
+                .build();
+        Cursor cursor = mResolver.query(uri, null, null, null, null);
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "John Q. Doe, Jr.");
+        values.put(StructuredName.PREFIX, "Mr");
+        values.put(StructuredName.GIVEN_NAME, "John");
+        values.put(StructuredName.MIDDLE_NAME, "Q.");
+        values.put(StructuredName.FAMILY_NAME, "Doe");
+        values.put(StructuredName.SUFFIX, "Jr.");
+        values.put(StructuredName.FULL_NAME_STYLE, FullNameStyle.WESTERN);
+        assertTrue(cursor.moveToFirst());
+        assertCursorValues(cursor, values);
+        cursor.close();
     }
 
     private Cursor queryGroupMemberships(Account account) {
