@@ -914,7 +914,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Cached information about contact directories.
      */
-    private HashMap<String, DirectoryInfo> mDirectoryCache;
+    private HashMap<String, DirectoryInfo> mDirectoryCache = new HashMap<String, DirectoryInfo>();
+    private boolean mDirectoryCacheValid = false;
 
     /**
      * Handles inserts and update for a specific Data type.
@@ -4219,7 +4220,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             "DELETE FROM " + Tables.DIRECTORIES +
                             " WHERE " + Directory.ACCOUNT_NAME + "=?" +
                             " AND " + Directory.ACCOUNT_TYPE + "=?", params);
-                    mDirectoryCache = null;
+                    resetDirectoryCache();
                 }
 
                 // Find all aggregated contacts that used to contain the raw contacts
@@ -4360,30 +4361,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Reads and caches directory information for the database.
      */
     private DirectoryInfo getDirectoryAuthority(String directoryId) {
-        if (mDirectoryCache == null) {
-            mDirectoryCache = new HashMap<String, DirectoryInfo>();
-            Cursor cursor = mDb.query(Tables.DIRECTORIES,
-                    DirectoryQuery.COLUMNS,
-                    null, null, null, null, null);
-            try {
-                while (cursor.moveToNext()) {
-                    DirectoryInfo info = new DirectoryInfo();
-                    String id = cursor.getString(DirectoryQuery.DIRECTORY_ID);
-                    info.authority = cursor.getString(DirectoryQuery.AUTHORITY);
-                    info.accountName = cursor.getString(DirectoryQuery.ACCOUNT_NAME);
-                    info.accountType = cursor.getString(DirectoryQuery.ACCOUNT_TYPE);
-                    mDirectoryCache.put(id, info);
+        synchronized (mDirectoryCache) {
+            if (!mDirectoryCacheValid) {
+                mDirectoryCache.clear();
+                Cursor cursor = mDb.query(Tables.DIRECTORIES,
+                        DirectoryQuery.COLUMNS,
+                        null, null, null, null, null);
+                try {
+                    while (cursor.moveToNext()) {
+                        DirectoryInfo info = new DirectoryInfo();
+                        String id = cursor.getString(DirectoryQuery.DIRECTORY_ID);
+                        info.authority = cursor.getString(DirectoryQuery.AUTHORITY);
+                        info.accountName = cursor.getString(DirectoryQuery.ACCOUNT_NAME);
+                        info.accountType = cursor.getString(DirectoryQuery.ACCOUNT_TYPE);
+                        mDirectoryCache.put(id, info);
+                    }
+                } finally {
+                    cursor.close();
                 }
-            } finally {
-                cursor.close();
+                mDirectoryCacheValid = true;
             }
-        }
 
-        return mDirectoryCache.get(directoryId);
+            return mDirectoryCache.get(directoryId);
+        }
     }
 
     public void resetDirectoryCache() {
-        mDirectoryCache = null;
+        synchronized(mDirectoryCache) {
+            mDirectoryCacheValid = false;
+        }
     }
 
     public Cursor queryLocal(Uri uri, String[] projection, String selection, String[] selectionArgs,
