@@ -19,6 +19,13 @@ LOCAL_STATIC_JAVA_LIBRARIES += android-common com.android.vcard
 # production builds.
 LOCAL_EMMA_COVERAGE_FILTER := +com.android.providers.contacts.*
 
+# The Emma tool analyzes code coverage when running unit tests on the
+# application. This configuration line selects which packages will be analyzed,
+# leaving out code which is tested by other means (e.g. static libraries) that
+# would dilute the coverage results. These options do not affect regular
+# production builds.
+LOCAL_EMMA_COVERAGE_FILTER := +com.android.providers.contacts.*
+
 LOCAL_PACKAGE_NAME := ContactsProvider
 LOCAL_CERTIFICATE := shared
 
