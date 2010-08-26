@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 405;
+    static final int DATABASE_VERSION = 406;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -908,8 +908,8 @@ import java.util.Locale;
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
                 Calls.CACHED_NUMBER_TYPE + " INTEGER," +
-                Calls.CACHED_NUMBER_LABEL + " TEXT" +
-        ");");
+                Calls.CACHED_NUMBER_LABEL + " TEXT," +
+                Calls.COUNTRY_ISO + " TEXT" + ");");
 
         // Activities table
         db.execSQL("CREATE TABLE " + Tables.ACTIVITIES + " (" +
@@ -1589,6 +1589,12 @@ import java.util.Locale;
             upgradeViewsAndTriggers = true;
             upgradeToVersion405(db);
             oldVersion = 405;
+        }
+
+        if (oldVersion == 405) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion406(db);
+            oldVersion = 406;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2601,6 +2607,10 @@ import java.util.Locale;
         } finally {
             cursor.close();
         }
+    }
+
+    private void upgradeToVersion406(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD countryiso TEXT;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

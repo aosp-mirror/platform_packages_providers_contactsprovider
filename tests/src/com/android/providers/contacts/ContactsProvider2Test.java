@@ -456,6 +456,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.NUMBER,
                 PhoneLookup.TYPE,
                 PhoneLookup.LABEL,
+                PhoneLookup.NORMALIZED_NUMBER,
         });
     }
 

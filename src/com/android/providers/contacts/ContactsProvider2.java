@@ -61,8 +61,6 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
-import android.content.res.AssetFileDescriptor;
-import android.content.res.Configuration;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.CursorWrapper;
@@ -73,16 +71,10 @@ import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
-import android.location.Country;
-import android.location.CountryDetector;
-import android.location.CountryListener;
 import android.net.Uri;
 import android.net.Uri.Builder;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.HandlerThread;
-import android.os.MemoryFile;
-import android.os.Process;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SystemProperties;
@@ -635,6 +627,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(PhoneLookup.NUMBER, Phone.NUMBER)
             .add(PhoneLookup.TYPE, Phone.TYPE)
             .add(PhoneLookup.LABEL, Phone.LABEL)
+            .add(PhoneLookup.NORMALIZED_NUMBER, Phone.NORMALIZED_NUMBER)
             .build();
 
     /** Contains the just the {@link Groups} columns */
@@ -1856,7 +1849,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private Locale mCurrentLocale;
 
-    private String mCurrentCountryIso;
+    private CountryMonitor mCountryMonitor;
 
 
     @Override
@@ -1872,6 +1865,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private boolean initialize() {
         final Context context = getContext();
+        mCountryMonitor = CountryMonitor.getInstance(context);
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
@@ -2002,24 +1996,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return (mDb != null);
     }
 
-    protected synchronized String getCurrentCountryIso() {
-        if (mCurrentCountryIso == null) {
-            final CountryDetector countryDetector =
-                (CountryDetector)getContext().getSystemService(Context.COUNTRY_DETECTOR);
-            mCurrentCountryIso = countryDetector.detectCountry().getCountryIso();
-            // Start a new thread to listen to the country change.
-            (new HandlerThread("country listener", Process.THREAD_PRIORITY_BACKGROUND) {
-                @Override
-                protected void onLooperPrepared() {
-                    countryDetector.addCountryListener(new CountryListener() {
-                        public void onCountryDetected(Country country) {
-                            mCurrentCountryIso = country.getCountryIso();
-                        }
-                    }, null);
-                }
-            }).start();
-        }
-        return mCurrentCountryIso;
+    protected String getCurrentCountryIso() {
+        return mCountryMonitor.getCountryIso();
     }
 
     private void initDataRowHandlers() {

@@ -65,11 +65,13 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_NAME, Calls.CACHED_NAME);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_TYPE, Calls.CACHED_NUMBER_TYPE);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_LABEL, Calls.CACHED_NUMBER_LABEL);
+        sCallsProjectionMap.put(Calls.COUNTRY_ISO, Calls.COUNTRY_ISO);
     }
 
     private ContactsDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
     private boolean mUseStrictPhoneNumberComparation;
+    private CountryMonitor mCountryMonitor;
 
     @Override
     public boolean onCreate() {
@@ -82,7 +84,7 @@ public class CallLogProvider extends ContentProvider {
         mUseStrictPhoneNumberComparation =
             context.getResources().getBoolean(
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
-
+        mCountryMonitor = CountryMonitor.getInstance(context);
         return true;
     }
 
@@ -150,6 +152,9 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
+        // Inserted the current country code, so we know the country
+        // the number belongs to.
+        values.put(Calls.COUNTRY_ISO, getCurrentCountryIso());
         long rowId = mCallsInserter.insert(values);
         if (rowId > 0) {
             notifyChange();
@@ -205,5 +210,9 @@ public class CallLogProvider extends ContentProvider {
     protected void notifyChange() {
         getContext().getContentResolver().notifyChange(CallLog.CONTENT_URI, null,
                 false /* wake up sync adapters */);
+    }
+
+    protected String getCurrentCountryIso() {
+        return mCountryMonitor.getCountryIso();
     }
 }

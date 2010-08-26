@@ -63,6 +63,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         putCallValues(values);
         Uri uri = mResolver.insert(Calls.CONTENT_URI, values);
+        values.put(Calls.COUNTRY_ISO, "us");
         assertStoredValues(uri, values);
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
     }
@@ -137,6 +138,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.CACHED_NAME, "1-800-GOOG-411");
         values.put(Calls.CACHED_NUMBER_TYPE, Phone.TYPE_CUSTOM);
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
+        values.put(Calls.COUNTRY_ISO, "us");
         assertStoredValues(uri, values);
     }
 
@@ -157,6 +159,11 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 mDbHelper = new ContactsDatabaseHelper(context);
             }
             return mDbHelper;
+        }
+
+        @Override
+        protected String getCurrentCountryIso() {
+            return "us";
         }
     }
 }
