@@ -56,7 +56,8 @@ public class ContactsUpgradeReceiver extends BroadcastReceiver {
                 // version number changes. This is intentionally done even before the upgrade path
                 // is attempted to be conservative. If the upgrade fails for some reason and we
                 // crash and burn we don't want to get into a loop doing so.
-                prefs.edit().putInt(PREF_DB_VERSION, ContactsDatabaseHelper.DATABASE_VERSION).commit();
+                prefs.edit().putInt(
+                    PREF_DB_VERSION, ContactsDatabaseHelper.DATABASE_VERSION).apply();
 
                 // Ask for a reference to the database to force the helper to either
                 // create the database or open it up, performing any necessary upgrades
