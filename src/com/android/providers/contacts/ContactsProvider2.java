@@ -4339,8 +4339,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             projection = getDefaultProjection(uri);
         }
 
-        return getContext().getContentResolver().query(directoryUri, projection, selection,
+        Cursor cursor = getContext().getContentResolver().query(directoryUri, projection, selection,
                 selectionArgs, sortOrder);
+        while (cursor instanceof CursorWrapper) {
+            cursor = ((CursorWrapper)cursor).getWrappedCursor();
+        }
+        return cursor;
     }
 
     private static final class DirectoryQuery {
