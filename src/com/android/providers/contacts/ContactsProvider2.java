@@ -2114,7 +2114,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             @Override
             protected void onPostExecute(Void result) {
-                prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
+                prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
                 setProviderStatus(savedProviderStatus);
 
                 // Recursive invocation, needed to cover the case where locale
