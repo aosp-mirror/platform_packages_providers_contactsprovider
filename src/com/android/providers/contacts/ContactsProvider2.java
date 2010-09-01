@@ -4335,6 +4335,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (directoryInfo.accountType != null) {
             builder.appendQueryParameter(RawContacts.ACCOUNT_TYPE, directoryInfo.accountType);
         }
+
+        String limit = getLimit(uri);
+        if (limit != null) {
+            builder.appendQueryParameter(ContactsContract.LIMIT_PARAM_KEY, limit);
+        }
+
         Uri directoryUri = builder.build();
 
         if (projection == null) {
@@ -5745,7 +5751,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      *         the parameter is not set, or is set to an invalid value.
      */
     private String getLimit(Uri uri) {
-        String limitParam = getQueryParameter(uri, "limit");
+        String limitParam = getQueryParameter(uri, ContactsContract.LIMIT_PARAM_KEY);
         if (limitParam == null) {
             return null;
         }
