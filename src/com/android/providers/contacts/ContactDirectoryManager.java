@@ -101,7 +101,7 @@ public class ContactDirectoryManager extends HandlerThread {
     @Override
     public void start() {
         super.start();
-        getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
+        scheduleScanAllPackages();
     }
 
     /**
@@ -176,6 +176,10 @@ public class ContactDirectoryManager extends HandlerThread {
 
         // Announce the change to listeners of the contacts authority
         mContactsProvider.notifyChange(false);
+    }
+
+    public void scheduleScanAllPackages() {
+        getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
     }
 
     /* Visible for testing */

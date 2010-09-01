@@ -4265,6 +4265,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mDb.endTransaction();
         }
         mAccountWritability.clear();
+        if (accountsChanged) {
+            mContactDirectoryManager.scheduleScanAllPackages();
+        }
     }
 
     public void onPackageChanged(String packageName) {
