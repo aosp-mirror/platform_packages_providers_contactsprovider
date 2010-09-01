@@ -1570,9 +1570,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (values.containsKey(Phone.NUMBER)) {
                 String number = values.getAsString(Phone.NUMBER);
 
-                // TODO: revert once the U_REGEX_RULE_SYNTAX problem is fixed in PhoneNumberUtils
                 String numberE164 = number;
-//                    PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                    PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
                 if (numberE164 != null) {
                     values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
                 }
