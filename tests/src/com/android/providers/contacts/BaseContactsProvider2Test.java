@@ -818,6 +818,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
+    protected void assertCursorValue(Cursor cursor, String column, Object expectedValue) {
+        String actualValue = cursor.getString(cursor.getColumnIndex(column));
+        assertEquals("Column " + column, String.valueOf(expectedValue),
+                String.valueOf(actualValue));
+    }
+
     protected void assertCursorValues(Cursor cursor, ContentValues expectedValues) {
         StringBuilder message = new StringBuilder();
         boolean result = equalsWithExpectedValues(cursor, expectedValues, message);

@@ -373,6 +373,32 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             " SET " + RawContacts.VERSION + " = " + RawContacts.VERSION + " + 1" +
             " WHERE " + RawContacts._ID + " IN (";
 
+    // Current contacts - those contacted within the last 3 days (in seconds)
+    private static final long EMAIL_FILTER_CURRENT = 3 * 24 * 60 * 60;
+
+    // Recent contacts - those contacted within the last 30 days (in seconds)
+    private static final long EMAIL_FILTER_RECENT = 30 * 24 * 60 * 60;
+
+    private static final String TIME_SINCE_LAST_CONTACTED =
+            "(strftime('%s', 'now') - " + Contacts.LAST_TIME_CONTACTED + "/1000)";
+
+    /*
+     * Sorting order for email address suggestions: first starred, then the rest.
+     * Within the starred/unstarred groups - three buckets: very recently contacted, then fairly
+     * recently contacted, then the rest.  Within each of the bucket - descending count
+     * of times contacted. If all else fails, alphabetical.  (Super)primary email
+     * address is returned before other addresses for the same contact.
+     */
+    private static final String EMAIL_FILTER_SORT_ORDER =
+            "(CASE WHEN " + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
+            + "(CASE WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + EMAIL_FILTER_CURRENT + " THEN 0 "
+            + " WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + EMAIL_FILTER_RECENT + " THEN 1 "
+            + " ELSE 2 END),"
+            + Contacts.TIMES_CONTACTED + " DESC, "
+            + Contacts.DISPLAY_NAME + ", "
+            + Data.CONTACT_ID + ", "
+            + Data.IS_SUPER_PRIMARY + " DESC";
+
     /** Name lookup types used for contact filtering */
     private static final String CONTACT_LOOKUP_NAME_TYPES =
             NameLookupType.NAME_COLLATION_KEY + "," +
@@ -4765,7 +4791,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
-                    sortOrder = Contacts.IN_VISIBLE_GROUP + " DESC, " + RawContacts.CONTACT_ID;
+                    sortOrder = EMAIL_FILTER_SORT_ORDER;
                 }
                 break;
             }
