@@ -95,7 +95,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals(allKeys, new HashSet<String>(Arrays.asList(expectedKeys)));
     }
 
-    private void testChineseStyleNameWithDifferentLocale() throws Exception {
+    public void testChineseStyleNameWithDifferentLocale() throws Exception {
         mContactLocaleUtils.setLocale(Locale.ENGLISH);
         assertTrue(mContactLocaleUtils.getSortKey(CHINESE_NAME,
                 FullNameStyle.CHINESE).equalsIgnoreCase("DU \u675C JUAN \u9D51"));
