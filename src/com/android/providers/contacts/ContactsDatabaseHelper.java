@@ -76,9 +76,8 @@ import java.util.Locale;
 /* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
-
     /**
-     * Contacts DB versions:
+     * Contacts DB version ranges:
      * <pre>
      *   0-98    Cupcake/Donut
      *   100-199 Eclair
@@ -1546,24 +1545,25 @@ import java.util.Locale;
             oldVersion = 308;
         }
 
-        if (oldVersion == 308) {
+        // Gingerbread upgrades
+        if (oldVersion < 350) {
             upgradeViewsAndTriggers = true;
-            oldVersion = 309;
+            oldVersion = 351;
         }
 
-        if (oldVersion == 309) {
-            // Add column NAME_RAW_CONTACT_ID
-            upgradeViewsAndTriggers = true;
-            oldVersion = 310;
+        if (oldVersion == 351) {
+            upgradeNameLookup = true;
+            oldVersion = 352;
         }
 
-        if (oldVersion == 310) {
+        // Honeycomb upgrades
+        if (oldVersion < 400) {
             upgradeViewsAndTriggers = true;
-            upgradeToVersion311(db);
-            oldVersion = 311;
+            upgradeToVersion400(db);
+            oldVersion = 400;
         }
 
-        if (oldVersion == 311) {
+        if (oldVersion == 400) {
             upgradeViewsAndTriggers = true;
             upgradeToVersion401(db);
             oldVersion = 401;
@@ -2219,7 +2219,7 @@ import java.util.Locale;
                 "SELECT DISTINCT account_name, account_type FROM raw_contacts");
     }
 
-    private void upgradeToVersion311(SQLiteDatabase db) {
+    private void upgradeToVersion400(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE " + Tables.GROUPS
                 + " ADD " + Groups.FAVORITES + " INTEGER NOT NULL DEFAULT 0;");
         db.execSQL("ALTER TABLE " + Tables.GROUPS
