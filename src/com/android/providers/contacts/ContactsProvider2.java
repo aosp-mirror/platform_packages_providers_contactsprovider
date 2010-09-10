@@ -2079,7 +2079,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     protected void verifyAccounts() {
         AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
-        onAccountsUpdated(AccountManager.get(getContext()).getAccounts());
+        updateAccounts(AccountManager.get(getContext()).getAccounts());
     }
 
     /**
@@ -4169,6 +4169,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void onAccountsUpdated(Account[] accounts) {
+        boolean accountsChanged = updateAccounts(accounts);
+        if (accountsChanged) {
+            mContactDirectoryManager.scheduleScanAllPackages();
+        }
+    }
+
+    private boolean updateAccounts(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
         HashSet<Account> existingAccounts = new HashSet<Account>();
@@ -4264,9 +4271,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mDb.endTransaction();
         }
         mAccountWritability.clear();
-        if (accountsChanged) {
-            mContactDirectoryManager.scheduleScanAllPackages();
-        }
+        return accountsChanged;
     }
 
     public void onPackageChanged(String packageName) {

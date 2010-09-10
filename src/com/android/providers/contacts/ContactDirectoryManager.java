@@ -155,8 +155,7 @@ public class ContactDirectoryManager extends HandlerThread {
     }
 
     /**
-     * Scans all packages for directory content providers. This is only done once
-     * in the lifetime of a contacts DB.
+     * Scans all packages for directory content providers.
      */
     private void scanAllPackagesIfNeeded() {
         ContactsDatabaseHelper dbHelper =
