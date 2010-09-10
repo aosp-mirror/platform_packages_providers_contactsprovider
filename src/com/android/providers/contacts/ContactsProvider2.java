@@ -4171,7 +4171,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public void onAccountsUpdated(Account[] accounts) {
         boolean accountsChanged = updateAccounts(accounts);
         if (accountsChanged) {
-            mContactDirectoryManager.scheduleScanAllPackages();
+            mContactDirectoryManager.scheduleScanAllPackages(true);
         }
     }
 

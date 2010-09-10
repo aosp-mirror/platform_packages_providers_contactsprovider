@@ -101,7 +101,7 @@ public class ContactDirectoryManager extends HandlerThread {
     @Override
     public void start() {
         super.start();
-        scheduleScanAllPackages();
+        scheduleScanAllPackages(false);
     }
 
     /**
@@ -160,7 +160,6 @@ public class ContactDirectoryManager extends HandlerThread {
     private void scanAllPackagesIfNeeded() {
         ContactsDatabaseHelper dbHelper =
                 (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
-        SQLiteDatabase db = dbHelper.getWritableDatabase();
 
         String scanComplete = dbHelper.getProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
         if (!"0".equals(scanComplete)) {
@@ -177,7 +176,12 @@ public class ContactDirectoryManager extends HandlerThread {
         mContactsProvider.notifyChange(false);
     }
 
-    public void scheduleScanAllPackages() {
+    public void scheduleScanAllPackages(boolean rescan) {
+        if (rescan) {
+            ContactsDatabaseHelper dbHelper =
+                    (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
+            dbHelper.setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+        }
         getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
     }
 
