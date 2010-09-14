@@ -408,6 +408,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             NameLookupType.ORGANIZATION + "," +
             NameLookupType.NAME_CONSONANTS;
 
+    /**
+     * If any of these columns are used in a Data projection, there is no point in
+     * using the DISTINCT keyword, which can negatively affect performance.
+     */
+    private static final String[] DISTINCT_DATA_PROHIBITING_COLUMNS = {
+            Data._ID,
+            Data.RAW_CONTACT_ID,
+            Data.NAME_RAW_CONTACT_ID,
+            RawContacts.ACCOUNT_NAME,
+            RawContacts.ACCOUNT_TYPE,
+            RawContacts.DIRTY,
+            RawContacts.NAME_VERIFIED,
+            RawContacts.SOURCE_ID,
+            RawContacts.VERSION,
+    };
 
     private static final ProjectionMap sContactsColumns = ProjectionMap.builder()
             .add(Contacts.CUSTOM_RINGTONE)
@@ -5606,7 +5621,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         appendDataStatusUpdateJoin(sb, projection, DataColumns.CONCRETE_ID);
 
         qb.setTables(sb.toString());
-        qb.setProjectionMap(distinct ? sDistinctDataProjectionMap : sDataProjectionMap);
+
+        boolean useDistinct = distinct
+                || !mDbHelper.isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
+        qb.setDistinct(useDistinct);
+        qb.setProjectionMap(useDistinct ? sDistinctDataProjectionMap : sDataProjectionMap);
         appendAccountFromParameter(qb, uri);
     }
 
