@@ -182,7 +182,11 @@ public class ContactDirectoryManager extends HandlerThread {
                     (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
             dbHelper.setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
         }
-        getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
+        if (isAlive()) {
+            getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
+        } else {
+            scanAllPackagesIfNeeded();
+        }
     }
 
     /* Visible for testing */
@@ -191,10 +195,12 @@ public class ContactDirectoryManager extends HandlerThread {
         PackageManager pm = mContext.getPackageManager();
         List<PackageInfo> packages = pm.getInstalledPackages(
                 PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
-        for (PackageInfo packageInfo : packages) {
-            // Check all packages except the one containing ContactsProvider itself
-            if (!packageInfo.packageName.equals(mContext.getPackageName())) {
-                count += updateDirectoriesForPackage(packageInfo, true);
+        if (packages != null) {
+            for (PackageInfo packageInfo : packages) {
+                // Check all packages except the one containing ContactsProvider itself
+                if (!packageInfo.packageName.equals(mContext.getPackageName())) {
+                    count += updateDirectoriesForPackage(packageInfo, true);
+                }
             }
         }
         return count;

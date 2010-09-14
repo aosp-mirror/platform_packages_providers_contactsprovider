@@ -425,6 +425,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Contacts.SORT_KEY_PRIMARY)
             .add(Contacts.STARRED)
             .add(Contacts.TIMES_CONTACTED)
+            .add(Contacts.HAS_PHONE_NUMBER)
             .build();
 
     private static final ProjectionMap sContactsPresenceColumns = ProjectionMap.builder()

@@ -87,7 +87,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 406;
+    static final int DATABASE_VERSION = 407;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1215,6 +1215,7 @@ import java.util.Locale;
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
                 + Contacts.NAME_RAW_CONTACT_ID + ", "
+                + Contacts.HAS_PHONE_NUMBER + ", "
                 + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
@@ -1595,6 +1596,11 @@ import java.util.Locale;
             upgradeViewsAndTriggers = true;
             upgradeToVersion406(db);
             oldVersion = 406;
+        }
+
+        if (oldVersion == 406) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 407;
         }
 
         if (upgradeViewsAndTriggers) {
