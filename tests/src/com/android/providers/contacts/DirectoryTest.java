@@ -72,7 +72,7 @@ public class DirectoryTest extends BaseContactsProvider2Test {
     }
 
     public void testForwardingToLocalContacts() {
-        long contactId = queryContactId(createRawContactWithName());
+        long contactId = queryContactId(createRawContactWithName("John", "Doe"));
 
         Uri contentUri = Contacts.CONTENT_URI.buildUpon().appendQueryParameter(
                 ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(Directory.DEFAULT)).build();
@@ -88,16 +88,16 @@ public class DirectoryTest extends BaseContactsProvider2Test {
     }
 
     public void testForwardingToLocalInvisibleContacts() {
+
+        // Visible because there is no account
         long visibleContactId = queryContactId(createRawContactWithName("Bob", "Parr"));
 
-        assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, visibleContactId),
-                Contacts.IN_VISIBLE_GROUP, "1");
-
+        Account account = new Account("accountName", "accountType");
+        long groupId = createGroup(account, "sid", "def",
+                0 /* visible */,  true /* auto-add */, false /* fav */);
+        // Hidden because not member of default group
         long hiddenContactId = queryContactId(createRawContactWithName("Helen", "Parr",
-                new Account("accountName", "accountType")));
-
-        assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, hiddenContactId),
-                Contacts.IN_VISIBLE_GROUP, "0");
+                account));
 
         Uri contentUri = Contacts.CONTENT_URI.buildUpon().appendQueryParameter(
                 ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(Directory.LOCAL_INVISIBLE))

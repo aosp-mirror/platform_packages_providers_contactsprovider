@@ -4340,10 +4340,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
-        if (directory == null || directory.equals("0")) {
-            return queryLocal(uri, projection, selection, selectionArgs, sortOrder, false);
+        if (directory == null) {
+            return queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1);
+        } else if (directory.equals("0")) {
+            return queryLocal(uri, projection, selection, selectionArgs, sortOrder,
+                    Directory.DEFAULT);
         } else if (directory.equals("1")) {
-            return queryLocal(uri, projection, selection, selectionArgs, sortOrder, true);
+            return queryLocal(uri, projection, selection, selectionArgs, sortOrder,
+                    Directory.LOCAL_INVISIBLE);
         }
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -4432,7 +4436,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public Cursor queryLocal(Uri uri, String[] projection, String selection, String[] selectionArgs,
-                String sortOrder, boolean hiddenOnly) {
+                String sortOrder, long directoryId) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: " + uri);
         }
@@ -4453,9 +4457,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                if (hiddenOnly) {
-                    qb.appendWhere(Contacts.IN_VISIBLE_GROUP + "=0");
-                }
+                appendLocalDirectorySelectionIfNeeded(qb, directoryId);
                 break;
             }
 
@@ -4555,9 +4557,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     filterParam = uri.getLastPathSegment();
                 }
                 setTablesAndProjectionMapForContactsWithSnippet(qb, uri, projection, filterParam);
-                if (hiddenOnly) {
-                    qb.appendWhere(Contacts.IN_VISIBLE_GROUP + "=0");
-                }
+                appendLocalDirectorySelectionIfNeeded(qb, directoryId);
                 break;
             }
 
@@ -5043,10 +5043,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case DIRECTORIES_ID : {
-                long directoryId = ContentUris.parseId(uri);
+                long id = ContentUris.parseId(uri);
                 qb.setTables(Tables.DIRECTORIES);
                 qb.setProjectionMap(sDirectoryProjectionMap);
-                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(directoryId));
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(id));
                 qb.appendWhere(Directory._ID + "=?");
                 break;
             }
@@ -5701,6 +5701,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (mDbHelper.isInProjection(projection, Data.PRESENCE, Data.CHAT_CAPABILITY)) {
             sb.append(" LEFT OUTER JOIN " + Tables.PRESENCE +
                     " ON (" + StatusUpdates.DATA_ID + "=" + dataIdColumn + ")");
+        }
+    }
+
+    private void appendLocalDirectorySelectionIfNeeded(SQLiteQueryBuilder qb, long directoryId) {
+        if (directoryId == Directory.DEFAULT) {
+            qb.appendWhere(Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY);
+        } else if (directoryId == Directory.LOCAL_INVISIBLE){
+            qb.appendWhere(Contacts._ID + " NOT IN " + Tables.DEFAULT_DIRECTORY);
         }
     }
 

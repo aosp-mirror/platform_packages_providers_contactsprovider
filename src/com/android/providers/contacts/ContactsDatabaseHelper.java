@@ -87,7 +87,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 407;
+    static final int DATABASE_VERSION = 408;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -112,6 +112,7 @@ import java.util.Locale;
         public static final String ACCOUNTS = "accounts";
         public static final String VISIBLE_CONTACTS = "visible_contacts";
         public static final String DIRECTORIES = "directories";
+        public static final String DEFAULT_DIRECTORY = "default_directory";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -896,6 +897,10 @@ import java.util.Locale;
                 Contacts._ID + " INTEGER PRIMARY KEY" +
         ");");
 
+        db.execSQL("CREATE TABLE " + Tables.DEFAULT_DIRECTORY + " (" +
+                Contacts._ID + " INTEGER PRIMARY KEY" +
+        ");");
+
         // The table for recent calls is here so we can do table joins
         // on people, phones, and calls all in one place.
         db.execSQL("CREATE TABLE " + Tables.CALLS + " (" +
@@ -1037,6 +1042,11 @@ import java.util.Locale;
                 + "        OR " + AggregationExceptions.RAW_CONTACT_ID2
                                 + "=OLD." + RawContacts._ID + ";"
                 + "   DELETE FROM " + Tables.VISIBLE_CONTACTS
+                + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
+                + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
+                + "            WHERE " + RawContacts.CONTACT_ID + "=OLD." + RawContacts.CONTACT_ID
+                + "           )=1;"
+                + "   DELETE FROM " + Tables.DEFAULT_DIRECTORY
                 + "     WHERE " + Contacts._ID + "=OLD." + RawContacts.CONTACT_ID
                 + "       AND (SELECT COUNT(*) FROM " + Tables.RAW_CONTACTS
                 + "            WHERE " + RawContacts.CONTACT_ID + "=OLD." + RawContacts.CONTACT_ID
@@ -1601,6 +1611,11 @@ import java.util.Locale;
         if (oldVersion == 406) {
             upgradeViewsAndTriggers = true;
             oldVersion = 407;
+        }
+
+        if (oldVersion == 407) {
+            upgradeToVersion408(db);
+            oldVersion = 408;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2619,6 +2634,50 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE calls ADD countryiso TEXT;");
     }
 
+    /**
+     * Adding the DEFAULT_DIRECTORY table.
+     */
+    private void upgradeToVersion408(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE " + Tables.DEFAULT_DIRECTORY + " (" +
+                Contacts._ID + " INTEGER PRIMARY KEY" +
+        ");");
+
+        // Process contacts without an account
+        db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                " SELECT " + RawContacts.CONTACT_ID +
+                " FROM " + Tables.RAW_CONTACTS +
+                " WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
+                "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL ");
+
+        // Process accounts that don't have a default group (e.g. Exchange)
+        db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                " SELECT " + RawContacts.CONTACT_ID +
+                " FROM " + Tables.RAW_CONTACTS +
+                " WHERE NOT EXISTS" +
+                " (SELECT " + Groups._ID +
+                "  FROM " + Tables.GROUPS +
+                "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = "
+                        + GroupsColumns.CONCRETE_ACCOUNT_NAME +
+                "    AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
+                        + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                "    AND " + Groups.AUTO_ADD + " != 0" +
+                ")");
+
+        long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
+
+        // Process accounts that do have a default group (e.g. Exchange)
+        db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                " SELECT " + RawContacts.CONTACT_ID +
+                " FROM " + Tables.RAW_CONTACTS +
+                " JOIN " + Tables.DATA +
+                "   ON (" + RawContactsColumns.CONCRETE_ID + "=" + Data.RAW_CONTACT_ID + ")" +
+                " JOIN " + Tables.GROUPS +
+                "   ON (" + GroupMembership.GROUP_ROW_ID + "=" + GroupsColumns.CONCRETE_ID + ")" +
+                " WHERE " + DataColumns.MIMETYPE_ID + "=" + mimetype +
+                "   AND " + Groups.AUTO_ADD + " != 0;");
+    }
+
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2885,19 +2944,73 @@ import java.util.Locale;
      * Update {@link Contacts#IN_VISIBLE_GROUP} for all contacts.
      */
     public void updateAllVisible() {
-        updateContactVisibility("");
+        updateCustomContactVisibility(getWritableDatabase(), "");
     }
 
     /**
-     * Update {@link Contacts#IN_VISIBLE_GROUP} for a specific contact.
+     * Update {@link Contacts#IN_VISIBLE_GROUP} and
+     * {@link Tables#DEFAULT_DIRECTORY} for a specific contact.
      */
     public void updateContactVisible(long contactId) {
-        updateContactVisibility(" AND " + Contacts._ID + "=" + contactId);
+        SQLiteDatabase db = getWritableDatabase();
+        updateCustomContactVisibility(getWritableDatabase(),
+                " AND " + Contacts._ID + "=" + contactId);
+
+        String contactIdAsString = String.valueOf(contactId);
+        long mimetype = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
+
+        // The contact will be included in the default directory if contains
+        // a raw contact that is in an AUTO_ADD group or in an account that
+        // does not have any AUTO_ADD groups.
+        long visibleRawContact = DatabaseUtils.longForQuery(db,
+                "SELECT EXISTS (" +
+                    "SELECT " + RawContacts.CONTACT_ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " JOIN " + Tables.DATA +
+                    "   ON (" + RawContactsColumns.CONCRETE_ID + "="
+                            + Data.RAW_CONTACT_ID + ")" +
+                    " JOIN " + Tables.GROUPS +
+                    "   ON (" + GroupMembership.GROUP_ROW_ID + "="
+                            + GroupsColumns.CONCRETE_ID + ")" +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
+                    "   AND " + DataColumns.MIMETYPE_ID + "=?" +
+                    "   AND " + Groups.AUTO_ADD + " != 0" +
+                ") OR EXISTS (" +
+                    "SELECT " + RawContacts._ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
+                    "   AND NOT EXISTS" +
+                        " (SELECT " + Groups._ID +
+                        "  FROM " + Tables.GROUPS +
+                        "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = "
+                                + GroupsColumns.CONCRETE_ACCOUNT_NAME +
+                        "  AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
+                                + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                        "  AND " + Groups.AUTO_ADD + " != 0" +
+                        ")" +
+                ") OR EXISTS (" +
+                    "SELECT " + RawContacts._ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
+                    "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
+                    "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL" +
+                ")",
+                new String[] {
+                    contactIdAsString,
+                    contactIdAsString,
+                    String.valueOf(mimetype)
+                });
+
+        if (visibleRawContact != 0) {
+            db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY + " VALUES(?)",
+                    new String[] { contactIdAsString });
+        } else {
+            db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY + " WHERE " + Contacts._ID + "=?",
+                    new String[] { contactIdAsString });
+        }
     }
 
-    private void updateContactVisibility(String selection) {
-        SQLiteDatabase db = getWritableDatabase();
-
+    private void updateCustomContactVisibility(SQLiteDatabase db, String selection) {
         final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         String[] selectionArgs = new String[]{String.valueOf(groupMembershipMimetypeId)};
 
