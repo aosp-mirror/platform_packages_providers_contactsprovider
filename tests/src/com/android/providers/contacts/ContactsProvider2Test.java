@@ -585,6 +585,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Directory.ACCOUNT_TYPE,
                 Directory.ACCOUNT_NAME,
                 Directory.EXPORT_SUPPORT,
+                Directory.SHORTCUT_SUPPORT,
+                Directory.PHOTO_SUPPORT,
         });
     }
 

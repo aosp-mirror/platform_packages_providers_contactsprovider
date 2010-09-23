@@ -804,6 +804,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Directory.ACCOUNT_TYPE)
             .add(Directory.ACCOUNT_NAME)
             .add(Directory.EXPORT_SUPPORT)
+            .add(Directory.SHORTCUT_SUPPORT)
+            .add(Directory.PHOTO_SUPPORT)
             .build();
 
     // where clause to update the status_updates table
