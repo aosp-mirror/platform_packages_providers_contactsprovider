@@ -50,6 +50,7 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
@@ -87,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 408;
+    static final int DATABASE_VERSION = 409;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -995,11 +996,16 @@ import java.util.Locale;
                 Directory.EXPORT_SUPPORT + " INTEGER NOT NULL" +
                         " DEFAULT " + Directory.EXPORT_SUPPORT_NONE + "," +
                 Directory.SHORTCUT_SUPPORT + " INTEGER NOT NULL" +
-                        " DEFAULT " + Directory.SHORTCUT_SUPPORT_NONE +
+                        " DEFAULT " + Directory.SHORTCUT_SUPPORT_NONE + "," +
+                Directory.PHOTO_SUPPORT + " INTEGER NOT NULL" +
+                        " DEFAULT " + Directory.PHOTO_SUPPORT_NONE +
         ");");
 
         insertDefaultDirectory(db);
         insertLocalInvisibleDirectory(db);
+
+        // Trigger a full scan of directories in the system
+        setProperty(db, ContactDirectoryManager.PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
     }
 
     private void insertDefaultDirectory(SQLiteDatabase db) {
@@ -1010,6 +1016,7 @@ import java.util.Locale;
         values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
         values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
         values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
+        values.put(Directory.PHOTO_SUPPORT, Directory.PHOTO_SUPPORT_FULL);
         db.insert(Tables.DIRECTORIES, null, values);
     }
 
@@ -1021,6 +1028,7 @@ import java.util.Locale;
         values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
         values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
         values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
+        values.put(Directory.PHOTO_SUPPORT, Directory.PHOTO_SUPPORT_FULL);
         db.insert(Tables.DIRECTORIES, null, values);
     }
 
@@ -1186,6 +1194,14 @@ import java.util.Locale;
                 + RawContactsColumns.CONCRETE_SYNC3 + " AS " + RawContacts.SYNC3 + ","
                 + RawContactsColumns.CONCRETE_SYNC4 + " AS " + RawContacts.SYNC4;
 
+        String baseContactColumns =
+                Contacts.HAS_PHONE_NUMBER + ", "
+                + Contacts.NAME_RAW_CONTACT_ID + ", "
+                + Contacts.LOOKUP_KEY + ", "
+                + Contacts.PHOTO_ID + ", "
+                + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
+                + ContactsColumns.LAST_STATUS_UPDATE_ID;
+
         String contactOptionColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
                         + " AS " + RawContacts.CUSTOM_RINGTONE + ","
@@ -1222,12 +1238,11 @@ import java.util.Locale;
                 + dataColumns + ", "
                 + contactOptionColumns + ", "
                 + contactNameColumns + ", "
-                + Contacts.LOOKUP_KEY + ", "
-                + Contacts.PHOTO_ID + ", "
-                + Contacts.NAME_RAW_CONTACT_ID + ", "
-                + Contacts.HAS_PHONE_NUMBER + ", "
-                + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
-                + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
+                + baseContactColumns + ", "
+                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                        Contacts.PHOTO_URI) + ", "
+                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                        Contacts.PHOTO_THUMBNAIL_URI) + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
                 + " JOIN " + Tables.MIMETYPES + " ON ("
@@ -1281,9 +1296,7 @@ import java.util.Locale;
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
                         + " AS " + Contacts.CUSTOM_RINGTONE + ", "
                 + contactNameColumns + ", "
-                + Contacts.HAS_PHONE_NUMBER + ", "
-                + Contacts.LOOKUP_KEY + ", "
-                + Contacts.PHOTO_ID + ", "
+                + baseContactColumns + ", "
                 + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
                         + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
@@ -1291,15 +1304,13 @@ import java.util.Locale;
                 + ContactsColumns.CONCRETE_STARRED
                         + " AS " + Contacts.STARRED + ", "
                 + ContactsColumns.CONCRETE_TIMES_CONTACTED
-                        + " AS " + Contacts.TIMES_CONTACTED + ", "
-                + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
-                + Contacts.NAME_RAW_CONTACT_ID + ", "
-                + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP;
-
+                        + " AS " + Contacts.TIMES_CONTACTED;
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
-                + contactsColumns
+                + contactsColumns + ", "
+                + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_URI) + ", "
+                + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_THUMBNAIL_URI)
                 + " FROM " + Tables.CONTACTS
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
                 +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
@@ -1349,6 +1360,10 @@ import java.util.Locale;
                 + dataColumns + ", "
                 + syncColumns + ", "
                 + contactsColumns + ", "
+                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                        Contacts.PHOTO_URI) + ", "
+                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                        Contacts.PHOTO_THUMBNAIL_URI) + ", "
                 + Data.SYNC1 + ", "
                 + Data.SYNC2 + ", "
                 + Data.SYNC3 + ", "
@@ -1376,6 +1391,11 @@ import java.util.Locale;
                 + entitiesSelect);
         db.execSQL("CREATE VIEW " + Views.ENTITIES_RESTRICTED + " AS "
                 + entitiesSelect + " WHERE " + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
+    }
+
+    private static String buildPhotoUriAlias(String contactIdColumn, String alias) {
+        return "('" + Contacts.CONTENT_URI + "/'||" + contactIdColumn + "|| '/"
+                + Photo.CONTENT_DIRECTORY + "') AS " + alias;
     }
 
     private static void createGroupsView(SQLiteDatabase db) {
@@ -1616,6 +1636,12 @@ import java.util.Locale;
         if (oldVersion == 407) {
             upgradeToVersion408(db);
             oldVersion = 408;
+        }
+
+        if (oldVersion == 408) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion409(db);
+            oldVersion = 409;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2677,6 +2703,10 @@ import java.util.Locale;
                 "   AND " + Groups.AUTO_ADD + " != 0;");
     }
 
+    private void upgradeToVersion409(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS directories;");
+        createDirectoriesTable(db);
+    }
 
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
@@ -3242,10 +3272,14 @@ import java.util.Locale;
      * Stores a key-value pair in the {@link Tables#PROPERTIES} table.
      */
     public void setProperty(String key, String value) {
+        setProperty(getWritableDatabase(), key, value);
+    }
+
+    private void setProperty(SQLiteDatabase db, String key, String value) {
         ContentValues values = new ContentValues();
         values.put(PropertiesColumns.PROPERTY_KEY, key);
         values.put(PropertiesColumns.PROPERTY_VALUE, value);
-        getWritableDatabase().replace(Tables.PROPERTIES, null, values);
+        db.replace(Tables.PROPERTIES, null, values);
     }
 
     /**

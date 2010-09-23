@@ -30,7 +30,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
-import android.os.Debug;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -52,8 +51,8 @@ public class ContactDirectoryManager extends HandlerThread {
     private static final int MESSAGE_SCAN_ALL_PROVIDERS = 0;
     private static final int MESSAGE_SCAN_PACKAGES_BY_UID = 1;
 
-    private static final String PROPERTY_DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
-    private static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
+    public static final String PROPERTY_DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
+    public static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
 
     public class DirectoryInfo {
         long id;

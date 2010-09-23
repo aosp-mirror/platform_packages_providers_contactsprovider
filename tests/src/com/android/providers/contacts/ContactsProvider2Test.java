@@ -96,6 +96,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_URI,
+                Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.HAS_PHONE_NUMBER,
                 Contacts.SEND_TO_VOICEMAIL,
@@ -127,6 +129,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_URI,
+                Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.HAS_PHONE_NUMBER,
                 Contacts.SEND_TO_VOICEMAIL,
@@ -235,6 +239,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_URI,
+                Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.SEND_TO_VOICEMAIL,
                 Contacts.LOOKUP_KEY,
@@ -300,6 +306,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_URI,
+                Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.HAS_PHONE_NUMBER,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.SEND_TO_VOICEMAIL,
@@ -380,6 +388,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_URI,
+                Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.SEND_TO_VOICEMAIL,
                 Contacts.LOOKUP_KEY,
@@ -453,6 +463,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.STARRED,
                 PhoneLookup.IN_VISIBLE_GROUP,
                 PhoneLookup.PHOTO_ID,
+                PhoneLookup.PHOTO_URI,
+                PhoneLookup.PHOTO_THUMBNAIL_URI,
                 PhoneLookup.CUSTOM_RINGTONE,
                 PhoneLookup.HAS_PHONE_NUMBER,
                 PhoneLookup.SEND_TO_VOICEMAIL,
@@ -1336,7 +1348,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, "John", "Doe");
         Uri photoUri = insertPhoto(rawContactId);
         long photoId = ContentUris.parseId(photoUri);
-        values.put(Contacts.PHOTO_ID, photoId);
         insertPhoneNumber(rawContactId, "18004664411");
         insertPhoneNumber(rawContactId, "18004664412");
         insertEmail(rawContactId, "goog411@acme.com");
@@ -2629,7 +2640,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // The photo should be the remaining one
         assertStoredValue(Contacts.CONTENT_URI, contactId,
                 Contacts.PHOTO_ID, ContentUris.parseId(photoUri1));
-
     }
 
     public void testContactDeletion() {
@@ -2796,6 +2806,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri twigUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId)), Contacts.Photo.CONTENT_DIRECTORY);
 
+        assertStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId)),
+                Contacts.PHOTO_URI, twigUri.toString());
+
         long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
         assertEquals(ContentUris.parseId(photoUri), twigId);
     }
@@ -2839,6 +2853,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId1));
         assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId1);
+        assertStoredValue(contactUri, Contacts.PHOTO_URI,
+                Uri.withAppendedPath(contactUri, Contacts.Photo.CONTENT_DIRECTORY));
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
