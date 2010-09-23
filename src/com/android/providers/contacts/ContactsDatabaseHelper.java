@@ -3027,8 +3027,9 @@ import java.util.Locale;
                 ")",
                 new String[] {
                     contactIdAsString,
+                    String.valueOf(mimetype),
                     contactIdAsString,
-                    String.valueOf(mimetype)
+                    contactIdAsString
                 });
 
         if (visibleRawContact != 0) {

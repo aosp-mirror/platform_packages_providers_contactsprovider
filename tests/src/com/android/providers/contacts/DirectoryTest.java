@@ -22,7 +22,9 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
 import android.test.suitebuilder.annotation.LargeTest;
 
@@ -90,13 +92,12 @@ public class DirectoryTest extends BaseContactsProvider2Test {
     public void testForwardingToLocalInvisibleContacts() {
 
         // Visible because there is no account
-        long visibleContactId = queryContactId(createRawContactWithName("Bob", "Parr"));
+        long contactId1 = queryContactId(createRawContactWithName("Bob", "Parr"));
 
         Account account = new Account("accountName", "accountType");
         long groupId = createGroup(account, "sid", "def",
                 0 /* visible */,  true /* auto-add */, false /* fav */);
-        // Hidden because not member of default group
-        long hiddenContactId = queryContactId(createRawContactWithName("Helen", "Parr",
+        long contactId2 = queryContactId(createRawContactWithName("Helen", "Parr",
                 account));
 
         Uri contentUri = Contacts.CONTENT_URI.buildUpon().appendQueryParameter(
@@ -105,10 +106,20 @@ public class DirectoryTest extends BaseContactsProvider2Test {
 
         Cursor cursor = mResolver.query(contentUri,
                 new String[]{Contacts._ID, Contacts.DISPLAY_NAME}, null, null, null);
+        assertEquals(0, cursor.getCount());
+        cursor.close();
+
+        // Hide by removing from the default group
+        mResolver.delete(Data.CONTENT_URI,
+                Data.MIMETYPE + "=? AND " + GroupMembership.GROUP_ROW_ID + "=?",
+                new String[] { GroupMembership.CONTENT_ITEM_TYPE, String.valueOf(groupId) });
+
+        cursor = mResolver.query(contentUri,
+                new String[]{Contacts._ID, Contacts.DISPLAY_NAME}, null, null, null);
         assertNotNull(cursor);
         assertEquals(1, cursor.getCount());
         cursor.moveToFirst();
-        assertEquals(hiddenContactId, cursor.getLong(0));
+        assertEquals(contactId2, cursor.getLong(0));
         assertEquals("Helen Parr", cursor.getString(1));
         cursor.close();
 
@@ -121,7 +132,7 @@ public class DirectoryTest extends BaseContactsProvider2Test {
         assertNotNull(cursor);
         assertEquals(1, cursor.getCount());
         cursor.moveToFirst();
-        assertEquals(hiddenContactId, cursor.getLong(0));
+        assertEquals(contactId2, cursor.getLong(0));
         assertEquals("Helen Parr", cursor.getString(1));
         cursor.close();
     }
