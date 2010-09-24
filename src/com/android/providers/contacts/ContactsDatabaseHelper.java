@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 409;
+    static final int DATABASE_VERSION = 410;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1394,8 +1394,13 @@ import java.util.Locale;
     }
 
     private static String buildPhotoUriAlias(String contactIdColumn, String alias) {
-        return "('" + Contacts.CONTENT_URI + "/'||" + contactIdColumn + "|| '/"
-                + Photo.CONTENT_DIRECTORY + "') AS " + alias;
+        return "(CASE WHEN " + Contacts.PHOTO_ID + " IS NULL"
+                + " OR " + Contacts.PHOTO_ID + "=0"
+                + " THEN NULL"
+                + " ELSE " + "'" + Contacts.CONTENT_URI + "/'||"
+                        + contactIdColumn + "|| '/" + Photo.CONTENT_DIRECTORY + "'"
+                + " END)"
+                + " AS " + alias;
     }
 
     private static void createGroupsView(SQLiteDatabase db) {
@@ -1642,6 +1647,11 @@ import java.util.Locale;
             upgradeViewsAndTriggers = true;
             upgradeToVersion409(db);
             oldVersion = 409;
+        }
+
+        if (oldVersion == 409) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 410;
         }
 
         if (upgradeViewsAndTriggers) {
