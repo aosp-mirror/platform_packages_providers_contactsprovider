@@ -16,10 +16,10 @@
 package com.android.providers.contacts;
 
 import com.ibm.icu4jni.text.CollationAttribute;
-import com.ibm.icu4jni.text.CollationKey; // TODO: java.text.CollationKey post-froyo
 import com.ibm.icu4jni.text.Collator;
 import com.ibm.icu4jni.text.RuleBasedCollator;
 import java.util.Locale;
+import java.text.CollationKey;
 
 /**
  * Converts a name to a normalized form by removing all non-letter characters and normalizing
