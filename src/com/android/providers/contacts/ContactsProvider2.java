@@ -5611,6 +5611,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return RawContacts.CONTENT_TYPE;
             case RAW_CONTACTS_ID:
                 return RawContacts.CONTENT_ITEM_TYPE;
+            case DATA:
+                return Data.CONTENT_TYPE;
             case DATA_ID:
                 return mDbHelper.getDataMimeType(ContentUris.parseId(uri));
             case PHONES:
