@@ -15,11 +15,10 @@
  */
 package com.android.providers.contacts;
 
-import com.ibm.icu4jni.text.CollationAttribute;
-import com.ibm.icu4jni.text.Collator;
-import com.ibm.icu4jni.text.RuleBasedCollator;
 import java.util.Locale;
+import java.text.Collator;
 import java.text.CollationKey;
+import java.text.RuleBasedCollator;
 
 /**
  * Converts a name to a normalized form by removing all non-letter characters and normalizing
@@ -37,14 +36,12 @@ public class NameNormalizer {
     private static final RuleBasedCollator sComplexityCollator;
     static {
         sComplexityCollator = (RuleBasedCollator)Collator.getInstance(Locale.getDefault());
-        sComplexityCollator.setStrength(Collator.TERTIARY);
-        sComplexityCollator.setAttribute(CollationAttribute.CASE_FIRST,
-                CollationAttribute.VALUE_LOWER_FIRST);
+        sComplexityCollator.setStrength(Collator.SECONDARY);
     }
 
     /**
      * Converts the supplied name to a string that can be used to perform approximate matching
-     * of names.  It ignores non-letter characters and removes accents.
+     * of names.  It ignores non-letter, non-digit characters, and removes accents.
      */
     public static String normalize(String name) {
         CollationKey key = sCompressingCollator.getCollationKey(lettersAndDigitsOnly(name));
@@ -56,17 +53,24 @@ public class NameNormalizer {
      * of mixed case characters, accents and, if all else is equal, length.
      */
     public static int compareComplexity(String name1, String name2) {
-        int diff = sComplexityCollator.compare(lettersAndDigitsOnly(name1),
-                lettersAndDigitsOnly(name2));
+        String clean1 = lettersAndDigitsOnly(name1);
+        String clean2 = lettersAndDigitsOnly(name2);
+        int diff = sComplexityCollator.compare(clean1, clean2);
         if (diff != 0) {
             return diff;
         }
-
+        // compareTo sorts uppercase first. We know that there are no non-case
+        // differences from the above test, so we can negate here to get the
+        // lowercase-first comparison we really want...
+        diff = -clean1.compareTo(clean2);
+        if (diff != 0) {
+            return diff;
+        }
         return name1.length() - name2.length();
     }
 
     /**
-     * Returns a string containing just the letters from the original string.
+     * Returns a string containing just the letters and digits from the original string.
      */
     private static String lettersAndDigitsOnly(String name) {
         char[] letters = name.toCharArray();
