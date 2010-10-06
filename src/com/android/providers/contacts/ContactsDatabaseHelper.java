@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 410;
+    static final int DATABASE_VERSION = 411;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1639,7 +1639,7 @@ import java.util.Locale;
         }
 
         if (oldVersion == 407) {
-            upgradeToVersion408(db);
+            // Obsolete
             oldVersion = 408;
         }
 
@@ -1652,6 +1652,11 @@ import java.util.Locale;
         if (oldVersion == 409) {
             upgradeViewsAndTriggers = true;
             oldVersion = 410;
+        }
+
+        if (oldVersion == 410) {
+            upgradeToVersion411(db);
+            oldVersion = 411;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2670,10 +2675,16 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE calls ADD countryiso TEXT;");
     }
 
+    private void upgradeToVersion409(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS directories;");
+        createDirectoriesTable(db);
+    }
+
     /**
-     * Adding the DEFAULT_DIRECTORY table.
+     * Adding DEFAULT_DIRECTORY table.
      */
-    private void upgradeToVersion408(SQLiteDatabase db) {
+    private void upgradeToVersion411(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.DEFAULT_DIRECTORY);
         db.execSQL("CREATE TABLE " + Tables.DEFAULT_DIRECTORY + " (" +
                 Contacts._ID + " INTEGER PRIMARY KEY" +
         ");");
@@ -2701,21 +2712,22 @@ import java.util.Locale;
 
         long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
 
-        // Process accounts that do have a default group (e.g. Exchange)
+        // Process accounts that do have a default group (e.g. Google)
         db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
                 " SELECT " + RawContacts.CONTACT_ID +
                 " FROM " + Tables.RAW_CONTACTS +
                 " JOIN " + Tables.DATA +
                 "   ON (" + RawContactsColumns.CONCRETE_ID + "=" + Data.RAW_CONTACT_ID + ")" +
-                " JOIN " + Tables.GROUPS +
-                "   ON (" + GroupMembership.GROUP_ROW_ID + "=" + GroupsColumns.CONCRETE_ID + ")" +
                 " WHERE " + DataColumns.MIMETYPE_ID + "=" + mimetype +
-                "   AND " + Groups.AUTO_ADD + " != 0;");
-    }
-
-    private void upgradeToVersion409(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS directories;");
-        createDirectoriesTable(db);
+                " AND EXISTS" +
+                " (SELECT " + Groups._ID +
+                "  FROM " + Tables.GROUPS +
+                "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = "
+                        + GroupsColumns.CONCRETE_ACCOUNT_NAME +
+                "    AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
+                        + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                "    AND " + Groups.AUTO_ADD + " != 0" +
+                ")");
     }
 
     public String extractHandleFromEmailAddress(String email) {
@@ -3000,7 +3012,7 @@ import java.util.Locale;
         long mimetype = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
 
         // The contact will be included in the default directory if contains
-        // a raw contact that is in an AUTO_ADD group or in an account that
+        // a raw contact that is in any group or in an account that
         // does not have any AUTO_ADD groups.
         long visibleRawContact = DatabaseUtils.longForQuery(db,
                 "SELECT EXISTS (" +
@@ -3009,12 +3021,8 @@ import java.util.Locale;
                     " JOIN " + Tables.DATA +
                     "   ON (" + RawContactsColumns.CONCRETE_ID + "="
                             + Data.RAW_CONTACT_ID + ")" +
-                    " JOIN " + Tables.GROUPS +
-                    "   ON (" + GroupMembership.GROUP_ROW_ID + "="
-                            + GroupsColumns.CONCRETE_ID + ")" +
                     " WHERE " + RawContacts.CONTACT_ID + "=?" +
                     "   AND " + DataColumns.MIMETYPE_ID + "=?" +
-                    "   AND " + Groups.AUTO_ADD + " != 0" +
                 ") OR EXISTS (" +
                     "SELECT " + RawContacts._ID +
                     " FROM " + Tables.RAW_CONTACTS +
