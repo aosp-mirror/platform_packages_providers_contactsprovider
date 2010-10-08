@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.content.SyncStateContentProviderHelper;
+import com.android.common.content.SyncStateContentProviderHelper;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
