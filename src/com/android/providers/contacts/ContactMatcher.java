@@ -68,6 +68,9 @@ public class ContactMatcher {
     // Minimum edit distance between two email ids to be considered an approximate match
     public static final float APPROXIMATE_MATCH_THRESHOLD_FOR_EMAIL = 0.95f;
 
+    // Returned value when we found multiple matches and that was not allowed
+    public static final long MULTIPLE_MATCHES = -2;
+
     /**
      * Name matching scores: a matrix by name type vs. candidate lookup type.
      * For example, if the name type is "full name" while we are looking for a
@@ -371,7 +374,7 @@ public class ContactMatcher {
      * Returns the contactId with the best match score over the specified threshold or -1
      * if no such contact is found.
      */
-    public long pickBestMatch(int threshold) {
+    public long pickBestMatch(int threshold, boolean allowMultipleMatches) {
         long contactId = -1;
         int maxScore = 0;
         for (int i = 0; i < mScoreCount; i++) {
@@ -389,9 +392,14 @@ public class ContactMatcher {
                 s = score.mSecondaryScore;
             }
 
-            if (s >= threshold && s > maxScore) {
-                contactId = score.mContactId;
-                maxScore = s;
+            if (s >= threshold) {
+                if (contactId != -1 && !allowMultipleMatches) {
+                    return MULTIPLE_MATCHES;
+                }
+                if (s > maxScore) {
+                    contactId = score.mContactId;
+                    maxScore = s;
+                }
             }
         }
         return contactId;
