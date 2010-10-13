@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 411;
+    static final int DATABASE_VERSION = 412;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1592,6 +1592,11 @@ import java.util.Locale;
             oldVersion = 352;
         }
 
+        if (oldVersion == 352) {
+            upgradeToVersion353(db);
+            oldVersion = 353;
+        }
+
         // Honeycomb upgrades
         if (oldVersion < 400) {
             upgradeViewsAndTriggers = true;
@@ -1657,6 +1662,12 @@ import java.util.Locale;
         if (oldVersion == 410) {
             upgradeToVersion411(db);
             oldVersion = 411;
+        }
+
+        if (oldVersion == 411) {
+            // Same upgrade as 353, only on Honeycomb devices
+            upgradeToVersion353(db);
+            oldVersion = 412;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2286,6 +2297,11 @@ import java.util.Locale;
                 + " ADD " + Groups.FAVORITES + " INTEGER NOT NULL DEFAULT 0;");
         db.execSQL("ALTER TABLE " + Tables.GROUPS
                 + " ADD " + Groups.AUTO_ADD + " INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    private void upgradeToVersion353(SQLiteDatabase db) {
+        db.execSQL("DELETE FROM contacts " +
+                "WHERE NOT EXISTS (SELECT 1 FROM raw_contacts WHERE contact_id=contacts._id)");
     }
 
     private void rebuildNameLookup(SQLiteDatabase db) {
