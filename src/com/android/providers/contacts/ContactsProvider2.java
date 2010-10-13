@@ -77,7 +77,6 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
-import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -156,9 +155,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final String PROPERTY_CONTACTS_IMPORTED = "contacts_imported_v1";
     private static final int PROPERTY_CONTACTS_IMPORT_VERSION = 1;
     private static final String PREF_LOCALE = "locale";
-
-    private static final String PROPERTY_AGGREGATION_ALGORITHM = "aggregation_v2";
-    private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 2;
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
@@ -2766,7 +2762,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RawContacts.AGGREGATION_MODE_IMMEDIATE: {
-                mContactAggregator.aggregateContact(mDb, rawContactId);
+                long contactId = mDbHelper.getContactId(rawContactId);
+                mContactAggregator.aggregateContact(mDb, rawContactId, contactId);
                 break;
             }
         }
@@ -4186,8 +4183,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.markForAggregation(rawContactId2,
                 RawContacts.AGGREGATION_MODE_DEFAULT, true);
 
-        mContactAggregator.aggregateContact(db, rawContactId1);
-        mContactAggregator.aggregateContact(db, rawContactId2);
+        long contactId1 = mDbHelper.getContactId(rawContactId1);
+        mContactAggregator.aggregateContact(db, rawContactId1, contactId1);
+
+        long contactId2 = mDbHelper.getContactId(rawContactId2);
+        mContactAggregator.aggregateContact(db, rawContactId2, contactId2);
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
@@ -6478,54 +6478,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             stmt.bindNull(index);
         } else {
             stmt.bindLong(index, value.longValue());
-        }
-    }
-
-    protected boolean isAggregationUpgradeNeeded() {
-        if (!mContactAggregator.isEnabled()) {
-            return false;
-        }
-
-        int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_AGGREGATION_ALGORITHM, "1"));
-        return version < PROPERTY_AGGREGATION_ALGORITHM_VERSION;
-    }
-
-    protected void upgradeAggregationAlgorithm() {
-        // This upgrade will affect very few contacts, so it can be performed on the
-        // main thread during the initial boot after an OTA
-
-        Log.i(TAG, "Upgrading aggregation algorithm");
-        int count = 0;
-        long start = SystemClock.currentThreadTimeMillis();
-        try {
-            mDb.beginTransaction();
-            Cursor cursor = mDb.query(true,
-                    Tables.RAW_CONTACTS + " r1 JOIN " + Tables.RAW_CONTACTS + " r2",
-                    new String[]{"r1." + RawContacts._ID},
-                    "r1." + RawContacts._ID + "!=r2." + RawContacts._ID +
-                    " AND r1." + RawContacts.CONTACT_ID + "=r2." + RawContacts.CONTACT_ID +
-                    " AND r1." + RawContacts.ACCOUNT_NAME + "=r2." + RawContacts.ACCOUNT_NAME +
-                    " AND r1." + RawContacts.ACCOUNT_TYPE + "=r2." + RawContacts.ACCOUNT_TYPE,
-                    null, null, null, null, null);
-            try {
-                while (cursor.moveToNext()) {
-                    long rawContactId = cursor.getLong(0);
-                    mContactAggregator.markForAggregation(rawContactId,
-                            RawContacts.AGGREGATION_MODE_DEFAULT, true);
-                    count++;
-                }
-            } finally {
-                cursor.close();
-            }
-            mContactAggregator.aggregateInTransaction(mDb);
-            mDb.setTransactionSuccessful();
-            mDbHelper.setProperty(PROPERTY_AGGREGATION_ALGORITHM,
-                    String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
-        } finally {
-            mDb.endTransaction();
-            long end = SystemClock.currentThreadTimeMillis();
-            Log.i(TAG, "Aggregation algorithm upgraded for " + count
-                    + " contacts, in " + (end - start) + "ms");
         }
     }
 }
