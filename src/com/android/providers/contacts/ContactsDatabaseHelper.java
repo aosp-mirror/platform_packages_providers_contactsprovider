@@ -85,7 +85,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 352;
+    static final int DATABASE_VERSION = 353;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1518,6 +1518,11 @@ import java.util.Locale;
             oldVersion = 352;
         }
 
+        if (oldVersion == 352) {
+            upgradeToVersion353(db);
+            oldVersion = 353;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2140,6 +2145,11 @@ import java.util.Locale;
 
             db.execSQL("INSERT INTO accounts " +
                     "SELECT DISTINCT account_name, account_type FROM raw_contacts");
+    }
+
+    private void upgradeToVersion353(SQLiteDatabase db) {
+        db.execSQL("DELETE FROM contacts " +
+                "WHERE NOT EXISTS (SELECT 1 FROM raw_contacts WHERE contact_id=contacts._id)");
     }
 
     private void rebuildNameLookup(SQLiteDatabase db) {
