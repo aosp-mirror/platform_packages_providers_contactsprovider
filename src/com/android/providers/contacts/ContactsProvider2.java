@@ -901,6 +901,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails", EMAILS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/#", EMAILS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup", EMAILS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup/*", EMAILS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
