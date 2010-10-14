@@ -1345,6 +1345,34 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesWithProjection(contactUri, values);
     }
 
+    public void testStatusUpdateUpdateToNull() {
+        long rawContactId = createRawContact();
+        insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
+
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        ContentValues values = new ContentValues();
+        Uri statusUri =
+            insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", StatusUpdates.AVAILABLE, "Available",
+                    StatusUpdates.CAPABILITY_HAS_CAMERA);
+        long statusId = ContentUris.parseId(statusUri);
+
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.AVAILABLE);
+        values.put(Contacts.CONTACT_STATUS, "Available");
+        assertStoredValuesWithProjection(contactUri, values);
+
+        values.clear();
+        values.putNull(StatusUpdates.PRESENCE);
+        mResolver.update(StatusUpdates.CONTENT_URI, values,
+                StatusUpdates.DATA_ID + "=" + statusId, null);
+
+        values.clear();
+        values.putNull(Contacts.CONTACT_PRESENCE);
+        values.put(Contacts.CONTACT_STATUS, "Available");
+        assertStoredValuesWithProjection(contactUri, values);
+    }
+
     public void testStatusUpdateWithTimestamp() {
         long rawContactId = createRawContact();
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
