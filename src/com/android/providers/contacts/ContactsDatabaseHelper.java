@@ -627,24 +627,25 @@ import java.util.Locale;
 
         final String replaceAggregatePresenceSql =
                 "INSERT OR REPLACE INTO " + Tables.AGGREGATED_PRESENCE + "("
-                + AggregatedPresenceColumns.CONTACT_ID + ", "
-                + StatusUpdates.PRESENCE_STATUS + ", "
-                + StatusUpdates.CHAT_CAPABILITY + ")"
-                + " SELECT " + PresenceColumns.CONTACT_ID + ","
-                + StatusUpdates.PRESENCE_STATUS + ","
-                + StatusUpdates.CHAT_CAPABILITY
+                        + AggregatedPresenceColumns.CONTACT_ID + ", "
+                        + StatusUpdates.PRESENCE + ", "
+                        + StatusUpdates.CHAT_CAPABILITY + ")"
+                + " SELECT "
+                        + PresenceColumns.CONTACT_ID + ","
+                        + StatusUpdates.PRESENCE + ","
+                        + StatusUpdates.CHAT_CAPABILITY
                 + " FROM " + Tables.PRESENCE
                 + " WHERE "
-                + " (" + StatusUpdates.PRESENCE_STATUS
-                +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
-                + " = (SELECT "
-                + "MAX (" + StatusUpdates.PRESENCE_STATUS
-                +       " * 10 + " + StatusUpdates.CHAT_CAPABILITY + ")"
-                + " FROM " + Tables.PRESENCE
-                + " WHERE " + PresenceColumns.CONTACT_ID
-                + "=NEW." + PresenceColumns.CONTACT_ID + ")"
-                + " AND " + PresenceColumns.CONTACT_ID
-                + "=NEW." + PresenceColumns.CONTACT_ID + ";";
+                    + " (ifnull(" + StatusUpdates.PRESENCE + ",0)  * 10 "
+                            + "+ ifnull(" + StatusUpdates.CHAT_CAPABILITY + ", 0))"
+                    + " = (SELECT "
+                        + "MAX (ifnull(" + StatusUpdates.PRESENCE + ",0)  * 10 "
+                                + "+ ifnull(" + StatusUpdates.CHAT_CAPABILITY + ", 0))"
+                        + " FROM " + Tables.PRESENCE
+                        + " WHERE " + PresenceColumns.CONTACT_ID
+                            + "=NEW." + PresenceColumns.CONTACT_ID
+                    + ")"
+                + " AND " + PresenceColumns.CONTACT_ID + "=NEW." + PresenceColumns.CONTACT_ID + ";";
 
         db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_inserted"
                 + " AFTER INSERT ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
