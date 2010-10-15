@@ -560,15 +560,15 @@ public class ContactAggregator {
             contactId = pickBestMatchBasedOnExceptions(db, rawContactId, matcher);
             if (contactId == -1) {
                 contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
-            }
 
-            // If we found an aggregate to join, but it already contains raw contacts from
-            // the same account, not only will we not join it, but also we will split
-            // that other aggregate
-            if (contactId != -1
-                    && containsRawContactsFromAccount(db, contactId, accountType, accountName)) {
-                contactIdToSplit = contactId;
-                contactId = -1;
+                // If we found an aggregate to join, but it already contains raw contacts from
+                // the same account, not only will we not join it, but also we will split
+                // that other aggregate
+                if (contactId != -1 && containsRawContactsFromAccount(
+                        db, contactId, accountType, accountName)) {
+                    contactIdToSplit = contactId;
+                    contactId = -1;
+                }
             }
         } else if (aggregationMode == RawContacts.AGGREGATION_MODE_DISABLED) {
             return;
