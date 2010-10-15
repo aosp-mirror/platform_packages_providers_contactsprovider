@@ -548,6 +548,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
         long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_2);
         long rawContactId3 = createRawContactWithName("John", "Doe", ACCOUNT_3);
+        assertAggregated(rawContactId1, rawContactId2);
+        assertAggregated(rawContactId1, rawContactId3);
         setAggregationException(
                 AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
         assertAggregated(rawContactId1, rawContactId2);

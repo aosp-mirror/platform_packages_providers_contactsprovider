@@ -564,8 +564,8 @@ public class ContactAggregator {
                 // If we found an aggregate to join, but it already contains raw contacts from
                 // the same account, not only will we not join it, but also we will split
                 // that other aggregate
-                if (contactId != -1 && containsRawContactsFromAccount(
-                        db, contactId, accountType, accountName)) {
+                if (contactId != -1 && contactId != currentContactId &&
+                        containsRawContactsFromAccount(db, contactId, accountType, accountName)) {
                     contactIdToSplit = contactId;
                     contactId = -1;
                 }
