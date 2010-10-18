@@ -597,6 +597,8 @@ import java.util.Locale;
 
         db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex" + " ON "
                 + Tables.PRESENCE + " (" + PresenceColumns.RAW_CONTACT_ID + ");");
+        db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex2" + " ON "
+                + Tables.PRESENCE + " (" + PresenceColumns.CONTACT_ID + ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS "
                 + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
