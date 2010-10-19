@@ -67,7 +67,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
             mResponse = new MatrixCursor(
                     new String[] { Directory.ACCOUNT_NAME, Directory.ACCOUNT_TYPE,
                             Directory.DISPLAY_NAME, Directory.TYPE_RESOURCE_ID,
-                            Directory.EXPORT_SUPPORT, Directory.SHORTCUT_SUPPORT, });
+                            Directory.EXPORT_SUPPORT, Directory.SHORTCUT_SUPPORT,
+                            Directory.PHOTO_SUPPORT });
 
             return mResponse;
         }
@@ -123,16 +124,19 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_FULL_SIZE_ONLY);
         addDirectoryRow(response1, "account-name2", "account-type2", "display-name2", 2,
-                Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY);
+                Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY,
+                Directory.PHOTO_SUPPORT_THUMBNAIL_ONLY);
 
         MockContactDirectoryProvider provider2 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority2");
 
         MatrixCursor response2 = provider2.createResponseCursor();
         addDirectoryRow(response2, "account-name3", "account-type3", "display-name3", 3,
-                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL);
+                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
 
         mDirectoryManager.scanAllPackages();
 
@@ -141,15 +145,18 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         cursor.moveToPosition(2);
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
-                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE);
+                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_FULL_SIZE_ONLY);
 
         cursor.moveToNext();
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name2", "account-type2",
-                "display-name2", 2, Directory.EXPORT_SUPPORT_ANY_ACCOUNT);
+                "display-name2", 2, Directory.EXPORT_SUPPORT_ANY_ACCOUNT,
+                Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY, Directory.PHOTO_SUPPORT_THUMBNAIL_ONLY);
 
         cursor.moveToNext();
         assertDirectoryRow(cursor, "test.package2", "authority2", "account-name3", "account-type3",
-                "display-name3", 3, Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY);
+                "display-name3", 3, Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY,
+                Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         cursor.close();
     }
@@ -163,7 +170,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_FULL);
 
         mDirectoryManager.scanAllPackages();
 
@@ -179,7 +187,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response2 = provider2.createResponseCursor();
         addDirectoryRow(response2, "account-name3", "account-type3", "display-name3", 3,
-                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL);
+                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
 
         mPackageManager.getInstalledPackages(0).add(
                 createProviderPackage("test.package2", "authority2"));
@@ -191,11 +200,13 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         cursor.moveToPosition(2);
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
-                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE);
+                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_FULL);
 
         cursor.moveToNext();
         assertDirectoryRow(cursor, "test.package2", "authority2", "account-name3", "account-type3",
-                "display-name3", 3, Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY);
+                "display-name3", 3, Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY,
+                Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         cursor.close();
     }
@@ -211,14 +222,16 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         MockContactDirectoryProvider provider2 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority2");
 
         MatrixCursor response2 = provider2.createResponseCursor();
         addDirectoryRow(response2, "account-name3", "account-type3", "display-name3", 3,
-                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL);
+                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
 
         mDirectoryManager.scanAllPackages();
 
@@ -237,7 +250,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         cursor.moveToPosition(2);
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
-                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE);
+                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         cursor.close();
     }
@@ -253,14 +267,16 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         MockContactDirectoryProvider provider2 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority2");
 
         MatrixCursor response2 = provider2.createResponseCursor();
         addDirectoryRow(response2, "account-name3", "account-type3", "display-name3", 3,
-                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL);
+                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
 
         mDirectoryManager.scanAllPackages();
 
@@ -272,7 +288,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         // Pretend to replace the package with a different provider inside
         MatrixCursor response3 = provider2.createResponseCursor();
         addDirectoryRow(response3, "account-name4", "account-type4", "display-name4", 4,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         mProvider.onPackageChanged("test.package2");
 
@@ -281,11 +298,13 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         cursor.moveToPosition(2);
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
-                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE);
+                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         cursor.moveToNext();
         assertDirectoryRow(cursor, "test.package2", "authority2", "account-name4", "account-type4",
-                "display-name4", 4, Directory.EXPORT_SUPPORT_NONE);
+                "display-name4", 4, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         cursor.close();
     }
@@ -306,9 +325,11 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
         addDirectoryRow(response1, "account-name2", "account-type2", "display-name2", 2,
-                Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY);
+                Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY,
+                Directory.PHOTO_SUPPORT_FULL_SIZE_ONLY);
 
         mDirectoryManager.scanAllPackages();
 
@@ -320,7 +341,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         cursor.moveToPosition(2);
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
-                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE);
+                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         cursor.close();
     }
@@ -334,14 +356,16 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         mDirectoryManager.scanAllPackages();
 
         // Pretend to replace the package with a different provider inside
         MatrixCursor response2 = provider1.createResponseCursor();
         addDirectoryRow(response2, "account-name2", "account-type2", "display-name2", 2,
-                Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_FULL);
+                Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
 
         ContactsContract.Directory.notifyDirectoryChange(mResolver);
 
@@ -350,7 +374,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         cursor.moveToPosition(2);
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name2", "account-type2",
-                "display-name2", 2, Directory.EXPORT_SUPPORT_ANY_ACCOUNT);
+                "display-name2", 2, Directory.EXPORT_SUPPORT_ANY_ACCOUNT,
+                Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         cursor.close();
     }
@@ -364,7 +389,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         mDirectoryManager.scanAllPackages();
 
@@ -402,7 +428,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
-                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE);
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
 
         mDirectoryManager.scanAllPackages();
 
@@ -438,7 +465,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
     }
 
     protected void addDirectoryRow(MatrixCursor cursor, String accountName, String accountType,
-            String displayName, int typeResourceId, int exportSupport, int shortcutSupport) {
+            String displayName, int typeResourceId, int exportSupport, int shortcutSupport,
+            int photoSupport) {
         Object[] row = new Object[cursor.getColumnCount()];
         row[cursor.getColumnIndex(Directory.ACCOUNT_NAME)] = accountName;
         row[cursor.getColumnIndex(Directory.ACCOUNT_TYPE)] = accountType;
@@ -446,12 +474,13 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         row[cursor.getColumnIndex(Directory.TYPE_RESOURCE_ID)] = typeResourceId;
         row[cursor.getColumnIndex(Directory.EXPORT_SUPPORT)] = exportSupport;
         row[cursor.getColumnIndex(Directory.SHORTCUT_SUPPORT)] = shortcutSupport;
+        row[cursor.getColumnIndex(Directory.PHOTO_SUPPORT)] = photoSupport;
         cursor.addRow(row);
     }
 
     protected void assertDirectoryRow(Cursor cursor, String packageName, String authority,
             String accountName, String accountType, String displayName, int typeResourceId,
-            int exportSupport) {
+            int exportSupport, int shortcutSupport, int photoSupport) {
         ContentValues values = new ContentValues();
         values.put(Directory.PACKAGE_NAME, packageName);
         values.put(Directory.DIRECTORY_AUTHORITY, authority);
@@ -460,10 +489,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         values.put(Directory.DISPLAY_NAME, displayName);
         values.put(Directory.TYPE_RESOURCE_ID, typeResourceId);
         values.put(Directory.EXPORT_SUPPORT, exportSupport);
-
-        // TODO: uncomment once shortcut support is implemented
-        // values.put(Directory.SHORTCUT_SUPPORT,
-        // Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY);
+        values.put(Directory.SHORTCUT_SUPPORT, shortcutSupport);
+        values.put(Directory.PHOTO_SUPPORT, photoSupport);
 
         assertCursorValues(cursor, values);
     }

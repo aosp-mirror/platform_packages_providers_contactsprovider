@@ -64,6 +64,7 @@ public class ContactDirectoryManager extends HandlerThread {
         int typeResourceId;
         int exportSupport = Directory.EXPORT_SUPPORT_NONE;
         int shortcutSupport = Directory.SHORTCUT_SUPPORT_NONE;
+        int photoSupport = Directory.PHOTO_SUPPORT_NONE;
     }
 
     private final static class DirectoryQuery {
@@ -74,6 +75,7 @@ public class ContactDirectoryManager extends HandlerThread {
             Directory.TYPE_RESOURCE_ID,
             Directory.EXPORT_SUPPORT,
             Directory.SHORTCUT_SUPPORT,
+            Directory.PHOTO_SUPPORT,
         };
 
         public static final int ACCOUNT_NAME = 0;
@@ -82,6 +84,7 @@ public class ContactDirectoryManager extends HandlerThread {
         public static final int TYPE_RESOURCE_ID = 3;
         public static final int EXPORT_SUPPORT = 4;
         public static final int SHORTCUT_SUPPORT = 5;
+        public static final int PHOTO_SUPPORT = 6;
     }
 
     private final ContactsProvider2 mContactsProvider;
@@ -326,6 +329,20 @@ public class ContactDirectoryManager extends HandlerThread {
                                         + " - invalid shortcut support flag: " + shortcutSupport);
                         }
                     }
+                    if (!cursor.isNull(DirectoryQuery.PHOTO_SUPPORT)) {
+                        int photoSupport = cursor.getInt(DirectoryQuery.PHOTO_SUPPORT);
+                        switch (photoSupport) {
+                            case Directory.PHOTO_SUPPORT_NONE:
+                            case Directory.PHOTO_SUPPORT_THUMBNAIL_ONLY:
+                            case Directory.PHOTO_SUPPORT_FULL_SIZE_ONLY:
+                            case Directory.PHOTO_SUPPORT_FULL:
+                                info.photoSupport = photoSupport;
+                                break;
+                            default:
+                                Log.e(TAG, providerDescription(provider)
+                                        + " - invalid photo support flag: " + photoSupport);
+                        }
+                    }
                     directoryInfo.add(info);
                 }
             }
@@ -356,6 +373,7 @@ public class ContactDirectoryManager extends HandlerThread {
             values.put(Directory.DISPLAY_NAME, info.displayName);
             values.put(Directory.EXPORT_SUPPORT, info.exportSupport);
             values.put(Directory.SHORTCUT_SUPPORT, info.shortcutSupport);
+            values.put(Directory.PHOTO_SUPPORT, info.photoSupport);
 
             Cursor cursor = db.query(Tables.DIRECTORIES, new String[] { Directory._ID },
                     Directory.PACKAGE_NAME + "=? AND " + Directory.DIRECTORY_AUTHORITY + "=? AND "
