@@ -27,6 +27,7 @@ import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.LiveFolders;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -99,42 +100,44 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
     public void testRestrictedInsertRestrictedQuery() {
         // Restricted query can read restricted data
-        final long rawContact = mGrey.createContact(true, GENERIC_NAME);
+        final long rawContact = mGrey.createRawContact(true, GENERIC_NAME);
         final int count = mGrey.getDataCountForRawContact(rawContact);
         assertEquals(1, count);
     }
 
     public void testRestrictedInsertGenericQuery() {
         // Generic query is denied restricted data
-        final long rawContact = mGrey.createContact(true, GENERIC_NAME);
+        final long rawContact = mGrey.createRawContact(true, GENERIC_NAME);
         final int count = mRed.getDataCountForRawContact(rawContact);
         assertEquals(0, count);
     }
 
     public void testGenericInsertRestrictedQuery() {
         // Restricted query can read generic data
-        final long rawContact = mRed.createContact(false, GENERIC_NAME);
+        final long rawContact = mRed.createRawContact(false, GENERIC_NAME);
         final int count = mGrey.getDataCountForRawContact(rawContact);
         assertEquals(1, count);
     }
 
     public void testGenericInsertGenericQuery() {
         // Generic query can read generic data
-        final long rawContact = mRed.createContact(false, GENERIC_NAME);
+        final long rawContact = mRed.createRawContact(false, GENERIC_NAME);
         final int count = mRed.getDataCountForRawContact(rawContact);
         assertEquals(1, count);
     }
 
     public void testMixedAggregateRestrictedQuery() {
         // Create mixed aggregate with a restricted phone number
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
-        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
-        final long redContact = mRed.createContact(false, GENERIC_NAME);
-        final long redPhone = mRed.createPhone(redContact, PHONE_RED);
+        final long greyRawContactId = mGrey.createRawContact(true, GENERIC_NAME);
+        mGrey.createPhone(greyRawContactId, PHONE_GREY);
+        final long redRawContactId = mRed.createRawContact(false, GENERIC_NAME);
+        mRed.createPhone(redRawContactId, PHONE_RED);
+        mGrey.setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, greyRawContactId, redRawContactId);
 
         // Make sure both aggregates were joined
-        final long greyAgg = mGrey.getContactForRawContact(greyContact);
-        final long redAgg = mRed.getContactForRawContact(redContact);
+        final long greyAgg = mGrey.getContactForRawContact(greyRawContactId);
+        final long redAgg = mRed.getContactForRawContact(redRawContactId);
         assertEquals(greyAgg, redAgg);
 
         // Restricted reader should have access to both numbers
@@ -148,7 +151,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
     public void testUpdateRestricted() {
         // Assert that we can't un-restrict something
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyContact = mGrey.createRawContact(true, GENERIC_NAME);
         final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
 
         int count = mRed.getDataCountForRawContact(greyContact);
@@ -167,14 +170,16 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
 
     public void testExportVCard() throws Exception {
         // Create mixed aggregate with a restricted phone number
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
-        final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
-        final long redContact = mRed.createContact(false, GENERIC_NAME);
-        final long redPhone = mRed.createPhone(redContact, PHONE_RED);
+        final long greyRawContactId = mGrey.createRawContact(true, GENERIC_NAME);
+        mGrey.createPhone(greyRawContactId, PHONE_GREY);
+        final long redRawContactId = mRed.createRawContact(false, GENERIC_NAME);
+        mRed.createPhone(redRawContactId, PHONE_RED);
+        mGrey.setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, greyRawContactId, redRawContactId);
 
         // Make sure both aggregates were joined
-        final long greyAgg = mGrey.getContactForRawContact(greyContact);
-        final long redAgg = mRed.getContactForRawContact(redContact);
+        final long greyAgg = mGrey.getContactForRawContact(greyRawContactId);
+        final long redAgg = mRed.getContactForRawContact(redRawContactId);
         assertEquals(greyAgg, redAgg);
 
         // Exported vCard shouldn't contain restricted phone
@@ -202,7 +207,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testContactsLiveFolder() {
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyContact = mGrey.createRawContact(true, GENERIC_NAME);
         final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
 
         // Protected contact should be omitted from live folder
@@ -222,7 +227,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testRestrictedQueryParam() throws Exception {
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyContact = mGrey.createRawContact(true, GENERIC_NAME);
         final long greyPhone = mGrey.createPhone(greyContact, PHONE_GREY);
 
         Uri greyUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, greyContact);
@@ -254,7 +259,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testRestrictedEmailLookupRestricted() {
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyContact = mGrey.createRawContact(true, GENERIC_NAME);
         final long greyEmail = mGrey.createEmail(greyContact, EMAIL_GREY);
 
         // Restricted caller should see protected data
@@ -273,7 +278,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testRestrictedEmailLookupGeneric() {
-        final long greyContact = mGrey.createContact(true, GENERIC_NAME);
+        final long greyContact = mGrey.createRawContact(true, GENERIC_NAME);
         final long greyEmail = mGrey.createEmail(greyContact, EMAIL_GREY);
 
         // Generic caller should never see protected data
@@ -292,7 +297,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testStatusRestrictedInsertRestrictedQuery() {
-        final long rawContactId = mGrey.createContactWithStatus(true,
+        final long rawContactId = mGrey.createRawContactWithStatus(true,
                 GENERIC_NAME, EMAIL_GREY, GENERIC_STATUS);
         final long aggId = mGrey.getContactForRawContact(rawContactId);
 
@@ -301,7 +306,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testStatusRestrictedInsertGenericQuery() {
-        final long rawContactId = mGrey.createContactWithStatus(true,
+        final long rawContactId = mGrey.createRawContactWithStatus(true,
                 GENERIC_NAME, EMAIL_GREY, GENERIC_STATUS);
         final long aggId = mGrey.getContactForRawContact(rawContactId);
 
@@ -310,7 +315,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testStatusGenericInsertRestrictedQuery() {
-        final long rawContactId = mRed.createContactWithStatus(false,
+        final long rawContactId = mRed.createRawContactWithStatus(false,
                 GENERIC_NAME, EMAIL_RED, GENERIC_STATUS);
         final long aggId = mRed.getContactForRawContact(rawContactId);
 
@@ -319,7 +324,7 @@ public class RestrictionExceptionsTest extends AndroidTestCase {
     }
 
     public void testStatusGenericInsertGenericQuery() {
-        final long rawContactId = mRed.createContactWithStatus(false,
+        final long rawContactId = mRed.createRawContactWithStatus(false,
                 GENERIC_NAME, EMAIL_RED, GENERIC_STATUS);
         final long aggId = mRed.getContactForRawContact(rawContactId);
 

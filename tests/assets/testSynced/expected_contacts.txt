@@ -10,7 +10,7 @@
 10    starred=0
 11    in_visible_group=0
 12    has_phone_number=0
-13    lookup=2273r1-423444445C52345052
+13    lookup=2273r1-433545455D53355153
 14 }
 15 1 {
 16    _id=2
@@ -94,7 +94,7 @@
 94    starred=0
 95    in_visible_group=1
 96    has_phone_number=1
-97    lookup=389r7-464852505C463034324654442E344E
+97    lookup=389r7-474953515D473135334755452F354F
 98 }
 99 7 {
 100    _id=8
@@ -108,7 +108,7 @@
 108    starred=0
 109    in_visible_group=1
 110    has_phone_number=1
-111    lookup=389r8-464852505C463034324654442E344E442C3C42
+111    lookup=389r8-474953515D473135334755452F354F452D3D43
 112 }
 113 8 {
 114    _id=9
@@ -122,7 +122,7 @@
 122    starred=0
 123    in_visible_group=1
 124    has_phone_number=0
-125    lookup=389r9-464852505C46303432442C3C42
+125    lookup=389r9-474953515D47313533452D3D43
 126 }
 127 9 {
 128    _id=10
@@ -136,7 +136,7 @@
 136    starred=0
 137    in_visible_group=1
 138    has_phone_number=0
-139    lookup=389r10-464852505C46303432
+139    lookup=389r10-474953515D47313533
 140 }
 141 10 {
 142    _id=11
@@ -150,7 +150,7 @@
 150    starred=0
 151    in_visible_group=1
 152    has_phone_number=1
-153    lookup=389r11-297E297E297E297E297E297E297E297E297E297E
+153    lookup=389r11-2A902A902A902A902A902A902A902A902A902A90
 154 }
 155 11 {
 156    _id=12
@@ -164,5 +164,5 @@
 164    starred=0
 165    in_visible_group=1
 166    has_phone_number=0
-167    lookup=389r12-464852505C4630343238442C3C42304844
+167    lookup=389r12-474953515D4731353339452D3D43314945
 168 }

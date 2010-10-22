@@ -79,6 +79,9 @@ import java.util.Locale;
 @LargeTest
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
+    private static final Account ACCOUNT_1 = new Account("account_name_1", "account_type_1");
+    private static final Account ACCOUNT_2 = new Account("account_name_2", "account_type_2");
+
     public void testRawContactsInsert() {
         ContentValues values = new ContentValues();
 
@@ -185,11 +188,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testPhonesFilterQuery() {
-        long rawContactId1 = createRawContactWithName("Hot", "Tamale");
+        long rawContactId1 = createRawContactWithName("Hot", "Tamale", ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "18004664411");
         insertPhoneNumber(rawContactId1, "1-800-466-4411");
 
-        long rawContactId2 = createRawContactWithName("Hot", "Tamale");
+        long rawContactId2 = createRawContactWithName("Hot", "Tamale", ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "1-800-466-4411");
 
         Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
@@ -338,11 +341,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testEmailsFilterQuery() {
-        long rawContactId1 = createRawContactWithName("Hot", "Tamale");
+        long rawContactId1 = createRawContactWithName("Hot", "Tamale", ACCOUNT_1);
         insertEmail(rawContactId1, "tamale@acme.com");
         insertEmail(rawContactId1, "tamale@acme.com");
 
-        long rawContactId2 = createRawContactWithName("Hot", "Tamale");
+        long rawContactId2 = createRawContactWithName("Hot", "Tamale", ACCOUNT_2);
         insertEmail(rawContactId2, "tamale@acme.com");
 
         Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tam");
@@ -1736,9 +1739,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testRawContactDeletionKeepingAggregateContact() {
         long rawContactId1 = createRawContactWithName(mAccount);
         long rawContactId2 = createRawContactWithName(mAccount);
-
-        // Same name - should be aggregated
-        assertAggregated(rawContactId1, rawContactId2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
 
         long contactId = queryContactId(rawContactId1);
 
@@ -1853,8 +1855,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactDeletion() {
-        long rawContactId1 = createRawContactWithName("John", "Doe");
-        long rawContactId2 = createRawContactWithName("John", "Doe");
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_2);
 
         long contactId = queryContactId(rawContactId1);
 
@@ -2133,8 +2135,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri rawContactUri1 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
         long rawContactId2 = createRawContactWithName();
         Uri rawContactUri2 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2);
-
-        assertAggregated(rawContactId1, rawContactId2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
 
         long contactId = queryContactId(rawContactId1);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);

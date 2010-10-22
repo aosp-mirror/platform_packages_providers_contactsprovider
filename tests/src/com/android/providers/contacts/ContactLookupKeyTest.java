@@ -42,8 +42,8 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
     public void testLookupKeyUsingDisplayNameAndNoAccount() {
         long rawContactId1 = createRawContactWithName("John", "Doe");
         long rawContactId2 = createRawContactWithName("johndoe", null);
-
-        assertAggregated(rawContactId1, rawContactId2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
 
         // Normalized display name
         String normalizedName = NameNormalizer.normalize("johndoe");
@@ -74,7 +74,8 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContactWithName("johndoe", null);
         storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.SOURCE_ID, "4.5.6");
 
-        assertAggregated(rawContactId1, rawContactId2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
 
         // Two source ids, of them escaped
         String expectedLookupKey = "0i123.0e4..5..6";
@@ -127,6 +128,10 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
 
         long rawContactId3 = createRawContactWithName("John", "Doe");
         storeValue(RawContacts.CONTENT_URI, rawContactId3, RawContacts.SOURCE_ID, "3");
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId3);
 
         String lookupKey = "0i1.0i2.0i3";
 
