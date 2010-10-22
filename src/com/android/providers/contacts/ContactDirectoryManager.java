@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.google.android.collect.Lists;
 
@@ -25,8 +26,11 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ProviderInfo;
+import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
@@ -35,7 +39,9 @@ import android.os.HandlerThread;
 import android.os.Message;
 import android.os.Process;
 import android.os.SystemClock;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -97,15 +103,23 @@ public class ContactDirectoryManager extends HandlerThread {
         this.mContext = contactsProvider.getContext();
     }
 
+    public ContactsDatabaseHelper getDbHelper() {
+        return (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
+    }
+
     /**
      * Launches an asynchronous scan of all packages.
      */
     @Override
     public void start() {
         super.start();
-        scheduleScanAllPackages(false);
+        if (areTypeResourceIdsValid()) {
+            scheduleScanAllPackages(false);
+        } else {
+            getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+            scanAllPackagesIfNeeded();
+        }
     }
-
     /**
      * Launches an asynchronous scan of all packages owned by the current calling UID.
      */
@@ -157,20 +171,64 @@ public class ContactDirectoryManager extends HandlerThread {
     }
 
     /**
+     * Scans through existing directories to see if the cached resource IDs still
+     * match their original resource names.  If not - plays it safe by refreshing all directories.
+     *
+     * @return true if all resource IDs were found valid
+     */
+    private boolean areTypeResourceIdsValid() {
+        final PackageManager pm = mContext.getPackageManager();
+        SQLiteDatabase db = getDbHelper().getReadableDatabase();
+
+        Cursor cursor = db.query(Tables.DIRECTORIES,
+                new String[] { Directory.TYPE_RESOURCE_ID, Directory.PACKAGE_NAME,
+                        DirectoryColumns.TYPE_RESOURCE_NAME }, null, null, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                int resourceId = cursor.getInt(0);
+                if (resourceId != 0) {
+                    String packageName = cursor.getString(1);
+                    String storedResourceName = cursor.getString(2);
+                    String resourceName = getResourceNameById(pm, packageName, resourceId);
+                    if (!TextUtils.equals(storedResourceName, resourceName)) {
+                        return false;
+                    }
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+
+        return true;
+    }
+
+    /**
+     * Given a resource ID, returns the corresponding resource name or null if the package name /
+     * resource ID combination is invalid.
+     */
+    private String getResourceNameById(PackageManager pm, String packageName, int resourceId) {
+        try {
+            Resources resources = pm.getResourcesForApplication(packageName);
+            return resources.getResourceName(resourceId);
+        } catch (NameNotFoundException e) {
+            return null;
+        } catch (NotFoundException e) {
+            return null;
+        }
+    }
+
+    /**
      * Scans all packages for directory content providers.
      */
     private void scanAllPackagesIfNeeded() {
-        ContactsDatabaseHelper dbHelper =
-                (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
-
-        String scanComplete = dbHelper.getProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+        String scanComplete = getDbHelper().getProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
         if (!"0".equals(scanComplete)) {
             return;
         }
 
         long start = SystemClock.currentThreadTimeMillis();
         int count = scanAllPackages();
-        dbHelper.setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "1");
+        getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "1");
         long end = SystemClock.currentThreadTimeMillis();
         Log.i(TAG, "Discovered " + count + " contact directories in " + (end - start) + "ms");
 
@@ -180,9 +238,7 @@ public class ContactDirectoryManager extends HandlerThread {
 
     public void scheduleScanAllPackages(boolean rescan) {
         if (rescan) {
-            ContactsDatabaseHelper dbHelper =
-                    (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
-            dbHelper.setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+            getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
         }
         if (isAlive()) {
             getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
@@ -193,6 +249,10 @@ public class ContactDirectoryManager extends HandlerThread {
 
     /* Visible for testing */
     int scanAllPackages() {
+        SQLiteDatabase db = getDbHelper().getWritableDatabase();
+        insertDefaultDirectory(db);
+        insertLocalInvisibleDirectory(db);
+
         int count = 0;
         PackageManager pm = mContext.getPackageManager();
         List<PackageInfo> packages = pm.getInstalledPackages(
@@ -206,6 +266,34 @@ public class ContactDirectoryManager extends HandlerThread {
             }
         }
         return count;
+    }
+
+    private void insertDefaultDirectory(SQLiteDatabase db) {
+        ContentValues values = new ContentValues();
+        values.put(Directory._ID, Directory.DEFAULT);
+        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
+        values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
+        values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
+        values.put(DirectoryColumns.TYPE_RESOURCE_NAME,
+                mContext.getResources().getResourceName(R.string.default_directory));
+        values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
+        values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
+        values.put(Directory.PHOTO_SUPPORT, Directory.PHOTO_SUPPORT_FULL);
+        db.replace(Tables.DIRECTORIES, null, values);
+    }
+
+    private void insertLocalInvisibleDirectory(SQLiteDatabase db) {
+        ContentValues values = new ContentValues();
+        values.put(Directory._ID, Directory.LOCAL_INVISIBLE);
+        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
+        values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
+        values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
+        values.put(DirectoryColumns.TYPE_RESOURCE_NAME,
+                mContext.getResources().getResourceName(R.string.local_invisible_directory));
+        values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
+        values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
+        values.put(Directory.PHOTO_SUPPORT, Directory.PHOTO_SUPPORT_FULL);
+        db.replace(Tables.DIRECTORIES, null, values);
     }
 
     /**
@@ -227,7 +315,7 @@ public class ContactDirectoryManager extends HandlerThread {
         }
 
         updateDirectoriesForPackage(packageInfo, false);
-  }
+    }
 
     /**
      * Scans the specified package for content directories and updates the {@link Directory}
@@ -253,8 +341,7 @@ public class ContactDirectoryManager extends HandlerThread {
             return 0;
         }
 
-        SQLiteDatabase db = ((ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper())
-                .getWritableDatabase();
+        SQLiteDatabase db = getDbHelper().getWritableDatabase();
         db.beginTransaction();
         try {
             updateDirectories(db, directories);
@@ -360,6 +447,7 @@ public class ContactDirectoryManager extends HandlerThread {
      * from directory providers.
      */
     private void updateDirectories(SQLiteDatabase db, ArrayList<DirectoryInfo> directoryInfo) {
+        PackageManager pm = mContext.getPackageManager();
 
         // Insert or replace existing directories.
         // This happens so infrequently that we can use a less-then-optimal one-a-time approach
@@ -374,6 +462,12 @@ public class ContactDirectoryManager extends HandlerThread {
             values.put(Directory.EXPORT_SUPPORT, info.exportSupport);
             values.put(Directory.SHORTCUT_SUPPORT, info.shortcutSupport);
             values.put(Directory.PHOTO_SUPPORT, info.photoSupport);
+
+            if (info.typeResourceId != 0) {
+                String resourceName = getResourceNameById(
+                        pm, info.packageName, info.typeResourceId);
+                values.put(DirectoryColumns.TYPE_RESOURCE_NAME, resourceName);
+            }
 
             Cursor cursor = db.query(Tables.DIRECTORIES, new String[] { Directory._ID },
                     Directory.PACKAGE_NAME + "=? AND " + Directory.DIRECTORY_AUTHORITY + "=? AND "

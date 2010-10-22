@@ -26,6 +26,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
@@ -217,6 +218,11 @@ public class ContactsActor {
         @Override
         public CharSequence getText(int id) throws NotFoundException {
             return mRes.getText(id);
+        }
+
+        @Override
+        public String getResourceName(int resid) throws NotFoundException {
+            return String.valueOf(resid);
         }
     }
 

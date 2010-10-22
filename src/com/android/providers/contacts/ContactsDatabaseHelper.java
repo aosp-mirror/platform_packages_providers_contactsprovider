@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 412;
+    static final int DATABASE_VERSION = 413;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -474,6 +474,10 @@ import java.util.Locale;
     public interface PropertiesColumns {
         String PROPERTY_KEY = "property_key";
         String PROPERTY_VALUE = "property_value";
+    }
+
+    public static final class DirectoryColumns {
+        public static final String TYPE_RESOURCE_NAME = "typeResourceName";
     }
 
     /** In-memory cache of previously found MIME-type mappings */
@@ -993,6 +997,7 @@ import java.util.Locale;
                 Directory.PACKAGE_NAME + " TEXT NOT NULL," +
                 Directory.DIRECTORY_AUTHORITY + " TEXT NOT NULL," +
                 Directory.TYPE_RESOURCE_ID + " INTEGER," +
+                DirectoryColumns.TYPE_RESOURCE_NAME + " TEXT," +
                 Directory.ACCOUNT_TYPE + " TEXT," +
                 Directory.ACCOUNT_NAME + " TEXT," +
                 Directory.DISPLAY_NAME + " TEXT, " +
@@ -1004,35 +1009,8 @@ import java.util.Locale;
                         " DEFAULT " + Directory.PHOTO_SUPPORT_NONE +
         ");");
 
-        insertDefaultDirectory(db);
-        insertLocalInvisibleDirectory(db);
-
         // Trigger a full scan of directories in the system
         setProperty(db, ContactDirectoryManager.PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
-    }
-
-    private void insertDefaultDirectory(SQLiteDatabase db) {
-        ContentValues values = new ContentValues();
-        values.put(Directory._ID, Directory.DEFAULT);
-        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
-        values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
-        values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
-        values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
-        values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
-        values.put(Directory.PHOTO_SUPPORT, Directory.PHOTO_SUPPORT_FULL);
-        db.insert(Tables.DIRECTORIES, null, values);
-    }
-
-    private void insertLocalInvisibleDirectory(SQLiteDatabase db) {
-        ContentValues values = new ContentValues();
-        values.put(Directory._ID, Directory.LOCAL_INVISIBLE);
-        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
-        values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
-        values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
-        values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
-        values.put(Directory.SHORTCUT_SUPPORT, Directory.SHORTCUT_SUPPORT_FULL);
-        values.put(Directory.PHOTO_SUPPORT, Directory.PHOTO_SUPPORT_FULL);
-        db.insert(Tables.DIRECTORIES, null, values);
     }
 
     private static void createContactsTriggers(SQLiteDatabase db) {
@@ -1671,6 +1649,11 @@ import java.util.Locale;
             // Same upgrade as 353, only on Honeycomb devices
             upgradeToVersion353(db);
             oldVersion = 412;
+        }
+
+        if (oldVersion == 412) {
+            upgradeToVersion413(db);
+            oldVersion = 413;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2749,6 +2732,12 @@ import java.util.Locale;
                 ")");
     }
 
+    private void upgradeToVersion413(SQLiteDatabase db) {
+        db.execSQL(
+                "ALTER TABLE " + Tables.DIRECTORIES +
+                " ADD " + DirectoryColumns.TYPE_RESOURCE_NAME + " TEXT;");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2883,9 +2872,6 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
-
-        insertDefaultDirectory(db);
-        insertLocalInvisibleDirectory(db);
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
