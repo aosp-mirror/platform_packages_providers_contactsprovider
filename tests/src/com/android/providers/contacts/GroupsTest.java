@@ -78,11 +78,13 @@ public class GroupsTest extends BaseContactsProvider2Test {
         long groupBlue = mActor.createGroup(GROUP_BLUE);
 
         // Create a handful of contacts
-        long contactAlpha = mActor.createContact(false, PERSON_ALPHA);
-        long contactBravo = mActor.createContact(false, PERSON_BRAVO);
-        long contactCharlie = mActor.createContact(false, PERSON_CHARLIE);
-        long contactCharlieDupe = mActor.createContact(false, PERSON_CHARLIE);
-        long contactDelta = mActor.createContact(false, PERSON_DELTA);
+        long contactAlpha = mActor.createRawContact(false, PERSON_ALPHA);
+        long contactBravo = mActor.createRawContact(false, PERSON_BRAVO);
+        long contactCharlie = mActor.createRawContact(false, PERSON_CHARLIE);
+        long contactCharlieDupe = mActor.createRawContact(false, PERSON_CHARLIE);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, contactCharlie, contactCharlieDupe);
+        long contactDelta = mActor.createRawContact(false, PERSON_DELTA);
 
         assertAggregated(contactCharlie, contactCharlieDupe);
 
