@@ -21,12 +21,6 @@
     <string-array name="unrestricted_packages" translatable="false">
 
         <item>com.android.contacts</item>
-        <item>com.android.mms</item>
-        <item>com.android.email</item>
-        <item>com.android.phone</item>
-        <item>com.android.quicksearchbox</item>
-        <item>com.android.calendar</item>
-        <item>android</item>
 
     </string-array>
 
