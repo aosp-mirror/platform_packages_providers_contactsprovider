@@ -200,6 +200,40 @@ public class NameLookupBuilderTest extends TestCase {
                 "(6:C)", mBuilder.inserted());
     }
 
+    public void testKoreanName() {
+        // Only run this test when Chinese collation is supported.
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.KOREA)) {
+            return;
+        }
+
+        // Lee Sang Il
+        mBuilder.insertNameLookup(0, 0, "\uC774\uC0C1\uC77C", FullNameStyle.KOREAN);
+        assertEquals(
+                "(0:\uC774\uC0C1\uC77C)" + // Lee Sang Il
+                "(2:\uC774\uC0C1\uC77C)" + // Lee Sang Il
+                "(6:\uC0C1\uC77C)" + // Sang Il : given name
+                "(7:\u1109\u110B)" + // SIOS IEUNG : consonants of given name
+                "(7:\u110B\u1109\u110B)", // RIEUL SIOS IEUNG : consonants of fullname
+                mBuilder.inserted());
+    }
+
+    public void testKoreanNameWithTwoCharactersFamilyName() {
+        // Only run this test when Chinese collation is supported.
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.KOREA)) {
+            return;
+        }
+
+        // Sun Woo Young Nyeu
+        mBuilder.insertNameLookup(0, 0, "\uC120\uC6B0\uC6A9\uB140", FullNameStyle.KOREAN);
+        assertEquals(
+                "(0:\uC120\uC6B0\uC6A9\uB140)" + // Sun Woo Young Nyeu
+                "(2:\uC120\uC6B0\uC6A9\uB140)" + // Sun Woo Young Nyeu
+                "(6:\uC6A9\uB140)" + // Young Nyeu : given name
+                "(7:\u110B\u1102)" + // IEUNG NIEUN : consonants of given name
+                "(7:\u1109\u110B\u110B\u1102)", // SIOS IEUNG IEUNG NIEUN : consonants of fullname
+                mBuilder.inserted());
+    }
+
     public void testMultiwordName() {
         mBuilder.insertNameLookup(0, 0, "Jo Jeffrey John Jessy Longname", FullNameStyle.UNDEFINED);
         String actual = mBuilder.inserted();

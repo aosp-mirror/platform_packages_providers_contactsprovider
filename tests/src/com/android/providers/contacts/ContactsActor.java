@@ -31,6 +31,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
@@ -232,27 +233,27 @@ public class ContactsActor {
         sCallingPackage = this.packageName;
     }
 
-    public long createContact(boolean isRestricted, String name) {
+    public long createRawContact(boolean isRestricted, String name) {
         ensureCallingPackage();
-        long contactId = createContact(isRestricted);
-        createName(contactId, name);
-        return contactId;
+        long rawContactId = createRawContact(isRestricted);
+        createName(rawContactId, name);
+        return rawContactId;
     }
 
-    public long createContact(boolean isRestricted) {
+    public long createRawContact(boolean isRestricted) {
         ensureCallingPackage();
         final ContentValues values = new ContentValues();
         if (isRestricted) {
             values.put(RawContacts.IS_RESTRICTED, 1);
         }
 
-        Uri contactUri = resolver.insert(RawContacts.CONTENT_URI, values);
-        return ContentUris.parseId(contactUri);
+        Uri rawContactUri = resolver.insert(RawContacts.CONTENT_URI, values);
+        return ContentUris.parseId(rawContactUri);
     }
 
-    public long createContactWithStatus(boolean isRestricted, String name, String address,
+    public long createRawContactWithStatus(boolean isRestricted, String name, String address,
             String status) {
-        final long rawContactId = createContact(isRestricted, name);
+        final long rawContactId = createRawContact(isRestricted, name);
         final long dataId = createEmail(rawContactId, address);
         createStatus(dataId, status);
         return rawContactId;
@@ -380,6 +381,14 @@ public class ContactsActor {
                 rawContactId), RawContacts.Data.CONTENT_DIRECTORY);
         Uri dataUri = resolver.insert(insertUri, values);
         return ContentUris.parseId(dataUri);
+    }
+
+    protected void setAggregationException(int type, long rawContactId1, long rawContactId2) {
+        ContentValues values = new ContentValues();
+        values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
+        values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
+        values.put(AggregationExceptions.TYPE, type);
+        resolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
     }
 
     /**

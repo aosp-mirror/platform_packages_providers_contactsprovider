@@ -15,9 +15,6 @@
  */
 package com.android.providers.contacts;
 
-import com.android.internal.util.HanziToPinyin;
-import com.android.internal.util.HanziToPinyin.Token;
-
 import android.content.ContentValues;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
@@ -25,7 +22,6 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
 
 import java.lang.Character.UnicodeBlock;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.StringTokenizer;
@@ -62,6 +58,26 @@ public class NameSplitter {
     private final HashSet<String> mConjuctions;
     private final Locale mLocale;
     private final String mLanguage;
+
+    /**
+     * Two-Chracter long Korean family names.
+     * http://ko.wikipedia.org/wiki/%ED%95%9C%EA%B5%AD%EC%9D%98_%EB%B3%B5%EC%84%B1
+     */
+    private static final String[] KOREAN_TWO_CHARCTER_FAMILY_NAMES = {
+        "\uAC15\uC804", // Gang Jeon
+        "\uB0A8\uAD81", // Nam Goong
+        "\uB3C5\uACE0", // Dok Go
+        "\uB3D9\uBC29", // Dong Bang
+        "\uB9DD\uC808", // Mang Jeol
+        "\uC0AC\uACF5", // Sa Gong
+        "\uC11C\uBB38", // Seo Moon
+        "\uC120\uC6B0", // Seon Woo
+        "\uC18C\uBD09", // So Bong
+        "\uC5B4\uAE08", // Uh Geum
+        "\uC7A5\uACE1", // Jang Gok
+        "\uC81C\uAC08", // Je Gal
+        "\uD669\uBCF4"  // Hwang Bo
+    };
 
     public static class Name {
         public String prefix;
@@ -335,6 +351,18 @@ public class NameSplitter {
             fullNameStyle = getAdjustedFullNameStyle(fullNameStyle);
         }
 
+        split(name, fullName, fullNameStyle);
+    }
+
+    /**
+     * Parses a full name and returns parsed components in the Name object
+     * with a given fullNameStyle.
+     */
+    public void split(Name name, String fullName, int fullNameStyle) {
+        if (fullName == null) {
+            return;
+        }
+
         name.fullNameStyle = fullNameStyle;
 
         switch (fullNameStyle) {
@@ -343,8 +371,11 @@ public class NameSplitter {
                 break;
 
             case FullNameStyle.JAPANESE:
+                splitJapaneseName(name, fullName);
+                break;
+
             case FullNameStyle.KOREAN:
-                splitJapaneseOrKoreanName(name, fullName);
+                splitKoreanName(name, fullName);
                 break;
 
             default:
@@ -427,7 +458,7 @@ public class NameSplitter {
      *   [family name] given name(s)
      * </pre>
      */
-    private void splitJapaneseOrKoreanName(Name name, String fullName) {
+    private void splitJapaneseName(Name name, String fullName) {
         StringTokenizer tokenizer = new StringTokenizer(fullName);
         while (tokenizer.hasMoreTokens()) {
             String token = tokenizer.nextToken();
@@ -438,6 +469,47 @@ public class NameSplitter {
                 name.givenNames = token;
             } else {
                 name.givenNames += " " + token;
+            }
+        }
+    }
+
+    /**
+     * Splits a full name composed according to the Korean tradition:
+     * <pre>
+     *   [family name] given name(s)
+     * </pre>
+     */
+    private void splitKoreanName(Name name, String fullName) {
+        StringTokenizer tokenizer = new StringTokenizer(fullName);
+        if (tokenizer.countTokens() > 1) {
+            // Each name can be identified by separators.
+            while (tokenizer.hasMoreTokens()) {
+                String token = tokenizer.nextToken();
+                if (name.givenNames == null) {
+                    name.givenNames = token;
+                } else if (name.familyName == null) {
+                    name.familyName = name.givenNames;
+                    name.givenNames = token;
+                } else {
+                    name.givenNames += " " + token;
+                }
+            }
+        } else {
+            // There is no separator. Try to guess family name.
+            // The length of most family names is 1.
+            int familyNameLength = 1;
+
+            // Compare with 2-length family names.
+            for (String twoLengthFamilyName : KOREAN_TWO_CHARCTER_FAMILY_NAMES) {
+                if (fullName.startsWith(twoLengthFamilyName)) {
+                    familyNameLength = 2;
+                    break;
+                }
+            }
+
+            name.familyName = fullName.substring(0, familyNameLength);
+            if (fullName.length() > familyNameLength) {
+                name.givenNames = fullName.substring(familyNameLength);
             }
         }
     }

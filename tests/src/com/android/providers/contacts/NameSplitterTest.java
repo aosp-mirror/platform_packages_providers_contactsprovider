@@ -372,4 +372,14 @@ public class NameSplitterTest extends TestCase {
 
         assertEquals(expectedPhoneticNameStyle, name.phoneticNameStyle);
     }
+
+    public void testSplitKoreanName() {
+        createNameSplitter(Locale.KOREA);
+
+        // Lee - Sang Il
+        assertSplitName("\uC774\uC0C1\uC77C", null, "\uC0C1\uC77C", null, "\uC774", null);
+        // Dok Go - Young Jae
+        assertSplitName("\uB3C5\uACE0\uC601\uC7AC",
+                null, "\uC601\uC7AC", null, "\uB3C5\uACE0", null);
+    }
 }
