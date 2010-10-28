@@ -69,6 +69,7 @@ import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
 import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
@@ -5910,7 +5911,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 "SELECT " + Photo.PHOTO + " FROM " + mDbHelper.getDataView() +
                 " WHERE " + selection;
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        return DatabaseUtils.blobFileDescriptorForQuery(db, sql, selectionArgs);
+        try {
+            return DatabaseUtils.blobFileDescriptorForQuery(db, sql, selectionArgs);
+        } catch (SQLiteDoneException e) {
+            // this will happen if the DB query returns no rows (i.e. contact does not exist)
+            throw new FileNotFoundException(uri.toString());
+        }
     }
 
     private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";
