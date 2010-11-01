@@ -6024,7 +6024,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return false;
         }
 
-        int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_AGGREGATION_ALGORITHM, "1"));
+        int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_AGGREGATION_ALGORITHM, "2"));
         return version < PROPERTY_AGGREGATION_ALGORITHM_VERSION;
     }
 
