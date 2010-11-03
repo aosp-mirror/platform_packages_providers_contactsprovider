@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.common.ArrayListCursor;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -27,19 +26,19 @@ import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.res.Resources;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
+import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
-import android.provider.Contacts.Intents;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
 
 import java.util.ArrayList;
@@ -75,13 +74,13 @@ public class GlobalSearchSupport {
     private interface SearchSuggestionQuery {
         public static final String TABLE = "data "
                 + " JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + " JOIN visible_contacts on (raw_contacts.contact_id = visible_contacts._id) "
-                + " JOIN contacts ON (visible_contacts._id = contacts._id) "
+                + " JOIN default_directory on (raw_contacts.contact_id = default_directory._id) "
+                + " JOIN contacts ON (default_directory._id = contacts._id) "
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON ("
                 +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
 
         public static final String PRESENCE_SQL =
-                "(SELECT " + StatusUpdates.PRESENCE_STATUS +
+                "(SELECT " + StatusUpdates.PRESENCE +
                 " FROM " + Tables.AGGREGATED_PRESENCE +
                 " WHERE " + AggregatedPresenceColumns.CONTACT_ID
                         + "=" + ContactsColumns.CONCRETE_ID + ")";
@@ -110,6 +109,28 @@ public class GlobalSearchSupport {
         public static final int PHONE = 6;
         public static final int PHOTO_ID = 7;
         public static final int LOOKUP_KEY = 8;
+
+        // Current contacts - those contacted within the last 3 days (in seconds)
+        public static final long CURRENT_CONTACTS = 3 * 24 * 60 * 60;
+
+        // Recent contacts - those contacted within the last 30 days (in seconds)
+        public static final long RECENT_CONTACTS = 30 * 24 * 60 * 60;
+
+        public static final String TIME_SINCE_LAST_CONTACTED =
+                "(strftime('%s', 'now') - contacts." + Contacts.LAST_TIME_CONTACTED + "/1000)";
+
+        /*
+         * See {@link ContactsProvider2#EMAIL_FILTER_SORT_ORDER} for the discussion of this
+         * sorting order.
+         */
+        public static final String SORT_ORDER =
+            "(CASE WHEN contacts." + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
+            + "(CASE WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + CURRENT_CONTACTS + " THEN 0 "
+            + " WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + RECENT_CONTACTS + " THEN 1 "
+            + " ELSE 2 END),"
+            + "contacts." + Contacts.TIMES_CONTACTED + " DESC, "
+            + "name_raw_contact." + RawContacts.DISPLAY_NAME_PRIMARY + ", "
+            + "contacts." + Contacts._ID;
     }
 
     private static class SearchSuggestion {
@@ -293,6 +314,7 @@ public class GlobalSearchSupport {
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
+        MatrixCursor cursor = new MatrixCursor(SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS);
         Resources r = mContactsProvider.getContext().getResources();
         String s;
         int i;
@@ -310,8 +332,9 @@ public class GlobalSearchSupport {
         }
         dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
         dialNumber.add("tel:" + searchClause);
-        dialNumber.add(Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
+        dialNumber.add(ContactsContract.Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
         dialNumber.add(null);
+        cursor.addRow(dialNumber);
 
         ArrayList<Object> createContact = new ArrayList<Object>();
         createContact.add(1);  // _id
@@ -326,14 +349,11 @@ public class GlobalSearchSupport {
         }
         createContact.add(String.valueOf(com.android.internal.R.drawable.create_contact));
         createContact.add("tel:" + searchClause);
-        createContact.add(Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
+        createContact.add(ContactsContract.Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
         createContact.add(SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
+        cursor.addRow(createContact);
 
-        @SuppressWarnings({"unchecked"}) ArrayList<ArrayList> rows = new ArrayList<ArrayList>();
-        rows.add(dialNumber);
-        rows.add(createContact);
-
-        return new ArrayListCursor(SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS, rows);
+        return cursor;
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnName(SQLiteDatabase db,
@@ -364,8 +384,8 @@ public class GlobalSearchSupport {
             String selection, String[] projection, String limit) {
         ArrayList<SearchSuggestion> suggestionList = new ArrayList<SearchSuggestion>();
         HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
-        Cursor c = db.query(false, SearchSuggestionQuery.TABLE,
-                SearchSuggestionQuery.COLUMNS, selection, null, null, null, null, limit);
+        Cursor c = db.query(false, SearchSuggestionQuery.TABLE, SearchSuggestionQuery.COLUMNS,
+                selection, null, null, null, SearchSuggestionQuery.SORT_ORDER, limit);
         try {
             while (c.moveToNext()) {
 
@@ -419,12 +439,11 @@ public class GlobalSearchSupport {
             }
         });
 
-        @SuppressWarnings({"unchecked"}) ArrayList<ArrayList> rows = new ArrayList<ArrayList>();
+        MatrixCursor cursor = new MatrixCursor(projection != null ? projection
+                : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS);
         for (int i = 0; i < suggestionList.size(); i++) {
-            rows.add(suggestionList.get(i).asList(projection));
+            cursor.addRow(suggestionList.get(i).asList(projection));
         }
-
-        return new ArrayListCursor(projection != null ? projection
-                : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS, rows);
+        return cursor;
     }
 }

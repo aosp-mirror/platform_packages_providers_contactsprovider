@@ -4365,8 +4365,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
         if (directoryInfo == null) {
-            throw new IllegalArgumentException(
-                    mDbHelper.exceptionMessage("Invalid directory ID", uri));
+            Log.e(TAG, "Invalid directory ID: " + uri);
+            return null;
         }
 
         Builder builder = new Uri.Builder();
@@ -6274,22 +6274,29 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendRawContactsByNormalizedNameFilter(StringBuilder sb, String normalizedName,
             boolean allowEmailMatch) {
-        sb.append("(" +
-                "SELECT " + NameLookupColumns.RAW_CONTACT_ID +
-                " FROM " + Tables.NAME_LOOKUP +
-                " WHERE " + NameLookupColumns.NORMALIZED_NAME +
-                " GLOB '");
-        sb.append(normalizedName);
-        sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
-                + NameLookupType.NAME_COLLATION_KEY + ","
-                + NameLookupType.NICKNAME + ","
-                + NameLookupType.NAME_SHORTHAND + ","
-                + NameLookupType.ORGANIZATION + ","
-                + NameLookupType.NAME_CONSONANTS);
-        if (allowEmailMatch) {
-            sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
+        if (TextUtils.isEmpty(normalizedName)) {
+            // Effectively an empty IN clause - SQL syntax does not allow an actual empty list here
+            sb.append("(0)");
+        } else {
+            sb.append("(" +
+                    "SELECT " + NameLookupColumns.RAW_CONTACT_ID +
+                    " FROM " + Tables.NAME_LOOKUP +
+                    " WHERE " + NameLookupColumns.NORMALIZED_NAME +
+                    " GLOB '");
+            // Should not use a "?" argument placeholder here, because
+            // that would prevent the SQL optimizer from using the index on NORMALIZED_NAME.
+            sb.append(normalizedName);
+            sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
+                    + NameLookupType.NAME_COLLATION_KEY + ","
+                    + NameLookupType.NICKNAME + ","
+                    + NameLookupType.NAME_SHORTHAND + ","
+                    + NameLookupType.ORGANIZATION + ","
+                    + NameLookupType.NAME_CONSONANTS);
+            if (allowEmailMatch) {
+                sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
+            }
+            sb.append("))");
         }
-        sb.append("))");
     }
 
     /**
