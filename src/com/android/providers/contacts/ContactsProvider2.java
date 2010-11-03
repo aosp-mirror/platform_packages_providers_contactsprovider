@@ -4365,8 +4365,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
         if (directoryInfo == null) {
-            throw new IllegalArgumentException(
-                    mDbHelper.exceptionMessage("Invalid directory ID", uri));
+            Log.e(TAG, "Invalid directory ID: " + uri);
+            return null;
         }
 
         Builder builder = new Uri.Builder();
