@@ -25,6 +25,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
@@ -73,6 +74,28 @@ public class ContactAggregator {
                     + NameLookupType.NAME_EXACT + ","
                     + NameLookupType.NAME_VARIANT + ","
                     + NameLookupType.NAME_COLLATION_KEY + ")";
+
+
+    /**
+     * SQL statement that sets the {@link ContactsColumns#LAST_STATUS_UPDATE_ID} column
+     * on the contact to point to the latest social status update.
+     */
+    private static final String UPDATE_LAST_STATUS_UPDATE_ID_SQL =
+            "UPDATE " + Tables.CONTACTS +
+            " SET " + ContactsColumns.LAST_STATUS_UPDATE_ID + "=" +
+                    "(SELECT " + DataColumns.CONCRETE_ID +
+                    " FROM " + Tables.STATUS_UPDATES +
+                    " JOIN " + Tables.DATA +
+                    "   ON (" + StatusUpdatesColumns.DATA_ID + "="
+                            + DataColumns.CONCRETE_ID + ")" +
+                    " JOIN " + Tables.RAW_CONTACTS +
+                    "   ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID + "="
+                            + RawContactsColumns.CONCRETE_ID + ")" +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
+                    " ORDER BY " + StatusUpdates.STATUS_TIMESTAMP + " DESC,"
+                            + StatusUpdates.STATUS +
+                    " LIMIT 1)" +
+            " WHERE " + ContactsColumns.CONCRETE_ID + "=?";
 
     // From system/core/logcat/event-log-tags
     // aggregator [time, count] will be logged for each aggregator cycle.
@@ -526,13 +549,23 @@ public class ContactAggregator {
         mContactUpdate.execute();
 
         mDbHelper.updateContactVisible(contactId);
-        updateAggregatedPresence(contactId);
+        updateAggregatedStatusUpdate(contactId);
     }
 
-    private void updateAggregatedPresence(long contactId) {
+    private void updateAggregatedStatusUpdate(long contactId) {
         mAggregatedPresenceReplace.bindLong(1, contactId);
         mAggregatedPresenceReplace.bindLong(2, contactId);
         mAggregatedPresenceReplace.execute();
+        updateLastStatusUpdateId(contactId);
+    }
+
+    /**
+     * Adjusts the reference to the latest status update for the specified contact.
+     */
+    public void updateLastStatusUpdateId(long contactId) {
+        String contactIdString = String.valueOf(contactId);
+        mDbHelper.getWritableDatabase().execSQL(UPDATE_LAST_STATUS_UPDATE_ID_SQL,
+                new String[]{contactIdString, contactIdString});
     }
 
     /**
@@ -616,7 +649,7 @@ public class ContactAggregator {
             mContactUpdate.bindLong(ContactReplaceSqlStatement.CONTACT_ID, contactId);
             mContactUpdate.execute();
             mDbHelper.updateContactVisible(contactId);
-            updateAggregatedPresence(contactId);
+            updateAggregatedStatusUpdate(contactId);
         }
 
         if (contactIdToSplit != -1) {
@@ -717,7 +750,7 @@ public class ContactAggregator {
         setContactIdAndMarkAggregated(rawContactId, contactId);
         mDbHelper.updateContactVisible(contactId);
         setPresenceContactId(rawContactId, contactId);
-        updateAggregatedPresence(contactId);
+        updateAggregatedStatusUpdate(contactId);
     }
 
     /**

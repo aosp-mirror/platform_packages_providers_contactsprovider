@@ -833,8 +833,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mSetSuperPrimaryStatement;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mRawContactDisplayNameUpdate;
-    /** Precompiled sql statement for updating an aggregated status update */
-    private SQLiteStatement mLastStatusUpdate;
+
     private SQLiteStatement mNameLookupInsert;
     private SQLiteStatement mNameLookupDelete;
     private SQLiteStatement mStatusUpdateAutoTimestamp;
@@ -1957,23 +1956,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         RawContacts.SORT_KEY_PRIMARY + "=?," +
                         RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
                 " WHERE " + RawContacts._ID + "=?");
-
-        mLastStatusUpdate = mDb.compileStatement(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + ContactsColumns.LAST_STATUS_UPDATE_ID + "=" +
-                        "(SELECT " + DataColumns.CONCRETE_ID +
-                        " FROM " + Tables.STATUS_UPDATES +
-                        " JOIN " + Tables.DATA +
-                        "   ON (" + StatusUpdatesColumns.DATA_ID + "="
-                                + DataColumns.CONCRETE_ID + ")" +
-                        " JOIN " + Tables.RAW_CONTACTS +
-                        "   ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID + "="
-                                + RawContactsColumns.CONCRETE_ID + ")" +
-                        " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                        " ORDER BY " + StatusUpdates.STATUS_TIMESTAMP + " DESC,"
-                                + StatusUpdates.STATUS +
-                        " LIMIT 1)" +
-                " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
         mNameLookupInsert = mDb.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
@@ -3377,9 +3359,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         if (contactId != -1) {
-            mLastStatusUpdate.bindLong(1, contactId);
-            mLastStatusUpdate.bindLong(2, contactId);
-            mLastStatusUpdate.execute();
+            mContactAggregator.updateLastStatusUpdateId(contactId);
         }
 
         return dataId;
