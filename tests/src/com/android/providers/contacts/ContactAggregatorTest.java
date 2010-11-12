@@ -33,6 +33,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.StatusUpdates;
 import android.test.suitebuilder.annotation.LargeTest;
 
 /**
@@ -992,6 +993,32 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
                 + "&query=email%3Aemail2"
                 + "&query=phone%3Aphone1"
                 + "&query=nickname%3Anickname1", uri.toString());
+    }
+
+    public void testAggregatedStatusUpdate() {
+        long rawContactId1 = createRawContact();
+        Uri dataUri1 = insertStructuredName(rawContactId1, "john", "doe");
+        insertStatusUpdate(ContentUris.parseId(dataUri1), StatusUpdates.AWAY, "Green", 100,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        long rawContactId2 = createRawContact();
+        Uri dataUri2 = insertStructuredName(rawContactId2, "john", "doe");
+        insertStatusUpdate(ContentUris.parseId(dataUri2), StatusUpdates.AVAILABLE, "Red", 50,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
+
+        assertStoredValue(getContactUriForRawContact(rawContactId1),
+                Contacts.CONTACT_STATUS, "Green");
+
+        // When we split these two raw contacts, their respective statuses should be restored
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_SEPARATE, rawContactId1, rawContactId2);
+
+        assertStoredValue(getContactUriForRawContact(rawContactId1),
+                Contacts.CONTACT_STATUS, "Green");
+
+        assertStoredValue(getContactUriForRawContact(rawContactId2),
+                Contacts.CONTACT_STATUS, "Red");
     }
 
     public void testAggregationSuggestionsByName() throws Exception {

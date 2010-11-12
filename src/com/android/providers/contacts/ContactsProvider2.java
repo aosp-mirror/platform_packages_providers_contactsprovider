@@ -833,8 +833,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mSetSuperPrimaryStatement;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mRawContactDisplayNameUpdate;
-    /** Precompiled sql statement for updating an aggregated status update */
-    private SQLiteStatement mLastStatusUpdate;
+
     private SQLiteStatement mNameLookupInsert;
     private SQLiteStatement mNameLookupDelete;
     private SQLiteStatement mStatusUpdateAutoTimestamp;
@@ -1957,23 +1956,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         RawContacts.SORT_KEY_PRIMARY + "=?," +
                         RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
                 " WHERE " + RawContacts._ID + "=?");
-
-        mLastStatusUpdate = mDb.compileStatement(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + ContactsColumns.LAST_STATUS_UPDATE_ID + "=" +
-                        "(SELECT " + DataColumns.CONCRETE_ID +
-                        " FROM " + Tables.STATUS_UPDATES +
-                        " JOIN " + Tables.DATA +
-                        "   ON (" + StatusUpdatesColumns.DATA_ID + "="
-                                + DataColumns.CONCRETE_ID + ")" +
-                        " JOIN " + Tables.RAW_CONTACTS +
-                        "   ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID + "="
-                                + RawContactsColumns.CONCRETE_ID + ")" +
-                        " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                        " ORDER BY " + StatusUpdates.STATUS_TIMESTAMP + " DESC,"
-                                + StatusUpdates.STATUS +
-                        " LIMIT 1)" +
-                " WHERE " + ContactsColumns.CONCRETE_ID + "=?");
 
         mNameLookupInsert = mDb.compileStatement("INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                 + NameLookupColumns.RAW_CONTACT_ID + "," + NameLookupColumns.DATA_ID + ","
@@ -3377,9 +3359,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         if (contactId != -1) {
-            mLastStatusUpdate.bindLong(1, contactId);
-            mLastStatusUpdate.bindLong(2, contactId);
-            mLastStatusUpdate.execute();
+            mContactAggregator.updateLastStatusUpdateId(contactId);
         }
 
         return dataId;
@@ -5564,22 +5544,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS + " WHERE ");
 
         if (!TextUtils.isEmpty(filter)) {
-            sb.append(DataColumns.CONCRETE_ID + " IN (");
+            String normalizedFilter = NameNormalizer.normalize(filter);
+            if (!TextUtils.isEmpty(normalizedFilter)) {
+                sb.append(DataColumns.CONCRETE_ID + " IN (");
 
-            // Construct a query that gives us exactly one data _id per matching contact.
-            // MIN stands in for ANY in this context.
-            sb.append(
-                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
-                    " FROM " + Tables.NAME_LOOKUP +
-                    " JOIN " + Tables.RAW_CONTACTS +
-                    " ON (" + RawContactsColumns.CONCRETE_ID
-                            + "=" + Tables.NAME_LOOKUP + "." + NameLookupColumns.RAW_CONTACT_ID + ")" +
-                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
-            sb.append(NameNormalizer.normalize(filter));
-            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
-                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                    ")");
+                // Construct a query that gives us exactly one data _id per matching contact.
+                // MIN stands in for ANY in this context.
+                sb.append(
+                        "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
+                        " FROM " + Tables.NAME_LOOKUP +
+                        " JOIN " + Tables.RAW_CONTACTS +
+                        " ON (" + RawContactsColumns.CONCRETE_ID
+                                + "=" + Tables.NAME_LOOKUP + "."
+                                        + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                        " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
+                sb.append(normalizedFilter);
+                sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                            " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
+                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                        ")");
+            } else {
+                sb.append("0");     // Empty filter - return an empty set
+            }
         } else {
             sb.append("0");     // Empty filter - return an empty set
         }

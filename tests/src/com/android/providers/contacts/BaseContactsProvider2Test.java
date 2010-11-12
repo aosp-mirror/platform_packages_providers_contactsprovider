@@ -368,6 +368,18 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(StatusUpdates.PROTOCOL, protocol);
         values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
         values.put(StatusUpdates.IM_HANDLE, handle);
+        return insertStatusUpdate(values, presence, status, timestamp, chatMode);
+    }
+
+    protected Uri insertStatusUpdate(
+            long dataId, int presence, String status, long timestamp, int chatMode) {
+        ContentValues values = new ContentValues();
+        values.put(StatusUpdates.DATA_ID, dataId);
+        return insertStatusUpdate(values, presence, status, timestamp, chatMode);
+    }
+
+    private Uri insertStatusUpdate(
+            ContentValues values, int presence, String status, long timestamp, int chatMode) {
         if (presence != 0) {
             values.put(StatusUpdates.PRESENCE, presence);
             values.put(StatusUpdates.CHAT_CAPABILITY, chatMode);
@@ -427,6 +439,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected Cursor queryContact(long contactId, String[] projection) {
         return mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                 projection, null, null, null);
+    }
+
+    protected Uri getContactUriForRawContact(long rawContactId) {
+        return ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId));
     }
 
     protected long queryContactId(long rawContactId) {
