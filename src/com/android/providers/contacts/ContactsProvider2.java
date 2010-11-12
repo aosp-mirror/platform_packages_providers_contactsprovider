@@ -5544,22 +5544,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS + " WHERE ");
 
         if (!TextUtils.isEmpty(filter)) {
-            sb.append(DataColumns.CONCRETE_ID + " IN (");
+            String normalizedFilter = NameNormalizer.normalize(filter);
+            if (!TextUtils.isEmpty(normalizedFilter)) {
+                sb.append(DataColumns.CONCRETE_ID + " IN (");
 
-            // Construct a query that gives us exactly one data _id per matching contact.
-            // MIN stands in for ANY in this context.
-            sb.append(
-                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
-                    " FROM " + Tables.NAME_LOOKUP +
-                    " JOIN " + Tables.RAW_CONTACTS +
-                    " ON (" + RawContactsColumns.CONCRETE_ID
-                            + "=" + Tables.NAME_LOOKUP + "." + NameLookupColumns.RAW_CONTACT_ID + ")" +
-                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
-            sb.append(NameNormalizer.normalize(filter));
-            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
-                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                    ")");
+                // Construct a query that gives us exactly one data _id per matching contact.
+                // MIN stands in for ANY in this context.
+                sb.append(
+                        "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
+                        " FROM " + Tables.NAME_LOOKUP +
+                        " JOIN " + Tables.RAW_CONTACTS +
+                        " ON (" + RawContactsColumns.CONCRETE_ID
+                                + "=" + Tables.NAME_LOOKUP + "."
+                                        + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                        " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
+                sb.append(normalizedFilter);
+                sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                            " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
+                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                        ")");
+            } else {
+                sb.append("0");     // Empty filter - return an empty set
+            }
         } else {
             sb.append("0");     // Empty filter - return an empty set
         }
