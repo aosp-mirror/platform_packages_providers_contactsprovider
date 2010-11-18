@@ -3155,12 +3155,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
-    public void testProviderStatus() throws Exception {
+    public void testProviderStatusNoContactsNoAccounts() throws Exception {
+        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+    }
+
+    public void testProviderStatusOnlyLocalContacts() throws Exception {
+        long rawContactId = createRawContact();
+        assertProviderStatus(ProviderStatus.STATUS_NORMAL);
+        mResolver.delete(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), null, null);
+        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+    }
+
+    public void testProviderStatusWithAccounts() throws Exception {
+        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        ((ContactsProvider2)getProvider()).onAccountsUpdated(new Account[]{ACCOUNT_1});
+        assertProviderStatus(ProviderStatus.STATUS_NORMAL);
+        ((ContactsProvider2)getProvider()).onAccountsUpdated(new Account[0]);
+        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+    }
+
+    private void assertProviderStatus(int expectedProviderStatus) {
         Cursor cursor = mResolver.query(ProviderStatus.CONTENT_URI,
                 new String[]{ProviderStatus.DATA1, ProviderStatus.STATUS}, null, null, null);
         assertTrue(cursor.moveToFirst());
         assertEquals(0, cursor.getLong(0));
-        assertEquals(ProviderStatus.STATUS_NORMAL, cursor.getInt(1));
+        assertEquals(expectedProviderStatus, cursor.getInt(1));
         cursor.close();
     }
 
