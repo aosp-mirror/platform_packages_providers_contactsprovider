@@ -86,7 +86,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
-    protected void verifyAccounts() {
+    protected void updateAccounts() {
     }
 
     @Override
@@ -103,6 +103,11 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
             mAccount = new Account("androidtest@gmail.com", "com.google");
         }
         return mAccount;
+    }
+
+    @Override
+    protected boolean isContactsAccount(Account account) {
+        return true;
     }
 
     /**

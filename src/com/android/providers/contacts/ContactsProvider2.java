@@ -1888,6 +1888,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
 
     private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
+    private boolean mProviderStatusUpdateNeeded;
     private long mEstimatedStorageRequirement = 0;
     private volatile CountDownLatch mAccessLatch;
 
@@ -1901,9 +1902,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean mSyncToNetwork;
 
     private Locale mCurrentLocale;
+    private int mContactsAccountCount;
 
     private CountryMonitor mCountryMonitor;
-
 
     @Override
     public boolean onCreate() {
@@ -2019,7 +2020,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
-        verifyAccounts();
+        updateAccounts();
 
         if (isLegacyContactImportNeeded()) {
             importLegacyContactsAsync();
@@ -2032,6 +2033,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (isAggregationUpgradeNeeded()) {
             upgradeAggregationAlgorithm();
         }
+
+        updateProviderStatus();
 
         return (mDb != null);
     }
@@ -2084,17 +2087,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void onLocaleChanged() {
-        if (mProviderStatus != ProviderStatus.STATUS_NORMAL) {
+        if (mProviderStatus != ProviderStatus.STATUS_NORMAL
+                && mProviderStatus != ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS) {
             return;
         }
 
         initForDefaultLocale();
         verifyLocale();
-    }
-
-    protected void verifyAccounts() {
-        AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
-        updateAccounts(AccountManager.get(getContext()).getAccounts());
     }
 
     /**
@@ -2144,6 +2143,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         };
 
         task.execute(providerStatus);
+    }
+
+    private void updateProviderStatus() {
+        if (mProviderStatus != ProviderStatus.STATUS_NORMAL
+                && mProviderStatus != ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS) {
+            return;
+        }
+
+        if (mContactsAccountCount == 0
+                && DatabaseUtils.queryNumEntries(mDb, Tables.CONTACTS, null) == 0) {
+            setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        } else {
+            setProviderStatus(ProviderStatus.STATUS_NORMAL);
+        }
     }
 
     /* Visible for testing */
@@ -2275,6 +2288,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     /* package */ void wipeData() {
         mDbHelper.wipeData();
+        mProviderStatus = ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS;
     }
 
     /**
@@ -2369,6 +2383,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mVisibleTouched = false;
             mDbHelper.updateAllVisible();
         }
+
+        if (mProviderStatusUpdateNeeded) {
+            updateProviderStatus();
+            mProviderStatusUpdateNeeded = false;
+        }
     }
 
     private void flushTransactionalChanges() {
@@ -2432,9 +2451,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     protected void setProviderStatus(int status) {
-        mProviderStatus = status;
-        getContext().getContentResolver().notifyChange(ContactsContract.ProviderStatus.CONTENT_URI,
-                null, false);
+        if (mProviderStatus != status) {
+            mProviderStatus = status;
+            getContext().getContentResolver().notifyChange(ProviderStatus.CONTENT_URI, null, false);
+        }
     }
 
     private boolean isNewRawContact(long rawContactId) {
@@ -2633,6 +2653,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         }
 
+        mProviderStatusUpdateNeeded = true;
         return rawContactId;
     }
 
@@ -3559,11 +3580,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             c.close();
         }
 
+        mProviderStatusUpdateNeeded = true;
+
         return mDb.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
     }
 
     public int deleteRawContact(long rawContactId, long contactId, boolean callerIsSyncAdapter) {
         mContactAggregator.invalidateAggregationExceptionCache();
+        mProviderStatusUpdateNeeded = true;
+
         if (callerIsSyncAdapter) {
             mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             int count = mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
@@ -4184,6 +4209,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
+    protected void updateAccounts() {
+        AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
+        Account[] accounts = AccountManager.get(getContext()).getAccounts();
+        updateAccounts(accounts);
+        updateContactsAccountCount(accounts);
+    }
+
     private boolean updateAccounts(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
@@ -4280,7 +4312,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mDb.endTransaction();
         }
         mAccountWritability.clear();
+
+        if (accountsChanged) {
+            updateContactsAccountCount(accounts);
+            updateProviderStatus();
+        }
+
         return accountsChanged;
+    }
+
+    private void updateContactsAccountCount(Account[] accounts) {
+        int count = 0;
+        for (Account account : accounts) {
+            if (isContactsAccount(account)) {
+                count++;
+            }
+        }
+        mContactsAccountCount = count;
+    }
+
+    protected boolean isContactsAccount(Account account) {
+        final IContentService cs = ContentResolver.getContentService();
+        try {
+            return cs.getIsSyncable(account, ContactsContract.AUTHORITY) > 0;
+        } catch (RemoteException e) {
+            Log.e(TAG, "Cannot obtain sync flag for account: " + account, e);
+            return false;
+        }
     }
 
     public void onPackageChanged(String packageName) {
