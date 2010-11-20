@@ -88,7 +88,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 414;
+    static final int DATABASE_VERSION = 415;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -859,6 +859,7 @@ import java.util.Locale;
                 Groups.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.AUTO_ADD + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.FAVORITES + " INTEGER NOT NULL DEFAULT 0," +
+                Groups.GROUP_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.SYNC1 + " TEXT, " +
                 Groups.SYNC2 + " TEXT, " +
                 Groups.SYNC3 + " TEXT, " +
@@ -1401,6 +1402,7 @@ import java.util.Locale;
                 + Groups.SHOULD_SYNC + ","
                 + Groups.AUTO_ADD + ","
                 + Groups.FAVORITES + ","
+                + Groups.GROUP_IS_READ_ONLY + ","
                 + Groups.SYNC1 + ","
                 + Groups.SYNC2 + ","
                 + Groups.SYNC3 + ","
@@ -1659,6 +1661,12 @@ import java.util.Locale;
         if (oldVersion == 413) {
             upgradeNameLookup = true;
             oldVersion = 414;
+        }
+
+        if (oldVersion == 414) {
+            upgradeToVersion415(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 415;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2741,6 +2749,16 @@ import java.util.Locale;
         db.execSQL(
                 "ALTER TABLE " + Tables.DIRECTORIES +
                 " ADD " + DirectoryColumns.TYPE_RESOURCE_NAME + " TEXT;");
+    }
+
+    private void upgradeToVersion415(SQLiteDatabase db) {
+        db.execSQL(
+                "ALTER TABLE " + Tables.GROUPS +
+                " ADD " + Groups.GROUP_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0");
+        db.execSQL(
+                "UPDATE " + Tables.GROUPS +
+                "   SET " + Groups.GROUP_IS_READ_ONLY + "=1" +
+                " WHERE " + Groups.SYSTEM_ID + " NOT NULL");
     }
 
     public String extractHandleFromEmailAddress(String email) {
