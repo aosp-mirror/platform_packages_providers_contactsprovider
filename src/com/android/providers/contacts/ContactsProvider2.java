@@ -700,6 +700,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Groups.SHOULD_SYNC)
             .add(Groups.FAVORITES)
             .add(Groups.AUTO_ADD)
+            .add(Groups.GROUP_IS_READ_ONLY)
             .add(Groups.SYNC1)
             .add(Groups.SYNC2)
             .add(Groups.SYNC3)
