@@ -1150,6 +1150,7 @@ public class ContactAggregator {
      */
     private void updateMatchScoresBasedOnNameMatches(SQLiteDatabase db, String query,
             MatchCandidateList candidates, ContactMatcher matcher) {
+        candidates.clear();
         NameLookupSelectionBuilder builder = new NameLookupSelectionBuilder(
                 mNameSplitter, candidates);
         builder.insertNameLookup(0, 0, query, FullNameStyle.UNDEFINED);
