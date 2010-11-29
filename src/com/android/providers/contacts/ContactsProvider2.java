@@ -832,6 +832,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private SQLiteStatement mSetPrimaryStatement;
     /** Precompiled sql statement for setting a data record to the super primary. */
     private SQLiteStatement mSetSuperPrimaryStatement;
+    /** Precompiled sql statement for clearing super primary of a single record. */
+    private SQLiteStatement mClearSuperPrimaryStatement;
     /** Precompiled sql statement for updating a contact display name */
     private SQLiteStatement mRawContactDisplayNameUpdate;
 
@@ -999,9 +1001,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public long insert(SQLiteDatabase db, long rawContactId, ContentValues values) {
             final long dataId = db.insert(Tables.DATA, null, values);
 
-            Integer primary = values.getAsInteger(Data.IS_PRIMARY);
-            if (primary != null && primary != 0) {
-                setIsPrimary(rawContactId, dataId, getMimeTypeId());
+            final Integer primary = values.getAsInteger(Data.IS_PRIMARY);
+            final Integer superPrimary = values.getAsInteger(Data.IS_SUPER_PRIMARY);
+            if ((primary != null && primary != 0) || (superPrimary != null && superPrimary != 0)) {
+                final long mimeTypeId = getMimeTypeId();
+                setIsPrimary(rawContactId, dataId, mimeTypeId);
+
+                // We also have to make sure that no other data item on this raw_contact is
+                // configured super primary
+                if (superPrimary != null) {
+                    if (superPrimary != 0) {
+                        setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
+                    } else {
+                        clearSuperPrimary(rawContactId, mimeTypeId);
+                    }
+                } else {
+                    // if there is already another data item configured as super-primary,
+                    // take over the flag (which will automatically remove it from the other item)
+                    if (rawContactHasSuperPrimary(rawContactId, mimeTypeId)) {
+                        setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
+                    }
+                }
             }
 
             return dataId;
@@ -1018,20 +1038,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
-            if (values.containsKey(Data.IS_SUPER_PRIMARY)) {
-                long mimeTypeId = getMimeTypeId();
-                setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
-                setIsPrimary(rawContactId, dataId, mimeTypeId);
-
-                // Now that we've taken care of setting these, remove them from "values".
-                values.remove(Data.IS_SUPER_PRIMARY);
-                values.remove(Data.IS_PRIMARY);
-            } else if (values.containsKey(Data.IS_PRIMARY)) {
-                setIsPrimary(rawContactId, dataId, getMimeTypeId());
-
-                // Now that we've taken care of setting this, remove it from "values".
-                values.remove(Data.IS_PRIMARY);
-            }
+            handlePrimaryAndSuperPrimary(values, dataId, rawContactId);
 
             if (values.size() > 0) {
                 mSelectionArgs1[0] = String.valueOf(dataId);
@@ -1043,6 +1050,72 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             return true;
+        }
+
+        /**
+         * Ensures that all super-primary and primary flags of this raw_contact are
+         * configured correctly
+         */
+        private void handlePrimaryAndSuperPrimary(ContentValues values, long dataId,
+                long rawContactId) {
+            final boolean hasPrimary = values.containsKey(Data.IS_PRIMARY);
+            final boolean hasSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
+
+            // Nothing to do? Bail out early
+            if (!hasPrimary && !hasSuperPrimary) return;
+
+            final long mimeTypeId = getMimeTypeId();
+
+            // Check if we want to clear values
+            final boolean clearPrimary = hasPrimary &&
+                    values.getAsInteger(Data.IS_PRIMARY) == 0;
+            final boolean clearSuperPrimary = hasSuperPrimary &&
+                    values.getAsInteger(Data.IS_SUPER_PRIMARY) == 0;
+
+            if (clearPrimary || clearSuperPrimary) {
+                // Test whether these values are currently set
+                final Uri dataUri = ContentUris.withAppendedId(Data.CONTENT_URI, dataId);
+                final String[] cols = new String[] { Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY };
+                final Cursor c = query(dataUri, cols , null, null, null);
+                try {
+                    if (c.moveToFirst()) {
+                        final boolean isPrimary = c.getInt(0) != 0;
+                        final boolean isSuperPrimary = c.getInt(1) != 0;
+                        // Clear values if they are currently set
+                        if (isSuperPrimary) {
+                            clearSuperPrimary(rawContactId, mimeTypeId);
+                        }
+                        if (clearPrimary && isPrimary) {
+                            setIsPrimary(rawContactId, -1, mimeTypeId);
+                        }
+                    }
+                } finally {
+                    c.close();
+                }
+            } else {
+                // Check if we want to set values
+                final boolean setPrimary = hasPrimary &&
+                        values.getAsInteger(Data.IS_PRIMARY) != 0;
+                final boolean setSuperPrimary = hasSuperPrimary &&
+                        values.getAsInteger(Data.IS_SUPER_PRIMARY) != 0;
+                if (setSuperPrimary) {
+                    // Set both super primary and primary
+                    setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
+                    setIsPrimary(rawContactId, dataId, mimeTypeId);
+                } else if (setPrimary) {
+                    // Primary was explicitely set, but super-primary was not.
+                    // In this case we set super-primary on this data item, if
+                    // any data item of the same raw-contact already is super-primary
+                    if (rawContactHasSuperPrimary(rawContactId, mimeTypeId)) {
+                        setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
+                    }
+                    setIsPrimary(rawContactId, dataId, mimeTypeId);
+                }
+            }
+
+            // Now that we've taken care of clearing this, remove it from "values".
+            values.remove(Data.IS_SUPER_PRIMARY);
+            values.remove(Data.IS_PRIMARY);
         }
 
         public int delete(SQLiteDatabase db, Cursor c) {
@@ -1946,6 +2019,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 "SELECT " + RawContacts.CONTACT_ID +
                                 " FROM " + Tables.RAW_CONTACTS +
                                 " WHERE " + RawContacts._ID + "=?))");
+
+        mClearSuperPrimaryStatement = mDb.compileStatement(
+                "UPDATE " + Tables.DATA +
+                " SET " + Data.IS_SUPER_PRIMARY + "=0" +
+                " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
+                "   AND " + Data.RAW_CONTACT_ID + "=?");
 
         mRawContactDisplayNameUpdate = mDb.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -4022,20 +4101,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (packageName != null) {
             mValues.remove(Data.RES_PACKAGE);
             mValues.put(DataColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
-        }
-
-        boolean containsIsSuperPrimary = mValues.containsKey(Data.IS_SUPER_PRIMARY);
-        boolean containsIsPrimary = mValues.containsKey(Data.IS_PRIMARY);
-
-        // Remove primary or super primary values being set to 0. This is disallowed by the
-        // content provider.
-        if (containsIsSuperPrimary && mValues.getAsInteger(Data.IS_SUPER_PRIMARY) == 0) {
-            containsIsSuperPrimary = false;
-            mValues.remove(Data.IS_SUPER_PRIMARY);
-        }
-        if (containsIsPrimary && mValues.getAsInteger(Data.IS_PRIMARY) == 0) {
-            containsIsPrimary = false;
-            mValues.remove(Data.IS_PRIMARY);
         }
 
         if (!callerIsSyncAdapter) {
@@ -6153,7 +6218,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Sets the given dataId record in the "data" table to primary, and resets all data records of
      * the same mimetype and under the same contact to not be primary.
      *
-     * @param dataId the id of the data record to be set to primary.
+     * @param dataId the id of the data record to be set to primary. Pass -1 to clear the primary
+     * flag of all data items of this raw contacts
      */
     private void setIsPrimary(long rawContactId, long dataId, long mimeTypeId) {
         mSetPrimaryStatement.bindLong(1, dataId);
@@ -6173,6 +6239,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mSetSuperPrimaryStatement.bindLong(2, mimeTypeId);
         mSetSuperPrimaryStatement.bindLong(3, rawContactId);
         mSetSuperPrimaryStatement.execute();
+    }
+
+    /**
+     * Performs a query and returns true if any Data item of the raw contact with the given
+     * id and mimetype is marked as super-primary
+     */
+    private boolean rawContactHasSuperPrimary(long rawContactId, long mimeTypeId) {
+        final Cursor existsCursor = mDb.rawQuery(
+                "SELECT EXISTS(SELECT 1 FROM " + Tables.DATA + " WHERE " +
+                Data.RAW_CONTACT_ID + "=?" +
+                " AND " + DataColumns.MIMETYPE_ID + "=?" +
+                " AND " + Data.IS_SUPER_PRIMARY + "<>0)",
+                new String[] { String.valueOf(rawContactId), String.valueOf(mimeTypeId) });
+        try {
+            if (!existsCursor.moveToFirst()) throw new IllegalStateException();
+            return existsCursor.getInt(0) != 0;
+        } finally {
+            existsCursor.close();
+        }
+    }
+
+    /*
+     * Clears the super primary of all data items of the given raw contact. does not touch
+     * other raw contacts of the same joined aggregate
+     */
+    private void clearSuperPrimary(long rawContactId, long mimeTypeId) {
+        mClearSuperPrimaryStatement.bindLong(1, mimeTypeId);
+        mClearSuperPrimaryStatement.bindLong(2, rawContactId);
+        mClearSuperPrimaryStatement.execute();
     }
 
     public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {

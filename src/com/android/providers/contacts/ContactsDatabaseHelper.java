@@ -2746,9 +2746,8 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion413(SQLiteDatabase db) {
-        db.execSQL(
-                "ALTER TABLE " + Tables.DIRECTORIES +
-                " ADD " + DirectoryColumns.TYPE_RESOURCE_NAME + " TEXT;");
+        db.execSQL("DROP TABLE IF EXISTS directories;");
+        createDirectoriesTable(db);
     }
 
     private void upgradeToVersion415(SQLiteDatabase db) {

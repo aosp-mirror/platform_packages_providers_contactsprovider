@@ -2496,9 +2496,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 " AND " + Data.MIMETYPE + "='testmimetype'", null);
         assertNetworkNotified(true);
 
-        // Should not be able to change IS_PRIMARY and IS_SUPER_PRIMARY by the above update
-        values.put(Data.IS_PRIMARY, 1);
-        values.put(Data.IS_SUPER_PRIMARY, 1);
         assertStoredValues(uri, values);
 
         int count = mResolver.delete(Data.CONTENT_URI, Data.RAW_CONTACT_ID + "=" + rawContactId
@@ -3003,6 +3000,162 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "1");
         assertStoredValue(contactUri, Contacts.STARRED, "1");
+    }
+
+    public void testSetAndClearSuperPrimaryEmail() {
+        long rawContactId1 = createRawContact(new Account("a", "a"));
+        Uri mailUri11 = insertEmail(rawContactId1, "test1@domain1.com");
+        Uri mailUri12 = insertEmail(rawContactId1, "test2@domain1.com");
+
+        long rawContactId2 = createRawContact(new Account("b", "b"));
+        Uri mailUri21 = insertEmail(rawContactId2, "test1@domain2.com");
+        Uri mailUri22 = insertEmail(rawContactId2, "test2@domain2.com");
+
+        assertStoredValue(mailUri11, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri11, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_SUPER_PRIMARY, 0);
+
+        // Set super primary on the first pair, primary on the second
+        {
+            ContentValues values = new ContentValues();
+            values.put(Data.IS_SUPER_PRIMARY, 1);
+            mResolver.update(mailUri11, values, null, null);
+        }
+        {
+            ContentValues values = new ContentValues();
+            values.put(Data.IS_SUPER_PRIMARY, 1);
+            mResolver.update(mailUri22, values, null, null);
+        }
+
+        assertStoredValue(mailUri11, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri11, Data.IS_SUPER_PRIMARY, 1);
+        assertStoredValue(mailUri12, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri22, Data.IS_SUPER_PRIMARY, 1);
+
+        // Clear primary on the first pair, make sure second is not affected and super_primary is
+        // also cleared
+        {
+            ContentValues values = new ContentValues();
+            values.put(Data.IS_PRIMARY, 0);
+            mResolver.update(mailUri11, values, null, null);
+        }
+
+        assertStoredValue(mailUri11, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri11, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri22, Data.IS_SUPER_PRIMARY, 1);
+
+        // Ensure that we can only clear super_primary, if we specify the correct data row
+        {
+            ContentValues values = new ContentValues();
+            values.put(Data.IS_SUPER_PRIMARY, 0);
+            mResolver.update(mailUri21, values, null, null);
+        }
+
+        assertStoredValue(mailUri21, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri22, Data.IS_SUPER_PRIMARY, 1);
+
+        // Ensure that we can only clear primary, if we specify the correct data row
+        {
+            ContentValues values = new ContentValues();
+            values.put(Data.IS_PRIMARY, 0);
+            mResolver.update(mailUri21, values, null, null);
+        }
+
+        assertStoredValue(mailUri21, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri22, Data.IS_SUPER_PRIMARY, 1);
+
+        // Now clear super-primary for real
+        {
+            ContentValues values = new ContentValues();
+            values.put(Data.IS_SUPER_PRIMARY, 0);
+            mResolver.update(mailUri22, values, null, null);
+        }
+
+        assertStoredValue(mailUri11, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri11, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri12, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri21, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri22, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri22, Data.IS_SUPER_PRIMARY, 0);
+    }
+
+    /**
+     * Common function for the testNewPrimaryIn* functions. Its four configurations
+     * are each called from its own test
+     */
+    public void testChangingPrimary(boolean inUpdate, boolean withSuperPrimary) {
+        long rawContactId = createRawContact(new Account("a", "a"));
+        Uri mailUri1 = insertEmail(rawContactId, "test1@domain1.com", true);
+
+        if (withSuperPrimary) {
+            final ContentValues values = new ContentValues();
+            values.put(Data.IS_SUPER_PRIMARY, 1);
+            mResolver.update(mailUri1, values, null, null);
+        }
+
+        assertStoredValue(mailUri1, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri1, Data.IS_SUPER_PRIMARY, withSuperPrimary ? 1 : 0);
+
+        // Insert another item
+        final Uri mailUri2;
+        if (inUpdate) {
+            mailUri2 = insertEmail(rawContactId, "test2@domain1.com");
+
+            assertStoredValue(mailUri1, Data.IS_PRIMARY, 1);
+            assertStoredValue(mailUri1, Data.IS_SUPER_PRIMARY, withSuperPrimary ? 1 : 0);
+            assertStoredValue(mailUri2, Data.IS_PRIMARY, 0);
+            assertStoredValue(mailUri2, Data.IS_SUPER_PRIMARY, 0);
+
+            final ContentValues values = new ContentValues();
+            values.put(Data.IS_PRIMARY, 1);
+            mResolver.update(mailUri2, values, null, null);
+        } else {
+            // directly add as default
+            mailUri2 = insertEmail(rawContactId, "test2@domain1.com", true);
+        }
+
+        // Ensure that primary has been unset on the first
+        // If withSuperPrimary is set, also ensure that is has been moved to the new item
+        assertStoredValue(mailUri1, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri1, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(mailUri2, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri2, Data.IS_SUPER_PRIMARY, withSuperPrimary ? 1 : 0);
+    }
+
+    public void testNewPrimaryInInsert() {
+        testChangingPrimary(false, false);
+    }
+
+    public void testNewPrimaryInInsertWithSuperPrimary() {
+        testChangingPrimary(false, true);
+    }
+
+    public void testNewPrimaryInUpdate() {
+        testChangingPrimary(true, false);
+    }
+
+    public void testNewPrimaryInUpdateWithSuperPrimary() {
+        testChangingPrimary(true, true);
     }
 
     public void testLiveFolders() {
