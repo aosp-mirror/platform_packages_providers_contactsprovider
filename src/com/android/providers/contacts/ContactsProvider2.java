@@ -1993,7 +1993,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private boolean initialize() {
         final Context context = getContext();
-        mCountryMonitor = CountryMonitor.getInstance(context);
+        mCountryMonitor = new CountryMonitor(context);
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);

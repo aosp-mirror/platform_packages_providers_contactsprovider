@@ -26,19 +26,22 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.content.res.Resources.NotFoundException;
 import android.database.Cursor;
+import android.location.Country;
+import android.location.CountryDetector;
+import android.location.CountryListener;
 import android.net.Uri;
+import android.os.Looper;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
@@ -66,6 +69,18 @@ public class ContactsActor {
     public String packageName;
     public MockContentResolver resolver;
     public ContentProvider provider;
+    private Country mMockCountry = new Country("us", 0);
+
+    private CountryDetector mMockCountryDetector = new CountryDetector(null){
+        @Override
+        public Country detectCountry() {
+            return mMockCountry;
+        }
+
+        @Override
+        public void addCountryListener(CountryListener listener, Looper looper) {
+        }
+    };
 
     private IsolatedContext mProviderContext;
 
@@ -83,7 +98,16 @@ public class ContactsActor {
 
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 overallContext, FILENAME_PREFIX);
-        mProviderContext = new IsolatedContext(resolver, targetContextWrapper);
+        mProviderContext = new IsolatedContext(resolver, targetContextWrapper){
+
+            @Override
+            public Object getSystemService(String name) {
+                if (Context.COUNTRY_DETECTOR.equals(name)) {
+                    return mMockCountryDetector;
+                }
+                return super.getSystemService(name);
+            }
+        };
         provider = addProvider(providerClass, authority);
     }
 
