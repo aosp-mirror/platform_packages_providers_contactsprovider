@@ -1978,7 +1978,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
-        mDb = mDbHelper.getWritableDatabase();
 
         initForDefaultLocale();
 
@@ -2005,7 +2004,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         updateProviderStatus();
 
-        return (mDb != null);
+        return true;
     }
 
     protected String getCurrentCountryIso() {
@@ -2121,7 +2120,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         if (mContactsAccountCount == 0
-                && DatabaseUtils.queryNumEntries(mDb, Tables.CONTACTS, null) == 0) {
+                && DatabaseUtils.queryNumEntries(mDbHelper.getReadableDatabase(),
+                        Tables.CONTACTS, null) == 0) {
             setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
         } else {
             setProviderStatus(ProviderStatus.STATUS_NORMAL);
@@ -4146,6 +4146,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // TODO : Check the unit test.
         boolean accountsChanged = false;
         HashSet<Account> existingAccounts = new HashSet<Account>();
+        mDb = mDbHelper.getWritableDatabase();
         mDb.beginTransaction();
         try {
             findValidAccounts(existingAccounts);
@@ -4236,6 +4237,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
+            mDb = null;
         }
         mAccountWritability.clear();
 
@@ -4384,7 +4386,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         synchronized (mDirectoryCache) {
             if (!mDirectoryCacheValid) {
                 mDirectoryCache.clear();
-                Cursor cursor = mDb.query(Tables.DIRECTORIES,
+                SQLiteDatabase db = mDbHelper.getReadableDatabase();
+                Cursor cursor = db.query(Tables.DIRECTORIES,
                         DirectoryQuery.COLUMNS,
                         null, null, null, null, null);
                 try {
@@ -5825,8 +5828,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_AS_VCARD: {
+                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
-                mSelectionArgs1[0] = String.valueOf(lookupContactIdByLookupKey(mDb, lookupKey));
+                mSelectionArgs1[0] = String.valueOf(lookupContactIdByLookupKey(db, lookupKey));
                 final String selection = Contacts._ID + "=?";
 
                 // When opening a contact as file, we pass back contents as a
@@ -5838,6 +5842,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_AS_MULTI_VCARD: {
+                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 final String lookupKeys = uri.getPathSegments().get(2);
                 final String[] loopupKeyList = lookupKeys.split(":");
                 final StringBuilder inBuilder = new StringBuilder();
@@ -5850,7 +5855,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     } else {
                         inBuilder.append(",");
                     }
-                    inBuilder.append(lookupContactIdByLookupKey(mDb, lookupKey));
+                    inBuilder.append(lookupContactIdByLookupKey(db, lookupKey));
                     index++;
                 }
                 inBuilder.append(')');
@@ -6438,6 +6443,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int count = 0;
         long start = SystemClock.currentThreadTimeMillis();
         try {
+            mDb = mDbHelper.getWritableDatabase();
             mDb.beginTransaction();
             Cursor cursor = mDb.query(true,
                     Tables.RAW_CONTACTS + " r1 JOIN " + Tables.RAW_CONTACTS + " r2",
@@ -6463,6 +6469,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
         } finally {
             mDb.endTransaction();
+            mDb = null;
             long end = SystemClock.currentThreadTimeMillis();
             Log.i(TAG, "Aggregation algorithm upgraded for " + count
                     + " contacts, in " + (end - start) + "ms");
