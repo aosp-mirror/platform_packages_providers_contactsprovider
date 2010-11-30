@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import android.content.ContentProvider;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Debug;
 import android.provider.CallLog;
@@ -80,7 +81,13 @@ public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
                 ai.packageName = "contactsTestPackage";
                 return ai;
             }
+
+            @Override
+            public PackageManager getPackageManager() {
+                return new ContactsMockPackageManager();
+            }
         };
+
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 targetContext, "perf_imp.");
         targetContextWrapper.makeExistingFilesAndDbsAccessible();
