@@ -951,7 +951,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Handles inserts and update for a specific Data type.
      */
     private abstract class DataRowHandler {
-
         protected final String mMimetype;
         protected long mMimetypeId;
 
@@ -998,7 +997,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 } else {
                     // if there is already another data item configured as super-primary,
                     // take over the flag (which will automatically remove it from the other item)
-                    if (rawContactHasSuperPrimary(rawContactId, mimeTypeId)) {
+                    if (mDbHelper.rawContactHasSuperPrimary(rawContactId, mimeTypeId)) {
                         mDbHelper.setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
                     }
                 }
@@ -1022,7 +1021,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             if (values.size() > 0) {
                 mSelectionArgs1[0] = String.valueOf(dataId);
-                mDb.update(Tables.DATA, values, Data._ID + " =?", mSelectionArgs1);
+                db.update(Tables.DATA, values, Data._ID + " =?", mSelectionArgs1);
             }
 
             if (!callerIsSyncAdapter) {
@@ -1054,9 +1053,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             if (clearPrimary || clearSuperPrimary) {
                 // Test whether these values are currently set
-                final Uri dataUri = ContentUris.withAppendedId(Data.CONTENT_URI, dataId);
+                mSelectionArgs1[0] = String.valueOf(dataId);
                 final String[] cols = new String[] { Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY };
-                final Cursor c = query(dataUri, cols , null, null, null);
+                final Cursor c = mDbHelper.getReadableDatabase().query(Tables.DATA,
+                        cols, Data._ID + "=?", mSelectionArgs1, null, null, null);
                 try {
                     if (c.moveToFirst()) {
                         final boolean isPrimary = c.getInt(0) != 0;
@@ -1086,7 +1086,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     // Primary was explicitly set, but super-primary was not.
                     // In this case we set super-primary on this data item, if
                     // any data item of the same raw-contact already is super-primary
-                    if (rawContactHasSuperPrimary(rawContactId, mimeTypeId)) {
+                    if (mDbHelper.rawContactHasSuperPrimary(rawContactId, mimeTypeId)) {
                         mDbHelper.setIsSuperPrimary(rawContactId, dataId, mimeTypeId);
                     }
                     mDbHelper.setIsPrimary(rawContactId, dataId, mimeTypeId);
@@ -6063,25 +6063,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private void setRawContactDirty(long rawContactId) {
         mDirtyRawContacts.add(rawContactId);
-    }
-
-    /**
-     * Performs a query and returns true if any Data item of the raw contact with the given
-     * id and mimetype is marked as super-primary
-     */
-    private boolean rawContactHasSuperPrimary(long rawContactId, long mimeTypeId) {
-        final Cursor existsCursor = mDb.rawQuery(
-                "SELECT EXISTS(SELECT 1 FROM " + Tables.DATA + " WHERE " +
-                Data.RAW_CONTACT_ID + "=?" +
-                " AND " + DataColumns.MIMETYPE_ID + "=?" +
-                " AND " + Data.IS_SUPER_PRIMARY + "<>0)",
-                new String[] { String.valueOf(rawContactId), String.valueOf(mimeTypeId) });
-        try {
-            if (!existsCursor.moveToFirst()) throw new IllegalStateException();
-            return existsCursor.getInt(0) != 0;
-        } finally {
-            existsCursor.close();
-        }
     }
 
     public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {

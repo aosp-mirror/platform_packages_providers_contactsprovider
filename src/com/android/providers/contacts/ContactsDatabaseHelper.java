@@ -3793,4 +3793,23 @@ import java.util.Locale;
         mNameLookupDelete.bindLong(1, dataId);
         mNameLookupDelete.execute();
     }
+
+    /**
+     * Performs a query and returns true if any Data item of the raw contact with the given
+     * id and mimetype is marked as super-primary
+     */
+    public boolean rawContactHasSuperPrimary(long rawContactId, long mimeTypeId) {
+        final Cursor existsCursor = getReadableDatabase().rawQuery(
+                "SELECT EXISTS(SELECT 1 FROM " + Tables.DATA +
+                " WHERE " + Data.RAW_CONTACT_ID + "=?" +
+                " AND " + DataColumns.MIMETYPE_ID + "=?" +
+                " AND " + Data.IS_SUPER_PRIMARY + "<>0)",
+                new String[] { String.valueOf(rawContactId), String.valueOf(mimeTypeId) });
+        try {
+            if (!existsCursor.moveToFirst()) throw new IllegalStateException();
+            return existsCursor.getInt(0) != 0;
+        } finally {
+            existsCursor.close();
+        }
+    }
 }
