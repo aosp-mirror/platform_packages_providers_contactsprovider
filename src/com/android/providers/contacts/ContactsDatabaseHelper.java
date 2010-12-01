@@ -46,6 +46,7 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
@@ -486,6 +487,12 @@ import java.util.Locale;
     /** In-memory cache of previously found package name mappings */
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
 
+    private long mMimeTypeIdEmail;
+    private long mMimeTypeIdIm;
+    private long mMimeTypeIdStructuredName;
+    private long mMimeTypeIdOrganization;
+    private long mMimeTypeIdNickname;
+    private long mMimeTypeIdPhone;
 
     /** Compiled statements for querying and inserting mappings */
     private SQLiteStatement mMimetypeQuery;
@@ -516,6 +523,7 @@ import java.util.Locale;
     private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
 
     private final Context mContext;
+    private final boolean mDatabaseOptimizationEnabled;
     private final SyncStateContentProviderHelper mSyncState;
 
     private boolean mReopenDatabase = false;
@@ -529,9 +537,10 @@ import java.util.Locale;
      */
     private String[] mUnrestrictedPackages;
 
+
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new ContactsDatabaseHelper(context);
+            sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true);
         }
         return sSingleton;
     }
@@ -541,7 +550,13 @@ import java.util.Locale;
      * {@link #getInstance(android.content.Context)} instead.
      */
     ContactsDatabaseHelper(Context context) {
-        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        this(context, null, false);
+    }
+
+    private ContactsDatabaseHelper(
+            Context context, String databaseName, boolean optimizationEnabled) {
+        super(context, databaseName, null, DATABASE_VERSION);
+        mDatabaseOptimizationEnabled = optimizationEnabled;
         Resources resources = context.getResources();
 
         mContext = context;
@@ -558,7 +573,7 @@ import java.util.Locale;
         }
     }
 
-    private void clearCompiledStatements() {
+    private void refreshDatabaseCaches(SQLiteDatabase db) {
         mStatusUpdateDelete = null;
         mStatusUpdateReplace = null;
         mStatusUpdateInsert = null;
@@ -573,17 +588,35 @@ import java.util.Locale;
         mNameLookupDelete = null;
         mPackageQuery = null;
         mPackageInsert = null;
-        mMimetypeQuery = null;
-        mMimetypeInsert = null;
         mDataMimetypeQuery = null;
         mActivitiesMimetypeQuery = null;
         mContactIdQuery = null;
         mAggregationModeQuery = null;
+
+        mMimetypeCache.clear();
+        mPackageCache.clear();
+
+        mMimetypeQuery = db.compileStatement(
+                "SELECT " + MimetypesColumns._ID +
+                " FROM " + Tables.MIMETYPES +
+                " WHERE " + MimetypesColumns.MIMETYPE + "=?");
+
+        mMimetypeInsert = db.compileStatement(
+                "INSERT INTO " + Tables.MIMETYPES + "("
+                        + MimetypesColumns.MIMETYPE +
+                ") VALUES (?)");
+
+        mMimeTypeIdEmail = getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimeTypeIdIm = getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mMimeTypeIdStructuredName = getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+        mMimeTypeIdOrganization = getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+        mMimeTypeIdNickname = getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
+        mMimeTypeIdPhone = getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
     }
 
     @Override
     public void onOpen(SQLiteDatabase db) {
-        clearCompiledStatements();
+        refreshDatabaseCaches(db);
 
         mSyncState.onDatabaseOpened(db);
 
@@ -1002,15 +1035,17 @@ import java.util.Locale;
         // Add the legacy API support views, etc
         LegacyApiSupport.createDatabase(db);
 
-        // This will create a sqlite_stat1 table that is used for query optimization
-        db.execSQL("ANALYZE;");
+        if (mDatabaseOptimizationEnabled) {
+            // This will create a sqlite_stat1 table that is used for query optimization
+            db.execSQL("ANALYZE;");
 
-        updateSqliteStats(db);
+            updateSqliteStats(db);
 
-        // We need to close and reopen the database connection so that the stats are
-        // taken into account. Make a note of it and do the actual reopening in the
-        // getWritableDatabase method.
-        mReopenDatabase = true;
+            // We need to close and reopen the database connection so that the stats are
+            // taken into account. Make a note of it and do the actual reopening in the
+            // getWritableDatabase method.
+            mReopenDatabase = true;
+        }
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
@@ -3019,20 +3054,39 @@ import java.util.Locale;
      * lookups and possible allocation of new IDs as needed.
      */
     public long getMimeTypeId(String mimetype) {
-        if (mMimetypeQuery == null) {
-            mMimetypeQuery = getWritableDatabase().compileStatement(
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE + "=?");
-        }
-        if (mMimetypeInsert == null) {
-            mMimetypeInsert = getWritableDatabase().compileStatement(
-                    "INSERT INTO " + Tables.MIMETYPES + "("
-                            + MimetypesColumns.MIMETYPE +
-                    ") VALUES (?)");
-        }
-
         return getCachedId(mMimetypeQuery, mMimetypeInsert, mimetype, mMimetypeCache);
+    }
+
+    public long getMimeTypeIdForStructuredName() {
+        return mMimeTypeIdStructuredName;
+    }
+
+    public long getMimeTypeIdForOrganization() {
+        return mMimeTypeIdOrganization;
+    }
+
+    public long getMimeTypeIdForIm() {
+        return mMimeTypeIdIm;
+    }
+
+    public long getMimeTypeIdForEmail() {
+        return mMimeTypeIdEmail;
+    }
+
+    public int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
+        if (mimeTypeId == mMimeTypeIdStructuredName) {
+            return DisplayNameSources.STRUCTURED_NAME;
+        } else if (mimeTypeId == mMimeTypeIdEmail) {
+            return DisplayNameSources.EMAIL;
+        } else if (mimeTypeId == mMimeTypeIdPhone) {
+            return DisplayNameSources.PHONE;
+        } else if (mimeTypeId == mMimeTypeIdOrganization) {
+            return DisplayNameSources.ORGANIZATION;
+        } else if (mimeTypeId == mMimeTypeIdNickname) {
+            return DisplayNameSources.NICKNAME;
+        } else {
+            return DisplayNameSources.UNDEFINED;
+        }
     }
 
     /**

@@ -826,12 +826,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private static final int LEGACY_IMPORT_FAILED_NOTIFICATION = 1;
 
-    private long mMimeTypeIdEmail;
-    private long mMimeTypeIdIm;
-    private long mMimeTypeIdStructuredName;
-    private long mMimeTypeIdOrganization;
-    private long mMimeTypeIdNickname;
-    private long mMimeTypeIdPhone;
     private StringBuilder mSb = new StringBuilder();
     private String[] mSelectionArgs1 = new String[1];
     private String[] mSelectionArgs2 = new String[2];
@@ -1981,13 +1975,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         initForDefaultLocale();
 
-        mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        mMimeTypeIdIm = mDbHelper.getMimeTypeId(Im.CONTENT_ITEM_TYPE);
-        mMimeTypeIdStructuredName = mDbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
-        mMimeTypeIdOrganization = mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
-        mMimeTypeIdNickname = mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
-        mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-
         updateAccounts();
 
         if (isLegacyContactImportNeeded()) {
@@ -2885,7 +2872,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         try {
             while (c.moveToNext()) {
                 int mimeType = c.getInt(DisplayNameQuery.MIMETYPE);
-                int source = getDisplayNameSource(mimeType);
+                int source = mDbHelper.getDisplayNameSourceForMimeTypeId(mimeType);
                 if (source < bestDisplayNameSource || source == DisplayNameSources.UNDEFINED) {
                     continue;
                 }
@@ -2894,7 +2881,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     continue;
                 }
 
-                if (mimeType == mMimeTypeIdStructuredName) {
+                if (mimeType == mDbHelper.getMimeTypeIdForStructuredName()) {
                     NameSplitter.Name name;
                     if (bestName != null) {
                         name = new NameSplitter.Name();
@@ -2920,7 +2907,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         bestDisplayNameSource = source;
                         bestName = name;
                     }
-                } else if (mimeType == mMimeTypeIdOrganization) {
+                } else if (mimeType == mDbHelper.getMimeTypeIdForOrganization()) {
                     mCharArrayBuffer.sizeCopied = 0;
                     c.copyStringToBuffer(DisplayNameQuery.DATA1, mCharArrayBuffer);
                     if (mCharArrayBuffer.sizeCopied != 0) {
@@ -3016,22 +3003,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDbHelper.setDisplayName(rawContactId, bestDisplayNameSource, displayNamePrimary,
                 displayNameAlternative, bestPhoneticName, bestPhoneticNameStyle,
                 sortKeyPrimary, sortKeyAlternative);
-    }
-
-    private int getDisplayNameSource(int mimeTypeId) {
-        if (mimeTypeId == mMimeTypeIdStructuredName) {
-            return DisplayNameSources.STRUCTURED_NAME;
-        } else if (mimeTypeId == mMimeTypeIdEmail) {
-            return DisplayNameSources.EMAIL;
-        } else if (mimeTypeId == mMimeTypeIdPhone) {
-            return DisplayNameSources.PHONE;
-        } else if (mimeTypeId == mMimeTypeIdOrganization) {
-            return DisplayNameSources.ORGANIZATION;
-        } else if (mimeTypeId == mMimeTypeIdNickname) {
-            return DisplayNameSources.NICKNAME;
-        } else {
-            return DisplayNameSources.UNDEFINED;
-        }
     }
 
     /**
@@ -3205,9 +3176,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // TODO: generalize to allow other providers to match against email
             boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == protocol;
 
-            String mimeTypeIdIm = String.valueOf(mMimeTypeIdIm);
+            String mimeTypeIdIm = String.valueOf(mDbHelper.getMimeTypeIdForIm());
             if (matchEmail) {
-                String mimeTypeIdEmail = String.valueOf(mMimeTypeIdEmail);
+                String mimeTypeIdEmail = String.valueOf(mDbHelper.getMimeTypeIdForEmail());
 
                 // The following hack forces SQLite to use the (mimetype_id,data1) index, otherwise
                 // the "OR" conjunction confuses it and it switches to a full scan of
@@ -4766,8 +4737,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     sb.append(
                             "SELECT " + Data._ID +
                             " FROM " + Tables.DATA +
-                            " WHERE " + DataColumns.MIMETYPE_ID + "=" + mMimeTypeIdEmail +
-                            " AND " + Data.DATA1 + " LIKE ");
+                            " WHERE " + DataColumns.MIMETYPE_ID + "=");
+                    sb.append(mDbHelper.getMimeTypeIdForEmail());
+                    sb.append(" AND " + Data.DATA1 + " LIKE ");
                     DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
                     if (!filterParam.contains("@")) {
                         String normalizedName = NameNormalizer.normalize(filterParam);
@@ -4784,8 +4756,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             sb.append(
                                     " UNION SELECT " + Data._ID +
                                     " FROM " + Tables.DATA +
-                                    " WHERE +" + DataColumns.MIMETYPE_ID + "=" + mMimeTypeIdEmail +
-                                    " AND " + Data.RAW_CONTACT_ID + " IN ");
+                                    " WHERE +" + DataColumns.MIMETYPE_ID + "=");
+                            sb.append(mDbHelper.getMimeTypeIdForEmail());
+                            sb.append(" AND " + Data.RAW_CONTACT_ID + " IN ");
                             appendRawContactsByNormalizedNameFilter(sb, normalizedName, false);
                         }
                     }
