@@ -527,6 +527,7 @@ import java.util.Locale;
     private final boolean mDatabaseOptimizationEnabled;
     private final SyncStateContentProviderHelper mSyncState;
     private final CountryMonitor mCountryMonitor;
+    private StringBuilder mSb = new StringBuilder();
 
     private boolean mReopenDatabase = false;
 
@@ -3887,6 +3888,32 @@ import java.util.Locale;
 
         insertNameLookup(rawContactId, dataId,
                 NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
+    }
+
+    public void insertNameLookupForPhoneticName(long rawContactId, long dataId, String familyName,
+            String middleName, String givenName) {
+        mSb.setLength(0);
+        if (familyName != null) {
+            mSb.append(familyName.trim());
+        }
+        if (middleName != null) {
+            mSb.append(middleName.trim());
+        }
+        if (givenName != null) {
+            mSb.append(givenName.trim());
+        }
+
+        if (mSb.length() > 0) {
+            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
+                    NameNormalizer.normalize(mSb.toString()));
+        }
+
+        if (givenName != null) {
+            // We want the phonetic given name to be used for search, but not for aggregation,
+            // which is why we are using NAME_SHORTHAND rather than NAME_COLLATION_KEY
+            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
+                    NameNormalizer.normalize(givenName.trim()));
+        }
     }
 
     /**

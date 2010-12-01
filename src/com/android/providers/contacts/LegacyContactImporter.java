@@ -74,6 +74,8 @@ public class LegacyContactImporter {
 
     private final Context mContext;
     private final ContactsProvider2 mContactsProvider;
+    private final NameLookupBuilder mNameLookupBuilder;
+
     private ContactsDatabaseHelper mDbHelper;
     private ContentValues mValues = new ContentValues();
     private ContentResolver mResolver;
@@ -103,6 +105,7 @@ public class LegacyContactImporter {
         mContext = context;
         mContactsProvider = contactsProvider;
         mResolver = mContactsProvider.getContext().getContentResolver();
+        mNameLookupBuilder = mContactsProvider.getNameLookupBuilder();
     }
 
     public boolean importContacts() throws Exception {
@@ -641,12 +644,13 @@ public class LegacyContactImporter {
 
         long dataId = insert(insert);
 
-        mContactsProvider.insertNameLookupForStructuredName(id, dataId, name,
+        mNameLookupBuilder.insertNameLookup(id, dataId, name,
                 mNameSplitter.getAdjustedFullNameStyle(fullNameStyle));
+
         if (splitName.phoneticFamilyName != null
                 || splitName.phoneticMiddleName != null
                 || splitName.phoneticGivenName != null) {
-            mContactsProvider.insertNameLookupForPhoneticName(id, dataId,
+            mDbHelper.insertNameLookupForPhoneticName(id, dataId,
                     splitName.phoneticFamilyName,
                     splitName.phoneticMiddleName,
                     splitName.phoneticGivenName);

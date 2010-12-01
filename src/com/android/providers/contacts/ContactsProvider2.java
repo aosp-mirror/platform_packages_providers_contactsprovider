@@ -1206,13 +1206,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class StructuredNameRowHandler extends DataRowHandler {
+    public static class StructuredNameRowHandler extends DataRowHandler {
         private final NameSplitter mSplitter;
+        private final NameLookupBuilder mNameLookupBuilder;
 
         public StructuredNameRowHandler(ContactsDatabaseHelper dbHelper,
-                ContactAggregator aggregator,NameSplitter splitter) {
+                ContactAggregator aggregator, NameSplitter splitter,
+                NameLookupBuilder nameLookupBuilder) {
             super(dbHelper, aggregator, StructuredName.CONTENT_ITEM_TYPE);
             mSplitter = splitter;
+            mNameLookupBuilder = nameLookupBuilder;
         }
 
         @Override
@@ -1224,9 +1227,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             String name = values.getAsString(StructuredName.DISPLAY_NAME);
             Integer fullNameStyle = values.getAsInteger(StructuredName.FULL_NAME_STYLE);
-            insertNameLookupForStructuredName(rawContactId, dataId, name,
+            mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name,
                     fullNameStyle != null
-                            ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
+                            ? mSplitter.getAdjustedFullNameStyle(fullNameStyle)
                             : FullNameStyle.UNDEFINED);
             insertNameLookupForPhoneticName(rawContactId, dataId, values);
             fixRawContactDisplayName(db, txContext, rawContactId);
@@ -1256,9 +1259,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String name = augmented.getAsString(StructuredName.DISPLAY_NAME);
                 mDbHelper.deleteNameLookup(dataId);
                 Integer fullNameStyle = augmented.getAsInteger(StructuredName.FULL_NAME_STYLE);
-                insertNameLookupForStructuredName(rawContactId, dataId, name,
+                mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name,
                         fullNameStyle != null
-                                ? mNameSplitter.getAdjustedFullNameStyle(fullNameStyle)
+                                ? mSplitter.getAdjustedFullNameStyle(fullNameStyle)
                                 : FullNameStyle.UNDEFINED);
                 insertNameLookupForPhoneticName(rawContactId, dataId, augmented);
             }
@@ -1331,6 +1334,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     update.put(StructuredName.PHONETIC_NAME_STYLE,
                             mSplitter.guessPhoneticNameStyle(unstruct));
                 }
+            }
+        }
+
+        public void insertNameLookupForPhoneticName(long rawContactId, long dataId,
+                ContentValues values) {
+            if (values.containsKey(StructuredName.PHONETIC_FAMILY_NAME)
+                    || values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)
+                    || values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME)) {
+                mDbHelper.insertNameLookupForPhoneticName(rawContactId, dataId,
+                        values.getAsString(StructuredName.PHONETIC_FAMILY_NAME),
+                        values.getAsString(StructuredName.PHONETIC_MIDDLE_NAME),
+                        values.getAsString(StructuredName.PHONETIC_GIVEN_NAME));
             }
         }
     }
@@ -2122,7 +2137,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
       mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
               new NicknameDataRowHandler(mDbHelper, mContactAggregator));
       mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
-              new StructuredNameRowHandler(mDbHelper, mContactAggregator, mNameSplitter));
+              new StructuredNameRowHandler(mDbHelper, mContactAggregator,
+                      mNameSplitter, mNameLookupBuilder));
       mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
               new StructuredPostalRowHandler(mDbHelper, mContactAggregator, mPostalSplitter));
       mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
@@ -2237,6 +2253,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /* package */ NameSplitter getNameSplitter() {
         return mNameSplitter;
+    }
+
+    /* package */ NameLookupBuilder getNameLookupBuilder() {
+        return mNameLookupBuilder;
     }
 
     /* Visible for testing */
@@ -5839,11 +5859,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public void insertNameLookupForStructuredName(long rawContactId, long dataId, String name,
-            int fullNameStyle) {
-        mNameLookupBuilder.insertNameLookup(rawContactId, dataId, name, fullNameStyle);
-    }
-
     private class StructuredNameLookupBuilder extends NameLookupBuilder {
 
         public StructuredNameLookupBuilder(NameSplitter splitter) {
@@ -5859,44 +5874,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         @Override
         protected String[] getCommonNicknameClusters(String normalizedName) {
             return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
-        }
-    }
-
-    public void insertNameLookupForPhoneticName(long rawContactId, long dataId,
-            ContentValues values) {
-        if (values.containsKey(StructuredName.PHONETIC_FAMILY_NAME)
-                || values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)
-                || values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME)) {
-            insertNameLookupForPhoneticName(rawContactId, dataId,
-                    values.getAsString(StructuredName.PHONETIC_FAMILY_NAME),
-                    values.getAsString(StructuredName.PHONETIC_MIDDLE_NAME),
-                    values.getAsString(StructuredName.PHONETIC_GIVEN_NAME));
-        }
-    }
-
-    public void insertNameLookupForPhoneticName(long rawContactId, long dataId, String familyName,
-            String middleName, String givenName) {
-        mSb.setLength(0);
-        if (familyName != null) {
-            mSb.append(familyName.trim());
-        }
-        if (middleName != null) {
-            mSb.append(middleName.trim());
-        }
-        if (givenName != null) {
-            mSb.append(givenName.trim());
-        }
-
-        if (mSb.length() > 0) {
-            mDbHelper.insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
-                    NameNormalizer.normalize(mSb.toString()));
-        }
-
-        if (givenName != null) {
-            // We want the phonetic given name to be used for search, but not for aggregation,
-            // which is why we are using NAME_SHORTHAND rather than NAME_COLLATION_KEY
-            mDbHelper.insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
-                    NameNormalizer.normalize(givenName.trim()));
         }
     }
 
