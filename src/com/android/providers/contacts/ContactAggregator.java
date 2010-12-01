@@ -459,6 +459,37 @@ public class ContactAggregator {
         }
     }
 
+    public void triggerAggregation(long rawContactId) {
+        if (!mEnabled) {
+            return;
+        }
+
+        int aggregationMode = mDbHelper.getAggregationMode(rawContactId);
+        switch (aggregationMode) {
+            case RawContacts.AGGREGATION_MODE_DISABLED:
+                break;
+
+            case RawContacts.AGGREGATION_MODE_DEFAULT: {
+                markForAggregation(rawContactId, aggregationMode, false);
+                break;
+            }
+
+            case RawContacts.AGGREGATION_MODE_SUSPENDED: {
+                long contactId = mDbHelper.getContactId(rawContactId);
+
+                if (contactId != 0) {
+                    updateAggregateData(contactId);
+                }
+                break;
+            }
+
+            case RawContacts.AGGREGATION_MODE_IMMEDIATE: {
+                aggregateContact(mDbHelper.getWritableDatabase(), rawContactId);
+                break;
+            }
+        }
+    }
+
     public void clearPendingAggregations() {
         mRawContactsMarkedForAggregation.clear();
     }

@@ -941,12 +941,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /**
      * Handles inserts and update for a specific Data type.
      */
-    private abstract class DataRowHandler {
+    private static abstract class DataRowHandler {
+        protected final ContactsDatabaseHelper mDbHelper;
+        protected final ContactAggregator mContactAggregator;
+        protected String[] mSelectionArgs1 = new String[1];
         protected final String mMimetype;
         protected long mMimetypeId;
 
         @SuppressWarnings("all")
-        public DataRowHandler(String mimetype) {
+        public DataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator,
+                String mimetype) {
+            mDbHelper = dbHelper;
+            mContactAggregator = aggregator;
             mMimetype = mimetype;
 
             // To ensure the data column position. This is dead code if properly configured.
@@ -1186,20 +1192,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             values.putAll(update);
             return values;
         }
+
+        public void triggerAggregation(long rawContactId) {
+            mContactAggregator.triggerAggregation(rawContactId);
+        }
     }
 
-    public class CustomDataRowHandler extends DataRowHandler {
+    public static class CustomDataRowHandler extends DataRowHandler {
 
-        public CustomDataRowHandler(String mimetype) {
-            super(mimetype);
+        public CustomDataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator,
+                String mimetype) {
+            super(dbHelper, aggregator, mimetype);
         }
     }
 
     public class StructuredNameRowHandler extends DataRowHandler {
         private final NameSplitter mSplitter;
 
-        public StructuredNameRowHandler(NameSplitter splitter) {
-            super(StructuredName.CONTENT_ITEM_TYPE);
+        public StructuredNameRowHandler(ContactsDatabaseHelper dbHelper,
+                ContactAggregator aggregator,NameSplitter splitter) {
+            super(dbHelper, aggregator, StructuredName.CONTENT_ITEM_TYPE);
             mSplitter = splitter;
         }
 
@@ -1323,11 +1335,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class StructuredPostalRowHandler extends DataRowHandler {
+    public static class StructuredPostalRowHandler extends DataRowHandler {
         private PostalSplitter mSplitter;
 
-        public StructuredPostalRowHandler(PostalSplitter splitter) {
-            super(StructuredPostal.CONTENT_ITEM_TYPE);
+        public StructuredPostalRowHandler(ContactsDatabaseHelper dbHelper,
+                ContactAggregator aggregator, PostalSplitter splitter) {
+            super(dbHelper, aggregator, StructuredPostal.CONTENT_ITEM_TYPE);
             mSplitter = splitter;
         }
 
@@ -1388,13 +1401,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class CommonDataRowHandler extends DataRowHandler {
+    public static class CommonDataRowHandler extends DataRowHandler {
 
         private final String mTypeColumn;
         private final String mLabelColumn;
 
-        public CommonDataRowHandler(String mimetype, String typeColumn, String labelColumn) {
-            super(mimetype);
+        public CommonDataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator,
+                String mimetype, String typeColumn, String labelColumn) {
+            super(dbHelper, aggregator, mimetype);
             mTypeColumn = typeColumn;
             mLabelColumn = labelColumn;
         }
@@ -1435,10 +1449,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class OrganizationDataRowHandler extends CommonDataRowHandler {
+    public static class OrganizationDataRowHandler extends CommonDataRowHandler {
 
-        public OrganizationDataRowHandler() {
-            super(Organization.CONTENT_ITEM_TYPE, Organization.TYPE, Organization.LABEL);
+        public OrganizationDataRowHandler(ContactsDatabaseHelper dbHelper,
+                ContactAggregator aggregator) {
+            super(dbHelper, aggregator,
+                    Organization.CONTENT_ITEM_TYPE, Organization.TYPE, Organization.LABEL);
         }
 
         @Override
@@ -1450,7 +1466,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = super.insert(db, txContext, rawContactId, values);
 
             fixRawContactDisplayName(db, txContext, rawContactId);
-            insertNameLookupForOrganization(rawContactId, dataId, company, title);
+            mDbHelper.insertNameLookupForOrganization(rawContactId, dataId, company, title);
             return dataId;
         }
 
@@ -1491,7 +1507,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 mDbHelper.deleteNameLookup(dataId);
-                insertNameLookupForOrganization(rawContactId, dataId, company, title);
+                mDbHelper.insertNameLookupForOrganization(rawContactId, dataId, company, title);
 
                 fixRawContactDisplayName(db, txContext, rawContactId);
             }
@@ -1520,10 +1536,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class EmailDataRowHandler extends CommonDataRowHandler {
+    public static class EmailDataRowHandler extends CommonDataRowHandler {
 
-        public EmailDataRowHandler() {
-            super(Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
+        public EmailDataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+            super(dbHelper, aggregator, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
         }
 
         @Override
@@ -1534,7 +1550,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             long dataId = super.insert(db, txContext, rawContactId, values);
 
             fixRawContactDisplayName(db, txContext, rawContactId);
-            String address = insertNameLookupForEmail(rawContactId, dataId, email);
+            String address = mDbHelper.insertNameLookupForEmail(rawContactId, dataId, email);
             if (address != null) {
                 triggerAggregation(rawContactId);
             }
@@ -1554,7 +1570,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 String address = values.getAsString(Email.DATA);
                 mDbHelper.deleteNameLookup(dataId);
-                insertNameLookupForEmail(rawContactId, dataId, address);
+                mDbHelper.insertNameLookupForEmail(rawContactId, dataId, address);
                 fixRawContactDisplayName(db, txContext, rawContactId);
                 triggerAggregation(rawContactId);
             }
@@ -1587,10 +1603,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class NicknameDataRowHandler extends CommonDataRowHandler {
+    public static class NicknameDataRowHandler extends CommonDataRowHandler {
 
-        public NicknameDataRowHandler() {
-            super(Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL);
+        public NicknameDataRowHandler(ContactsDatabaseHelper dbHelper,
+                ContactAggregator aggregator) {
+            super(dbHelper, aggregator, Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL);
         }
 
         @Override
@@ -1602,7 +1619,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             if (!TextUtils.isEmpty(nickname)) {
                 fixRawContactDisplayName(db, txContext, rawContactId);
-                insertNameLookupForNickname(rawContactId, dataId, nickname);
+                mDbHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
                 triggerAggregation(rawContactId);
             }
             return dataId;
@@ -1621,7 +1638,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (values.containsKey(Nickname.NAME)) {
                 String nickname = values.getAsString(Nickname.NAME);
                 mDbHelper.deleteNameLookup(dataId);
-                insertNameLookupForNickname(rawContactId, dataId, nickname);
+                mDbHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
                 fixRawContactDisplayName(db, txContext, rawContactId);
                 triggerAggregation(rawContactId);
             }
@@ -1643,10 +1660,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class PhoneDataRowHandler extends CommonDataRowHandler {
+    public static class PhoneDataRowHandler extends CommonDataRowHandler {
 
-        public PhoneDataRowHandler() {
-            super(Phone.CONTENT_ITEM_TYPE, Phone.TYPE, Phone.LABEL);
+        public PhoneDataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+            super(dbHelper, aggregator, Phone.CONTENT_ITEM_TYPE, Phone.TYPE, Phone.LABEL);
         }
 
         @Override
@@ -1657,7 +1674,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String number = values.getAsString(Phone.NUMBER);
 
                 String numberE164 =
-                        PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                        PhoneNumberUtils.formatNumberToE164(number, mDbHelper.getCurrentCountryIso());
                 if (numberE164 != null) {
                     values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
                 }
@@ -1679,13 +1696,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
                 Cursor c, boolean callerIsSyncAdapter) {
             String number = null;
-            String normalizedNumber = null;
             String numberE164 = null;
             if (values.containsKey(Phone.NUMBER)) {
                 number = values.getAsString(Phone.NUMBER);
                 if (number != null) {
-                    numberE164 =
-                        PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                    numberE164 = PhoneNumberUtils.formatNumberToE164(number,
+                            mDbHelper.getCurrentCountryIso());
                 }
                 if (numberE164 != null) {
                     values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
@@ -1762,7 +1778,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public class GroupMembershipRowHandler extends DataRowHandler {
+    public static class GroupMembershipRowHandler extends DataRowHandler {
 
         private static final String SELECTION_RAW_CONTACT_ID = RawContacts._ID + "=?";
 
@@ -1774,14 +1790,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         + " AND " + Tables.DATA + "." + GroupMembership.RAW_CONTACT_ID + "=?"
                         + " AND " + Groups.FAVORITES + "!=0";
 
-        public GroupMembershipRowHandler() {
-            super(GroupMembership.CONTENT_ITEM_TYPE);
+        private final HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache;
+
+        public GroupMembershipRowHandler(ContactsDatabaseHelper dbHelper,
+                ContactAggregator aggregator,
+                HashMap<String, ArrayList<GroupIdCacheEntry>> groupIdCache) {
+            super(dbHelper, aggregator, GroupMembership.CONTENT_ITEM_TYPE);
+            mGroupIdCache = groupIdCache;
         }
 
         @Override
         public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
                 ContentValues values) {
-            resolveGroupSourceIdInValues(rawContactId, db, values, true);
+            resolveGroupSourceIdInValues(txContext, rawContactId, db, values, true);
             long dataId = super.insert(db, txContext, rawContactId, values);
             if (hasFavoritesGroupMembership(db, rawContactId)) {
                 updateRawContactsStar(db, rawContactId, true /* starred */);
@@ -1795,7 +1816,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Cursor c, boolean callerIsSyncAdapter) {
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
             boolean wasStarred = hasFavoritesGroupMembership(db, rawContactId);
-            resolveGroupSourceIdInValues(rawContactId, db, values, false);
+            resolveGroupSourceIdInValues(txContext, rawContactId, db, values, false);
             if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
                 return false;
             }
@@ -1845,8 +1866,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         }
 
-        private void resolveGroupSourceIdInValues(long rawContactId, SQLiteDatabase db,
-                ContentValues values, boolean isInsert) {
+        private void resolveGroupSourceIdInValues(TransactionContext txContext,
+                long rawContactId, SQLiteDatabase db, ContentValues values, boolean isInsert) {
             boolean containsGroupSourceId = values.containsKey(GroupMembership.GROUP_SOURCE_ID);
             boolean containsGroupId = values.containsKey(GroupMembership.GROUP_ROW_ID);
             if (containsGroupSourceId && containsGroupId) {
@@ -1868,17 +1889,100 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (containsGroupSourceId) {
                 final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
                 final long groupId = getOrMakeGroup(db, rawContactId, sourceId,
-                        mTransactionContext.getAccountForRawContact(rawContactId));
+                        txContext.getAccountForRawContact(rawContactId));
                 values.remove(GroupMembership.GROUP_SOURCE_ID);
                 values.put(GroupMembership.GROUP_ROW_ID, groupId);
             }
         }
+
+        /**
+         * Returns the group id of the group with sourceId and the same account as rawContactId.
+         * If the group doesn't already exist then it is first created,
+         * @param db SQLiteDatabase to use for this operation
+         * @param rawContactId the contact this group is associated with
+         * @param sourceId the sourceIf of the group to query or create
+         * @return the group id of the existing or created group
+         * @throws IllegalArgumentException if the contact is not associated with an account
+         * @throws IllegalStateException if a group needs to be created but the creation failed
+         */
+        private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId,
+                Account account) {
+
+            if (account == null) {
+                mSelectionArgs1[0] = String.valueOf(rawContactId);
+                Cursor c = db.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
+                        RawContacts._ID + "=?", mSelectionArgs1, null, null, null);
+                try {
+                    if (c.moveToFirst()) {
+                        String accountName = c.getString(RawContactsQuery.ACCOUNT_NAME);
+                        String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
+                        if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
+                            account = new Account(accountName, accountType);
+                        }
+                    }
+                } finally {
+                    c.close();
+                }
+            }
+
+            if (account == null) {
+                throw new IllegalArgumentException("if the groupmembership only "
+                        + "has a sourceid the the contact must be associated with "
+                        + "an account");
+            }
+
+            ArrayList<GroupIdCacheEntry> entries = mGroupIdCache.get(sourceId);
+            if (entries == null) {
+                entries = new ArrayList<GroupIdCacheEntry>(1);
+                mGroupIdCache.put(sourceId, entries);
+            }
+
+            int count = entries.size();
+            for (int i = 0; i < count; i++) {
+                GroupIdCacheEntry entry = entries.get(i);
+                if (entry.accountName.equals(account.name) && entry.accountType.equals(account.type)) {
+                    return entry.groupId;
+                }
+            }
+
+            GroupIdCacheEntry entry = new GroupIdCacheEntry();
+            entry.accountName = account.name;
+            entry.accountType = account.type;
+            entry.sourceId = sourceId;
+            entries.add(0, entry);
+
+            // look up the group that contains this sourceId and has the same account name and type
+            // as the contact refered to by rawContactId
+            Cursor c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
+                    Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
+                    new String[]{sourceId, account.name, account.type}, null, null, null);
+            try {
+                if (c.moveToFirst()) {
+                    entry.groupId = c.getLong(0);
+                } else {
+                    ContentValues groupValues = new ContentValues();
+                    groupValues.put(Groups.ACCOUNT_NAME, account.name);
+                    groupValues.put(Groups.ACCOUNT_TYPE, account.type);
+                    groupValues.put(Groups.SOURCE_ID, sourceId);
+                    long groupId = db.insert(Tables.GROUPS, Groups.ACCOUNT_NAME, groupValues);
+                    if (groupId < 0) {
+                        throw new IllegalStateException("unable to create a new group with "
+                                + "this sourceid: " + groupValues);
+                    }
+                    entry.groupId = groupId;
+                }
+            } finally {
+                c.close();
+            }
+
+            return entry.groupId;
+        }
     }
 
-    public class PhotoDataRowHandler extends DataRowHandler {
+    public static class PhotoDataRowHandler extends DataRowHandler {
 
-        public PhotoDataRowHandler() {
-            super(Photo.CONTENT_ITEM_TYPE);
+        public PhotoDataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+            super(dbHelper, aggregator, Photo.CONTENT_ITEM_TYPE);
         }
 
         @Override
@@ -1916,12 +2020,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * An entry in group id cache. It maps the combination of (account type, account name
      * and source id) to group row id.
      */
-    public class GroupIdCacheEntry {
+    public static class GroupIdCacheEntry {
         String accountType;
         String accountName;
         String sourceId;
         long groupId;
     }
+
+    // We don't need a soft cache for groups - the assumption is that there will only
+    // be a small number of contact groups. The cache is keyed off source id.  The value
+    // is a list of groups with this group id.
+    private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
 
     private HashMap<String, DataRowHandler> mDataRowHandlers;
     private ContactsDatabaseHelper mDbHelper;
@@ -1930,11 +2039,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private NameLookupBuilder mNameLookupBuilder;
 
     private PostalSplitter mPostalSplitter;
-
-    // We don't need a soft cache for groups - the assumption is that there will only
-    // be a small number of contact groups. The cache is keyed off source id.  The value
-    // is a list of groups with this group id.
-    private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
 
     private ContactDirectoryManager mContactDirectoryManager;
     private ContactAggregator mContactAggregator;
@@ -1959,7 +2063,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private Locale mCurrentLocale;
     private int mContactsAccountCount;
 
-    private CountryMonitor mCountryMonitor;
 
     @Override
     public boolean onCreate() {
@@ -1974,7 +2077,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private boolean initialize() {
         final Context context = getContext();
-        mCountryMonitor = new CountryMonitor(context);
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
@@ -2001,27 +2103,32 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return true;
     }
 
-    protected String getCurrentCountryIso() {
-        return mCountryMonitor.getCountryIso();
-    }
-
     private void initDataRowHandlers() {
       mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
-      mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE, new EmailDataRowHandler());
+      mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
+              new EmailDataRowHandler(mDbHelper, mContactAggregator));
       mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
-              new CommonDataRowHandler(Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
-      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new CommonDataRowHandler(
-              StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE, StructuredPostal.LABEL));
-      mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE, new OrganizationDataRowHandler());
-      mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE, new PhoneDataRowHandler());
-      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE, new NicknameDataRowHandler());
+              new CommonDataRowHandler(mDbHelper, mContactAggregator,
+                      Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
+      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
+              new CommonDataRowHandler(mDbHelper, mContactAggregator,
+                      StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
+                      StructuredPostal.LABEL));
+      mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE,
+              new OrganizationDataRowHandler(mDbHelper, mContactAggregator));
+      mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE,
+              new PhoneDataRowHandler(mDbHelper, mContactAggregator));
+      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
+              new NicknameDataRowHandler(mDbHelper, mContactAggregator));
       mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
-              new StructuredNameRowHandler(mNameSplitter));
+              new StructuredNameRowHandler(mDbHelper, mContactAggregator, mNameSplitter));
       mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
-              new StructuredPostalRowHandler(mPostalSplitter));
-      mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE, new GroupMembershipRowHandler());
-      mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE, new PhotoDataRowHandler());
+              new StructuredPostalRowHandler(mDbHelper, mContactAggregator, mPostalSplitter));
+      mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
+              new GroupMembershipRowHandler(mDbHelper, mContactAggregator, mGroupIdCache));
+      mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE,
+              new PhotoDataRowHandler(mDbHelper, mContactAggregator));
     }
 
     /**
@@ -2419,7 +2526,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private DataRowHandler getDataRowHandler(final String mimeType) {
         DataRowHandler handler = mDataRowHandlers.get(mimeType);
         if (handler == null) {
-            handler = new CustomDataRowHandler(mimeType);
+            handler = new CustomDataRowHandler(mDbHelper, mContactAggregator, mimeType);
             mDataRowHandlers.put(mimeType, handler);
         }
         return handler;
@@ -2700,120 +2807,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         mTransactionContext.rawContactUpdated(rawContactId);
         return id;
-    }
-
-    private void triggerAggregation(long rawContactId) {
-        if (!mContactAggregator.isEnabled()) {
-            return;
-        }
-
-        int aggregationMode = mDbHelper.getAggregationMode(rawContactId);
-        switch (aggregationMode) {
-            case RawContacts.AGGREGATION_MODE_DISABLED:
-                break;
-
-            case RawContacts.AGGREGATION_MODE_DEFAULT: {
-                mContactAggregator.markForAggregation(rawContactId, aggregationMode, false);
-                break;
-            }
-
-            case RawContacts.AGGREGATION_MODE_SUSPENDED: {
-                long contactId = mDbHelper.getContactId(rawContactId);
-
-                if (contactId != 0) {
-                    mContactAggregator.updateAggregateData(contactId);
-                }
-                break;
-            }
-
-            case RawContacts.AGGREGATION_MODE_IMMEDIATE: {
-                mContactAggregator.aggregateContact(mDb, rawContactId);
-                break;
-            }
-        }
-    }
-
-    /**
-     * Returns the group id of the group with sourceId and the same account as rawContactId.
-     * If the group doesn't already exist then it is first created,
-     * @param db SQLiteDatabase to use for this operation
-     * @param rawContactId the contact this group is associated with
-     * @param sourceId the sourceIf of the group to query or create
-     * @return the group id of the existing or created group
-     * @throws IllegalArgumentException if the contact is not associated with an account
-     * @throws IllegalStateException if a group needs to be created but the creation failed
-     */
-    private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId,
-            Account account) {
-
-        if (account == null) {
-            mSelectionArgs1[0] = String.valueOf(rawContactId);
-            Cursor c = db.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
-                    RawContacts._ID + "=?", mSelectionArgs1, null, null, null);
-            try {
-                if (c.moveToFirst()) {
-                    String accountName = c.getString(RawContactsQuery.ACCOUNT_NAME);
-                    String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
-                    if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                        account = new Account(accountName, accountType);
-                    }
-                }
-            } finally {
-                c.close();
-            }
-        }
-
-        if (account == null) {
-            throw new IllegalArgumentException("if the groupmembership only "
-                    + "has a sourceid the the contact must be associated with "
-                    + "an account");
-        }
-
-        ArrayList<GroupIdCacheEntry> entries = mGroupIdCache.get(sourceId);
-        if (entries == null) {
-            entries = new ArrayList<GroupIdCacheEntry>(1);
-            mGroupIdCache.put(sourceId, entries);
-        }
-
-        int count = entries.size();
-        for (int i = 0; i < count; i++) {
-            GroupIdCacheEntry entry = entries.get(i);
-            if (entry.accountName.equals(account.name) && entry.accountType.equals(account.type)) {
-                return entry.groupId;
-            }
-        }
-
-        GroupIdCacheEntry entry = new GroupIdCacheEntry();
-        entry.accountName = account.name;
-        entry.accountType = account.type;
-        entry.sourceId = sourceId;
-        entries.add(0, entry);
-
-        // look up the group that contains this sourceId and has the same account name and type
-        // as the contact refered to by rawContactId
-        Cursor c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
-                Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
-                new String[]{sourceId, account.name, account.type}, null, null, null);
-        try {
-            if (c.moveToFirst()) {
-                entry.groupId = c.getLong(0);
-            } else {
-                ContentValues groupValues = new ContentValues();
-                groupValues.put(Groups.ACCOUNT_NAME, account.name);
-                groupValues.put(Groups.ACCOUNT_TYPE, account.type);
-                groupValues.put(Groups.SOURCE_ID, sourceId);
-                long groupId = db.insert(Tables.GROUPS, Groups.ACCOUNT_NAME, groupValues);
-                if (groupId < 0) {
-                    throw new IllegalStateException("unable to create a new group with "
-                            + "this sourceid: " + groupValues);
-                }
-                entry.groupId = groupId;
-            }
-        } finally {
-            c.close();
-        }
-
-        return entry.groupId;
     }
 
     public void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
@@ -4645,8 +4638,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 String number = uri.getPathSegments().size() > 1 ? uri.getLastPathSegment() : "";
-                String numberE164 =
-                        PhoneNumberUtils.formatNumberToE164(number, getCurrentCountryIso());
+                String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
+                        mDbHelper.getCurrentCountryIso());
                 String normalizedNumber =
                         PhoneNumberUtils.normalizeNumber(number);
                 mDbHelper.buildPhoneLookupAndContactQuery(qb, normalizedNumber, numberE164);
@@ -5843,45 +5836,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             default:
                 return null;
-        }
-    }
-
-    public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {
-        if (TextUtils.isEmpty(email)) {
-            return null;
-        }
-
-        String address = mDbHelper.extractHandleFromEmailAddress(email);
-        if (address == null) {
-            return null;
-        }
-
-        mDbHelper.insertNameLookup(rawContactId, dataId,
-                NameLookupType.EMAIL_BASED_NICKNAME, NameNormalizer.normalize(address));
-        return address;
-    }
-
-    /**
-     * Normalizes the nickname and inserts it in the name lookup table.
-     */
-    public void insertNameLookupForNickname(long rawContactId, long dataId, String nickname) {
-        if (TextUtils.isEmpty(nickname)) {
-            return;
-        }
-
-        mDbHelper.insertNameLookup(rawContactId, dataId,
-                NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
-    }
-
-    public void insertNameLookupForOrganization(long rawContactId, long dataId, String company,
-            String title) {
-        if (!TextUtils.isEmpty(company)) {
-            mDbHelper.insertNameLookup(rawContactId, dataId,
-                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(company));
-        }
-        if (!TextUtils.isEmpty(title)) {
-            mDbHelper.insertNameLookup(rawContactId, dataId,
-                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(title));
         }
     }
 

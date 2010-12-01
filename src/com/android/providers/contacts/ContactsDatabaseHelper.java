@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -525,6 +526,7 @@ import java.util.Locale;
     private final Context mContext;
     private final boolean mDatabaseOptimizationEnabled;
     private final SyncStateContentProviderHelper mSyncState;
+    private final CountryMonitor mCountryMonitor;
 
     private boolean mReopenDatabase = false;
 
@@ -536,7 +538,6 @@ import java.util.Locale;
      * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
      */
     private String[] mUnrestrictedPackages;
-
 
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
@@ -561,6 +562,7 @@ import java.util.Locale;
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
+        mCountryMonitor = new CountryMonitor(context);
         mUseStrictPhoneNumberComparison =
                 resources.getBoolean(
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
@@ -3848,6 +3850,45 @@ import java.util.Locale;
         mNameLookupDelete.execute();
     }
 
+    public void insertNameLookupForOrganization(long rawContactId, long dataId, String company,
+            String title) {
+        if (!TextUtils.isEmpty(company)) {
+            insertNameLookup(rawContactId, dataId,
+                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(company));
+        }
+        if (!TextUtils.isEmpty(title)) {
+            insertNameLookup(rawContactId, dataId,
+                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(title));
+        }
+    }
+
+    public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {
+        if (TextUtils.isEmpty(email)) {
+            return null;
+        }
+
+        String address = extractHandleFromEmailAddress(email);
+        if (address == null) {
+            return null;
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.EMAIL_BASED_NICKNAME, NameNormalizer.normalize(address));
+        return address;
+    }
+
+    /**
+     * Normalizes the nickname and inserts it in the name lookup table.
+     */
+    public void insertNameLookupForNickname(long rawContactId, long dataId, String nickname) {
+        if (TextUtils.isEmpty(nickname)) {
+            return;
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
+    }
+
     /**
      * Performs a query and returns true if any Data item of the raw contact with the given
      * id and mimetype is marked as super-primary
@@ -3865,5 +3906,9 @@ import java.util.Locale;
         } finally {
             existsCursor.close();
         }
+    }
+
+    public String getCurrentCountryIso() {
+        return mCountryMonitor.getCountryIso();
     }
 }

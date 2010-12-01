@@ -38,12 +38,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         if (mDbHelper == null) {
-            mDbHelper = new ContactsDatabaseHelper(context) {
-                @Override
-                protected String getCountryIso() {
-                    return "US";
-                }
-            };
+            mDbHelper = new ContactsDatabaseHelper(context);
         }
         return mDbHelper;
     }
@@ -177,10 +172,5 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
         // We have an explicit test for data conversion - no need to do it every time
         return false;
-    }
-
-    @Override
-    protected String getCurrentCountryIso() {
-        return "us";
     }
 }
