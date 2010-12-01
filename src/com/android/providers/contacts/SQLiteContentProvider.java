@@ -99,7 +99,6 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
-                mDb = null;
             }
 
             onEndTransaction();
@@ -132,7 +131,6 @@ public abstract class SQLiteContentProvider extends ContentProvider
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
-            mDb = null;
         }
 
         onEndTransaction();
@@ -154,7 +152,6 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
-                mDb = null;
             }
 
             onEndTransaction();
@@ -183,7 +180,6 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
-                mDb = null;
             }
 
             onEndTransaction();
@@ -232,7 +228,6 @@ public abstract class SQLiteContentProvider extends ContentProvider
         } finally {
             mApplyingBatch.set(false);
             mDb.endTransaction();
-            mDb = null;
             onEndTransaction();
         }
     }
