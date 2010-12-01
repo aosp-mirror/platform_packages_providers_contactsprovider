@@ -25,7 +25,7 @@ import android.text.TextUtils;
  * Superclass for data row handlers that deal with types (e.g. Home, Work, Other) and
  * labels, which are custom types.
  */
-public abstract class DataRowHandlerForCommonDataKind extends DataRowHandler {
+public class DataRowHandlerForCommonDataKind extends DataRowHandler {
 
     private final String mTypeColumn;
     private final String mLabelColumn;

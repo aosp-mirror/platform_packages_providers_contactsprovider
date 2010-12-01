@@ -2762,7 +2762,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         long rcId1 = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID1);
         long rcId2 = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID2);
 
-        long rawContactId1, rawContactId2;
+        long rawContactId1;
+        long rawContactId2;
         if (rcId1 < rcId2) {
             rawContactId1 = rcId1;
             rawContactId2 = rcId2;
