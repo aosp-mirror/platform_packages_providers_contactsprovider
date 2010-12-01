@@ -1,5 +1,5 @@
 -keep class com.android.providers.contacts.ContactsDatabaseHelper {
-  * <init>(...);
+  <init>(...);
 }
 
 # Any methods whose name is '*ForTest' are preserved.
