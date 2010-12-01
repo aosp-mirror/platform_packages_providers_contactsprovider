@@ -1050,7 +1050,7 @@ public class LegacyApiSupport {
     private int updatePeople(long rawContactId, ContentValues values) {
         parsePeopleValues(values);
 
-        int count = mContactsProvider.update(RawContacts.CONTENT_URI,
+        int count = mContactsProvider.updateInTransaction(RawContacts.CONTENT_URI,
                 mValues, RawContacts._ID + "=" + rawContactId, null);
 
         if (count == 0) {
@@ -1060,7 +1060,7 @@ public class LegacyApiSupport {
         if (mValues2.size() != 0) {
             Uri dataUri = findFirstDataRow(rawContactId, StructuredName.CONTENT_ITEM_TYPE);
             if (dataUri != null) {
-                mContactsProvider.update(dataUri, mValues2, null, null);
+                mContactsProvider.updateInTransaction(dataUri, mValues2, null, null);
             } else {
                 mValues2.put(Data.RAW_CONTACT_ID, rawContactId);
                 mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues2);
@@ -1070,7 +1070,7 @@ public class LegacyApiSupport {
         if (mValues3.size() != 0) {
             Uri dataUri = findFirstDataRow(rawContactId, Note.CONTENT_ITEM_TYPE);
             if (dataUri != null) {
-                mContactsProvider.update(dataUri, mValues3, null, null);
+                mContactsProvider.updateInTransaction(dataUri, mValues3, null, null);
             } else {
                 mValues3.put(Data.RAW_CONTACT_ID, rawContactId);
                 mContactsProvider.insertInTransaction(Data.CONTENT_URI, mValues3);

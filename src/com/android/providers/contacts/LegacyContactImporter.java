@@ -860,7 +860,7 @@ public class LegacyContactImporter {
         bindString(insert, EmailInsert.LABEL, c.getString(ContactMethodsQuery.LABEL));
 
         long dataId = insert(insert);
-        mContactsProvider.insertNameLookupForEmail(personId, dataId, email);
+        mDbHelper.insertNameLookupForEmail(personId, dataId, email);
     }
 
     private void insertIm(Cursor c, SQLiteStatement insert) {

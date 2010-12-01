@@ -23,6 +23,8 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.StatusUpdates;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -40,10 +42,18 @@ import android.test.suitebuilder.annotation.LargeTest;
 @LargeTest
 public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
-    public void testSearchSuggestionsNotInVisibleGroup() throws Exception {
+    public void testSearchSuggestionsNotInDefaultDirectory() throws Exception {
         Account account = new Account("actname", "acttype");
+
+        // Creating an AUTO_ADD group will exclude all ungrouped contacts from global search
+        createGroup(account, "any", "any", 0 /* visible */, true /* auto-add */, false /* fav */);
+
         long rawContactId = createRawContact(account);
         insertStructuredName(rawContactId, "Deer", "Dough");
+
+        // Remove the new contact from all groups
+        mResolver.delete(Data.CONTENT_URI, Data.RAW_CONTACT_ID + "=" + rawContactId
+                + " AND " + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE + "'", null);
 
         Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
                 .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("D").build();

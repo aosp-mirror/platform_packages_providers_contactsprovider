@@ -99,6 +99,7 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
+                mDb = null;
             }
 
             onEndTransaction();
@@ -122,11 +123,16 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 if (result != null) {
                     mNotifyChange = true;
                 }
+                boolean savedNotifyChange = mNotifyChange;
+                SQLiteDatabase savedDb = mDb;
                 mDb.yieldIfContendedSafely();
+                mDb = savedDb;
+                mNotifyChange = savedNotifyChange;
             }
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
+            mDb = null;
         }
 
         onEndTransaction();
@@ -148,6 +154,7 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
+                mDb = null;
             }
 
             onEndTransaction();
@@ -176,6 +183,7 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 mDb.setTransactionSuccessful();
             } finally {
                 mDb.endTransaction();
+                mDb = null;
             }
 
             onEndTransaction();
@@ -209,10 +217,14 @@ public abstract class SQLiteContentProvider extends ContentProvider
                 final ContentProviderOperation operation = operations.get(i);
                 if (i > 0 && operation.isYieldAllowed()) {
                     opCount = 0;
+                    boolean savedNotifyChange = mNotifyChange;
                     if (mDb.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
+                        mDb = mOpenHelper.getWritableDatabase();
+                        mNotifyChange = savedNotifyChange;
                         ypCount++;
                     }
                 }
+
                 results[i] = operation.apply(this, results, i);
             }
             mDb.setTransactionSuccessful();
@@ -220,6 +232,7 @@ public abstract class SQLiteContentProvider extends ContentProvider
         } finally {
             mApplyingBatch.set(false);
             mDb.endTransaction();
+            mDb = null;
             onEndTransaction();
         }
     }

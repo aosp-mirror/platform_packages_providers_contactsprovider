@@ -865,11 +865,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testPhonesFilterQuery() {
         long rawContactId1 = createRawContactWithName("Hot", "Tamale", ACCOUNT_1);
-        insertPhoneNumber(rawContactId1, "18004664411");
         insertPhoneNumber(rawContactId1, "1-800-466-4411");
 
-        long rawContactId2 = createRawContactWithName("Hot", "Tamale", ACCOUNT_2);
-        insertPhoneNumber(rawContactId2, "1-800-466-4411");
+        long rawContactId2 = createRawContactWithName("Chilled", "Guacamole", ACCOUNT_2);
+        insertPhoneNumber(rawContactId2, "1-800-466-5432");
 
         Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
         ContentValues values = new ContentValues();

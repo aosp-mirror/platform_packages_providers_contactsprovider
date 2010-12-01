@@ -84,7 +84,7 @@ public class CallLogProvider extends ContentProvider {
         mUseStrictPhoneNumberComparation =
             context.getResources().getBoolean(
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
-        mCountryMonitor = CountryMonitor.getInstance(context);
+        mCountryMonitor = new CountryMonitor(context);
         return true;
     }
 

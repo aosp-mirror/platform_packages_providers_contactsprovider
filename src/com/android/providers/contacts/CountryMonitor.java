@@ -29,18 +29,10 @@ import android.os.Looper;
  * code of current country.
  */
 public class CountryMonitor {
-    private static CountryMonitor sSingleton;
     private String mCurrentCountryIso;
     private Context mContext;
 
-    public synchronized static CountryMonitor getInstance(Context context) {
-        if (sSingleton == null) {
-            sSingleton = new CountryMonitor(context);
-        }
-        return sSingleton;
-    }
-
-    private CountryMonitor(Context context) {
+    public CountryMonitor(Context context) {
         mContext = context;
     }
 
@@ -56,9 +48,7 @@ public class CountryMonitor {
             mCurrentCountryIso = countryDetector.detectCountry().getCountryIso();
             countryDetector.addCountryListener(new CountryListener() {
                 public void onCountryDetected(Country country) {
-                    synchronized (sSingleton) {
-                        mCurrentCountryIso = country.getCountryIso();
-                    }
+                    mCurrentCountryIso = country.getCountryIso();
                 }
             }, Looper.getMainLooper());
         }

@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -28,6 +29,7 @@ import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.SQLException;
+import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteException;
@@ -45,6 +47,7 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
@@ -485,6 +488,12 @@ import java.util.Locale;
     /** In-memory cache of previously found package name mappings */
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
 
+    private long mMimeTypeIdEmail;
+    private long mMimeTypeIdIm;
+    private long mMimeTypeIdStructuredName;
+    private long mMimeTypeIdOrganization;
+    private long mMimeTypeIdNickname;
+    private long mMimeTypeIdPhone;
 
     /** Compiled statements for querying and inserting mappings */
     private SQLiteStatement mMimetypeQuery;
@@ -496,8 +505,28 @@ import java.util.Locale;
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
 
+    /** Precompiled sql statement for setting a data record to the primary. */
+    private SQLiteStatement mSetPrimaryStatement;
+    /** Precompiled sql statement for setting a data record to the super primary. */
+    private SQLiteStatement mSetSuperPrimaryStatement;
+    /** Precompiled sql statement for clearing super primary of a single record. */
+    private SQLiteStatement mClearSuperPrimaryStatement;
+    /** Precompiled sql statement for updating a contact display name */
+    private SQLiteStatement mRawContactDisplayNameUpdate;
+
+    private SQLiteStatement mNameLookupInsert;
+    private SQLiteStatement mNameLookupDelete;
+    private SQLiteStatement mStatusUpdateAutoTimestamp;
+    private SQLiteStatement mStatusUpdateInsert;
+    private SQLiteStatement mStatusUpdateReplace;
+    private SQLiteStatement mStatusAttributionUpdate;
+    private SQLiteStatement mStatusUpdateDelete;
+    private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
+
     private final Context mContext;
+    private final boolean mDatabaseOptimizationEnabled;
     private final SyncStateContentProviderHelper mSyncState;
+    private final CountryMonitor mCountryMonitor;
 
     private boolean mReopenDatabase = false;
 
@@ -512,7 +541,7 @@ import java.util.Locale;
 
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new ContactsDatabaseHelper(context);
+            sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true);
         }
         return sSingleton;
     }
@@ -522,11 +551,18 @@ import java.util.Locale;
      * {@link #getInstance(android.content.Context)} instead.
      */
     ContactsDatabaseHelper(Context context) {
-        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        this(context, null, false);
+    }
+
+    private ContactsDatabaseHelper(
+            Context context, String databaseName, boolean optimizationEnabled) {
+        super(context, databaseName, null, DATABASE_VERSION);
+        mDatabaseOptimizationEnabled = optimizationEnabled;
         Resources resources = context.getResources();
 
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
+        mCountryMonitor = new CountryMonitor(context);
         mUseStrictPhoneNumberComparison =
                 resources.getBoolean(
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
@@ -539,29 +575,52 @@ import java.util.Locale;
         }
     }
 
+    private void refreshDatabaseCaches(SQLiteDatabase db) {
+        mStatusUpdateDelete = null;
+        mStatusUpdateReplace = null;
+        mStatusUpdateInsert = null;
+        mStatusUpdateAutoTimestamp = null;
+        mStatusAttributionUpdate = null;
+        mResetNameVerifiedForOtherRawContacts = null;
+        mRawContactDisplayNameUpdate = null;
+        mSetPrimaryStatement = null;
+        mClearSuperPrimaryStatement = null;
+        mSetSuperPrimaryStatement = null;
+        mNameLookupInsert = null;
+        mNameLookupDelete = null;
+        mPackageQuery = null;
+        mPackageInsert = null;
+        mDataMimetypeQuery = null;
+        mActivitiesMimetypeQuery = null;
+        mContactIdQuery = null;
+        mAggregationModeQuery = null;
+
+        mMimetypeCache.clear();
+        mPackageCache.clear();
+
+        mMimetypeQuery = db.compileStatement(
+                "SELECT " + MimetypesColumns._ID +
+                " FROM " + Tables.MIMETYPES +
+                " WHERE " + MimetypesColumns.MIMETYPE + "=?");
+
+        mMimetypeInsert = db.compileStatement(
+                "INSERT INTO " + Tables.MIMETYPES + "("
+                        + MimetypesColumns.MIMETYPE +
+                ") VALUES (?)");
+
+        mMimeTypeIdEmail = getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimeTypeIdIm = getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mMimeTypeIdStructuredName = getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
+        mMimeTypeIdOrganization = getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
+        mMimeTypeIdNickname = getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
+        mMimeTypeIdPhone = getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+    }
+
     @Override
     public void onOpen(SQLiteDatabase db) {
+        refreshDatabaseCaches(db);
+
         mSyncState.onDatabaseOpened(db);
-
-        // Create compiled statements for package and mimetype lookups
-        mMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns._ID + " FROM "
-                + Tables.MIMETYPES + " WHERE " + MimetypesColumns.MIMETYPE + "=?");
-        mPackageQuery = db.compileStatement("SELECT " + PackagesColumns._ID + " FROM "
-                + Tables.PACKAGES + " WHERE " + PackagesColumns.PACKAGE + "=?");
-        mContactIdQuery = db.compileStatement("SELECT " + RawContacts.CONTACT_ID + " FROM "
-                + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
-        mAggregationModeQuery = db.compileStatement("SELECT " + RawContacts.AGGREGATION_MODE
-                + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?");
-        mMimetypeInsert = db.compileStatement("INSERT INTO " + Tables.MIMETYPES + "("
-                + MimetypesColumns.MIMETYPE + ") VALUES (?)");
-        mPackageInsert = db.compileStatement("INSERT INTO " + Tables.PACKAGES + "("
-                + PackagesColumns.PACKAGE + ") VALUES (?)");
-
-        mDataMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns.MIMETYPE + " FROM "
-                + Tables.DATA_JOIN_MIMETYPES + " WHERE " + Tables.DATA + "." + Data._ID + "=?");
-        mActivitiesMimetypeQuery = db.compileStatement("SELECT " + MimetypesColumns.MIMETYPE
-                + " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES + " WHERE " + Tables.ACTIVITIES + "."
-                + Activities._ID + "=?");
 
         db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
         db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
@@ -978,15 +1037,17 @@ import java.util.Locale;
         // Add the legacy API support views, etc
         LegacyApiSupport.createDatabase(db);
 
-        // This will create a sqlite_stat1 table that is used for query optimization
-        db.execSQL("ANALYZE;");
+        if (mDatabaseOptimizationEnabled) {
+            // This will create a sqlite_stat1 table that is used for query optimization
+            db.execSQL("ANALYZE;");
 
-        updateSqliteStats(db);
+            updateSqliteStats(db);
 
-        // We need to close and reopen the database connection so that the stats are
-        // taken into account. Make a note of it and do the actual reopening in the
-        // getWritableDatabase method.
-        mReopenDatabase = true;
+            // We need to close and reopen the database connection so that the stats are
+            // taken into account. Make a note of it and do the actual reopening in the
+            // getWritableDatabase method.
+            mReopenDatabase = true;
+        }
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
@@ -2804,6 +2865,14 @@ import java.util.Locale;
         }
     }
 
+    private void bindLong(SQLiteStatement stmt, int index, Number value) {
+        if (value == null) {
+            stmt.bindNull(index);
+        } else {
+            stmt.bindLong(index, value.longValue());
+        }
+    }
+
     /**
      * Adds index stats into the SQLite database to force it to always use the lookup indexes.
      */
@@ -2966,8 +3035,19 @@ import java.util.Locale;
      * lookups and possible allocation of new IDs as needed.
      */
     public long getPackageId(String packageName) {
-        // Make sure compiled statements are ready by opening database
-        getReadableDatabase();
+        if (mPackageQuery == null) {
+            mPackageQuery = getWritableDatabase().compileStatement(
+                    "SELECT " + PackagesColumns._ID +
+                    " FROM " + Tables.PACKAGES +
+                    " WHERE " + PackagesColumns.PACKAGE + "=?");
+
+        }
+        if (mPackageInsert == null) {
+            mPackageInsert = getWritableDatabase().compileStatement(
+                    "INSERT INTO " + Tables.PACKAGES + "("
+                            + PackagesColumns.PACKAGE +
+                    ") VALUES (?)");
+        }
         return getCachedId(mPackageQuery, mPackageInsert, packageName, mPackageCache);
     }
 
@@ -2976,21 +3056,51 @@ import java.util.Locale;
      * lookups and possible allocation of new IDs as needed.
      */
     public long getMimeTypeId(String mimetype) {
-        // Make sure compiled statements are ready by opening database
-        getReadableDatabase();
-        return getMimeTypeIdNoDbCheck(mimetype);
+        return getCachedId(mMimetypeQuery, mMimetypeInsert, mimetype, mMimetypeCache);
     }
 
-    private long getMimeTypeIdNoDbCheck(String mimetype) {
-        return getCachedId(mMimetypeQuery, mMimetypeInsert, mimetype, mMimetypeCache);
+    public long getMimeTypeIdForStructuredName() {
+        return mMimeTypeIdStructuredName;
+    }
+
+    public long getMimeTypeIdForOrganization() {
+        return mMimeTypeIdOrganization;
+    }
+
+    public long getMimeTypeIdForIm() {
+        return mMimeTypeIdIm;
+    }
+
+    public long getMimeTypeIdForEmail() {
+        return mMimeTypeIdEmail;
+    }
+
+    public int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
+        if (mimeTypeId == mMimeTypeIdStructuredName) {
+            return DisplayNameSources.STRUCTURED_NAME;
+        } else if (mimeTypeId == mMimeTypeIdEmail) {
+            return DisplayNameSources.EMAIL;
+        } else if (mimeTypeId == mMimeTypeIdPhone) {
+            return DisplayNameSources.PHONE;
+        } else if (mimeTypeId == mMimeTypeIdOrganization) {
+            return DisplayNameSources.ORGANIZATION;
+        } else if (mimeTypeId == mMimeTypeIdNickname) {
+            return DisplayNameSources.NICKNAME;
+        } else {
+            return DisplayNameSources.UNDEFINED;
+        }
     }
 
     /**
      * Find the mimetype for the given {@link Data#_ID}.
      */
     public String getDataMimeType(long dataId) {
-        // Make sure compiled statements are ready by opening database
-        getReadableDatabase();
+        if (mDataMimetypeQuery == null) {
+            mDataMimetypeQuery = getWritableDatabase().compileStatement(
+                    "SELECT " + MimetypesColumns.MIMETYPE +
+                    " FROM " + Tables.DATA_JOIN_MIMETYPES +
+                    " WHERE " + Tables.DATA + "." + Data._ID + "=?");
+        }
         try {
             // Try database query to find mimetype
             DatabaseUtils.bindObjectToProgram(mDataMimetypeQuery, 1, dataId);
@@ -3006,8 +3116,12 @@ import java.util.Locale;
      * Find the mime-type for the given {@link Activities#_ID}.
      */
     public String getActivityMimeType(long activityId) {
-        // Make sure compiled statements are ready by opening database
-        getReadableDatabase();
+        if (mActivitiesMimetypeQuery == null) {
+            mActivitiesMimetypeQuery = getWritableDatabase().compileStatement(
+                    "SELECT " + MimetypesColumns.MIMETYPE +
+                    " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES +
+                    " WHERE " + Tables.ACTIVITIES + "." + Activities._ID + "=?");
+        }
         try {
             // Try database query to find mimetype
             DatabaseUtils.bindObjectToProgram(mActivitiesMimetypeQuery, 1, activityId);
@@ -3113,7 +3227,12 @@ import java.util.Locale;
      * Returns contact ID for the given contact or zero if it is NULL.
      */
     public long getContactId(long rawContactId) {
-        getReadableDatabase();
+        if (mContactIdQuery == null) {
+            mContactIdQuery = getWritableDatabase().compileStatement(
+                    "SELECT " + RawContacts.CONTACT_ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContacts._ID + "=?");
+        }
         try {
             DatabaseUtils.bindObjectToProgram(mContactIdQuery, 1, rawContactId);
             return mContactIdQuery.simpleQueryForLong();
@@ -3124,7 +3243,12 @@ import java.util.Locale;
     }
 
     public int getAggregationMode(long rawContactId) {
-        getReadableDatabase();
+        if (mAggregationModeQuery == null) {
+            mAggregationModeQuery = getWritableDatabase().compileStatement(
+                    "SELECT " + RawContacts.AGGREGATION_MODE +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContacts._ID + "=?");
+        }
         try {
             DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, rawContactId);
             return (int)mAggregationModeQuery.simpleQueryForLong();
@@ -3491,5 +3615,300 @@ import java.util.Locale;
         CountryDetector detector =
             (CountryDetector) mContext.getSystemService(Context.COUNTRY_DETECTOR);
         return detector.detectCountry().getCountryIso();
+    }
+
+    public void deleteStatusUpdate(long dataId) {
+        if (mStatusUpdateDelete == null) {
+            mStatusUpdateDelete = getWritableDatabase().compileStatement(
+                    "DELETE FROM " + Tables.STATUS_UPDATES +
+                    " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
+        }
+        mStatusUpdateDelete.bindLong(1, dataId);
+        mStatusUpdateDelete.execute();
+    }
+
+    public void replaceStatusUpdate(Long dataId, long timestamp, String status, String resPackage,
+            Long iconResource, Integer labelResource) {
+        if (mStatusUpdateReplace == null) {
+            mStatusUpdateReplace = getWritableDatabase().compileStatement(
+                    "INSERT OR REPLACE INTO " + Tables.STATUS_UPDATES + "("
+                            + StatusUpdatesColumns.DATA_ID + ", "
+                            + StatusUpdates.STATUS_TIMESTAMP + ","
+                            + StatusUpdates.STATUS + ","
+                            + StatusUpdates.STATUS_RES_PACKAGE + ","
+                            + StatusUpdates.STATUS_ICON + ","
+                            + StatusUpdates.STATUS_LABEL + ")" +
+                    " VALUES (?,?,?,?,?,?)");
+        }
+        mStatusUpdateReplace.bindLong(1, dataId);
+        mStatusUpdateReplace.bindLong(2, timestamp);
+        bindString(mStatusUpdateReplace, 3, status);
+        bindString(mStatusUpdateReplace, 4, resPackage);
+        bindLong(mStatusUpdateReplace, 5, iconResource);
+        bindLong(mStatusUpdateReplace, 6, labelResource);
+        mStatusUpdateReplace.execute();
+    }
+
+    public void insertStatusUpdate(Long dataId, String status, String resPackage, Long iconResource,
+            Integer labelResource) {
+        if (mStatusUpdateInsert == null) {
+            mStatusUpdateInsert = getWritableDatabase().compileStatement(
+                    "INSERT INTO " + Tables.STATUS_UPDATES + "("
+                            + StatusUpdatesColumns.DATA_ID + ", "
+                            + StatusUpdates.STATUS + ","
+                            + StatusUpdates.STATUS_RES_PACKAGE + ","
+                            + StatusUpdates.STATUS_ICON + ","
+                            + StatusUpdates.STATUS_LABEL + ")" +
+                    " VALUES (?,?,?,?,?)");
+        }
+        try {
+            mStatusUpdateInsert.bindLong(1, dataId);
+            bindString(mStatusUpdateInsert, 2, status);
+            bindString(mStatusUpdateInsert, 3, resPackage);
+            bindLong(mStatusUpdateInsert, 4, iconResource);
+            bindLong(mStatusUpdateInsert, 5, labelResource);
+            mStatusUpdateInsert.executeInsert();
+        } catch (SQLiteConstraintException e) {
+            // The row already exists - update it
+            if (mStatusUpdateAutoTimestamp == null) {
+                mStatusUpdateAutoTimestamp = getWritableDatabase().compileStatement(
+                        "UPDATE " + Tables.STATUS_UPDATES +
+                        " SET " + StatusUpdates.STATUS_TIMESTAMP + "=?,"
+                                + StatusUpdates.STATUS + "=?" +
+                        " WHERE " + StatusUpdatesColumns.DATA_ID + "=?"
+                                + " AND " + StatusUpdates.STATUS + "!=?");
+            }
+
+            long timestamp = System.currentTimeMillis();
+            mStatusUpdateAutoTimestamp.bindLong(1, timestamp);
+            bindString(mStatusUpdateAutoTimestamp, 2, status);
+            mStatusUpdateAutoTimestamp.bindLong(3, dataId);
+            bindString(mStatusUpdateAutoTimestamp, 4, status);
+            mStatusUpdateAutoTimestamp.execute();
+
+            if (mStatusAttributionUpdate == null) {
+                mStatusAttributionUpdate = getWritableDatabase().compileStatement(
+                        "UPDATE " + Tables.STATUS_UPDATES +
+                        " SET " + StatusUpdates.STATUS_RES_PACKAGE + "=?,"
+                                + StatusUpdates.STATUS_ICON + "=?,"
+                                + StatusUpdates.STATUS_LABEL + "=?" +
+                        " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
+            }
+            bindString(mStatusAttributionUpdate, 1, resPackage);
+            bindLong(mStatusAttributionUpdate, 2, iconResource);
+            bindLong(mStatusAttributionUpdate, 3, labelResource);
+            mStatusAttributionUpdate.bindLong(4, dataId);
+            mStatusAttributionUpdate.execute();
+        }
+    }
+
+    /**
+     * Resets the {@link RawContacts#NAME_VERIFIED} flag to 0 on all other raw
+     * contacts in the same aggregate
+     */
+    public void resetNameVerifiedForOtherRawContacts(long rawContactId) {
+        if (mResetNameVerifiedForOtherRawContacts == null) {
+            mResetNameVerifiedForOtherRawContacts = getWritableDatabase().compileStatement(
+                    "UPDATE " + Tables.RAW_CONTACTS +
+                    " SET " + RawContacts.NAME_VERIFIED + "=0" +
+                    " WHERE " + RawContacts.CONTACT_ID + "=(" +
+                            "SELECT " + RawContacts.CONTACT_ID +
+                            " FROM " + Tables.RAW_CONTACTS +
+                            " WHERE " + RawContacts._ID + "=?)" +
+                    " AND " + RawContacts._ID + "!=?");
+        }
+        mResetNameVerifiedForOtherRawContacts.bindLong(1, rawContactId);
+        mResetNameVerifiedForOtherRawContacts.bindLong(2, rawContactId);
+        mResetNameVerifiedForOtherRawContacts.execute();
+    }
+
+    public void setDisplayName(long rawContactId, int displayNameSource,
+            String displayNamePrimary, String displayNameAlternative, String phoneticName,
+            int phoneticNameStyle, String sortKeyPrimary, String sortKeyAlternative) {
+        if (mRawContactDisplayNameUpdate == null) {
+            mRawContactDisplayNameUpdate = getWritableDatabase().compileStatement(
+                    "UPDATE " + Tables.RAW_CONTACTS +
+                    " SET " +
+                            RawContacts.DISPLAY_NAME_SOURCE + "=?," +
+                            RawContacts.DISPLAY_NAME_PRIMARY + "=?," +
+                            RawContacts.DISPLAY_NAME_ALTERNATIVE + "=?," +
+                            RawContacts.PHONETIC_NAME + "=?," +
+                            RawContacts.PHONETIC_NAME_STYLE + "=?," +
+                            RawContacts.SORT_KEY_PRIMARY + "=?," +
+                            RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
+                    " WHERE " + RawContacts._ID + "=?");
+        }
+        mRawContactDisplayNameUpdate.bindLong(1, displayNameSource);
+        bindString(mRawContactDisplayNameUpdate, 2, displayNamePrimary);
+        bindString(mRawContactDisplayNameUpdate, 3, displayNameAlternative);
+        bindString(mRawContactDisplayNameUpdate, 4, phoneticName);
+        mRawContactDisplayNameUpdate.bindLong(5, phoneticNameStyle);
+        bindString(mRawContactDisplayNameUpdate, 6, sortKeyPrimary);
+        bindString(mRawContactDisplayNameUpdate, 7, sortKeyAlternative);
+        mRawContactDisplayNameUpdate.bindLong(8, rawContactId);
+        mRawContactDisplayNameUpdate.execute();
+    }
+
+    /*
+     * Sets the given dataId record in the "data" table to primary, and resets all data records of
+     * the same mimetype and under the same contact to not be primary.
+     *
+     * @param dataId the id of the data record to be set to primary. Pass -1 to clear the primary
+     * flag of all data items of this raw contacts
+     */
+    public void setIsPrimary(long rawContactId, long dataId, long mimeTypeId) {
+        if (mSetPrimaryStatement == null) {
+            mSetPrimaryStatement = getWritableDatabase().compileStatement(
+                    "UPDATE " + Tables.DATA +
+                    " SET " + Data.IS_PRIMARY + "=(_id=?)" +
+                    " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
+                    "   AND " + Data.RAW_CONTACT_ID + "=?");
+        }
+        mSetPrimaryStatement.bindLong(1, dataId);
+        mSetPrimaryStatement.bindLong(2, mimeTypeId);
+        mSetPrimaryStatement.bindLong(3, rawContactId);
+        mSetPrimaryStatement.execute();
+    }
+
+    /*
+     * Clears the super primary of all data items of the given raw contact. does not touch
+     * other raw contacts of the same joined aggregate
+     */
+    public void clearSuperPrimary(long rawContactId, long mimeTypeId) {
+        if (mClearSuperPrimaryStatement == null) {
+            mClearSuperPrimaryStatement = getWritableDatabase().compileStatement(
+                    "UPDATE " + Tables.DATA +
+                    " SET " + Data.IS_SUPER_PRIMARY + "=0" +
+                    " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
+                    "   AND " + Data.RAW_CONTACT_ID + "=?");
+        }
+        mClearSuperPrimaryStatement.bindLong(1, mimeTypeId);
+        mClearSuperPrimaryStatement.bindLong(2, rawContactId);
+        mClearSuperPrimaryStatement.execute();
+    }
+
+    /*
+     * Sets the given dataId record in the "data" table to "super primary", and resets all data
+     * records of the same mimetype and under the same aggregate to not be "super primary".
+     *
+     * @param dataId the id of the data record to be set to primary.
+     */
+    public void setIsSuperPrimary(long rawContactId, long dataId, long mimeTypeId) {
+        if (mSetSuperPrimaryStatement == null) {
+            mSetSuperPrimaryStatement = getWritableDatabase().compileStatement(
+                    "UPDATE " + Tables.DATA +
+                    " SET " + Data.IS_SUPER_PRIMARY + "=(" + Data._ID + "=?)" +
+                    " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
+                    "   AND " + Data.RAW_CONTACT_ID + " IN (" +
+                            "SELECT " + RawContacts._ID +
+                            " FROM " + Tables.RAW_CONTACTS +
+                            " WHERE " + RawContacts.CONTACT_ID + " =(" +
+                                    "SELECT " + RawContacts.CONTACT_ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContacts._ID + "=?))");
+        }
+        mSetSuperPrimaryStatement.bindLong(1, dataId);
+        mSetSuperPrimaryStatement.bindLong(2, mimeTypeId);
+        mSetSuperPrimaryStatement.bindLong(3, rawContactId);
+        mSetSuperPrimaryStatement.execute();
+    }
+
+    /**
+     * Inserts a record in the {@link Tables#NAME_LOOKUP} table.
+     */
+    public void insertNameLookup(long rawContactId, long dataId, int lookupType, String name) {
+        if (TextUtils.isEmpty(name)) {
+            return;
+        }
+
+        if (mNameLookupInsert == null) {
+            mNameLookupInsert = getWritableDatabase().compileStatement(
+                    "INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
+                            + NameLookupColumns.RAW_CONTACT_ID + ","
+                            + NameLookupColumns.DATA_ID + ","
+                            + NameLookupColumns.NAME_TYPE + ","
+                            + NameLookupColumns.NORMALIZED_NAME
+                    + ") VALUES (?,?,?,?)");
+        }
+        mNameLookupInsert.bindLong(1, rawContactId);
+        mNameLookupInsert.bindLong(2, dataId);
+        mNameLookupInsert.bindLong(3, lookupType);
+        bindString(mNameLookupInsert, 4, name);
+        mNameLookupInsert.executeInsert();
+    }
+
+    /**
+     * Deletes all {@link Tables#NAME_LOOKUP} table rows associated with the specified data element.
+     */
+    public void deleteNameLookup(long dataId) {
+        if (mNameLookupDelete == null) {
+            mNameLookupDelete = getWritableDatabase().compileStatement(
+                    "DELETE FROM " + Tables.NAME_LOOKUP +
+                    " WHERE " + NameLookupColumns.DATA_ID + "=?");
+        }
+        mNameLookupDelete.bindLong(1, dataId);
+        mNameLookupDelete.execute();
+    }
+
+    public void insertNameLookupForOrganization(long rawContactId, long dataId, String company,
+            String title) {
+        if (!TextUtils.isEmpty(company)) {
+            insertNameLookup(rawContactId, dataId,
+                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(company));
+        }
+        if (!TextUtils.isEmpty(title)) {
+            insertNameLookup(rawContactId, dataId,
+                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(title));
+        }
+    }
+
+    public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {
+        if (TextUtils.isEmpty(email)) {
+            return null;
+        }
+
+        String address = extractHandleFromEmailAddress(email);
+        if (address == null) {
+            return null;
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.EMAIL_BASED_NICKNAME, NameNormalizer.normalize(address));
+        return address;
+    }
+
+    /**
+     * Normalizes the nickname and inserts it in the name lookup table.
+     */
+    public void insertNameLookupForNickname(long rawContactId, long dataId, String nickname) {
+        if (TextUtils.isEmpty(nickname)) {
+            return;
+        }
+
+        insertNameLookup(rawContactId, dataId,
+                NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
+    }
+
+    /**
+     * Performs a query and returns true if any Data item of the raw contact with the given
+     * id and mimetype is marked as super-primary
+     */
+    public boolean rawContactHasSuperPrimary(long rawContactId, long mimeTypeId) {
+        final Cursor existsCursor = getReadableDatabase().rawQuery(
+                "SELECT EXISTS(SELECT 1 FROM " + Tables.DATA +
+                " WHERE " + Data.RAW_CONTACT_ID + "=?" +
+                " AND " + DataColumns.MIMETYPE_ID + "=?" +
+                " AND " + Data.IS_SUPER_PRIMARY + "<>0)",
+                new String[] { String.valueOf(rawContactId), String.valueOf(mimeTypeId) });
+        try {
+            if (!existsCursor.moveToFirst()) throw new IllegalStateException();
+            return existsCursor.getInt(0) != 0;
+        } finally {
+            existsCursor.close();
+        }
+    }
+
+    public String getCurrentCountryIso() {
+        return mCountryMonitor.getCountryIso();
     }
 }
