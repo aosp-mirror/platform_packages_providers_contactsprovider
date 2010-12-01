@@ -62,7 +62,6 @@ import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
 import android.content.res.AssetFileDescriptor;
-import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
@@ -98,12 +97,10 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
-import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
-import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
@@ -1145,7 +1142,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         protected void fixRawContactDisplayName(SQLiteDatabase db, TransactionContext txContext,
                 long rawContactId) {
             if (!isNewRawContact(txContext, rawContactId)) {
-                updateRawContactDisplayName(db, rawContactId);
+                mContactAggregator.updateRawContactDisplayName(db, rawContactId);
                 mContactAggregator.updateDisplayNameForRawContact(db, rawContactId);
             }
         }
@@ -1946,8 +1943,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private CommonNicknameCache mCommonNicknameCache;
 
     private ContentValues mValues = new ContentValues();
-    private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
-    private NameSplitter.Name mName = new NameSplitter.Name();
     private HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
 
     private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
@@ -2358,7 +2353,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         for (long rawContactId : mTransactionContext.getInsertedRawContactIds()) {
-            updateRawContactDisplayName(mDb, rawContactId);
+            mContactAggregator.updateRawContactDisplayName(mDb, rawContactId);
             mContactAggregator.onRawContactInsert(mDb, rawContactId);
         }
 
@@ -2821,192 +2816,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return entry.groupId;
     }
 
-    private interface DisplayNameQuery {
-        public static final String RAW_SQL =
-                "SELECT "
-                        + DataColumns.MIMETYPE_ID + ","
-                        + Data.IS_PRIMARY + ","
-                        + Data.DATA1 + ","
-                        + Data.DATA2 + ","
-                        + Data.DATA3 + ","
-                        + Data.DATA4 + ","
-                        + Data.DATA5 + ","
-                        + Data.DATA6 + ","
-                        + Data.DATA7 + ","
-                        + Data.DATA8 + ","
-                        + Data.DATA9 + ","
-                        + Data.DATA10 + ","
-                        + Data.DATA11 +
-                " FROM " + Tables.DATA +
-                " WHERE " + Data.RAW_CONTACT_ID + "=?" +
-                        " AND (" + Data.DATA1 + " NOT NULL OR " +
-                                Organization.TITLE + " NOT NULL)";
-
-        public static final int MIMETYPE = 0;
-        public static final int IS_PRIMARY = 1;
-        public static final int DATA1 = 2;
-        public static final int GIVEN_NAME = 3;                         // data2
-        public static final int FAMILY_NAME = 4;                        // data3
-        public static final int PREFIX = 5;                             // data4
-        public static final int TITLE = 5;                              // data4
-        public static final int MIDDLE_NAME = 6;                        // data5
-        public static final int SUFFIX = 7;                             // data6
-        public static final int PHONETIC_GIVEN_NAME = 8;                // data7
-        public static final int PHONETIC_MIDDLE_NAME = 9;               // data8
-        public static final int ORGANIZATION_PHONETIC_NAME = 9;         // data8
-        public static final int PHONETIC_FAMILY_NAME = 10;              // data9
-        public static final int FULL_NAME_STYLE = 11;                   // data10
-        public static final int ORGANIZATION_PHONETIC_NAME_STYLE = 11;  // data10
-        public static final int PHONETIC_NAME_STYLE = 12;               // data11
-    }
-
-    /**
-     * Updates a raw contact display name based on data rows, e.g. structured name,
-     * organization, email etc.
-     */
     public void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
-        int bestDisplayNameSource = DisplayNameSources.UNDEFINED;
-        NameSplitter.Name bestName = null;
-        String bestDisplayName = null;
-        String bestPhoneticName = null;
-        int bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
-
-        mSelectionArgs1[0] = String.valueOf(rawContactId);
-        Cursor c = db.rawQuery(DisplayNameQuery.RAW_SQL, mSelectionArgs1);
-        try {
-            while (c.moveToNext()) {
-                int mimeType = c.getInt(DisplayNameQuery.MIMETYPE);
-                int source = mDbHelper.getDisplayNameSourceForMimeTypeId(mimeType);
-                if (source < bestDisplayNameSource || source == DisplayNameSources.UNDEFINED) {
-                    continue;
-                }
-
-                if (source == bestDisplayNameSource && c.getInt(DisplayNameQuery.IS_PRIMARY) == 0) {
-                    continue;
-                }
-
-                if (mimeType == mDbHelper.getMimeTypeIdForStructuredName()) {
-                    NameSplitter.Name name;
-                    if (bestName != null) {
-                        name = new NameSplitter.Name();
-                    } else {
-                        name = mName;
-                        name.clear();
-                    }
-                    name.prefix = c.getString(DisplayNameQuery.PREFIX);
-                    name.givenNames = c.getString(DisplayNameQuery.GIVEN_NAME);
-                    name.middleName = c.getString(DisplayNameQuery.MIDDLE_NAME);
-                    name.familyName = c.getString(DisplayNameQuery.FAMILY_NAME);
-                    name.suffix = c.getString(DisplayNameQuery.SUFFIX);
-                    name.fullNameStyle = c.isNull(DisplayNameQuery.FULL_NAME_STYLE)
-                            ? FullNameStyle.UNDEFINED
-                            : c.getInt(DisplayNameQuery.FULL_NAME_STYLE);
-                    name.phoneticFamilyName = c.getString(DisplayNameQuery.PHONETIC_FAMILY_NAME);
-                    name.phoneticMiddleName = c.getString(DisplayNameQuery.PHONETIC_MIDDLE_NAME);
-                    name.phoneticGivenName = c.getString(DisplayNameQuery.PHONETIC_GIVEN_NAME);
-                    name.phoneticNameStyle = c.isNull(DisplayNameQuery.PHONETIC_NAME_STYLE)
-                            ? PhoneticNameStyle.UNDEFINED
-                            : c.getInt(DisplayNameQuery.PHONETIC_NAME_STYLE);
-                    if (!name.isEmpty()) {
-                        bestDisplayNameSource = source;
-                        bestName = name;
-                    }
-                } else if (mimeType == mDbHelper.getMimeTypeIdForOrganization()) {
-                    mCharArrayBuffer.sizeCopied = 0;
-                    c.copyStringToBuffer(DisplayNameQuery.DATA1, mCharArrayBuffer);
-                    if (mCharArrayBuffer.sizeCopied != 0) {
-                        bestDisplayNameSource = source;
-                        bestDisplayName = new String(mCharArrayBuffer.data, 0,
-                                mCharArrayBuffer.sizeCopied);
-                        bestPhoneticName = c.getString(DisplayNameQuery.ORGANIZATION_PHONETIC_NAME);
-                        bestPhoneticNameStyle =
-                                c.isNull(DisplayNameQuery.ORGANIZATION_PHONETIC_NAME_STYLE)
-                                    ? PhoneticNameStyle.UNDEFINED
-                                    : c.getInt(DisplayNameQuery.ORGANIZATION_PHONETIC_NAME_STYLE);
-                    } else {
-                        c.copyStringToBuffer(DisplayNameQuery.TITLE, mCharArrayBuffer);
-                        if (mCharArrayBuffer.sizeCopied != 0) {
-                            bestDisplayNameSource = source;
-                            bestDisplayName = new String(mCharArrayBuffer.data, 0,
-                                    mCharArrayBuffer.sizeCopied);
-                            bestPhoneticName = null;
-                            bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
-                        }
-                    }
-                } else {
-                    // Display name is at DATA1 in all other types.
-                    // This is ensured in the constructor.
-
-                    mCharArrayBuffer.sizeCopied = 0;
-                    c.copyStringToBuffer(DisplayNameQuery.DATA1, mCharArrayBuffer);
-                    if (mCharArrayBuffer.sizeCopied != 0) {
-                        bestDisplayNameSource = source;
-                        bestDisplayName = new String(mCharArrayBuffer.data, 0,
-                                mCharArrayBuffer.sizeCopied);
-                        bestPhoneticName = null;
-                        bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
-                    }
-                }
-            }
-
-        } finally {
-            c.close();
-        }
-
-        String displayNamePrimary;
-        String displayNameAlternative;
-        String sortKeyPrimary = null;
-        String sortKeyAlternative = null;
-        int displayNameStyle = FullNameStyle.UNDEFINED;
-
-        if (bestDisplayNameSource == DisplayNameSources.STRUCTURED_NAME) {
-            displayNameStyle = bestName.fullNameStyle;
-            if (displayNameStyle == FullNameStyle.CJK
-                    || displayNameStyle == FullNameStyle.UNDEFINED) {
-                displayNameStyle = mNameSplitter.getAdjustedFullNameStyle(displayNameStyle);
-                bestName.fullNameStyle = displayNameStyle;
-            }
-
-            displayNamePrimary = mNameSplitter.join(bestName, true);
-            displayNameAlternative = mNameSplitter.join(bestName, false);
-
-            bestPhoneticName = mNameSplitter.joinPhoneticName(bestName);
-            bestPhoneticNameStyle = bestName.phoneticNameStyle;
-        } else {
-            displayNamePrimary = displayNameAlternative = bestDisplayName;
-        }
-
-        if (bestPhoneticName != null) {
-            sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
-            if (bestPhoneticNameStyle == PhoneticNameStyle.UNDEFINED) {
-                bestPhoneticNameStyle = mNameSplitter.guessPhoneticNameStyle(bestPhoneticName);
-            }
-        } else {
-            if (displayNameStyle == FullNameStyle.UNDEFINED) {
-                displayNameStyle = mNameSplitter.guessFullNameStyle(bestDisplayName);
-                if (displayNameStyle == FullNameStyle.UNDEFINED
-                        || displayNameStyle == FullNameStyle.CJK) {
-                    displayNameStyle = mNameSplitter.getAdjustedNameStyleBasedOnPhoneticNameStyle(
-                            displayNameStyle, bestPhoneticNameStyle);
-                }
-                displayNameStyle = mNameSplitter.getAdjustedFullNameStyle(displayNameStyle);
-            }
-            if (displayNameStyle == FullNameStyle.CHINESE ||
-                    displayNameStyle == FullNameStyle.CJK) {
-                sortKeyPrimary = sortKeyAlternative =
-                        ContactLocaleUtils.getIntance().getSortKey(
-                                displayNamePrimary, displayNameStyle);
-            }
-        }
-
-        if (sortKeyPrimary == null) {
-            sortKeyPrimary = displayNamePrimary;
-            sortKeyAlternative = displayNameAlternative;
-        }
-
-        mDbHelper.setDisplayName(rawContactId, bestDisplayNameSource, displayNamePrimary,
-                displayNameAlternative, bestPhoneticName, bestPhoneticNameStyle,
-                sortKeyPrimary, sortKeyAlternative);
+        mContactAggregator.updateRawContactDisplayName(db, rawContactId);
     }
 
     /**
