@@ -81,15 +81,21 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
-    protected void updateAccounts() {
+    protected void scheduleBackgroundTask(int task) {
+        performBackgroundTask(task, null);
     }
 
     @Override
-    protected void verifyLocale() {
+    protected void scheduleBackgroundTask(int task, Object arg) {
+        performBackgroundTask(task, arg);
     }
 
     @Override
-    protected void startContactDirectoryManager() {
+    protected void updateLocaleInBackground() {
+    }
+
+    @Override
+    protected void updateDirectoriesInBackground(boolean rescan) {
     }
 
     @Override

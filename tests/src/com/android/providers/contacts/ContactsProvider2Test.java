@@ -2613,6 +2613,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
 
         ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        mActor.setAccounts(new Account[]{mAccount, mAccountTwo});
         cp.onAccountsUpdated(new Account[]{mAccount, mAccountTwo});
         assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
         assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, null);
@@ -2627,6 +2628,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 StatusUpdates.AVAILABLE, null,
                 StatusUpdates.CAPABILITY_HAS_CAMERA);
 
+        mActor.setAccounts(new Account[]{mAccount});
         cp.onAccountsUpdated(new Account[]{mAccount});
         assertEquals(2, getCount(RawContacts.CONTENT_URI, null, null));
         assertEquals(0, getCount(StatusUpdates.CONTENT_URI, PresenceColumns.RAW_CONTACT_ID + "="
@@ -2636,6 +2638,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testAccountDeletion() {
         Account readOnlyAccount = new Account("act", READ_ONLY_ACCOUNT_TYPE);
         ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        mActor.setAccounts(new Account[]{readOnlyAccount, mAccount});
         cp.onAccountsUpdated(new Account[]{readOnlyAccount, mAccount});
 
         long rawContactId1 = createRawContactWithName("John", "Doe", readOnlyAccount);
@@ -2658,6 +2661,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(Contacts.CONTENT_URI, contactId,
                 Contacts.PHOTO_ID, ContentUris.parseId(photoUri2));
 
+        mActor.setAccounts(new Account[]{readOnlyAccount});
         // Remove the writable account
         cp.onAccountsUpdated(new Account[]{readOnlyAccount});
 
@@ -3323,8 +3327,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testProviderStatusWithAccounts() throws Exception {
         assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        mActor.setAccounts(new Account[]{ACCOUNT_1});
         ((ContactsProvider2)getProvider()).onAccountsUpdated(new Account[]{ACCOUNT_1});
         assertProviderStatus(ProviderStatus.STATUS_NORMAL);
+        mActor.setAccounts(new Account[0]);
         ((ContactsProvider2)getProvider()).onAccountsUpdated(new Account[0]);
         assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
     }
@@ -3855,10 +3861,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private String readToEnd(FileInputStream inputStream) {
         try {
+            System.out.println("DECLARED INPUT STREAM LENGTH: " + inputStream.available());
             int ch;
             StringBuilder stringBuilder = new StringBuilder();
-            while ((ch = inputStream.read()) != -1)
+            int index = 0;
+            while (true) {
+                ch = inputStream.read();
+                System.out.println("READ CHARACTER: " + index + " " + ch);
+                if (ch == -1) {
+                    break;
+                }
                 stringBuilder.append((char)ch);
+                index++;
+            }
             return stringBuilder.toString();
         } catch (IOException e) {
             return null;

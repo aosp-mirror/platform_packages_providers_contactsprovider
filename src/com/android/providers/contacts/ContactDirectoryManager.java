@@ -30,14 +30,8 @@ import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
-import android.os.Binder;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
-import android.os.Process;
 import android.os.SystemClock;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
@@ -50,12 +44,9 @@ import java.util.List;
 /**
  * Manages the contents of the {@link Directory} table.
  */
-public class ContactDirectoryManager extends HandlerThread {
+public class ContactDirectoryManager {
 
     private static final String TAG = "ContactDirectoryManager";
-
-    private static final int MESSAGE_SCAN_ALL_PROVIDERS = 0;
-    private static final int MESSAGE_SCAN_PACKAGES_BY_UID = 1;
 
     public static final String PROPERTY_DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
     public static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
@@ -95,65 +86,14 @@ public class ContactDirectoryManager extends HandlerThread {
 
     private final ContactsProvider2 mContactsProvider;
     private Context mContext;
-    private Handler mHandler;
 
     public ContactDirectoryManager(ContactsProvider2 contactsProvider) {
-        super("DirectoryManager", Process.THREAD_PRIORITY_BACKGROUND);
         this.mContactsProvider = contactsProvider;
         this.mContext = contactsProvider.getContext();
     }
 
     public ContactsDatabaseHelper getDbHelper() {
         return (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
-    }
-
-    /**
-     * Launches an asynchronous scan of all packages.
-     */
-    @Override
-    public void start() {
-        super.start();
-        if (areTypeResourceIdsValid()) {
-            scheduleScanAllPackages(false);
-        } else {
-            getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
-            scanAllPackagesIfNeeded();
-        }
-    }
-    /**
-     * Launches an asynchronous scan of all packages owned by the current calling UID.
-     */
-    public void scheduleDirectoryUpdateForCaller() {
-        final int callingUid = Binder.getCallingUid();
-        if (isAlive()) {
-            Handler handler = getHandler();
-            handler.sendMessage(handler.obtainMessage(MESSAGE_SCAN_PACKAGES_BY_UID, callingUid, 0));
-        } else {
-            scanPackagesByUid(callingUid);
-        }
-    }
-
-    protected Handler getHandler() {
-        if (mHandler == null) {
-            mHandler = new Handler(getLooper()) {
-                @Override
-                public void handleMessage(Message msg) {
-                    ContactDirectoryManager.this.handleMessage(msg);
-                }
-            };
-        }
-        return mHandler;
-    }
-
-    protected void handleMessage(Message msg) {
-        switch(msg.what) {
-            case MESSAGE_SCAN_ALL_PROVIDERS:
-                scanAllPackagesIfNeeded();
-                break;
-            case MESSAGE_SCAN_PACKAGES_BY_UID:
-                scanPackagesByUid(msg.arg1);
-                break;
-        }
     }
 
     /**
@@ -220,6 +160,14 @@ public class ContactDirectoryManager extends HandlerThread {
     /**
      * Scans all packages for directory content providers.
      */
+    public void scanAllPackages(boolean rescan) {
+        if (rescan || !areTypeResourceIdsValid()) {
+            getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+        }
+
+        scanAllPackagesIfNeeded();
+    }
+
     private void scanAllPackagesIfNeeded() {
         String scanComplete = getDbHelper().getProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
         if (!"0".equals(scanComplete)) {
@@ -234,17 +182,6 @@ public class ContactDirectoryManager extends HandlerThread {
 
         // Announce the change to listeners of the contacts authority
         mContactsProvider.notifyChange(false);
-    }
-
-    public void scheduleScanAllPackages(boolean rescan) {
-        if (rescan) {
-            getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
-        }
-        if (isAlive()) {
-            getHandler().sendEmptyMessage(MESSAGE_SCAN_ALL_PROVIDERS);
-        } else {
-            scanAllPackagesIfNeeded();
-        }
     }
 
     /* Visible for testing */

@@ -318,10 +318,11 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
 
-        ((ContactsProvider2)getProvider()).onAccountsUpdated(
-                new Account[]{
-                        new Account("account-name1", "account-type1"),
-                        new Account("account-name2", "account-type2")});
+        Account[] accounts = new Account[]{
+                new Account("account-name1", "account-type1"),
+                new Account("account-name2", "account-type2")};
+        mActor.setAccounts(accounts);
+        ((ContactsProvider2)getProvider()).onAccountsUpdated(accounts);
 
         MatrixCursor response1 = provider1.createResponseCursor();
         addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
@@ -333,8 +334,9 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         mDirectoryManager.scanAllPackages();
 
-        ((ContactsProvider2)getProvider()).onAccountsUpdated(
-                new Account[]{new Account("account-name1", "account-type1")});
+        accounts = new Account[]{new Account("account-name1", "account-type1")};
+        mActor.setAccounts(accounts);
+        ((ContactsProvider2)getProvider()).onAccountsUpdated(accounts);
 
         Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
         assertEquals(3, cursor.getCount());
