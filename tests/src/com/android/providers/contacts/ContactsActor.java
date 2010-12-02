@@ -16,6 +16,13 @@
 
 package com.android.providers.contacts;
 
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.accounts.AccountManagerCallback;
+import android.accounts.AccountManagerFuture;
+import android.accounts.AuthenticatorException;
+import android.accounts.OnAccountsUpdateListener;
+import android.accounts.OperationCanceledException;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -31,6 +38,7 @@ import android.location.Country;
 import android.location.CountryDetector;
 import android.location.CountryListener;
 import android.net.Uri;
+import android.os.Handler;
 import android.os.Looper;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
@@ -49,7 +57,9 @@ import android.test.mock.MockContext;
 import android.test.mock.MockResources;
 import android.util.TypedValue;
 
+import java.io.IOException;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Helper class that encapsulates an "actor" which is owned by a specific
@@ -71,6 +81,8 @@ public class ContactsActor {
     public ContentProvider provider;
     private Country mMockCountry = new Country("us", 0);
 
+    private Account[] mAccounts = new Account[0];
+
     private CountryDetector mMockCountryDetector = new CountryDetector(null){
         @Override
         public Country detectCountry() {
@@ -81,6 +93,39 @@ public class ContactsActor {
         public void addCountryListener(CountryListener listener, Looper looper) {
         }
     };
+
+    private AccountManager mMockAccountManager;
+
+    private class MockAccountManager extends AccountManager {
+        public MockAccountManager(Context conteact) {
+            super(context, null, null);
+        }
+
+        @Override
+        public void addOnAccountsUpdatedListener(OnAccountsUpdateListener listener,
+                Handler handler, boolean updateImmediately) {
+            // do nothing
+        }
+
+        @Override
+        public Account[] getAccounts() {
+            return mAccounts;
+        }
+
+        @Override
+        public AccountManagerFuture<Account[]> getAccountsByTypeAndFeatures(
+                final String type, final String[] features,
+                AccountManagerCallback<Account[]> callback, Handler handler) {
+            return null;
+        }
+
+        @Override
+        public String blockingGetAuthToken(Account account, String authTokenType,
+                boolean notifyAuthFailure)
+                throws OperationCanceledException, IOException, AuthenticatorException {
+            return null;
+        }
+    }
 
     private IsolatedContext mProviderContext;
 
@@ -105,9 +150,14 @@ public class ContactsActor {
                 if (Context.COUNTRY_DETECTOR.equals(name)) {
                     return mMockCountryDetector;
                 }
+                if (Context.ACCOUNT_SERVICE.equals(name)) {
+                    return mMockAccountManager;
+                }
                 return super.getSystemService(name);
             }
         };
+
+        mMockAccountManager = new MockAccountManager(mProviderContext);
         provider = addProvider(providerClass, authority);
     }
 
@@ -413,6 +463,10 @@ public class ContactsActor {
         values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
         values.put(AggregationExceptions.TYPE, type);
         resolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
+    }
+
+    public void setAccounts(Account[] accounts) {
+        mAccounts = accounts;
     }
 
     /**

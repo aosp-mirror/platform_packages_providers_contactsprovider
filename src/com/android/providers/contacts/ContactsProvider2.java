@@ -72,9 +72,13 @@ import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.net.Uri.Builder;
-import android.os.AsyncTask;
+import android.os.Binder;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.os.ParcelFileDescriptor;
+import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.SystemProperties;
@@ -136,6 +140,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final String TAG = "ContactsProvider";
 
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
+
+    private static final int BACKGROUND_TASK_OPEN_ACCESS = 0;
+    private static final int BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS = 1;
+    private static final int BACKGROUND_TASK_UPDATE_ACCOUNTS = 2;
+    private static final int BACKGROUND_TASK_UPDATE_LOCALE = 3;
+    private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 4;
+    private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 5;
+    private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 6;
 
     // TODO: carefully prevent all incoming nested queries; they can be gaping security holes
     // TODO: check for restricted flag during insert(), update(), and delete() calls
@@ -938,6 +950,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean mProviderStatusUpdateNeeded;
     private long mEstimatedStorageRequirement = 0;
     private volatile CountDownLatch mAccessLatch;
+    private boolean mOkToOpenAccess = true;
 
     private TransactionContext mTransactionContext = new TransactionContext();
 
@@ -947,6 +960,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private Locale mCurrentLocale;
     private int mContactsAccountCount;
+
+    private HandlerThread mBackgroundThread;
+    private Handler mBackgroundHandler;
 
     @Override
     public boolean onCreate() {
@@ -966,63 +982,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
 
+        AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
+
         initForDefaultLocale();
 
-        updateAccounts();
+        // The provider is closed for business until fully initialized
+        mAccessLatch = new CountDownLatch(1);
 
-        if (isLegacyContactImportNeeded()) {
-            importLegacyContactsAsync();
-        } else {
-            verifyLocale();
-        }
+        mBackgroundThread = new HandlerThread("ContactsProviderWorker",
+                Process.THREAD_PRIORITY_BACKGROUND);
+        mBackgroundThread.start();
+        mBackgroundHandler = new Handler(mBackgroundThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                performBackgroundTask(msg.what, msg.obj);
+            }
+        };
 
-        startContactDirectoryManager();
-
-        if (isAggregationUpgradeNeeded()) {
-            upgradeAggregationAlgorithm();
-        }
-
-        updateProviderStatus();
+        scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
+        scheduleBackgroundTask(BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM);
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_PROVIDER_STATUS);
+        scheduleBackgroundTask(BACKGROUND_TASK_OPEN_ACCESS);
 
         return true;
-    }
-
-    private void initDataRowHandlers() {
-      mDataRowHandlers = new HashMap<String, DataRowHandler>();
-
-      mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForEmail(mDbHelper, mContactAggregator));
-      mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForCommonDataKind(mDbHelper, mContactAggregator,
-                      Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
-      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForCommonDataKind(mDbHelper, mContactAggregator,
-                      StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
-                      StructuredPostal.LABEL));
-      mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForOrganization(mDbHelper, mContactAggregator));
-      mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForPhoneNumber(mDbHelper, mContactAggregator));
-      mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForNickname(mDbHelper, mContactAggregator));
-      mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForStructuredName(mDbHelper, mContactAggregator,
-                      mNameSplitter, mNameLookupBuilder));
-      mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForStructuredPostal(mDbHelper, mContactAggregator,
-                      mPostalSplitter));
-      mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForGroupMembership(mDbHelper, mContactAggregator,
-                      mGroupIdCache));
-      mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE,
-              new DataRowHandlerForPhoto(mDbHelper, mContactAggregator));
-    }
-
-    /**
-     * Visible for testing.
-     */
-    /* package */ PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
-        return new PhotoPriorityResolver(context);
     }
 
     /**
@@ -1039,7 +1023,100 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
-        initDataRowHandlers();
+        mDataRowHandlers = new HashMap<String, DataRowHandler>();
+
+        mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForEmail(mDbHelper, mContactAggregator));
+        mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForCommonDataKind(mDbHelper, mContactAggregator,
+                        Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
+        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForCommonDataKind(mDbHelper, mContactAggregator,
+                        StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
+                        StructuredPostal.LABEL));
+        mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForOrganization(mDbHelper, mContactAggregator));
+        mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForPhoneNumber(mDbHelper, mContactAggregator));
+        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForNickname(mDbHelper, mContactAggregator));
+        mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForStructuredName(mDbHelper, mContactAggregator,
+                        mNameSplitter, mNameLookupBuilder));
+        mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForStructuredPostal(mDbHelper, mContactAggregator,
+                        mPostalSplitter));
+        mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForGroupMembership(mDbHelper, mContactAggregator,
+                        mGroupIdCache));
+        mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForPhoto(mDbHelper, mContactAggregator));
+    }
+
+    /**
+     * Visible for testing.
+     */
+    /* package */ PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
+        return new PhotoPriorityResolver(context);
+    }
+
+    protected void scheduleBackgroundTask(int task) {
+        mBackgroundHandler.sendEmptyMessage(task);
+    }
+
+    protected void scheduleBackgroundTask(int task, Object arg) {
+        mBackgroundHandler.sendMessage(mBackgroundHandler.obtainMessage(task, arg));
+    }
+
+    protected void performBackgroundTask(int task, Object arg) {
+        switch (task) {
+            case BACKGROUND_TASK_OPEN_ACCESS: {
+                if (mOkToOpenAccess) {
+                    mAccessLatch.countDown();
+                    mAccessLatch = null;
+                }
+                break;
+            }
+
+            case BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS: {
+                if (isLegacyContactImportNeeded()) {
+                    importLegacyContactsInBackground();
+                }
+                break;
+            }
+
+            case BACKGROUND_TASK_UPDATE_ACCOUNTS: {
+                Account[] accounts = AccountManager.get(getContext()).getAccounts();
+                boolean accountsChanged = updateAccountsInBackground(accounts);
+                updateContactsAccountCount(accounts);
+                updateDirectoriesInBackground(accountsChanged);
+                break;
+            }
+
+            case BACKGROUND_TASK_UPDATE_LOCALE: {
+                updateLocaleInBackground();
+                break;
+            }
+
+            case BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM: {
+                if (isAggregationUpgradeNeeded()) {
+                    upgradeAggregationAlgorithmInBackground();
+                }
+                break;
+            }
+
+            case BACKGROUND_TASK_UPDATE_PROVIDER_STATUS: {
+                updateProviderStatus();
+                break;
+            }
+
+            case BACKGROUND_TASK_UPDATE_DIRECTORIES: {
+                if (arg != null) {
+                    mContactDirectoryManager.onPackageChanged((String) arg);
+                }
+                break;
+            }
+        }
     }
 
     public void onLocaleChanged() {
@@ -1049,7 +1126,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         initForDefaultLocale();
-        verifyLocale();
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
     }
 
     /**
@@ -1059,7 +1136,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * large data structures (name lookup, sort keys), which can take minutes on
      * a large set of contacts.
      */
-    protected void verifyLocale() {
+    protected void updateLocaleInBackground() {
 
         // The process is already running - postpone the change
         if (mProviderStatus == ProviderStatus.STATUS_CHANGING_LOCALE) {
@@ -1075,30 +1152,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         int providerStatus = mProviderStatus;
         setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
+        mDbHelper.setLocale(this, currentLocale);
+        prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
+        setProviderStatus(providerStatus);
+    }
 
-        AsyncTask<Integer, Void, Void> task = new AsyncTask<Integer, Void, Void>() {
-
-            int savedProviderStatus;
-
-            @Override
-            protected Void doInBackground(Integer... params) {
-                savedProviderStatus = params[0];
-                mDbHelper.setLocale(ContactsProvider2.this, currentLocale);
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void result) {
-                prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
-                setProviderStatus(savedProviderStatus);
-
-                // Recursive invocation, needed to cover the case where locale
-                // changes once and then changes again before the db upgrade is completed.
-                verifyLocale();
-            }
-        };
-
-        task.execute(providerStatus);
+    protected void updateDirectoriesInBackground(boolean rescan) {
+        mContactDirectoryManager.scanAllPackages(rescan);
     }
 
     private void updateProviderStatus() {
@@ -1140,11 +1200,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return Locale.getDefault();
     }
 
-    /* Visible for testing */
-    protected void startContactDirectoryManager() {
-        getContactDirectoryManager().start();
-    }
-
     protected boolean isLegacyContactImportNeeded() {
         int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_CONTACTS_IMPORTED, "0"));
         return version < PROPERTY_CONTACTS_IMPORT_VERSION;
@@ -1155,34 +1210,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Imports legacy contacts in a separate thread.  As long as the import process is running
-     * all other access to the contacts is blocked.
+     * Imports legacy contacts as a background task.
      */
-    private void importLegacyContactsAsync() {
+    private void importLegacyContactsInBackground() {
         Log.v(TAG, "Importing legacy contacts");
         setProviderStatus(ProviderStatus.STATUS_UPGRADING);
-        if (mAccessLatch == null) {
-            mAccessLatch = new CountDownLatch(1);
+
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        mDbHelper.setLocale(this, mCurrentLocale);
+        prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
+
+        LegacyContactImporter importer = getLegacyContactImporter();
+        if (importLegacyContacts(importer)) {
+            onLegacyContactImportSuccess();
+        } else {
+            onLegacyContactImportFailure();
         }
-
-        Thread importThread = new Thread("LegacyContactImport") {
-            @Override
-            public void run() {
-                final SharedPreferences prefs =
-                    PreferenceManager.getDefaultSharedPreferences(getContext());
-                mDbHelper.setLocale(ContactsProvider2.this, mCurrentLocale);
-                prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
-
-                LegacyContactImporter importer = getLegacyContactImporter();
-                if (importLegacyContacts(importer)) {
-                    onLegacyContactImportSuccess();
-                } else {
-                    onLegacyContactImportFailure();
-                }
-            }
-        };
-
-        importThread.start();
     }
 
     /**
@@ -1197,8 +1240,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDbHelper.setProperty(PROPERTY_CONTACTS_IMPORTED,
                 String.valueOf(PROPERTY_CONTACTS_IMPORT_VERSION));
         setProviderStatus(ProviderStatus.STATUS_NORMAL);
-        mAccessLatch.countDown();
-        mAccessLatch = null;
         Log.v(TAG, "Completed import of legacy contacts");
     }
 
@@ -1224,6 +1265,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         setProviderStatus(ProviderStatus.STATUS_UPGRADE_OUT_OF_MEMORY);
         Log.v(TAG, "Failed to import legacy contacts");
+
+        // Do not let any database changes until this issue is resolved.
+        mOkToOpenAccess = false;
     }
 
     /* Visible for testing */
@@ -1265,7 +1309,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             while (true) {
                 try {
                     latch.await();
-                    mAccessLatch = null;
                     return;
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -1287,10 +1330,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // allowed in this case is an update of provider status, which will trigger
             // an attempt to upgrade contacts again.
             int match = sUriMatcher.match(uri);
-            if (match == PROVIDER_STATUS && isLegacyContactImportNeeded()) {
+            if (match == PROVIDER_STATUS) {
                 Integer newStatus = values.getAsInteger(ProviderStatus.STATUS);
                 if (newStatus != null && newStatus == ProviderStatus.STATUS_UPGRADING) {
-                    importLegacyContactsAsync();
+                    scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
                     return 1;
                 } else {
                     return 0;
@@ -2384,7 +2427,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case DIRECTORIES: {
-                mContactDirectoryManager.scheduleDirectoryUpdateForCaller();
+                mContactDirectoryManager.scanPackagesByUid(Binder.getCallingUid());
                 count = 1;
                 break;
             }
@@ -2802,20 +2845,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void onAccountsUpdated(Account[] accounts) {
-        boolean accountsChanged = updateAccounts(accounts);
-        if (accountsChanged) {
-            mContactDirectoryManager.scheduleScanAllPackages(true);
-        }
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
     }
 
-    protected void updateAccounts() {
-        AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
-        Account[] accounts = AccountManager.get(getContext()).getAccounts();
-        updateAccounts(accounts);
-        updateContactsAccountCount(accounts);
-    }
-
-    private boolean updateAccounts(Account[] accounts) {
+    protected boolean updateAccountsInBackground(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
         HashSet<Account> existingAccounts = new HashSet<Account>();
@@ -2910,7 +2943,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mDb.setTransactionSuccessful();
         } finally {
             mDb.endTransaction();
-            mDb = null;
         }
         mAccountWritability.clear();
 
@@ -2943,7 +2975,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void onPackageChanged(String packageName) {
-        mContactDirectoryManager.onPackageChanged(packageName);
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_DIRECTORIES, packageName);
     }
 
     /**
@@ -4978,7 +5010,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return version < PROPERTY_AGGREGATION_ALGORITHM_VERSION;
     }
 
-    protected void upgradeAggregationAlgorithm() {
+    protected void upgradeAggregationAlgorithmInBackground() {
         // This upgrade will affect very few contacts, so it can be performed on the
         // main thread during the initial boot after an OTA
 
@@ -5012,7 +5044,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
         } finally {
             mDb.endTransaction();
-            mDb = null;
             long end = SystemClock.currentThreadTimeMillis();
             Log.i(TAG, "Aggregation algorithm upgraded for " + count
                     + " contacts, in " + (end - start) + "ms");
