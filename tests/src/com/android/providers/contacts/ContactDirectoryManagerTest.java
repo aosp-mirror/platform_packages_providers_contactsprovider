@@ -107,7 +107,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         super.setUp();
 
         mProvider = (ContactsProvider2) getProvider();
-        mDirectoryManager = mProvider.getContactDirectoryManager();
+        mDirectoryManager = mProvider.getContactDirectoryManagerForTest();
 
         mPackageManager = (ContactsMockPackageManager) getProvider()
                 .getContext().getPackageManager();

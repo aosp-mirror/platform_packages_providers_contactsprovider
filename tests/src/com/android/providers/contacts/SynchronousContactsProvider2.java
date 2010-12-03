@@ -170,7 +170,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('contacts', 2009)");
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('data', 777)");
 
-        getContactDirectoryManager().scanAllPackages();
+        getContactDirectoryManagerForTest().scanAllPackages();
     }
 
     @Override
