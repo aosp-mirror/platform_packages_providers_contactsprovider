@@ -1191,7 +1191,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /* Visible for testing */
-    public ContactDirectoryManager getContactDirectoryManager() {
+    public ContactDirectoryManager getContactDirectoryManagerForTest() {
         return mContactDirectoryManager;
     }
 
