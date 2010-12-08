@@ -76,11 +76,7 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public boolean onCreate() {
         final Context context = getContext();
-
         mDbHelper = getDatabaseHelper(context);
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
-
         mUseStrictPhoneNumberComparation =
             context.getResources().getBoolean(
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
@@ -155,6 +151,11 @@ public class CallLogProvider extends ContentProvider {
         // Inserted the current country code, so we know the country
         // the number belongs to.
         values.put(Calls.COUNTRY_ISO, getCurrentCountryIso());
+
+        if (mCallsInserter == null) {
+            SQLiteDatabase db = mDbHelper.getWritableDatabase();
+            mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
+        }
         long rowId = mCallsInserter.insert(values);
         if (rowId > 0) {
             notifyChange();
