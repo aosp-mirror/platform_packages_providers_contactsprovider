@@ -27,12 +27,12 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.CommonDataKinds.Organization;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.StatusUpdates;
 import android.test.suitebuilder.annotation.LargeTest;
 
@@ -135,6 +135,27 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId2, "Johnb", "Smithb");
 
         assertAggregated(rawContactId1, rawContactId2, "Johnb Smithb");
+    }
+
+    public void testAggregationIgnoresInvisibleContact() {
+        Account account = new Account("accountName", "accountType");
+        createAutoAddGroup(account);
+
+        long rawContactId1 = createRawContact(account);
+        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+
+        // Hide by removing from all groups
+        removeGroupMemberships(rawContactId1);
+
+        long rawContactId2 = createRawContact(account);
+        insertStructuredName(rawContactId2, "Flynn", "Ryder");
+
+        long rawContactId3 = createRawContact(ACCOUNT_2);
+        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertAggregated(rawContactId2, rawContactId3, "Flynn Ryder");
     }
 
     public void testAggregationOfCaseInsensitiveFullNameMatch() {
@@ -540,6 +561,82 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         // The aggregate this raw contact could join has a raw contact from the same account,
         // let's not aggregate and break up the existing aggregate because of the ambiguity
         long rawContactId3 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testReaggregationWhenBecomesInvisible() {
+        Account account = new Account("accountName", "accountType");
+        createAutoAddGroup(account);
+
+        long rawContactId1 = createRawContact(account);
+        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+
+        long rawContactId2 = createRawContact(ACCOUNT_2);
+        insertStructuredName(rawContactId2, "Flynn", "Ryder");
+
+        long rawContactId3 = createRawContact(account);
+        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+        assertNotAggregated(rawContactId1, rawContactId2);
+
+        // Hide by removing from all groups
+        removeGroupMemberships(rawContactId3);
+
+        assertAggregated(rawContactId1, rawContactId2, "Flynn Ryder");
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+    }
+
+    public void testReaggregationWhenBecomesInvisibleSecondaryDataMatch() {
+        Account account = new Account("accountName", "accountType");
+        createAutoAddGroup(account);
+
+        long rawContactId1 = createRawContact(account);
+        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+        insertPhoneNumber(rawContactId1, "1234567890");
+
+        long rawContactId2 = createRawContact(ACCOUNT_2);
+        insertPhoneNumber(rawContactId2, "1234567890");
+
+        long rawContactId3 = createRawContact(account);
+        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+        assertNotAggregated(rawContactId1, rawContactId2);
+
+        // Hide by removing from all groups
+        removeGroupMemberships(rawContactId3);
+
+        assertAggregated(rawContactId1, rawContactId2, "Flynn Ryder");
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+    }
+
+    public void testReaggregationWhenBecomesVisible() {
+        Account account = new Account("accountName", "accountType");
+        long groupId = createAutoAddGroup(account);
+
+        long rawContactId1 = createRawContact(account);
+        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+
+        long rawContactId2 = createRawContact(ACCOUNT_2);
+        insertStructuredName(rawContactId2, "Flynn", "Ryder");
+
+        long rawContactId3 = createRawContact(account);
+        removeGroupMemberships(rawContactId3);
+        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+
+        assertAggregated(rawContactId1, rawContactId2, "Flynn Ryder");
+        assertNotAggregated(rawContactId1, rawContactId3);
+        assertNotAggregated(rawContactId2, rawContactId3);
+
+        insertGroupMembership(rawContactId3, groupId);
+
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId2, rawContactId3);
         assertNotAggregated(rawContactId1, rawContactId2);

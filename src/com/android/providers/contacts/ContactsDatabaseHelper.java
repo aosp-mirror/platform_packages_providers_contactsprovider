@@ -522,6 +522,7 @@ import java.util.Locale;
     private SQLiteStatement mStatusAttributionUpdate;
     private SQLiteStatement mStatusUpdateDelete;
     private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
+    private SQLiteStatement mContactInDefaultDirectoryQuery;
 
     private final Context mContext;
     private final boolean mDatabaseOptimizationEnabled;
@@ -539,6 +540,7 @@ import java.util.Locale;
      * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
      */
     private String[] mUnrestrictedPackages;
+
 
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
@@ -595,6 +597,7 @@ import java.util.Locale;
         mActivitiesMimetypeQuery = null;
         mContactIdQuery = null;
         mAggregationModeQuery = null;
+        mContactInDefaultDirectoryQuery = null;
 
         mMimetypeCache.clear();
         mPackageCache.clear();
@@ -3142,13 +3145,23 @@ import java.util.Locale;
     }
 
     /**
+     * Updates contact visibility and return true iff the visibility was actually changed.
+     */
+    public boolean updateContactVisibleOnlyIfChanged(long contactId) {
+        return updateContactVisible(contactId, true);
+    }
+
+    /**
      * Update {@link Contacts#IN_VISIBLE_GROUP} and
      * {@link Tables#DEFAULT_DIRECTORY} for a specific contact.
      */
     public void updateContactVisible(long contactId) {
+        updateContactVisible(contactId, false);
+    }
+
+    public boolean updateContactVisible(long contactId, boolean onlyIfChanged) {
         SQLiteDatabase db = getWritableDatabase();
-        updateCustomContactVisibility(getWritableDatabase(),
-                " AND " + Contacts._ID + "=" + contactId);
+        updateCustomContactVisibility(db, " AND " + Contacts._ID + "=" + contactId);
 
         String contactIdAsString = String.valueOf(contactId);
         long mimetype = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
@@ -3156,7 +3169,7 @@ import java.util.Locale;
         // The contact will be included in the default directory if contains
         // a raw contact that is in any group or in an account that
         // does not have any AUTO_ADD groups.
-        long visibleRawContact = DatabaseUtils.longForQuery(db,
+        boolean newVisibility = DatabaseUtils.longForQuery(db,
                 "SELECT EXISTS (" +
                     "SELECT " + RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
@@ -3190,15 +3203,34 @@ import java.util.Locale;
                     String.valueOf(mimetype),
                     contactIdAsString,
                     contactIdAsString
-                });
+                }) != 0;
 
-        if (visibleRawContact != 0) {
+        if (onlyIfChanged) {
+            boolean oldVisibility = isContactInDefaultDirectory(db, contactId);
+            if (oldVisibility == newVisibility) {
+                return false;
+            }
+        }
+
+        if (newVisibility) {
             db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY + " VALUES(?)",
                     new String[] { contactIdAsString });
         } else {
             db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY + " WHERE " + Contacts._ID + "=?",
                     new String[] { contactIdAsString });
         }
+        return true;
+    }
+
+    public boolean isContactInDefaultDirectory(SQLiteDatabase db, long contactId) {
+        if (mContactInDefaultDirectoryQuery == null) {
+            mContactInDefaultDirectoryQuery = db.compileStatement(
+                    "SELECT EXISTS (" +
+                            "SELECT 1 FROM " + Tables.DEFAULT_DIRECTORY +
+                            " WHERE " + Contacts._ID + "=?)");
+        }
+        mContactInDefaultDirectoryQuery.bindLong(1, contactId);
+        return mContactInDefaultDirectoryQuery.simpleQueryForLong() != 0;
     }
 
     private void updateCustomContactVisibility(SQLiteDatabase db, String selection) {

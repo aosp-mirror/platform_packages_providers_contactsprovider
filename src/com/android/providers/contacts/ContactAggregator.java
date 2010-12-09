@@ -513,6 +513,39 @@ public class ContactAggregator {
         mRawContactsMarkedForAggregation.put(rawContactId, aggregationMode);
     }
 
+    private static class RawContactIdAndAggregationModeQuery {
+        public static final String TABLE = Tables.RAW_CONTACTS;
+
+        public static final String[] COLUMNS = { RawContacts._ID, RawContacts.AGGREGATION_MODE };
+
+        public static final String SELECTION = RawContacts.CONTACT_ID + "=?";
+
+        public static final int _ID = 0;
+        public static final int AGGREGATION_MODE = 1;
+    }
+
+    /**
+     * Marks all constituent raw contacts of an aggregated contact for re-aggregation.
+     */
+    private void markContactForAggregation(SQLiteDatabase db, long contactId) {
+        mSelectionArgs1[0] = String.valueOf(contactId);
+        Cursor cursor = db.query(RawContactIdAndAggregationModeQuery.TABLE,
+                RawContactIdAndAggregationModeQuery.COLUMNS,
+                RawContactIdAndAggregationModeQuery.SELECTION, mSelectionArgs1, null, null, null);
+        try {
+            if (cursor.moveToFirst()) {
+                long rawContactId = cursor.getLong(RawContactIdAndAggregationModeQuery._ID);
+                int aggregationMode = cursor.getInt(
+                        RawContactIdAndAggregationModeQuery.AGGREGATION_MODE);
+                if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {
+                    markForAggregation(rawContactId, aggregationMode, true);
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
     /**
      * Creates a new contact based on the given raw contact.  Does not perform aggregation.
      */
@@ -538,6 +571,14 @@ public class ContactAggregator {
     }
 
     public void aggregateContact(SQLiteDatabase db, long rawContactId) {
+        if (!mEnabled) {
+            return;
+        }
+
+        MatchCandidateList candidates = new MatchCandidateList();
+        ContactMatcher matcher = new ContactMatcher();
+        ContentValues values = new ContentValues();
+
         long contactId = 0;
         String accountName = null;
         String accountType = null;
@@ -554,23 +595,8 @@ public class ContactAggregator {
         } finally {
             cursor.close();
         }
-        aggregateContact(db, rawContactId, accountType, accountName, contactId);
-    }
 
-    /**
-     * Synchronously aggregate the specified contact assuming an open transaction.
-     */
-    public void aggregateContact(SQLiteDatabase db, long rawContactId, String accountType,
-            String accountName, long currentContactId) {
-        if (!mEnabled) {
-            return;
-        }
-
-        MatchCandidateList candidates = new MatchCandidateList();
-        ContactMatcher matcher = new ContactMatcher();
-        ContentValues values = new ContentValues();
-
-        aggregateContact(db, rawContactId, accountType, accountName, currentContactId, candidates,
+        aggregateContact(db, rawContactId, accountType, accountName, contactId, candidates,
                 matcher, values);
     }
 
@@ -628,7 +654,13 @@ public class ContactAggregator {
 
             contactId = pickBestMatchBasedOnExceptions(db, rawContactId, matcher);
             if (contactId == -1) {
-                contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
+
+                // If this is a newly inserted contact or a visible contact, look for
+                // data matches.
+                if (currentContactId == 0
+                        || mDbHelper.isContactInDefaultDirectory(db, currentContactId)) {
+                    contactId = pickBestMatchBasedOnData(db, rawContactId, candidates, matcher);
+                }
 
                 // If we found an aggregate to join, but it already contains raw contacts from
                 // the same account, not only will we not join it, but also we will split
@@ -728,7 +760,7 @@ public class ContactAggregator {
 
     /**
      * Breaks up an existing aggregate when a new raw contact is inserted that has
-     * comes from the same account as one of the raw contacts in this aggregate.
+     * come from the same account as one of the raw contacts in this aggregate.
      */
     private void splitAutomaticallyAggregatedRawContacts(SQLiteDatabase db, long contactId) {
         mSelectionArgs1[0] = String.valueOf(contactId);
@@ -757,6 +789,7 @@ public class ContactAggregator {
                         " WHERE " + AggregationExceptions.TYPE + "="
                                 + AggregationExceptions.TYPE_KEEP_TOGETHER +
                         ")";
+
         Cursor cursor = db.rawQuery(query, mSelectionArgs1);
         try {
             // Process up to count-1 raw contact, leaving the last one alone.
@@ -787,6 +820,67 @@ public class ContactAggregator {
         mDbHelper.updateContactVisible(contactId);
         setPresenceContactId(rawContactId, contactId);
         updateAggregatedStatusUpdate(contactId);
+    }
+
+    private static class RawContactIdQuery {
+        public static final String TABLE = Tables.RAW_CONTACTS;
+        public static final String[] COLUMNS = { RawContacts._ID };
+        public static final String SELECTION = RawContacts.CONTACT_ID + "=?";
+        public static final int RAW_CONTACT_ID = 0;
+    }
+
+    /**
+     * Ensures that automatic aggregation rules are followed after a contact
+     * becomes visible or invisible. Specifically, consider this case: there are
+     * three contacts named Foo. Two of them come from account A1 and one comes
+     * from account A2. The aggregation rules say that in this case none of the
+     * three Foo's should be aggregated: two of them are in the same account, so
+     * they don't get aggregated; the third has two affinities, so it does not
+     * join either of them.
+     * <p>
+     * Consider what happens if one of the "Foo"s from account A1 becomes
+     * invisible. Nothing stands in the way of aggregating the other two
+     * anymore, so they should get joined.
+     * <p>
+     * What if the invisible "Foo" becomes visible after that? We should split the
+     * aggregate between the other two.
+     */
+    public void updateAggregationAfterVisibilityChange(long contactId) {
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        boolean visible = mDbHelper.isContactInDefaultDirectory(db, contactId);
+        if (visible) {
+            markContactForAggregation(db, contactId);
+        } else {
+            // Find all contacts that _could be_ aggregated with this one and
+            // rerun aggregation for all of them
+            mSelectionArgs1[0] = String.valueOf(contactId);
+            Cursor cursor = db.query(RawContactIdQuery.TABLE, RawContactIdQuery.COLUMNS,
+                    RawContactIdQuery.SELECTION, mSelectionArgs1, null, null, null);
+            try {
+                while (cursor.moveToNext()) {
+                    long rawContactId = cursor.getLong(RawContactIdQuery.RAW_CONTACT_ID);
+                    mMatcher.clear();
+
+                    updateMatchScoresBasedOnNameMatches(db, rawContactId, mMatcher);
+                    List<MatchScore> bestMatches =
+                            mMatcher.pickBestMatches(ContactMatcher.SCORE_THRESHOLD_PRIMARY);
+                    for (MatchScore matchScore : bestMatches) {
+                        markContactForAggregation(db, matchScore.getContactId());
+                    }
+
+                    mMatcher.clear();
+                    updateMatchScoresBasedOnEmailMatches(db, rawContactId, mMatcher);
+                    updateMatchScoresBasedOnPhoneMatches(db, rawContactId, mMatcher);
+                    bestMatches =
+                            mMatcher.pickBestMatches(ContactMatcher.SCORE_THRESHOLD_SECONDARY);
+                    for (MatchScore matchScore : bestMatches) {
+                        markContactForAggregation(db, matchScore.getContactId());
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+        }
     }
 
     /**
@@ -1076,7 +1170,8 @@ public class ContactAggregator {
                         + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
 
         String SELECTION = "nameA." + NameLookupColumns.RAW_CONTACT_ID + "=?"
-                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0";
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
 
         String[] COLUMNS = new String[] {
             RawContacts.CONTACT_ID,
@@ -1226,7 +1321,8 @@ public class ContactAggregator {
                 + " AND dataA." + DataColumns.MIMETYPE_ID + "=?"
                 + " AND dataA." + Email.DATA + " NOT NULL"
                 + " AND dataB." + DataColumns.MIMETYPE_ID + "=?"
-                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0";
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
 
         String[] COLUMNS = new String[] {
             RawContacts.CONTACT_ID
@@ -1268,7 +1364,8 @@ public class ContactAggregator {
         String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
                 + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
                         + "dataB." + Phone.NUMBER + ",?)"
-                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0";
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
 
         String[] COLUMNS = new String[] {
             RawContacts.CONTACT_ID
@@ -1292,7 +1389,6 @@ public class ContactAggregator {
         } finally {
             c.close();
         }
-
     }
 
     /**
@@ -2154,16 +2250,6 @@ public class ContactAggregator {
         return new ReorderingCursorWrapper(cursor, positionMap);
     }
 
-    private interface RawContactIdQuery {
-        String TABLE = Tables.RAW_CONTACTS;
-
-        String[] COLUMNS = new String[] {
-            RawContacts._ID
-        };
-
-        int _ID = 0;
-    }
-
     /**
      * Finds contacts with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
@@ -2183,7 +2269,7 @@ public class ContactAggregator {
                     RawContacts.CONTACT_ID + "=" + contactId, null, null, null, null);
             try {
                 while (c.moveToNext()) {
-                    long rawContactId = c.getLong(RawContactIdQuery._ID);
+                    long rawContactId = c.getLong(RawContactIdQuery.RAW_CONTACT_ID);
                     updateMatchScoresForSuggestionsBasedOnDataMatches(db, rawContactId, candidates,
                             matcher);
                 }

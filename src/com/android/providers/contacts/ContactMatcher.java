@@ -427,6 +427,6 @@ public class ContactMatcher {
 
     @Override
     public String toString() {
-        return mScoreList.toString();
+        return mScoreList.subList(0, mScoreCount).toString();
     }
 }

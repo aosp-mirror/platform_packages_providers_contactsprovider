@@ -205,6 +205,11 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return createGroup(account, sourceId, title, visible, false, false);
     }
 
+    protected long createAutoAddGroup(Account account) {
+        return createGroup(account, "auto", "auto",
+                0 /* visible */,  true /* auto-add */, false /* fav */);
+    }
+
     protected long createGroup(Account account, String sourceId, String title,
             int visible, boolean autoAdd, boolean favorite) {
         ContentValues values = new ContentValues();
@@ -354,6 +359,12 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
         values.put(GroupMembership.GROUP_ROW_ID, groupId);
         return mResolver.insert(Data.CONTENT_URI, values);
+    }
+
+    public void removeGroupMemberships(long rawContactId) {
+        mResolver.delete(Data.CONTENT_URI,
+                Data.MIMETYPE + "=? AND " + GroupMembership.RAW_CONTACT_ID + "=?",
+                new String[] { GroupMembership.CONTENT_ITEM_TYPE, String.valueOf(rawContactId) });
     }
 
     protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
@@ -510,8 +521,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
     protected void assertStructuredName(long rawContactId, String prefix, String givenName,
             String middleName, String familyName, String suffix) {
-        Uri uri =
-                Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+        Uri uri = Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
                 RawContacts.Data.CONTENT_DIRECTORY);
 
         final String[] projection = new String[] {
