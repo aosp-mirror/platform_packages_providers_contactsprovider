@@ -135,8 +135,12 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
 
     private void updateVisibility(long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
-        if (contactId != 0) {
-            mDbHelper.updateContactVisible(contactId);
+        if (contactId == 0) {
+            return;
+        }
+
+        if (mDbHelper.updateContactVisibleOnlyIfChanged(contactId)) {
+            mContactAggregator.updateAggregationAfterVisibilityChange(contactId);
         }
     }
 

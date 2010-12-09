@@ -80,6 +80,7 @@ import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
 import android.os.RemoteException;
+import android.os.StrictMode;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
@@ -141,16 +142,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
-    private static final int BACKGROUND_TASK_OPEN_ACCESS = 0;
-    private static final int BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS = 1;
-    private static final int BACKGROUND_TASK_UPDATE_ACCOUNTS = 2;
-    private static final int BACKGROUND_TASK_UPDATE_LOCALE = 3;
-    private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 4;
-    private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 5;
-    private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 6;
-
-    // TODO: carefully prevent all incoming nested queries; they can be gaping security holes
-    // TODO: check for restricted flag during insert(), update(), and delete() calls
+    private static final int BACKGROUND_TASK_INITIALIZE = 0;
+    private static final int BACKGROUND_TASK_OPEN_WRITE_ACCESS = 1;
+    private static final int BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS = 2;
+    private static final int BACKGROUND_TASK_UPDATE_ACCOUNTS = 3;
+    private static final int BACKGROUND_TASK_UPDATE_LOCALE = 4;
+    private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 5;
+    private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 6;
+    private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 7;
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
@@ -949,7 +948,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
     private long mEstimatedStorageRequirement = 0;
-    private volatile CountDownLatch mAccessLatch;
+    private volatile CountDownLatch mReadAccessLatch;
+    private volatile CountDownLatch mWriteAccessLatch;
+    private boolean mAccountUpdateListenerRegistered;
     private boolean mOkToOpenAccess = true;
 
     private TransactionContext mTransactionContext = new TransactionContext();
@@ -976,18 +977,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private boolean initialize() {
-        final Context context = getContext();
+        StrictMode.setThreadPolicy(
+                new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
+
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
-        mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
-
-        AccountManager.get(getContext()).addOnAccountsUpdatedListener(this, null, false);
-
-        initForDefaultLocale();
 
         // The provider is closed for business until fully initialized
-        mAccessLatch = new CountDownLatch(1);
+        mReadAccessLatch = new CountDownLatch(1);
+        mWriteAccessLatch = new CountDownLatch(1);
 
         mBackgroundThread = new HandlerThread("ContactsProviderWorker",
                 Process.THREAD_PRIORITY_BACKGROUND);
@@ -999,12 +998,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         };
 
+        scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
         scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
         scheduleBackgroundTask(BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_PROVIDER_STATUS);
-        scheduleBackgroundTask(BACKGROUND_TASK_OPEN_ACCESS);
+        scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
 
         return true;
     }
@@ -1013,6 +1013,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * (Re)allocates all locale-sensitive structures.
      */
     private void initForDefaultLocale() {
+        Context context = getContext();
+        mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
         mCurrentLocale = getLocale();
         mNameSplitter = mDbHelper.createNameSplitter();
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
@@ -1020,7 +1022,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mCommonNicknameCache = new CommonNicknameCache(mDbHelper.getReadableDatabase());
         ContactLocaleUtils.getIntance().setLocale(mCurrentLocale);
         mContactAggregator = new ContactAggregator(this, mDbHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
@@ -1070,10 +1072,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     protected void performBackgroundTask(int task, Object arg) {
         switch (task) {
-            case BACKGROUND_TASK_OPEN_ACCESS: {
+            case BACKGROUND_TASK_INITIALIZE: {
+                initForDefaultLocale();
+                mReadAccessLatch.countDown();
+                mReadAccessLatch = null;
+                break;
+            }
+
+            case BACKGROUND_TASK_OPEN_WRITE_ACCESS: {
                 if (mOkToOpenAccess) {
-                    mAccessLatch.countDown();
-                    mAccessLatch = null;
+                    mWriteAccessLatch.countDown();
+                    mWriteAccessLatch = null;
                 }
                 break;
             }
@@ -1086,7 +1095,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case BACKGROUND_TASK_UPDATE_ACCOUNTS: {
-                Account[] accounts = AccountManager.get(getContext()).getAccounts();
+                Context context = getContext();
+                if (!mAccountUpdateListenerRegistered) {
+                    AccountManager.get(context).addOnAccountsUpdatedListener(this, null, false);
+                    mAccountUpdateListenerRegistered = true;
+                }
+
+                Account[] accounts = AccountManager.get(context).getAccounts();
                 boolean accountsChanged = updateAccountsInBackground(accounts);
                 updateContactsAccountCount(accounts);
                 updateDirectoriesInBackground(accountsChanged);
@@ -1297,35 +1312,36 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * While importing and aggregating contacts, this content provider will
+     * During intialization, this content provider will
      * block all attempts to change contacts data. In particular, it will hold
      * up all contact syncs. As soon as the import process is complete, all
      * processes waiting to write to the provider are unblocked and can proceed
      * to compete for the database transaction monitor.
      */
-    private void waitForAccess() {
-        CountDownLatch latch = mAccessLatch;
-        if (latch != null) {
-            while (true) {
-                try {
-                    latch.await();
-                    return;
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+    private void waitForAccess(CountDownLatch latch) {
+        if (latch == null) {
+            return;
+        }
+
+        while (true) {
+            try {
+                latch.await();
+                return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        waitForAccess();
+        waitForAccess(mWriteAccessLatch);
         return super.insert(uri, values);
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        if (mAccessLatch != null) {
+        if (mWriteAccessLatch != null) {
             // We are stuck trying to upgrade contacts db.  The only update request
             // allowed in this case is an update of provider status, which will trigger
             // an attempt to upgrade contacts again.
@@ -1340,20 +1356,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
             }
         }
-        waitForAccess();
+        waitForAccess(mWriteAccessLatch);
         return super.update(uri, values, selection, selectionArgs);
     }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        waitForAccess();
+        waitForAccess(mWriteAccessLatch);
         return super.delete(uri, selection, selectionArgs);
     }
 
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
-        waitForAccess();
+        waitForAccess(mWriteAccessLatch);
         return super.applyBatch(operations);
     }
 
@@ -2999,6 +3015,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+
+        waitForAccess(mReadAccessLatch);
+
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
             return queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1);
