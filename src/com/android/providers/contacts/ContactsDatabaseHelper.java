@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -91,7 +90,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 415;
+    static final int DATABASE_VERSION = 416;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -875,6 +874,9 @@ import java.util.Locale;
                 PhoneLookupColumns.RAW_CONTACT_ID + "," +
                 PhoneLookupColumns.DATA_ID +
         ");");
+
+        db.execSQL("CREATE INDEX phone_lookup_data_id_min_match_index ON " + Tables.PHONE_LOOKUP +
+                " (" + PhoneLookupColumns.DATA_ID + ", " + PhoneLookupColumns.MIN_MATCH + ");");
 
         // Private name/nickname table used for lookup
         db.execSQL("CREATE TABLE " + Tables.NAME_LOOKUP + " (" +
@@ -1732,6 +1734,11 @@ import java.util.Locale;
             upgradeToVersion415(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 415;
+        }
+
+        if (oldVersion == 415) {
+            upgradeToVersion416(db);
+            oldVersion = 416;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2823,6 +2830,11 @@ import java.util.Locale;
                 "UPDATE " + Tables.GROUPS +
                 "   SET " + Groups.GROUP_IS_READ_ONLY + "=1" +
                 " WHERE " + Groups.SYSTEM_ID + " NOT NULL");
+    }
+
+    private void upgradeToVersion416(SQLiteDatabase db) {
+        db.execSQL("CREATE INDEX phone_lookup_data_id_min_match_index ON " + Tables.PHONE_LOOKUP +
+                " (" + PhoneLookupColumns.DATA_ID + ", " + PhoneLookupColumns.MIN_MATCH + ");");
     }
 
     public String extractHandleFromEmailAddress(String email) {
