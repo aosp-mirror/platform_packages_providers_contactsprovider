@@ -21,8 +21,6 @@
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Actualizarea datelor despre persoanele din agendă necesită mai multă memorie"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Se trece la o versiune superioară a memoriei pentru persoanele din agendă"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Selectaţi pentru a finaliza trecerea la o versiune superioară."</string>
-    <!-- no translation found for default_directory (93961630309570294) -->
-    <skip />
-    <!-- no translation found for local_invisible_directory (705244318477396120) -->
-    <skip />
+    <string name="default_directory" msgid="93961630309570294">"Agendă"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Altul"</string>
 </resources>
