@@ -150,6 +150,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 5;
     private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 6;
     private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 7;
+    private static final int BACKGROUND_TASK_CHANGE_LOCALE = 8;
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
@@ -1113,6 +1114,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case BACKGROUND_TASK_CHANGE_LOCALE: {
+                changeLocaleInBackground();
+                break;
+            }
+
             case BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM: {
                 if (isAggregationUpgradeNeeded()) {
                     upgradeAggregationAlgorithmInBackground();
@@ -1140,8 +1146,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return;
         }
 
-        initForDefaultLocale();
-        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
+        scheduleBackgroundTask(BACKGROUND_TASK_CHANGE_LOCALE);
     }
 
     /**
@@ -1170,6 +1175,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDbHelper.setLocale(this, currentLocale);
         prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
         setProviderStatus(providerStatus);
+    }
+
+    /**
+     * Reinitializes the provider for a new locale.
+     */
+    private void changeLocaleInBackground() {
+        // Re-initializing the provider without stopping it.
+        // Locking the database will prevent inserts/updates/deletes from
+        // running at the same time, but queries may still be running
+        // on other threads. Those queries may return inconsistent results.
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            initForDefaultLocale();
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+
+        updateLocaleInBackground();
     }
 
     protected void updateDirectoriesInBackground(boolean rescan) {
