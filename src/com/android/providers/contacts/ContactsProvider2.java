@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.common.content.SQLiteContentProvider;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
