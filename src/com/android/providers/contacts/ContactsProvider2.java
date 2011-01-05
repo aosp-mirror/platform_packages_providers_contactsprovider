@@ -63,7 +63,9 @@ import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
 import android.content.res.AssetFileDescriptor;
+import android.database.CrossProcessCursor;
 import android.database.Cursor;
+import android.database.CursorWindow;
 import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
@@ -290,6 +292,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final String SELECTION_STARRED_FROM_RAW_CONTACTS =
             "SELECT " + RawContacts.STARRED
                     + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?";
+
+    public class AddressBookCursor extends CursorWrapper implements CrossProcessCursor {
+        private final CrossProcessCursor mCursor;
+        private final Bundle mBundle;
+
+        public AddressBookCursor(CrossProcessCursor cursor, String[] titles, int[] counts) {
+            super(cursor);
+            mCursor = cursor;
+            mBundle = new Bundle();
+            mBundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
+            mBundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
+        }
+
+        @Override
+        public Bundle getExtras() {
+            return mBundle;
+        }
+
+        @Override
+        public void fillWindow(int pos, CursorWindow window) {
+            mCursor.fillWindow(pos, window);
+        }
+
+        @Override
+        public CursorWindow getWindow() {
+            return mCursor.getWindow();
+        }
+
+        @Override
+        public boolean onMove(int oldPosition, int newPosition) {
+            return mCursor.onMove(oldPosition, newPosition);
+        }
+    }
 
     private interface DataContactsQuery {
         public static final String TABLE = "data "
@@ -3935,16 +3970,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 counts = newCounts;
             }
 
-            final Bundle bundle = new Bundle();
-            bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
-            bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
-            return new CursorWrapper(cursor) {
-
-                @Override
-                public Bundle getExtras() {
-                    return bundle;
-                }
-            };
+            return new AddressBookCursor((CrossProcessCursor) cursor, titles, counts);
         } finally {
             indexCursor.close();
         }
