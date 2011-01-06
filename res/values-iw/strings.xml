@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+  
+          http://www.apache.org/licenses/LICENSE-2.0
+  
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="app_label" msgid="3389954322874982620">"אחסון אנשי קשר"</string>
+    <string name="provider_label" msgid="6012150850819899907">"אנשי קשר"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"שדרוג איש הקשר דורש זיכרון נוסף"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"שדרוג אחסון של אנשי קשר"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"בחר כדי להשלים את השדרוג."</string>
+</resources>
