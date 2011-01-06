@@ -90,7 +90,7 @@ import java.util.Locale;
      *   400-499 Honeycomb
      * </pre>
      */
-    static final int DATABASE_VERSION = 416;
+    static final int DATABASE_VERSION = 417;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1517,6 +1517,7 @@ import java.util.Locale;
 
         boolean upgradeViewsAndTriggers = false;
         boolean upgradeNameLookup = false;
+        boolean upgradeLegacyApiSupport = false;
 
         if (oldVersion == 99) {
             upgradeViewsAndTriggers = true;
@@ -1741,14 +1742,23 @@ import java.util.Locale;
             oldVersion = 416;
         }
 
+        if (oldVersion == 416) {
+            upgradeLegacyApiSupport = true;
+            oldVersion = 417;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
             createContactsTriggers(db);
             createContactsIndexes(db);
-            LegacyApiSupport.createViews(db);
             updateSqliteStats(db);
+            upgradeLegacyApiSupport = true;
             mReopenDatabase = true;
+        }
+
+        if (upgradeLegacyApiSupport) {
+            LegacyApiSupport.createViews(db);
         }
 
         if (upgradeNameLookup) {
