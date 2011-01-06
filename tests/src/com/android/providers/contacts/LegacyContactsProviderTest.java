@@ -23,18 +23,17 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.Contacts;
-import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.GroupMembership;
 import android.provider.Contacts.Groups;
-import android.provider.Contacts.Intents;
 import android.provider.Contacts.Organizations;
 import android.provider.Contacts.People;
 import android.provider.Contacts.Phones;
 import android.provider.Contacts.Photos;
 import android.provider.Contacts.Presence;
 import android.provider.Contacts.Settings;
+import android.provider.ContactsContract;
 import android.test.suitebuilder.annotation.LargeTest;
 
 import java.io.IOException;
@@ -392,15 +391,13 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.put(Phones.ISPRIMARY, 1);
 
         Uri uri = mResolver.insert(Phones.CONTENT_URI, values);
-        ContentValues expectedResults[] = new ContentValues[2];
+        ContentValues expectedResults[] = new ContentValues[1];
         // Adding another value to assert
         expectedResults[0] = new ContentValues(values);
-        expectedResults[0].put(Phones.NUMBER_KEY, "+18004664411");
-        expectedResults[1] = values;
-        expectedResults[1].put(Phones.NUMBER_KEY, "18004664411");
+        expectedResults[0].put(Phones.NUMBER_KEY, "11446640081");
+
         // The result is joined with People
         putContactValues(expectedResults[0]);
-        putContactValues(expectedResults[1]);
         assertStoredValues(uri, expectedResults);
         assertSelection(Phones.CONTENT_URI, values, "phones",
                 Phones._ID, ContentUris.parseId(uri));
@@ -446,11 +443,9 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         mResolver.update(uri, values, null, null);
 
-        ContentValues[] expectedValues = new ContentValues[2];
+        ContentValues[] expectedValues = new ContentValues[1];
         expectedValues[0] = values;
-        expectedValues[0].put(Phones.NUMBER_KEY, "18005554663");
-        expectedValues[1] = new ContentValues(values);
-        expectedValues[1].put(Phones.NUMBER_KEY, "+18005554663");
+        expectedValues[0].put(Phones.NUMBER_KEY, "36645550081");
         assertStoredValues(uri, expectedValues);
     }
 
@@ -470,11 +465,9 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         Uri uri = mResolver.insert(Phones.CONTENT_URI, values);
 
         Uri filterUri1 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "18004664411");
-        ContentValues[] expectedValues = new ContentValues[2];
+        ContentValues[] expectedValues = new ContentValues[1];
         expectedValues[0] = values;
-        expectedValues[0].put(Phones.NUMBER_KEY, "8004664411");
-        expectedValues[1] = new ContentValues(values);
-        expectedValues[1].put(Phones.NUMBER_KEY, "+18004664411");
+        expectedValues[0].put(Phones.NUMBER_KEY, "1144664008");
         assertStoredValues(filterUri1, expectedValues);
 
         Uri filterUri2 = Uri.withAppendedPath(Phones.CONTENT_FILTER_URL, "7773334444");

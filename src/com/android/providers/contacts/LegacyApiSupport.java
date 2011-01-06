@@ -19,7 +19,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ExtensionsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
@@ -41,16 +40,10 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.BaseColumns;
-import android.provider.ContactsContract;
 import android.provider.Contacts.ContactMethods;
 import android.provider.Contacts.Extensions;
 import android.provider.Contacts.People;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.Settings;
-import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -60,6 +53,12 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.StatusUpdates;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -585,7 +584,7 @@ public class LegacyApiSupport {
                         + " AS " + People.TYPE + ", " +
                 "phone." + Phone.LABEL
                         + " AS " + People.LABEL + ", " +
-                "phone." + PhoneColumns.NORMALIZED_NUMBER
+                "_PHONE_NUMBER_STRIPPED_REVERSED(phone." + Phone.NUMBER + ")"
                         + " AS " + People.NUMBER_KEY;
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PEOPLE + ";");
@@ -649,7 +648,7 @@ public class LegacyApiSupport {
 
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.PHONES + ";");
-        db.execSQL("CREATE VIEW " + LegacyTables.PHONES + " AS SELECT " +
+        db.execSQL("CREATE VIEW " + LegacyTables.PHONES + " AS SELECT DISTINCT " +
                 DataColumns.CONCRETE_ID
                         + " AS " + android.provider.Contacts.Phones._ID + ", " +
                 DataColumns.CONCRETE_RAW_CONTACT_ID
@@ -662,7 +661,7 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.Phones.TYPE + ", " +
                 Tables.DATA + "." + Phone.LABEL
                         + " AS " + android.provider.Contacts.Phones.LABEL + ", " +
-                Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.NORMALIZED_NUMBER
+                "_PHONE_NUMBER_STRIPPED_REVERSED(" + Tables.DATA + "." + Phone.NUMBER + ")"
                         + " AS " + android.provider.Contacts.Phones.NUMBER_KEY + ", " +
                 peopleColumns +
                 " FROM " + Tables.DATA
@@ -1749,6 +1748,7 @@ public class LegacyApiSupport {
                     String filterParam = uri.getLastPathSegment();
                     qb.appendWhere(" AND person =");
                     qb.appendWhere(mDbHelper.buildPhoneLookupAsNestedQuery(filterParam));
+                    qb.setDistinct(true);
                 }
                 break;
 
