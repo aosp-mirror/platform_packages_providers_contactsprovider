@@ -4567,6 +4567,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
+
+        waitForAccess(mReadAccessLatch);
+
         int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS_ID_PHOTO: {
@@ -4707,6 +4710,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     public String getType(Uri uri) {
+
+        waitForAccess(mReadAccessLatch);
+
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS:
