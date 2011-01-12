@@ -50,6 +50,7 @@ import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
@@ -489,6 +490,7 @@ import java.util.Locale;
 
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
+    private long mMimeTypeIdSip;
     private long mMimeTypeIdStructuredName;
     private long mMimeTypeIdOrganization;
     private long mMimeTypeIdNickname;
@@ -613,6 +615,7 @@ import java.util.Locale;
 
         mMimeTypeIdEmail = getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         mMimeTypeIdIm = getMimeTypeId(Im.CONTENT_ITEM_TYPE);
+        mMimeTypeIdSip = getMimeTypeId(SipAddress.CONTENT_ITEM_TYPE);
         mMimeTypeIdStructuredName = getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
         mMimeTypeIdOrganization = getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
         mMimeTypeIdNickname = getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
@@ -3099,6 +3102,10 @@ import java.util.Locale;
 
     public long getMimeTypeIdForEmail() {
         return mMimeTypeIdEmail;
+    }
+
+    public long getMimeTypeIdForSip() {
+        return mMimeTypeIdSip;
     }
 
     public int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
