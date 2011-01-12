@@ -4284,37 +4284,86 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS + " WHERE ");
 
-        if (!TextUtils.isEmpty(filter)) {
-            String normalizedFilter = NameNormalizer.normalize(filter);
-            if (!TextUtils.isEmpty(normalizedFilter)) {
-                sb.append(DataColumns.CONCRETE_ID + " IN (");
-
-                // Construct a query that gives us exactly one data _id per matching contact.
-                // MIN stands in for ANY in this context.
-                sb.append(
-                        "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
-                        " FROM " + Tables.NAME_LOOKUP +
-                        " JOIN " + Tables.RAW_CONTACTS +
-                        " ON (" + RawContactsColumns.CONCRETE_ID
-                                + "=" + Tables.NAME_LOOKUP + "."
-                                        + NameLookupColumns.RAW_CONTACT_ID + ")" +
-                        " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
-                sb.append(normalizedFilter);
-                sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                            " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
-                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                        ")");
-            } else {
-                sb.append("0");     // Empty filter - return an empty set
-            }
-        } else {
-            sb.append("0");     // Empty filter - return an empty set
-        }
+        appendGeneralContactFilter(sb, filter);
 
         sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionWithSnippetMap);
+    }
+
+    private void appendGeneralContactFilter(StringBuilder sb, String filter) {
+        if (filter != null) {
+            filter = filter.trim();
+        }
+
+        if (TextUtils.isEmpty(filter)) {
+            sb.append("0");     // Empty filter - return an empty set
+            return;
+        }
+
+        if (filter.indexOf('@') != -1) {
+            String address = mDbHelper.extractAddressFromEmailAddress(filter);
+            if (!TextUtils.isEmpty(address)) {
+                sb.append(DataColumns.CONCRETE_ID + " IN (" +
+                        "SELECT MIN(" + DataColumns.CONCRETE_ID + ")" +
+                        " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS +
+                        " WHERE " + DataColumns.MIMETYPE_ID + " IN (");
+                sb.append(mDbHelper.getMimeTypeIdForEmail());
+                sb.append(",");
+                sb.append(mDbHelper.getMimeTypeIdForIm());
+                sb.append(",");
+                sb.append(mDbHelper.getMimeTypeIdForSip());
+                sb.append(") AND " + Data.DATA1 + " LIKE(");
+                DatabaseUtils.appendEscapedSQLString(sb, address + '%');
+                sb.append(")" +
+                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                        ")");
+            }
+            return;
+        }
+
+        String normalizedFilter = NameNormalizer.normalize(filter);
+        if (!TextUtils.isEmpty(normalizedFilter)) {
+            sb.append(DataColumns.CONCRETE_ID + " IN (");
+
+            // Construct a query that gives us exactly one data _id per matching contact.
+            // MIN stands in for ANY in this context.
+            sb.append(
+                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
+                    " FROM " + Tables.NAME_LOOKUP +
+                    " JOIN " + Tables.RAW_CONTACTS +
+                    " ON (" + RawContactsColumns.CONCRETE_ID
+                            + "=" + Tables.NAME_LOOKUP + "."
+                                    + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
+            sb.append(normalizedFilter);
+            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
+                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                    ")");
+        } else {
+            sb.append("0");     // Empty filter - return an empty set
+        }
+
+        String number = PhoneNumberUtils.normalizeNumber(filter);
+        if (!TextUtils.isEmpty(number)) {
+            sb.append(" OR " + DataColumns.CONCRETE_ID + " IN (" +
+                    " SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
+                    + " FROM " + Tables.PHONE_LOOKUP
+                    + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+            sb.append(number);
+            sb.append("%'");
+
+            String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
+                    mDbHelper.getCountryIso());
+            if (!TextUtils.isEmpty(numberE164)) {
+                sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                sb.append(numberE164);
+                sb.append("%'");
+            }
+            sb.append(')');
+        }
     }
 
     private void appendContactsTables(StringBuilder sb, Uri uri, String[] projection) {
