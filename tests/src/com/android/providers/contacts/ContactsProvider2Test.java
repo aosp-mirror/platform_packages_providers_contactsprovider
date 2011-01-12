@@ -1235,7 +1235,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelectionWithProjection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
     }
 
-    public void testQueryContactFilter() {
+    public void testQueryContactFilterByName() {
         ContentValues values = new ContentValues();
         long rawContactId = createRawContact(values, "18004664411",
                 "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
@@ -1258,12 +1258,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContactFilter(contactId, "goolash");
         assertContactFilter(contactId, "lash");
 
-        Uri filterUri2 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goolish");
-        assertEquals(0, getCount(filterUri2, null, null));
+        assertContactFilterNoResult("goolish");
 
         // Phonetic name with given/family reversed should not match
-        Uri filterUri3 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "lashgoo");
-        assertEquals(0, getCount(filterUri3, null, null));
+        assertContactFilterNoResult("lashgoo");
 
         nameValues.clear();
         nameValues.put(StructuredName.PHONETIC_FAMILY_NAME, "ga");
@@ -1273,8 +1271,58 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertContactFilter(contactId, "galosh");
 
-        Uri filterUri4 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goolish");
-        assertEquals(0, getCount(filterUri4, null, null));
+        assertContactFilterNoResult("goolish");
+    }
+
+    public void testQueryContactFilterByEmailAddress() {
+        ContentValues values = new ContentValues();
+        long rawContactId = createRawContact(values, "18004664411",
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO |
+                StatusUpdates.CAPABILITY_HAS_VOICE);
+
+        insertStructuredName(rawContactId, "James", "Bond");
+
+        long contactId = queryContactId(rawContactId);
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
+
+        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goog411@acme.com");
+        assertStoredValuesWithProjection(filterUri1, values);
+
+        assertContactFilter(contactId, "goog");
+        assertContactFilter(contactId, "goog411");
+        assertContactFilter(contactId, "goog411@");
+        assertContactFilter(contactId, "goog411@acme");
+        assertContactFilter(contactId, "goog411@acme.com");
+
+        assertContactFilterNoResult("goog411@acme.combo");
+        assertContactFilterNoResult("goog411@le.com");
+        assertContactFilterNoResult("goolish");
+    }
+
+    public void testQueryContactFilterByPhoneNumber() {
+        ContentValues values = new ContentValues();
+        long rawContactId = createRawContact(values, "18004664411",
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO |
+                StatusUpdates.CAPABILITY_HAS_VOICE);
+
+        insertStructuredName(rawContactId, "James", "Bond");
+
+        long contactId = queryContactId(rawContactId);
+        values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
+
+        Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "18004664411");
+        assertStoredValuesWithProjection(filterUri1, values);
+
+        assertContactFilter(contactId, "18004664411");
+        assertContactFilter(contactId, "1800466");
+        assertContactFilter(contactId, "+18004664411");
+        assertContactFilter(contactId, "8004664411");
+
+        assertContactFilterNoResult("78004664411");
+        assertContactFilterNoResult("18004664412");
+        assertContactFilterNoResult("8884664411");
     }
 
     public void testQueryContactStrequent() {
@@ -1782,6 +1830,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private void assertContactFilter(long contactId, String filter) {
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filter));
         assertStoredValue(filterUri, Contacts._ID, contactId);
+    }
+
+    private void assertContactFilterNoResult(String filter) {
+        Uri filterUri4 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, filter);
+        assertEquals(0, getCount(filterUri4, null, null));
     }
 
     public void testSearchSnippetOrganization() throws Exception {
