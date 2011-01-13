@@ -357,7 +357,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google";
-    public static final String FEATURE_LEGACY_HOSTED_OR_GOOGLE = "legacy_hosted_or_google";
 
     /** Sql where statement for filtering on groups. */
     private static final String CONTACTS_IN_GROUP_SELECT =
@@ -5027,8 +5026,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     protected Account getDefaultAccount() {
         AccountManager accountManager = AccountManager.get(getContext());
         try {
-            Account[] accounts = accountManager.getAccountsByTypeAndFeatures(DEFAULT_ACCOUNT_TYPE,
-                    new String[] {FEATURE_LEGACY_HOSTED_OR_GOOGLE}, null, null).getResult();
+            Account[] accounts = accountManager.getAccountsByType(DEFAULT_ACCOUNT_TYPE);
             if (accounts != null && accounts.length > 0) {
                 return accounts[0];
             }
