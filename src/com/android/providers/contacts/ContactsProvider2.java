@@ -4346,8 +4346,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             sb.append("0");     // Empty filter - return an empty set
         }
 
-        String number = PhoneNumberUtils.normalizeNumber(filter);
-        if (!TextUtils.isEmpty(number)) {
+        if (isPhoneNumber(filter)) {
+            String number = PhoneNumberUtils.normalizeNumber(filter);
             sb.append(" OR " + DataColumns.CONCRETE_ID + " IN (" +
                     " SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
                     + " FROM " + Tables.PHONE_LOOKUP
@@ -4364,6 +4364,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             sb.append(')');
         }
+    }
+
+    private boolean isPhoneNumber(String filter) {
+        boolean atLeastOneDigit = false;
+        int len = filter.length();
+        for (int i = 0; i < len; i++) {
+            char c = filter.charAt(i);
+            if (c >= '0' && c <= '9') {
+                atLeastOneDigit = true;
+            } else if (c != '*' && c != '#' && c != '+' && c != 'N' && c != '.' && c != ';'
+                    && c != '-' && c != '(' && c != ')' && c != ' ') {
+                return false;
+            }
+        }
+        return atLeastOneDigit;
     }
 
     private void appendContactsTables(StringBuilder sb, Uri uri, String[] projection) {
