@@ -3037,25 +3037,26 @@ import java.util.Locale;
             return cache.get(value);
         }
 
-        long id = -1;
-        try {
-            // Try searching database for mapping
-            DatabaseUtils.bindObjectToProgram(query, 1, value);
-            id = query.simpleQueryForLong();
-        } catch (SQLiteDoneException e) {
-            // Nothing found, so try inserting new mapping
-            DatabaseUtils.bindObjectToProgram(insert, 1, value);
-            id = insert.executeInsert();
-        }
-
-        if (id != -1) {
-            // Cache and return the new answer
-            cache.put(value, id);
-            return id;
-        } else {
-            // Otherwise throw if no mapping found or created
-            throw new IllegalStateException("Couldn't find or create internal "
-                    + "lookup table entry for value " + value);
+        synchronized (this) {
+            long id = -1;
+            try {
+                // Try searching database for mapping
+                DatabaseUtils.bindObjectToProgram(query, 1, value);
+                id = query.simpleQueryForLong();
+            } catch (SQLiteDoneException e) {
+                // Nothing found, so try inserting new mapping
+                DatabaseUtils.bindObjectToProgram(insert, 1, value);
+                id = insert.executeInsert();
+            }
+            if (id != -1) {
+                // Cache and return the new answer
+                cache.put(value, id);
+                return id;
+            } else {
+                // Otherwise throw if no mapping found or created
+                throw new IllegalStateException("Couldn't find or create internal "
+                        + "lookup table entry for value " + value);
+            }
         }
     }
 
