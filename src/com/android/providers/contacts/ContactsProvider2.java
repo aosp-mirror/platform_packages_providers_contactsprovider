@@ -4318,8 +4318,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 sb.append(")" +
                         " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
                         ")");
+                return;
             }
-            return;
         }
 
         String normalizedFilter = NameNormalizer.normalize(filter);

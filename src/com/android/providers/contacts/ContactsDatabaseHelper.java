@@ -2870,7 +2870,7 @@ import java.util.Locale;
             return null;
         }
 
-        return tokens[0].getAddress();
+        return tokens[0].getAddress().trim();
     }
 
     private long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
