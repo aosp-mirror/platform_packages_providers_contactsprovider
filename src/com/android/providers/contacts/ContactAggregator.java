@@ -2148,14 +2148,17 @@ public class ContactAggregator {
     /**
      * Finds matching contacts and returns a cursor on those.
      */
-    public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb, String[] projection,
-            long contactId, int maxSuggestions, String filter,
+    public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb,
+            String[] projection, long contactId, int maxSuggestions, String filter,
             ArrayList<AggregationSuggestionParameter> parameters) {
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
-
-        List<MatchScore> bestMatches = findMatchingContacts(db, contactId, parameters);
-        return queryMatchingContacts(qb, db, contactId, projection, bestMatches, maxSuggestions,
-                filter);
+        db.beginTransaction();
+        try {
+            List<MatchScore> bestMatches = findMatchingContacts(db, contactId, parameters);
+            return queryMatchingContacts(qb, db, projection, bestMatches, maxSuggestions, filter);
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private interface ContactIdQuery {
@@ -2170,9 +2173,8 @@ public class ContactAggregator {
      * Loads contacts with specified IDs and returns them in the order of IDs in the
      * supplied list.
      */
-    private Cursor queryMatchingContacts(SQLiteQueryBuilder qb, SQLiteDatabase db, long contactId,
+    private Cursor queryMatchingContacts(SQLiteQueryBuilder qb, SQLiteDatabase db,
             String[] projection, List<MatchScore> bestMatches, int maxSuggestions, String filter) {
-
         StringBuilder sb = new StringBuilder();
         sb.append(Contacts._ID);
         sb.append(" IN (");
