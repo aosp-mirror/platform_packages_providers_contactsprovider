@@ -34,6 +34,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private boolean mDataWipeEnabled = true;
     private Account mAccount;
     private boolean mNetworkNotified;
+    private boolean mIsPhone = true;
 
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
@@ -64,6 +65,15 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     public boolean isNetworkNotified() {
         return mNetworkNotified;
+    }
+
+    public void setIsPhone(boolean flag) {
+        mIsPhone = flag;
+    }
+
+    @Override
+    public boolean isPhone() {
+        return mIsPhone;
     }
 
     @Override

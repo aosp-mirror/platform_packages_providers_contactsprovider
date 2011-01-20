@@ -26,6 +26,7 @@ import android.app.SearchManager;
 import android.content.ContentUris;
 import android.content.res.Resources;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -134,8 +135,9 @@ public class GlobalSearchSupport {
     }
 
     private static class SearchSuggestion {
-        long contactId;
-        boolean titleIsName;
+        final long contactId;
+        final boolean filterIsEmail;
+        final boolean filterIsPhone;
         String organization;
         String email;
         String phoneNumber;
@@ -149,8 +151,10 @@ public class GlobalSearchSupport {
         String icon1;
         String icon2;
 
-        public SearchSuggestion(long contactId) {
+        public SearchSuggestion(long contactId, boolean filterIsEmail, boolean filterIsPhone) {
             this.contactId = contactId;
+            this.filterIsEmail = filterIsEmail;
+            this.filterIsPhone = filterIsPhone;
         }
 
         private void process() {
@@ -158,21 +162,20 @@ public class GlobalSearchSupport {
                 return;
             }
 
-            boolean hasOrganization = !TextUtils.isEmpty(organization);
-            boolean hasEmail = !TextUtils.isEmpty(email);
-            boolean hasPhone = !TextUtils.isEmpty(phoneNumber);
-
-            boolean titleIsOrganization = !titleIsName && hasOrganization;
-            boolean titleIsEmail = !titleIsName && !titleIsOrganization && hasEmail;
-            boolean titleIsPhone = !titleIsName && !titleIsOrganization && !titleIsEmail
-                    && hasPhone;
-
-            if (!titleIsOrganization && hasOrganization) {
-                text2 = organization;
-            } else if (!titleIsPhone && hasPhone) {
+            if (filterIsPhone && !TextUtils.isEmpty(phoneNumber)) {
                 text2 = phoneNumber;
-            } else if (!titleIsEmail && hasEmail) {
+            } else if (filterIsEmail && !TextUtils.isEmpty(email)) {
                 text2 = email;
+            } else if (!TextUtils.isEmpty(organization)) {
+                text2 = organization;
+            } else if (!TextUtils.isEmpty(phoneNumber)) {
+                text2 = phoneNumber;
+            } else if (!TextUtils.isEmpty(email)) {
+                text2 = email;
+            }
+
+            if (TextUtils.equals(text1, text2)) {
+                text2 = null;
             }
 
             if (photoUri != null) {
@@ -280,10 +283,10 @@ public class GlobalSearchSupport {
         }
 
         final String searchClause = uri.getLastPathSegment();
-        if (TextUtils.isDigitsOnly(searchClause)) {
+        if (TextUtils.isDigitsOnly(searchClause) && mContactsProvider.isPhone()) {
             return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
         } else {
-            return buildCursorForSearchSuggestionsBasedOnName(db, searchClause, limit);
+            return buildCursorForSearchSuggestionsBasedOnFilter(db, searchClause, limit);
         }
     }
 
@@ -310,7 +313,7 @@ public class GlobalSearchSupport {
         sb.append(mContactsProvider.getContactsRestrictions());
         appendMimeTypeFilter(sb);
         sb.append(" AND " + ContactsColumns.CONCRETE_ID + "=" + contactId);
-        return buildCursorForSearchSuggestions(db, sb.toString(), projection, null);
+        return buildCursorForSearchSuggestions(db, sb.toString(), projection, null, false, false);
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
@@ -356,17 +359,29 @@ public class GlobalSearchSupport {
         return cursor;
     }
 
-    private Cursor buildCursorForSearchSuggestionsBasedOnName(SQLiteDatabase db,
-            String searchClause, String limit) {
+    private Cursor buildCursorForSearchSuggestionsBasedOnFilter(SQLiteDatabase db,
+            String filter, String limit) {
         ensureMimetypeIdsLoaded();
         StringBuilder sb = new StringBuilder();
         sb.append(mContactsProvider.getContactsRestrictions());
         appendMimeTypeFilter(sb);
-        sb.append(" AND " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN ");
-        mContactsProvider.appendRawContactsByFilterAsNestedQuery(sb, searchClause);
+        sb.append(" AND ");
+        boolean filterIsEmail = mContactsProvider.appendEmailBasedDataFilter(sb, filter);
+        boolean filterIsPhone = false;
+        if (!filterIsEmail) {
+            filterIsPhone = mContactsProvider.appendPhoneNumberBasedDataFilter(sb, filter);
+        }
+        if (!filterIsEmail && !filterIsPhone) {
+            boolean filterIsName = mContactsProvider.appendNameBasedRawContactFilter(sb, filter);
+            if (!filterIsName) {
+                sb.append("0");
+            }
+        }
+
         String selection = sb.toString();
 
-        return buildCursorForSearchSuggestions(db, selection, null, limit);
+        return buildCursorForSearchSuggestions(
+                db, selection, null, limit, filterIsEmail, filterIsPhone);
     }
 
     private void appendMimeTypeFilter(StringBuilder sb) {
@@ -380,8 +395,8 @@ public class GlobalSearchSupport {
                 mMimeTypeIdStructuredName + ")");
     }
 
-    private Cursor buildCursorForSearchSuggestions(SQLiteDatabase db,
-            String selection, String[] projection, String limit) {
+    private Cursor buildCursorForSearchSuggestions(SQLiteDatabase db, String selection,
+            String[] projection, String limit, boolean filterIsEmail, boolean filterIsPhone) {
         ArrayList<SearchSuggestion> suggestionList = new ArrayList<SearchSuggestion>();
         HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
         Cursor c = db.query(false, SearchSuggestionQuery.TABLE, SearchSuggestionQuery.COLUMNS,
@@ -392,7 +407,7 @@ public class GlobalSearchSupport {
                 long contactId = c.getLong(SearchSuggestionQuery.CONTACT_ID);
                 SearchSuggestion suggestion = suggestionMap.get(contactId);
                 if (suggestion == null) {
-                    suggestion = new SearchSuggestion(contactId);
+                    suggestion = new SearchSuggestion(contactId, filterIsEmail, filterIsPhone);
                     suggestionList.add(suggestion);
                     suggestionMap.put(contactId, suggestion);
                 }
@@ -405,9 +420,7 @@ public class GlobalSearchSupport {
                 }
 
                 long mimetype = c.getLong(SearchSuggestionQuery.MIMETYPE_ID);
-                if (mimetype == mMimeTypeIdStructuredName) {
-                    suggestion.titleIsName = true;
-                } else if (mimetype == mMimeTypeIdOrganization) {
+                if (mimetype == mMimeTypeIdOrganization) {
                     if (isSuperPrimary || suggestion.organization == null) {
                         suggestion.organization = c.getString(SearchSuggestionQuery.ORGANIZATION);
                     }
