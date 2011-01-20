@@ -98,17 +98,20 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         mActor = new ContactsActor(getContext(), PACKAGE_GREY, getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
         if (mActor.provider instanceof SynchronousContactsProvider2) {
-            ((SynchronousContactsProvider2) mActor.provider).wipeData();
+            getContactsProvider().wipeData();
         }
     }
 
     @Override
     protected void tearDown() throws Exception {
         if (mActor.provider instanceof SynchronousContactsProvider2) {
-            ((SynchronousContactsProvider2) mActor.provider)
-                    .getDatabaseHelper(mActor.context).close();
+            getContactsProvider().getDatabaseHelper(mActor.context).close();
         }
         super.tearDown();
+    }
+
+    public SynchronousContactsProvider2 getContactsProvider() {
+        return (SynchronousContactsProvider2) mActor.provider;
     }
 
     public Context getMockContext() {
@@ -1004,7 +1007,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected void assertNetworkNotified(boolean expected) {
-        assertEquals(expected, ((SynchronousContactsProvider2)mActor.provider).isNetworkNotified());
+        assertEquals(expected, (getContactsProvider()).isNetworkNotified());
     }
 
     protected void assertProjection(Uri uri, String[] expectedProjection) {

@@ -20,7 +20,6 @@ import android.accounts.Account;
 import android.app.SearchManager;
 import android.content.ContentValues;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -93,6 +92,14 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                 .expectedText1("Deer Dough").expectedText2("foo@acme.com").build().test();
     }
 
+    public void testSearchSuggestionsByEmailWithPhoto() {
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
+                loadTestPhoto()).email("foo@acme.com").build();
+        new SuggestionTesterBuilder(contact).query("foo@ac").expectIcon1Uri(true).expectedIcon2(
+                String.valueOf(StatusUpdates.getPresenceIconResourceId(StatusUpdates.OFFLINE)))
+                .expectedText1("Deer Dough").expectedText2("foo@acme.com").build().test();
+    }
+
     public void testSearchSuggestionsByNameWithCompany() {
         GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").company("Google")
                 .build();
@@ -121,14 +128,24 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                 "Deer Dough").expectedText2("Google").build().test();
     }
 
-    public void testSearchSuggestionsByPhoneNumber() throws Exception {
+    public void testSearchSuggestionsByPhoneNumberOnNonPhone() throws Exception {
+        getContactsProvider().setIsPhone(false);
+
+        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
+                loadTestPhoto()).phone("1-800-4664-411").build();
+        new SuggestionTesterBuilder(contact).query("1800").expectIcon1Uri(true).expectedText1(
+                "Deer Dough").expectedText2("1-800-4664-411").build().test();
+    }
+
+    public void testSearchSuggestionsByPhoneNumberOnPhone() throws Exception {
+        getContactsProvider().setIsPhone(true);
+
         ContentValues values = new ContentValues();
 
         Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
                 .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("12345").build();
 
         Cursor c = mResolver.query(searchUri, null, null, null, null);
-        DatabaseUtils.dumpCursor(c);
         assertEquals(2, c.getCount());
         c.moveToFirst();
 
