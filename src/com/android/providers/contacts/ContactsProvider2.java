@@ -1438,6 +1438,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     @Override
+    public int bulkInsert(Uri uri, ContentValues[] values) {
+        waitForAccess(mWriteAccessLatch);
+        return super.bulkInsert(uri, values);
+    }
+
+    @Override
     protected void onBeginTransaction() {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "onBeginTransaction");
