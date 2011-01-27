@@ -3037,7 +3037,7 @@ import java.util.Locale;
             return cache.get(value);
         }
 
-        synchronized (this) {
+        synchronized (query) {
             long id = -1;
             try {
                 // Try searching database for mapping
