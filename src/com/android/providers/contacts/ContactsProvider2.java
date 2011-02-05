@@ -3082,6 +3082,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
+    private static class DirectoryCursorWrapper extends CursorWrapper
+            implements CrossProcessCursor {
+        private final CrossProcessCursor mCrossProcessCursor;
+
+        public DirectoryCursorWrapper(Cursor cursor, CrossProcessCursor crossProcessCursor) {
+            super(cursor);
+            mCrossProcessCursor = crossProcessCursor;
+        }
+
+        @Override
+        public void fillWindow(int pos, CursorWindow window) {
+            mCrossProcessCursor.fillWindow(pos, window);
+        }
+
+        @Override
+        public CursorWindow getWindow() {
+            return mCrossProcessCursor.getWindow();
+        }
+
+        @Override
+        public boolean onMove(int oldPosition, int newPosition) {
+            return mCrossProcessCursor.onMove(oldPosition, newPosition);
+        }
+    }
+
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
@@ -3129,10 +3154,42 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         Cursor cursor = getContext().getContentResolver().query(directoryUri, projection, selection,
                 selectionArgs, sortOrder);
-        while (cursor instanceof CursorWrapper) {
-            cursor = ((CursorWrapper)cursor).getWrappedCursor();
+
+        if (cursor == null) {
+            return null;
         }
-        return cursor;
+
+        CrossProcessCursor crossProcessCursor = getCrossProcessCursor(cursor);
+        if (crossProcessCursor != null) {
+            return new DirectoryCursorWrapper(cursor, crossProcessCursor);
+        } else {
+            return matrixCursorFromCursor(cursor);
+        }
+    }
+
+    private CrossProcessCursor getCrossProcessCursor(Cursor cursor) {
+        Cursor c = cursor;
+        if (c instanceof CrossProcessCursor) {
+            return (CrossProcessCursor) c;
+        } else if (c instanceof CursorWindow) {
+            return getCrossProcessCursor(((CursorWrapper) c).getWrappedCursor());
+        } else {
+            return null;
+        }
+    }
+
+    public MatrixCursor matrixCursorFromCursor(Cursor cursor) {
+        MatrixCursor newCursor = new MatrixCursor(cursor.getColumnNames());
+        int numColumns = cursor.getColumnCount();
+        String data[] = new String[numColumns];
+        cursor.moveToPosition(-1);
+        while (cursor.moveToNext()) {
+            for (int i = 0; i < numColumns; i++) {
+                data[i] = cursor.getString(i);
+            }
+            newCursor.addRow(data);
+        }
+        return newCursor;
     }
 
     private static final class DirectoryQuery {
