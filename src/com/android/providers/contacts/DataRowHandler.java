@@ -21,6 +21,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -70,6 +71,7 @@ public abstract class DataRowHandler {
         int MIMETYPE = 2;
     }
 
+    protected final Context mContext;
     protected final ContactsDatabaseHelper mDbHelper;
     protected final ContactAggregator mContactAggregator;
     protected String[] mSelectionArgs1 = new String[1];
@@ -77,8 +79,9 @@ public abstract class DataRowHandler {
     protected long mMimetypeId;
 
     @SuppressWarnings("all")
-    public DataRowHandler(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator,
-            String mimetype) {
+    public DataRowHandler(Context context, ContactsDatabaseHelper dbHelper,
+            ContactAggregator aggregator, String mimetype) {
+        mContext = context;
         mDbHelper = dbHelper;
         mContactAggregator = aggregator;
         mMimetype = mimetype;

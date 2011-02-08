@@ -33,9 +33,11 @@ import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Event;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
@@ -425,6 +427,25 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Im.DATA, handle);
         values.put(Im.TYPE, Im.TYPE_HOME);
 
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertEvent(long rawContactId, int type, String date) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Event.CONTENT_ITEM_TYPE);
+        values.put(Event.TYPE, type);
+        values.put(Event.START_DATE, date);
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertNote(long rawContactId, String note) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
+        values.put(Note.NOTE, note);
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }

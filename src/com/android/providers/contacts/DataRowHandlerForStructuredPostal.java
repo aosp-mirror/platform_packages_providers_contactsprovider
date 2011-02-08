@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
@@ -43,9 +44,9 @@ public class DataRowHandlerForStructuredPostal extends DataRowHandler {
 
     private final PostalSplitter mSplitter;
 
-    public DataRowHandlerForStructuredPostal(ContactsDatabaseHelper dbHelper,
+    public DataRowHandlerForStructuredPostal(Context context, ContactsDatabaseHelper dbHelper,
             ContactAggregator aggregator, PostalSplitter splitter) {
-        super(dbHelper, aggregator, StructuredPostal.CONTENT_ITEM_TYPE);
+        super(context, dbHelper, aggregator, StructuredPostal.CONTENT_ITEM_TYPE);
         mSplitter = splitter;
     }
 
@@ -89,7 +90,6 @@ public class DataRowHandlerForStructuredPostal extends DataRowHandler {
             postal.toValues(update);
         } else if (!touchedUnstruct
                 && (touchedStruct || areAnySpecified(update, STRUCTURED_FIELDS))) {
-            // See comment in
             postal.fromValues(augmented);
             final String joined = mSplitter.join(postal);
             update.put(StructuredPostal.FORMATTED_ADDRESS, joined);

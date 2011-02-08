@@ -16,6 +16,7 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
@@ -30,9 +31,9 @@ public class DataRowHandlerForCommonDataKind extends DataRowHandler {
     private final String mTypeColumn;
     private final String mLabelColumn;
 
-    public DataRowHandlerForCommonDataKind(ContactsDatabaseHelper dbHelper,
+    public DataRowHandlerForCommonDataKind(Context context, ContactsDatabaseHelper dbHelper,
             ContactAggregator aggregator, String mimetype, String typeColumn, String labelColumn) {
-        super(dbHelper, aggregator, mimetype);
+        super(context, dbHelper, aggregator, mimetype);
         mTypeColumn = typeColumn;
         mLabelColumn = labelColumn;
     }

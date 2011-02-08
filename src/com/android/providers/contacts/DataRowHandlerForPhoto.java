@@ -16,6 +16,7 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
@@ -25,8 +26,9 @@ import android.provider.ContactsContract.CommonDataKinds.Photo;
  */
 public class DataRowHandlerForPhoto extends DataRowHandler {
 
-    public DataRowHandlerForPhoto(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
-        super(dbHelper, aggregator, Photo.CONTENT_ITEM_TYPE);
+    public DataRowHandlerForPhoto(
+            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+        super(context, dbHelper, aggregator, Photo.CONTENT_ITEM_TYPE);
     }
 
     @Override

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -32,10 +33,10 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
     private final NameLookupBuilder mNameLookupBuilder;
     private final StringBuilder mSb = new StringBuilder();
 
-    public DataRowHandlerForStructuredName(ContactsDatabaseHelper dbHelper,
+    public DataRowHandlerForStructuredName(Context context, ContactsDatabaseHelper dbHelper,
             ContactAggregator aggregator, NameSplitter splitter,
             NameLookupBuilder nameLookupBuilder) {
-        super(dbHelper, aggregator, StructuredName.CONTENT_ITEM_TYPE);
+        super(context, dbHelper, aggregator, StructuredName.CONTENT_ITEM_TYPE);
         mSplitter = splitter;
         mNameLookupBuilder = nameLookupBuilder;
     }

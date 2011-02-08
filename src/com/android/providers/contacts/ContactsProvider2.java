@@ -94,6 +94,7 @@ import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
@@ -1070,31 +1071,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
         mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForEmail(mDbHelper, mContactAggregator));
+                new DataRowHandlerForEmail(context, mDbHelper, mContactAggregator));
         mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForCommonDataKind(mDbHelper, mContactAggregator,
-                        Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL));
-        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForCommonDataKind(mDbHelper, mContactAggregator,
-                        StructuredPostal.CONTENT_ITEM_TYPE, StructuredPostal.TYPE,
-                        StructuredPostal.LABEL));
+                new DataRowHandlerForIm(context, mDbHelper, mContactAggregator));
         mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForOrganization(mDbHelper, mContactAggregator));
+                new DataRowHandlerForOrganization(context, mDbHelper, mContactAggregator));
         mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForPhoneNumber(mDbHelper, mContactAggregator));
+                new DataRowHandlerForPhoneNumber(context, mDbHelper, mContactAggregator));
         mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForNickname(mDbHelper, mContactAggregator));
+                new DataRowHandlerForNickname(context, mDbHelper, mContactAggregator));
         mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForStructuredName(mDbHelper, mContactAggregator,
+                new DataRowHandlerForStructuredName(context, mDbHelper, mContactAggregator,
                         mNameSplitter, mNameLookupBuilder));
         mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForStructuredPostal(mDbHelper, mContactAggregator,
+                new DataRowHandlerForStructuredPostal(context, mDbHelper, mContactAggregator,
                         mPostalSplitter));
         mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForGroupMembership(mDbHelper, mContactAggregator,
+                new DataRowHandlerForGroupMembership(context, mDbHelper, mContactAggregator,
                         mGroupIdCache));
         mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForPhoto(mDbHelper, mContactAggregator));
+                new DataRowHandlerForPhoto(context, mDbHelper, mContactAggregator));
+        mDataRowHandlers.put(Note.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForNote(context, mDbHelper, mContactAggregator));
     }
 
     /**
@@ -1553,7 +1551,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public DataRowHandler getDataRowHandler(final String mimeType) {
         DataRowHandler handler = mDataRowHandlers.get(mimeType);
         if (handler == null) {
-            handler = new DataRowHandlerForCustomMimetype(mDbHelper, mContactAggregator, mimeType);
+            handler = new DataRowHandlerForCustomMimetype(
+                    getContext(), mDbHelper, mContactAggregator, mimeType);
             mDataRowHandlers.put(mimeType, handler);
         }
         return handler;

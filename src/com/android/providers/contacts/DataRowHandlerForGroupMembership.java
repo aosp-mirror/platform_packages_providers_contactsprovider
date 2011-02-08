@@ -23,6 +23,7 @@ import com.android.providers.contacts.ContactsProvider2.GroupIdCacheEntry;
 
 import android.accounts.Account;
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
@@ -65,10 +66,10 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
 
     private final HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache;
 
-    public DataRowHandlerForGroupMembership(ContactsDatabaseHelper dbHelper,
+    public DataRowHandlerForGroupMembership(Context context, ContactsDatabaseHelper dbHelper,
             ContactAggregator aggregator,
             HashMap<String, ArrayList<GroupIdCacheEntry>> groupIdCache) {
-        super(dbHelper, aggregator, GroupMembership.CONTENT_ITEM_TYPE);
+        super(context, dbHelper, aggregator, GroupMembership.CONTENT_ITEM_TYPE);
         mGroupIdCache = groupIdCache;
     }
 

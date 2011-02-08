@@ -84,6 +84,10 @@ public class SearchIndexManager {
             return mCursor.getString(mCursor.getColumnIndex(columnName));
         }
 
+        public int getInt(String columnName) {
+            return mCursor.getInt(mCursor.getColumnIndex(columnName));
+        }
+
         @Override
         public String toString() {
             return "Content: " + mSbContent + "\n Tokens: " + mSbTokens;

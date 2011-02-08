@@ -19,6 +19,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
@@ -30,9 +31,9 @@ import android.provider.ContactsContract.Data;
  */
 public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKind {
 
-    public DataRowHandlerForOrganization(ContactsDatabaseHelper dbHelper,
+    public DataRowHandlerForOrganization(Context context, ContactsDatabaseHelper dbHelper,
             ContactAggregator aggregator) {
-        super(dbHelper, aggregator,
+        super(context, dbHelper, aggregator,
                 Organization.CONTENT_ITEM_TYPE, Organization.TYPE, Organization.LABEL);
     }
 

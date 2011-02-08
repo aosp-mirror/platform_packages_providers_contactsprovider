@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -27,8 +28,9 @@ import android.provider.ContactsContract.CommonDataKinds.Email;
  */
 public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
 
-    public DataRowHandlerForEmail(ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
-        super(dbHelper, aggregator, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
+    public DataRowHandlerForEmail(
+            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+        super(context, dbHelper, aggregator, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
     }
 
     @Override

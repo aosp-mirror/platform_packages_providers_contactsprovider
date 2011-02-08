@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
@@ -113,6 +114,23 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
 
         assertSearchIndex(contactId, "1600 Amphitheatre Pkwy Mountain View, CA 94043\n"
                 + "76 Buckingham Palace Road London SW1W 9TQ United Kingdom", null);
+    }
+
+    public void testSearchIndexForIm() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertImHandle(rawContactId, Im.PROTOCOL_JABBER, null, "bp@android.com");
+        insertImHandle(rawContactId, Im.PROTOCOL_CUSTOM, "android_im", "android@android.com");
+
+        assertSearchIndex(contactId, "Jabber/bp@android.com\nandroid_im/android@android.com", null);
+    }
+
+    public void testSearchIndexForNote() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertNote(rawContactId, "Please note: three notes or more make up a chord.");
+
+        assertSearchIndex(contactId, "Please note: three notes or more make up a chord.", null);
     }
 
     private void assertSearchIndex(long contactId, String expectedContent, String expectedTokens) {

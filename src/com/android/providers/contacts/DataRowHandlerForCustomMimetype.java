@@ -15,10 +15,12 @@
  */
 package com.android.providers.contacts;
 
+import android.content.Context;
+
 public class DataRowHandlerForCustomMimetype extends DataRowHandler {
 
-    public DataRowHandlerForCustomMimetype(
+    public DataRowHandlerForCustomMimetype(Context context,
             ContactsDatabaseHelper dbHelper, ContactAggregator aggregator, String mimetype) {
-        super(dbHelper, aggregator, mimetype);
+        super(context, dbHelper, aggregator, mimetype);
     }
 }

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
@@ -28,9 +29,10 @@ import android.text.TextUtils;
  */
 public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
 
-    public DataRowHandlerForNickname(ContactsDatabaseHelper dbHelper,
-            ContactAggregator aggregator) {
-        super(dbHelper, aggregator, Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE, Nickname.LABEL);
+    public DataRowHandlerForNickname(
+            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+        super(context, dbHelper, aggregator, Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE,
+                Nickname.LABEL);
     }
 
     @Override
