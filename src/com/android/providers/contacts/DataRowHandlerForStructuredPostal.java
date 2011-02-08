@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
+
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -92,5 +94,21 @@ public class DataRowHandlerForStructuredPostal extends DataRowHandler {
             final String joined = mSplitter.join(postal);
             update.put(StructuredPostal.FORMATTED_ADDRESS, joined);
         }
+    }
+
+
+    @Override
+    public boolean hasSearchableData() {
+        return true;
+    }
+
+    @Override
+    public boolean containsSearchableColumns(ContentValues values) {
+        return values.containsKey(StructuredPostal.FORMATTED_ADDRESS);
+    }
+
+    @Override
+    public void appendSearchableData(IndexBuilder builder) {
+        builder.appendContentFromColumn(StructuredPostal.FORMATTED_ADDRESS);
     }
 }

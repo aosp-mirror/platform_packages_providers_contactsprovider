@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
+
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -78,5 +80,15 @@ public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
         fixRawContactDisplayName(db, txContext, rawContactId);
         triggerAggregation(rawContactId);
         return count;
+    }
+
+    @Override
+    public boolean containsSearchableColumns(ContentValues values) {
+        return values.containsKey(Nickname.NAME);
+    }
+
+    @Override
+    public void appendSearchableData(IndexBuilder builder) {
+        builder.appendContentFromColumn(Nickname.NAME);
     }
 }

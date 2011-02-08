@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -144,6 +145,28 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
             case Phone.TYPE_FAX_WORK: return 6;
             case Phone.TYPE_FAX_HOME: return 7;
             default: return 1000;
+        }
+    }
+
+    @Override
+    public boolean containsSearchableColumns(ContentValues values) {
+        return values.containsKey(Phone.NUMBER);
+    }
+
+    @Override
+    public void appendSearchableData(IndexBuilder builder) {
+        String number = builder.getString(Phone.NUMBER);
+        String normalizedNumber = PhoneNumberUtils.normalizeNumber(number);
+        if (TextUtils.isEmpty(normalizedNumber)) {
+            return;
+        }
+
+        builder.appendToken(normalizedNumber);
+
+        String numberE164 = PhoneNumberUtils.formatNumberToE164(
+                number, mDbHelper.getCurrentCountryIso());
+        if (numberE164 != null && !numberE164.equals(normalizedNumber)) {
+            builder.appendToken(numberE164);
         }
     }
 }

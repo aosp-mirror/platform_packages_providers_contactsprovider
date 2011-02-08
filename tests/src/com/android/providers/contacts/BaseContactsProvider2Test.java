@@ -339,6 +339,13 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return resultUri;
     }
 
+    protected Uri insertPostalAddress(long rawContactId, ContentValues values) {
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, StructuredPostal.CONTENT_ITEM_TYPE);
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
     protected Uri insertPhoto(long rawContactId) {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);

@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
+
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -28,6 +30,7 @@ import android.text.TextUtils;
 public class DataRowHandlerForStructuredName extends DataRowHandler {
     private final NameSplitter mSplitter;
     private final NameLookupBuilder mNameLookupBuilder;
+    private final StringBuilder mSb = new StringBuilder();
 
     public DataRowHandlerForStructuredName(ContactsDatabaseHelper dbHelper,
             ContactAggregator aggregator, NameSplitter splitter,
@@ -165,6 +168,49 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                     values.getAsString(StructuredName.PHONETIC_FAMILY_NAME),
                     values.getAsString(StructuredName.PHONETIC_MIDDLE_NAME),
                     values.getAsString(StructuredName.PHONETIC_GIVEN_NAME));
+        }
+    }
+
+    @Override
+    public boolean hasSearchableData() {
+        return true;
+    }
+
+    @Override
+    public boolean containsSearchableColumns(ContentValues values) {
+        return values.containsKey(StructuredName.FAMILY_NAME)
+                || values.containsKey(StructuredName.GIVEN_NAME)
+                || values.containsKey(StructuredName.MIDDLE_NAME)
+                || values.containsKey(StructuredName.PHONETIC_FAMILY_NAME)
+                || values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)
+                || values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME)
+                || values.containsKey(StructuredName.PREFIX)
+                || values.containsKey(StructuredName.SUFFIX);
+    }
+
+    @Override
+    public void appendSearchableData(IndexBuilder builder) {
+        builder.appendContentFromColumn(StructuredName.PREFIX);
+        builder.appendContentFromColumn(StructuredName.FAMILY_NAME);
+        builder.appendContentFromColumn(StructuredName.GIVEN_NAME, IndexBuilder.SEPARATOR_COMMA);
+        builder.appendContentFromColumn(StructuredName.MIDDLE_NAME);
+        builder.appendContentFromColumn(StructuredName.SUFFIX, IndexBuilder.SEPARATOR_COMMA);
+
+        String family = builder.getString(StructuredName.PHONETIC_FAMILY_NAME);
+        String middle = builder.getString(StructuredName.PHONETIC_MIDDLE_NAME);
+        String given = builder.getString(StructuredName.PHONETIC_GIVEN_NAME);
+        if (!TextUtils.isEmpty(family) || !TextUtils.isEmpty(middle) || !TextUtils.isEmpty(given)) {
+            mSb.setLength(0);
+            if (!TextUtils.isEmpty(family)) {
+                mSb.append(family);
+            }
+            if (!TextUtils.isEmpty(middle)) {
+                mSb.append(' ').append(middle);
+            }
+            if (!TextUtils.isEmpty(given)) {
+                mSb.append(' ').append(given);
+            }
+            builder.appendContent(mSb.toString().trim(), IndexBuilder.SEPARATOR_PARENTHESES);
         }
     }
 }

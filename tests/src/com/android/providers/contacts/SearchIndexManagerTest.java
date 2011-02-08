@@ -18,6 +18,8 @@ package com.android.providers.contacts;
 
 import android.content.ContentValues;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.test.suitebuilder.annotation.MediumTest;
 
 /**
@@ -31,6 +33,27 @@ import android.test.suitebuilder.annotation.MediumTest;
  */
 @MediumTest
 public class SearchIndexManagerTest extends BaseContactsProvider2Test {
+
+    public void testSearchIndexForStructuredName() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertStructuredName(rawContactId, "John", "Doe");
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "Bob I. Parr");
+        insertStructuredName(rawContactId, values);
+        values.clear();
+        values.put(StructuredName.PREFIX, "Mrs.");
+        values.put(StructuredName.GIVEN_NAME, "Helen");
+        values.put(StructuredName.MIDDLE_NAME, "I.");
+        values.put(StructuredName.FAMILY_NAME, "Parr");
+        values.put(StructuredName.SUFFIX, "PhD");
+        values.put(StructuredName.PHONETIC_FAMILY_NAME, "par");
+        values.put(StructuredName.PHONETIC_GIVEN_NAME, "helen");
+        insertStructuredName(rawContactId, values);
+
+        assertSearchIndex(
+                contactId, "Doe, John\nParr, Bob I.\nMrs. Parr, Helen I., PhD (par helen)", null);
+    }
 
     public void testSearchIndexForOrganization() {
         long rawContactId = createRawContact();
@@ -48,6 +71,48 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         assertSearchIndex(contactId,
                 "Director, Acme Inc. (ack-me) (ACME)/Phones and tablets/virtual/full text search",
                 null);
+    }
+
+    public void testSearchIndexForPhoneNumber() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertPhoneNumber(rawContactId, "800555GOOG");
+        insertPhoneNumber(rawContactId, "8005551234");
+
+        assertSearchIndex(contactId, null, "8005554664 +18005554664 8005551234 +18005551234");
+    }
+
+    public void testSearchIndexForEmail() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertEmail(rawContactId, "Bob Parr <incredible@android.com>");
+        insertEmail(rawContactId, "bob_parr@android.com");
+
+        assertSearchIndex(contactId, "Bob Parr <incredible@android.com>\nbob_parr@android.com",
+                null);
+    }
+
+    public void testSearchIndexForNickname() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertNickname(rawContactId, "incredible");
+
+        assertSearchIndex(contactId, "incredible", null);
+    }
+
+    public void testSearchIndexForStructuredPostal() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertPostalAddress(rawContactId, "1600 Amphitheatre Pkwy\nMountain View, CA 94043");
+        ContentValues values = new ContentValues();
+        values.put(StructuredPostal.CITY, "London");
+        values.put(StructuredPostal.STREET, "76 Buckingham Palace Road");
+        values.put(StructuredPostal.POSTCODE, "SW1W 9TQ");
+        values.put(StructuredPostal.COUNTRY, "United Kingdom");
+        insertPostalAddress(rawContactId, values);
+
+        assertSearchIndex(contactId, "1600 Amphitheatre Pkwy Mountain View, CA 94043\n"
+                + "76 Buckingham Palace Road London SW1W 9TQ United Kingdom", null);
     }
 
     private void assertSearchIndex(long contactId, String expectedContent, String expectedTokens) {

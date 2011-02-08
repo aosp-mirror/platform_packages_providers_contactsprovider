@@ -58,7 +58,6 @@ public class SearchIndexManager {
         private StringBuilder mSbContent = new StringBuilder();
         private StringBuilder mSbTokens = new StringBuilder();
         private StringBuilder mSbElementContent = new StringBuilder();
-        private StringBuilder mSbElementTokens = new StringBuilder();
         private HashSet<String> mUniqueElements = new HashSet<String>();
         private Cursor mCursor;
 
@@ -70,7 +69,6 @@ public class SearchIndexManager {
             mSbContent.setLength(0);
             mSbTokens.setLength(0);
             mSbElementContent.setLength(0);
-            mSbElementTokens.setLength(0);
             mUniqueElements.clear();
         }
 
@@ -82,6 +80,10 @@ public class SearchIndexManager {
             return mSbTokens.length() == 0 ? null : mSbTokens.toString();
         }
 
+        public String getString(String columnName) {
+            return mCursor.getString(mCursor.getColumnIndex(columnName));
+        }
+
         @Override
         public String toString() {
             return "Content: " + mSbContent + "\n Tokens: " + mSbTokens;
@@ -89,7 +91,7 @@ public class SearchIndexManager {
 
         public void commit() {
             if (mSbElementContent.length() != 0) {
-                String content = mSbElementContent.toString();
+                String content = mSbElementContent.toString().replace('\n', ' ');
                 if (!mUniqueElements.contains(content)) {
                     if (mSbContent.length() != 0) {
                         mSbContent.append('\n');
@@ -97,13 +99,7 @@ public class SearchIndexManager {
                     mSbContent.append(content);
                     mUniqueElements.add(content);
                 }
-            }
-
-            if (mSbElementTokens.length() != 0) {
-                if (mSbTokens.length() != 0) {
-                    mSbTokens.append(' ');
-                }
-                mSbTokens.append(mSbElementTokens);
+                mSbElementContent.setLength(0);
             }
         }
 
@@ -112,7 +108,11 @@ public class SearchIndexManager {
         }
 
         public void appendContentFromColumn(String columnName, int format) {
-            appendContent(mCursor.getString(mCursor.getColumnIndex(columnName)), format);
+            appendContent(getString(columnName), format);
+        }
+
+        public void appendContent(String value) {
+            appendContent(value, SEPARATOR_SPACE);
         }
 
         public void appendContent(String value, int format) {
@@ -122,30 +122,37 @@ public class SearchIndexManager {
 
             switch (format) {
                 case SEPARATOR_SPACE:
-                    if (mSbContent.length() > 0) {
-                        mSbContent.append(' ');
+                    if (mSbElementContent.length() > 0) {
+                        mSbElementContent.append(' ');
                     }
-                    mSbContent.append(value);
+                    mSbElementContent.append(value);
                     break;
 
                 case SEPARATOR_SLASH:
-                    mSbContent.append('/').append(value);
+                    mSbElementContent.append('/').append(value);
                     break;
 
                 case SEPARATOR_PARENTHESES:
-                    if (mSbContent.length() > 0) {
-                        mSbContent.append(' ');
+                    if (mSbElementContent.length() > 0) {
+                        mSbElementContent.append(' ');
                     }
-                    mSbContent.append('(').append(value).append(')');
+                    mSbElementContent.append('(').append(value).append(')');
                     break;
 
                 case SEPARATOR_COMMA:
-                    if (mSbContent.length() > 0) {
-                        mSbContent.append(", ");
+                    if (mSbElementContent.length() > 0) {
+                        mSbElementContent.append(", ");
                     }
-                    mSbContent.append(value);
+                    mSbElementContent.append(value);
                     break;
             }
+        }
+
+        public void appendToken(String token) {
+            if (mSbTokens.length() != 0) {
+                mSbTokens.append(' ');
+            }
+            mSbTokens.append(token);
         }
     }
 

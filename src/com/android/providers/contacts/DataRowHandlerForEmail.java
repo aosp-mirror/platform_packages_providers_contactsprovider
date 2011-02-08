@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
+
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -87,5 +89,15 @@ public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
             case Email.TYPE_OTHER: return 3;
             default: return 1000;
         }
+    }
+
+    @Override
+    public boolean containsSearchableColumns(ContentValues values) {
+        return values.containsKey(Email.ADDRESS);
+    }
+
+    @Override
+    public void appendSearchableData(IndexBuilder builder) {
+        builder.appendContentFromColumn(Email.ADDRESS);
     }
 }
