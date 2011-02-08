@@ -981,6 +981,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
     private CommonNicknameCache mCommonNicknameCache;
+    private SearchIndexManager mSearchIndexManager;
 
     private ContentValues mValues = new ContentValues();
     private HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
@@ -1064,6 +1065,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator = new ContactAggregator(this, mDbHelper,
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+        mSearchIndexManager = new SearchIndexManager(this);
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
@@ -1502,6 +1504,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mDb.execSQL(mSb.toString());
         }
 
+        Set<Long> staleRawContacts = mTransactionContext.getStaleSearchIndexRawContactIds();
+        if (!staleRawContacts.isEmpty()) {
+            mSearchIndexManager.updateIndexForRawContacts(staleRawContacts);
+        }
+
         for (Map.Entry<Long, Object> entry : mTransactionContext.getUpdatedSyncStates()) {
             long id = entry.getKey();
             if (mDbHelper.getSyncState().update(mDb, id, entry.getValue()) <= 0) {
@@ -1543,7 +1550,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private DataRowHandler getDataRowHandler(final String mimeType) {
+    public DataRowHandler getDataRowHandler(final String mimeType) {
         DataRowHandler handler = mDataRowHandlers.get(mimeType);
         if (handler == null) {
             handler = new DataRowHandlerForCustomMimetype(mDbHelper, mContactAggregator, mimeType);

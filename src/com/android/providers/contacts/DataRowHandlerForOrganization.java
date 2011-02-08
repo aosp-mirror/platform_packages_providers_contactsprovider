@@ -16,6 +16,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -111,5 +112,28 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
             case Organization.TYPE_OTHER: return 2;
             default: return 1000;
         }
+    }
+
+    @Override
+    public boolean containsSearchableColumns(ContentValues values) {
+        return values.containsKey(Organization.COMPANY)
+                || values.containsKey(Organization.DEPARTMENT)
+                || values.containsKey(Organization.JOB_DESCRIPTION)
+                || values.containsKey(Organization.OFFICE_LOCATION)
+                || values.containsKey(Organization.PHONETIC_NAME)
+                || values.containsKey(Organization.SYMBOL)
+                || values.containsKey(Organization.TITLE);
+    }
+
+    @Override
+    public void appendSearchableData(IndexBuilder builder) {
+        builder.appendContentFromColumn(Organization.TITLE);
+        builder.appendContentFromColumn(Organization.COMPANY, IndexBuilder.SEPARATOR_COMMA);
+        builder.appendContentFromColumn(Organization.PHONETIC_NAME,
+                IndexBuilder.SEPARATOR_PARENTHESES);
+        builder.appendContentFromColumn(Organization.SYMBOL, IndexBuilder.SEPARATOR_PARENTHESES);
+        builder.appendContentFromColumn(Organization.DEPARTMENT, IndexBuilder.SEPARATOR_SLASH);
+        builder.appendContentFromColumn(Organization.OFFICE_LOCATION, IndexBuilder.SEPARATOR_SLASH);
+        builder.appendContentFromColumn(Organization.JOB_DESCRIPTION, IndexBuilder.SEPARATOR_SLASH);
     }
 }

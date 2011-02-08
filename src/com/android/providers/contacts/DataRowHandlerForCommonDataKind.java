@@ -71,4 +71,9 @@ public class DataRowHandlerForCommonDataKind extends DataRowHandler {
                     + mLabelColumn + " is defined.");
         }
     }
+
+    @Override
+    public boolean hasSearchableData() {
+        return true;
+    }
 }

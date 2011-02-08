@@ -129,6 +129,10 @@ public abstract class DataRowHandler {
             }
         }
 
+        if (containsSearchableColumns(values)) {
+            txContext.invalidateSearchIndexForRawContact(rawContactId);
+        }
+
         return dataId;
     }
 
@@ -150,11 +154,26 @@ public abstract class DataRowHandler {
             db.update(Tables.DATA, values, Data._ID + " =?", mSelectionArgs1);
         }
 
+        if (containsSearchableColumns(values)) {
+            txContext.invalidateSearchIndexForRawContact(rawContactId);
+        }
+
         if (!callerIsSyncAdapter) {
             txContext.markRawContactDirty(rawContactId);
         }
 
         return true;
+    }
+
+    public boolean hasSearchableData() {
+        return false;
+    }
+
+    public boolean containsSearchableColumns(ContentValues values) {
+        return false;
+    }
+
+    public void appendSearchableData(SearchIndexManager.IndexBuilder builder) {
     }
 
     /**
@@ -235,6 +254,11 @@ public abstract class DataRowHandler {
         if (count != 0 && primary) {
             fixPrimary(db, rawContactId);
         }
+
+        if (hasSearchableData()) {
+            txContext.invalidateSearchIndexForRawContact(rawContactId);
+        }
+
         return count;
     }
 

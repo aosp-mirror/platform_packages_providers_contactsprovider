@@ -89,9 +89,10 @@ import java.util.Locale;
      *   300-349 Froyo
      *   350-399 Gingerbread
      *   400-499 Honeycomb
+     *   500-599 Honeycomb-MR1
      * </pre>
      */
-    static final int DATABASE_VERSION = 417;
+    static final int DATABASE_VERSION = 500;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -117,6 +118,7 @@ import java.util.Locale;
         public static final String VISIBLE_CONTACTS = "visible_contacts";
         public static final String DIRECTORIES = "directories";
         public static final String DEFAULT_DIRECTORY = "default_directory";
+        public static final String SEARCH_INDEX = "search_index";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -481,6 +483,12 @@ import java.util.Locale;
 
     public static final class DirectoryColumns {
         public static final String TYPE_RESOURCE_NAME = "typeResourceName";
+    }
+
+    public static final class SearchIndexColumns {
+        public static final String CONTACT_ID = "contact_id";
+        public static final String CONTENT = "content";
+        public static final String TOKENS = "tokens";
     }
 
     /** In-memory cache of previously found MIME-type mappings */
@@ -1035,6 +1043,7 @@ import java.util.Locale;
         db.execSQL("INSERT INTO accounts VALUES(NULL, NULL)");
 
         createDirectoriesTable(db);
+        createSearchIndexTable(db);
 
         createContactsViews(db);
         createGroupsView(db);
@@ -1082,6 +1091,16 @@ import java.util.Locale;
 
         // Trigger a full scan of directories in the system
         setProperty(db, ContactDirectoryManager.PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+    }
+
+    private void createSearchIndexTable(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
+        db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
+                + " USING FTS4 ("
+                    + SearchIndexColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL,"
+                    + SearchIndexColumns.CONTENT + " TEXT, "
+                    + SearchIndexColumns.TOKENS + " TEXT"
+                + ")");
     }
 
     private static void createContactsTriggers(SQLiteDatabase db) {
@@ -1748,6 +1767,12 @@ import java.util.Locale;
         if (oldVersion == 416) {
             upgradeLegacyApiSupport = true;
             oldVersion = 417;
+        }
+
+        // Honeycomb-MR1 upgrades
+        if (oldVersion < 500) {
+            upgradeToVersion500(db);
+            oldVersion = 500;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2850,6 +2875,10 @@ import java.util.Locale;
                 " (" + PhoneLookupColumns.DATA_ID + ", " + PhoneLookupColumns.MIN_MATCH + ");");
     }
 
+    private void upgradeToVersion500(SQLiteDatabase db) {
+        createSearchIndexTable(db);
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2992,6 +3021,7 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
+        db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
@@ -3999,5 +4029,23 @@ import java.util.Locale;
 
     public String getCurrentCountryIso() {
         return mCountryMonitor.getCountryIso();
+    }
+
+    /* visible for testing */
+    /* package */ String querySearchIndexContent(long contactId) {
+        return DatabaseUtils.stringForQuery(getReadableDatabase(),
+                "SELECT " + SearchIndexColumns.CONTENT +
+                " FROM " + Tables.SEARCH_INDEX +
+                " WHERE " + SearchIndexColumns.CONTACT_ID + "=CAST(? AS int)",
+                new String[] { String.valueOf(contactId) });
+    }
+
+    /* visible for testing */
+    /* package */ String querySearchIndexTokens(long contactId) {
+        return DatabaseUtils.stringForQuery(getReadableDatabase(),
+                "SELECT " + SearchIndexColumns.TOKENS +
+                " FROM " + Tables.SEARCH_INDEX +
+                " WHERE " + SearchIndexColumns.CONTACT_ID + "=CAST(? AS int)",
+                new String[] { String.valueOf(contactId) });
     }
 }
