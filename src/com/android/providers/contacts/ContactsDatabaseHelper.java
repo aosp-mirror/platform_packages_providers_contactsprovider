@@ -1093,7 +1093,7 @@ import java.util.Locale;
         setProperty(db, ContactDirectoryManager.PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
     }
 
-    private void createSearchIndexTable(SQLiteDatabase db) {
+    public void createSearchIndexTable(SQLiteDatabase db) {
         db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
         db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
                 + " USING FTS4 ("

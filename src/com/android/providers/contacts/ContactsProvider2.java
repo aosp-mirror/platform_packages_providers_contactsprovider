@@ -153,9 +153,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int BACKGROUND_TASK_UPDATE_ACCOUNTS = 3;
     private static final int BACKGROUND_TASK_UPDATE_LOCALE = 4;
     private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 5;
-    private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 6;
-    private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 7;
-    private static final int BACKGROUND_TASK_CHANGE_LOCALE = 8;
+    private static final int BACKGROUND_TASK_UPDATE_SEARCH_INDEX = 6;
+    private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 7;
+    private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 8;
+    private static final int BACKGROUND_TASK_CHANGE_LOCALE = 9;
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
@@ -1045,6 +1046,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
         scheduleBackgroundTask(BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM);
+        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_SEARCH_INDEX);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_PROVIDER_STATUS);
         scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
 
@@ -1165,6 +1167,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case BACKGROUND_TASK_UPDATE_SEARCH_INDEX: {
+                updateSearchIndexInBackground();
+                break;
+            }
+
             case BACKGROUND_TASK_UPDATE_PROVIDER_STATUS: {
                 updateProviderStatus();
                 break;
@@ -1234,6 +1241,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         updateLocaleInBackground();
+    }
+
+    protected void updateSearchIndexInBackground() {
+        mSearchIndexManager.updateIndex();
     }
 
     protected void updateDirectoriesInBackground(boolean rescan) {
