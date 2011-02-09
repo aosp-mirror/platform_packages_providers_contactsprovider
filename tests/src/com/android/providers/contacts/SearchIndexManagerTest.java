@@ -17,10 +17,13 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.net.Uri;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.SearchSnippetColumns;
 import android.test.suitebuilder.annotation.MediumTest;
 
 /**
@@ -131,6 +134,19 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertNote(rawContactId, "Please note: three notes or more make up a chord.");
 
         assertSearchIndex(contactId, "Please note: three notes or more make up a chord.", null);
+    }
+
+    public void testSnippetArgs() {
+        long rawContactId = createRawContact();
+        insertNote(rawContactId, "Please note: three notes or more make up a chord.");
+
+        assertStoredValue(
+                buildSearchUri("thr", "[,],-,2"), SearchSnippetColumns.SNIPPET, "-note: [three]");
+    }
+
+    private Uri buildSearchUri(String filter, String args) {
+        return Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(filter).appendQueryParameter(
+                SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY, args).build();
     }
 
     private void assertSearchIndex(long contactId, String expectedContent, String expectedTokens) {

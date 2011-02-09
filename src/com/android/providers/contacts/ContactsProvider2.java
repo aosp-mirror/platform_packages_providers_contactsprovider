@@ -27,13 +27,13 @@ import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
@@ -477,14 +477,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .build();
 
     private static final ProjectionMap sSnippetColumns = ProjectionMap.builder()
-            .add(SearchSnippetColumns.SNIPPET_MIMETYPE)
-            .add(SearchSnippetColumns.SNIPPET_DATA_ID)
-            .add(SearchSnippetColumns.SNIPPET_DATA1)
-            .add(SearchSnippetColumns.SNIPPET_DATA2)
-            .add(SearchSnippetColumns.SNIPPET_DATA3)
-            .add(SearchSnippetColumns.SNIPPET_DATA4)
+            .add(SearchSnippetColumns.SNIPPET)
             .build();
-
 
     private static final ProjectionMap sRawContactColumns = ProjectionMap.builder()
             .add(RawContacts.ACCOUNT_NAME)
@@ -835,6 +829,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Notification ID for failure to import contacts.
      */
     private static final int LEGACY_IMPORT_FAILED_NOTIFICATION = 1;
+
+    private static final String DEFAULT_SNIPPET_ARG_START_MATCH = "[";
+    private static final String DEFAULT_SNIPPET_ARG_END_MATCH = "]";
+    private static final String DEFAULT_SNIPPET_ARG_ELLIPSIS = "...";
+    private static final int DEFAULT_SNIPPET_ARG_MAX_TOKENS = -10;
 
     private boolean sIsPhoneInitialized;
     private boolean sIsPhone;
@@ -4330,49 +4329,147 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForContactsWithSnippet(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, String filter) {
 
+        if (filter != null) {
+            filter = filter.trim();
+        }
+
         StringBuilder sb = new StringBuilder();
         appendContactsTables(sb, uri, projection);
-
-        sb.append(" JOIN (SELECT " +
-                RawContacts.CONTACT_ID + " AS snippet_contact_id");
-
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA_ID)) {
-            sb.append(", " + DataColumns.CONCRETE_ID + " AS "
-                    + SearchSnippetColumns.SNIPPET_DATA_ID);
-        }
-
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA1)) {
-            sb.append(", " + Data.DATA1 + " AS " + SearchSnippetColumns.SNIPPET_DATA1);
-        }
-
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA2)) {
-            sb.append(", " + Data.DATA2 + " AS " + SearchSnippetColumns.SNIPPET_DATA2);
-        }
-
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA3)) {
-            sb.append(", " + Data.DATA3 + " AS " + SearchSnippetColumns.SNIPPET_DATA3);
-        }
-
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_DATA4)) {
-            sb.append(", " + Data.DATA4 + " AS " + SearchSnippetColumns.SNIPPET_DATA4);
-        }
-
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET_MIMETYPE)) {
-            sb.append(", (" +
-                    "SELECT " + MimetypesColumns.MIMETYPE +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns._ID + "=" + DataColumns.MIMETYPE_ID +
-                    ") AS " + SearchSnippetColumns.SNIPPET_MIMETYPE);
-        }
-
-        sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS + " WHERE ");
-
-        appendGeneralDataFilter(sb, filter);
-
-        sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
-
+        appendSearchIndexJoin(sb, uri, projection, filter);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionWithSnippetMap);
+    }
+
+    private void appendSearchIndexJoin(
+            StringBuilder sb, Uri uri, String[] projection, String filter) {
+        sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS snippet_contact_id");
+
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET)) {
+            String startMatch;
+            String endMatch;
+            String ellipsis;
+            int maxTokens;
+
+            String[] args = null;
+            String snippetArgs =
+                    getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
+            if (snippetArgs != null) {
+                args = snippetArgs.split(",");
+            }
+
+            if (args != null && args.length > 0) {
+                startMatch = args[0];
+            } else {
+                startMatch = DEFAULT_SNIPPET_ARG_START_MATCH;
+            }
+
+            if (args != null && args.length > 1) {
+                endMatch = args[1];
+            } else {
+                endMatch = DEFAULT_SNIPPET_ARG_END_MATCH;
+            }
+
+            if (args != null && args.length > 2) {
+                ellipsis = args[2];
+            } else {
+                ellipsis = DEFAULT_SNIPPET_ARG_ELLIPSIS;
+            }
+
+            if (args != null && args.length > 3) {
+                maxTokens = Integer.parseInt(args[3]);
+            } else {
+                maxTokens = DEFAULT_SNIPPET_ARG_MAX_TOKENS;
+            }
+
+            sb.append(", " + "snippet(" + Tables.SEARCH_INDEX + ",");
+            DatabaseUtils.appendEscapedSQLString(sb, startMatch);
+            sb.append(",");
+            DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+            sb.append(",");
+            DatabaseUtils.appendEscapedSQLString(sb, ellipsis);
+
+            // The index of the column used for the snippet, "content"
+            sb.append(",1,");
+            sb.append(maxTokens);
+            sb.append(")" + " AS " + SearchSnippetColumns.SNIPPET);
+        }
+
+        sb.append(" FROM " + Tables.SEARCH_INDEX + " WHERE ");
+
+        if (TextUtils.isEmpty(filter)) {
+            sb.append("0");     // Empty filter - return an empty set
+        } else {
+            sb.append(Tables.SEARCH_INDEX + " MATCH ");
+            DatabaseUtils.appendEscapedSQLString(sb, filter + "*");
+        }
+        sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
+
+        if (true) {
+            return;
+        }
+
+        if (filter.indexOf('@') != -1) {
+            String address = mDbHelper.extractAddressFromEmailAddress(filter);
+            if (!TextUtils.isEmpty(address)) {
+                sb.append(DataColumns.CONCRETE_ID + " IN (" +
+                        "SELECT MIN(" + DataColumns.CONCRETE_ID + ")" +
+                        " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS +
+                        " WHERE " + DataColumns.MIMETYPE_ID + " IN (");
+                sb.append(mDbHelper.getMimeTypeIdForEmail());
+                sb.append(",");
+                sb.append(mDbHelper.getMimeTypeIdForIm());
+                sb.append(",");
+                sb.append(mDbHelper.getMimeTypeIdForSip());
+                sb.append(") AND " + Data.DATA1 + " LIKE(");
+                DatabaseUtils.appendEscapedSQLString(sb, address + '%');
+                sb.append(")" +
+                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                        ")");
+                return;
+            }
+        }
+
+        String normalizedFilter = NameNormalizer.normalize(filter);
+        if (!TextUtils.isEmpty(normalizedFilter)) {
+            sb.append(DataColumns.CONCRETE_ID + " IN (");
+
+            // Construct a query that gives us exactly one data _id per matching contact.
+            // MIN stands in for ANY in this context.
+            sb.append(
+                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
+                    " FROM " + Tables.NAME_LOOKUP +
+                    " JOIN " + Tables.RAW_CONTACTS +
+                    " ON (" + RawContactsColumns.CONCRETE_ID
+                            + "=" + Tables.NAME_LOOKUP + "."
+                                    + NameLookupColumns.RAW_CONTACT_ID + ")" +
+                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
+            sb.append(normalizedFilter);
+            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
+                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                    ")");
+        } else {
+            sb.append("0");     // Empty filter - return an empty set
+        }
+
+        if (isPhoneNumber(filter)) {
+            String number = PhoneNumberUtils.normalizeNumber(filter);
+            sb.append(" OR " + DataColumns.CONCRETE_ID + " IN (" +
+                    " SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
+                    + " FROM " + Tables.PHONE_LOOKUP
+                    + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+            sb.append(number);
+            sb.append("%'");
+
+            String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
+                    mDbHelper.getCountryIso());
+            if (!TextUtils.isEmpty(numberE164)) {
+                sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                sb.append(numberE164);
+                sb.append("%'");
+            }
+            sb.append(')');
+        }
     }
 
     private void appendContactsTables(StringBuilder sb, Uri uri, String[] projection) {
@@ -4944,79 +5041,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private void appendGeneralDataFilter(StringBuilder sb, String filter) {
-        if (filter != null) {
-            filter = filter.trim();
-        }
-
-        if (TextUtils.isEmpty(filter)) {
-            sb.append("0");     // Empty filter - return an empty set
-            return;
-        }
-
-        if (filter.indexOf('@') != -1) {
-            String address = mDbHelper.extractAddressFromEmailAddress(filter);
-            if (!TextUtils.isEmpty(address)) {
-                sb.append(DataColumns.CONCRETE_ID + " IN (" +
-                        "SELECT MIN(" + DataColumns.CONCRETE_ID + ")" +
-                        " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS +
-                        " WHERE " + DataColumns.MIMETYPE_ID + " IN (");
-                sb.append(mDbHelper.getMimeTypeIdForEmail());
-                sb.append(",");
-                sb.append(mDbHelper.getMimeTypeIdForIm());
-                sb.append(",");
-                sb.append(mDbHelper.getMimeTypeIdForSip());
-                sb.append(") AND " + Data.DATA1 + " LIKE(");
-                DatabaseUtils.appendEscapedSQLString(sb, address + '%');
-                sb.append(")" +
-                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                        ")");
-                return;
-            }
-        }
-
-        String normalizedFilter = NameNormalizer.normalize(filter);
-        if (!TextUtils.isEmpty(normalizedFilter)) {
-            sb.append(DataColumns.CONCRETE_ID + " IN (");
-
-            // Construct a query that gives us exactly one data _id per matching contact.
-            // MIN stands in for ANY in this context.
-            sb.append(
-                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
-                    " FROM " + Tables.NAME_LOOKUP +
-                    " JOIN " + Tables.RAW_CONTACTS +
-                    " ON (" + RawContactsColumns.CONCRETE_ID
-                            + "=" + Tables.NAME_LOOKUP + "."
-                                    + NameLookupColumns.RAW_CONTACT_ID + ")" +
-                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
-            sb.append(normalizedFilter);
-            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
-                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                    ")");
-        } else {
-            sb.append("0");     // Empty filter - return an empty set
-        }
-
-        if (isPhoneNumber(filter)) {
-            String number = PhoneNumberUtils.normalizeNumber(filter);
-            sb.append(" OR " + DataColumns.CONCRETE_ID + " IN (" +
-                    " SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
-                    + " FROM " + Tables.PHONE_LOOKUP
-                    + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-            sb.append(number);
-            sb.append("%'");
-
-            String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
-                    mDbHelper.getCountryIso());
-            if (!TextUtils.isEmpty(numberE164)) {
-                sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-                sb.append(numberE164);
-                sb.append("%'");
-            }
-            sb.append(')');
-        }
-    }
 
     public boolean appendEmailBasedDataFilter(StringBuilder sb, String filter) {
         if (filter.indexOf('@') == -1) {
