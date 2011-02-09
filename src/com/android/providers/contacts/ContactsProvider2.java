@@ -4335,7 +4335,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         StringBuilder sb = new StringBuilder();
         appendContactsTables(sb, uri, projection);
-        appendSearchIndexJoin(sb, uri, projection, filter);
+        if (TextUtils.isEmpty(filter)) {
+            sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + ") WHERE 0");
+        } else {
+            appendSearchIndexJoin(sb, uri, projection, filter);
+        }
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionWithSnippetMap);
     }
@@ -4344,11 +4348,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             StringBuilder sb, Uri uri, String[] projection, String filter) {
         sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS snippet_contact_id");
 
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET)) {
-            String startMatch;
-            String endMatch;
-            String ellipsis;
-            int maxTokens;
+        boolean snippetNeeded = mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
+        boolean isEmailAddress = false;
+        String emailAddress = null;
+        if (snippetNeeded) {
+            if (filter.indexOf('@') != -1) {
+                emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
+                isEmailAddress = !TextUtils.isEmpty(emailAddress);
+            }
 
             String[] args = null;
             String snippetArgs =
@@ -4357,99 +4364,54 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 args = snippetArgs.split(",");
             }
 
-            if (args != null && args.length > 0) {
-                startMatch = args[0];
+            String startMatch = args != null && args.length > 0 ? args[0]
+                    : DEFAULT_SNIPPET_ARG_START_MATCH;
+            String endMatch = args != null && args.length > 1 ? args[1]
+                    : DEFAULT_SNIPPET_ARG_END_MATCH;
+            String ellipsis = args != null && args.length > 2 ? args[2]
+                    : DEFAULT_SNIPPET_ARG_ELLIPSIS;
+            int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
+                    : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
+
+            sb.append(", ");
+            if (isEmailAddress) {
+                sb.append("coalesce(");
+                DatabaseUtils.appendEscapedSQLString(sb, startMatch);
+                sb.append("||email_data." + Email.ADDRESS + "||");
+                DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+                sb.append(",");
+                appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                sb.append(")");
             } else {
-                startMatch = DEFAULT_SNIPPET_ARG_START_MATCH;
+                appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
             }
-
-            if (args != null && args.length > 1) {
-                endMatch = args[1];
-            } else {
-                endMatch = DEFAULT_SNIPPET_ARG_END_MATCH;
-            }
-
-            if (args != null && args.length > 2) {
-                ellipsis = args[2];
-            } else {
-                ellipsis = DEFAULT_SNIPPET_ARG_ELLIPSIS;
-            }
-
-            if (args != null && args.length > 3) {
-                maxTokens = Integer.parseInt(args[3]);
-            } else {
-                maxTokens = DEFAULT_SNIPPET_ARG_MAX_TOKENS;
-            }
-
-            sb.append(", " + "snippet(" + Tables.SEARCH_INDEX + ",");
-            DatabaseUtils.appendEscapedSQLString(sb, startMatch);
-            sb.append(",");
-            DatabaseUtils.appendEscapedSQLString(sb, endMatch);
-            sb.append(",");
-            DatabaseUtils.appendEscapedSQLString(sb, ellipsis);
-
-            // The index of the column used for the snippet, "content"
-            sb.append(",1,");
-            sb.append(maxTokens);
-            sb.append(")" + " AS " + SearchSnippetColumns.SNIPPET);
+            sb.append(" AS " + SearchSnippetColumns.SNIPPET);
         }
 
-        sb.append(" FROM " + Tables.SEARCH_INDEX + " WHERE ");
+        sb.append(" FROM " + Tables.SEARCH_INDEX);
 
-        if (TextUtils.isEmpty(filter)) {
-            sb.append("0");     // Empty filter - return an empty set
+        if (isEmailAddress) {
+            sb.append(" LEFT OUTER JOIN "
+                    + "(SELECT DISTINCT "
+                            + RawContacts.CONTACT_ID + " AS email_contact_id,"
+                            + Email.ADDRESS
+                    + " FROM " + Tables.DATA_JOIN_RAW_CONTACTS
+                    + " WHERE " + Email.ADDRESS + " LIKE ");
+            DatabaseUtils.appendEscapedSQLString(sb, filter + "%");
+            sb.append(") AS email_data ON (email_contact_id=snippet_contact_id)");
+        }
+
+        sb.append(" WHERE ");
+        sb.append(Tables.SEARCH_INDEX + " MATCH ");
+        if (isEmailAddress) {
+            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\"");
         } else {
-            sb.append(Tables.SEARCH_INDEX + " MATCH ");
             DatabaseUtils.appendEscapedSQLString(sb, filter + "*");
         }
         sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
 
         if (true) {
             return;
-        }
-
-        if (filter.indexOf('@') != -1) {
-            String address = mDbHelper.extractAddressFromEmailAddress(filter);
-            if (!TextUtils.isEmpty(address)) {
-                sb.append(DataColumns.CONCRETE_ID + " IN (" +
-                        "SELECT MIN(" + DataColumns.CONCRETE_ID + ")" +
-                        " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS +
-                        " WHERE " + DataColumns.MIMETYPE_ID + " IN (");
-                sb.append(mDbHelper.getMimeTypeIdForEmail());
-                sb.append(",");
-                sb.append(mDbHelper.getMimeTypeIdForIm());
-                sb.append(",");
-                sb.append(mDbHelper.getMimeTypeIdForSip());
-                sb.append(") AND " + Data.DATA1 + " LIKE(");
-                DatabaseUtils.appendEscapedSQLString(sb, address + '%');
-                sb.append(")" +
-                        " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                        ")");
-                return;
-            }
-        }
-
-        String normalizedFilter = NameNormalizer.normalize(filter);
-        if (!TextUtils.isEmpty(normalizedFilter)) {
-            sb.append(DataColumns.CONCRETE_ID + " IN (");
-
-            // Construct a query that gives us exactly one data _id per matching contact.
-            // MIN stands in for ANY in this context.
-            sb.append(
-                    "SELECT MIN(" + Tables.NAME_LOOKUP + "." + NameLookupColumns.DATA_ID + ")" +
-                    " FROM " + Tables.NAME_LOOKUP +
-                    " JOIN " + Tables.RAW_CONTACTS +
-                    " ON (" + RawContactsColumns.CONCRETE_ID
-                            + "=" + Tables.NAME_LOOKUP + "."
-                                    + NameLookupColumns.RAW_CONTACT_ID + ")" +
-                    " WHERE " + NameLookupColumns.NORMALIZED_NAME + " GLOB '");
-            sb.append(normalizedFilter);
-            sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                        " IN(" + CONTACT_LOOKUP_NAME_TYPES + ")" +
-                    " GROUP BY " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                    ")");
-        } else {
-            sb.append("0");     // Empty filter - return an empty set
         }
 
         if (isPhoneNumber(filter)) {
@@ -4470,6 +4432,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             sb.append(')');
         }
+    }
+
+    private void appendSnippetFunction(
+            StringBuilder sb, String startMatch, String endMatch, String ellipsis, int maxTokens) {
+        sb.append("snippet(" + Tables.SEARCH_INDEX + ",");
+        DatabaseUtils.appendEscapedSQLString(sb, startMatch);
+        sb.append(",");
+        DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+        sb.append(",");
+        DatabaseUtils.appendEscapedSQLString(sb, ellipsis);
+
+        // The index of the column used for the snippet, "content"
+        sb.append(",1,");
+        sb.append(maxTokens);
+        sb.append(")");
     }
 
     private void appendContactsTables(StringBuilder sb, Uri uri, String[] projection) {

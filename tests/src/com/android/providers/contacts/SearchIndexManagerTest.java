@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.content.ContentValues;
 import android.net.Uri;
+import android.net.Uri.Builder;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -141,12 +142,39 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertNote(rawContactId, "Please note: three notes or more make up a chord.");
 
         assertStoredValue(
-                buildSearchUri("thr", "[,],-,2"), SearchSnippetColumns.SNIPPET, "-note: [three]");
+                buildSearchUri("thr", "[,],-,2"), SearchSnippetColumns.SNIPPET, "-note: [three]-");
+    }
+
+    public void testEmptyFilter() {
+        createRawContactWithName("John", "Doe");
+        assertEquals(0, getCount(buildSearchUri(""), null, null));
+    }
+
+    public void testSearchByEmailAddress() {
+        long rawContactId = createRawContact();
+        insertPhoneNumber(rawContactId, "1234567890");
+        insertEmail(rawContactId, "john@doe.com");
+        insertNote(rawContactId, "a hundred dollar note for doe@john.com and bob parr");
+
+        assertStoredValue(buildSearchUri("john@d", "[,],-,5"), SearchSnippetColumns.SNIPPET,
+                "[john@doe.com]");
+        assertStoredValue(buildSearchUri("doe@j", "[,],-,5"), SearchSnippetColumns.SNIPPET,
+                "-note for [doe]@[john].com-");
+
+        // TODO: uncomment after we have a custom tokenizer that recognizes email addresses
+//      assertStoredValue(buildSearchUri("bob@p", "[,],-,5"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    private Uri buildSearchUri(String filter) {
+        return buildSearchUri(filter, null);
     }
 
     private Uri buildSearchUri(String filter, String args) {
-        return Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(filter).appendQueryParameter(
-                SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY, args).build();
+        Builder builder = Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(filter);
+        if (args != null) {
+            builder.appendQueryParameter(SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY, args);
+        }
+        return builder.build();
     }
 
     private void assertSearchIndex(long contactId, String expectedContent, String expectedTokens) {
