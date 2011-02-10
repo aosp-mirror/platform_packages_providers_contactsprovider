@@ -56,7 +56,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                         : FullNameStyle.UNDEFINED);
         insertNameLookupForPhoneticName(rawContactId, dataId, values);
         fixRawContactDisplayName(db, txContext, rawContactId);
-        triggerAggregation(rawContactId);
+        triggerAggregation(txContext, rawContactId);
         return dataId;
     }
 
@@ -89,7 +89,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
             insertNameLookupForPhoneticName(rawContactId, dataId, augmented);
         }
         fixRawContactDisplayName(db, txContext, rawContactId);
-        triggerAggregation(rawContactId);
+        triggerAggregation(txContext, rawContactId);
         return true;
     }
 
@@ -102,7 +102,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
 
         mDbHelper.deleteNameLookup(dataId);
         fixRawContactDisplayName(db, txContext, rawContactId);
-        triggerAggregation(rawContactId);
+        triggerAggregation(txContext, rawContactId);
         return count;
     }
 

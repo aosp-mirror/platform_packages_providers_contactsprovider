@@ -348,8 +348,8 @@ public abstract class DataRowHandler {
         return values;
     }
 
-    public void triggerAggregation(long rawContactId) {
-        mContactAggregator.triggerAggregation(rawContactId);
+    public void triggerAggregation(TransactionContext txContext, long rawContactId) {
+        mContactAggregator.triggerAggregation(txContext, rawContactId);
     }
 
     /**

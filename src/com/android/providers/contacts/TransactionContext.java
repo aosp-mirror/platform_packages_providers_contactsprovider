@@ -36,6 +36,7 @@ public class TransactionContext  {
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
     private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexRawContacts = Sets.newHashSet();
+    private HashSet<Long> mStaleSearchIndexContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
     public void rawContactInserted(long rawContactId, Account account) {
@@ -58,6 +59,10 @@ public class TransactionContext  {
         mStaleSearchIndexRawContacts.add(rawContactId);
     }
 
+    public void invalidateSearchIndexForContact(long contactId) {
+        mStaleSearchIndexContacts.add(contactId);
+    }
+
     public Set<Long> getInsertedRawContactIds() {
         return mInsertedRawContacts.keySet();
     }
@@ -72,6 +77,10 @@ public class TransactionContext  {
 
     public Set<Long> getStaleSearchIndexRawContactIds() {
         return mStaleSearchIndexRawContacts;
+    }
+
+    public Set<Long> getStaleSearchIndexContactIds() {
+        return mStaleSearchIndexContacts;
     }
 
     public Set<Entry<Long, Object>> getUpdatedSyncStates() {
@@ -91,6 +100,10 @@ public class TransactionContext  {
         mUpdatedRawContacts.clear();
         mUpdatedSyncStates.clear();
         mDirtyRawContacts.clear();
+    }
+
+    public void clearSearchIndexUpdates() {
         mStaleSearchIndexRawContacts.clear();
+        mStaleSearchIndexContacts.clear();
     }
 }

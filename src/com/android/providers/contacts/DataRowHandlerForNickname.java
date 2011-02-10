@@ -45,7 +45,7 @@ public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
         if (!TextUtils.isEmpty(nickname)) {
             fixRawContactDisplayName(db, txContext, rawContactId);
             mDbHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
-            triggerAggregation(rawContactId);
+            triggerAggregation(txContext, rawContactId);
         }
         return dataId;
     }
@@ -65,7 +65,7 @@ public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
             mDbHelper.deleteNameLookup(dataId);
             mDbHelper.insertNameLookupForNickname(rawContactId, dataId, nickname);
             fixRawContactDisplayName(db, txContext, rawContactId);
-            triggerAggregation(rawContactId);
+            triggerAggregation(txContext, rawContactId);
         }
 
         return true;
@@ -80,7 +80,7 @@ public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
 
         mDbHelper.deleteNameLookup(dataId);
         fixRawContactDisplayName(db, txContext, rawContactId);
-        triggerAggregation(rawContactId);
+        triggerAggregation(txContext, rawContactId);
         return count;
     }
 

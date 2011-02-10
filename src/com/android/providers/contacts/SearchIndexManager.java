@@ -220,15 +220,32 @@ public class SearchIndexManager {
         }
     }
 
-    public void updateIndexForRawContacts(Set<Long> rawContactIds) {
+    public void updateIndexForRawContacts(Set<Long> contactIds, Set<Long> rawContactIds) {
         mSb.setLength(0);
-        mSb.append(Data.RAW_CONTACT_ID + " IN (");
-        for (Long rawContactId : rawContactIds) {
-            mSb.append(rawContactId).append(",");
+        mSb.append("(");
+        if (!contactIds.isEmpty()) {
+            mSb.append(Data.CONTACT_ID + " IN (");
+            for (Long contactId : contactIds) {
+                mSb.append(contactId).append(",");
+            }
+            mSb.setLength(mSb.length() - 1);
+            mSb.append(')');
         }
-        mSb.setLength(mSb.length() - 1);
-        mSb.append(')');
 
+        if (!rawContactIds.isEmpty()) {
+            if (!contactIds.isEmpty()) {
+                mSb.append(" OR ");
+            }
+            mSb.append(Data.RAW_CONTACT_ID + " IN (");
+            for (Long rawContactId : rawContactIds) {
+                mSb.append(rawContactId).append(",");
+            }
+            mSb.setLength(mSb.length() - 1);
+            mSb.append(')');
+        }
+
+        mSb.append(") AND " + RawContacts.CONTACT_ID + " IN "
+                    + "(SELECT " + Contacts._ID + " FROM " + Tables.DEFAULT_DIRECTORY + ")");
         buildIndex(mDbHelper.getWritableDatabase(), mSb.toString(), true);
     }
 

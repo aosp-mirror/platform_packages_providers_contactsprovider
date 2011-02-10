@@ -56,7 +56,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, txContext, rawContactId);
             if (numberE164 != null) {
-                triggerAggregation(rawContactId);
+                triggerAggregation(txContext, rawContactId);
             }
         } else {
             dataId = super.insert(db, txContext, rawContactId, values);
@@ -90,7 +90,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
             updatePhoneLookup(db, rawContactId, dataId, number, numberE164);
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, txContext, rawContactId);
-            triggerAggregation(rawContactId);
+            triggerAggregation(txContext, rawContactId);
         }
         return true;
     }
@@ -105,7 +105,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
         updatePhoneLookup(db, rawContactId, dataId, null, null);
         mContactAggregator.updateHasPhoneNumber(db, rawContactId);
         fixRawContactDisplayName(db, txContext, rawContactId);
-        triggerAggregation(rawContactId);
+        triggerAggregation(txContext, rawContactId);
         return count;
     }
 

@@ -1472,15 +1472,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         super.beforeTransactionCommit();
         flushTransactionalChanges();
-        mContactAggregator.aggregateInTransaction(mDb);
+        mContactAggregator.aggregateInTransaction(mTransactionContext, mDb);
         if (mVisibleTouched) {
             mVisibleTouched = false;
             mDbHelper.updateAllVisible();
         }
 
+        updateSearchIndexInTransaction();
+
         if (mProviderStatusUpdateNeeded) {
             updateProviderStatus();
             mProviderStatusUpdateNeeded = false;
+        }
+    }
+
+    private void updateSearchIndexInTransaction() {
+        Set<Long> staleContacts = mTransactionContext.getStaleSearchIndexContactIds();
+        Set<Long> staleRawContacts = mTransactionContext.getStaleSearchIndexRawContactIds();
+        if (!staleContacts.isEmpty() || !staleRawContacts.isEmpty()) {
+            mSearchIndexManager.updateIndexForRawContacts(staleContacts, staleRawContacts);
+            mTransactionContext.clearSearchIndexUpdates();
         }
     }
 
@@ -1491,7 +1502,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         for (long rawContactId : mTransactionContext.getInsertedRawContactIds()) {
             mContactAggregator.updateRawContactDisplayName(mDb, rawContactId);
-            mContactAggregator.onRawContactInsert(mDb, rawContactId);
+            mContactAggregator.onRawContactInsert(mTransactionContext, mDb, rawContactId);
         }
 
         Set<Long> dirtyRawContacts = mTransactionContext.getDirtyRawContactIds();
@@ -1510,11 +1521,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             appendIds(mSb, updatedRawContacts);
             mSb.append(")");
             mDb.execSQL(mSb.toString());
-        }
-
-        Set<Long> staleRawContacts = mTransactionContext.getStaleSearchIndexRawContactIds();
-        if (!staleRawContacts.isEmpty()) {
-            mSearchIndexManager.updateIndexForRawContacts(staleRawContacts);
         }
 
         for (Map.Entry<Long, Object> entry : mTransactionContext.getUpdatedSyncStates()) {
@@ -2938,8 +2944,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mContactAggregator.markForAggregation(rawContactId2,
                 RawContacts.AGGREGATION_MODE_DEFAULT, true);
 
-        mContactAggregator.aggregateContact(db, rawContactId1);
-        mContactAggregator.aggregateContact(db, rawContactId2);
+        mContactAggregator.aggregateContact(mTransactionContext, db, rawContactId1);
+        mContactAggregator.aggregateContact(mTransactionContext, db, rawContactId2);
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
@@ -3034,9 +3040,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 for (Long contactId : orphanContactIds) {
-                    mContactAggregator.updateAggregateData(contactId);
+                    mContactAggregator.updateAggregateData(mTransactionContext, contactId);
                 }
                 mDbHelper.updateAllVisible();
+                updateSearchIndexInTransaction();
             }
 
             if (accountsChanged) {
@@ -5375,7 +5382,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             } finally {
                 cursor.close();
             }
-            mContactAggregator.aggregateInTransaction(mDb);
+            mContactAggregator.aggregateInTransaction(mTransactionContext, mDb);
+            updateSearchIndexInTransaction();
             mDb.setTransactionSuccessful();
             mDbHelper.setProperty(PROPERTY_AGGREGATION_ALGORITHM,
                     String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));

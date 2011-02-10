@@ -43,7 +43,7 @@ public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
         fixRawContactDisplayName(db, txContext, rawContactId);
         String address = mDbHelper.insertNameLookupForEmail(rawContactId, dataId, email);
         if (address != null) {
-            triggerAggregation(rawContactId);
+            triggerAggregation(txContext, rawContactId);
         }
         return dataId;
     }
@@ -63,7 +63,7 @@ public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
             mDbHelper.deleteNameLookup(dataId);
             mDbHelper.insertNameLookupForEmail(rawContactId, dataId, address);
             fixRawContactDisplayName(db, txContext, rawContactId);
-            triggerAggregation(rawContactId);
+            triggerAggregation(txContext, rawContactId);
         }
 
         return true;
@@ -78,7 +78,7 @@ public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
 
         mDbHelper.deleteNameLookup(dataId);
         fixRawContactDisplayName(db, txContext, rawContactId);
-        triggerAggregation(rawContactId);
+        triggerAggregation(txContext, rawContactId);
         return count;
     }
 

@@ -398,7 +398,7 @@ public class ContactAggregator {
      * Aggregate all raw contacts that were marked for aggregation in the current transaction.
      * Call just before committing the transaction.
      */
-    public void aggregateInTransaction(SQLiteDatabase db) {
+    public void aggregateInTransaction(TransactionContext txContext, SQLiteDatabase db) {
         int count = mRawContactsMarkedForAggregation.size();
         if (count == 0) {
             return;
@@ -446,8 +446,8 @@ public class ContactAggregator {
         }
 
         for (int i = 0; i < count; i++) {
-            aggregateContact(db, rawContactIds[i], accountTypes[i], accountNames[i], contactIds[i],
-                    mCandidates, mMatcher, mValues);
+            aggregateContact(txContext, db, rawContactIds[i], accountTypes[i], accountNames[i],
+                    contactIds[i], mCandidates, mMatcher, mValues);
         }
 
         long elapsedTime = System.currentTimeMillis() - start;
@@ -459,7 +459,7 @@ public class ContactAggregator {
         }
     }
 
-    public void triggerAggregation(long rawContactId) {
+    public void triggerAggregation(TransactionContext txContext, long rawContactId) {
         if (!mEnabled) {
             return;
         }
@@ -478,13 +478,13 @@ public class ContactAggregator {
                 long contactId = mDbHelper.getContactId(rawContactId);
 
                 if (contactId != 0) {
-                    updateAggregateData(contactId);
+                    updateAggregateData(txContext, contactId);
                 }
                 break;
             }
 
             case RawContacts.AGGREGATION_MODE_IMMEDIATE: {
-                aggregateContact(mDbHelper.getWritableDatabase(), rawContactId);
+                aggregateContact(txContext, mDbHelper.getWritableDatabase(), rawContactId);
                 break;
             }
         }
@@ -549,12 +549,13 @@ public class ContactAggregator {
     /**
      * Creates a new contact based on the given raw contact.  Does not perform aggregation.
      */
-    public void onRawContactInsert(SQLiteDatabase db, long rawContactId) {
+    public void onRawContactInsert(
+            TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1, mContactInsert);
         long contactId = mContactInsert.executeInsert();
         setContactId(rawContactId, contactId);
-        mDbHelper.updateContactVisible(contactId);
+        mDbHelper.updateContactVisible(txContext, contactId);
     }
 
     private static final class RawContactIdAndAccountQuery {
@@ -570,7 +571,8 @@ public class ContactAggregator {
         public static final int ACCOUNT_NAME = 2;
     }
 
-    public void aggregateContact(SQLiteDatabase db, long rawContactId) {
+    public void aggregateContact(
+            TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
         if (!mEnabled) {
             return;
         }
@@ -596,11 +598,11 @@ public class ContactAggregator {
             cursor.close();
         }
 
-        aggregateContact(db, rawContactId, accountType, accountName, contactId, candidates,
-                matcher, values);
+        aggregateContact(txContext, db, rawContactId, accountType, accountName, contactId,
+                candidates, matcher, values);
     }
 
-    public void updateAggregateData(long contactId) {
+    public void updateAggregateData(TransactionContext txContext, long contactId) {
         if (!mEnabled) {
             return;
         }
@@ -610,7 +612,7 @@ public class ContactAggregator {
         mContactUpdate.bindLong(ContactReplaceSqlStatement.CONTACT_ID, contactId);
         mContactUpdate.execute();
 
-        mDbHelper.updateContactVisible(contactId);
+        mDbHelper.updateContactVisible(txContext, contactId);
         updateAggregatedStatusUpdate(contactId);
     }
 
@@ -634,8 +636,8 @@ public class ContactAggregator {
      * Given a specific raw contact, finds all matching aggregate contacts and chooses the one
      * with the highest match score.  If no such contact is found, creates a new contact.
      */
-    private synchronized void aggregateContact(SQLiteDatabase db, long rawContactId,
-            String accountType, String accountName, long currentContactId,
+    private synchronized void aggregateContact(TransactionContext txContext, SQLiteDatabase db,
+            long rawContactId, String accountType, String accountName, long currentContactId,
             MatchCandidateList candidates, ContactMatcher matcher, ContentValues values) {
 
         int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
@@ -697,9 +699,9 @@ public class ContactAggregator {
             markAggregated(rawContactId);
         } else if (contactId == -1) {
             // Splitting an aggregate
-            createNewContactForRawContact(db, rawContactId);
+            createNewContactForRawContact(txContext, db, rawContactId);
             if (currentContactContentsCount > 0) {
-                updateAggregateData(currentContactId);
+                updateAggregateData(txContext, currentContactId);
             }
         } else {
             // Joining with an existing aggregate
@@ -716,12 +718,12 @@ public class ContactAggregator {
             computeAggregateData(db, contactId, mContactUpdate);
             mContactUpdate.bindLong(ContactReplaceSqlStatement.CONTACT_ID, contactId);
             mContactUpdate.execute();
-            mDbHelper.updateContactVisible(contactId);
+            mDbHelper.updateContactVisible(txContext, contactId);
             updateAggregatedStatusUpdate(contactId);
         }
 
         if (contactIdToSplit != -1) {
-            splitAutomaticallyAggregatedRawContacts(db, contactIdToSplit);
+            splitAutomaticallyAggregatedRawContacts(txContext, db, contactIdToSplit);
         }
     }
 
@@ -762,7 +764,8 @@ public class ContactAggregator {
      * Breaks up an existing aggregate when a new raw contact is inserted that has
      * come from the same account as one of the raw contacts in this aggregate.
      */
-    private void splitAutomaticallyAggregatedRawContacts(SQLiteDatabase db, long contactId) {
+    private void splitAutomaticallyAggregatedRawContacts(
+            TransactionContext txContext, SQLiteDatabase db, long contactId) {
         mSelectionArgs1[0] = String.valueOf(contactId);
         int count = (int) DatabaseUtils.longForQuery(db,
                 "SELECT COUNT(" + RawContacts._ID + ")" +
@@ -798,26 +801,27 @@ public class ContactAggregator {
                     break;
                 }
                 long rawContactId = cursor.getLong(0);
-                createNewContactForRawContact(db, rawContactId);
+                createNewContactForRawContact(txContext, db, rawContactId);
             }
         } finally {
             cursor.close();
         }
         if (contactId > 0) {
-            updateAggregateData(contactId);
+            updateAggregateData(txContext, contactId);
         }
     }
 
     /**
      * Creates a stand-alone Contact for the given raw contact ID.
      */
-    private void createNewContactForRawContact(SQLiteDatabase db, long rawContactId) {
+    private void createNewContactForRawContact(
+            TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1,
                 mContactInsert);
         long contactId = mContactInsert.executeInsert();
         setContactIdAndMarkAggregated(rawContactId, contactId);
-        mDbHelper.updateContactVisible(contactId);
+        mDbHelper.updateContactVisible(txContext, contactId);
         setPresenceContactId(rawContactId, contactId);
         updateAggregatedStatusUpdate(contactId);
     }

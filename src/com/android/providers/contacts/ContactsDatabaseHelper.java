@@ -3207,19 +3207,20 @@ import java.util.Locale;
     /**
      * Updates contact visibility and return true iff the visibility was actually changed.
      */
-    public boolean updateContactVisibleOnlyIfChanged(long contactId) {
-        return updateContactVisible(contactId, true);
+    public boolean updateContactVisibleOnlyIfChanged(TransactionContext txContext, long contactId) {
+        return updateContactVisible(txContext, contactId, true);
     }
 
     /**
      * Update {@link Contacts#IN_VISIBLE_GROUP} and
      * {@link Tables#DEFAULT_DIRECTORY} for a specific contact.
      */
-    public void updateContactVisible(long contactId) {
-        updateContactVisible(contactId, false);
+    public void updateContactVisible(TransactionContext txContext, long contactId) {
+        updateContactVisible(txContext, contactId, false);
     }
 
-    public boolean updateContactVisible(long contactId, boolean onlyIfChanged) {
+    public boolean updateContactVisible(
+            TransactionContext txContext, long contactId, boolean onlyIfChanged) {
         SQLiteDatabase db = getWritableDatabase();
         updateCustomContactVisibility(db, " AND " + Contacts._ID + "=" + contactId);
 
@@ -3275,8 +3276,13 @@ import java.util.Locale;
         if (newVisibility) {
             db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY + " VALUES(?)",
                     new String[] { contactIdAsString });
+            txContext.invalidateSearchIndexForContact(contactId);
         } else {
-            db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY + " WHERE " + Contacts._ID + "=?",
+            db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY +
+                        " WHERE " + Contacts._ID + "=?",
+                    new String[] { contactIdAsString });
+            db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX +
+                        " WHERE " + SearchIndexColumns.CONTACT_ID + "=CAST(? AS int)",
                     new String[] { contactIdAsString });
         }
         return true;

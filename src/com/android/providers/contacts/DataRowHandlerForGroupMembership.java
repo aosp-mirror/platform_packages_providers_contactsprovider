@@ -81,7 +81,7 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         if (hasFavoritesGroupMembership(db, rawContactId)) {
             updateRawContactsStar(db, rawContactId, true /* starred */);
         }
-        updateVisibility(rawContactId);
+        updateVisibility(txContext, rawContactId);
         return dataId;
     }
 
@@ -98,7 +98,7 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         if (wasStarred != isStarred) {
             updateRawContactsStar(db, rawContactId, isStarred);
         }
-        updateVisibility(rawContactId);
+        updateVisibility(txContext, rawContactId);
         return true;
     }
 
@@ -130,17 +130,17 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         if (wasStarred && !isStarred) {
             updateRawContactsStar(db, rawContactId, false /* starred */);
         }
-        updateVisibility(rawContactId);
+        updateVisibility(txContext, rawContactId);
         return count;
     }
 
-    private void updateVisibility(long rawContactId) {
+    private void updateVisibility(TransactionContext txContext, long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
         }
 
-        if (mDbHelper.updateContactVisibleOnlyIfChanged(contactId)) {
+        if (mDbHelper.updateContactVisibleOnlyIfChanged(txContext, contactId)) {
             mContactAggregator.updateAggregationAfterVisibilityChange(contactId);
         }
     }
