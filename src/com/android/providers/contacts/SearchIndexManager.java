@@ -158,7 +158,15 @@ public class SearchIndexManager {
             }
         }
 
+        public void appendTokenFromColumn(String columnName) {
+            appendToken(getString(columnName));
+        }
+
         public void appendToken(String token) {
+            if (TextUtils.isEmpty(token)) {
+                return;
+            }
+
             if (mSbTokens.length() != 0) {
                 mSbTokens.append(' ');
             }

@@ -57,7 +57,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, values);
 
         assertSearchIndex(
-                contactId, "Doe, John\nParr, Bob I.\nMrs. Parr, Helen I., PhD (par helen)", null);
+                contactId, null, "Doe John Parr Bob I. Mrs. Parr Helen I. PhD par helen");
     }
 
     public void testSearchIndexForOrganization() {
@@ -148,6 +148,13 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
     public void testEmptyFilter() {
         createRawContactWithName("John", "Doe");
         assertEquals(0, getCount(buildSearchUri(""), null, null));
+    }
+
+    public void testSearchByName() {
+        createRawContactWithName("John", "Doe");
+
+        // We are supposed to find the contact, but return a null snippet
+        assertStoredValue(buildSearchUri("john"), SearchSnippetColumns.SNIPPET, null);
     }
 
     public void testSearchByEmailAddress() {

@@ -4395,7 +4395,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
                 sb.append(")");
             } else {
+                sb.append("(CASE WHEN name_contact_id NOT NULL THEN NULL ELSE ");
                 appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                sb.append(" END)");
             }
             sb.append(" AS " + SearchSnippetColumns.SNIPPET);
         }
@@ -4410,7 +4412,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     " FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
                     " WHERE " + Email.ADDRESS + " LIKE ");
             DatabaseUtils.appendEscapedSQLString(sb, filter + "%");
-            sb.append(") AS email_data ON (email_contact_id=snippet_contact_id)");
+            sb.append(") ON (email_contact_id=snippet_contact_id)");
         } else if (isPhoneNumber) {
             phoneNumber = PhoneNumberUtils.normalizeNumber(filter);
             sb.append(" LEFT OUTER JOIN " +
@@ -4433,7 +4435,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 sb.append("%'");
             }
             sb.append(" GROUP BY phone_contact_id");
-            sb.append(") AS phone_data ON (phone_contact_id=snippet_contact_id)");
+            sb.append(") ON (phone_contact_id=snippet_contact_id)");
+        } else {
+            sb.append(" LEFT OUTER JOIN " +
+                    "(SELECT DISTINCT "
+                            + RawContacts.CONTACT_ID + " AS name_contact_id" +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " JOIN " + Tables.NAME_LOOKUP +
+                    " ON(" + RawContactsColumns.CONCRETE_ID + "="
+                            + NameLookupColumns.RAW_CONTACT_ID + ")");
+
+            String normalizedFilter = NameNormalizer.normalize(filter);
+            if (!TextUtils.isEmpty(normalizedFilter)) {
+                sb.append(" WHERE normalized_name GLOB '");
+                sb.append(normalizedFilter);
+                sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
+                        "=" + NameLookupType.NAME_COLLATION_KEY);
+            } else {
+                sb.append(" WHERE 0");
+            }
+            sb.append(") ON (name_contact_id=snippet_contact_id)");
         }
 
         sb.append(" WHERE ");

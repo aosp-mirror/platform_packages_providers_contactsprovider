@@ -191,27 +191,13 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
 
     @Override
     public void appendSearchableData(IndexBuilder builder) {
-        builder.appendContentFromColumn(StructuredName.PREFIX);
-        builder.appendContentFromColumn(StructuredName.FAMILY_NAME);
-        builder.appendContentFromColumn(StructuredName.GIVEN_NAME, IndexBuilder.SEPARATOR_COMMA);
-        builder.appendContentFromColumn(StructuredName.MIDDLE_NAME);
-        builder.appendContentFromColumn(StructuredName.SUFFIX, IndexBuilder.SEPARATOR_COMMA);
-
-        String family = builder.getString(StructuredName.PHONETIC_FAMILY_NAME);
-        String middle = builder.getString(StructuredName.PHONETIC_MIDDLE_NAME);
-        String given = builder.getString(StructuredName.PHONETIC_GIVEN_NAME);
-        if (!TextUtils.isEmpty(family) || !TextUtils.isEmpty(middle) || !TextUtils.isEmpty(given)) {
-            mSb.setLength(0);
-            if (!TextUtils.isEmpty(family)) {
-                mSb.append(family);
-            }
-            if (!TextUtils.isEmpty(middle)) {
-                mSb.append(' ').append(middle);
-            }
-            if (!TextUtils.isEmpty(given)) {
-                mSb.append(' ').append(given);
-            }
-            builder.appendContent(mSb.toString().trim(), IndexBuilder.SEPARATOR_PARENTHESES);
-        }
+        builder.appendTokenFromColumn(StructuredName.PREFIX);
+        builder.appendTokenFromColumn(StructuredName.FAMILY_NAME);
+        builder.appendTokenFromColumn(StructuredName.GIVEN_NAME);
+        builder.appendTokenFromColumn(StructuredName.MIDDLE_NAME);
+        builder.appendTokenFromColumn(StructuredName.SUFFIX);
+        builder.appendTokenFromColumn(StructuredName.PHONETIC_FAMILY_NAME);
+        builder.appendTokenFromColumn(StructuredName.PHONETIC_MIDDLE_NAME);
+        builder.appendTokenFromColumn(StructuredName.PHONETIC_GIVEN_NAME);
     }
 }
