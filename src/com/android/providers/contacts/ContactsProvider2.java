@@ -4351,10 +4351,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         boolean snippetNeeded = mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
         boolean isEmailAddress = false;
         String emailAddress = null;
+        boolean isPhoneNumber = false;
+        String phoneNumber = null;
         if (snippetNeeded) {
             if (filter.indexOf('@') != -1) {
                 emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
                 isEmailAddress = !TextUtils.isEmpty(emailAddress);
+            } else {
+                isPhoneNumber = isPhoneNumber(filter);
             }
 
             String[] args = null;
@@ -4375,9 +4379,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             sb.append(", ");
             if (isEmailAddress) {
-                sb.append("coalesce(");
+                sb.append("ifnull(");
                 DatabaseUtils.appendEscapedSQLString(sb, startMatch);
-                sb.append("||email_data." + Email.ADDRESS + "||");
+                sb.append("||email_address||");
+                DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+                sb.append(",");
+                appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                sb.append(")");
+            } else if (isPhoneNumber) {
+                sb.append("ifnull(");
+                DatabaseUtils.appendEscapedSQLString(sb, startMatch);
+                sb.append("||phone_number||");
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
                 appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
@@ -4391,47 +4403,49 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(" FROM " + Tables.SEARCH_INDEX);
 
         if (isEmailAddress) {
-            sb.append(" LEFT OUTER JOIN "
-                    + "(SELECT DISTINCT "
+            sb.append(" LEFT OUTER JOIN " +
+                    "(SELECT "
                             + RawContacts.CONTACT_ID + " AS email_contact_id,"
-                            + Email.ADDRESS
-                    + " FROM " + Tables.DATA_JOIN_RAW_CONTACTS
-                    + " WHERE " + Email.ADDRESS + " LIKE ");
+                            + "MIN(" + Email.ADDRESS + ") AS email_address" +
+                    " FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
+                    " WHERE " + Email.ADDRESS + " LIKE ");
             DatabaseUtils.appendEscapedSQLString(sb, filter + "%");
             sb.append(") AS email_data ON (email_contact_id=snippet_contact_id)");
-        }
-
-        sb.append(" WHERE ");
-        sb.append(Tables.SEARCH_INDEX + " MATCH ");
-        if (isEmailAddress) {
-            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\"");
-        } else {
-            DatabaseUtils.appendEscapedSQLString(sb, filter + "*");
-        }
-        sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
-
-        if (true) {
-            return;
-        }
-
-        if (isPhoneNumber(filter)) {
-            String number = PhoneNumberUtils.normalizeNumber(filter);
-            sb.append(" OR " + DataColumns.CONCRETE_ID + " IN (" +
-                    " SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
-                    + " FROM " + Tables.PHONE_LOOKUP
-                    + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-            sb.append(number);
+        } else if (isPhoneNumber) {
+            phoneNumber = PhoneNumberUtils.normalizeNumber(filter);
+            sb.append(" LEFT OUTER JOIN " +
+                    "(SELECT "
+                            + RawContacts.CONTACT_ID + " AS phone_contact_id,"
+                            + "MIN(" + Phone.NUMBER + ") AS phone_number" +
+                    " FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
+                    " JOIN " + Tables.PHONE_LOOKUP +
+                    " ON(" + DataColumns.CONCRETE_ID + "="
+                        + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.DATA_ID + ")" +
+                    " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+            sb.append(phoneNumber);
             sb.append("%'");
 
-            String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
+            String numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
                     mDbHelper.getCountryIso());
             if (!TextUtils.isEmpty(numberE164)) {
                 sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
                 sb.append(numberE164);
                 sb.append("%'");
             }
-            sb.append(')');
+            sb.append(" GROUP BY phone_contact_id");
+            sb.append(") AS phone_data ON (phone_contact_id=snippet_contact_id)");
         }
+
+        sb.append(" WHERE ");
+        sb.append(Tables.SEARCH_INDEX + " MATCH ");
+        if (isEmailAddress) {
+            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\"");
+        } else if (isPhoneNumber) {
+            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\" OR " + phoneNumber + "*");
+        } else {
+            DatabaseUtils.appendEscapedSQLString(sb, filter + "*");
+        }
+        sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
     }
 
     private void appendSnippetFunction(

@@ -156,13 +156,28 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "john@doe.com");
         insertNote(rawContactId, "a hundred dollar note for doe@john.com and bob parr");
 
-        assertStoredValue(buildSearchUri("john@d", "[,],-,5"), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("john@d"), SearchSnippetColumns.SNIPPET,
                 "[john@doe.com]");
-        assertStoredValue(buildSearchUri("doe@j", "[,],-,5"), SearchSnippetColumns.SNIPPET,
-                "-note for [doe]@[john].com-");
+        assertStoredValue(buildSearchUri("doe@j"), SearchSnippetColumns.SNIPPET,
+                "...hundred dollar note for [doe]@[john].com and bob parr");
 
         // TODO: uncomment after we have a custom tokenizer that recognizes email addresses
-//      assertStoredValue(buildSearchUri("bob@p", "[,],-,5"), SearchSnippetColumns.SNIPPET, null);
+//      assertStoredValue(buildSearchUri("bob@p"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testSearchByPhoneNumber() {
+        long rawContactId = createRawContact();
+        insertPhoneNumber(rawContactId, "330142685300");
+        insertPhoneNumber(rawContactId, "(800)GOOG-123");
+        insertEmail(rawContactId, "john@doe.com");
+        insertNote(rawContactId, "the eighteenth episode of Seinfeld, 650-253-0000");
+
+        assertStoredValue(buildSearchUri("33 (0)1 42 68 53 00"), SearchSnippetColumns.SNIPPET,
+                "[330142685300]");
+        assertStoredValue(buildSearchUri("8004664"), SearchSnippetColumns.SNIPPET,
+                "[(800)GOOG-123]");
+        assertStoredValue(buildSearchUri("650-2"), SearchSnippetColumns.SNIPPET,
+                "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
     }
 
     private Uri buildSearchUri(String filter) {
