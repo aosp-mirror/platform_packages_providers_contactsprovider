@@ -419,7 +419,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             NameLookupType.EMAIL_BASED_NICKNAME + "," +
             NameLookupType.NICKNAME + "," +
             NameLookupType.NAME_SHORTHAND + "," +
-            NameLookupType.ORGANIZATION + "," +
             NameLookupType.NAME_CONSONANTS;
 
     /**
@@ -5051,7 +5050,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + NameLookupType.NAME_COLLATION_KEY + ","
                     + NameLookupType.NICKNAME + ","
                     + NameLookupType.NAME_SHORTHAND + ","
-                    + NameLookupType.ORGANIZATION + ","
                     + NameLookupType.NAME_CONSONANTS);
             if (allowEmailMatch) {
                 sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);

@@ -46,7 +46,6 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
         long dataId = super.insert(db, txContext, rawContactId, values);
 
         fixRawContactDisplayName(db, txContext, rawContactId);
-        mDbHelper.insertNameLookupForOrganization(rawContactId, dataId, company, title);
         return dataId;
     }
 
@@ -87,8 +86,6 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
             }
 
             mDbHelper.deleteNameLookup(dataId);
-            mDbHelper.insertNameLookupForOrganization(rawContactId, dataId, company, title);
-
             fixRawContactDisplayName(db, txContext, rawContactId);
         }
         return true;

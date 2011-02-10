@@ -92,7 +92,7 @@ import java.util.Locale;
      *   500-599 Honeycomb-MR1
      * </pre>
      */
-    static final int DATABASE_VERSION = 500;
+    static final int DATABASE_VERSION = 501;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -392,7 +392,6 @@ import java.util.Locale;
         public static final int NAME_COLLATION_KEY = 2;
         public static final int NICKNAME = 3;
         public static final int EMAIL_BASED_NICKNAME = 4;
-        public static final int ORGANIZATION = 5;
         public static final int NAME_SHORTHAND = 6;
         public static final int NAME_CONSONANTS = 7;
 
@@ -1775,6 +1774,11 @@ import java.util.Locale;
             oldVersion = 500;
         }
 
+        if (oldVersion < 501) {
+            upgradeToVersion501(db);
+            oldVersion = 501;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2170,71 +2174,12 @@ import java.util.Locale;
                 + " ADD " + RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0;");
     }
 
-    private interface Organization300Query {
-        String TABLE = Tables.DATA;
-
-        String SELECTION = DataColumns.MIMETYPE_ID + "=?";
-
-        String COLUMNS[] = {
-                Organization._ID,
-                Organization.RAW_CONTACT_ID,
-                Organization.COMPANY,
-                Organization.TITLE
-        };
-
-        int ID = 0;
-        int RAW_CONTACT_ID = 1;
-        int COMPANY = 2;
-        int TITLE = 3;
-    }
-
     /**
      * Fix for the bug where name lookup records for organizations would get removed by
      * unrelated updates of the data rows.
      */
     private void upgradeToVersion300(SQLiteDatabase db) {
-        final long mimeType = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
-        if (mimeType == -1) {
-            return;
-        }
-
-        ContentValues values = new ContentValues();
-
-        // Find all data rows with the mime type "organization"
-        Cursor cursor = db.query(Organization300Query.TABLE, Organization300Query.COLUMNS,
-                Organization300Query.SELECTION, new String[] {String.valueOf(mimeType)},
-                null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(Organization300Query.ID);
-                long rawContactId = cursor.getLong(Organization300Query.RAW_CONTACT_ID);
-                String company = cursor.getString(Organization300Query.COMPANY);
-                String title = cursor.getString(Organization300Query.TITLE);
-
-                // First delete name lookup if there is any (chances are there won't be)
-                db.delete(Tables.NAME_LOOKUP, NameLookupColumns.DATA_ID + "=?",
-                        new String[]{String.valueOf(dataId)});
-
-                // Now insert two name lookup records: one for company name, one for title
-                values.put(NameLookupColumns.DATA_ID, dataId);
-                values.put(NameLookupColumns.RAW_CONTACT_ID, rawContactId);
-                values.put(NameLookupColumns.NAME_TYPE, NameLookupType.ORGANIZATION);
-
-                if (!TextUtils.isEmpty(company)) {
-                    values.put(NameLookupColumns.NORMALIZED_NAME,
-                            NameNormalizer.normalize(company));
-                    db.insert(Tables.NAME_LOOKUP, null, values);
-                }
-
-                if (!TextUtils.isEmpty(title)) {
-                    values.put(NameLookupColumns.NORMALIZED_NAME,
-                            NameNormalizer.normalize(title));
-                    db.insert(Tables.NAME_LOOKUP, null, values);
-                }
-            }
-        } finally {
-            cursor.close();
-        }
+        // No longer needed
     }
 
     private static final class Upgrade303Query {
@@ -2475,7 +2420,6 @@ import java.util.Locale;
 
         try {
             insertStructuredNameLookup(db, nameLookupInsert);
-            insertOrganizationLookup(db, nameLookupInsert);
             insertEmailLookup(db, nameLookupInsert);
             insertNicknameLookup(db, nameLookupInsert);
         } finally {
@@ -2569,30 +2513,6 @@ import java.util.Locale;
         public static final int RAW_CONTACT_ID = 1;
         public static final int COMPANY = 2;
         public static final int TITLE = 3;
-    }
-
-    /**
-     * Inserts name lookup rows for all organizations in the database.
-     */
-    private void insertOrganizationLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
-        final long mimeTypeId = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
-        Cursor cursor = db.query(OrganizationQuery.TABLE, OrganizationQuery.COLUMNS,
-                OrganizationQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
-                null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(OrganizationQuery.ID);
-                long rawContactId = cursor.getLong(OrganizationQuery.RAW_CONTACT_ID);
-                String organization = cursor.getString(OrganizationQuery.COMPANY);
-                String title = cursor.getString(OrganizationQuery.TITLE);
-                insertNameLookup(nameLookupInsert, rawContactId, dataId,
-                        NameLookupType.ORGANIZATION, organization);
-                insertNameLookup(nameLookupInsert, rawContactId, dataId,
-                        NameLookupType.ORGANIZATION, title);
-            }
-        } finally {
-            cursor.close();
-        }
     }
 
     private static final class EmailQuery {
@@ -2876,7 +2796,13 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion500(SQLiteDatabase db) {
-        createSearchIndexTable(db);
+        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
+    }
+
+    private void upgradeToVersion501(SQLiteDatabase db) {
+        // Remove organization rows from the name lookup, we now use search index for that
+        db.execSQL("DELETE FROM name_lookup WHERE name_type=5");
+        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
     }
 
     public String extractHandleFromEmailAddress(String email) {
@@ -3947,18 +3873,6 @@ import java.util.Locale;
         }
         mNameLookupDelete.bindLong(1, dataId);
         mNameLookupDelete.execute();
-    }
-
-    public void insertNameLookupForOrganization(long rawContactId, long dataId, String company,
-            String title) {
-        if (!TextUtils.isEmpty(company)) {
-            insertNameLookup(rawContactId, dataId,
-                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(company));
-        }
-        if (!TextUtils.isEmpty(title)) {
-            insertNameLookup(rawContactId, dataId,
-                    NameLookupType.ORGANIZATION, NameNormalizer.normalize(title));
-        }
     }
 
     public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {

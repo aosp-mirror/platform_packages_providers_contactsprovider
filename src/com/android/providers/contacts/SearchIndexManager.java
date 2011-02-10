@@ -24,6 +24,10 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.SystemClock;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Organization;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.ProviderStatus;
@@ -40,7 +44,7 @@ import java.util.Set;
 public class SearchIndexManager {
     private static final String TAG = "ContactsFTS";
 
-    private static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
+    public static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
     private static final int SEARCH_INDEX_VERSION = 1;
 
     private static final class ContactIndexQuery {
@@ -250,11 +254,25 @@ public class SearchIndexManager {
     }
 
     private int buildIndex(SQLiteDatabase db, String selection, boolean replace) {
+        mSb.setLength(0);
+        mSb.append(Data.CONTACT_ID + ", ");
+        mSb.append("(CASE WHEN " + DataColumns.MIMETYPE_ID + "=");
+        mSb.append(mDbHelper.getMimeTypeId(Nickname.CONTENT_ITEM_TYPE));
+        mSb.append(" THEN -4 ");
+        mSb.append(" WHEN " + DataColumns.MIMETYPE_ID + "=");
+        mSb.append(mDbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE));
+        mSb.append(" THEN -3 ");
+        mSb.append(" WHEN " + DataColumns.MIMETYPE_ID + "=");
+        mSb.append(mDbHelper.getMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE));
+        mSb.append(" THEN -2");
+        mSb.append(" WHEN " + DataColumns.MIMETYPE_ID + "=");
+        mSb.append(mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE));
+        mSb.append(" THEN -1");
+        mSb.append(" END), " + Data.IS_SUPER_PRIMARY + ", " + DataColumns.CONCRETE_ID);
+
         int count = 0;
-        Cursor cursor = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS,
-                ContactIndexQuery.COLUMNS, selection, null, null, null,
-                Data.CONTACT_ID + ", " + DataColumns.MIMETYPE_ID + ", " + Data.IS_SUPER_PRIMARY
-                        + ", " + DataColumns.CONCRETE_ID);
+        Cursor cursor = db.query(Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS, ContactIndexQuery.COLUMNS,
+                selection, null, null, null, mSb.toString());
         mIndexBuilder.setCursor(cursor);
         mIndexBuilder.reset();
         try {
