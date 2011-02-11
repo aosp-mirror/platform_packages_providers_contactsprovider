@@ -57,7 +57,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, values);
 
         assertSearchIndex(
-                contactId, null, "Doe John Parr Bob I. Mrs. Parr Helen I. PhD par helen");
+                contactId, null, "Doe John Parr Bob I. Mrs. Parr Helen I. PhD par helen parhelen");
     }
 
     public void testSearchIndexForOrganization() {

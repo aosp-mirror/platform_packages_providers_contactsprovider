@@ -1872,13 +1872,14 @@ public class LegacyApiSupport {
                 break;
 
             case SEARCH_SUGGESTIONS:
-
-                // No legacy compatibility for search suggestions
-                return mGlobalSearchSupport.handleSearchSuggestionsQuery(db, uri, limit);
+                return mGlobalSearchSupport.handleSearchSuggestionsQuery(
+                        db, uri, projection, limit);
 
             case SEARCH_SHORTCUT: {
                 String lookupKey = uri.getLastPathSegment();
-                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, lookupKey, projection);
+                String filter = ContactsProvider2.getQueryParameter(uri, "filter");
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(
+                        db, projection, lookupKey, filter);
             }
 
             case LIVE_FOLDERS_PEOPLE:

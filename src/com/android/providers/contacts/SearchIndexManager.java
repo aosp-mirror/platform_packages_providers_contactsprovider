@@ -268,6 +268,7 @@ public class SearchIndexManager {
         mSb.append(" WHEN " + DataColumns.MIMETYPE_ID + "=");
         mSb.append(mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE));
         mSb.append(" THEN -1");
+        mSb.append(" ELSE " + DataColumns.MIMETYPE_ID);
         mSb.append(" END), " + Data.IS_SUPER_PRIMARY + ", " + DataColumns.CONCRETE_ID);
 
         int count = 0;

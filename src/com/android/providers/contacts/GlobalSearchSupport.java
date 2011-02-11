@@ -18,15 +18,11 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.app.SearchManager;
-import android.content.ContentUris;
 import android.content.res.Resources;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -34,18 +30,13 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
 
 /**
  * Support for global search integration for Contacts.
@@ -68,116 +59,56 @@ public class GlobalSearchSupport {
             SearchManager.SUGGEST_COLUMN_TEXT_2,
             SearchManager.SUGGEST_COLUMN_ICON_1,
             SearchManager.SUGGEST_COLUMN_ICON_2,
-            SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
+            SearchManager.SUGGEST_COLUMN_INTENT_DATA,
             SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
+            SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA,
     };
 
-    private interface SearchSuggestionQuery {
-        public static final String TABLE = "data "
-                + " JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + " JOIN default_directory on (raw_contacts.contact_id = default_directory._id) "
-                + " JOIN contacts ON (default_directory._id = contacts._id) "
-                + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON ("
-                +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
+    private static final char SNIPPET_START_MATCH = '\u0001';
+    private static final char SNIPPET_END_MATCH = '\u0001';
+    private static final String SNIPPET_ELLIPSIS = "\u2026";
+    private static final int SNIPPET_MAX_TOKENS = 5;
 
-        public static final String PRESENCE_SQL =
-                "(SELECT " + StatusUpdates.PRESENCE +
-                " FROM " + Tables.AGGREGATED_PRESENCE +
-                " WHERE " + AggregatedPresenceColumns.CONTACT_ID
-                        + "=" + ContactsColumns.CONCRETE_ID + ")";
+    private static final String PRESENCE_SQL =
+        "(SELECT " + StatusUpdates.PRESENCE +
+        " FROM " + Tables.AGGREGATED_PRESENCE +
+        " WHERE " + AggregatedPresenceColumns.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")";
 
-        public static final String[] COLUMNS = {
-            ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID,
-            "name_raw_contact." + RawContactsColumns.DISPLAY_NAME
-                    + " AS " + Contacts.DISPLAY_NAME,
-            PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE,
-            DataColumns.CONCRETE_ID + " AS data_id",
-            DataColumns.MIMETYPE_ID,
-            Data.IS_SUPER_PRIMARY,
-            Data.DATA1,
-            Contacts.PHOTO_ID,
-            Contacts.LOOKUP_KEY,
-        };
+    // Current contacts - those contacted within the last 3 days (in seconds)
+    private static final long CURRENT_CONTACTS = 3 * 24 * 60 * 60;
 
-        public static final int CONTACT_ID = 0;
-        public static final int DISPLAY_NAME = 1;
-        public static final int PRESENCE_STATUS = 2;
-        public static final int DATA_ID = 3;
-        public static final int MIMETYPE_ID = 4;
-        public static final int IS_SUPER_PRIMARY = 5;
-        public static final int ORGANIZATION = 6;
-        public static final int EMAIL = 6;
-        public static final int PHONE = 6;
-        public static final int PHOTO_ID = 7;
-        public static final int LOOKUP_KEY = 8;
+    // Recent contacts - those contacted within the last 30 days (in seconds)
+    private static final long RECENT_CONTACTS = 30 * 24 * 60 * 60;
 
-        // Current contacts - those contacted within the last 3 days (in seconds)
-        public static final long CURRENT_CONTACTS = 3 * 24 * 60 * 60;
+    private static final String TIME_SINCE_LAST_CONTACTED =
+            "(strftime('%s', 'now') - contacts." + Contacts.LAST_TIME_CONTACTED + "/1000)";
 
-        // Recent contacts - those contacted within the last 30 days (in seconds)
-        public static final long RECENT_CONTACTS = 30 * 24 * 60 * 60;
-
-        public static final String TIME_SINCE_LAST_CONTACTED =
-                "(strftime('%s', 'now') - contacts." + Contacts.LAST_TIME_CONTACTED + "/1000)";
-
-        /*
-         * See {@link ContactsProvider2#EMAIL_FILTER_SORT_ORDER} for the discussion of this
-         * sorting order.
-         */
-        public static final String SORT_ORDER =
-            "(CASE WHEN contacts." + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
-            + "(CASE WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + CURRENT_CONTACTS + " THEN 0 "
-            + " WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + RECENT_CONTACTS + " THEN 1 "
-            + " ELSE 2 END),"
-            + "contacts." + Contacts.TIMES_CONTACTED + " DESC, "
-            + "name_raw_contact." + RawContacts.DISPLAY_NAME_PRIMARY + ", "
-            + "contacts." + Contacts._ID;
-    }
+    /*
+     * See {@link ContactsProvider2#EMAIL_FILTER_SORT_ORDER} for the discussion of this
+     * sorting order.
+     */
+    private static final String SORT_ORDER =
+        "(CASE WHEN contacts." + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
+        + "(CASE WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + CURRENT_CONTACTS + " THEN 0 "
+        + " WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + RECENT_CONTACTS + " THEN 1 "
+        + " ELSE 2 END),"
+        + "contacts." + Contacts.TIMES_CONTACTED + " DESC, "
+        + "contacts." + Contacts.DISPLAY_NAME_PRIMARY + ", "
+        + "contacts." + Contacts._ID;
 
     private static class SearchSuggestion {
-        final long contactId;
-        final boolean filterIsEmail;
-        final boolean filterIsPhone;
-        String organization;
-        String email;
-        String phoneNumber;
-        Uri photoUri;
+        long contactId;
+        String photoUri;
         String lookupKey;
-        String normalizedName;
         int presence = -1;
-        boolean processed;
         String text1;
         String text2;
         String icon1;
         String icon2;
+        String filter;
 
-        public SearchSuggestion(long contactId, boolean filterIsEmail, boolean filterIsPhone) {
-            this.contactId = contactId;
-            this.filterIsEmail = filterIsEmail;
-            this.filterIsPhone = filterIsPhone;
-        }
-
-        private void process() {
-            if (processed) {
-                return;
-            }
-
-            if (filterIsPhone && !TextUtils.isEmpty(phoneNumber)) {
-                text2 = phoneNumber;
-            } else if (filterIsEmail && !TextUtils.isEmpty(email)) {
-                text2 = email;
-            } else if (!TextUtils.isEmpty(organization)) {
-                text2 = organization;
-            } else if (!TextUtils.isEmpty(phoneNumber)) {
-                text2 = phoneNumber;
-            } else if (!TextUtils.isEmpty(email)) {
-                text2 = email;
-            }
-
-            if (TextUtils.equals(text1, text2)) {
-                text2 = null;
-            }
-
+        @SuppressWarnings({"unchecked"})
+        public ArrayList asList(String[] projection) {
             if (photoUri != null) {
                 icon1 = photoUri.toString();
             } else {
@@ -188,26 +119,6 @@ public class GlobalSearchSupport {
                 icon2 = String.valueOf(StatusUpdates.getPresenceIconResourceId(presence));
             }
 
-            processed = true;
-        }
-
-        /**
-         * Returns key for sorting search suggestions.
-         *
-         * <p>TODO: switch to new sort key
-         */
-        public String getSortKey() {
-            if (normalizedName == null) {
-                process();
-                normalizedName = text1 == null ? "" : NameNormalizer.normalize(text1);
-            }
-            return normalizedName;
-        }
-
-        @SuppressWarnings({"unchecked"})
-        public ArrayList asList(String[] projection) {
-            process();
-
             ArrayList<Object> list = new ArrayList<Object>();
             if (projection == null) {
                 list.add(contactId);
@@ -215,8 +126,9 @@ public class GlobalSearchSupport {
                 list.add(text2);
                 list.add(icon1);
                 list.add(icon2);
+                list.add(buildUri());
                 list.add(lookupKey);
-                list.add(lookupKey);
+                list.add(filter);
             } else {
                 for (int i = 0; i < projection.length; i++) {
                     addColumnValue(list, projection[i]);
@@ -236,22 +148,25 @@ public class GlobalSearchSupport {
                 list.add(icon1);
             } else if (SearchManager.SUGGEST_COLUMN_ICON_2.equals(column)) {
                 list.add(icon2);
+            } else if (SearchManager.SUGGEST_COLUMN_INTENT_DATA.equals(column)) {
+                list.add(buildUri());
             } else if (SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID.equals(column)) {
                 list.add(lookupKey);
             } else if (SearchManager.SUGGEST_COLUMN_SHORTCUT_ID.equals(column)) {
                 list.add(lookupKey);
+            } else if (SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA.equals(column)) {
+                list.add(filter);
             } else {
                 throw new IllegalArgumentException("Invalid column name: " + column);
             }
         }
+
+        private String buildUri() {
+            return Contacts.getLookupUri(contactId, lookupKey).toString();
+        }
     }
 
     private final ContactsProvider2 mContactsProvider;
-    private boolean mMimeTypeIdsLoaded;
-    private long mMimeTypeIdEmail;
-    private long mMimeTypeIdStructuredName;
-    private long mMimeTypeIdOrganization;
-    private long mMimeTypeIdPhone;
 
     @SuppressWarnings("all")
     public GlobalSearchSupport(ContactsProvider2 contactsProvider) {
@@ -265,19 +180,8 @@ public class GlobalSearchSupport {
         }
     }
 
-    private void ensureMimetypeIdsLoaded() {
-        if (!mMimeTypeIdsLoaded) {
-            ContactsDatabaseHelper dbHelper = (ContactsDatabaseHelper)mContactsProvider
-                    .getDatabaseHelper();
-            mMimeTypeIdStructuredName = dbHelper.getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
-            mMimeTypeIdOrganization = dbHelper.getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
-            mMimeTypeIdPhone = dbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-            mMimeTypeIdEmail = dbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-            mMimeTypeIdsLoaded = true;
-        }
-    }
-
-    public Cursor handleSearchSuggestionsQuery(SQLiteDatabase db, Uri uri, String limit) {
+    public Cursor handleSearchSuggestionsQuery(
+            SQLiteDatabase db, Uri uri, String[] projection, String limit) {
         if (uri.getPathSegments().size() <= 1) {
             return null;
         }
@@ -286,7 +190,8 @@ public class GlobalSearchSupport {
         if (TextUtils.isDigitsOnly(searchClause) && mContactsProvider.isPhone()) {
             return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
         } else {
-            return buildCursorForSearchSuggestionsBasedOnFilter(db, searchClause, limit);
+            return buildCursorForSearchSuggestionsBasedOnFilter(
+                    db, projection, null, searchClause, limit);
         }
     }
 
@@ -300,20 +205,16 @@ public class GlobalSearchSupport {
      * silently.  This would occur with old-style shortcuts that were created using the contact id
      * instead of the lookup key.
      */
-    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, String lookupKey,
-            String[] projection) {
-        ensureMimetypeIdsLoaded();
+    public Cursor handleSearchShortcutRefresh(SQLiteDatabase db, String[] projection,
+            String lookupKey, String filter) {
         long contactId;
         try {
             contactId = mContactsProvider.lookupContactIdByLookupKey(db, lookupKey);
         } catch (IllegalArgumentException e) {
             contactId = -1L;
         }
-        StringBuilder sb = new StringBuilder();
-        sb.append(mContactsProvider.getContactsRestrictions());
-        appendMimeTypeFilter(sb);
-        sb.append(" AND " + ContactsColumns.CONCRETE_ID + "=" + contactId);
-        return buildCursorForSearchSuggestions(db, sb.toString(), projection, null, false, false);
+        return buildCursorForSearchSuggestionsBasedOnFilter(
+                db, projection, ContactsColumns.CONCRETE_ID + "=" + contactId, filter, null);
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
@@ -360,103 +261,86 @@ public class GlobalSearchSupport {
     }
 
     private Cursor buildCursorForSearchSuggestionsBasedOnFilter(SQLiteDatabase db,
-            String filter, String limit) {
-        ensureMimetypeIdsLoaded();
+            String[] projection, String selection, String filter, String limit) {
+        MatrixCursor cursor = new MatrixCursor(
+                projection != null ? projection : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS);
         StringBuilder sb = new StringBuilder();
-        sb.append(mContactsProvider.getContactsRestrictions());
-        appendMimeTypeFilter(sb);
-        sb.append(" AND ");
-        boolean filterIsEmail = mContactsProvider.appendEmailBasedDataFilter(sb, filter);
-        boolean filterIsPhone = false;
-        if (!filterIsEmail) {
-            filterIsPhone = mContactsProvider.appendPhoneNumberBasedDataFilter(sb, filter);
+        sb.append("SELECT "
+                        + Contacts._ID + ", "
+                        + Contacts.LOOKUP_KEY + ", "
+                        + Contacts.PHOTO_THUMBNAIL_URI + ", "
+                        + Contacts.DISPLAY_NAME + ", "
+                        + SearchSnippetColumns.SNIPPET + ", "
+                        + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE +
+                " FROM ");
+        sb.append(getDatabaseHelper().getContactView(false));
+        sb.append(" AS contacts");
+        if (filter != null) {
+            mContactsProvider.appendSearchIndexJoin(sb, filter, true,
+                    String.valueOf(SNIPPET_START_MATCH), String.valueOf(SNIPPET_END_MATCH),
+                    SNIPPET_ELLIPSIS, SNIPPET_MAX_TOKENS);
         }
-        if (!filterIsEmail && !filterIsPhone) {
-            boolean filterIsName = mContactsProvider.appendNameBasedRawContactFilter(sb, filter);
-            if (!filterIsName) {
-                sb.append("0");
-            }
+        if (selection != null) {
+            sb.append(" WHERE ").append(selection);
         }
-
-        String selection = sb.toString();
-
-        return buildCursorForSearchSuggestions(
-                db, selection, null, limit, filterIsEmail, filterIsPhone);
-    }
-
-    private void appendMimeTypeFilter(StringBuilder sb) {
-
-        /*
-         * The "+" syntax prevents the mime type index from being used - we just want
-         * to reduce the size of the result set, not actually search by mime types.
-         */
-        sb.append(" AND " + "+" + DataColumns.MIMETYPE_ID + " IN (" + mMimeTypeIdEmail + "," +
-                mMimeTypeIdOrganization + "," + mMimeTypeIdPhone + "," +
-                mMimeTypeIdStructuredName + ")");
-    }
-
-    private Cursor buildCursorForSearchSuggestions(SQLiteDatabase db, String selection,
-            String[] projection, String limit, boolean filterIsEmail, boolean filterIsPhone) {
-        ArrayList<SearchSuggestion> suggestionList = new ArrayList<SearchSuggestion>();
-        HashMap<Long, SearchSuggestion> suggestionMap = new HashMap<Long, SearchSuggestion>();
-        Cursor c = db.query(false, SearchSuggestionQuery.TABLE, SearchSuggestionQuery.COLUMNS,
-                selection, null, null, null, SearchSuggestionQuery.SORT_ORDER, limit);
+        sb.append(" ORDER BY " + SORT_ORDER);
+        if (limit != null) {
+            sb.append(" LIMIT " + limit);
+        }
+        Cursor c = db.rawQuery(sb.toString(), null);
+        SearchSuggestion suggestion = new SearchSuggestion();
+        suggestion.filter = filter;
         try {
             while (c.moveToNext()) {
-
-                long contactId = c.getLong(SearchSuggestionQuery.CONTACT_ID);
-                SearchSuggestion suggestion = suggestionMap.get(contactId);
-                if (suggestion == null) {
-                    suggestion = new SearchSuggestion(contactId, filterIsEmail, filterIsPhone);
-                    suggestionList.add(suggestion);
-                    suggestionMap.put(contactId, suggestion);
-                }
-
-                boolean isSuperPrimary = c.getInt(SearchSuggestionQuery.IS_SUPER_PRIMARY) != 0;
-                suggestion.text1 = c.getString(SearchSuggestionQuery.DISPLAY_NAME);
-
-                if (!c.isNull(SearchSuggestionQuery.PRESENCE_STATUS)) {
-                    suggestion.presence = c.getInt(SearchSuggestionQuery.PRESENCE_STATUS);
-                }
-
-                long mimetype = c.getLong(SearchSuggestionQuery.MIMETYPE_ID);
-                if (mimetype == mMimeTypeIdOrganization) {
-                    if (isSuperPrimary || suggestion.organization == null) {
-                        suggestion.organization = c.getString(SearchSuggestionQuery.ORGANIZATION);
-                    }
-                } else if (mimetype == mMimeTypeIdEmail) {
-                    if (isSuperPrimary || suggestion.email == null) {
-                        suggestion.email = c.getString(SearchSuggestionQuery.EMAIL);
-                    }
-                } else if (mimetype == mMimeTypeIdPhone) {
-                    if (isSuperPrimary || suggestion.phoneNumber == null) {
-                        suggestion.phoneNumber = c.getString(SearchSuggestionQuery.PHONE);
-                    }
-                }
-
-                if (!c.isNull(SearchSuggestionQuery.PHOTO_ID)) {
-                    suggestion.photoUri = Uri.withAppendedPath(
-                            ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
-                            Photo.CONTENT_DIRECTORY);
-                }
-
-                suggestion.lookupKey = c.getString(SearchSuggestionQuery.LOOKUP_KEY);
+                suggestion.contactId = c.getLong(0);
+                suggestion.lookupKey = c.getString(1);
+                suggestion.photoUri = c.getString(2);
+                suggestion.text1 = c.getString(3);
+                suggestion.text2 = shortenSnippet(c.getString(4));
+                suggestion.presence = c.isNull(5) ? -1 : c.getInt(5);
+                cursor.addRow(suggestion.asList(projection));
             }
         } finally {
             c.close();
         }
-
-        Collections.sort(suggestionList, new Comparator<SearchSuggestion>() {
-            public int compare(SearchSuggestion row1, SearchSuggestion row2) {
-                return row1.getSortKey().compareTo(row2.getSortKey());
-            }
-        });
-
-        MatrixCursor cursor = new MatrixCursor(projection != null ? projection
-                : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS);
-        for (int i = 0; i < suggestionList.size(); i++) {
-            cursor.addRow(suggestionList.get(i).asList(projection));
-        }
         return cursor;
+    }
+
+    private ContactsDatabaseHelper getDatabaseHelper() {
+        return (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
+    }
+
+    private String shortenSnippet(final String snippet) {
+        if (snippet == null) {
+            return null;
+        }
+
+        int from = 0;
+        int to = snippet.length();
+        int start = snippet.indexOf(SNIPPET_START_MATCH);
+        if (start == -1) {
+            return snippet;
+        }
+
+        int firstNl = snippet.lastIndexOf('\n', start);
+        if (firstNl != -1) {
+            from = firstNl + 1;
+        }
+        int end = snippet.lastIndexOf(SNIPPET_END_MATCH);
+        if (end != -1) {
+            int lastNl = snippet.indexOf('\n', end);
+            if (lastNl != -1) {
+                to = lastNl;
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < to; i++) {
+            char c = snippet.charAt(i);
+            if (c != SNIPPET_START_MATCH && c != SNIPPET_END_MATCH) {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }

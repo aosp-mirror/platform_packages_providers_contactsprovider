@@ -23,6 +23,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.StatusUpdates;
@@ -70,28 +71,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                 "Deer Dough").build().test();
     }
 
-    public void testSearchSuggestionsByNameWithPhotoAndCompany() throws Exception {
-        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
-                loadTestPhoto()).company("Google").build();
-        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedText1(
-                "Deer Dough").expectedText2("Google").build().test();
-    }
-
-    public void testSearchSuggestionsByNameWithPhotoAndPhone() {
-        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
-                loadTestPhoto()).phone("1-800-4664-411").build();
-        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedText1(
-                "Deer Dough").expectedText2("1-800-4664-411").build().test();
-    }
-
-    public void testSearchSuggestionsByNameWithPhotoAndEmail() {
-        GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
-                loadTestPhoto()).email("foo@acme.com").build();
-        new SuggestionTesterBuilder(contact).query("D").expectIcon1Uri(true).expectedIcon2(
-                String.valueOf(StatusUpdates.getPresenceIconResourceId(StatusUpdates.OFFLINE)))
-                .expectedText1("Deer Dough").expectedText2("foo@acme.com").build().test();
-    }
-
     public void testSearchSuggestionsByEmailWithPhoto() {
         GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
                 loadTestPhoto()).email("foo@acme.com").build();
@@ -100,18 +79,18 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                 .expectedText1("Deer Dough").expectedText2("foo@acme.com").build().test();
     }
 
-    public void testSearchSuggestionsByNameWithCompany() {
+    public void testSearchSuggestionsByName() {
         GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").company("Google")
                 .build();
         new SuggestionTesterBuilder(contact).query("D").expectedText1("Deer Dough").expectedText2(
-                "Google").build().test();
+                null).build().test();
     }
 
-    public void testSearchByNicknameWithCompany() {
+    public void testSearchByNickname() {
         GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").nickname(
                 "Little Fawn").company("Google").build();
         new SuggestionTesterBuilder(contact).query("L").expectedText1("Deer Dough").expectedText2(
-                "Google").build().test();
+                "Little Fawn").build().test();
     }
 
     public void testSearchByCompany() {
@@ -125,7 +104,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").company("Google")
                 .title("Software Engineer").build();
         new SuggestionTesterBuilder(contact).query("S").expectIcon1Uri(false).expectedText1(
-                "Deer Dough").expectedText2("Google").build().test();
+                "Deer Dough").expectedText2("Software Engineer, Google").build().test();
     }
 
     public void testSearchSuggestionsByPhoneNumberOnNonPhone() throws Exception {
@@ -254,6 +233,25 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
 
             values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
+            values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA,
+                    Contacts.getLookupUri(contact.getContactId(), contact.getLookupKey())
+                            .toString());
+            values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contact.getLookupKey());
+            values.put(SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA, query);
+            return values;
+        }
+
+        /**
+         * Returns the expected Quick Search Box content values for the golden contact.
+         */
+        private ContentValues getRefreshValues() {
+
+            ContentValues values = new ContentValues();
+            values.put("_id", contact.getContactId());
+            values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, expectedText1);
+            values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, expectedText2);
+
+            values.put(SearchManager.SUGGEST_COLUMN_ICON_2, expectedIcon2);
             values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID, contact.getLookupKey());
             values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID, contact.getLookupKey());
             return values;
@@ -270,7 +268,9 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             // See if the same result is returned by a shortcut refresh
             Uri refershUri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath(
                     SearchManager.SUGGEST_URI_PATH_SHORTCUT)
-                    .appendPath(refreshId).build();
+                    .appendPath(refreshId)
+                    .appendQueryParameter(SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA, query)
+                    .build();
 
             String[] projection = new String[] {
                     SearchManager.SUGGEST_COLUMN_ICON_1, SearchManager.SUGGEST_COLUMN_ICON_2,
@@ -312,7 +312,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             try {
                 assertEquals("Record count", 1, c.getCount());
                 c.moveToFirst();
-                assertCursorValues(c, getContactValues());
+                assertCursorValues(c, getRefreshValues());
             } finally {
                 c.close();
             }

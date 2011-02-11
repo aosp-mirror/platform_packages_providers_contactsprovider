@@ -3818,12 +3818,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case SEARCH_SUGGESTIONS: {
-                return mGlobalSearchSupport.handleSearchSuggestionsQuery(db, uri, limit);
+                return mGlobalSearchSupport.handleSearchSuggestionsQuery(
+                        db, uri, projection, limit);
             }
 
             case SEARCH_SHORTCUT: {
                 String lookupKey = uri.getLastPathSegment();
-                return mGlobalSearchSupport.handleSearchShortcutRefresh(db, lookupKey, projection);
+                String filter = getQueryParameter(
+                        uri, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(
+                        db, projection, lookupKey, filter);
             }
 
             case LIVE_FOLDERS_CONTACTS:
@@ -4357,23 +4361,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendSearchIndexJoin(
             StringBuilder sb, Uri uri, String[] projection, String filter) {
-        sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS snippet_contact_id");
 
-        boolean snippetNeeded = mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
-        boolean isEmailAddress = false;
-        String emailAddress = null;
-        boolean isPhoneNumber = false;
-        String phoneNumber = null;
-        String numberE164 = null;
-
-        if (filter.indexOf('@') != -1) {
-            emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
-            isEmailAddress = !TextUtils.isEmpty(emailAddress);
-        } else {
-            isPhoneNumber = isPhoneNumber(filter);
-        }
-
-        if (snippetNeeded) {
+        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET)) {
             String[] args = null;
             String snippetArgs =
                     getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
@@ -4390,6 +4379,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
                     : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
 
+            appendSearchIndexJoin(
+                    sb, filter, true, startMatch, endMatch, ellipsis, maxTokens);
+        } else {
+            appendSearchIndexJoin(sb, filter, false, null, null, null, 0);
+        }
+    }
+
+    public void appendSearchIndexJoin(StringBuilder sb, String filter,
+            boolean snippetNeeded, String startMatch, String endMatch, String ellipsis,
+            int maxTokens) {
+        boolean isEmailAddress = false;
+        String emailAddress = null;
+        boolean isPhoneNumber = false;
+        String phoneNumber = null;
+        String numberE164 = null;
+
+        if (filter.indexOf('@') != -1) {
+            emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
+            isEmailAddress = !TextUtils.isEmpty(emailAddress);
+        } else {
+            isPhoneNumber = isPhoneNumber(filter);
+        }
+
+        sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS snippet_contact_id");
+        if (snippetNeeded) {
             sb.append(", ");
             if (isEmailAddress) {
                 sb.append("ifnull(");
