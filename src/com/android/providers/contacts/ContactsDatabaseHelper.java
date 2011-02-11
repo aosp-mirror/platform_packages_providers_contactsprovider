@@ -92,7 +92,7 @@ import java.util.Locale;
      *   500-599 Honeycomb-MR1
      * </pre>
      */
-    static final int DATABASE_VERSION = 501;
+    static final int DATABASE_VERSION = 502;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -392,11 +392,9 @@ import java.util.Locale;
         public static final int NAME_COLLATION_KEY = 2;
         public static final int NICKNAME = 3;
         public static final int EMAIL_BASED_NICKNAME = 4;
-        public static final int NAME_SHORTHAND = 6;
-        public static final int NAME_CONSONANTS = 7;
 
         // This is the highest name lookup type code plus one
-        public static final int TYPE_COUNT = 8;
+        public static final int TYPE_COUNT = 5;
 
         public static boolean isBasedOnStructuredName(int nameLookupType) {
             return nameLookupType == NameLookupType.NAME_EXACT
@@ -1779,6 +1777,11 @@ import java.util.Locale;
             oldVersion = 501;
         }
 
+        if (oldVersion < 502) {
+            upgradeToVersion502(db);
+            oldVersion = 502;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2802,6 +2805,12 @@ import java.util.Locale;
     private void upgradeToVersion501(SQLiteDatabase db) {
         // Remove organization rows from the name lookup, we now use search index for that
         db.execSQL("DELETE FROM name_lookup WHERE name_type=5");
+        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
+    }
+
+    private void upgradeToVersion502(SQLiteDatabase db) {
+        // Remove Chinese and Korean name lookup - this data is now in the search index
+        db.execSQL("DELETE FROM name_lookup WHERE name_type IN (6, 7)");
         setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
     }
 
@@ -3918,13 +3927,6 @@ import java.util.Locale;
         if (mSb.length() > 0) {
             insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
                     NameNormalizer.normalize(mSb.toString()));
-        }
-
-        if (givenName != null) {
-            // We want the phonetic given name to be used for search, but not for aggregation,
-            // which is why we are using NAME_SHORTHAND rather than NAME_COLLATION_KEY
-            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
-                    NameNormalizer.normalize(givenName.trim()));
         }
     }
 

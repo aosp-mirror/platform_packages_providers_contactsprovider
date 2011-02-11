@@ -27,6 +27,10 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.test.suitebuilder.annotation.MediumTest;
 
+import java.text.Collator;
+import java.util.Arrays;
+import java.util.Locale;
+
 /**
  * Unit tests for {@link SearchIndexManager}.
  *
@@ -57,7 +61,112 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, values);
 
         assertSearchIndex(
-                contactId, null, "Doe John Parr Bob I. Mrs. Parr Helen I. PhD par helen parhelen");
+                contactId, null, "John Doe Bob I Parr Helen I Parr PhD par helen parhelen");
+    }
+
+    public void testSearchIndexForChineseName() {
+        // Only run this test when Chinese collation is supported
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+            return;
+        }
+
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "\u695A\u8FAD");    // CHUCI
+        insertStructuredName(rawContactId, values);
+
+        assertSearchIndex(
+                contactId, null, "\u695A\u8FAD \u695A\u8FAD CI \u8FAD CHUCI CC C");
+    }
+
+    public void testSearchByChineseName() {
+        // Only run this test when Chinese collation is supported
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+            return;
+        }
+
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "\u695A\u8FAD");    // CHUCI
+        insertStructuredName(rawContactId, values);
+
+        assertStoredValue(buildSearchUri("\u695A\u8FAD"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\u8FAD"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("CI"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("CHUCI"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("CC"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("C"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testSearchIndexForKoreanName() {
+        // Only run this test when Korean collation is supported
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.KOREA)) {
+            return;
+        }
+
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "\uC774\uC0C1\uC77C");    // Lee Sang Il
+        insertStructuredName(rawContactId, values);
+
+        assertSearchIndex(
+                contactId, null, "\uC774\uC0C1\uC77C \uC0C1\uC77C \u1109\u110B \u110B\u1109\u110B");
+    }
+
+    public void testSearchByKoreanName() {
+        // Only run this test when Korean collation is supported
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.KOREA)) {
+            return;
+        }
+
+        long rawContactId = createRawContact();
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "\uC774\uC0C1\uC77C");   // Lee Sang Il
+        insertStructuredName(rawContactId, values);
+
+        // Full name: Lee Sang Il
+        assertStoredValue(buildSearchUri("\uC774\uC0C1\uC77C"), SearchSnippetColumns.SNIPPET, null);
+
+        // Given name: Sang Il
+        assertStoredValue(buildSearchUri("\uC0C1\uC77C"), SearchSnippetColumns.SNIPPET, null);
+
+        // Consonants of given name: SIOS IEUNG
+        assertStoredValue(buildSearchUri("\u1109\u110B"), SearchSnippetColumns.SNIPPET, null);
+
+        // Consonants of full name: RIEUL SIOS IEUNG
+        assertStoredValue(buildSearchUri("\u110B\u1109\u110B"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testSearchByKoreanNameWithTwoCharactersFamilyName() {
+        // Only run this test when Korean collation is supported.
+        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.KOREA)) {
+            return;
+        }
+
+        long rawContactId = createRawContact();
+
+        // Sun Woo Young Nyeu
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "\uC120\uC6B0\uC6A9\uB140");
+
+        insertStructuredName(rawContactId, values);
+
+        // Full name: Sun Woo Young Nyeu
+        assertStoredValue(
+                buildSearchUri("\uC120\uC6B0\uC6A9\uB140"), SearchSnippetColumns.SNIPPET, null);
+
+        // Given name: Young Nyeu
+        assertStoredValue(buildSearchUri("\uC6A9\uB140"), SearchSnippetColumns.SNIPPET, null);
+
+        // Consonants of given name: IEUNG NIEUN
+        assertStoredValue(buildSearchUri("\u110B\u1102"), SearchSnippetColumns.SNIPPET, null);
+
+        // Consonants of full name: SIOS IEUNG IEUNG NIEUN
+        assertStoredValue(
+                buildSearchUri("\u1109\u110B\u110B\u1102"), SearchSnippetColumns.SNIPPET, null);
     }
 
     public void testSearchIndexForOrganization() {

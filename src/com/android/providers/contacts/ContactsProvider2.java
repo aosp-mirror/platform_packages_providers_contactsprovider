@@ -417,9 +417,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final String CONTACT_LOOKUP_NAME_TYPES =
             NameLookupType.NAME_COLLATION_KEY + "," +
             NameLookupType.EMAIL_BASED_NICKNAME + "," +
-            NameLookupType.NICKNAME + "," +
-            NameLookupType.NAME_SHORTHAND + "," +
-            NameLookupType.NAME_CONSONANTS;
+            NameLookupType.NICKNAME;
 
     /**
      * If any of these columns are used in a Data projection, there is no point in
@@ -5052,9 +5050,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             sb.append(normalizedName);
             sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
                     + NameLookupType.NAME_COLLATION_KEY + ","
-                    + NameLookupType.NICKNAME + ","
-                    + NameLookupType.NAME_SHORTHAND + ","
-                    + NameLookupType.NAME_CONSONANTS);
+                    + NameLookupType.NICKNAME);
             if (allowEmailMatch) {
                 sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
             }

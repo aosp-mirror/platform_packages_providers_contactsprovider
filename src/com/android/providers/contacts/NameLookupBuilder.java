@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 
 import android.provider.ContactsContract.FullNameStyle;
 
@@ -136,31 +137,42 @@ public abstract class NameLookupBuilder {
 
         insertNameVariants(rawContactId, dataId, 0, tokenCount, !tooManyTokens, true);
         insertNicknamePermutations(rawContactId, dataId, 0, tokenCount);
-        insertNameShorthandLookup(rawContactId, dataId, name, fullNameStyle);
-        insertNameLookupForLocaleBasedName(rawContactId, dataId, name, fullNameStyle);
+    }
+
+    public void appendToSearchIndex(IndexBuilder builder, String name, int fullNameStyle) {
+        int tokenCount = mSplitter.tokenize(mNames, name);
+        if (tokenCount == 0) {
+            return;
+        }
+
+        for (int i = 0; i < tokenCount; i++) {
+            builder.appendToken(mNames[i]);
+        }
+
+        appendNameShorthandLookup(builder, name, fullNameStyle);
+        appendNameLookupForLocaleBasedName(builder, name, fullNameStyle);
     }
 
     /**
      * Insert more name indexes according to locale specifies.
      */
-    private void insertNameLookupForLocaleBasedName(long rawContactId, long dataId,
+    private void appendNameLookupForLocaleBasedName(IndexBuilder builder,
             String fullName, int fullNameStyle) {
         if (fullNameStyle == FullNameStyle.KOREAN) {
             NameSplitter.Name name = new NameSplitter.Name();
             mSplitter.split(name, fullName, fullNameStyle);
             if (name.givenNames != null) {
-                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
-                        normalizeName(name.givenNames));
-                insertKoreanNameConsonantsLookup(rawContactId, dataId, name.givenNames);
+                builder.appendToken(name.givenNames);
+                appendKoreanNameConsonantsLookup(builder, name.givenNames);
             }
-            insertKoreanNameConsonantsLookup(rawContactId, dataId, fullName);
+            appendKoreanNameConsonantsLookup(builder, fullName);
         }
     }
 
     /**
      * Inserts Korean lead consonants records of name for the given structured name.
      */
-    private void insertKoreanNameConsonantsLookup(long rawContactId, long dataId, String name) {
+    private void appendKoreanNameConsonantsLookup(IndexBuilder builder, String name) {
         int position = 0;
         int consonantLength = 0;
         int character;
@@ -206,8 +218,7 @@ public abstract class NameLookupBuilder {
         // At least, insert consonants when Korean characters are two or more.
         // Only one character cases are covered by NAME_COLLATION_KEY
         if (consonantLength > 1) {
-            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_CONSONANTS,
-                    normalizeName(mStringBuilder.toString()));
+            builder.appendToken(mStringBuilder.toString());
         }
     }
 
@@ -308,15 +319,12 @@ public abstract class NameLookupBuilder {
         }
     }
 
-    private void insertNameShorthandLookup(long rawContactId, long dataId, String name,
-            int fullNameStyle) {
+    private void appendNameShorthandLookup(IndexBuilder builder, String name, int fullNameStyle) {
         Iterator<String> it =
                 ContactLocaleUtils.getIntance().getNameLookupKeys(name, fullNameStyle);
         if (it != null) {
             while (it.hasNext()) {
-                String key = it.next();
-                insertNameLookup(rawContactId, dataId, NameLookupType.NAME_SHORTHAND,
-                        normalizeName(key));
+                builder.appendToken(it.next());
             }
         }
     }

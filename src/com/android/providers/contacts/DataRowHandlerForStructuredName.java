@@ -191,11 +191,12 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
 
     @Override
     public void appendSearchableData(IndexBuilder builder) {
-        builder.appendTokenFromColumn(StructuredName.PREFIX);
-        builder.appendTokenFromColumn(StructuredName.FAMILY_NAME);
-        builder.appendTokenFromColumn(StructuredName.GIVEN_NAME);
-        builder.appendTokenFromColumn(StructuredName.MIDDLE_NAME);
-        builder.appendTokenFromColumn(StructuredName.SUFFIX);
+        String name = builder.getString(StructuredName.DISPLAY_NAME);
+        Integer fullNameStyle = builder.getInt(StructuredName.FULL_NAME_STYLE);
+
+        mNameLookupBuilder.appendToSearchIndex(builder, name, fullNameStyle != null
+                        ? mSplitter.getAdjustedFullNameStyle(fullNameStyle)
+                        : FullNameStyle.UNDEFINED);
 
         String phoneticFamily = builder.getString(StructuredName.PHONETIC_FAMILY_NAME);
         String phoneticMiddle = builder.getString(StructuredName.PHONETIC_MIDDLE_NAME);
@@ -219,6 +220,5 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
             }
             builder.appendToken(mSb.toString().trim());
         }
-
     }
 }

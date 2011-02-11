@@ -319,7 +319,7 @@ public class GlobalSearchSupport {
         int to = snippet.length();
         int start = snippet.indexOf(SNIPPET_START_MATCH);
         if (start == -1) {
-            return snippet;
+            return null;
         }
 
         int firstNl = snippet.lastIndexOf('\n', start);

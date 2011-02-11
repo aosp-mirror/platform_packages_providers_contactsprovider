@@ -776,6 +776,8 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         String value = null;
         Cursor c = mResolver.query(uri, new String[] { column }, selection, selectionArgs, null);
         try {
+            assertEquals("Record count", 1, c.getCount());
+
             if (c.moveToFirst()) {
                 value = c.getString(c.getColumnIndex(column));
             }
