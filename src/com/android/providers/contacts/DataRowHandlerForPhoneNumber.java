@@ -157,6 +157,10 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
     @Override
     public void appendSearchableData(IndexBuilder builder) {
         String number = builder.getString(Phone.NUMBER);
+        if (TextUtils.isEmpty(number)) {
+            return;
+        }
+
         String normalizedNumber = PhoneNumberUtils.normalizeNumber(number);
         if (TextUtils.isEmpty(normalizedNumber)) {
             return;

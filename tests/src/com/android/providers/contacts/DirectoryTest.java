@@ -122,19 +122,6 @@ public class DirectoryTest extends BaseContactsProvider2Test {
         assertEquals(contactId2, cursor.getLong(0));
         assertEquals("Helen Parr", cursor.getString(1));
         cursor.close();
-
-        Uri filterUri = Contacts.CONTENT_FILTER_URI.buildUpon().appendEncodedPath("parr")
-                .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
-                        String.valueOf(Directory.LOCAL_INVISIBLE)).build();
-
-        cursor = mResolver.query(filterUri,
-                new String[]{Contacts._ID, Contacts.DISPLAY_NAME}, null, null, null);
-        assertNotNull(cursor);
-        assertEquals(1, cursor.getCount());
-        cursor.moveToFirst();
-        assertEquals(contactId2, cursor.getLong(0));
-        assertEquals("Helen Parr", cursor.getString(1));
-        cursor.close();
     }
 }
 

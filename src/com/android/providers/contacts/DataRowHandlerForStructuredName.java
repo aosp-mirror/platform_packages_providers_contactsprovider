@@ -196,8 +196,29 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
         builder.appendTokenFromColumn(StructuredName.GIVEN_NAME);
         builder.appendTokenFromColumn(StructuredName.MIDDLE_NAME);
         builder.appendTokenFromColumn(StructuredName.SUFFIX);
-        builder.appendTokenFromColumn(StructuredName.PHONETIC_FAMILY_NAME);
-        builder.appendTokenFromColumn(StructuredName.PHONETIC_MIDDLE_NAME);
-        builder.appendTokenFromColumn(StructuredName.PHONETIC_GIVEN_NAME);
+
+        String phoneticFamily = builder.getString(StructuredName.PHONETIC_FAMILY_NAME);
+        String phoneticMiddle = builder.getString(StructuredName.PHONETIC_MIDDLE_NAME);
+        String phoneticGiven = builder.getString(StructuredName.PHONETIC_GIVEN_NAME);
+
+        // Phonetic name is often spelled without spaces
+        if (!TextUtils.isEmpty(phoneticFamily) || !TextUtils.isEmpty(phoneticMiddle)
+                || !TextUtils.isEmpty(phoneticGiven)) {
+            mSb.setLength(0);
+            if (!TextUtils.isEmpty(phoneticFamily)) {
+                builder.appendToken(phoneticFamily);
+                mSb.append(phoneticFamily);
+            }
+            if (!TextUtils.isEmpty(phoneticMiddle)) {
+                builder.appendToken(phoneticMiddle);
+                mSb.append(phoneticMiddle);
+            }
+            if (!TextUtils.isEmpty(phoneticGiven)) {
+                builder.appendToken(phoneticGiven);
+                mSb.append(phoneticGiven);
+            }
+            builder.appendToken(mSb.toString().trim());
+        }
+
     }
 }

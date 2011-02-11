@@ -36,7 +36,6 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
-import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
@@ -147,12 +146,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.CONTACT_STATUS_LABEL,
                 Contacts.CONTACT_STATUS_ICON,
 
-                SearchSnippetColumns.SNIPPET_MIMETYPE,
-                SearchSnippetColumns.SNIPPET_DATA_ID,
-                SearchSnippetColumns.SNIPPET_DATA1,
-                SearchSnippetColumns.SNIPPET_DATA2,
-                SearchSnippetColumns.SNIPPET_DATA3,
-                SearchSnippetColumns.SNIPPET_DATA4,
+                SearchSnippetColumns.SNIPPET,
         });
     }
 
@@ -1865,10 +1859,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(organizationUri));
-        values.put(SearchSnippetColumns.SNIPPET_DATA1, "acmecorp");
-        values.put(SearchSnippetColumns.SNIPPET_DATA4, "engineer");
-        values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Organization.CONTENT_ITEM_TYPE);
+        values.put(SearchSnippetColumns.SNIPPET, "engineer, [acmecorp]\n"
+                + "engineer, [acmeinc]\n"
+                + "engineer, corpacme\n"
+                + "inc@corp.com\n"
+                + "emca...");
         assertStoredValues(filterUri, values);
     }
 
@@ -1883,11 +1878,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET_DATA1, "acme@corp.com");
-        values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(dataUri));
-        values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Email.CONTENT_ITEM_TYPE);
-        values.put(SearchSnippetColumns.SNIPPET_DATA2, Email.TYPE_CUSTOM);
-        values.put(SearchSnippetColumns.SNIPPET_DATA3, "Custom");
+        values.put(SearchSnippetColumns.SNIPPET, "[acme]@corp.com");
         assertStoredValues(filterUri, values);
     }
 
@@ -1902,9 +1893,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET_DATA1, "Incredible");
-        values.put(SearchSnippetColumns.SNIPPET_DATA_ID, ContentUris.parseId(dataUri));
-        values.put(SearchSnippetColumns.SNIPPET_MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
+        values.put(SearchSnippetColumns.SNIPPET, "[Incredible]");
         assertStoredValues(filterUri, values);
     }
 

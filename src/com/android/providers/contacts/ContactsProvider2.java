@@ -4344,8 +4344,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             filter = filter.trim();
         }
 
-        if (TextUtils.isEmpty(filter) || directoryId != Directory.DEFAULT) {
-            sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + ") WHERE 0");
+        if (TextUtils.isEmpty(filter) || (directoryId != -1 && directoryId != Directory.DEFAULT)) {
+            sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + " WHERE 0)");
         } else {
             appendSearchIndexJoin(sb, uri, projection, filter);
         }
@@ -4364,14 +4364,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String emailAddress = null;
         boolean isPhoneNumber = false;
         String phoneNumber = null;
-        if (snippetNeeded) {
-            if (filter.indexOf('@') != -1) {
-                emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
-                isEmailAddress = !TextUtils.isEmpty(emailAddress);
-            } else {
-                isPhoneNumber = isPhoneNumber(filter);
-            }
+        String numberE164 = null;
 
+        if (filter.indexOf('@') != -1) {
+            emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
+            isEmailAddress = !TextUtils.isEmpty(emailAddress);
+        } else {
+            isPhoneNumber = isPhoneNumber(filter);
+        }
+
+        if (snippetNeeded) {
             String[] args = null;
             String snippetArgs =
                     getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
@@ -4438,7 +4440,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             sb.append(phoneNumber);
             sb.append("%'");
 
-            String numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
+            numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
                     mDbHelper.getCountryIso());
             if (!TextUtils.isEmpty(numberE164)) {
                 sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
@@ -4473,7 +4475,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (isEmailAddress) {
             DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\"");
         } else if (isPhoneNumber) {
-            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\" OR " + phoneNumber + "*");
+            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\" OR " + phoneNumber + "*"
+                    + (numberE164 != null ? " OR \"" + numberE164 + "\"" : ""));
         } else {
             DatabaseUtils.appendEscapedSQLString(sb, filter + "*");
         }
