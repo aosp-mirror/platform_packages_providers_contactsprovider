@@ -3385,8 +3385,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (uri.getPathSegments().size() > 2) {
                     filterParam = uri.getLastPathSegment();
                 }
-                setTablesAndProjectionMapForContactsWithSnippet(qb, uri, projection, filterParam);
-                appendLocalDirectorySelectionIfNeeded(qb, directoryId);
+                setTablesAndProjectionMapForContactsWithSnippet(
+                        qb, uri, projection, filterParam, directoryId);
                 break;
             }
 
@@ -4323,7 +4323,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
             String[] projection) {
         StringBuilder sb = new StringBuilder();
-        appendContactsTables(sb, uri, projection);
+        sb.append(mDbHelper.getContactView(shouldExcludeRestrictedData(uri)));
+        appendContactPresenceJoin(sb, projection, Contacts._ID);
+        appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionMap);
     }
@@ -4333,19 +4335,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * contact and joins that with other contacts tables.
      */
     private void setTablesAndProjectionMapForContactsWithSnippet(SQLiteQueryBuilder qb, Uri uri,
-            String[] projection, String filter) {
+            String[] projection, String filter, long directoryId) {
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(mDbHelper.getContactView(shouldExcludeRestrictedData(uri)));
 
         if (filter != null) {
             filter = filter.trim();
         }
 
-        StringBuilder sb = new StringBuilder();
-        appendContactsTables(sb, uri, projection);
-        if (TextUtils.isEmpty(filter)) {
+        if (TextUtils.isEmpty(filter) || directoryId != Directory.DEFAULT) {
             sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + ") WHERE 0");
         } else {
             appendSearchIndexJoin(sb, uri, projection, filter);
         }
+        appendContactPresenceJoin(sb, projection, Contacts._ID);
+        appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sContactsProjectionWithSnippetMap);
     }
@@ -4490,27 +4495,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(")");
     }
 
-    private void appendContactsTables(StringBuilder sb, Uri uri, String[] projection) {
-        boolean excludeRestrictedData = false;
-        String requestingPackage = getQueryParameter(uri,
-                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
-        if (requestingPackage != null) {
-            excludeRestrictedData = !mDbHelper.hasAccessToRestrictedData(requestingPackage);
-        }
-        sb.append(mDbHelper.getContactView(excludeRestrictedData));
-        appendContactPresenceJoin(sb, projection, Contacts._ID);
-        appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
-    }
-
     private void setTablesAndProjectionMapForRawContacts(SQLiteQueryBuilder qb, Uri uri) {
         StringBuilder sb = new StringBuilder();
-        boolean excludeRestrictedData = false;
-        String requestingPackage = getQueryParameter(uri,
-                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
-        if (requestingPackage != null) {
-            excludeRestrictedData = !mDbHelper.hasAccessToRestrictedData(requestingPackage);
-        }
-        sb.append(mDbHelper.getRawContactView(excludeRestrictedData));
+        sb.append(mDbHelper.getRawContactView(shouldExcludeRestrictedData(uri)));
         qb.setTables(sb.toString());
         qb.setProjectionMap(sRawContactsProjectionMap);
         appendAccountFromParameter(qb, uri);
