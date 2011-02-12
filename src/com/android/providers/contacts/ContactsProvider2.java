@@ -3540,7 +3540,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
                                         + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
                                 " WHERE " + SearchIndexColumns.NAME + " MATCH ");
-                        DatabaseUtils.appendEscapedSQLString(sb, filterParam + "*");
+                        DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filterParam) + "*");
                         sb.append(")");
                         orNeeded = true;
                         hasCondition = true;
@@ -3637,7 +3637,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
                                         + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
                                 " WHERE " + SearchIndexColumns.NAME + " MATCH ");
-                        DatabaseUtils.appendEscapedSQLString(sb, filterParam + "*");
+                        DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filterParam) + "*");
                         sb.append(")");
                     }
                     sb.append(")");
@@ -4487,14 +4487,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(" WHERE ");
         sb.append(Tables.SEARCH_INDEX + " MATCH ");
         if (isEmailAddress) {
-            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\"");
+            DatabaseUtils.appendEscapedSQLString(sb, "\"" + sanitizeMatch(filter) + "*\"");
         } else if (isPhoneNumber) {
-            DatabaseUtils.appendEscapedSQLString(sb, "\"" + filter + "*\" OR " + phoneNumber + "*"
-                    + (numberE164 != null ? " OR \"" + numberE164 + "\"" : ""));
+            DatabaseUtils.appendEscapedSQLString(sb,
+                    "\"" + sanitizeMatch(filter) + "*\" OR " + phoneNumber + "*"
+                            + (numberE164 != null ? " OR \"" + numberE164 + "\"" : ""));
         } else {
-            DatabaseUtils.appendEscapedSQLString(sb, filter + "*");
+            DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filter) + "*");
         }
         sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
+    }
+
+    private String sanitizeMatch(String filter) {
+        // TODO more robust preprocessing of match expressions
+        return filter.replace('-', ' ').replace('\"', ' ');
     }
 
     private void appendSnippetFunction(
