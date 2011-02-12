@@ -66,6 +66,7 @@ public class SearchIndexManager {
         public static final int SEPARATOR_COMMA = 3;
 
         private StringBuilder mSbContent = new StringBuilder();
+        private StringBuilder mSbName = new StringBuilder();
         private StringBuilder mSbTokens = new StringBuilder();
         private StringBuilder mSbElementContent = new StringBuilder();
         private HashSet<String> mUniqueElements = new HashSet<String>();
@@ -78,12 +79,17 @@ public class SearchIndexManager {
         void reset() {
             mSbContent.setLength(0);
             mSbTokens.setLength(0);
+            mSbName.setLength(0);
             mSbElementContent.setLength(0);
             mUniqueElements.clear();
         }
 
         public String getContent() {
             return mSbContent.length() == 0 ? null : mSbContent.toString();
+        }
+
+        public String getName() {
+            return mSbName.length() == 0 ? null : mSbName.toString();
         }
 
         public String getTokens() {
@@ -100,7 +106,7 @@ public class SearchIndexManager {
 
         @Override
         public String toString() {
-            return "Content: " + mSbContent + "\n Tokens: " + mSbTokens;
+            return "Content: " + mSbContent + "\n Name: " + mSbTokens + "\n Tokens: " + mSbTokens;
         }
 
         public void commit() {
@@ -162,10 +168,6 @@ public class SearchIndexManager {
             }
         }
 
-        public void appendTokenFromColumn(String columnName) {
-            appendToken(getString(columnName));
-        }
-
         public void appendToken(String token) {
             if (TextUtils.isEmpty(token)) {
                 return;
@@ -175,6 +177,17 @@ public class SearchIndexManager {
                 mSbTokens.append(' ');
             }
             mSbTokens.append(token);
+        }
+
+        public void appendName(String name) {
+            if (TextUtils.isEmpty(name)) {
+                return;
+            }
+
+            if (mSbName.length() != 0) {
+                mSbName.append(' ');
+            }
+            mSbName.append(name);
         }
     }
 
@@ -309,6 +322,7 @@ public class SearchIndexManager {
             SQLiteDatabase db, long contactId, IndexBuilder builder, boolean replace) {
         mValues.clear();
         mValues.put(SearchIndexColumns.CONTENT, builder.getContent());
+        mValues.put(SearchIndexColumns.NAME, builder.getName());
         mValues.put(SearchIndexColumns.TOKENS, builder.getTokens());
         if (replace) {
             mSelectionArgs1[0] = String.valueOf(contactId);

@@ -146,7 +146,7 @@ public abstract class NameLookupBuilder {
         }
 
         for (int i = 0; i < tokenCount; i++) {
-            builder.appendToken(mNames[i]);
+            builder.appendName(mNames[i]);
         }
 
         appendNameShorthandLookup(builder, name, fullNameStyle);
@@ -162,7 +162,7 @@ public abstract class NameLookupBuilder {
             NameSplitter.Name name = new NameSplitter.Name();
             mSplitter.split(name, fullName, fullNameStyle);
             if (name.givenNames != null) {
-                builder.appendToken(name.givenNames);
+                builder.appendName(name.givenNames);
                 appendKoreanNameConsonantsLookup(builder, name.givenNames);
             }
             appendKoreanNameConsonantsLookup(builder, fullName);
@@ -218,7 +218,7 @@ public abstract class NameLookupBuilder {
         // At least, insert consonants when Korean characters are two or more.
         // Only one character cases are covered by NAME_COLLATION_KEY
         if (consonantLength > 1) {
-            builder.appendToken(mStringBuilder.toString());
+            builder.appendName(mStringBuilder.toString());
         }
     }
 
@@ -324,7 +324,7 @@ public abstract class NameLookupBuilder {
                 ContactLocaleUtils.getIntance().getNameLookupKeys(name, fullNameStyle);
         if (it != null) {
             while (it.hasNext()) {
-                builder.appendToken(it.next());
+                builder.appendName(it.next());
             }
         }
     }

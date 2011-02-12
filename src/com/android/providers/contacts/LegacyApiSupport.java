@@ -19,6 +19,8 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ExtensionsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
@@ -59,6 +61,7 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.HashMap;
@@ -1632,7 +1635,7 @@ public class LegacyApiSupport {
                 applyRawContactsAccount(qb);
                 String filterParam = uri.getPathSegments().get(2);
                 qb.appendWhere(" AND " + People._ID + " IN "
-                        + mContactsProvider.getRawContactsByFilterAsNestedQuery(filterParam));
+                        + getRawContactsByFilterAsNestedQuery(filterParam));
                 break;
             }
 
@@ -1996,6 +1999,32 @@ public class LegacyApiSupport {
                                 + " FROM " + Tables.GROUPS
                                 + " WHERE " + Groups.SYSTEM_ID + "="
                                         + DatabaseUtils.sqlEscapeString(systemId) + "))";
+    }
+
+    private String getRawContactsByFilterAsNestedQuery(String filterParam) {
+        StringBuilder sb = new StringBuilder();
+        String normalizedName = NameNormalizer.normalize(filterParam);
+        if (TextUtils.isEmpty(normalizedName)) {
+            // Effectively an empty IN clause - SQL syntax does not allow an actual empty list here
+            sb.append("(0)");
+        } else {
+            sb.append("(" +
+                    "SELECT " + NameLookupColumns.RAW_CONTACT_ID +
+                    " FROM " + Tables.NAME_LOOKUP +
+                    " WHERE " + NameLookupColumns.NORMALIZED_NAME +
+                    " GLOB '");
+            // Should not use a "?" argument placeholder here, because
+            // that would prevent the SQL optimizer from using the index on NORMALIZED_NAME.
+            sb.append(normalizedName);
+            sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
+                    + NameLookupType.NAME_COLLATION_KEY + ","
+                    + NameLookupType.NICKNAME);
+            if (true) {
+                sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
+            }
+            sb.append("))");
+        }
+        return sb.toString();
     }
 
     /**

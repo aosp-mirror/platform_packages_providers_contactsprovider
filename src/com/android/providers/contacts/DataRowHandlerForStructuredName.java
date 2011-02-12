@@ -207,18 +207,18 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                 || !TextUtils.isEmpty(phoneticGiven)) {
             mSb.setLength(0);
             if (!TextUtils.isEmpty(phoneticFamily)) {
-                builder.appendToken(phoneticFamily);
+                builder.appendName(phoneticFamily);
                 mSb.append(phoneticFamily);
             }
             if (!TextUtils.isEmpty(phoneticMiddle)) {
-                builder.appendToken(phoneticMiddle);
+                builder.appendName(phoneticMiddle);
                 mSb.append(phoneticMiddle);
             }
             if (!TextUtils.isEmpty(phoneticGiven)) {
-                builder.appendToken(phoneticGiven);
+                builder.appendName(phoneticGiven);
                 mSb.append(phoneticGiven);
             }
-            builder.appendToken(mSb.toString().trim());
+            builder.appendName(mSb.toString().trim());
         }
     }
 }

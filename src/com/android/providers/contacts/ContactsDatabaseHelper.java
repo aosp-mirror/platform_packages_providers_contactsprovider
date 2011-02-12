@@ -92,7 +92,7 @@ import java.util.Locale;
      *   500-599 Honeycomb-MR1
      * </pre>
      */
-    static final int DATABASE_VERSION = 502;
+    static final int DATABASE_VERSION = 503;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -485,6 +485,7 @@ import java.util.Locale;
     public static final class SearchIndexColumns {
         public static final String CONTACT_ID = "contact_id";
         public static final String CONTENT = "content";
+        public static final String NAME = "name";
         public static final String TOKENS = "tokens";
     }
 
@@ -1096,6 +1097,7 @@ import java.util.Locale;
                 + " USING FTS4 ("
                     + SearchIndexColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL,"
                     + SearchIndexColumns.CONTENT + " TEXT, "
+                    + SearchIndexColumns.NAME + " TEXT, "
                     + SearchIndexColumns.TOKENS + " TEXT"
                 + ")");
     }
@@ -1537,6 +1539,7 @@ import java.util.Locale;
         boolean upgradeViewsAndTriggers = false;
         boolean upgradeNameLookup = false;
         boolean upgradeLegacyApiSupport = false;
+        boolean upgradeSearchIndex = false;
 
         if (oldVersion == 99) {
             upgradeViewsAndTriggers = true;
@@ -1768,18 +1771,24 @@ import java.util.Locale;
 
         // Honeycomb-MR1 upgrades
         if (oldVersion < 500) {
-            upgradeToVersion500(db);
-            oldVersion = 500;
+            upgradeSearchIndex = true;
         }
 
         if (oldVersion < 501) {
+            upgradeSearchIndex = true;
             upgradeToVersion501(db);
             oldVersion = 501;
         }
 
         if (oldVersion < 502) {
+            upgradeSearchIndex = true;
             upgradeToVersion502(db);
             oldVersion = 502;
+        }
+
+        if (oldVersion < 503) {
+            upgradeSearchIndex = true;
+            oldVersion = 503;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -1798,6 +1807,10 @@ import java.util.Locale;
 
         if (upgradeNameLookup) {
             rebuildNameLookup(db);
+        }
+
+        if (upgradeSearchIndex) {
+            setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
         }
 
         if (oldVersion != newVersion) {
@@ -2798,20 +2811,14 @@ import java.util.Locale;
                 " (" + PhoneLookupColumns.DATA_ID + ", " + PhoneLookupColumns.MIN_MATCH + ");");
     }
 
-    private void upgradeToVersion500(SQLiteDatabase db) {
-        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
-    }
-
     private void upgradeToVersion501(SQLiteDatabase db) {
         // Remove organization rows from the name lookup, we now use search index for that
         db.execSQL("DELETE FROM name_lookup WHERE name_type=5");
-        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
     }
 
     private void upgradeToVersion502(SQLiteDatabase db) {
         // Remove Chinese and Korean name lookup - this data is now in the search index
         db.execSQL("DELETE FROM name_lookup WHERE name_type IN (6, 7)");
-        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
     }
 
     public String extractHandleFromEmailAddress(String email) {

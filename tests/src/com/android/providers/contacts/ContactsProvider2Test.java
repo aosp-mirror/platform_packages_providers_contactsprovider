@@ -1090,7 +1090,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri filterUri2 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "hot");
         assertStoredValuesWithProjection(filterUri2, values);
 
-        Uri filterUri3 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "hottamale");
+        Uri filterUri3 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "hot tamale");
         assertStoredValuesWithProjection(filterUri3, values);
 
         Uri filterUri4 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "tamale@acme");
@@ -2965,7 +2965,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
         long photoId = ContentUris.parseId(dataUri);
 
-        assertNull(getStoredValue(twigUri, Data._ID));
+        assertEquals(0, getCount(twigUri, null, null));
 
         values.clear();
         values.put(Photo.PHOTO, loadTestPhoto());

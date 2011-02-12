@@ -3533,8 +3533,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     boolean orNeeded = false;
                     String normalizedName = NameNormalizer.normalize(filterParam);
                     if (normalizedName.length() > 0) {
-                        sb.append(Data.RAW_CONTACT_ID + " IN ");
-                        appendRawContactsByNormalizedNameFilter(sb, normalizedName, false);
+                        sb.append(Data.RAW_CONTACT_ID + " IN " +
+                                "(SELECT " + RawContactsColumns.CONCRETE_ID +
+                                " FROM " + Tables.SEARCH_INDEX +
+                                " JOIN " + Tables.RAW_CONTACTS +
+                                " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
+                                        + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
+                                " WHERE " + SearchIndexColumns.NAME + " MATCH ");
+                        DatabaseUtils.appendEscapedSQLString(sb, filterParam + "*");
+                        sb.append(")");
                         orNeeded = true;
                         hasCondition = true;
                     }
@@ -3618,25 +3625,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     sb.append(" AND " + Data.DATA1 + " LIKE ");
                     DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
                     if (!filterParam.contains("@")) {
-                        String normalizedName = NameNormalizer.normalize(filterParam);
-                        if (normalizedName.length() > 0) {
-
-                            /*
-                             * Using a UNION instead of an "OR" to make SQLite use the right
-                             * indexes. We need it to use the (mimetype,data1) index for the
-                             * email lookup (see above), but not for the name lookup.
-                             * SQLite is not smart enough to use the index on one side of an OR
-                             * but not on the other. Using two separate nested queries
-                             * and a UNION between them does the job.
-                             */
-                            sb.append(
-                                    " UNION SELECT " + Data._ID +
-                                    " FROM " + Tables.DATA +
-                                    " WHERE +" + DataColumns.MIMETYPE_ID + "=");
-                            sb.append(mDbHelper.getMimeTypeIdForEmail());
-                            sb.append(" AND " + Data.RAW_CONTACT_ID + " IN ");
-                            appendRawContactsByNormalizedNameFilter(sb, normalizedName, false);
-                        }
+                        sb.append(
+                                " UNION SELECT " + Data._ID +
+                                " FROM " + Tables.DATA +
+                                " WHERE +" + DataColumns.MIMETYPE_ID + "=");
+                        sb.append(mDbHelper.getMimeTypeIdForEmail());
+                        sb.append(" AND " + Data.RAW_CONTACT_ID + " IN " +
+                                "(SELECT " + RawContactsColumns.CONCRETE_ID +
+                                " FROM " + Tables.SEARCH_INDEX +
+                                " JOIN " + Tables.RAW_CONTACTS +
+                                " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
+                                        + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
+                                " WHERE " + SearchIndexColumns.NAME + " MATCH ");
+                        DatabaseUtils.appendEscapedSQLString(sb, filterParam + "*");
+                        sb.append(")");
                     }
                     sb.append(")");
                     qb.appendWhere(sb);
@@ -5022,119 +5024,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(NameNormalizer.normalize(filterParam));
         sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
                     " IN(" + CONTACT_LOOKUP_NAME_TYPES + "))");
-    }
-
-    public String getRawContactsByFilterAsNestedQuery(String filterParam) {
-        StringBuilder sb = new StringBuilder();
-        appendRawContactsByFilterAsNestedQuery(sb, filterParam);
-        return sb.toString();
-    }
-
-    public void appendRawContactsByFilterAsNestedQuery(StringBuilder sb, String filterParam) {
-        appendRawContactsByNormalizedNameFilter(sb, NameNormalizer.normalize(filterParam), true);
-    }
-
-    private void appendRawContactsByNormalizedNameFilter(StringBuilder sb, String normalizedName,
-            boolean allowEmailMatch) {
-        if (TextUtils.isEmpty(normalizedName)) {
-            // Effectively an empty IN clause - SQL syntax does not allow an actual empty list here
-            sb.append("(0)");
-        } else {
-            sb.append("(" +
-                    "SELECT " + NameLookupColumns.RAW_CONTACT_ID +
-                    " FROM " + Tables.NAME_LOOKUP +
-                    " WHERE " + NameLookupColumns.NORMALIZED_NAME +
-                    " GLOB '");
-            // Should not use a "?" argument placeholder here, because
-            // that would prevent the SQL optimizer from using the index on NORMALIZED_NAME.
-            sb.append(normalizedName);
-            sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
-                    + NameLookupType.NAME_COLLATION_KEY + ","
-                    + NameLookupType.NICKNAME);
-            if (allowEmailMatch) {
-                sb.append("," + NameLookupType.EMAIL_BASED_NICKNAME);
-            }
-            sb.append("))");
-        }
-    }
-
-
-    public boolean appendEmailBasedDataFilter(StringBuilder sb, String filter) {
-        if (filter.indexOf('@') == -1) {
-            return false;
-        }
-
-        String address = mDbHelper.extractAddressFromEmailAddress(filter);
-        if (TextUtils.isEmpty(address)) {
-            return false;
-        }
-
-        sb.append(DataColumns.MIMETYPE_ID + " IN (");
-        sb.append(mDbHelper.getMimeTypeIdForEmail());
-        sb.append(",");
-        sb.append(mDbHelper.getMimeTypeIdForIm());
-        sb.append(",");
-        sb.append(mDbHelper.getMimeTypeIdForSip());
-        sb.append(") AND " + Data.DATA1 + " LIKE(");
-        DatabaseUtils.appendEscapedSQLString(sb, address + '%');
-        sb.append(")");
-        return true;
-    }
-
-    public boolean appendPhoneNumberBasedDataFilter(StringBuilder sb, String filter) {
-        if (!isPhoneNumber(filter)) {
-            return false;
-        }
-
-        String number = PhoneNumberUtils.normalizeNumber(filter);
-        sb.append(DataColumns.CONCRETE_ID + " IN " +
-                "(SELECT " + PhoneLookupColumns.DATA_ID
-                + " FROM " + Tables.PHONE_LOOKUP
-                + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-        sb.append(number);
-        sb.append("%'");
-
-        String numberE164 = PhoneNumberUtils.formatNumberToE164(number, mDbHelper.getCountryIso());
-        if (!TextUtils.isEmpty(numberE164)) {
-            sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-            sb.append(numberE164);
-            sb.append("%'");
-        }
-        sb.append(")");
-
-        String normalizedFilter = NameNormalizer.normalize(filter);
-        if (TextUtils.isEmpty(normalizedFilter)) {
-            return true;
-        }
-
-        sb.append(" OR " + DataColumns.CONCRETE_RAW_CONTACT_ID + " IN " +
-                "(SELECT " + NameLookupColumns.RAW_CONTACT_ID +
-                " FROM " + Tables.NAME_LOOKUP +
-                " WHERE " + NameLookupColumns.NORMALIZED_NAME +
-                " GLOB '");
-        sb.append(normalizedFilter);
-        sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
-                + CONTACT_LOOKUP_NAME_TYPES + "))");
-        return true;
-    }
-
-    public boolean appendNameBasedRawContactFilter(StringBuilder sb, String filter) {
-        String normalizedFilter = NameNormalizer.normalize(filter);
-        if (TextUtils.isEmpty(normalizedFilter)) {
-            return false;
-        }
-
-        sb.append(DataColumns.CONCRETE_RAW_CONTACT_ID + " IN " +
-                "(SELECT " + NameLookupColumns.RAW_CONTACT_ID +
-                " FROM " + Tables.NAME_LOOKUP +
-                " WHERE " + NameLookupColumns.NORMALIZED_NAME +
-                " GLOB '");
-        // Should not use a "?" argument placeholder here, because
-        // that would prevent the SQL optimizer from using the index on NORMALIZED_NAME.
-        sb.append(normalizedFilter);
-        sb.append("*' AND " + NameLookupColumns.NAME_TYPE + " IN ("
-                + CONTACT_LOOKUP_NAME_TYPES + "))");
-        return true;
     }
 
     public boolean isPhoneNumber(String filter) {
