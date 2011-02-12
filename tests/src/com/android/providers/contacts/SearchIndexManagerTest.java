@@ -61,7 +61,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, values);
 
         assertSearchIndex(
-                contactId, null, "John Doe Bob I Parr Helen I Parr PhD par helen parhelen");
+                contactId, null, "John Doe Bob I Parr Helen I Parr PhD par helen parhelen", null);
     }
 
     public void testSearchIndexForChineseName() {
@@ -77,7 +77,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, values);
 
         assertSearchIndex(
-                contactId, null, "\u695A\u8FAD \u695A\u8FAD CI \u8FAD CHUCI CC C");
+                contactId, null, "\u695A\u8FAD \u695A\u8FAD CI \u8FAD CHUCI CC C", null);
     }
 
     public void testSearchByChineseName() {
@@ -112,8 +112,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         values.put(StructuredName.DISPLAY_NAME, "\uC774\uC0C1\uC77C");    // Lee Sang Il
         insertStructuredName(rawContactId, values);
 
-        assertSearchIndex(
-                contactId, null, "\uC774\uC0C1\uC77C \uC0C1\uC77C \u1109\u110B \u110B\u1109\u110B");
+        assertSearchIndex(contactId, null,
+                "\uC774\uC0C1\uC77C \uC0C1\uC77C \u1109\u110B \u110B\u1109\u110B", null);
     }
 
     public void testSearchByKoreanName() {
@@ -184,7 +184,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
 
         assertSearchIndex(contactId,
                 "Director, Acme Inc. (ack-me) (ACME)/Phones and tablets/virtual/full text search",
-                null);
+                null, null);
     }
 
     public void testSearchIndexForPhoneNumber() {
@@ -193,7 +193,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, "800555GOOG");
         insertPhoneNumber(rawContactId, "8005551234");
 
-        assertSearchIndex(contactId, null, "8005554664 +18005554664 8005551234 +18005551234");
+        assertSearchIndex(contactId, null, null, "8005554664 +18005554664 8005551234 +18005551234");
     }
 
     public void testSearchIndexForEmail() {
@@ -203,7 +203,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "bob_parr@android.com");
 
         assertSearchIndex(contactId, "Bob Parr <incredible@android.com>\nbob_parr@android.com",
-                null);
+                null, null);
     }
 
     public void testSearchIndexForNickname() {
@@ -211,7 +211,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         long contactId = queryContactId(rawContactId);
         insertNickname(rawContactId, "incredible");
 
-        assertSearchIndex(contactId, "incredible", null);
+        assertSearchIndex(contactId, "incredible", null, null);
     }
 
     public void testSearchIndexForStructuredPostal() {
@@ -226,7 +226,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertPostalAddress(rawContactId, values);
 
         assertSearchIndex(contactId, "1600 Amphitheatre Pkwy Mountain View, CA 94043\n"
-                + "76 Buckingham Palace Road London SW1W 9TQ United Kingdom", null);
+                + "76 Buckingham Palace Road London SW1W 9TQ United Kingdom", null, null);
     }
 
     public void testSearchIndexForIm() {
@@ -235,7 +235,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertImHandle(rawContactId, Im.PROTOCOL_JABBER, null, "bp@android.com");
         insertImHandle(rawContactId, Im.PROTOCOL_CUSTOM, "android_im", "android@android.com");
 
-        assertSearchIndex(contactId, "Jabber/bp@android.com\nandroid_im/android@android.com", null);
+        assertSearchIndex(
+                contactId, "Jabber/bp@android.com\nandroid_im/android@android.com", null, null);
     }
 
     public void testSearchIndexForNote() {
@@ -243,7 +244,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         long contactId = queryContactId(rawContactId);
         insertNote(rawContactId, "Please note: three notes or more make up a chord.");
 
-        assertSearchIndex(contactId, "Please note: three notes or more make up a chord.", null);
+        assertSearchIndex(
+                contactId, "Please note: three notes or more make up a chord.", null, null);
     }
 
     public void testSnippetArgs() {
@@ -308,7 +310,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         return builder.build();
     }
 
-    private void assertSearchIndex(long contactId, String expectedContent, String expectedTokens) {
+    private void assertSearchIndex(
+            long contactId, String expectedContent, String expectedName, String expectedTokens) {
         ContactsDatabaseHelper dbHelper = (ContactsDatabaseHelper) getContactsProvider()
                 .getDatabaseHelper();
         assertEquals(expectedContent, dbHelper.querySearchIndexContent(contactId));
