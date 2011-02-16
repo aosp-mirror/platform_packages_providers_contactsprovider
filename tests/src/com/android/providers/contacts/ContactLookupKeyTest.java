@@ -74,11 +74,16 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContactWithName("johndoe", null);
         storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.SOURCE_ID, "4.5.6");
 
+        long rawContactId3 = createRawContactWithName("john", "dough");
+        storeValue(RawContacts.CONTENT_URI, rawContactId3, RawContacts.SOURCE_ID, "http://foo?bar");
+
         setAggregationException(
                 AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId2);
+        setAggregationException(
+                AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1, rawContactId3);
 
         // Two source ids, of them escaped
-        String expectedLookupKey = "0i123.0e4..5..6";
+        String expectedLookupKey = "0i123.0e4..5..6.0ihttp%3A%2F%2Ffoo%3Fbar";
 
         long contactId = queryContactId(rawContactId1);
         assertStoredValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
