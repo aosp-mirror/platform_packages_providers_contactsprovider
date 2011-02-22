@@ -3960,8 +3960,7 @@ import java.util.Locale;
         return mCountryMonitor.getCountryIso();
     }
 
-    /* visible for testing */
-    /* package */ String querySearchIndexContent(long contactId) {
+    /* package */ String querySearchIndexContentForTest(long contactId) {
         return DatabaseUtils.stringForQuery(getReadableDatabase(),
                 "SELECT " + SearchIndexColumns.CONTENT +
                 " FROM " + Tables.SEARCH_INDEX +
@@ -3969,8 +3968,7 @@ import java.util.Locale;
                 new String[] { String.valueOf(contactId) });
     }
 
-    /* visible for testing */
-    /* package */ String querySearchIndexTokens(long contactId) {
+    /* package */ String querySearchIndexTokensForTest(long contactId) {
         return DatabaseUtils.stringForQuery(getReadableDatabase(),
                 "SELECT " + SearchIndexColumns.TOKENS +
                 " FROM " + Tables.SEARCH_INDEX +

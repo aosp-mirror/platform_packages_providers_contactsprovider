@@ -314,8 +314,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
             long contactId, String expectedContent, String expectedName, String expectedTokens) {
         ContactsDatabaseHelper dbHelper = (ContactsDatabaseHelper) getContactsProvider()
                 .getDatabaseHelper();
-        assertEquals(expectedContent, dbHelper.querySearchIndexContent(contactId));
-        assertEquals(expectedTokens, dbHelper.querySearchIndexTokens(contactId));
+        assertEquals(expectedContent, dbHelper.querySearchIndexContentForTest(contactId));
+        assertEquals(expectedTokens, dbHelper.querySearchIndexTokensForTest(contactId));
     }
 }
 
