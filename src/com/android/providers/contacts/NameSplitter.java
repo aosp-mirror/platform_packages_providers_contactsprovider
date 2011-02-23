@@ -556,6 +556,11 @@ public class NameSplitter {
      */
     private String join(String part1, String part2, String part3, String suffix,
             boolean useSpace, boolean useCommaAfterPart1, boolean useCommaAfterPart3) {
+        part1 = part1 == null ? null: part1.trim();
+        part2 = part2 == null ? null: part2.trim();
+        part3 = part3 == null ? null: part3.trim();
+        suffix = suffix == null ? null: suffix.trim();
+
         boolean hasPart1 = !TextUtils.isEmpty(part1);
         boolean hasPart2 = !TextUtils.isEmpty(part2);
         boolean hasPart3 = !TextUtils.isEmpty(part3);
