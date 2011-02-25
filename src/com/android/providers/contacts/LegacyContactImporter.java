@@ -1218,7 +1218,7 @@ public class LegacyContactImporter {
         try {
             while (cursor.moveToNext()) {
                 long rawContactId = cursor.getLong(0);
-                mContactsProvider.updateRawContactDisplayName(mTargetDb, rawContactId);
+                mDbHelper.updateRawContactDisplayName(mTargetDb, rawContactId);
                 mContactsProvider.updateLookupKeyForRawContact(mTargetDb, rawContactId);
             }
         } finally {

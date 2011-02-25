@@ -303,7 +303,7 @@ public abstract class DataRowHandler {
     protected void fixRawContactDisplayName(SQLiteDatabase db, TransactionContext txContext,
             long rawContactId) {
         if (!isNewRawContact(txContext, rawContactId)) {
-            mContactAggregator.updateRawContactDisplayName(db, rawContactId);
+            mDbHelper.updateRawContactDisplayName(db, rawContactId);
             mContactAggregator.updateDisplayNameForRawContact(db, rawContactId);
         }
     }

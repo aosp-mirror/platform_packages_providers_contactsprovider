@@ -1498,7 +1498,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         for (long rawContactId : mTransactionContext.getInsertedRawContactIds()) {
-            mContactAggregator.updateRawContactDisplayName(mDb, rawContactId);
+            mDbHelper.updateRawContactDisplayName(mDb, rawContactId);
             mContactAggregator.onRawContactInsert(mTransactionContext, mDb, rawContactId);
         }
 
@@ -1849,7 +1849,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
-        mContactAggregator.updateRawContactDisplayName(db, rawContactId);
+        mDbHelper.updateRawContactDisplayName(db, rawContactId);
     }
 
     /**
