@@ -519,25 +519,26 @@ public class NameSplitter {
      *
      * @param givenNameFirst is ignored for CJK display name styles
      */
-    public String join(Name name, boolean givenNameFirst) {
+    public String join(Name name, boolean givenNameFirst, boolean includePrefix) {
+        String prefix = includePrefix ? name.prefix : null;
         switch (name.fullNameStyle) {
             case FullNameStyle.CJK:
             case FullNameStyle.CHINESE:
             case FullNameStyle.KOREAN:
-                return join(name.familyName, name.middleName, name.givenNames, name.suffix,
-                        false, false, false);
+                return join(prefix, name.familyName, name.middleName, name.givenNames,
+                        name.suffix, false, false, false);
 
             case FullNameStyle.JAPANESE:
-                return join(name.familyName, name.middleName, name.givenNames, name.suffix,
-                        true, false, false);
+                return join(prefix, name.familyName, name.middleName, name.givenNames,
+                        name.suffix, true, false, false);
 
             default:
                 if (givenNameFirst) {
-                    return join(name.givenNames, name.middleName, name.familyName, name.suffix,
-                            true, false, true);
+                    return join(prefix, name.givenNames, name.middleName, name.familyName,
+                            name.suffix, true, false, true);
                 } else {
-                    return join(name.familyName, name.givenNames, name.middleName, name.suffix,
-                            true, true, true);
+                    return join(prefix, name.familyName, name.givenNames, name.middleName,
+                            name.suffix, true, true, true);
                 }
         }
     }
@@ -547,20 +548,22 @@ public class NameSplitter {
      * family name + middle name + given name(s).
      */
     public String joinPhoneticName(Name name) {
-        return join(name.phoneticFamilyName, name.phoneticMiddleName,
-                name.phoneticGivenName, null, true, false, false);
+        return join(null, name.phoneticFamilyName,
+                name.phoneticMiddleName, name.phoneticGivenName, null, true, false, false);
     }
 
     /**
      * Concatenates parts of a full name inserting spaces and commas as specified.
      */
-    private String join(String part1, String part2, String part3, String suffix,
+    private String join(String prefix, String part1, String part2, String part3, String suffix,
             boolean useSpace, boolean useCommaAfterPart1, boolean useCommaAfterPart3) {
+        prefix = prefix == null ? null: prefix.trim();
         part1 = part1 == null ? null: part1.trim();
         part2 = part2 == null ? null: part2.trim();
         part3 = part3 == null ? null: part3.trim();
         suffix = suffix == null ? null: suffix.trim();
 
+        boolean hasPrefix = !TextUtils.isEmpty(prefix);
         boolean hasPart1 = !TextUtils.isEmpty(part1);
         boolean hasPart2 = !TextUtils.isEmpty(part2);
         boolean hasPart3 = !TextUtils.isEmpty(part3);
@@ -568,8 +571,17 @@ public class NameSplitter {
 
         boolean isSingleWord = true;
         String singleWord = null;
+
+        if (hasPrefix) {
+            singleWord = prefix;
+        }
+
         if (hasPart1) {
-            singleWord = part1;
+            if (singleWord != null) {
+                isSingleWord = false;
+            } else {
+                singleWord = part1;
+            }
         }
 
         if (hasPart2) {
@@ -601,12 +613,20 @@ public class NameSplitter {
         }
 
         StringBuilder sb = new StringBuilder();
+
+        if (hasPrefix) {
+            sb.append(prefix);
+        }
+
         if (hasPart1) {
+            if (hasPrefix) {
+                sb.append(' ');
+            }
             sb.append(part1);
         }
 
         if (hasPart2) {
-            if (hasPart1) {
+            if (hasPrefix || hasPart1) {
                 if (useCommaAfterPart1) {
                     sb.append(',');
                 }
@@ -618,7 +638,7 @@ public class NameSplitter {
         }
 
         if (hasPart3) {
-            if (hasPart1 || hasPart2) {
+            if (hasPrefix || hasPart1 || hasPart2) {
                 if (useSpace) {
                     sb.append(' ');
                 }
@@ -627,7 +647,7 @@ public class NameSplitter {
         }
 
         if (hasSuffix) {
-            if (hasPart1 || hasPart2 || hasPart3) {
+            if (hasPrefix || hasPart1 || hasPart2 || hasPart3) {
                 if (useCommaAfterPart3) {
                     sb.append(',');
                 }
@@ -712,6 +732,18 @@ public class NameSplitter {
         }
 
         String lastToken = tokens.mTokens[tokens.mEndPointer - 1];
+
+        // Take care of an explicit comma-separated suffix
+        if (tokens.mEndPointer - tokens.mStartPointer > 2
+                && tokens.hasComma(tokens.mEndPointer - 2)) {
+            if (tokens.hasDot(tokens.mEndPointer - 1)) {
+                lastToken += '.';
+            }
+            name.suffix = lastToken;
+            tokens.mEndPointer--;
+            return;
+        }
+
         if (lastToken.length() > mMaxSuffixLength) {
             return;
         }
@@ -910,6 +942,24 @@ public class NameSplitter {
         }
 
         guess = guessFullNameStyle(name.middleName);
+        if (guess != FullNameStyle.UNDEFINED) {
+            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
+                name.fullNameStyle = guess;
+                return;
+            }
+            bestGuess = guess;
+        }
+
+        guess = guessFullNameStyle(name.prefix);
+        if (guess != FullNameStyle.UNDEFINED) {
+            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
+                name.fullNameStyle = guess;
+                return;
+            }
+            bestGuess = guess;
+        }
+
+        guess = guessFullNameStyle(name.suffix);
         if (guess != FullNameStyle.UNDEFINED) {
             if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
                 name.fullNameStyle = guess;

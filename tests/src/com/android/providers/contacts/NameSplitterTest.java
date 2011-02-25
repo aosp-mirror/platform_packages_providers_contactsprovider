@@ -72,7 +72,7 @@ public class NameSplitterTest extends TestCase {
 
     public void testIgnoreSuffix() {
         assertSplitName("Ms MD", "Ms", null, null, "MD", null);
-        assertJoinedName("MD", "Ms", null, null, "MD", null);
+        assertJoinedName("Ms MD", "Ms", null, null, "MD", null);
     }
 
     public void testGivenFamilyName() {
@@ -92,9 +92,9 @@ public class NameSplitterTest extends TestCase {
 
     public void testPrefixFivenFamilyName() {
         assertSplitName("Mr. John Smith", "Mr", "John", null, "Smith", null);
-        assertJoinedName("John Smith", "Mr", "John", null, "Smith", null);
+        assertJoinedName("Mr John Smith", "Mr", "John", null, "Smith", null);
         assertSplitName("Mr.John Smith", "Mr", "John", null, "Smith", null);
-        assertJoinedName("John Smith", "Mr", "John", null, "Smith", null);
+        assertJoinedName("Mr John Smith", "Mr", "John", null, "Smith", null);
     }
 
     public void testFivenFamilyNameSuffix() {
@@ -121,19 +121,19 @@ public class NameSplitterTest extends TestCase {
 
     public void testPrefixGivenMiddleFamily() {
         assertSplitName("Mr. John Kevin Smith", "Mr", "John", "Kevin", "Smith", null);
-        assertJoinedName("John Kevin Smith", "Mr", "John", "Kevin", "Smith", null);
+        assertJoinedName("Mr John Kevin Smith", "Mr", "John", "Kevin", "Smith", null);
         assertSplitName("Mr.John Kevin Smith", "Mr", "John", "Kevin", "Smith", null);
-        assertJoinedName("John Kevin Smith", "Mr", "John", "Kevin", "Smith", null);
+        assertJoinedName("Mr. John Kevin Smith", "Mr.", "John", "Kevin", "Smith", null);
     }
 
     public void testPrefixGivenMiddleFamilySuffix() {
         assertSplitName("Mr. John Kevin Smith Jr.", "Mr", "John", "Kevin", "Smith", "Jr.");
-        assertJoinedName("John Kevin Smith, Jr.", "Mr", "John", "Kevin", "Smith", "Jr");
+        assertJoinedName("Mr John Kevin Smith, Jr.", "Mr", "John", "Kevin", "Smith", "Jr");
     }
 
     public void testPrefixGivenMiddlePrefixFamilySuffixWrongCapitalization() {
         assertSplitName("MR. john keVin VON SmiTh JR.", "MR", "john", "keVin", "VON SmiTh", "JR.");
-        assertJoinedName("john keVin VON SmiTh, JR.", "MR", "john", "keVin", "VON SmiTh", "JR");
+        assertJoinedName("MR john keVin VON SmiTh, JR.", "MR", "john", "keVin", "VON SmiTh", "JR");
     }
 
     public void testPrefixFamilySuffix() {
@@ -336,7 +336,7 @@ public class NameSplitterTest extends TestCase {
         name.middleName = middleName;
         name.familyName = familyName;
         name.suffix = suffix;
-        String actual = mNameSplitter.join(name, givenNameFirst);
+        String actual = mNameSplitter.join(name, givenNameFirst, true);
         assertEquals(expected, actual);
     }
 

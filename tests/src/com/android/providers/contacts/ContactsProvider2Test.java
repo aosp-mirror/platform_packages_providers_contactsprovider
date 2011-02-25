@@ -1535,8 +1535,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(RawContacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
-        values.put(RawContacts.DISPLAY_NAME_PRIMARY, "John K. Doe, Jr.");
-        values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "Doe, John K., Jr.");
+        values.put(RawContacts.DISPLAY_NAME_PRIMARY, "Mr John K. Doe, Jr.");
+        values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "Mr Doe, John K., Jr.");
         values.putNull(RawContacts.PHONETIC_NAME);
         values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
         values.put(RawContacts.SORT_KEY_PRIMARY, "John K. Doe, Jr.");
@@ -1547,8 +1547,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts.DISPLAY_NAME_SOURCE, DisplayNameSources.STRUCTURED_NAME);
-        values.put(Contacts.DISPLAY_NAME_PRIMARY, "John K. Doe, Jr.");
-        values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "Doe, John K., Jr.");
+        values.put(Contacts.DISPLAY_NAME_PRIMARY, "Mr John K. Doe, Jr.");
+        values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "Mr Doe, John K., Jr.");
         values.putNull(Contacts.PHONETIC_NAME);
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
         values.put(Contacts.SORT_KEY_PRIMARY, "John K. Doe, Jr.");
@@ -3913,7 +3913,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .build();
         Cursor cursor = mResolver.query(uri, null, null, null, null);
         ContentValues values = new ContentValues();
-        values.put(StructuredName.DISPLAY_NAME, "John Q. Doe, Jr.");
+        values.put(StructuredName.DISPLAY_NAME, "Mr John Q. Doe, Jr.");
         values.put(StructuredName.PREFIX, "Mr");
         values.put(StructuredName.GIVEN_NAME, "John");
         values.put(StructuredName.MIDDLE_NAME, "Q.");

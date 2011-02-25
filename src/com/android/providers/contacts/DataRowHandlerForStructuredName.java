@@ -143,7 +143,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
             mSplitter.guessNameStyle(name);
             int unadjustedFullNameStyle = name.fullNameStyle;
             name.fullNameStyle = mSplitter.getAdjustedFullNameStyle(name.fullNameStyle);
-            final String joined = mSplitter.join(name, true);
+            final String joined = mSplitter.join(name, true, true);
             update.put(StructuredName.DISPLAY_NAME, joined);
 
             update.put(StructuredName.FULL_NAME_STYLE, unadjustedFullNameStyle);

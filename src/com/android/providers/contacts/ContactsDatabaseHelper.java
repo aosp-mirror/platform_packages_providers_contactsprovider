@@ -94,7 +94,7 @@ import java.util.Locale;
      *   500-599 Honeycomb-MR1
      * </pre>
      */
-    static final int DATABASE_VERSION = 503;
+    static final int DATABASE_VERSION = 504;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -612,6 +612,10 @@ import java.util.Locale;
         mAggregationModeQuery = null;
         mContactInDefaultDirectoryQuery = null;
 
+        populateMimeTypeCache(db);
+    }
+
+    private void populateMimeTypeCache(SQLiteDatabase db) {
         mMimetypeCache.clear();
         mPackageCache.clear();
 
@@ -1797,6 +1801,11 @@ import java.util.Locale;
             oldVersion = 503;
         }
 
+        if (oldVersion < 504) {
+            upgradeToVersion504(db);
+            oldVersion = 504;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2077,7 +2086,7 @@ import java.util.Locale;
         splitter.guessNameStyle(name);
         int unadjustedFullNameStyle = name.fullNameStyle;
         name.fullNameStyle = splitter.getAdjustedFullNameStyle(name.fullNameStyle);
-        String displayName = splitter.join(name, true);
+        String displayName = splitter.join(name, true, true);
 
         // Don't update database with the adjusted fullNameStyle as it is locale
         // related
@@ -2088,7 +2097,7 @@ import java.util.Locale;
         structuredNameUpdate.execute();
 
         if (displayNameSource == DisplayNameSources.STRUCTURED_NAME) {
-            String displayNameAlternative = splitter.join(name, false);
+            String displayNameAlternative = splitter.join(name, false, false);
             String phoneticName = splitter.joinPhoneticName(name);
             String sortKey = null;
             String sortKeyAlternative = null;
@@ -2825,6 +2834,28 @@ import java.util.Locale;
     private void upgradeToVersion502(SQLiteDatabase db) {
         // Remove Chinese and Korean name lookup - this data is now in the search index
         db.execSQL("DELETE FROM name_lookup WHERE name_type IN (6, 7)");
+    }
+
+    private void upgradeToVersion504(SQLiteDatabase db) {
+        populateMimeTypeCache(db);
+
+        // Find all names with prefixes and recreate display name
+        Cursor cursor = db.rawQuery(
+                "SELECT " + StructuredName.RAW_CONTACT_ID +
+                " FROM " + Tables.DATA +
+                " WHERE " + DataColumns.MIMETYPE_ID + "=?"
+                        + " AND " + StructuredName.PREFIX + " NOT NULL",
+                new String[]{ String.valueOf(mMimeTypeIdStructuredName) });
+
+        try {
+            while(cursor.moveToNext()) {
+                long rawContactId = cursor.getLong(0);
+                updateRawContactDisplayName(db, rawContactId);
+            }
+
+        } finally {
+            cursor.close();
+        }
     }
 
     public String extractHandleFromEmailAddress(String email) {
@@ -3910,6 +3941,8 @@ import java.util.Locale;
 
         String displayNamePrimary;
         String displayNameAlternative;
+        String sortNamePrimary;
+        String sortNameAlternative;
         String sortKeyPrimary = null;
         String sortKeyAlternative = null;
         int displayNameStyle = FullNameStyle.UNDEFINED;
@@ -3922,13 +3955,22 @@ import java.util.Locale;
                 bestName.fullNameStyle = displayNameStyle;
             }
 
-            displayNamePrimary = mNameSplitter.join(bestName, true);
-            displayNameAlternative = mNameSplitter.join(bestName, false);
+            displayNamePrimary = mNameSplitter.join(bestName, true, true);
+            displayNameAlternative = mNameSplitter.join(bestName, false, true);
+
+            if (TextUtils.isEmpty(bestName.prefix)) {
+                sortNamePrimary = displayNamePrimary;
+                sortNameAlternative = displayNameAlternative;
+            } else {
+                sortNamePrimary = mNameSplitter.join(bestName, true, false);
+                sortNameAlternative = mNameSplitter.join(bestName, false, false);
+            }
 
             bestPhoneticName = mNameSplitter.joinPhoneticName(bestName);
             bestPhoneticNameStyle = bestName.phoneticNameStyle;
         } else {
             displayNamePrimary = displayNameAlternative = bestDisplayName;
+            sortNamePrimary = sortNameAlternative = bestDisplayName;
         }
 
         if (bestPhoneticName != null) {
@@ -3950,25 +3992,17 @@ import java.util.Locale;
                     displayNameStyle == FullNameStyle.CJK) {
                 sortKeyPrimary = sortKeyAlternative =
                         ContactLocaleUtils.getIntance().getSortKey(
-                                displayNamePrimary, displayNameStyle);
+                                sortNamePrimary, displayNameStyle);
             }
         }
 
         if (sortKeyPrimary == null) {
-            sortKeyPrimary = displayNamePrimary;
-            sortKeyAlternative = displayNameAlternative;
+            sortKeyPrimary = sortNamePrimary;
+            sortKeyAlternative = sortNameAlternative;
         }
 
-        setDisplayName(rawContactId, bestDisplayNameSource, displayNamePrimary,
-                displayNameAlternative, bestPhoneticName, bestPhoneticNameStyle,
-                sortKeyPrimary, sortKeyAlternative);
-    }
-
-    public void setDisplayName(long rawContactId, int displayNameSource,
-            String displayNamePrimary, String displayNameAlternative, String phoneticName,
-            int phoneticNameStyle, String sortKeyPrimary, String sortKeyAlternative) {
         if (mRawContactDisplayNameUpdate == null) {
-            mRawContactDisplayNameUpdate = getWritableDatabase().compileStatement(
+            mRawContactDisplayNameUpdate = db.compileStatement(
                     "UPDATE " + Tables.RAW_CONTACTS +
                     " SET " +
                             RawContacts.DISPLAY_NAME_SOURCE + "=?," +
@@ -3980,11 +4014,12 @@ import java.util.Locale;
                             RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
                     " WHERE " + RawContacts._ID + "=?");
         }
-        mRawContactDisplayNameUpdate.bindLong(1, displayNameSource);
+
+        mRawContactDisplayNameUpdate.bindLong(1, bestDisplayNameSource);
         bindString(mRawContactDisplayNameUpdate, 2, displayNamePrimary);
         bindString(mRawContactDisplayNameUpdate, 3, displayNameAlternative);
-        bindString(mRawContactDisplayNameUpdate, 4, phoneticName);
-        mRawContactDisplayNameUpdate.bindLong(5, phoneticNameStyle);
+        bindString(mRawContactDisplayNameUpdate, 4, bestPhoneticName);
+        mRawContactDisplayNameUpdate.bindLong(5, bestPhoneticNameStyle);
         bindString(mRawContactDisplayNameUpdate, 6, sortKeyPrimary);
         bindString(mRawContactDisplayNameUpdate, 7, sortKeyAlternative);
         mRawContactDisplayNameUpdate.bindLong(8, rawContactId);

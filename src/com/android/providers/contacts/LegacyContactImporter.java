@@ -612,7 +612,7 @@ public class LegacyContactImporter {
                 splitName.getFamilyName());
         bindString(insert, StructuredNameInsert.SUFFIX,
                 splitName.getSuffix());
-        final String joined = mNameSplitter.join(splitName, true);
+        final String joined = mNameSplitter.join(splitName, true, true);
         bindString(insert, StructuredNameInsert.DISPLAY_NAME, joined);
 
         if (mPhoneticNameAvailable) {
