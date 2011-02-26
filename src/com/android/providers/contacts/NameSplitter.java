@@ -208,11 +208,11 @@ public class NameSplitter {
 
         @Override
         public String toString() {
-            return "[given: " + givenNames + " middle: " + middleName + " family: " + familyName
-                    + " ph/given: " + phoneticGivenName + " ph/middle: " + phoneticMiddleName
-                    + " ph/family: " + phoneticFamilyName + "]";
+            return "[prefix: " + prefix + " given: " + givenNames + " middle: " + middleName
+                    + " family: " + familyName + " suffix: " + suffix + " ph/given: "
+                    + phoneticGivenName + " ph/middle: " + phoneticMiddleName + " ph/family: "
+                    + phoneticFamilyName + "]";
         }
-
     }
 
     private static class NameTokenizer extends StringTokenizer {
@@ -718,6 +718,9 @@ public class NameSplitter {
 
         String firstToken = tokens.mTokens[tokens.mStartPointer];
         if (mPrefixesSet.contains(firstToken.toUpperCase())) {
+            if (tokens.hasDot(tokens.mStartPointer)) {
+                firstToken += '.';
+            }
             name.prefix = firstToken;
             tokens.mStartPointer++;
         }

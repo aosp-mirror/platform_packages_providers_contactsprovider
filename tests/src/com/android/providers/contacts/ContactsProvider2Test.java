@@ -1499,7 +1499,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(StructuredName.DISPLAY_NAME, "Mr.John Kevin von Smith, Jr.");
         insertStructuredName(rawContactId, values);
 
-        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr.");
+        assertStructuredName(rawContactId, "Mr.", "John", "Kevin", "von Smith", "Jr.");
     }
 
     public void testDisplayNameParsingWhenPartsAreNull() {
@@ -1509,7 +1509,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(StructuredName.GIVEN_NAME);
         values.putNull(StructuredName.FAMILY_NAME);
         insertStructuredName(rawContactId, values);
-        assertStructuredName(rawContactId, "Mr", "John", "Kevin", "von Smith", "Jr.");
+        assertStructuredName(rawContactId, "Mr.", "John", "Kevin", "von Smith", "Jr.");
     }
 
     public void testDisplayNameParsingWhenPartsSpecified() {
@@ -3892,7 +3892,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Cursor cursor = mResolver.query(uri, null, null, null, null);
         ContentValues values = new ContentValues();
         values.put(StructuredName.DISPLAY_NAME, "Mr. John Q. Doe Jr.");
-        values.put(StructuredName.PREFIX, "Mr");
+        values.put(StructuredName.PREFIX, "Mr.");
         values.put(StructuredName.GIVEN_NAME, "John");
         values.put(StructuredName.MIDDLE_NAME, "Q.");
         values.put(StructuredName.FAMILY_NAME, "Doe");
