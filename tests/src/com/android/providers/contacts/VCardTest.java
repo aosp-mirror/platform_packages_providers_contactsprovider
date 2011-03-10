@@ -67,15 +67,10 @@ public class VCardTest extends BaseContactsProvider2Test {
         createRawContactWithName("John", "Doe");
         final VCardComposer composer = new VCardComposer(
                 getContext(), mResolver, VCardConfig.VCARD_TYPE_DEFAULT, null, true);
-        CustomHandler handler = new CustomHandler();
-        composer.addHandler(handler);
         assertTrue(composer.init());
         int total = composer.getCount();
         assertEquals(1, total);
-        assertFalse(composer.isAfterLast());
-        assertTrue(composer.createOneEntry());
-        assertTrue(composer.isAfterLast());
-        String vcard = handler.getVCard();
+        String vcard = composer.createOneEntry();
         assertNotNull(vcard);
 
         // Check vCard very roughly.

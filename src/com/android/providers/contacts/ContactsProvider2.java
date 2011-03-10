@@ -4884,7 +4884,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         while (!composer.isAfterLast()) {
-            if (!composer.createOneEntry()) {
+            if (!composer.createOneEntryLegacy()) {
                 Log.w(TAG, "Failed to output a contact.");
             }
         }
