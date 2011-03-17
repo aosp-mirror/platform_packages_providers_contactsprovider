@@ -121,10 +121,13 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -4875,20 +4878,30 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final Context context = this.getContext();
         final VCardComposer composer =
                 new VCardComposer(context, VCardConfig.VCARD_TYPE_DEFAULT, false);
-        composer.addHandler(composer.new HandlerForOutputStream(stream));
+        Writer writer = null;
+        try {
+            writer = new BufferedWriter(new OutputStreamWriter(stream));
+            // No extra checks since composer always uses restricted views
+            if (!composer.init(selection, selectionArgs)) {
+                Log.w(TAG, "Failed to init VCardComposer");
+                return;
+            }
 
-        // No extra checks since composer always uses restricted views
-        if (!composer.init(selection, selectionArgs)) {
-            Log.w(TAG, "Failed to init VCardComposer");
-            return;
-        }
-
-        while (!composer.isAfterLast()) {
-            if (!composer.createOneEntryLegacy()) {
-                Log.w(TAG, "Failed to output a contact.");
+            while (!composer.isAfterLast()) {
+                writer.write(composer.createOneEntry());
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "IOException: " + e);
+        } finally {
+            composer.terminate();
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (IOException e) {
+                    Log.w(TAG, "IOException during closing output stream: " + e);
+                }
             }
         }
-        composer.terminate();
     }
 
     @Override

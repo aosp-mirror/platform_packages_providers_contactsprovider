@@ -17,13 +17,9 @@
 package com.android.providers.contacts;
 
 import com.android.vcard.VCardComposer;
-import com.android.vcard.VCardComposer.OneEntryHandler;
 import com.android.vcard.VCardConfig;
 
 import android.content.ContentResolver;
-import android.content.Context;
-import android.text.TextUtils;
-import android.util.Log;
 
 /**
  * Tests (or integration tests) verifying if vCard library works well with {@link ContentResolver}.
@@ -33,31 +29,6 @@ import android.util.Log;
 public class VCardTest extends BaseContactsProvider2Test {
     private static final String TAG = "VCardTest";
     private static final boolean DEBUG = false;
-
-    private class CustomHandler implements OneEntryHandler {
-        private String mVCard;
-
-        @Override
-        public boolean onInit(Context context) {
-            return true;
-        }
-
-        @Override
-        public boolean onEntryCreated(String vcard) {
-            if (DEBUG) Log.d(TAG, "vcard:" + vcard);
-            assertTrue(TextUtils.isEmpty(mVCard));
-            mVCard = vcard;
-            return true;
-        }
-
-        @Override
-        public void onTerminate() {
-        }
-
-        public String getVCard() {
-            return mVCard;
-        }
-    }
 
     /**
      * Confirms the app fetches a stored contact from resolver and output the name as part of
