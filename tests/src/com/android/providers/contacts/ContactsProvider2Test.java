@@ -16,10 +16,11 @@
 
 package com.android.providers.contacts;
 
+import com.google.android.collect.Lists;
+
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
-import com.google.android.collect.Lists;
 
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
@@ -1185,6 +1186,44 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), values, null, null);
         insertEmail(rawContactId, "findme" + name + "@acme.com");
+    }
+
+    /**
+     * Tests if ContactsProvider2 has email address associated with a primary account before the
+     * other address.
+     */
+    public void testEmailFilterPrimaryAccount() {
+        long rawContactId1 = createRawContact(ACCOUNT_1);
+        insertEmail(rawContactId1, "account1@email.com");
+        long rawContactId2 = createRawContact(ACCOUNT_2);
+        insertEmail(rawContactId2, "account2@email.com");
+        ContentValues v1 = new ContentValues();
+        v1.put(Email.ADDRESS, "account1@email.com");
+        ContentValues v2 = new ContentValues();
+        v2.put(Email.ADDRESS, "account2@email.com");
+
+        Uri filterUri1 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_1.name)
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_TYPE, ACCOUNT_1.type)
+                .build();
+        assertStoredValuesOrderly(filterUri1, new ContentValues[] { v1, v2 });
+
+        Uri filterUri2 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_2.name)
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_TYPE, ACCOUNT_2.type)
+                .build();
+        assertStoredValuesOrderly(filterUri2, new ContentValues[] { v2, v1 });
+
+        // Just with PRIMARY_ACCOUNT_NAME
+        Uri filterUri3 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_1.name)
+                .build();
+        assertStoredValuesOrderly(filterUri3, new ContentValues[] { v1, v2 });
+
+        Uri filterUri4 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_2.name)
+                .build();
+        assertStoredValuesOrderly(filterUri4, new ContentValues[] { v2, v1 });
     }
 
     public void testPostalsQuery() {

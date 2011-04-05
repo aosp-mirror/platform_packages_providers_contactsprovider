@@ -829,6 +829,21 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         }
     }
 
+    protected void assertStoredValuesOrderly(Uri rowUri, ContentValues[] expectedValues) {
+        assertStoredValuesOrderly(rowUri, null, null, expectedValues);
+    }
+
+    protected void assertStoredValuesOrderly(Uri rowUri, String selection,
+            String[] selectionArgs, ContentValues[] expectedValues) {
+        Cursor c = mResolver.query(rowUri, null, selection, selectionArgs, null);
+        try {
+            assertEquals("Record count", expectedValues.length, c.getCount());
+            assertCursorValuesOrderly(c, expectedValues);
+        } finally {
+            c.close();
+        }
+    }
+
     /**
      * Constructs a selection (where clause) out of all supplied values, uses it
      * to query the provider and verifies that a single row is returned and it
@@ -901,6 +916,16 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
                 }
             }
             assertTrue("Expected values can not be found " + v + message.toString(), found);
+        }
+    }
+
+    protected void assertCursorValuesOrderly(Cursor cursor, ContentValues[] expectedValues) {
+        StringBuilder message = new StringBuilder();
+        cursor.moveToPosition(-1);
+        for (ContentValues v : expectedValues) {
+            assertTrue(cursor.moveToNext());
+            assertTrue("ContentValues didn't match " + v + message.toString(),
+                    equalsWithExpectedValues(cursor, v, message));
         }
     }
 

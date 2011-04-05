@@ -3607,6 +3607,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case EMAILS_FILTER: {
                 setTablesAndProjectionMapForData(qb, uri, projection, true);
                 String filterParam = null;
+
+                String primaryAccountName =
+                        uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME);
+                String primaryAccountType =
+                        uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_TYPE);
+
                 if (uri.getPathSegments().size() > 3) {
                     filterParam = uri.getLastPathSegment();
                     if (TextUtils.isEmpty(filterParam)) {
@@ -3648,7 +3654,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
-                    sortOrder = EMAIL_FILTER_SORT_ORDER;
+                    // Addresses associated with primary account should be promoted.
+                    if (!TextUtils.isEmpty(primaryAccountName)) {
+                        StringBuilder sb2 = new StringBuilder();
+                        sb2.append("(CASE WHEN " + RawContacts.ACCOUNT_NAME + "=");
+                        DatabaseUtils.appendEscapedSQLString(sb2, primaryAccountName);
+                        if (!TextUtils.isEmpty(primaryAccountType)) {
+                            sb2.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
+                            DatabaseUtils.appendEscapedSQLString(sb2, primaryAccountType);
+                        }
+                        sb2.append(" THEN 0 ELSE 1 END), ");
+                        sb2.append(EMAIL_FILTER_SORT_ORDER);
+
+                        sortOrder = sb2.toString();
+                    } else {
+                        sortOrder = EMAIL_FILTER_SORT_ORDER;
+                    }
                 }
                 break;
             }
