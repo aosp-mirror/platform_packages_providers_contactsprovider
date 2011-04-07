@@ -5268,6 +5268,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return null;
             }
 
+            // Should match against the whole parameter instead of its suffix.
+            // e.g. The parameter "param" must not be found in "some_param=val".
+            if (index > 0) {
+                char prevChar = query.charAt(index - 1);
+                if (prevChar != '?' && prevChar != '&') {
+                    // With "some_param=val1&param=val2", we should find second "param" occurrence.
+                    index += parameterLength;
+                    continue;
+                }
+            }
+
             index += parameterLength;
 
             if (queryLength == index) {

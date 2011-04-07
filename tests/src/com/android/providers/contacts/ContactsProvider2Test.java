@@ -3500,6 +3500,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertQueryParameter("foo:bar?some=some&param=val", "param", "val");
         assertQueryParameter("foo:bar?some=some&param=val&else=else", "param", "val");
         assertQueryParameter("foo:bar?param=john%40doe.com", "param", "john@doe.com");
+        assertQueryParameter("foo:bar?some_param=val", "param", null);
+        assertQueryParameter("foo:bar?some_param=val1&param=val2", "param", "val2");
+        assertQueryParameter("foo:bar?some_param=val1&param=", "param", "");
+        assertQueryParameter("foo:bar?some_param=val1&param", "param", null);
+        assertQueryParameter("foo:bar?some_param=val1&another_param=val2&param=val3",
+                "param", "val3");
+        assertQueryParameter("foo:bar?some_param=val1&param=val2&some_param=val3",
+                "param", "val2");
+        assertQueryParameter("foo:bar?param=val1&some_param=val2", "param", "val1");
+        assertQueryParameter("foo:bar?p=val1&pp=val2", "p", "val1");
+        assertQueryParameter("foo:bar?pp=val1&p=val2", "p", "val2");
+        assertQueryParameter("foo:bar?ppp=val1&pp=val2&p=val3", "p", "val3");
+        assertQueryParameter("foo:bar?ppp=val&", "p", null);
     }
 
     public void testMissingAccountTypeParameter() {
