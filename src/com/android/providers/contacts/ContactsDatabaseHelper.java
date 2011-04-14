@@ -2710,7 +2710,6 @@ import java.util.Locale;
             return;
         }
 
-        String mCountryIso = getCountryIso();
         Cursor cursor = db.rawQuery(
                     "SELECT _id, " + Phone.RAW_CONTACT_ID + ", " + Phone.NUMBER +
                     " FROM " + Tables.DATA +
@@ -2723,7 +2722,6 @@ import java.util.Locale;
                 long dataID = cursor.getLong(0);
                 long rawContactID = cursor.getLong(1);
                 String number = cursor.getString(2);
-                String numberE164 = PhoneNumberUtils.formatNumberToE164(number, mCountryIso);
                 String normalizedNumber = PhoneNumberUtils.normalizeNumber(number);
                 if (!TextUtils.isEmpty(normalizedNumber)) {
                     phoneValues.clear();
@@ -2733,13 +2731,6 @@ import java.util.Locale;
                     phoneValues.put(PhoneLookupColumns.MIN_MATCH,
                             PhoneNumberUtils.toCallerIDMinMatch(normalizedNumber));
                     db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
-
-                    if (numberE164 != null && !numberE164.equals(normalizedNumber)) {
-                        phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, numberE164);
-                        phoneValues.put(PhoneLookupColumns.MIN_MATCH,
-                                PhoneNumberUtils.toCallerIDMinMatch(numberE164));
-                        db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
-                    }
                 }
             }
         } finally {
