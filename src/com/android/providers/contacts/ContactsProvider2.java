@@ -4424,6 +4424,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             isEmailAddress = !TextUtils.isEmpty(emailAddress);
         } else {
             isPhoneNumber = isPhoneNumber(filter);
+            if (isPhoneNumber) {
+                phoneNumber = PhoneNumberUtils.normalizeNumber(filter);
+                numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
+                        mDbHelper.getCountryIso());
+            }
         }
 
         sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS snippet_contact_id");
@@ -4432,7 +4437,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (isEmailAddress) {
                 sb.append("ifnull(");
                 DatabaseUtils.appendEscapedSQLString(sb, startMatch);
-                sb.append("||email_address||");
+                sb.append("||(SELECT MIN(" + Email.ADDRESS + ")");
+                sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS);
+                sb.append(" WHERE  " + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID);
+                sb.append("=" + RawContacts.CONTACT_ID + " AND " + Email.ADDRESS + " LIKE ");
+                DatabaseUtils.appendEscapedSQLString(sb, filter + "%");
+                sb.append(")||");
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
                 appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
@@ -4440,81 +4450,57 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             } else if (isPhoneNumber) {
                 sb.append("ifnull(");
                 DatabaseUtils.appendEscapedSQLString(sb, startMatch);
-                sb.append("||phone_number||");
+                sb.append("||(SELECT MIN(" + Phone.NUMBER + ")");
+                sb.append(" FROM " +
+                        Tables.DATA_JOIN_RAW_CONTACTS + " JOIN " + Tables.PHONE_LOOKUP);
+                sb.append(" ON " + DataColumns.CONCRETE_ID);
+                sb.append("=" + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.DATA_ID);
+                sb.append(" WHERE  " + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID);
+                sb.append("=" + RawContacts.CONTACT_ID);
+                sb.append(" AND " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                sb.append(phoneNumber);
+                sb.append("%'");
+                if (!TextUtils.isEmpty(numberE164)) {
+                    sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                    sb.append(numberE164);
+                    sb.append("%'");
+                }
+                sb.append(")||");
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
                 appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
                 sb.append(")");
             } else {
-                sb.append("(CASE WHEN name_contact_id NOT NULL THEN NULL ELSE ");
-                appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
-                sb.append(" END)");
+                final String normalizedFilter = NameNormalizer.normalize(filter);
+                if (!TextUtils.isEmpty(normalizedFilter)) {
+                    sb.append("(CASE WHEN EXISTS (SELECT 1 FROM ");
+                    sb.append(Tables.RAW_CONTACTS + " AS rc INNER JOIN ");
+                    sb.append(Tables.NAME_LOOKUP + " AS nl ON (rc." + RawContacts._ID);
+                    sb.append("=nl." + NameLookupColumns.RAW_CONTACT_ID);
+                    sb.append(") WHERE nl." + NameLookupColumns.NORMALIZED_NAME);
+                    sb.append(" GLOB '" + normalizedFilter + "*' AND ");
+                    sb.append("nl." + NameLookupColumns.NAME_TYPE + "=");
+                    sb.append(NameLookupType.NAME_COLLATION_KEY + " AND ");
+                    sb.append(Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID);
+                    sb.append("=rc." + RawContacts.CONTACT_ID);
+                    sb.append(") THEN NULL ELSE ");
+                    appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                    sb.append(" END)");
+                } else {
+                    sb.append("NULL");
+                }
             }
             sb.append(" AS " + SearchSnippetColumns.SNIPPET);
         }
 
         sb.append(" FROM " + Tables.SEARCH_INDEX);
-
-        if (isEmailAddress) {
-            sb.append(" LEFT OUTER JOIN " +
-                    "(SELECT "
-                            + RawContacts.CONTACT_ID + " AS email_contact_id,"
-                            + "MIN(" + Email.ADDRESS + ") AS email_address" +
-                    " FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
-                    " WHERE " + Email.ADDRESS + " LIKE ");
-            DatabaseUtils.appendEscapedSQLString(sb, filter + "%");
-            sb.append(") ON (email_contact_id=snippet_contact_id)");
-        } else if (isPhoneNumber) {
-            phoneNumber = PhoneNumberUtils.normalizeNumber(filter);
-            sb.append(" LEFT OUTER JOIN " +
-                    "(SELECT "
-                            + RawContacts.CONTACT_ID + " AS phone_contact_id,"
-                            + "MIN(" + Phone.NUMBER + ") AS phone_number" +
-                    " FROM " + Tables.DATA_JOIN_RAW_CONTACTS +
-                    " JOIN " + Tables.PHONE_LOOKUP +
-                    " ON(" + DataColumns.CONCRETE_ID + "="
-                        + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.DATA_ID + ")" +
-                    " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-            sb.append(phoneNumber);
-            sb.append("%'");
-
-            numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
-                    mDbHelper.getCountryIso());
-            if (!TextUtils.isEmpty(numberE164)) {
-                sb.append(" OR " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-                sb.append(numberE164);
-                sb.append("%'");
-            }
-            sb.append(" GROUP BY phone_contact_id");
-            sb.append(") ON (phone_contact_id=snippet_contact_id)");
-        } else {
-            sb.append(" LEFT OUTER JOIN " +
-                    "(SELECT DISTINCT "
-                            + RawContacts.CONTACT_ID + " AS name_contact_id" +
-                    " FROM " + Tables.RAW_CONTACTS +
-                    " JOIN " + Tables.NAME_LOOKUP +
-                    " ON(" + RawContactsColumns.CONCRETE_ID + "="
-                            + NameLookupColumns.RAW_CONTACT_ID + ")");
-
-            String normalizedFilter = NameNormalizer.normalize(filter);
-            if (!TextUtils.isEmpty(normalizedFilter)) {
-                sb.append(" WHERE normalized_name GLOB '");
-                sb.append(normalizedFilter);
-                sb.append("*' AND " + NameLookupColumns.NAME_TYPE +
-                        "=" + NameLookupType.NAME_COLLATION_KEY);
-            } else {
-                sb.append(" WHERE 0");
-            }
-            sb.append(") ON (name_contact_id=snippet_contact_id)");
-        }
-
         sb.append(" WHERE ");
         sb.append(Tables.SEARCH_INDEX + " MATCH ");
         if (isEmailAddress) {
             DatabaseUtils.appendEscapedSQLString(sb, "\"" + sanitizeMatch(filter) + "*\"");
         } else if (isPhoneNumber) {
             DatabaseUtils.appendEscapedSQLString(sb,
-                    "\"" + sanitizeMatch(filter) + "*\" OR " + phoneNumber + "*"
+                    "\"" + sanitizeMatch(filter) + "*\" OR \"" + phoneNumber + "*\""
                             + (numberE164 != null ? " OR \"" + numberE164 + "\"" : ""));
         } else {
             DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filter) + "*");
