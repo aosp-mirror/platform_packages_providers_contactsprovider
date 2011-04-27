@@ -277,10 +277,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         assertStoredValue(buildSearchUri("john@d"), SearchSnippetColumns.SNIPPET,
                 "[john@doe.com]");
         assertStoredValue(buildSearchUri("doe@j"), SearchSnippetColumns.SNIPPET,
-                "...hundred dollar note for [doe]@[john].com and bob parr");
-
-        // TODO: uncomment after we have a custom tokenizer that recognizes email addresses
-//      assertStoredValue(buildSearchUri("bob@p"), SearchSnippetColumns.SNIPPET, null);
+                "a hundred dollar note for [doe@john.com] and bob parr");
+        assertStoredValue(buildSearchUri("bob@p"), SearchSnippetColumns.SNIPPET, null);
     }
 
     public void testSearchByPhoneNumber() {

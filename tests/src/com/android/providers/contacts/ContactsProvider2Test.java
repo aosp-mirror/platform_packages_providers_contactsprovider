@@ -1898,11 +1898,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "engineer, [acmecorp]\n"
-                + "engineer, [acmeinc]\n"
-                + "engineer, corpacme\n"
-                + "inc@corp.com\n"
-                + "emca...");
+        values.put(SearchSnippetColumns.SNIPPET, "engineer, [acmecorp]");
         assertStoredValues(filterUri, values);
     }
 
@@ -1911,14 +1907,43 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long contactId = queryContactId(rawContactId);
         ContentValues values = new ContentValues();
 
+        insertStructuredName(rawContactId, "John", "Doe");
         Uri dataUri = insertEmail(rawContactId, "acme@corp.com", true, Email.TYPE_CUSTOM, "Custom");
 
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("acme"));
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "[acme]@corp.com");
+        values.put(SearchSnippetColumns.SNIPPET, "[acme@corp.com]");
         assertStoredValues(filterUri, values);
+    }
+
+    public void testSearchSnippetPhone() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = new ContentValues();
+
+        insertStructuredName(rawContactId, "Cave", "Johnson");
+        insertPhoneNumber(rawContactId, "(860) 555-1234");
+
+        values.clear();
+        values.put(Contacts._ID, contactId);
+        values.put(SearchSnippetColumns.SNIPPET, "[(860) 555-1234]");
+
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("86 (0) 5-55-12-34")), values);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("860 555-1234")), values);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("860")), values);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("8605551234")), values);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("860555")), values);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("860 555")), values);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("860-555")), values);
     }
 
     public void testSearchSnippetNickname() throws Exception {
@@ -1934,6 +1959,87 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts._ID, contactId);
         values.put(SearchSnippetColumns.SNIPPET, "[Incredible]");
         assertStoredValues(filterUri, values);
+    }
+
+    public void testSearchSnippetEmptyForNameInDisplayName() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertStructuredName(rawContactId, "Cave", "Johnson");
+        insertEmail(rawContactId, "cave@aperturescience.com", true);
+
+        ContentValues emptySnippet = new ContentValues();
+        emptySnippet.clear();
+        emptySnippet.put(Contacts._ID, contactId);
+        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("cave")),
+                emptySnippet);
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("john")),
+                emptySnippet);
+    }
+
+    public void testSearchSnippetEmptyForNicknameInDisplayName() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertNickname(rawContactId, "Caveman");
+        insertEmail(rawContactId, "cave@aperturescience.com", true);
+
+        ContentValues emptySnippet = new ContentValues();
+        emptySnippet.clear();
+        emptySnippet.put(Contacts._ID, contactId);
+        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("cave")),
+                emptySnippet);
+    }
+
+    public void testSearchSnippetEmptyForCompanyInDisplayName() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues company = new ContentValues();
+        company.clear();
+        company.put(Organization.COMPANY, "Aperture Science");
+        company.put(Organization.TITLE, "President");
+        insertOrganization(rawContactId, company);
+        insertEmail(rawContactId, "aperturepresident@aperturescience.com", true);
+
+        ContentValues emptySnippet = new ContentValues();
+        emptySnippet.clear();
+        emptySnippet.put(Contacts._ID, contactId);
+        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
+                Uri.encode("aperture")), emptySnippet);
+    }
+
+    public void testSearchSnippetEmptyForPhoneInDisplayName() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertPhoneNumber(rawContactId, "860-555-1234");
+        insertEmail(rawContactId, "860@aperturescience.com", true);
+
+        ContentValues emptySnippet = new ContentValues();
+        emptySnippet.clear();
+        emptySnippet.put(Contacts._ID, contactId);
+        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("860")),
+                emptySnippet);
+    }
+
+    public void testSearchSnippetEmptyForEmailInDisplayName() throws Exception {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        insertEmail(rawContactId, "cave@aperturescience.com", true);
+        insertNote(rawContactId, "Cave Johnson is president of Aperture Science");
+
+        ContentValues emptySnippet = new ContentValues();
+        emptySnippet.clear();
+        emptySnippet.put(Contacts._ID, contactId);
+        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+
+        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("cave")),
+                emptySnippet);
     }
 
     public void testDisplayNameUpdateFromStructuredNameUpdate() {

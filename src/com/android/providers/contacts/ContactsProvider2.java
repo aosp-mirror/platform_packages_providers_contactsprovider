@@ -201,6 +201,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
 
+    // Regex for splitting query strings - we split on any group of non-alphanumeric characters,
+    // excluding the @ symbol.
+    /* package */ static final String QUERY_TOKENIZER_REGEX = "[^\\w@]+";
+
     private static final int CONTACTS = 1000;
     private static final int CONTACTS_ID = 1001;
     private static final int CONTACTS_LOOKUP = 1002;
@@ -3105,31 +3109,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private static class DirectoryCursorWrapper extends CursorWrapper
-            implements CrossProcessCursor {
-        private final CrossProcessCursor mCrossProcessCursor;
-
-        public DirectoryCursorWrapper(Cursor cursor, CrossProcessCursor crossProcessCursor) {
-            super(cursor);
-            mCrossProcessCursor = crossProcessCursor;
-        }
-
-        @Override
-        public void fillWindow(int pos, CursorWindow window) {
-            mCrossProcessCursor.fillWindow(pos, window);
-        }
-
-        @Override
-        public CursorWindow getWindow() {
-            return mCrossProcessCursor.getWindow();
-        }
-
-        @Override
-        public boolean onMove(int oldPosition, int newPosition) {
-            return mCrossProcessCursor.onMove(oldPosition, newPosition);
-        }
-    }
-
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
@@ -3138,13 +3117,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
-            return queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1);
+            return wrapCursor(uri,
+                    queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1));
         } else if (directory.equals("0")) {
-            return queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                    Directory.DEFAULT);
+            return wrapCursor(uri,
+                    queryLocal(uri, projection, selection, selectionArgs, sortOrder,
+                            Directory.DEFAULT));
         } else if (directory.equals("1")) {
-            return queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                    Directory.LOCAL_INVISIBLE);
+            return wrapCursor(uri,
+                    queryLocal(uri, projection, selection, selectionArgs, sortOrder,
+                            Directory.LOCAL_INVISIBLE));
         }
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -3182,11 +3164,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return null;
         }
 
+        return wrapCursor(uri, cursor);
+    }
+
+    private CursorWrapper wrapCursor(Uri uri, Cursor cursor) {
+        // Parse out snippet arguments for use when snippets are retrieved from the cursor.
+        String[] args = null;
+        String snippetArgs =
+                getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
+        if (snippetArgs != null) {
+            args = snippetArgs.split(",");
+        }
+
+        String query = uri.getLastPathSegment();
+        String startMatch = args != null && args.length > 0 ? args[0]
+                : DEFAULT_SNIPPET_ARG_START_MATCH;
+        String endMatch = args != null && args.length > 1 ? args[1]
+                : DEFAULT_SNIPPET_ARG_END_MATCH;
+        String ellipsis = args != null && args.length > 2 ? args[2]
+                : DEFAULT_SNIPPET_ARG_ELLIPSIS;
+        int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
+                : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
+
         CrossProcessCursor crossProcessCursor = getCrossProcessCursor(cursor);
         if (crossProcessCursor != null) {
-            return new DirectoryCursorWrapper(cursor, crossProcessCursor);
+            return new SnippetizingCursorWrapper(cursor, query, startMatch,
+                    endMatch, ellipsis, maxTokens);
         } else {
-            return matrixCursorFromCursor(cursor);
+            return new SnippetizingCursorWrapper(matrixCursorFromCursor(cursor), query, startMatch,
+                    endMatch, ellipsis, maxTokens);
         }
     }
 
@@ -4419,6 +4425,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String phoneNumber = null;
         String numberE164 = null;
 
+        // If the query consists of a single word, we can do snippetizing after-the-fact for a
+        // performance boost.
+        boolean singleTokenSearch = filter.split(QUERY_TOKENIZER_REGEX).length == 1;
+
         if (filter.indexOf('@') != -1) {
             emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
             isEmailAddress = !TextUtils.isEmpty(emailAddress);
@@ -4445,7 +4455,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 sb.append(")||");
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
-                appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+
+                // Optimization for single-token search.
+                if (singleTokenSearch) {
+                    sb.append(SearchIndexColumns.CONTENT);
+                } else {
+                    appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                }
                 sb.append(")");
             } else if (isPhoneNumber) {
                 sb.append("ifnull(");
@@ -4468,24 +4484,35 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 sb.append(")||");
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
-                appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+
+                // Optimization for single-token search.
+                if (singleTokenSearch) {
+                    sb.append(SearchIndexColumns.CONTENT);
+                } else {
+                    appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                }
                 sb.append(")");
             } else {
                 final String normalizedFilter = NameNormalizer.normalize(filter);
                 if (!TextUtils.isEmpty(normalizedFilter)) {
-                    sb.append("(CASE WHEN EXISTS (SELECT 1 FROM ");
-                    sb.append(Tables.RAW_CONTACTS + " AS rc INNER JOIN ");
-                    sb.append(Tables.NAME_LOOKUP + " AS nl ON (rc." + RawContacts._ID);
-                    sb.append("=nl." + NameLookupColumns.RAW_CONTACT_ID);
-                    sb.append(") WHERE nl." + NameLookupColumns.NORMALIZED_NAME);
-                    sb.append(" GLOB '" + normalizedFilter + "*' AND ");
-                    sb.append("nl." + NameLookupColumns.NAME_TYPE + "=");
-                    sb.append(NameLookupType.NAME_COLLATION_KEY + " AND ");
-                    sb.append(Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID);
-                    sb.append("=rc." + RawContacts.CONTACT_ID);
-                    sb.append(") THEN NULL ELSE ");
-                    appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
-                    sb.append(" END)");
+                    // Optimization for single-token search.
+                    if (singleTokenSearch) {
+                        sb.append(SearchIndexColumns.CONTENT);
+                    } else {
+                        sb.append("(CASE WHEN EXISTS (SELECT 1 FROM ");
+                        sb.append(Tables.RAW_CONTACTS + " AS rc INNER JOIN ");
+                        sb.append(Tables.NAME_LOOKUP + " AS nl ON (rc." + RawContacts._ID);
+                        sb.append("=nl." + NameLookupColumns.RAW_CONTACT_ID);
+                        sb.append(") WHERE nl." + NameLookupColumns.NORMALIZED_NAME);
+                        sb.append(" GLOB '" + normalizedFilter + "*' AND ");
+                        sb.append("nl." + NameLookupColumns.NAME_TYPE + "=");
+                        sb.append(NameLookupType.NAME_COLLATION_KEY + " AND ");
+                        sb.append(Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID);
+                        sb.append("=rc." + RawContacts.CONTACT_ID);
+                        sb.append(") THEN NULL ELSE ");
+                        appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
+                        sb.append(" END)");
+                    }
                 } else {
                     sb.append("NULL");
                 }

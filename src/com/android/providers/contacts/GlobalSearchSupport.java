@@ -287,7 +287,13 @@ public class GlobalSearchSupport {
         if (limit != null) {
             sb.append(" LIMIT " + limit);
         }
-        Cursor c = db.rawQuery(sb.toString(), null);
+        Cursor c = new SnippetizingCursorWrapper(
+                db.rawQuery(sb.toString(), null),
+                filter,
+                String.valueOf(SNIPPET_START_MATCH),
+                String.valueOf(SNIPPET_END_MATCH),
+                SNIPPET_ELLIPSIS,
+                SNIPPET_MAX_TOKENS);
         SearchSuggestion suggestion = new SearchSuggestion();
         suggestion.filter = filter;
         try {
