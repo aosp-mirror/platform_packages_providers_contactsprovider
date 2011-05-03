@@ -96,6 +96,9 @@ public class GlobalSearchSupport {
         + "contacts." + Contacts.DISPLAY_NAME_PRIMARY + ", "
         + "contacts." + Contacts._ID;
 
+    private static final String RECENTLY_CONTACTED =
+        TIME_SINCE_LAST_CONTACTED + " < " + RECENT_CONTACTS;
+
     private static class SearchSuggestion {
         long contactId;
         String photoUri;
@@ -182,16 +185,22 @@ public class GlobalSearchSupport {
 
     public Cursor handleSearchSuggestionsQuery(
             SQLiteDatabase db, Uri uri, String[] projection, String limit) {
+        final String searchClause;
+        final String selection;
         if (uri.getPathSegments().size() <= 1) {
-            return null;
+            searchClause = null;
+            selection = RECENTLY_CONTACTED;
+        } else {
+            searchClause = uri.getLastPathSegment();
+            selection = null;
         }
 
-        final String searchClause = uri.getLastPathSegment();
-        if (TextUtils.isDigitsOnly(searchClause) && mContactsProvider.isPhone()) {
+        if (!TextUtils.isEmpty(searchClause) && TextUtils.isDigitsOnly(searchClause)
+                && mContactsProvider.isPhone()) {
             return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
         } else {
             return buildCursorForSearchSuggestionsBasedOnFilter(
-                    db, projection, null, searchClause, limit);
+                    db, projection, selection, searchClause, limit);
         }
     }
 
@@ -265,17 +274,20 @@ public class GlobalSearchSupport {
         MatrixCursor cursor = new MatrixCursor(
                 projection != null ? projection : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS);
         StringBuilder sb = new StringBuilder();
+        final boolean haveFilter = !TextUtils.isEmpty(filter);
         sb.append("SELECT "
                         + Contacts._ID + ", "
                         + Contacts.LOOKUP_KEY + ", "
                         + Contacts.PHOTO_THUMBNAIL_URI + ", "
                         + Contacts.DISPLAY_NAME + ", "
-                        + SearchSnippetColumns.SNIPPET + ", "
-                        + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE +
-                " FROM ");
+                        + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE);
+        if (haveFilter) {
+            sb.append(", " + SearchSnippetColumns.SNIPPET);
+        }
+        sb.append(" FROM ");
         sb.append(getDatabaseHelper().getContactView(false));
         sb.append(" AS contacts");
-        if (filter != null) {
+        if (haveFilter) {
             mContactsProvider.appendSearchIndexJoin(sb, filter, true,
                     String.valueOf(SNIPPET_START_MATCH), String.valueOf(SNIPPET_END_MATCH),
                     SNIPPET_ELLIPSIS, SNIPPET_MAX_TOKENS);
@@ -289,7 +301,7 @@ public class GlobalSearchSupport {
         }
         Cursor c = new SnippetizingCursorWrapper(
                 db.rawQuery(sb.toString(), null),
-                filter,
+                haveFilter ? filter : "",
                 String.valueOf(SNIPPET_START_MATCH),
                 String.valueOf(SNIPPET_END_MATCH),
                 SNIPPET_ELLIPSIS,
@@ -302,8 +314,10 @@ public class GlobalSearchSupport {
                 suggestion.lookupKey = c.getString(1);
                 suggestion.photoUri = c.getString(2);
                 suggestion.text1 = c.getString(3);
-                suggestion.text2 = shortenSnippet(c.getString(4));
-                suggestion.presence = c.isNull(5) ? -1 : c.getInt(5);
+                suggestion.presence = c.isNull(5) ? -1 : c.getInt(4);
+                if (haveFilter) {
+                    suggestion.text2 = shortenSnippet(c.getString(5));
+                }
                 cursor.addRow(suggestion.asList(projection));
             }
         } finally {
