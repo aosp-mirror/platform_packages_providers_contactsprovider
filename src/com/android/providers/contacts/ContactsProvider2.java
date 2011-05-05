@@ -3164,10 +3164,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return null;
         }
 
-        return wrapCursor(uri, cursor);
+        CrossProcessCursor crossProcessCursor = getCrossProcessCursor(cursor);
+        if (crossProcessCursor != null) {
+            return wrapCursor(uri, cursor);
+        } else {
+            return matrixCursorFromCursor(wrapCursor(uri, cursor));
+        }
     }
 
-    private CursorWrapper wrapCursor(Uri uri, Cursor cursor) {
+    private Cursor wrapCursor(Uri uri, Cursor cursor) {
+
+        // If the cursor doesn't contain a snippet column, don't bother wrapping it.
+        if (cursor.getColumnIndex(SearchSnippetColumns.SNIPPET) < 0) {
+            return cursor;
+        }
+
         // Parse out snippet arguments for use when snippets are retrieved from the cursor.
         String[] args = null;
         String snippetArgs =
@@ -3186,14 +3197,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
                 : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
 
-        CrossProcessCursor crossProcessCursor = getCrossProcessCursor(cursor);
-        if (crossProcessCursor != null) {
-            return new SnippetizingCursorWrapper(cursor, query, startMatch,
-                    endMatch, ellipsis, maxTokens);
-        } else {
-            return new SnippetizingCursorWrapper(matrixCursorFromCursor(cursor), query, startMatch,
-                    endMatch, ellipsis, maxTokens);
-        }
+        return new SnippetizingCursorWrapper(cursor, query, startMatch, endMatch, ellipsis,
+                maxTokens);
     }
 
     private CrossProcessCursor getCrossProcessCursor(Cursor cursor) {
