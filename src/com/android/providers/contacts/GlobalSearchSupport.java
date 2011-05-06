@@ -314,7 +314,7 @@ public class GlobalSearchSupport {
                 suggestion.lookupKey = c.getString(1);
                 suggestion.photoUri = c.getString(2);
                 suggestion.text1 = c.getString(3);
-                suggestion.presence = c.isNull(5) ? -1 : c.getInt(4);
+                suggestion.presence = c.isNull(4) ? -1 : c.getInt(4);
                 if (haveFilter) {
                     suggestion.text2 = shortenSnippet(c.getString(5));
                 }
