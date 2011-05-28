@@ -16,11 +16,10 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Lists;
-
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.google.android.collect.Lists;
 
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
@@ -51,6 +50,7 @@ import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
+import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
@@ -104,6 +104,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.HAS_PHONE_NUMBER,
                 Contacts.SEND_TO_VOICEMAIL,
+                Contacts.IS_USER_PROFILE,
                 Contacts.LOOKUP_KEY,
                 Contacts.NAME_RAW_CONTACT_ID,
                 Contacts.CONTACT_PRESENCE,
@@ -137,6 +138,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.HAS_PHONE_NUMBER,
                 Contacts.SEND_TO_VOICEMAIL,
+                Contacts.IS_USER_PROFILE,
                 Contacts.LOOKUP_KEY,
                 Contacts.NAME_RAW_CONTACT_ID,
                 Contacts.CONTACT_PRESENCE,
@@ -159,6 +161,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.ACCOUNT_TYPE,
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
+                RawContacts.RAW_CONTACT_IS_USER_PROFILE,
                 RawContacts.DIRTY,
                 RawContacts.DELETED,
                 RawContacts.DISPLAY_NAME_PRIMARY,
@@ -224,6 +227,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.VERSION,
                 RawContacts.DIRTY,
                 RawContacts.NAME_VERIFIED,
+                RawContacts.RAW_CONTACT_IS_USER_PROFILE,
                 Contacts._ID,
                 Contacts.DISPLAY_NAME_PRIMARY,
                 Contacts.DISPLAY_NAME_ALTERNATIVE,
@@ -291,6 +295,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.STATUS_RES_PACKAGE,
                 Data.STATUS_LABEL,
                 Data.STATUS_ICON,
+                RawContacts.RAW_CONTACT_IS_USER_PROFILE,
                 Contacts._ID,
                 Contacts.DISPLAY_NAME_PRIMARY,
                 Contacts.DISPLAY_NAME_ALTERNATIVE,
@@ -390,6 +395,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
                 Contacts.SEND_TO_VOICEMAIL,
+                Contacts.IS_USER_PROFILE,
                 Contacts.LOOKUP_KEY,
                 Contacts.NAME_RAW_CONTACT_ID,
                 Contacts.HAS_PHONE_NUMBER,
@@ -422,6 +428,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.SYNC3,
                 RawContacts.SYNC4,
                 RawContacts.STARRED,
+                RawContacts.RAW_CONTACT_IS_USER_PROFILE,
                 Data.DATA_VERSION,
                 Data.IS_PRIMARY,
                 Data.IS_SUPER_PRIMARY,
@@ -1425,6 +1432,315 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c = mResolver.query(filterUri3, null, null, null, Contacts._ID);
         assertEquals(0, c.getCount());
         c.close();
+    }
+
+    public void testQueryProfileRequiresReadPermission() {
+        mActor.removePermissions("android.permission.READ_PROFILE");
+
+        createBasicProfileContact(new ContentValues());
+
+        // Queries for the profile should fail.
+        Cursor c = null;
+
+        // Case 1: Retrieving profile contact.
+        try {
+            c = mResolver.query(Profile.CONTENT_URI, null, null, null, Contacts._ID);
+            fail("Querying for the profile without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+
+        // Case 2: Retrieving profile data.
+        try {
+            c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                    null, null, null, Contacts._ID);
+            fail("Querying for the profile data without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+
+        // Case 3: Retrieving profile entities.
+        try {
+            c = mResolver.query(Profile.CONTENT_URI.buildUpon()
+                    .appendPath("entities").build(), null, null, null, Contacts._ID);
+            fail("Querying for the profile entities without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
+    public void testQueryProfileByContactIdRequiresReadPermission() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+        long profileContactId = queryContactId(profileRawContactId);
+
+        mActor.removePermissions("android.permission.READ_PROFILE");
+
+        // A query for the profile contact by ID should fail.
+        Cursor c = null;
+        try {
+            c = mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, profileContactId),
+                    null, null, null, Contacts._ID);
+            fail("Querying for the profile by contact ID without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
+    public void testQueryProfileByRawContactIdRequiresReadPermission() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+
+        // Remove profile read permission and attempt to retrieve the raw contact.
+        mActor.removePermissions("android.permission.READ_PROFILE");
+        Cursor c = null;
+        try {
+            c = mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                    profileRawContactId), null, null, null, RawContacts._ID);
+            fail("Querying for the raw contact profile without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
+    public void testQueryProfileRawContactRequiresReadPermission() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+
+        // Remove profile read permission and attempt to retrieve the profile's raw contact data.
+        mActor.removePermissions("android.permission.READ_PROFILE");
+        Cursor c = null;
+
+        // Case 1: Retrieve the overall raw contact set for the profile.
+        try {
+            c = mResolver.query(Profile.CONTENT_RAW_CONTACTS_URI, null, null, null, null);
+            fail("Querying for the raw contact profile without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+
+        // Case 2: Retrieve the raw contact profile data for the inserted raw contact ID.
+        try {
+            c = mResolver.query(ContentUris.withAppendedId(
+                    Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
+                    .appendPath("data").build(), null, null, null, null);
+            fail("Querying for the raw profile data without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+
+        // Case 3: Retrieve the raw contact profile entity for the inserted raw contact ID.
+        try {
+            c = mResolver.query(ContentUris.withAppendedId(
+                    Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
+                    .appendPath("entity").build(), null, null, null, null);
+            fail("Querying for the raw profile entities without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
+    public void testQueryProfileDataByDataIdRequiresReadPermission() {
+        createBasicProfileContact(new ContentValues());
+        Cursor c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                new String[]{Data._ID, Data.MIMETYPE}, null, null, null);
+        assertEquals(4, c.getCount());  // Photo, phone, email, name.
+        c.moveToFirst();
+        long profileDataId = c.getLong(0);
+        c.close();
+
+        // Remove profile read permission and attempt to retrieve the data
+        mActor.removePermissions("android.permission.READ_PROFILE");
+        try {
+            c = mResolver.query(ContentUris.withAppendedId(Data.CONTENT_URI, profileDataId),
+                    null, null, null, null);
+            fail("Querying for the data in the profile without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
+    public void testQueryProfileDataRequiresReadPermission() {
+        createBasicProfileContact(new ContentValues());
+
+        // Remove profile read permission and attempt to retrieve all profile data.
+        mActor.removePermissions("android.permission.READ_PROFILE");
+        Cursor c = null;
+        try {
+            c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                    null, null, null, null);
+            fail("Querying for the data in the profile without READ_PROFILE access should fail.");
+        } catch (SecurityException expected) {
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
+    public void testInsertProfileRequiresWritePermission() {
+        mActor.removePermissions("android.permission.WRITE_PROFILE");
+
+        // Creating a non-profile contact should be fine.
+        createBasicNonProfileContact(new ContentValues());
+
+        // Creating a profile contact should throw an exception.
+        try {
+            createBasicProfileContact(new ContentValues());
+            fail("Creating a profile contact should fail without WRITE_PROFILE access.");
+        } catch (SecurityException expected) {
+        }
+    }
+
+    public void testInsertProfileDataRequiresWritePermission() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+
+        mActor.removePermissions("android.permission.WRITE_PROFILE");
+        try {
+            insertEmail(profileRawContactId, "foo@bar.net", false);
+            fail("Inserting data into a profile contact should fail without WRITE_PROFILE access.");
+        } catch (SecurityException expected) {
+        }
+    }
+
+    public void testQueryContactIncludeProfile() {
+        ContentValues profileValues = new ContentValues();
+        long profileRawContactId = createBasicProfileContact(profileValues);
+        long profileContactId = queryContactId(profileRawContactId);
+
+        ContentValues nonProfileValues = new ContentValues();
+        long nonProfileRawContactId = createBasicNonProfileContact(nonProfileValues);
+        long nonProfileContactId = queryContactId(nonProfileRawContactId);
+
+        Uri contactWithProfilesUri = Contacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.INCLUDE_PROFILE, "1").build();
+        assertStoredValuesOrderly(contactWithProfilesUri,
+                new ContentValues[]{profileValues, nonProfileValues});
+        assertSelection(contactWithProfilesUri, profileValues, Contacts._ID, profileContactId);
+        assertSelection(Contacts.CONTENT_URI, nonProfileValues, Contacts._ID, nonProfileContactId);
+    }
+
+    public void testQueryContactExcludeProfile() {
+        // Create a profile contact (it should not be returned by the general contact URI).
+        createBasicProfileContact(new ContentValues());
+
+        // Create a non-profile contact - this should be returned.
+        ContentValues nonProfileValues = new ContentValues();
+        createBasicNonProfileContact(nonProfileValues);
+
+        assertStoredValues(Contacts.CONTENT_URI, new ContentValues[] {nonProfileValues});
+    }
+
+    public void testQueryProfile() {
+        ContentValues profileValues = new ContentValues();
+        createBasicProfileContact(profileValues);
+
+        assertStoredValues(Profile.CONTENT_URI, profileValues);
+    }
+
+    private ContentValues[] getExpectedProfileDataValues() {
+        // Expected photo data values (only field is the photo BLOB, which we can't check).
+        ContentValues photoRow = new ContentValues();
+        photoRow.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+
+        // Expected phone data values.
+        ContentValues phoneRow = new ContentValues();
+        phoneRow.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        phoneRow.put(Phone.NUMBER, "18005554411");
+
+        // Expected email data values.
+        ContentValues emailRow = new ContentValues();
+        emailRow.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        emailRow.put(Email.ADDRESS, "mia.prophyl@acme.com");
+
+        // Expected name data values.
+        ContentValues nameRow = new ContentValues();
+        nameRow.put(Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE);
+        nameRow.put(StructuredName.DISPLAY_NAME, "Mia Prophyl");
+        nameRow.put(StructuredName.GIVEN_NAME, "Mia");
+        nameRow.put(StructuredName.FAMILY_NAME, "Prophyl");
+
+        return new ContentValues[]{photoRow, phoneRow, emailRow, nameRow};
+    }
+
+    public void testQueryProfileData() {
+        createBasicProfileContact(new ContentValues());
+
+        assertStoredValues(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                getExpectedProfileDataValues());
+    }
+
+    public void testQueryProfileEntities() {
+        createBasicProfileContact(new ContentValues());
+
+        assertStoredValues(Profile.CONTENT_URI.buildUpon().appendPath("entities").build(),
+                getExpectedProfileDataValues());
+    }
+
+    public void testQueryRawProfile() {
+        ContentValues profileValues = new ContentValues();
+        createBasicProfileContact(profileValues);
+
+        // The raw contact view doesn't include the photo ID.
+        profileValues.remove(Contacts.PHOTO_ID);
+        assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, profileValues);
+    }
+
+    public void testQueryRawProfileById() {
+        ContentValues profileValues = new ContentValues();
+        long profileRawContactId = createBasicProfileContact(profileValues);
+
+        // The raw contact view doesn't include the photo ID.
+        profileValues.remove(Contacts.PHOTO_ID);
+        assertStoredValues(ContentUris.withAppendedId(
+                Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId), profileValues);
+    }
+
+    public void testQueryRawProfileData() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+
+        assertStoredValues(ContentUris.withAppendedId(
+                Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
+                .appendPath("data").build(), getExpectedProfileDataValues());
+    }
+
+    public void testQueryRawProfileEntity() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+
+        assertStoredValues(ContentUris.withAppendedId(
+                Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
+                .appendPath("entity").build(), getExpectedProfileDataValues());
+    }
+
+    public void testQueryDataForProfile() {
+        createBasicProfileContact(new ContentValues());
+
+        assertStoredValues(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                getExpectedProfileDataValues());
     }
 
     public void testPhonesWithStatusUpdate() {
@@ -3672,6 +3988,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testQueryFileProfileVCard() {
+        createBasicProfileContact(new ContentValues());
+        Cursor cursor = mResolver.query(Profile.CONTENT_VCARD_URI, null, null, null, null);
+        assertEquals(1, cursor.getCount());
+        assertTrue(cursor.moveToFirst());
+        assertTrue(cursor.isNull(cursor.getColumnIndex(OpenableColumns.SIZE)));
+        String filename = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+        assertEquals("Mia Prophyl.vcf", filename);
+        cursor.close();
+    }
 
     public void testOpenAssetFileMultiVCard() throws IOException {
         final VCardTestUriCreator contacts = createVCardTestContacts();
@@ -3697,11 +4023,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openAssetFileDescriptor(contacts.getUri1(), "r");
             final FileInputStream inputStream = descriptor.createInputStream();
             final String data = readToEnd(inputStream);
-            assertTrue(data.contains("N:Doe;John;;;"));
-            assertFalse(data.contains("N:Doh;Jane;;;"));
-
             inputStream.close();
             descriptor.close();
+
+            assertTrue(data.contains("N:Doe;John;;;"));
+            assertFalse(data.contains("N:Doh;Jane;;;"));
         }
 
         {
@@ -4120,8 +4446,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private long createContact(ContentValues values, String firstName, String givenName,
             String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
             long groupId, int chatMode) {
+        return createContact(values, firstName, givenName, phoneNumber, email, presenceStatus,
+                timesContacted, starred, groupId, chatMode, false);
+    }
+
+    private long createContact(ContentValues values, String firstName, String givenName,
+            String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
+            long groupId, int chatMode, boolean isUserProfile) {
         return queryContactId(createRawContact(values, firstName, givenName, phoneNumber, email,
-                presenceStatus, timesContacted, starred, groupId, chatMode));
+                presenceStatus, timesContacted, starred, groupId, chatMode, isUserProfile));
     }
 
     private long createRawContact(ContentValues values, String firstName, String givenName,
@@ -4133,14 +4466,34 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return rawContactId;
     }
 
+    private long createRawContact(ContentValues values, String firstName, String givenName,
+            String phoneNumber, String email, int presenceStatus, int timesContacted, int starred,
+            long groupId, int chatMode, boolean isUserProfile) {
+        long rawContactId = createRawContact(values, phoneNumber, email, presenceStatus,
+                timesContacted, starred, groupId, chatMode, isUserProfile);
+        insertStructuredName(rawContactId, firstName, givenName);
+        return rawContactId;
+    }
+
     private long createRawContact(ContentValues values, String phoneNumber, String email,
             int presenceStatus, int timesContacted, int starred, long groupId, int chatMode) {
+        return createRawContact(values, phoneNumber, email, presenceStatus, timesContacted, starred,
+                groupId, chatMode, false);
+    }
+
+    private long createRawContact(ContentValues values, String phoneNumber, String email,
+            int presenceStatus, int timesContacted, int starred, long groupId, int chatMode,
+            boolean isUserProfile) {
         values.put(RawContacts.STARRED, starred);
         values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(RawContacts.CUSTOM_RINGTONE, "beethoven5");
         values.put(RawContacts.LAST_TIME_CONTACTED, 12345);
         values.put(RawContacts.TIMES_CONTACTED, timesContacted);
-        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+
+        Uri insertionUri = isUserProfile
+                ? Profile.CONTENT_RAW_CONTACTS_URI
+                : RawContacts.CONTENT_URI;
+        Uri rawContactUri = mResolver.insert(insertionUri, values);
         long rawContactId = ContentUris.parseId(rawContactUri);
         Uri photoUri = insertPhoto(rawContactId);
         long photoId = ContentUris.parseId(photoUri);
@@ -4154,7 +4507,36 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);
         }
+
         return rawContactId;
+    }
+
+    /**
+     * Creates a raw contact with pre-set values under the user's profile.
+     * @param profileValues Values to be used to create the entry (common values will be
+     *     automatically populated in createRawContact()).
+     * @return the raw contact ID that was created.
+     */
+    private long createBasicProfileContact(ContentValues profileValues) {
+        long profileRawContactId = createRawContact(profileValues, "Mia", "Prophyl",
+                "18005554411", "mia.prophyl@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA, true);
+        profileValues.put(Contacts.DISPLAY_NAME, "Mia Prophyl");
+        return profileRawContactId;
+    }
+
+    /**
+     * Creates a raw contact with pre-set values that is not under the user's profile.
+     * @param nonProfileValues Values to be used to create the entry (common values will be
+     *     automatically populated in createRawContact()).
+     * @return the raw contact ID that was created.
+     */
+    private long createBasicNonProfileContact(ContentValues nonProfileValues) {
+        long nonProfileRawContactId = createRawContact(nonProfileValues, "John", "Doe",
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA, false);
+        nonProfileValues.put(Contacts.DISPLAY_NAME, "John Doe");
+        return nonProfileRawContactId;
     }
 
     private void putDataValues(ContentValues values, long rawContactId) {

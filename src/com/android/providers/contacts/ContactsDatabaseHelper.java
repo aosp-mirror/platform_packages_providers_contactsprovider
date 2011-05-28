@@ -91,10 +91,12 @@ import java.util.Locale;
      *   300-349 Froyo
      *   350-399 Gingerbread
      *   400-499 Honeycomb
-     *   500-599 Honeycomb-MR1
+     *   500-549 Honeycomb-MR1
+     *   550-599 Honeycomb-MR2
+     *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 504;
+    static final int DATABASE_VERSION = 600;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -296,6 +298,14 @@ import java.util.Locale;
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC3;
         public static final String CONCRETE_SYNC4 =
                 Tables.RAW_CONTACTS + "." + RawContacts.SYNC4;
+        public static final String CONCRETE_CUSTOM_RINGTONE =
+                Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE;
+        public static final String CONCRETE_SEND_TO_VOICEMAIL =
+                Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL;
+        public static final String CONCRETE_LAST_TIME_CONTACTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED;
+        public static final String CONCRETE_TIMES_CONTACTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
         public static final String CONCRETE_IS_RESTRICTED =
@@ -478,6 +488,12 @@ import java.util.Locale;
     public interface PropertiesColumns {
         String PROPERTY_KEY = "property_key";
         String PROPERTY_VALUE = "property_value";
+    }
+
+    public interface AccountsColumns {
+        String ACCOUNT_NAME = RawContacts.ACCOUNT_NAME;
+        String ACCOUNT_TYPE = RawContacts.ACCOUNT_TYPE;
+        String PROFILE_RAW_CONTACT_ID = "profile_raw_contact_id";
     }
 
     public static final class DirectoryColumns {
@@ -1040,15 +1056,21 @@ import java.util.Locale;
         ");");
 
         db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
-                RawContacts.ACCOUNT_NAME + " TEXT, " +
-                RawContacts.ACCOUNT_TYPE + " TEXT " +
+                AccountsColumns.ACCOUNT_NAME + " TEXT, " +
+                AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
+                AccountsColumns.PROFILE_RAW_CONTACT_ID + " INTEGER" +
+        ");");
+
+        db.execSQL("CREATE INDEX accounts_profile_raw_contact_id_index ON " +
+                Tables.ACCOUNTS + " (" +
+                AccountsColumns.PROFILE_RAW_CONTACT_ID +
         ");");
 
         // Allow contacts without any account to be created for now.  Achieve that
         // by inserting a fake account with both type and name as NULL.
         // This "account" should be eliminated as soon as the first real writable account
         // is added to the phone.
-        db.execSQL("INSERT INTO accounts VALUES(NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
 
         createDirectoriesTable(db);
         createSearchIndexTable(db);
@@ -1323,6 +1345,10 @@ import java.util.Locale;
                         Contacts.PHOTO_URI) + ", "
                 + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
+                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
+                    " WHERE " + DataColumns.CONCRETE_RAW_CONTACT_ID +
+                    "=" + AccountsColumns.PROFILE_RAW_CONTACT_ID + ") AS " +
+                    RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
                 + " JOIN " + Tables.MIMETYPES + " ON ("
@@ -1364,6 +1390,10 @@ import java.util.Locale;
                 + RawContacts.PHONETIC_NAME_STYLE  + ", "
                 + RawContacts.SORT_KEY_PRIMARY  + ", "
                 + RawContacts.SORT_KEY_ALTERNATIVE + ", "
+                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
+                    " WHERE " + AccountsColumns.PROFILE_RAW_CONTACT_ID +
+                    "=" + RawContactsColumns.CONCRETE_ID + ") AS " +
+                    RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + rawContactOptionColumns + ", "
                 + syncColumns
                 + " FROM " + Tables.RAW_CONTACTS;
@@ -1390,7 +1420,14 @@ import java.util.Locale;
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
                 + contactsColumns + ", "
                 + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_URI) + ", "
-                + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_THUMBNAIL_URI)
+                + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID,
+                        Contacts.PHOTO_THUMBNAIL_URI) + ", "
+                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
+                    " JOIN " + Tables.RAW_CONTACTS + " ON " + RawContactsColumns.CONCRETE_ID + "=" +
+                    AccountsColumns.PROFILE_RAW_CONTACT_ID +
+                    " WHERE " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                    "=" + ContactsColumns.CONCRETE_ID + ") AS " +
+                    Contacts.IS_USER_PROFILE
                 + " FROM " + Tables.CONTACTS
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
                 +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
@@ -1413,6 +1450,10 @@ import java.util.Locale;
                 + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
                 + RawContactsColumns.CONCRETE_IS_RESTRICTED + " AS "
                         + RawContacts.IS_RESTRICTED + ","
+                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
+                    " WHERE " + RawContactsColumns.CONCRETE_ID +
+                    "=" + AccountsColumns.PROFILE_RAW_CONTACT_ID + ") AS " +
+                    RawContacts.RAW_CONTACT_IS_USER_PROFILE + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.RAW_CONTACTS
                 + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
@@ -1444,6 +1485,12 @@ import java.util.Locale;
                         Contacts.PHOTO_URI) + ", "
                 + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
+                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
+                    " JOIN " + Tables.RAW_CONTACTS + " ON " + RawContactsColumns.CONCRETE_ID + "=" +
+                    AccountsColumns.PROFILE_RAW_CONTACT_ID +
+                    " WHERE " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                    "=" + ContactsColumns.CONCRETE_ID + ") AS " +
+                    Contacts.IS_USER_PROFILE + ", "
                 + Data.SYNC1 + ", "
                 + Data.SYNC2 + ", "
                 + Data.SYNC3 + ", "
@@ -1804,6 +1851,12 @@ import java.util.Locale;
         if (oldVersion < 504) {
             upgradeToVersion504(db);
             oldVersion = 504;
+        }
+
+        if (oldVersion < 600) {
+            upgradeToVersion600(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 600;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2849,6 +2902,15 @@ import java.util.Locale;
         }
     }
 
+    private void upgradeToVersion600(SQLiteDatabase db) {
+        // Add a column to the Accounts table to track which raw contact ID (if any) represents that
+        // account's contribution to the user's profile Contact.
+        db.execSQL("ALTER TABLE accounts" +
+                " ADD profile_raw_contact_id INTEGER");
+        db.execSQL("CREATE INDEX accounts_profile_raw_contact_id_index ON accounts" +
+                " (profile_raw_contact_id);");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -2978,7 +3040,7 @@ import java.util.Locale;
         SQLiteDatabase db = getWritableDatabase();
 
         db.execSQL("DELETE FROM " + Tables.ACCOUNTS + ";");
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
 
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");

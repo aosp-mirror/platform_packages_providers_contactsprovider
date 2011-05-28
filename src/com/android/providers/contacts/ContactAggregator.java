@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -28,10 +29,12 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
+import android.accounts.Account;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
@@ -126,12 +129,15 @@ public class ContactAggregator {
     /** Precompiled sql statement for setting an aggregated presence */
     private SQLiteStatement mAggregatedPresenceReplace;
     private SQLiteStatement mPresenceContactIdUpdate;
+    private SQLiteStatement mProfileContactIdQuery;
     private SQLiteStatement mRawContactCountQuery;
     private SQLiteStatement mContactDelete;
     private SQLiteStatement mAggregatedPresenceDelete;
     private SQLiteStatement mMarkForAggregation;
     private SQLiteStatement mPhotoIdUpdate;
     private SQLiteStatement mDisplayNameUpdate;
+    private SQLiteStatement mProfileUpdate;
+    private SQLiteStatement mNoAccountProfileUpdate;
     private SQLiteStatement mHasPhoneNumberUpdate;
     private SQLiteStatement mLookupKeyUpdate;
     private SQLiteStatement mStarredUpdate;
@@ -285,6 +291,12 @@ public class ContactAggregator {
                 " WHERE " + RawContacts.CONTACT_ID + "=?"
                         + " AND " + RawContacts._ID + "<>?");
 
+        mProfileContactIdQuery = db.compileStatement(
+                "SELECT " + RawContacts.CONTACT_ID +
+                " FROM " + Tables.RAW_CONTACTS + " JOIN " + Tables.ACCOUNTS +
+                " ON " + RawContactsColumns.CONCRETE_ID + "=" +
+                        AccountsColumns.PROFILE_RAW_CONTACT_ID);
+
         mContactDelete = db.compileStatement(
                 "DELETE FROM " + Tables.CONTACTS +
                 " WHERE " + Contacts._ID + "=?");
@@ -308,6 +320,18 @@ public class ContactAggregator {
                 "UPDATE " + Tables.CONTACTS +
                 " SET " + Contacts.NAME_RAW_CONTACT_ID + "=? " +
                 " WHERE " + Contacts._ID + "=?");
+
+        mProfileUpdate = db.compileStatement(
+                "UPDATE " + Tables.ACCOUNTS +
+                " SET " + AccountsColumns.PROFILE_RAW_CONTACT_ID + "=? " +
+                " WHERE " + AccountsColumns.ACCOUNT_TYPE + "=?" +
+                " AND " + AccountsColumns.ACCOUNT_NAME + "=?");
+
+        mNoAccountProfileUpdate = db.compileStatement(
+                "UPDATE " + Tables.ACCOUNTS +
+                " SET " + AccountsColumns.PROFILE_RAW_CONTACT_ID + "=? " +
+                " WHERE " + AccountsColumns.ACCOUNT_TYPE + " IS NULL" +
+                " AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL");
 
         mLookupKeyUpdate = db.compileStatement(
                 "UPDATE " + Tables.CONTACTS +
@@ -542,15 +566,48 @@ public class ContactAggregator {
     }
 
     /**
-     * Creates a new contact based on the given raw contact.  Does not perform aggregation.
+     * Creates a new contact based on the given raw contact.  Does not perform aggregation.  Returns
+     * the ID of the contact that was created.
      */
-    public void onRawContactInsert(
+    public long onRawContactInsert(
             TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1, mContactInsert);
         long contactId = mContactInsert.executeInsert();
         setContactId(rawContactId, contactId);
         mDbHelper.updateContactVisible(txContext, contactId);
+        return contactId;
+    }
+
+    /**
+     * Creates a user profile contact based on the given raw contact (if one does not yet exist).
+     * If a user profile contact already exists, the raw contact will simply be associated to it.
+     * Does special aggregation (all profile raw contacts are automatically added to the same
+     * profile contact).
+     */
+    public void onProfileRawContactInsert(TransactionContext txContext, SQLiteDatabase db,
+            long rawContactId, Account account) {
+        long profileContactId = 0;
+        try {
+            profileContactId = mProfileContactIdQuery.simpleQueryForLong();
+        } catch (SQLiteDoneException noProfileException) {
+            // Do nothing - we'll create the profile below.
+        }
+        if (profileContactId == 0) {
+            profileContactId = onRawContactInsert(txContext, db, rawContactId);
+            setContactId(rawContactId, profileContactId);
+        }
+
+        // Update the accounts table with the user's raw contact ID.
+        if (account == null) {
+            mNoAccountProfileUpdate.bindLong(1, rawContactId);
+            mNoAccountProfileUpdate.execute();
+        } else {
+            mProfileUpdate.bindLong(1, rawContactId);
+            mProfileUpdate.bindString(2, account.type);
+            mProfileUpdate.bindString(3, account.name);
+            mProfileUpdate.execute();
+        }
     }
 
     private static final class RawContactIdAndAccountQuery {

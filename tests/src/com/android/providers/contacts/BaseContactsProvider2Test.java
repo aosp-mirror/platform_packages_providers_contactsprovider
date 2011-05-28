@@ -102,13 +102,17 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         if (mActor.provider instanceof SynchronousContactsProvider2) {
             getContactsProvider().wipeData();
         }
+
+        // Give the actor access to read/write contacts and profile data by default.
+        mActor.addPermissions(
+                "android.permission.READ_CONTACTS",
+                "android.permission.WRITE_CONTACTS",
+                "android.permission.READ_PROFILE",
+                "android.permission.WRITE_PROFILE");
     }
 
     @Override
     protected void tearDown() throws Exception {
-        if (mActor.provider instanceof SynchronousContactsProvider2) {
-            getContactsProvider().getDatabaseHelper(mActor.context).close();
-        }
         super.tearDown();
     }
 

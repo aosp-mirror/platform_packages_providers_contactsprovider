@@ -23,6 +23,7 @@ import android.accounts.Account;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
@@ -34,6 +35,7 @@ public class TransactionContext  {
 
     private HashMap<Long, Account> mInsertedRawContacts = Maps.newHashMap();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
+    private HashMap<Long, Account> mInsertedProfileRawContacts = Maps.newHashMap();
     private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexContacts = Sets.newHashSet();
@@ -45,6 +47,10 @@ public class TransactionContext  {
 
     public void rawContactUpdated(long rawContactId) {
         mUpdatedRawContacts.add(rawContactId);
+    }
+
+    public void profileRawContactInserted(long rawContactId, Account account) {
+        mInsertedProfileRawContacts.put(rawContactId, account);
     }
 
     public void markRawContactDirty(long rawContactId) {
@@ -67,12 +73,16 @@ public class TransactionContext  {
         return mInsertedRawContacts.keySet();
     }
 
-    public Set<Long> getDirtyRawContactIds() {
-        return mDirtyRawContacts;
-    }
-
     public Set<Long> getUpdatedRawContactIds() {
         return mUpdatedRawContacts;
+    }
+
+    public Map<Long, Account> getInsertedProfileRawContactIds() {
+        return mInsertedProfileRawContacts;
+    }
+
+    public Set<Long> getDirtyRawContactIds() {
+        return mDirtyRawContacts;
     }
 
     public Set<Long> getStaleSearchIndexRawContactIds() {
@@ -98,6 +108,7 @@ public class TransactionContext  {
     public void clear() {
         mInsertedRawContacts.clear();
         mUpdatedRawContacts.clear();
+        mInsertedProfileRawContacts.clear();
         mUpdatedSyncStates.clear();
         mDirtyRawContacts.clear();
     }

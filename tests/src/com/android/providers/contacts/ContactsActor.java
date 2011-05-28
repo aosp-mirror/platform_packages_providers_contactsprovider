@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import com.google.android.collect.Sets;
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerCallback;
@@ -58,7 +60,9 @@ import android.test.mock.MockResources;
 import android.util.TypedValue;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -82,6 +86,8 @@ public class ContactsActor {
     private Country mMockCountry = new Country("us", 0);
 
     private Account[] mAccounts = new Account[0];
+
+    private Set<String> mGrantedPermissions = Sets.newHashSet();
 
     private CountryDetector mMockCountryDetector = new CountryDetector(null){
         @Override
@@ -138,7 +144,8 @@ public class ContactsActor {
     public ContactsActor(Context overallContext, String packageName,
             Class<? extends ContentProvider> providerClass, String authority) throws Exception {
         resolver = new MockContentResolver();
-        context = new RestrictionMockContext(overallContext, packageName, resolver);
+        context = new RestrictionMockContext(overallContext, packageName, resolver,
+                mGrantedPermissions);
         this.packageName = packageName;
 
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
@@ -175,6 +182,14 @@ public class ContactsActor {
         return provider;
     }
 
+    public void addPermissions(String... permissions) {
+        mGrantedPermissions.addAll(Arrays.asList(permissions));
+    }
+
+    public void removePermissions(String... permissions) {
+        mGrantedPermissions.removeAll(Arrays.asList(permissions));
+    }
+
     /**
      * Mock {@link Context} that reports specific well-known values for testing
      * data protection. The creator can override the owner package name, and
@@ -191,15 +206,17 @@ public class ContactsActor {
         private final ContactsMockPackageManager mPackageManager;
         private final ContentResolver mResolver;
         private final Resources mRes;
+        private final Set<String> mGrantedPermissions;
 
         /**
          * Create a {@link Context} under the given package name.
          */
         public RestrictionMockContext(Context overallContext, String reportedPackageName,
-                ContentResolver resolver) {
+                ContentResolver resolver, Set<String> grantedPermissions) {
             mOverallContext = overallContext;
             mReportedPackageName = reportedPackageName;
             mResolver = resolver;
+            mGrantedPermissions = grantedPermissions;
 
             mPackageManager = new ContactsMockPackageManager();
             mPackageManager.addPackage(1000, PACKAGE_GREY);
@@ -239,6 +256,44 @@ public class ContactsActor {
             ApplicationInfo ai = new ApplicationInfo();
             ai.packageName = "contactsTestPackage";
             return ai;
+        }
+
+        // All permission checks are implemented to simply check against the granted permission set.
+
+        @Override
+        public int checkPermission(String permission, int pid, int uid) {
+            return checkCallingPermission(permission);
+        }
+
+        @Override
+        public int checkCallingPermission(String permission) {
+            if (mGrantedPermissions.contains(permission)) {
+                return PackageManager.PERMISSION_GRANTED;
+            } else {
+                return PackageManager.PERMISSION_DENIED;
+            }
+        }
+
+        @Override
+        public int checkCallingOrSelfPermission(String permission) {
+            return checkCallingPermission(permission);
+        }
+
+        @Override
+        public void enforcePermission(String permission, int pid, int uid, String message) {
+            enforceCallingPermission(permission, message);
+        }
+
+        @Override
+        public void enforceCallingPermission(String permission, String message) {
+            if (!mGrantedPermissions.contains(permission)) {
+                throw new SecurityException(message);
+            }
+        }
+
+        @Override
+        public void enforceCallingOrSelfPermission(String permission, String message) {
+            enforceCallingPermission(permission, message);
         }
     }
 

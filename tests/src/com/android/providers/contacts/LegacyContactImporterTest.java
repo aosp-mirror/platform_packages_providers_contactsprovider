@@ -29,7 +29,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.test.mock.MockContext;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -44,8 +44,11 @@ import java.io.InputStream;
  * adb shell am instrument -e class com.android.providers.contacts.LegacyContactImporterTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
+ *
+ * Note that this SHOULD be a large test, but had to be bumped down to medium due to a bug in the
+ * SQLite cleanup code.
  */
-@LargeTest
+@MediumTest
 public class LegacyContactImporterTest extends BaseContactsProvider2Test {
 
     private static class LegacyMockContext extends MockContext {
@@ -172,6 +175,7 @@ public class LegacyContactImporterTest extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.HAS_PHONE_NUMBER,
+                Contacts.IS_USER_PROFILE,
                 Contacts.LOOKUP_KEY,
         });
 

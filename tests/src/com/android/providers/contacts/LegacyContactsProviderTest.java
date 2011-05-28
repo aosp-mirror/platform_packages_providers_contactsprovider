@@ -34,7 +34,7 @@ import android.provider.Contacts.Photos;
 import android.provider.Contacts.Presence;
 import android.provider.Contacts.Settings;
 import android.provider.ContactsContract;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 import java.io.IOException;
 
@@ -46,8 +46,11 @@ import java.io.IOException;
  * adb shell am instrument -e class com.android.providers.contacts.LegacyContactsProviderTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
+ *
+ * Note that this SHOULD be a large test, but had to be bumped down to medium due to a bug in the
+ * SQLite cleanup code.
  */
-@LargeTest
+@MediumTest
 @SuppressWarnings("deprecation")
 public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 

@@ -10,47 +10,51 @@
 10    starred=0
 11    in_visible_group=0
 12    has_phone_number=0
-13    lookup=2273r1-533551532D47334F493D33
-14 }
-15 1 {
-16    _id=2
-17    display_name=Jane Doe
-18    sort_key=Jane Doe
-19    photo_id=809
-20    times_contacted=1
-21    last_time_contacted=1249177384979
-22    custom_ringtone=null
-23    send_to_voicemail=0
-24    starred=1
-25    in_visible_group=1
-26    has_phone_number=1
-27    lookup=2187i3d09f37e0f0dbc6f
-28 }
-29 2 {
-30    _id=3
-31    display_name=John Doe
-32    sort_key=John Doe
-33    photo_id=810
-34    times_contacted=0
-35    last_time_contacted=0
-36    custom_ringtone=content://media/internal/audio/media/80
-37    send_to_voicemail=1
-38    starred=1
-39    in_visible_group=1
-40    has_phone_number=1
-41    lookup=2187i5c9ae978b346ac9
-42 }
-43 3 {
-44    _id=11
-45    display_name=Added On Android
-46    sort_key=Added On Android
-47    photo_id=null
-48    times_contacted=0
-49    last_time_contacted=0
-50    custom_ringtone=null
-51    send_to_voicemail=0
-52    starred=0
-53    in_visible_group=1
-54    has_phone_number=1
-55    lookup=2187r11-2D3333353349472D47334F493D33
-56 }
+13    is_user_profile=0
+14    lookup=2273r1-533551532D47334F493D33
+15 }
+16 1 {
+17    _id=2
+18    display_name=Jane Doe
+19    sort_key=Jane Doe
+20    photo_id=809
+21    times_contacted=1
+22    last_time_contacted=1249177384979
+23    custom_ringtone=null
+24    send_to_voicemail=0
+25    starred=1
+26    in_visible_group=1
+27    has_phone_number=1
+28    is_user_profile=0
+29    lookup=2187i3d09f37e0f0dbc6f
+30 }
+31 2 {
+32    _id=3
+33    display_name=John Doe
+34    sort_key=John Doe
+35    photo_id=810
+36    times_contacted=0
+37    last_time_contacted=0
+38    custom_ringtone=content://media/internal/audio/media/80
+39    send_to_voicemail=1
+40    starred=1
+41    in_visible_group=1
+42    has_phone_number=1
+43    is_user_profile=0
+44    lookup=2187i5c9ae978b346ac9
+45 }
+46 3 {
+47    _id=11
+48    display_name=Added On Android
+49    sort_key=Added On Android
+50    photo_id=null
+51    times_contacted=0
+52    last_time_contacted=0
+53    custom_ringtone=null
+54    send_to_voicemail=0
+55    starred=0
+56    in_visible_group=1
+57    has_phone_number=1
+58    is_user_profile=0
+59    lookup=2187r11-2D3333353349472D47334F493D33
+60 }

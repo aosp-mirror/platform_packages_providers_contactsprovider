@@ -29,7 +29,7 @@ import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
 
 /**
@@ -41,8 +41,11 @@ import android.util.Log;
  *         -e class com.android.providers.contacts.LegacyContactImporterPerformanceTest \
  *         -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
+ *
+ * Note that this SHOULD be a large test, but had to be bumped down to medium due to a bug in the
+ * SQLite cleanup code.
  */
-@LargeTest
+@MediumTest
 public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
 
     private static final String TAG = "LegacyContactImporterPerformanceTest";
