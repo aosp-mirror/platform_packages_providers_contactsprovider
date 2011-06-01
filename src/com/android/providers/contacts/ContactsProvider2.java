@@ -3930,7 +3930,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         sortOrder, limit);
         }
 
-        qb.setStrictProjectionMap(true);
+        qb.setStrict(true);
 
         Cursor cursor =
                 query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
