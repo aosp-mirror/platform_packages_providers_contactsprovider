@@ -78,6 +78,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 String sortOrder) {
 
             if (uri.toString().equals("content://" + mAuthority + "/directories")) {
+                // Should tolerate multiple queries.
+                mResponse.moveToPosition(-1);
                 return mResponse;
             } else if (uri.toString().startsWith("content://" + mAuthority + "/contacts")) {
                 MatrixCursor cursor = new MatrixCursor(
@@ -305,6 +307,72 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         assertDirectoryRow(cursor, "test.package2", "authority2", "account-name4", "account-type4",
                 "display-name4", 4, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
                 Directory.PHOTO_SUPPORT_NONE);
+
+        cursor.close();
+    }
+
+    /**
+     * Tests if the manager works correctly when the package name for a directory is changed
+     * (on system update).
+     */
+    public void testPackageRenamed() throws Exception {
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(
+                        createProviderPackage("test.package1", "authority1"),
+                        createProviderPackage("test.package2", "authority2")));
+
+        MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
+                MockContactDirectoryProvider.class, "authority1");
+
+        MatrixCursor response1 = provider1.createResponseCursor();
+        addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
+
+        MockContactDirectoryProvider provider2 = (MockContactDirectoryProvider) addProvider(
+                MockContactDirectoryProvider.class, "authority2");
+
+        MatrixCursor response2 = provider2.createResponseCursor();
+        addDirectoryRow(response2, "account-name2", "account-type2", "display-name2", 2,
+                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
+
+        mDirectoryManager.scanAllPackages();
+
+        // At this point the manager has discovered two custom directories.
+        Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
+        assertEquals(4, cursor.getCount());
+        cursor.close();
+
+        // Pretend to rename the package name of a package on system update.
+        PackageInfo info = mPackageManager.getInstalledPackages(0).get(1);
+        info.packageName              = "test.package3";
+        info.providers[0].packageName = "test.package3";
+        MatrixCursor response3 = provider2.createResponseCursor();
+        // Change resource id.
+        addDirectoryRow(response3, "account-name2", "account-type2", "display-name2", 3,
+                Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
+                Directory.PHOTO_SUPPORT_FULL);
+
+        // When this happens on reboot, scanAllPackages() is called instead of onPackageChanged()
+        // (as part of ContactsProvider2 initialization).
+        // Accounts won't be affected so false should be passed here.
+        mDirectoryManager.scanAllPackages(false);
+
+        cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
+        // We should have columns for default, local_invisible, test.package1, and test.package3.
+        // The row for test.package2 should not remain.
+        assertEquals(4, cursor.getCount());
+
+        cursor.moveToPosition(2);
+        assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
+                "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
+
+        cursor.moveToNext();
+        assertDirectoryRow(cursor, "test.package3", "authority2", "account-name2", "account-type2",
+                "display-name2", 3, Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY,
+                Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         cursor.close();
     }

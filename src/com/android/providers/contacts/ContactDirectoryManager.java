@@ -195,12 +195,44 @@ public class ContactDirectoryManager {
         List<PackageInfo> packages = pm.getInstalledPackages(
                 PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
         if (packages != null) {
+            // Prepare query strings for removing stale rows which don't correspond to existing
+            // directories.
+            StringBuilder deleteWhereBuilder = new StringBuilder();
+            ArrayList<String> deleteWhereArgs = new ArrayList<String>();
+            deleteWhereBuilder.append("NOT (" + Directory._ID + "=? OR " + Directory._ID + "=?");
+            deleteWhereArgs.add(String.valueOf(Directory.DEFAULT));
+            deleteWhereArgs.add(String.valueOf(Directory.LOCAL_INVISIBLE));
+            final String wherePart = "(" + Directory.PACKAGE_NAME + "=? AND "
+                    + Directory.DIRECTORY_AUTHORITY + "=? AND "
+                    + Directory.ACCOUNT_NAME + "=? AND "
+                    + Directory.ACCOUNT_TYPE + "=?)";
+
             for (PackageInfo packageInfo : packages) {
                 // Check all packages except the one containing ContactsProvider itself
                 if (!packageInfo.packageName.equals(mContext.getPackageName())) {
-                    count += updateDirectoriesForPackage(packageInfo, true);
+                    List<DirectoryInfo> directories =
+                            updateDirectoriesForPackage(packageInfo, true);
+                    if (directories != null && !directories.isEmpty()) {
+                        count += directories.size();
+
+                        // We shouldn't delete rows for existing directories.
+                        for (DirectoryInfo info : directories) {
+                            deleteWhereBuilder.append(" OR ");
+                            deleteWhereBuilder.append(wherePart);
+                            deleteWhereArgs.add(info.packageName);
+                            deleteWhereArgs.add(info.authority);
+                            deleteWhereArgs.add(info.accountName);
+                            deleteWhereArgs.add(info.accountType);
+                        }
+                    }
                 }
             }
+
+            deleteWhereBuilder.append(")");  // Close "NOT ("
+            int deletedRows = db.delete(Tables.DIRECTORIES, deleteWhereBuilder.toString(),
+                    deleteWhereArgs.toArray(new String[0]));
+            Log.i(TAG, "deleted " + deletedRows
+                    + " stale rows which don't have any relevant directory");
         }
         return count;
     }
@@ -258,7 +290,8 @@ public class ContactDirectoryManager {
      * Scans the specified package for content directories and updates the {@link Directory}
      * table accordingly.
      */
-    private int updateDirectoriesForPackage(PackageInfo packageInfo, boolean initialScan) {
+    private List<DirectoryInfo> updateDirectoriesForPackage(
+            PackageInfo packageInfo, boolean initialScan) {
         ArrayList<DirectoryInfo> directories = Lists.newArrayList();
 
         ProviderInfo[] providers = packageInfo.providers;
@@ -275,7 +308,7 @@ public class ContactDirectoryManager {
         }
 
         if (directories.size() == 0 && initialScan) {
-            return 0;
+            return null;
         }
 
         SQLiteDatabase db = getDbHelper().getWritableDatabase();
@@ -299,7 +332,7 @@ public class ContactDirectoryManager {
         }
 
         mContactsProvider.resetDirectoryCache();
-        return directories.size();
+        return directories;
     }
 
     /**
