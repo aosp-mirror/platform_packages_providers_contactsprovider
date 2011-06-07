@@ -65,6 +65,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.SocialContract.Activities;
+import android.provider.VoicemailContract.Voicemails;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
@@ -96,7 +97,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 601;
+    static final int DATABASE_VERSION = 602;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1065,7 +1066,15 @@ import java.util.Locale;
                 Calls.CACHED_NAME + " TEXT," +
                 Calls.CACHED_NUMBER_TYPE + " INTEGER," +
                 Calls.CACHED_NUMBER_LABEL + " TEXT," +
-                Calls.COUNTRY_ISO + " TEXT" + ");");
+                Calls.COUNTRY_ISO + " TEXT," +
+                Calls.VOICEMAIL_URI + " TEXT," +
+                Voicemails._DATA + " TEXT," +
+                Voicemails.HAS_CONTENT + " INTEGER," +
+                Voicemails.MIME_TYPE + " TEXT," +
+                Voicemails.SOURCE_DATA + " TEXT," +
+                Voicemails.SOURCE_PACKAGE + " TEXT," +
+                Voicemails.STATE + " INTEGER" +
+        ");");
 
         // Activities table
         db.execSQL("CREATE TABLE " + Tables.ACTIVITIES + " (" +
@@ -1920,6 +1929,11 @@ import java.util.Locale;
         if (oldVersion < 601) {
             upgradeToVersion601(db);
             oldVersion = 601;
+        }
+
+        if (oldVersion < 602) {
+            upgradeToVersion602(db);
+            oldVersion = 602;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2984,6 +2998,16 @@ import java.util.Locale;
                 "FOREIGN KEY(data_id) REFERENCES data(_id));");
         db.execSQL("CREATE UNIQUE INDEX data_usage_stat_index ON " +
                 "data_usage_stat (data_id, usage_type)");
+    }
+
+    private void upgradeToVersion602(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD voicemail_uri TEXT;");
+        db.execSQL("ALTER TABLE calls ADD _data TEXT;");
+        db.execSQL("ALTER TABLE calls ADD has_content INTEGER;");
+        db.execSQL("ALTER TABLE calls ADD mime_type TEXT;");
+        db.execSQL("ALTER TABLE calls ADD source_data TEXT;");
+        db.execSQL("ALTER TABLE calls ADD source_package TEXT;");
+        db.execSQL("ALTER TABLE calls ADD state INTEGER;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

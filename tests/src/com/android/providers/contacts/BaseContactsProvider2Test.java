@@ -683,6 +683,7 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     }
 
     protected static class IdComparator implements Comparator<ContentValues> {
+        @Override
         public int compare(ContentValues o1, ContentValues o2) {
             long id1 = o1.getAsLong(ContactsContract.Data._ID);
             long id2 = o2.getAsLong(ContactsContract.Data._ID);

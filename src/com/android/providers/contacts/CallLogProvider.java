@@ -32,6 +32,7 @@ import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 
 import java.util.HashMap;
+import java.util.Set;
 
 /**
  * Call log content provider.
@@ -62,6 +63,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.DURATION, Calls.DURATION);
         sCallsProjectionMap.put(Calls.TYPE, Calls.TYPE);
         sCallsProjectionMap.put(Calls.NEW, Calls.NEW);
+        sCallsProjectionMap.put(Calls.VOICEMAIL_URI, Calls.VOICEMAIL_URI);
         sCallsProjectionMap.put(Calls.CACHED_NAME, Calls.CACHED_NAME);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_TYPE, Calls.CACHED_NUMBER_TYPE);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_LABEL, Calls.CACHED_NUMBER_LABEL);
@@ -93,25 +95,26 @@ public class CallLogProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        qb.setTables(Tables.CALLS);
+        qb.setProjectionMap(sCallsProjectionMap);
+        qb.setStrict(true);
+
         int match = sURIMatcher.match(uri);
         switch (match) {
-            case CALLS: {
-                qb.setTables("calls");
-                qb.setProjectionMap(sCallsProjectionMap);
+            case CALLS:
                 break;
-            }
 
             case CALLS_ID: {
-                qb.setTables("calls");
-                qb.setProjectionMap(sCallsProjectionMap);
-                qb.appendWhere("calls._id=");
-                qb.appendWhere(uri.getPathSegments().get(1));
+                try {
+                    Long id = Long.valueOf(uri.getPathSegments().get(1));
+                    qb.appendWhere(Calls._ID + "=" + id.toString());
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("Invalid call id in uri: " + uri, e);
+                }
                 break;
             }
 
             case CALLS_FILTER: {
-                qb.setTables("calls");
-                qb.setProjectionMap(sCallsProjectionMap);
                 String phoneNumber = uri.getPathSegments().get(2);
                 qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ");
                 qb.appendWhereEscapeString(phoneNumber);
@@ -148,6 +151,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
+        checkForSupportedColumns(values);
         // Inserted the current country code, so we know the country
         // the number belongs to.
         values.put(Calls.COUNTRY_ISO, getCurrentCountryIso());
@@ -166,6 +170,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int update(Uri url, ContentValues values, String selection, String[] selectionArgs) {
+        checkForSupportedColumns(values);
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         String where;
         final int matchedUriId = sURIMatcher.match(url);
@@ -215,5 +220,14 @@ public class CallLogProvider extends ContentProvider {
 
     protected String getCurrentCountryIso() {
         return mCountryMonitor.getCountryIso();
+    }
+
+    /** Checks if ContentValues contains none other than supported columns. */
+    private void checkForSupportedColumns(ContentValues values) {
+        for (String requestedColumn : values.keySet()) {
+            if (!sCallsProjectionMap.keySet().contains(requestedColumn)) {
+                throw new IllegalArgumentException("Column '" + requestedColumn + "' is invalid.");
+            }
+        }
     }
 }

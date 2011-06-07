@@ -18,17 +18,23 @@ package com.android.providers.contacts;
 
 import com.android.internal.telephony.CallerInfo;
 import com.android.internal.telephony.Connection;
+import com.android.providers.contacts.EvenMoreAsserts;
+
+import java.util.Arrays;
+import java.util.List;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.VoicemailContract.Voicemails;
 import android.test.suitebuilder.annotation.MediumTest;
 
 /**
@@ -42,6 +48,13 @@ import android.test.suitebuilder.annotation.MediumTest;
  */
 @MediumTest
 public class CallLogProviderTest extends BaseContactsProvider2Test {
+    private static final String[] VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS = new String[] {
+            Voicemails._DATA,
+            Voicemails.HAS_CONTENT,
+            Voicemails.MIME_TYPE,
+            Voicemails.SOURCE_PACKAGE,
+            Voicemails.SOURCE_DATA,
+            Voicemails.STATE};
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -59,7 +72,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         addProvider(TestCallLogProvider.class, CallLog.AUTHORITY);
     }
 
-    public void testInsert() {
+    public void testInsert_RegularCallRecord() {
         ContentValues values = new ContentValues();
         putCallValues(values);
         Uri uri = mResolver.insert(Calls.CONTENT_URI, values);
@@ -68,12 +81,19 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
     }
 
-    public void testUpdate() {
+    public void testInsert_VoicemailCallRecord() {
         ContentValues values = new ContentValues();
         putCallValues(values);
-        Uri uri = mResolver.insert(Calls.CONTENT_URI, values);
+        values.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
+        values.put(Calls.VOICEMAIL_URI, "content://foo/voicemail/2");
+        Uri uri  = mResolver.insert(Calls.CONTENT_URI, values);
+        assertStoredValues(uri, values);
+        assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
+    }
 
-        values.clear();
+    public void testUpdate() {
+        Uri uri = insertCallRecord();
+        ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
         values.put(Calls.NUMBER, "1-800-263-7643");
         values.put(Calls.DATE, 2000);
@@ -88,9 +108,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     }
 
     public void testDelete() {
-        ContentValues values = new ContentValues();
-        putCallValues(values);
-        Uri uri = mResolver.insert(Calls.CONTENT_URI, values);
+        Uri uri = insertCallRecord();
         try {
             mResolver.delete(uri, null, null);
             fail();
@@ -142,12 +160,66 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         assertStoredValues(uri, values);
     }
 
+    // Test to check that none of the voicemail provider specific fields are
+    // insertable through call_log provider.
+    public void testCannotAccessVoicemailSpecificFields_Insert() {
+        for (String voicemailColumn : VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS) {
+            final ContentValues values = new ContentValues();
+            putCallValues(values);
+            values.put(voicemailColumn, "foo");
+            EvenMoreAsserts.assertThrows("Column: " + voicemailColumn,
+                    IllegalArgumentException.class, new Runnable() {
+                    @Override
+                    public void run() {
+                        mResolver.insert(Calls.CONTENT_URI, values);
+                    }
+                });
+        }
+    }
+
+    // Test to check that none of the voicemail provider specific fields are
+    // exposed through call_log provider query.
+    public void testCannotAccessVoicemailSpecificFields_Query() {
+        // Query.
+        Cursor cursor = mResolver.query(Calls.CONTENT_URI, null, null, null, null);
+        List<String> columnNames = Arrays.asList(cursor.getColumnNames());
+        assertEquals(11, columnNames.size());
+        // None of the voicemail provider specific columns should be present.
+        for (String voicemailColumn : VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS) {
+            assertFalse("Unexpected column: '" + voicemailColumn + "' returned.",
+                    columnNames.contains(voicemailColumn));
+        }
+    }
+
+    // Test to check that none of the voicemail provider specific fields are
+    // updatable through call_log provider.
+    public void testCannotAccessVoicemailSpecificFields_Update() {
+        for (String voicemailColumn : VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS) {
+            final Uri insertedUri = insertCallRecord();
+            final ContentValues values = new ContentValues();
+            values.put(voicemailColumn, "foo");
+            EvenMoreAsserts.assertThrows("Column: " + voicemailColumn,
+                    IllegalArgumentException.class, new Runnable() {
+                    @Override
+                    public void run() {
+                        mResolver.update(insertedUri, values, null, null);
+                    }
+                });
+        }
+    }
+
     private void putCallValues(ContentValues values) {
         values.put(Calls.TYPE, Calls.INCOMING_TYPE);
         values.put(Calls.NUMBER, "1-800-4664-411");
         values.put(Calls.DATE, 1000);
         values.put(Calls.DURATION, 30);
         values.put(Calls.NEW, 1);
+    }
+
+    private Uri insertCallRecord() {
+        ContentValues values = new ContentValues();
+        putCallValues(values);
+        return mResolver.insert(Calls.CONTENT_URI, values);
     }
 
     public static class TestCallLogProvider extends CallLogProvider {

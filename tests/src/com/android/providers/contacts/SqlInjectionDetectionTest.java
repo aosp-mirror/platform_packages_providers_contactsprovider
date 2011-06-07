@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.EvenMoreAsserts.assertThrows;
+
 import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
 import android.net.Uri;
@@ -108,18 +110,4 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
             }
         });
     }
-
-    private static <T extends Exception> void assertThrows(Class<T> exception, Runnable r) {
-        try {
-            r.run();
-            Assert.fail("Exception " + exception + " expected but no exception was thrown");
-        } catch (Exception e) {
-            if (exception.isInstance(e)) {
-                return;
-            }
-            Assert.fail("Exception " + exception + " expected but " + e.getClass() +" thrown: " +
-                    e);
-        }
-    }
-
 }
