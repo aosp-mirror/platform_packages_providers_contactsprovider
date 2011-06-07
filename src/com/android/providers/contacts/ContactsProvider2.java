@@ -34,6 +34,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
@@ -111,6 +112,7 @@ import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
@@ -131,6 +133,7 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -287,6 +290,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PROFILE_RAW_CONTACTS_ID_DATA = 19007;
     private static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
 
+    private static final int DATA_USAGE_FEEDBACK_ID = 20001;
+
     private static final String SELECTION_FAVORITES_GROUPS_BY_RAW_CONTACT_ID =
             RawContactsColumns.CONCRETE_ID + "=? AND "
                     + GroupsColumns.CONCRETE_ACCOUNT_NAME
@@ -411,25 +416,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     // Recent contacts - those contacted within the last 30 days (in seconds)
     private static final long EMAIL_FILTER_RECENT = 30 * 24 * 60 * 60;
 
-    private static final String TIME_SINCE_LAST_CONTACTED =
-            "(strftime('%s', 'now') - " + Contacts.LAST_TIME_CONTACTED + "/1000)";
-
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
      * Within the starred/unstarred groups - three buckets: very recently contacted, then fairly
      * recently contacted, then the rest.  Within each of the bucket - descending count
-     * of times contacted. If all else fails, alphabetical.  (Super)primary email
-     * address is returned before other addresses for the same contact.
+     * of times contacted (both for data row and for contact row). If all else fails, alphabetical.
+     * (Super)primary email address is returned before other addresses for the same contact.
      */
     private static final String EMAIL_FILTER_SORT_ORDER =
-            "(CASE WHEN " + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
-            + "(CASE WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + EMAIL_FILTER_CURRENT + " THEN 0 "
-            + " WHEN " + TIME_SINCE_LAST_CONTACTED + " < " + EMAIL_FILTER_RECENT + " THEN 1 "
-            + " ELSE 2 END),"
-            + Contacts.TIMES_CONTACTED + " DESC, "
-            + Contacts.DISPLAY_NAME + ", "
-            + Data.CONTACT_ID + ", "
-            + Data.IS_SUPER_PRIMARY + " DESC";
+        "(CASE WHEN " + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
+        + "(CASE WHEN " + DataUsageStatColumns.LAST_TIME_USED + " < " + EMAIL_FILTER_CURRENT
+        + " THEN 0 "
+                + " WHEN " + DataUsageStatColumns.LAST_TIME_USED + " < " + EMAIL_FILTER_RECENT
+        + " THEN 1 "
+        + " ELSE 2 END), "
+        + DataUsageStatColumns.TIMES_USED + " DESC, "
+        + Contacts.DISPLAY_NAME + ", "
+        + Data.CONTACT_ID + ", "
+        + Data.IS_SUPER_PRIMARY + " DESC";
+
+    /** Currently same as {@link #EMAIL_FILTER_SORT_ORDER} */
+    private static final String PHONE_FILTER_SORT_ORDER = EMAIL_FILTER_SORT_ORDER;
 
     /** Name lookup types used for contact filtering */
     private static final String CONTACT_LOOKUP_NAME_TYPES =
@@ -866,6 +873,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private Account mAccount;
 
+    /**
+     * Stores mapping from type Strings exposed via {@link DataUsageFeedback} to
+     * type integers in {@link DataUsageStatColumns}.
+     */
+    private static final Map<String, Integer> sDataUsageTypeMap;
+
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
@@ -918,6 +931,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
+        /** "*" is in CSV form with data ids ("123,456,789") */
+        matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback/*", DATA_USAGE_FEEDBACK_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
         matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
@@ -973,6 +988,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 PROFILE_RAW_CONTACTS_ID_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#/entity",
                 PROFILE_RAW_CONTACTS_ID_ENTITIES);
+
+        HashMap<String, Integer> tmpTypeMap = new HashMap<String, Integer>();
+        tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_CALL, DataUsageStatColumns.USAGE_TYPE_INT_CALL);
+        tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_LONG_TEXT,
+                DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT);
+        tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_SHORT_TEXT,
+                DataUsageStatColumns.USAGE_TYPE_INT_SHORT_TEXT);
+        sDataUsageTypeMap = Collections.unmodifiableMap(tmpTypeMap);
     }
 
     private static class DirectoryInfo {
@@ -2754,6 +2777,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case DATA_USAGE_FEEDBACK_ID: {
+                if (handleDataUsageFeedback(uri)) {
+                    count = 1;
+                } else {
+                    count = 0;
+                }
+                break;
+            }
+
             default: {
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.update(uri, values, selection, selectionArgs);
@@ -3816,7 +3848,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case PHONES_FILTER: {
-                setTablesAndProjectionMapForData(qb, uri, projection, true);
+                String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
+                Integer typeInt = sDataUsageTypeMap.get(typeParam);
+                if (typeInt == null) {
+                    typeInt = DataUsageStatColumns.USAGE_TYPE_INT_CALL;
+                }
+                setTablesAndProjectionMapForData(qb, uri, projection, true, typeInt);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
@@ -3864,7 +3901,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 groupBy = PhoneColumns.NORMALIZED_NUMBER + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
-                    sortOrder = Contacts.IN_VISIBLE_GROUP + " DESC, " + RawContacts.CONTACT_ID;
+                    final String accountPromotionSortOrder = getAccountPromotionSortOrder(uri);
+                    if (!TextUtils.isEmpty(accountPromotionSortOrder)) {
+                        sortOrder = accountPromotionSortOrder + ", " + PHONE_FILTER_SORT_ORDER;
+                    } else {
+                        sortOrder = PHONE_FILTER_SORT_ORDER;
+                    }
                 }
                 break;
             }
@@ -3896,13 +3938,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case EMAILS_FILTER: {
-                setTablesAndProjectionMapForData(qb, uri, projection, true);
+                String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
+                Integer typeInt = sDataUsageTypeMap.get(typeParam);
+                if (typeInt == null) {
+                    typeInt = DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT;
+                }
+                setTablesAndProjectionMapForData(qb, uri, projection, true, typeInt);
                 String filterParam = null;
-
-                String primaryAccountName =
-                        uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME);
-                String primaryAccountType =
-                        uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_TYPE);
 
                 if (uri.getPathSegments().size() > 3) {
                     filterParam = uri.getLastPathSegment();
@@ -3945,19 +3987,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
-                    // Addresses associated with primary account should be promoted.
-                    if (!TextUtils.isEmpty(primaryAccountName)) {
-                        StringBuilder sb2 = new StringBuilder();
-                        sb2.append("(CASE WHEN " + RawContacts.ACCOUNT_NAME + "=");
-                        DatabaseUtils.appendEscapedSQLString(sb2, primaryAccountName);
-                        if (!TextUtils.isEmpty(primaryAccountType)) {
-                            sb2.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
-                            DatabaseUtils.appendEscapedSQLString(sb2, primaryAccountType);
-                        }
-                        sb2.append(" THEN 0 ELSE 1 END), ");
-                        sb2.append(EMAIL_FILTER_SORT_ORDER);
-
-                        sortOrder = sb2.toString();
+                    final String accountPromotionSortOrder = getAccountPromotionSortOrder(uri);
+                    if (!TextUtils.isEmpty(accountPromotionSortOrder)) {
+                        sortOrder = accountPromotionSortOrder + ", " + EMAIL_FILTER_SORT_ORDER;
                     } else {
                         sortOrder = EMAIL_FILTER_SORT_ORDER;
                     }
@@ -4931,6 +4963,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean distinct) {
+        setTablesAndProjectionMapForData(qb, uri, projection, distinct, null);
+    }
+
+    /**
+     * @param usageType when non-null {@link Tables#DATA_USAGE_STAT} is joined with the specified
+     * type.
+     */
+    private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection, boolean distinct, Integer usageType) {
         StringBuilder sb = new StringBuilder();
         sb.append(mDbHelper.getDataView(shouldExcludeRestrictedData(uri)));
         sb.append(" data");
@@ -4939,6 +4980,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
         appendDataPresenceJoin(sb, projection, DataColumns.CONCRETE_ID);
         appendDataStatusUpdateJoin(sb, projection, DataColumns.CONCRETE_ID);
+
+        if (usageType != null) {
+            appendDataUsageStatJoin(sb, usageType, DataColumns.CONCRETE_ID);
+        }
 
         qb.setTables(sb.toString());
 
@@ -5004,6 +5049,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     " ON (" + StatusUpdatesColumns.CONCRETE_DATA_ID + "="
                             + dataIdColumn + ")");
         }
+    }
+
+    private void appendDataUsageStatJoin(StringBuilder sb, int usageType, String dataIdColumn) {
+        sb.append(" LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT +
+                " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=" + dataIdColumn +
+                " AND " + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=" + usageType + ")");
     }
 
     private void appendContactPresenceJoin(StringBuilder sb, String[] projection,
@@ -5768,5 +5819,127 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             sIsPhoneInitialized = true;
         }
         return sIsPhone;
+    }
+
+    private boolean handleDataUsageFeedback(Uri uri) {
+        final long currentTimeMillis = System.currentTimeMillis();
+        final String usageType = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
+        final String[] ids = uri.getLastPathSegment().trim().split(",");
+        final ArrayList<Long> dataIds = new ArrayList<Long>();
+
+        for (String id : ids) {
+            dataIds.add(Long.valueOf(id));
+        }
+        final boolean successful;
+        if (TextUtils.isEmpty(usageType)) {
+            Log.w(TAG, "Method for data usage feedback isn't specified. Ignoring.");
+            successful = false;
+        } else {
+            successful = updateDataUsageStat(dataIds, usageType, currentTimeMillis) > 0;
+        }
+
+        // Handle old API. This doesn't affect the result of this entire method.
+        final String[] questionMarks = new String[ids.length];
+        Arrays.fill(questionMarks, "?");
+        final String where = Data._ID + " IN (" + TextUtils.join(",", questionMarks) + ")";
+        final Cursor cursor = mDb.query(
+                mDbHelper.getDataView(shouldExcludeRestrictedData(uri)),
+                new String[] { Data.CONTACT_ID },
+                where, ids, null, null, null);
+        try {
+            while (cursor.moveToNext()) {
+                mSelectionArgs1[0] = cursor.getString(0);
+                ContentValues values2 = new ContentValues();
+                values2.put(Contacts.LAST_TIME_CONTACTED, currentTimeMillis);
+                mDb.update(Tables.CONTACTS, values2, Contacts._ID + "=?", mSelectionArgs1);
+                mDb.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
+                mDb.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
+            }
+        } finally {
+            cursor.close();
+        }
+
+        return successful;
+    }
+
+    /**
+     * Update {@link Tables#DATA_USAGE_STAT}.
+     *
+     * @return the number of rows affected.
+     */
+    private int updateDataUsageStat(
+            ArrayList<Long> dataIds, String type, long currentTimeMillis) {
+        final int typeInt = sDataUsageTypeMap.get(type);
+        final String where = DataUsageStatColumns.DATA_ID + " =? AND "
+                + DataUsageStatColumns.USAGE_TYPE_INT + " =?";
+        final String[] columns =
+                new String[] { DataUsageStatColumns._ID, DataUsageStatColumns.TIMES_USED };
+        final ContentValues values = new ContentValues();
+        for (Long dataId : dataIds) {
+            final String[] args = new String[] { dataId.toString(), String.valueOf(typeInt) };
+            mDb.beginTransaction();
+            try {
+                final Cursor cursor = mDb.query(Tables.DATA_USAGE_STAT, columns, where, args,
+                        null, null, null);
+                try {
+                    if (cursor.getCount() > 0) {
+                        if (!cursor.moveToFirst()) {
+                            Log.e(TAG,
+                                    "moveToFirst() failed while getAccount() returned non-zero.");
+                        } else {
+                            values.clear();
+                            values.put(DataUsageStatColumns.TIMES_USED, cursor.getInt(1) + 1);
+                            values.put(DataUsageStatColumns.LAST_TIME_USED, currentTimeMillis);
+                            mDb.update(Tables.DATA_USAGE_STAT, values,
+                                    DataUsageStatColumns._ID + " =?",
+                                    new String[] { cursor.getString(0) });
+                        }
+                    } else {
+                        values.clear();
+                        values.put(DataUsageStatColumns.DATA_ID, dataId);
+                        values.put(DataUsageStatColumns.USAGE_TYPE_INT, typeInt);
+                        values.put(DataUsageStatColumns.TIMES_USED, 1);
+                        values.put(DataUsageStatColumns.LAST_TIME_USED, currentTimeMillis);
+                        mDb.insert(Tables.DATA_USAGE_STAT, null, values);
+                    }
+                    mDb.setTransactionSuccessful();
+                } finally {
+                    cursor.close();
+                }
+            } finally {
+                mDb.endTransaction();
+            }
+        }
+
+        return dataIds.size();
+    }
+
+    /**
+     * Returns a sort order String for promoting data rows (email addresses, phone numbers, etc.)
+     * associated with a primary account. The primary account should be supplied from applications
+     * with {@link ContactsContract#PRIMARY_ACCOUNT_NAME} and
+     * {@link ContactsContract#PRIMARY_ACCOUNT_TYPE}. Null will be returned when the primary
+     * account isn't available.
+     */
+    private String getAccountPromotionSortOrder(Uri uri) {
+        final String primaryAccountName =
+                uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME);
+        final String primaryAccountType =
+                uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_TYPE);
+
+        // Data rows associated with primary account should be promoted.
+        if (!TextUtils.isEmpty(primaryAccountName)) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("(CASE WHEN " + RawContacts.ACCOUNT_NAME + "=");
+            DatabaseUtils.appendEscapedSQLString(sb, primaryAccountName);
+            if (!TextUtils.isEmpty(primaryAccountType)) {
+                sb.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
+                DatabaseUtils.appendEscapedSQLString(sb, primaryAccountType);
+            }
+            sb.append(" THEN 0 ELSE 1 END)");
+            return sb.toString();
+        } else {
+            return null;
+        }
     }
 }

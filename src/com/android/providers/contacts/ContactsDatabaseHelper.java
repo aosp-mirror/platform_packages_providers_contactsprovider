@@ -96,7 +96,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 600;
+    static final int DATABASE_VERSION = 601;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -123,6 +123,12 @@ import java.util.Locale;
         public static final String DIRECTORIES = "directories";
         public static final String DEFAULT_DIRECTORY = "default_directory";
         public static final String SEARCH_INDEX = "search_index";
+
+        /**
+         * For {@link ContactsContract.DataUsageFeedback}. The table structure itself
+         * is not exposed outside.
+         */
+        public static final String DATA_USAGE_STAT = "data_usage_stat";
 
         public static final String DATA_JOIN_MIMETYPES = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id)";
@@ -505,6 +511,43 @@ import java.util.Locale;
         public static final String CONTENT = "content";
         public static final String NAME = "name";
         public static final String TOKENS = "tokens";
+    }
+
+    /**
+     * Private table for calculating per-contact-method ranking.
+     */
+    public static final class DataUsageStatColumns {
+        /** type: INTEGER (long) */
+        public static final String _ID = "stat_id";
+        public static final String CONCRETE_ID = Tables.DATA_USAGE_STAT + "." + _ID;
+
+        /** type: INTEGER (long) */
+        public static final String DATA_ID = "data_id";
+        public static final String CONCRETE_DATA_ID = Tables.DATA_USAGE_STAT + "." + DATA_ID;
+
+        /** type: INTEGER (long) */
+        public static final String LAST_TIME_USED = "last_time_used";
+        public static final String CONCRETE_LAST_TIME_USED =
+                Tables.DATA_USAGE_STAT + "." + LAST_TIME_USED;
+
+        /** type: INTEGER */
+        public static final String TIMES_USED = "times_used";
+        public static final String CONCRETE_TIMES_USED =
+                Tables.DATA_USAGE_STAT + "." + TIMES_USED;
+
+        /** type: INTEGER */
+        public static final String USAGE_TYPE_INT = "usage_type";
+        public static final String CONCRETE_USAGE_TYPE =
+                Tables.DATA_USAGE_STAT + "." + USAGE_TYPE_INT;
+
+        /**
+         * Integer values for USAGE_TYPE.
+         *
+         * @see ContactsContract.DataUsageFeedback#USAGE_TYPE
+         */
+        public static final int USAGE_TYPE_INT_CALL = 0;
+        public static final int USAGE_TYPE_INT_LONG_TEXT = 1;
+        public static final int USAGE_TYPE_INT_SHORT_TEXT = 2;
     }
 
     /** In-memory cache of previously found MIME-type mappings */
@@ -1074,6 +1117,21 @@ import java.util.Locale;
 
         createDirectoriesTable(db);
         createSearchIndexTable(db);
+
+        db.execSQL("CREATE TABLE " + Tables.DATA_USAGE_STAT + "(" +
+                DataUsageStatColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                DataUsageStatColumns.DATA_ID + " INTEGER NOT NULL, " +
+                DataUsageStatColumns.USAGE_TYPE_INT + " INTEGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.LAST_TIME_USED + " INTERGER NOT NULL DEFAULT 0, " +
+                "FOREIGN KEY(" + DataUsageStatColumns.DATA_ID + ") REFERENCES "
+                        + Tables.DATA + "(" + Data._ID + ")" +
+        ");");
+        db.execSQL("CREATE UNIQUE INDEX data_usage_stat_index ON " +
+                Tables.DATA_USAGE_STAT + " (" +
+                DataUsageStatColumns.DATA_ID + ", " +
+                DataUsageStatColumns.USAGE_TYPE_INT +
+        ");");
 
         createContactsViews(db);
         createGroupsView(db);
@@ -1857,6 +1915,11 @@ import java.util.Locale;
             upgradeToVersion600(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 600;
+        }
+
+        if (oldVersion < 601) {
+            upgradeToVersion601(db);
+            oldVersion = 601;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -2909,6 +2972,18 @@ import java.util.Locale;
                 " ADD profile_raw_contact_id INTEGER");
         db.execSQL("CREATE INDEX accounts_profile_raw_contact_id_index ON accounts" +
                 " (profile_raw_contact_id);");
+    }
+
+    private void upgradeToVersion601(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE data_usage_stat(" +
+                "stat_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "data_id INTEGER NOT NULL, " +
+                "usage_type INTEGER NOT NULL DEFAULT 0, " +
+                "times_used INTEGER NOT NULL DEFAULT 0, " +
+                "last_time_used INTERGER NOT NULL DEFAULT 0, " +
+                "FOREIGN KEY(data_id) REFERENCES data(_id));");
+        db.execSQL("CREATE UNIQUE INDEX data_usage_stat_index ON " +
+                "data_usage_stat (data_id, usage_type)");
     }
 
     public String extractHandleFromEmailAddress(String email) {

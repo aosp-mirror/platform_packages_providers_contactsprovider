@@ -44,6 +44,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
@@ -1108,93 +1109,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(filterUri5, null, null));
     }
 
-    public void testEmailFilterSortOrder() {
-
-        // Adding contacts from the end to beginning of the expected order.
-
-        // Never contacted
-        insertContactWithEmail("never", false);
-        insertContactWithEmail("starred-never", true);
-
-        // Contacted a long time ago
-        insertContactWithEmail("a-longago", 10, 1800, false);
-        insertContactWithEmail("b-longago", 20, 1000, false);
-        insertContactWithEmail("c-longago", 30, 2000, false);
-
-        // Contacted fairly recently
-        insertContactWithEmail("a-recent", 10, 18, false);
-        insertContactWithEmail("b-recent", 20, 10, false);
-        insertContactWithEmail("c-recent", 30, 20, false);
-
-        // Contacted very recently
-        insertContactWithEmail("a-current", 10, 1, false);
-        insertContactWithEmail("b-current", 20, 0, false);
-        insertContactWithEmail("c-current", 30, 2, false);
-
-        // Starred
-        insertContactWithEmail("starred-longago", 10, 100, true);
-        insertContactWithEmail("starred-current", 10, 10, true);
-        insertContactWithEmail("starred-recent", 10, 1, true);
-
-        Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "findme");
-        Cursor cursor = mResolver.query(filterUri, new String[]{Contacts.DISPLAY_NAME},
-                null, null, null);
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "starred-recent");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "starred-current");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "starred-longago");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "starred-never");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "c-current");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "b-current");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "a-current");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "c-recent");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "b-recent");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "a-recent");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "c-longago");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "b-longago");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "a-longago");
-        cursor.moveToNext();
-        assertCursorValue(cursor, Contacts.DISPLAY_NAME, "never");
-        cursor.close();
-    }
-
-    private void insertContactWithEmail(String name, boolean starred) {
-        long rawContactId = createRawContactWithName(name, null);
-        long contactId = queryContactId(rawContactId);
-        if (starred) {
-            storeValue(Contacts.CONTENT_URI, contactId, Contacts.STARRED, 1);
-        }
-        insertEmail(rawContactId, "findme" + name + "@acme.com");
-    }
-
-    private void insertContactWithEmail(
-            String name, int timesContacted, int lastTimeContactedDays, boolean starred) {
-        long rawContactId = createRawContactWithName(name, null);
-        long contactId = queryContactId(rawContactId);
-        ContentValues values = new ContentValues();
-        values.put(Contacts.TIMES_CONTACTED, timesContacted);
-        values.put(Contacts.LAST_TIME_CONTACTED,
-                System.currentTimeMillis() - (lastTimeContactedDays * 24 * 60 * 60 * 1000l));
-        if (starred) {
-            values.put(Contacts.STARRED, 1);
-        }
-        mResolver.update(
-                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), values, null, null);
-        insertEmail(rawContactId, "findme" + name + "@acme.com");
-    }
-
     /**
      * Tests if ContactsProvider2 has email address associated with a primary account before the
      * other address.
@@ -1231,6 +1145,53 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_2.name)
                 .build();
         assertStoredValuesOrderly(filterUri4, new ContentValues[] { v2, v1 });
+    }
+
+    /** Tests {@link DataUsageFeedback} correctly promotes a data row instead of a raw contact. */
+    public void testEmailFilterSortOrderWithFeedback() {
+        long rawContactId1 = createRawContact();
+        insertEmail(rawContactId1, "address1@email.com");
+        long rawContactId2 = createRawContact();
+        insertEmail(rawContactId2, "address2@email.com");
+        long dataId = ContentUris.parseId(insertEmail(rawContactId2, "address3@email.com"));
+
+        ContentValues v1 = new ContentValues();
+        v1.put(Email.ADDRESS, "address1@email.com");
+        ContentValues v2 = new ContentValues();
+        v2.put(Email.ADDRESS, "address2@email.com");
+        ContentValues v3 = new ContentValues();
+        v3.put(Email.ADDRESS, "address3@email.com");
+
+        Uri filterUri1 = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "address");
+        Uri filterUri2 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("address")
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
+                        DataUsageFeedback.USAGE_TYPE_CALL)
+                .build();
+        Uri filterUri3 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("address")
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
+                        DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
+                .build();
+        Uri filterUri4 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("address")
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
+                        DataUsageFeedback.USAGE_TYPE_SHORT_TEXT)
+                .build();
+        assertStoredValuesOrderly(filterUri1, new ContentValues[] { v1, v2, v3 });
+        assertStoredValuesOrderly(filterUri2, new ContentValues[] { v1, v2, v3 });
+        assertStoredValuesOrderly(filterUri3, new ContentValues[] { v1, v2, v3 });
+        assertStoredValuesOrderly(filterUri4, new ContentValues[] { v1, v2, v3 });
+
+        // Send feedback for address3 in the second account.
+        Uri feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
+                .appendPath(String.valueOf(dataId))
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
+                        DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
+                .build();
+        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+
+        // account3@email.com should be the first. account2@email.com should also be promoted as
+        // it has same contact id.
+        assertStoredValuesOrderly(filterUri1, new ContentValues[] { v3, v1, v2 });
+        assertStoredValuesOrderly(filterUri3, new ContentValues[] { v3, v1, v2 });
     }
 
     public void testPostalsQuery() {
