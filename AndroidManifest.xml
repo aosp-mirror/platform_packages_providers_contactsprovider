@@ -2,6 +2,24 @@
         package="com.android.providers.contacts"
         android:sharedUserId="android.uid.shared">
 
+    <!-- TODO: These permissions should be moved to framework/base once voicemail
+    API is approved. -->
+    <permission
+            android:name="com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL"
+            android:label="@string/read_write_own_voicemail_label"
+            android:description="@string/read_write_own_voicemail_description"
+            android:permissionGroup="android.permission-group.PERSONAL_INFO"
+            android:protectionLevel="dangerous"
+            />
+
+    <permission
+            android:name="com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL"
+            android:label="@string/read_write_all_voicemail_label"
+            android:description="@string/read_write_all_voicemail_description"
+            android:permissionGroup="android.permission-group.PERSONAL_INFO"
+            android:protectionLevel="dangerous"
+            />
+
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
@@ -42,6 +60,12 @@
             android:syncable="false" android:multiprocess="false"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
+        </provider>
+
+        <provider android:name="VoicemailContentProvider"
+            android:authorities="com.android.voicemail"
+            android:syncable="false" android:multiprocess="false"
+            android:permission="com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL">
         </provider>
 
         <!-- TODO: create permissions for social data -->
