@@ -418,13 +418,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
-     * Within the starred/unstarred groups - three buckets: very recently contacted, then fairly
+     * second in_visible_group, then the rest.
+     * Within the four (starred/unstarred, in_visible_group/not-in_visible_group) groups
+     * - three buckets: very recently contacted, then fairly
      * recently contacted, then the rest.  Within each of the bucket - descending count
      * of times contacted (both for data row and for contact row). If all else fails, alphabetical.
      * (Super)primary email address is returned before other addresses for the same contact.
      */
     private static final String EMAIL_FILTER_SORT_ORDER =
-        "(CASE WHEN " + Contacts.STARRED + "=1 THEN 0 ELSE 1 END), "
+        Contacts.STARRED + " DESC, "
+        + Contacts.IN_VISIBLE_GROUP + " DESC, "
         + "(CASE WHEN " + DataUsageStatColumns.LAST_TIME_USED + " < " + EMAIL_FILTER_CURRENT
         + " THEN 0 "
                 + " WHEN " + DataUsageStatColumns.LAST_TIME_USED + " < " + EMAIL_FILTER_RECENT
