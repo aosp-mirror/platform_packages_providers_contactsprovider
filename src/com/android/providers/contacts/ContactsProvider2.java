@@ -5267,7 +5267,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
-                outputRawContactsAsVCard(localStream, selection, mSelectionArgs1);
+                final boolean noPhoto = uri.getBooleanQueryParameter(
+                        Contacts.QUERY_PARAMETER_VCARD_NO_PHOTO, false);
+                outputRawContactsAsVCard(localStream, selection, mSelectionArgs1,
+                        noPhoto);
                 return buildAssetFileDescriptor(localStream);
             }
 
@@ -5297,7 +5300,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
-                outputRawContactsAsVCard(localStream, selection, null);
+                final boolean noPhoto = uri.getBooleanQueryParameter(
+                        Contacts.QUERY_PARAMETER_VCARD_NO_PHOTO, false);
+                outputRawContactsAsVCard(localStream, selection, null, noPhoto);
                 return buildAssetFileDescriptor(localStream);
             }
 
@@ -5363,10 +5368,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * any errors encountered.
      */
     private void outputRawContactsAsVCard(OutputStream stream, String selection,
-            String[] selectionArgs) {
+            String[] selectionArgs, boolean noPhoto) {
         final Context context = this.getContext();
+        int vcardconfig = VCardConfig.VCARD_TYPE_DEFAULT;
+        if (noPhoto) {
+            vcardconfig |= VCardConfig.FLAG_REFRAIN_IMAGE_EXPORT;
+        }
         final VCardComposer composer =
-                new VCardComposer(context, VCardConfig.VCARD_TYPE_DEFAULT, false);
+                new VCardComposer(context, vcardconfig, false);
         Writer writer = null;
         try {
             writer = new BufferedWriter(new OutputStreamWriter(stream));
