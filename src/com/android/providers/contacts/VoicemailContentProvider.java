@@ -86,9 +86,13 @@ public class VoicemailContentProvider extends ContentProvider {
         Context context = context();
 
         mContentResolver = context.getContentResolver();
-        mDbHelper = ContactsDatabaseHelper.getInstance(context);
+        mDbHelper = getDatabaseHelper(context);
 
         return true;
+    }
+
+    /*package for testing*/ ContactsDatabaseHelper getDatabaseHelper(Context context) {
+        return ContactsDatabaseHelper.getInstance(context);
     }
 
     /*package for testing*/ Context context() {
@@ -135,7 +139,7 @@ public class VoicemailContentProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
-        checkHasOwnPermission();
+        checkCallerHasOwnPermission();
         UriData uriData = createUriData(uri);
         checkPackagePermission(uriData);
         return queryInternal(uriData, projection,
@@ -178,7 +182,7 @@ public class VoicemailContentProvider extends ContentProvider {
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] valuesArray) {
-        checkHasOwnPermission();
+        checkCallerHasOwnPermission();
         // TODO: There is scope to optimize this method further. At the least we can avoid doing the
         // extra work related to the calling provider and checking permissions.
         UriData uriData = createUriData(uri);
@@ -196,28 +200,29 @@ public class VoicemailContentProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        checkHasOwnPermission();
+        checkCallerHasOwnPermission();
         return insertInternal(createUriData(uri), values, true);
     }
 
     private Uri insertInternal(UriData uriData, ContentValues values,
             boolean sendProviderChangedNotification) {
+        ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
-        checkAndAddSourcePackageIntoValues(uriData, values);
+        checkAndAddSourcePackageIntoValues(uriData, copiedValues);
 
         // "_data" column is used by base ContentProvider's openFileHelper() to determine filename
         // when Input/Output stream is requested to be opened.
-        values.put(Voicemails._DATA, generateDataFile());
+        copiedValues.put(Voicemails._DATA, generateDataFile());
 
         // call type is always voicemail.
-        values.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
+        copiedValues.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
 
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        long rowId = db.insert(VOICEMAILS_TABLE_NAME, null, values);
+        long rowId = db.insert(VOICEMAILS_TABLE_NAME, null, copiedValues);
         if (rowId > 0) {
             Uri newUri = ContentUris.withAppendedId(
                     Uri.withAppendedPath(VoicemailContract.CONTENT_URI_SOURCE,
-                            values.getAsString(Voicemails.SOURCE_PACKAGE)), rowId);
+                            copiedValues.getAsString(Voicemails.SOURCE_PACKAGE)), rowId);
 
             if (sendProviderChangedNotification) {
                 notifyChange(newUri, VoicemailContract.ACTION_NEW_VOICEMAIL,
@@ -248,14 +253,14 @@ public class VoicemailContentProvider extends ContentProvider {
         // If you put a provider in the URI and in the values, they must match.
         if (uriData.hasSourcePackage() && values.containsKey(Voicemails.SOURCE_PACKAGE)) {
             if (!uriData.getSourcePackage().equals(values.get(Voicemails.SOURCE_PACKAGE))) {
-                throw new IllegalArgumentException(
+                throw new SecurityException(
                         "Provider in URI was " + uriData.getSourcePackage() +
                         " but doesn't match provider in ContentValues which was "
                         + values.get(Voicemails.SOURCE_PACKAGE));
             }
         }
         // You must have access to the provider given in values.
-        if (!hasFullPermission(getCallingPackage())) {
+        if (!callerHasFullPermission()) {
             checkPackagesMatch(getCallingPackage(), values.getAsString(Voicemails.SOURCE_PACKAGE),
                     uriData.getUri());
         }
@@ -286,7 +291,7 @@ public class VoicemailContentProvider extends ContentProvider {
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        checkHasOwnPermission();
+        checkCallerHasOwnPermission();
         UriData uriData = createUriData(uri);
         checkUpdateSupported(uriData);
         checkPackagePermission(uriData);
@@ -311,7 +316,7 @@ public class VoicemailContentProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        checkHasOwnPermission();
+        checkCallerHasOwnPermission();
         UriData uriData = createUriData(uri);
         checkPackagePermission(uriData);
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
@@ -347,7 +352,7 @@ public class VoicemailContentProvider extends ContentProvider {
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        checkHasOwnPermission();
+        checkCallerHasOwnPermission();
         UriData uriData = createUriData(uri);
         checkPackagePermission(uriData);
 
@@ -451,7 +456,7 @@ public class VoicemailContentProvider extends ContentProvider {
      * @throws SecurityException if the check fails.
      */
     private void checkPackagePermission(UriData uriData) {
-        if (!hasFullPermission(getCallingPackage())) {
+        if (!callerHasFullPermission()) {
             if (!uriData.hasSourcePackage()) {
                 // You cannot have a match if this is not a provider uri.
                 throw new SecurityException(String.format(
@@ -513,11 +518,11 @@ public class VoicemailContentProvider extends ContentProvider {
         // which one we return.
         String bestSoFar = callerPackages[0];
         for (String callerPackage : callerPackages) {
-            if (hasFullPermission(callerPackage)) {
+            if (hasPermission(callerPackage, Manifest.permission.READ_WRITE_ALL_VOICEMAIL)) {
                 // Full always wins, we can return early.
                 return callerPackage;
             }
-            if (hasOwnPermission(callerPackage)) {
+            if (hasPermission(callerPackage, Manifest.permission.READ_WRITE_OWN_VOICEMAIL)) {
                 bestSoFar = callerPackage;
             }
         }
@@ -529,29 +534,31 @@ public class VoicemailContentProvider extends ContentProvider {
      *
      * @throws SecurityException if the caller does not have the voicemail source permission.
      */
-    private void checkHasOwnPermission() {
-        if (!hasOwnPermission(getCallingPackage())) {
+    private void checkCallerHasOwnPermission() {
+        if (!callerHasOwnPermission()) {
             throw new SecurityException("The caller must have permission: " +
                     Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
         }
     }
 
-    /** Tells us if the given package has the source permission. */
-    private boolean hasOwnPermission(String packageName) {
-        return hasPermission(packageName, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+    /** Determines if the calling process has own permission. */
+    private boolean callerHasOwnPermission() {
+        return callerHasPermission(Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
     }
 
-    /**
-     * Tells us if the given package has the full permission and the source
-     * permission.
-     */
-    private boolean hasFullPermission(String packageName) {
-        return hasOwnPermission(packageName) &&
-                hasPermission(packageName, Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
+    /** Determines if the calling process has full permission. */
+    private boolean callerHasFullPermission() {
+        return callerHasOwnPermission() &&
+                callerHasPermission(Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
     }
 
-    /** Tells us if the given package has the given permission. */
-    /* package for test */boolean hasPermission(String packageName, String permission) {
+    /** Determines if the calling process has the given permission. */
+    boolean callerHasPermission(String permission) {
+        return context().checkCallingPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Determines if the given package has the given permission. */
+    boolean hasPermission(String packageName, String permission) {
         return context().getPackageManager().checkPermission(permission, packageName)
                 == PackageManager.PERMISSION_GRANTED;
     }
@@ -561,7 +568,7 @@ public class VoicemailContentProvider extends ContentProvider {
      * access to all data.
      */
     private String getPackageRestrictionClause() {
-        if (hasFullPermission(getCallingPackage())) {
+        if (callerHasFullPermission()) {
             return null;
         }
         return getEqualityClause(Voicemails.SOURCE_PACKAGE, getCallingPackage());
