@@ -91,8 +91,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
                 mContactLocaleUtils.getSortKey(CHINESE_NAME, FullNameStyle.CHINESE).toUpperCase());
         assertEquals("DU \u675C JUAN \u9D51",
                 mContactLocaleUtils.getSortKey(CHINESE_NAME, FullNameStyle.CJK).toUpperCase());
-        assertEquals(LATIN_NAME,
-                mContactLocaleUtils.getSortKey(LATIN_NAME, FullNameStyle.WESTERN).toUpperCase());
+        assertEquals(LATIN_NAME, mContactLocaleUtils.getSortKey(LATIN_NAME, FullNameStyle.WESTERN));
 
         mContactLocaleUtils.setLocale(Locale.ENGLISH);
         Iterator<String> keys = mContactLocaleUtils.getNameLookupKeys(CHINESE_NAME,
