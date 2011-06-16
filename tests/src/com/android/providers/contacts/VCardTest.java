@@ -20,12 +20,14 @@ import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
 
 import android.content.ContentResolver;
+import android.test.suitebuilder.annotation.MediumTest;
 
 /**
  * Tests (or integration tests) verifying if vCard library works well with {@link ContentResolver}.
  *
  * Unit tests for vCard itself should be availabel in vCard library.
  */
+@MediumTest
 public class VCardTest extends BaseContactsProvider2Test {
     private static final String TAG = "VCardTest";
     private static final boolean DEBUG = false;

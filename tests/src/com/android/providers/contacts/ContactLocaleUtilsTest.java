@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.provider.ContactsContract.FullNameStyle;
 import android.test.AndroidTestCase;
+import android.test.suitebuilder.annotation.SmallTest;
 
 import java.text.Collator;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Locale;
 
+@SmallTest
 public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String LATIN_NAME = "John Smith";
     private static final String CHINESE_NAME = "\u675C\u9D51";
@@ -79,19 +81,18 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         if (!hasChineseCollator()) {
             return;
         }
-
         mContactLocaleUtils.setLocale(Locale.ENGLISH);
-        assertTrue(mContactLocaleUtils.getSortKey(CHINESE_NAME,
-                FullNameStyle.CHINESE).equalsIgnoreCase("DU \u675C JUAN \u9D51"));
-        assertTrue(mContactLocaleUtils.getSortKey(CHINESE_NAME,
-                FullNameStyle.CJK).equalsIgnoreCase("DU \u675C JUAN \u9D51"));
+        assertEquals("DU \u675C JUAN \u9D51",
+                mContactLocaleUtils.getSortKey(CHINESE_NAME, FullNameStyle.CHINESE).toUpperCase());
+        assertEquals("DU \u675C JUAN \u9D51",
+                mContactLocaleUtils.getSortKey(CHINESE_NAME, FullNameStyle.CJK).toUpperCase());
         mContactLocaleUtils.setLocale(Locale.CHINESE);
-        assertTrue(mContactLocaleUtils.getSortKey(CHINESE_NAME,
-                FullNameStyle.CHINESE).equalsIgnoreCase("DU \u675C JUAN \u9D51"));
-        assertTrue(mContactLocaleUtils.getSortKey(CHINESE_NAME,
-                FullNameStyle.CJK).equalsIgnoreCase("DU \u675C JUAN \u9D51"));
-        assertTrue(mContactLocaleUtils.getSortKey(LATIN_NAME,
-                FullNameStyle.WESTERN).equalsIgnoreCase(LATIN_NAME));
+        assertEquals("DU \u675C JUAN \u9D51",
+                mContactLocaleUtils.getSortKey(CHINESE_NAME, FullNameStyle.CHINESE).toUpperCase());
+        assertEquals("DU \u675C JUAN \u9D51",
+                mContactLocaleUtils.getSortKey(CHINESE_NAME, FullNameStyle.CJK).toUpperCase());
+        assertEquals(LATIN_NAME,
+                mContactLocaleUtils.getSortKey(LATIN_NAME, FullNameStyle.WESTERN).toUpperCase());
 
         mContactLocaleUtils.setLocale(Locale.ENGLISH);
         Iterator<String> keys = mContactLocaleUtils.getNameLookupKeys(CHINESE_NAME,
