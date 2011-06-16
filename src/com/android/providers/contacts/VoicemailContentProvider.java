@@ -15,6 +15,7 @@
  */
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
@@ -39,6 +40,7 @@ import android.util.Log;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.util.CloseUtils;
+import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
 
 import java.io.File;
@@ -206,6 +208,7 @@ public class VoicemailContentProvider extends ContentProvider {
 
     private Uri insertInternal(UriData uriData, ContentValues values,
             boolean sendProviderChangedNotification) {
+        checkForSupportedColumns(sVoicemailProjectionMap, values);
         ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
         checkAndAddSourcePackageIntoValues(uriData, copiedValues);
@@ -231,16 +234,19 @@ public class VoicemailContentProvider extends ContentProvider {
                 notifyChange(newUri, VoicemailContract.ACTION_NEW_VOICEMAIL);
             }
             // Populate the 'voicemail_uri' field to be used by the call_log provider.
-            updateVoicemailUri(newUri);
+            updateVoicemailUri(db, newUri);
             return newUri;
         }
         return null;
     }
 
-    private void updateVoicemailUri(Uri newUri) {
+    private void updateVoicemailUri(SQLiteDatabase db, Uri newUri) {
         ContentValues values = new ContentValues();
         values.put(Calls.VOICEMAIL_URI, newUri.toString());
-        update(newUri, values, null, null);
+        // Directly update the db because we cannot update voicemail_uri through external
+        // update() due to projectionMap check. This also avoids unnecessary permission
+        // checks that are already done as part of insert request.
+        db.update(VOICEMAILS_TABLE_NAME, values, getWhereClause(createUriData(newUri)), null);
     }
 
     private void checkAndAddSourcePackageIntoValues(UriData uriData, ContentValues values) {
@@ -293,8 +299,9 @@ public class VoicemailContentProvider extends ContentProvider {
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         checkCallerHasOwnPermission();
         UriData uriData = createUriData(uri);
-        checkUpdateSupported(uriData);
         checkPackagePermission(uriData);
+        checkForSupportedColumns(sVoicemailProjectionMap, values);
+        checkUpdateSupported(uriData);
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         // TODO: This implementation does not allow bulk update because it only accepts
         // URI that include message Id. I think we do want to support bulk update.

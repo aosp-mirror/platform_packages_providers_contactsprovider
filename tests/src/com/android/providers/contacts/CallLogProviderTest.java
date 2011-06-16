@@ -48,6 +48,7 @@ import android.test.suitebuilder.annotation.MediumTest;
  */
 @MediumTest
 public class CallLogProviderTest extends BaseContactsProvider2Test {
+    /** Fields specific to voicemail provider that should not be exposed by call_log*/
     private static final String[] VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS = new String[] {
             Voicemails._DATA,
             Voicemails.HAS_CONTENT,
@@ -55,6 +56,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.SOURCE_PACKAGE,
             Voicemails.SOURCE_DATA,
             Voicemails.STATE};
+    /** Total number of columns exposed by call_log provider. */
+    private static final int NUM_CALLLOG_FIELDS = 11;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -183,7 +186,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         // Query.
         Cursor cursor = mResolver.query(Calls.CONTENT_URI, null, null, null, null);
         List<String> columnNames = Arrays.asList(cursor.getColumnNames());
-        assertEquals(11, columnNames.size());
+        assertEquals(NUM_CALLLOG_FIELDS, columnNames.size());
         // None of the voicemail provider specific columns should be present.
         for (String voicemailColumn : VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS) {
             assertFalse("Unexpected column: '" + voicemailColumn + "' returned.",

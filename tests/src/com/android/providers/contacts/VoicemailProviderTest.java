@@ -1,4 +1,18 @@
-// Copyright 2011 Google Inc. All Rights Reserved.
+/*
+ * Copyright (C) 2011 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
+ */
 
 package com.android.providers.contacts;
 
@@ -8,8 +22,10 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.provider.VoicemailContract;
+import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 
@@ -17,6 +33,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,11 +45,24 @@ import java.util.List;
  * runtest -c com.android.providers.contacts.VoicemailProviderTest contactsprov
  * </code>
  */
+// TODO: Test that calltype and voicemail_uri are auto populated by the provider.
 public class VoicemailProviderTest extends BaseContactsProvider2Test {
     private static final String ALL_PERMISSION =
-        "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
+            "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
     private static final String OWN_PERMISSION =
-        "com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL";
+            "com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL";
+    /** Fields specific to call_log provider that should not be exposed by voicemail provider. */
+    private static final String[] CALLLOG_PROVIDER_SPECIFIC_COLUMNS = {
+            Calls.CACHED_NAME,
+            Calls.CACHED_NUMBER_LABEL,
+            Calls.CACHED_NUMBER_TYPE,
+            Calls.TYPE,
+            Calls.VOICEMAIL_URI,
+            Calls.COUNTRY_ISO
+    };
+    /** Total number of columns exposed by voicemail provider. */
+    private static final int NUM_VOICEMAIL_FIELDS = 11;
+
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
        return TestVoicemailProvider.class;
@@ -212,6 +242,53 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
                 mResolver.delete(contentUri(), null, null);
             }
         });
+    }
+
+    // Test to check that none of the call_log provider specific fields are
+    // insertable through voicemail provider.
+    public void testCannotAccessCallLogSpecificFields_Insert() {
+        for (String callLogColumn : CALLLOG_PROVIDER_SPECIFIC_COLUMNS) {
+            final ContentValues values = getDefaultVoicemailValues();
+            values.put(callLogColumn, "foo");
+            EvenMoreAsserts.assertThrows("Column: " + callLogColumn,
+                    IllegalArgumentException.class, new Runnable() {
+                    @Override
+                    public void run() {
+                        mResolver.insert(contentUri(), values);
+                    }
+                });
+        }
+    }
+
+    // Test to check that none of the call_log provider specific fields are
+    // exposed through voicemail provider query.
+    public void testCannotAccessCallLogSpecificFields_Query() {
+        // Query.
+        Cursor cursor = mResolver.query(contentUri(), null, null, null, null);
+        List<String> columnNames = Arrays.asList(cursor.getColumnNames());
+        assertEquals(NUM_VOICEMAIL_FIELDS, columnNames.size());
+        // None of the call_log provider specific columns should be present.
+        for (String callLogColumn : CALLLOG_PROVIDER_SPECIFIC_COLUMNS) {
+            assertFalse("Unexpected column: '" + callLogColumn + "' returned.",
+                    columnNames.contains(callLogColumn));
+        }
+    }
+
+    // Test to check that none of the call_log provider specific fields are
+    // updatable through voicemail provider.
+    public void testCannotAccessCallLogSpecificFields_Update() {
+        for (String callLogColumn : CALLLOG_PROVIDER_SPECIFIC_COLUMNS) {
+            final Uri insertedUri = insertVoicemail();
+            final ContentValues values = getDefaultVoicemailValues();
+            values.put(callLogColumn, "foo");
+            EvenMoreAsserts.assertThrows("Column: " + callLogColumn,
+                    IllegalArgumentException.class, new Runnable() {
+                    @Override
+                    public void run() {
+                        mResolver.update(insertedUri, values, null, null);
+                    }
+                });
+        }
     }
 
     /**

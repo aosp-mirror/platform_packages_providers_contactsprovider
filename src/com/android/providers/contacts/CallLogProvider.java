@@ -16,7 +16,10 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.DbQueryUtils;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -151,7 +154,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        checkForSupportedColumns(values);
+        checkForSupportedColumns(sCallsProjectionMap, values);
         // Inserted the current country code, so we know the country
         // the number belongs to.
         values.put(Calls.COUNTRY_ISO, getCurrentCountryIso());
@@ -170,7 +173,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int update(Uri url, ContentValues values, String selection, String[] selectionArgs) {
-        checkForSupportedColumns(values);
+        checkForSupportedColumns(sCallsProjectionMap, values);
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         String where;
         final int matchedUriId = sURIMatcher.match(url);
@@ -220,14 +223,5 @@ public class CallLogProvider extends ContentProvider {
 
     protected String getCurrentCountryIso() {
         return mCountryMonitor.getCountryIso();
-    }
-
-    /** Checks if ContentValues contains none other than supported columns. */
-    private void checkForSupportedColumns(ContentValues values) {
-        for (String requestedColumn : values.keySet()) {
-            if (!sCallsProjectionMap.keySet().contains(requestedColumn)) {
-                throw new IllegalArgumentException("Column '" + requestedColumn + "' is invalid.");
-            }
-        }
     }
 }

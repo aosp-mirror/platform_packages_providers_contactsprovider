@@ -36,10 +36,10 @@ public final class EvenMoreAsserts {
            // Cannot invoke Assert.fail() here because it will be caught by the try/catch below
            // and, if we are expecting an AssertionError or AssertionFailedError (depending on
            // the platform), we might incorrectly identify that as a success.
-        } catch (Exception e) {
-            if (!exception.isInstance(e)) {
+        } catch (Exception caught) {
+            if (!exception.isInstance(caught)) {
                 Assert.fail(appendUserMessage("Exception " + exception + " expected but " +
-                        e.getClass() +" thrown: " + e, message));
+                        caught +" thrown.", message));
             }
             return;
         }

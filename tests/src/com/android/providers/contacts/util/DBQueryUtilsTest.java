@@ -16,11 +16,15 @@
 
 package com.android.providers.contacts.util;
 
+import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 
+import android.content.ContentValues;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import com.android.providers.contacts.EvenMoreAsserts;
+import com.android.providers.contacts.ProjectionMap;
 import com.android.providers.contacts.util.DbQueryUtils;
 
 /**
@@ -44,5 +48,23 @@ public class DBQueryUtilsTest extends AndroidTestCase {
         assertEquals("(second)", concatenateClauses(null, "second", null));
         assertEquals("(a) AND (b) AND (c)", concatenateClauses(null, "a", "b", null, "c"));
         assertEquals("(WHERE \"a\" = \"b\")", concatenateClauses(null, "WHERE \"a\" = \"b\""));
+    }
+
+    public void testCheckForSupportedColumns() {
+        final ProjectionMap projectionMap = new ProjectionMap.Builder()
+                .add("A").add("B").add("C").build();
+        final ContentValues values = new ContentValues();
+        values.put("A", "?");
+        values.put("C", "?");
+        // No exception expected.
+        checkForSupportedColumns(projectionMap, values);
+        // Expect exception for invalid column.
+        EvenMoreAsserts.assertThrows(IllegalArgumentException.class, new Runnable() {
+            @Override
+            public void run() {
+                values.put("D", "?");
+                checkForSupportedColumns(projectionMap, values);
+            }
+        });
     }
 }

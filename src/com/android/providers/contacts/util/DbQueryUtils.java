@@ -15,8 +15,11 @@
  */
 package com.android.providers.contacts.util;
 
+import android.content.ContentValues;
 import android.database.DatabaseUtils;
 import android.text.TextUtils;
+
+import java.util.HashMap;
 
 /**
  * Static methods for helping us build database query selection strings.
@@ -51,5 +54,20 @@ public class DbQueryUtils {
             }
         }
         return builder.toString();
+    }
+
+    /**
+     * Checks if the given ContentValues contains values within the projection
+     * map.
+     * @throws IllegalArgumentException if any value in values is not found in
+     * the projection map.
+     */
+    public static void checkForSupportedColumns(HashMap<String, String> projectionMap,
+            ContentValues values) {
+        for (String requestedColumn : values.keySet()) {
+            if (!projectionMap.keySet().contains(requestedColumn)) {
+                throw new IllegalArgumentException("Column '" + requestedColumn + "' is invalid.");
+            }
+        }
     }
 }
