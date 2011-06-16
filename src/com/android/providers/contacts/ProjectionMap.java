@@ -56,7 +56,7 @@ public class ProjectionMap extends HashMap<String, String> {
 
     }
 
-    public String[] mColumns;
+    private String[] mColumns;
 
     public static Builder builder() {
         return new Builder();
