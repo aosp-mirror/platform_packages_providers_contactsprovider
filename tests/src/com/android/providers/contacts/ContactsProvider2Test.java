@@ -1110,6 +1110,41 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
+     * Tests if ContactsProvider2 returns addresses according to registration order.
+     */
+    public void testEmailFilterDefaultSortOrder() {
+        long rawContactId1 = createRawContact();
+        insertEmail(rawContactId1, "address1@email.com");
+        insertEmail(rawContactId1, "address2@email.com");
+        insertEmail(rawContactId1, "address3@email.com");
+        ContentValues v1 = new ContentValues();
+        v1.put(Email.ADDRESS, "address1@email.com");
+        ContentValues v2 = new ContentValues();
+        v2.put(Email.ADDRESS, "address2@email.com");
+        ContentValues v3 = new ContentValues();
+        v3.put(Email.ADDRESS, "address3@email.com");
+
+        Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "address");
+        assertStoredValuesOrderly(filterUri, new ContentValues[] { v1, v2, v3 });
+    }
+
+    /**
+     * Tests if ContactsProvider2 returns primary addresses before the other addresses.
+     */
+    public void testEmailFilterPrimaryAddress() {
+        long rawContactId1 = createRawContact();
+        insertEmail(rawContactId1, "address1@email.com");
+        insertEmail(rawContactId1, "address2@email.com", true);
+        ContentValues v1 = new ContentValues();
+        v1.put(Email.ADDRESS, "address1@email.com");
+        ContentValues v2 = new ContentValues();
+        v2.put(Email.ADDRESS, "address2@email.com");
+
+        Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "address");
+        assertStoredValuesOrderly(filterUri, new ContentValues[] { v2, v1 });
+    }
+
+    /**
      * Tests if ContactsProvider2 has email address associated with a primary account before the
      * other address.
      */

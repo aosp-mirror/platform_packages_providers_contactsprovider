@@ -436,7 +436,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         + DataUsageStatColumns.TIMES_USED + " DESC, "
         + Contacts.DISPLAY_NAME + ", "
         + Data.CONTACT_ID + ", "
-        + Data.IS_SUPER_PRIMARY + " DESC";
+        + Data.IS_SUPER_PRIMARY + " DESC, "
+        + Data.IS_PRIMARY + " DESC";
 
     /** Currently same as {@link #EMAIL_FILTER_SORT_ORDER} */
     private static final String PHONE_FILTER_SORT_ORDER = EMAIL_FILTER_SORT_ORDER;
