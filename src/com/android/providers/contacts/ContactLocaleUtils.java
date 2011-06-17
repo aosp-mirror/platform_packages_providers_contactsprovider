@@ -16,15 +16,15 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.HanziToPinyin.Token;
+
+import android.provider.ContactsContract.FullNameStyle;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Locale;
-
-import android.provider.ContactsContract.FullNameStyle;
-import com.android.internal.util.HanziToPinyin;
-import com.android.internal.util.HanziToPinyin.Token;
 
 /**
  * This utility class provides customized sort key and name lookup key according the locale.
