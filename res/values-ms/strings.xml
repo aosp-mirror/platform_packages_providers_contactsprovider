@@ -4,9 +4,9 @@
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
      You may obtain a copy of the License at
-  
+
           http://www.apache.org/licenses/LICENSE-2.0
-  
+
      Unless required by applicable law or agreed to in writing, software
      distributed under the License is distributed on an "AS IS" BASIS,
      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,16 +17,18 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_label" msgid="3389954322874982620">"Storan Kenalan"</string>
-    <!-- no translation found for provider_label (6012150850819899907) -->
+    <string name="provider_label" msgid="6012150850819899907">"Kenalan"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kemas kini kenalan memerlukan lagi memori"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Meningkatkan storan kenalan"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Pilih untuk menyelesaikan pengemaskinian."</string>
+    <string name="default_directory" msgid="93961630309570294">"Kenalan"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Lain-lain"</string>
+    <!-- no translation found for read_write_own_voicemail_label (4633727212134804596) -->
     <skip />
-    <!-- no translation found for upgrade_out_of_memory_notification_ticker (4089605622758004662) -->
+    <!-- no translation found for read_write_own_voicemail_description (7358328813231165233) -->
     <skip />
-    <!-- no translation found for upgrade_out_of_memory_notification_title (7849508493764133004) -->
+    <!-- no translation found for read_write_all_voicemail_label (5357954571910155610) -->
     <skip />
-    <!-- no translation found for upgrade_out_of_memory_notification_text (3967762223137708403) -->
-    <skip />
-    <!-- no translation found for default_directory (93961630309570294) -->
-    <skip />
-    <!-- no translation found for local_invisible_directory (705244318477396120) -->
+    <!-- no translation found for read_write_all_voicemail_description (440170132212565839) -->
     <skip />
 </resources>

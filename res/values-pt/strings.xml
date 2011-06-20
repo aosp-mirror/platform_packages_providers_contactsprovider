@@ -4,9 +4,9 @@
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
      You may obtain a copy of the License at
-  
+
           http://www.apache.org/licenses/LICENSE-2.0
-  
+
      Unless required by applicable law or agreed to in writing, software
      distributed under the License is distributed on an "AS IS" BASIS,
      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,4 +23,12 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Selecione para concluir a atualização."</string>
     <string name="default_directory" msgid="93961630309570294">"Contatos"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Outros"</string>
+    <!-- no translation found for read_write_own_voicemail_label (4633727212134804596) -->
+    <skip />
+    <!-- no translation found for read_write_own_voicemail_description (7358328813231165233) -->
+    <skip />
+    <!-- no translation found for read_write_all_voicemail_label (5357954571910155610) -->
+    <skip />
+    <!-- no translation found for read_write_all_voicemail_description (440170132212565839) -->
+    <skip />
 </resources>
