@@ -17,9 +17,12 @@
 package com.android.providers.contacts;
 
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
+import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
+import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
+import com.android.providers.contacts.util.SelectionBuilder;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -33,6 +36,8 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
+import android.provider.ContactsContract;
+import android.util.Log;
 
 import java.util.HashMap;
 import java.util.Set;
@@ -41,6 +46,31 @@ import java.util.Set;
  * Call log content provider.
  */
 public class CallLogProvider extends ContentProvider {
+
+    /**
+     * An optional URI parameter for call_log operations which instructs the
+     * provider to allow the operation to be applied to voicemail records as well.
+     * <p> TYPE: Boolean
+     *
+     * <p> Using this parameter with a value true will result in a security
+     * error if the calling application does not have appropriate permissions
+     * to access voicemails.
+     */
+    // TODO: Move this to ContactsContract.Calls once we are happy with the changes.
+    public static final String ALLOW_VOICEMAILS_PARAM_KEY = "allow_voicemails";
+
+    /**
+     * Content uri with {@link #ALLOW_VOICEMAILS_PARAM_KEY} set. This can directly
+     * be used to access call log entries that includes voicemail records.
+     */
+    // TODO: Move this to ContactsContract.Calls once we are happy with the changes.
+    public static Uri CONTENT_URI_WITH_VOICEMAIL = Calls.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CallLogProvider.ALLOW_VOICEMAILS_PARAM_KEY, "true")
+            .build();
+
+    /** Selection clause to use to exclude voicemail records.  */
+    private static final String EXCLUDE_VOICEMAIL_SELECTION = getInequalityClause(
+            Calls.TYPE, Integer.toString(Calls.VOICEMAIL_TYPE));
 
     private static final int CALLS = 1;
 
@@ -77,6 +107,7 @@ public class CallLogProvider extends ContentProvider {
     private DatabaseUtils.InsertHelper mCallsInserter;
     private boolean mUseStrictPhoneNumberComparation;
     private CountryMonitor mCountryMonitor;
+    private VoicemailPermissions mVoicemailPermissions;
 
     @Override
     public boolean onCreate() {
@@ -86,6 +117,7 @@ public class CallLogProvider extends ContentProvider {
             context.getResources().getBoolean(
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
         mCountryMonitor = new CountryMonitor(context);
+        mVoicemailPermissions = new VoicemailPermissions(context);
         return true;
     }
 
@@ -102,18 +134,17 @@ public class CallLogProvider extends ContentProvider {
         qb.setProjectionMap(sCallsProjectionMap);
         qb.setStrict(true);
 
+        SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
+        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
+
         int match = sURIMatcher.match(uri);
         switch (match) {
             case CALLS:
                 break;
 
             case CALLS_ID: {
-                try {
-                    Long id = Long.valueOf(uri.getPathSegments().get(1));
-                    qb.appendWhere(Calls._ID + "=" + id.toString());
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Invalid call id in uri: " + uri, e);
-                }
+                selectionBuilder.addClause(getEqualityClause(Calls._ID,
+                        parseCallIdFromUri(uri)));
                 break;
             }
 
@@ -130,7 +161,8 @@ public class CallLogProvider extends ContentProvider {
         }
 
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        Cursor c = qb.query(db, projection, selection, selectionArgs, null, null, sortOrder, null);
+        Cursor c = qb.query(db, projection, selectionBuilder.build(), selectionArgs, null, null,
+                sortOrder, null);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), CallLog.CONTENT_URI);
         }
@@ -155,6 +187,13 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public Uri insert(Uri uri, ContentValues values) {
         checkForSupportedColumns(sCallsProjectionMap, values);
+        // Inserting a voicemail record through call_log requires the voicemail
+        // permission and also requires the additional voicemail param set.
+        if (hasVoicemailValue(values)) {
+            checkIsAllowVoicemailRequest(uri);
+            mVoicemailPermissions.checkCallerHasFullAccess();
+        }
+
         // Inserted the current country code, so we know the country
         // the number belongs to.
         values.put(Calls.COUNTRY_ISO, getCurrentCountryIso());
@@ -172,26 +211,32 @@ public class CallLogProvider extends ContentProvider {
     }
 
     @Override
-    public int update(Uri url, ContentValues values, String selection, String[] selectionArgs) {
+    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         checkForSupportedColumns(sCallsProjectionMap, values);
+        // Request that involves changing record type to voicemail requires the
+        // voicemail param set in the uri.
+        if (hasVoicemailValue(values)) {
+            checkIsAllowVoicemailRequest(uri);
+        }
+
+        SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
+        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
+
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        String where;
-        final int matchedUriId = sURIMatcher.match(url);
+        final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                where = selection;
                 break;
 
             case CALLS_ID:
-                where = DatabaseUtils.concatenateWhere(selection, Calls._ID + "="
-                        + url.getPathSegments().get(1));
+                selectionBuilder.addClause(getEqualityClause(Calls._ID, parseCallIdFromUri(uri)));
                 break;
 
             default:
-                throw new UnsupportedOperationException("Cannot update URL: " + url);
+                throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        int count = db.update(Tables.CALLS, values, where, selectionArgs);
+        int count = db.update(Tables.CALLS, values, selectionBuilder.build(), selectionArgs);
         if (count > 0) {
             notifyChange();
         }
@@ -200,12 +245,14 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
+        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
 
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                int count = db.delete(Tables.CALLS, selection, selectionArgs);
+                int count = db.delete(Tables.CALLS, selectionBuilder.build(), selectionArgs);
                 if (count > 0) {
                     notifyChange();
                 }
@@ -223,5 +270,61 @@ public class CallLogProvider extends ContentProvider {
 
     protected String getCurrentCountryIso() {
         return mCountryMonitor.getCountryIso();
+    }
+
+    private boolean hasVoicemailValue(ContentValues values) {
+        return values.containsKey(Calls.TYPE) &&
+                values.getAsInteger(Calls.TYPE).equals(Calls.VOICEMAIL_TYPE);
+    }
+
+    /**
+     * Checks if the supplied uri requests to include voicemails and take appropriate
+     * action.
+     * <p> If voicemail is requested, then check for voicemail permissions. Otherwise
+     * modify the selection to restrict to non-voicemail entries only.
+     */
+    private void checkVoicemailPermissionAndAddRestriction(Uri uri,
+            SelectionBuilder selectionBuilder) {
+        if (isAllowVoicemailRequest(uri)) {
+            mVoicemailPermissions.checkCallerHasFullAccess();
+        } else {
+            selectionBuilder.addClause(EXCLUDE_VOICEMAIL_SELECTION);
+        }
+    }
+
+    /**
+     * Determines if the supplied uri has the request to allow voicemails to be
+     * included.
+     */
+    private boolean isAllowVoicemailRequest(Uri uri) {
+        return uri.getBooleanQueryParameter(ALLOW_VOICEMAILS_PARAM_KEY, false);
+    }
+
+    /**
+     * Checks to ensure that the given uri has allow_voicemail set. Used by
+     * insert and update operations to check that ContentValues with voicemail
+     * call type must use the voicemail uri.
+     * @throws IllegalArgumentException if allow_voicemail is not set.
+     */
+    private void checkIsAllowVoicemailRequest(Uri uri) {
+        if (!isAllowVoicemailRequest(uri)) {
+            throw new IllegalArgumentException(
+                    String.format("Uri %s cannot be used for voicemail record." +
+                            " Please set '%s=true' in the uri.", uri, ALLOW_VOICEMAILS_PARAM_KEY));
+        }
+    }
+
+   /**
+    * Parses the call Id from the given uri, assuming that this is a uri that
+    * matches CALLS_ID. For other uri types the behaviour is undefined.
+    * @throws IllegalArgumentException if the id included in the Uri is not a valid long value.
+    */
+    private String parseCallIdFromUri(Uri uri) {
+        try {
+            Long id = Long.valueOf(uri.getPathSegments().get(1));
+            return id.toString();
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid call id in uri: " + uri, e);
+        }
     }
 }

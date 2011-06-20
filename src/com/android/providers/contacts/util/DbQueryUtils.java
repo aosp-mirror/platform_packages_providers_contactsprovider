@@ -31,10 +31,19 @@ public class DbQueryUtils {
 
     /** Returns a WHERE clause asserting equality of a field to a value. */
     public static String getEqualityClause(String field, String value) {
+        return getClauseWithOperator(field, "=", value);
+    }
+
+    /** Returns a WHERE clause asserting in-equality of a field to a value. */
+    public static String getInequalityClause(String field, String value) {
+        return getClauseWithOperator(field, "!=", value);
+    }
+
+    private static String getClauseWithOperator(String field, String operator, String value) {
         StringBuilder clause = new StringBuilder();
         clause.append("(");
         clause.append(field);
-        clause.append(" = ");
+        clause.append(" ").append(operator).append(" ");
         DatabaseUtils.appendEscapedSQLString(clause, value);
         clause.append(")");
         return clause.toString();

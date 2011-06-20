@@ -40,6 +40,10 @@ public class DBQueryUtilsTest extends AndroidTestCase {
         assertEquals("(foo = 'bar')", DbQueryUtils.getEqualityClause("foo", "bar"));
     }
 
+    public void testGetInEqualityClause() {
+        assertEquals("(foo != 'bar')", DbQueryUtils.getInequalityClause("foo", "bar"));
+    }
+
     public void testConcatenateClauses() {
         assertEquals("(first)", concatenateClauses("first"));
         assertEquals("(first) AND (second)", concatenateClauses("first", "second"));
