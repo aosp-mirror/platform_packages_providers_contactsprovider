@@ -611,6 +611,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /** Contains just the contacts vCard columns */
     private static final ProjectionMap sContactsVCardProjectionMap = ProjectionMap.builder()
+            .add(Contacts._ID)
             .add(OpenableColumns.DISPLAY_NAME, Contacts.DISPLAY_NAME + " || '.vcf'")
             .add(OpenableColumns.SIZE, "NULL")
             .build();
@@ -5259,22 +5260,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         new String[]{String.valueOf(dataId)});
             }
 
-            case CONTACTS_AS_VCARD: {
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
-                final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
-                long contactId = lookupContactIdByLookupKey(db, lookupKey);
-                enforceProfilePermissionForContact(contactId, false);
-                mSelectionArgs1[0] = String.valueOf(contactId);
-                final String selection = Contacts._ID + "=?";
-
+            case PROFILE_AS_VCARD: {
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
-                final boolean noPhoto = uri.getBooleanQueryParameter(
-                        Contacts.QUERY_PARAMETER_VCARD_NO_PHOTO, false);
-                outputRawContactsAsVCard(localStream, selection, mSelectionArgs1,
-                        noPhoto);
+                outputRawContactsAsVCard(uri, localStream, null, null);
+                return buildAssetFileDescriptor(localStream);
+            }
+
+            case CONTACTS_AS_VCARD: {
+                // When opening a contact as file, we pass back contents as a
+                // vCard-encoded stream. We build into a local buffer first,
+                // then pipe into MemoryFile once the exact size is known.
+                final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
+                outputRawContactsAsVCard(uri, localStream, null, null);
                 return buildAssetFileDescriptor(localStream);
             }
 
@@ -5283,7 +5283,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final String lookupKeys = uri.getPathSegments().get(2);
                 final String[] loopupKeyList = lookupKeys.split(":");
                 final StringBuilder inBuilder = new StringBuilder();
+                Uri queryUri = Contacts.CONTENT_URI;
                 int index = 0;
+
+                mProfileIdCache.init(mDb, false);
+
                 // SQLite has limits on how many parameters can be used
                 // so the IDs are concatenated to a query string here instead
                 for (String lookupKey : loopupKeyList) {
@@ -5295,6 +5299,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     long contactId = lookupContactIdByLookupKey(db, lookupKey);
                     enforceProfilePermissionForContact(contactId, false);
                     inBuilder.append(contactId);
+                    if (mProfileIdCache.profileContactId == contactId) {
+                        queryUri = queryUri.buildUpon().appendQueryParameter(
+                                ContactsContract.INCLUDE_PROFILE, "true").build();
+                    }
                     index++;
                 }
                 inBuilder.append(')');
@@ -5304,9 +5312,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
                 final ByteArrayOutputStream localStream = new ByteArrayOutputStream();
-                final boolean noPhoto = uri.getBooleanQueryParameter(
-                        Contacts.QUERY_PARAMETER_VCARD_NO_PHOTO, false);
-                outputRawContactsAsVCard(localStream, selection, null, noPhoto);
+                outputRawContactsAsVCard(queryUri, localStream, selection, null);
                 return buildAssetFileDescriptor(localStream);
             }
 
@@ -5371,20 +5377,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * format to the given {@link OutputStream}. This method returns silently if
      * any errors encountered.
      */
-    private void outputRawContactsAsVCard(OutputStream stream, String selection,
-            String[] selectionArgs, boolean noPhoto) {
+    private void outputRawContactsAsVCard(Uri uri, OutputStream stream,
+            String selection, String[] selectionArgs) {
         final Context context = this.getContext();
         int vcardconfig = VCardConfig.VCARD_TYPE_DEFAULT;
-        if (noPhoto) {
+        if(uri.getBooleanQueryParameter(
+                Contacts.QUERY_PARAMETER_VCARD_NO_PHOTO, false)) {
             vcardconfig |= VCardConfig.FLAG_REFRAIN_IMAGE_EXPORT;
         }
         final VCardComposer composer =
                 new VCardComposer(context, vcardconfig, false);
         Writer writer = null;
         try {
+            // No extra checks since composer always uses restricted views.
             writer = new BufferedWriter(new OutputStreamWriter(stream));
-            // No extra checks since composer always uses restricted views
-            if (!composer.init(selection, selectionArgs)) {
+            if (!composer.init(uri, selection, selectionArgs, null)) {
                 Log.w(TAG, "Failed to init VCardComposer");
                 return;
             }
