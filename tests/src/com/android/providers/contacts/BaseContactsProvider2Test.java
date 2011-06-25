@@ -792,6 +792,22 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return value;
     }
 
+    protected Long getStoredLongValue(Uri uri, String selection, String[] selectionArgs,
+            String column) {
+        Long value = null;
+        Cursor c = mResolver.query(uri, new String[] { column }, selection, selectionArgs, null);
+        try {
+            assertEquals("Record count", 1, c.getCount());
+
+            if (c.moveToFirst()) {
+                value = c.getLong(c.getColumnIndex(column));
+            }
+        } finally {
+            c.close();
+        }
+        return value;
+    }
+
     protected void assertStoredValues(Uri rowUri, ContentValues expectedValues) {
         assertStoredValues(rowUri, null, null, expectedValues);
     }

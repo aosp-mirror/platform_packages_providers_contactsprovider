@@ -97,7 +97,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 602;
+    static final int DATABASE_VERSION = 603;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -211,6 +211,10 @@ import java.util.Locale;
         public static final String RAW_ENTITIES_RESTRICTED = "view_raw_entities_restricted";
 
         public static final String GROUPS_ALL = "view_groups";
+
+        public static final String DATA_USAGE_STAT_ALL = "view_data_usage_stat";
+        public static final String DATA_USAGE_STAT_RESTRICTED =
+                "view_data_usage_stat_restricted";
     }
 
     public interface Clauses {
@@ -1323,6 +1327,8 @@ import java.util.Locale;
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT_RESTRICTED + ";");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1585,6 +1591,28 @@ import java.util.Locale;
                 + entitiesSelect);
         db.execSQL("CREATE VIEW " + Views.ENTITIES_RESTRICTED + " AS "
                 + entitiesSelect + " WHERE " + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
+
+        String dataUsageStatSelect = "SELECT "
+                + DataUsageStatColumns.CONCRETE_ID + " AS " + DataUsageStatColumns._ID + ", "
+                + DataUsageStatColumns.DATA_ID + ", "
+                + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
+                + MimetypesColumns.CONCRETE_MIMETYPE + " AS " + Data.MIMETYPE + ", "
+                + DataUsageStatColumns.USAGE_TYPE_INT + ", "
+                + DataUsageStatColumns.TIMES_USED + ", "
+                + DataUsageStatColumns.LAST_TIME_USED
+                + " FROM " + Tables.DATA_USAGE_STAT
+                + " JOIN " + Tables.DATA + " ON ("
+                +   DataColumns.CONCRETE_ID + "=" + DataUsageStatColumns.CONCRETE_DATA_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_RAW_CONTACT_ID
+                    + " )"
+                + " JOIN " + Tables.MIMETYPES + " ON ("
+                +   MimetypesColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_MIMETYPE_ID + ")";
+
+        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT_ALL + " AS " + dataUsageStatSelect);
+        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT_RESTRICTED + " AS "
+                + dataUsageStatSelect + " WHERE "
+                + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
     }
 
     private static String buildPhotoUriAlias(String contactIdColumn, String alias) {
@@ -1934,6 +1962,11 @@ import java.util.Locale;
         if (oldVersion < 602) {
             upgradeToVersion602(db);
             oldVersion = 602;
+        }
+
+        if (oldVersion < 603) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 603;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3764,6 +3797,15 @@ import java.util.Locale;
     public String getEntitiesView(boolean requireRestrictedView) {
         return (hasAccessToRestrictedData() && !requireRestrictedView) ?
                 Views.ENTITIES : Views.ENTITIES_RESTRICTED;
+    }
+
+    public String getDataUsageStatView() {
+        return getDataUsageStatView(false);
+    }
+
+    public String getDataUsageStatView(boolean requireRestrictedView) {
+        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
+                Views.DATA_USAGE_STAT_ALL : Views.DATA_USAGE_STAT_RESTRICTED;
     }
 
     /**

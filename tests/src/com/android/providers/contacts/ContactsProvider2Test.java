@@ -1361,41 +1361,88 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContactFilterNoResult("8884664411");
     }
 
+    /**
+     * Checks ContactsProvider2 works well with strequent Uris. The provider should return starred
+     * contacts and frequently used contacts.
+     */
     public void testQueryContactStrequent() {
         ContentValues values1 = new ContentValues();
+        final String email1 = "a@acme.com";
+        final int timesContacted1 = 0;
         createContact(values1, "Noah", "Tever", "18004664411",
-                "a@acme.com", StatusUpdates.OFFLINE, 0, 0, 0,
+                email1, StatusUpdates.OFFLINE, timesContacted1, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
         ContentValues values2 = new ContentValues();
         createContact(values2, "Sam", "Times", "18004664412",
                 "b@acme.com", StatusUpdates.INVISIBLE, 3, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_CAMERA);
         ContentValues values3 = new ContentValues();
-        createContact(values3, "Lotta", "Calling", "18004664413",
-                "c@acme.com", StatusUpdates.AWAY, 5, 0, 0,
+        final String phoneNumber3 = "18004664413";
+        final int timesContacted3 = 5;
+        createContact(values3, "Lotta", "Calling", phoneNumber3,
+                "c@acme.com", StatusUpdates.AWAY, timesContacted3, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_VIDEO);
         ContentValues values4 = new ContentValues();
         createContact(values4, "Fay", "Veritt", "18004664414",
                 "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0,
                 StatusUpdates.CAPABILITY_HAS_VIDEO | StatusUpdates.CAPABILITY_HAS_VOICE);
 
-        Cursor c = mResolver.query(Contacts.CONTENT_STREQUENT_URI, null, null, null,
-                Contacts._ID);
-        assertEquals(3, c.getCount());
-        c.moveToFirst();
-        assertCursorValues(c, values4);
-        c.moveToNext();
-        assertCursorValues(c, values3);
-        c.moveToNext();
-        assertCursorValues(c, values2);
-        c.close();
+        // Starred contacts should be returned. TIMES_CONTACTED should be ignored and only data
+        // usage feedback should be used for "frequently contacted" listing.
+        assertStoredValues(Contacts.CONTENT_STREQUENT_URI, values4);
+
+        final long dataIdPhone3 = getStoredLongValue(Phone.CONTENT_URI,
+                Phone.NUMBER + "=?", new String[] { phoneNumber3 },
+                Data._ID);
+
+        // Send feedback for the 3rd phone number, pretending we called that person via phone.
+        Uri feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
+                .appendPath(String.valueOf(dataIdPhone3))
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
+                        DataUsageFeedback.USAGE_TYPE_CALL)
+                .build();
+        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+
+        // After the feedback, times contacted should be incremented
+        values3.put(RawContacts.TIMES_CONTACTED, timesContacted3 + 1);
+
+        // After the feedback, 3rd contact should be shown after starred one.
+        assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
+                new ContentValues[] { values4, values3 });
+
+        // Obtain data ID for an email address of the 1st contact.
+        final long dataIdEmail1 = getStoredLongValue(Email.CONTENT_URI,
+                Email.ADDRESS + "=?", new String[] { email1},
+                Email._ID);
+
+        // Send feedback for the 1st email, pretending we sent the person an email twice.
+        // (we don't define the order for 1st and 3rd contacts with same times contacted)
+        feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
+                .appendPath(String.valueOf(dataIdEmail1))
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
+                        DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
+                .build();
+        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+        // Twice.
+        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+
+        // After the feedback, times contacted should be incremented
+        values1.put(RawContacts.TIMES_CONTACTED, timesContacted1 + 2);
+
+        // After the feedback, 1st and 3rd contacts should be shown after starred one.
+        assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
+                    new ContentValues[] { values4, values1, values3 });
+
+        // With phone-only parameter, the 1st contact shouldn't be returned, since it is only
+        // about email, not phone-call.
+        Uri phoneOnlyStrequentUri = Contacts.CONTENT_STREQUENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.STREQUENT_PHONE_ONLY, "true")
+                .build();
+        assertStoredValuesOrderly(phoneOnlyStrequentUri,
+                new ContentValues[] { values4, values3 });
 
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_STREQUENT_FILTER_URI, "fay");
-        c = mResolver.query(filterUri, null, null, null, Contacts._ID);
-        assertEquals(1, c.getCount());
-        c.moveToFirst();
-        assertCursorValues(c, values4);
-        c.close();
+        assertStoredValues(filterUri, values4);
     }
 
     public void testQueryContactGroup() {
@@ -4483,7 +4530,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.STARRED, starred);
         values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(RawContacts.CUSTOM_RINGTONE, "beethoven5");
-        values.put(RawContacts.LAST_TIME_CONTACTED, 12345);
         values.put(RawContacts.TIMES_CONTACTED, timesContacted);
 
         Uri insertionUri = isUserProfile

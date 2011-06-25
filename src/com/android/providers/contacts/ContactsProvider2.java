@@ -29,6 +29,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdat
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
@@ -39,6 +40,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
 import com.google.android.collect.Lists;
@@ -184,10 +186,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
-    private static final String TIMES_CONTACTED_SORT_COLUMN = "times_contacted_sort";
+    /**
+     * Used to insert a column into strequent results, which enables SQL to sort the list using
+     * the total times contacted. See also {@link #sStrequentFrequentProjectionMap}.
+     */
+    private static final String TIMES_USED_SORT_COLUMN = "times_used_sort";
 
     private static final String STREQUENT_ORDER_BY = Contacts.STARRED + " DESC, "
-            + TIMES_CONTACTED_SORT_COLUMN + " DESC, "
+            + TIMES_USED_SORT_COLUMN + " DESC, "
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
     private static final String STREQUENT_LIMIT =
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
@@ -601,12 +607,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /** Used for pushing starred contacts to the top of a times contacted list **/
     private static final ProjectionMap sStrequentStarredProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(TIMES_CONTACTED_SORT_COLUMN, String.valueOf(Long.MAX_VALUE))
+            .add(TIMES_USED_SORT_COLUMN, String.valueOf(Long.MAX_VALUE))
             .build();
 
     private static final ProjectionMap sStrequentFrequentProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(TIMES_CONTACTED_SORT_COLUMN, Contacts.TIMES_CONTACTED)
+            .add(TIMES_USED_SORT_COLUMN, "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED + ")")
             .build();
 
     /** Contains just the contacts vCard columns */
@@ -3680,58 +3686,81 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_STREQUENT_FILTER:
             case CONTACTS_STREQUENT: {
-                String filterSql = null;
-                if (match == CONTACTS_STREQUENT_FILTER
-                        && uri.getPathSegments().size() > 3) {
+                // Basically the resultant SQL should look like this:
+                // (SQL for listing starred items)
+                // UNION ALL
+                // (SQL for listing frequently contacted items)
+                // ORDER BY ...
+
+                final boolean phoneOnly = readBooleanQueryParameter(
+                        uri, ContactsContract.STREQUENT_PHONE_ONLY, false);
+                if (match == CONTACTS_STREQUENT_FILTER && uri.getPathSegments().size() > 3) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
                     sb.append(Contacts._ID + " IN ");
                     appendContactFilterAsNestedQuery(sb, filterParam);
-                    filterSql = sb.toString();
+                    selection = DbQueryUtils.concatenateClauses(selection, sb.toString());
                 }
 
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
-
-                String[] starredProjection = null;
-                String[] frequentProjection = null;
+                String[] subProjection = null;
                 if (projection != null) {
-                    starredProjection =
-                            appendProjectionArg(projection, TIMES_CONTACTED_SORT_COLUMN);
-                    frequentProjection =
-                            appendProjectionArg(projection, TIMES_CONTACTED_SORT_COLUMN);
+                    subProjection = appendProjectionArg(projection, TIMES_USED_SORT_COLUMN);
                 }
-                qb.setProjectionMap(sStrequentStarredProjectionMap);
 
                 // Build the first query for starred
-                if (filterSql != null) {
-                    qb.appendWhere(filterSql + " AND ");
-                }
-                qb.appendWhere(Contacts.IS_USER_PROFILE + "=0");
-                final String starredQuery = qb.buildQuery(starredProjection,
+                setTablesAndProjectionMapForContacts(qb, uri, projection,
+                        false /* for frequent */, phoneOnly);
+                qb.setProjectionMap(sStrequentStarredProjectionMap);
+                qb.appendWhere(DbQueryUtils.concatenateClauses(
+                        selection, Contacts.IS_USER_PROFILE + "=0"));
+                qb.setStrict(true);
+                final String starredQuery = qb.buildQuery(subProjection,
                         Contacts.STARRED + "=1", Contacts._ID, null, null, null);
 
-                // Build the second query for frequent
+                // Reset the builder.
                 qb = new SQLiteQueryBuilder();
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+
+                // Build the second query for frequent
+                setTablesAndProjectionMapForContacts(qb, uri, projection,
+                        true /* for frequent */, phoneOnly);
                 qb.setProjectionMap(sStrequentFrequentProjectionMap);
-                if (filterSql != null) {
-                    qb.appendWhere(filterSql + " AND ");
-                }
-                qb.appendWhere(Contacts.IS_USER_PROFILE + "=0");
-                final String frequentQuery = qb.buildQuery(frequentProjection,
-                        Contacts.TIMES_CONTACTED + " > 0 AND (" + Contacts.STARRED
-                        + " = 0 OR " + Contacts.STARRED + " IS NULL)",
+                qb.appendWhere(DbQueryUtils.concatenateClauses(
+                        selection, Contacts.IS_USER_PROFILE + "=0"));
+                qb.setStrict(true);
+                final String frequentQuery = qb.buildQuery(subProjection,
+                        "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)",
                         Contacts._ID, null, null, null);
 
                 // Put them together
-                final String query = qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
-                        STREQUENT_ORDER_BY, STREQUENT_LIMIT);
-                Cursor c = db.rawQuery(query, null);
-                if (c != null) {
-                    c.setNotificationUri(getContext().getContentResolver(),
+                final String unionQuery =
+                        qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
+                                STREQUENT_ORDER_BY, STREQUENT_LIMIT);
+
+                // Here, we need to use selection / selectionArgs (supplied from users) "twice",
+                // as we want them both for starred items and for frequently contacted items.
+                //
+                // e.g. if the user specify selection = "starred =?" and selectionArgs = "0",
+                // the resultant SQL should be like:
+                // SELECT ... WHERE starred =? AND ...
+                // UNION ALL
+                // SELECT ... WHERE starred =? AND ...
+                String[] doubledSelectionArgs = null;
+                if (selectionArgs != null) {
+                    final int length = selectionArgs.length;
+                    doubledSelectionArgs = new String[length * 2];
+                    for (int i = 0; i < length; i++) {
+                        final String arg = selectionArgs[i];
+                        doubledSelectionArgs[i] = arg;
+                        doubledSelectionArgs[length + i] = arg;
+                    }
+                }
+
+                Cursor cursor = db.rawQuery(unionQuery, doubledSelectionArgs);
+                if (cursor != null) {
+                    cursor.setNotificationUri(getContext().getContentResolver(),
                             ContactsContract.AUTHORITY_URI);
                 }
-                return c;
+                return cursor;
             }
 
             case CONTACTS_GROUP: {
@@ -4753,8 +4782,42 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
             String[] projection) {
+        setTablesAndProjectionMapForContacts(qb, uri, projection, false, false);
+    }
+
+    /**
+     * @param forStrequentFrequent Should be used only in strequent handling.
+     *     true when this is for frequently contacted listing (not starred)
+     * @param strequentPhoneCallOnly Should be used only in strequent handling.
+     *     true when this is for phone-only results. See also
+     * {@link ContactsContract#STREQUENT_PHONE_ONLY}.
+     */
+    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection, boolean forStrequentFrequent, boolean strequentPhoneCallOnly) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getContactView(shouldExcludeRestrictedData(uri)));
+        String viewName = mDbHelper.getContactView(shouldExcludeRestrictedData(uri));
+        sb.append(viewName);
+
+        // Just for frequently contacted contacts in Strequent Uri handling.
+        if (forStrequentFrequent) {
+            final String strequentPhoneCallOnlyClause =
+                (strequentPhoneCallOnly ? DbQueryUtils.concatenateClauses(
+                        MimetypesColumns.MIMETYPE + "=\'" + Phone.CONTENT_ITEM_TYPE + "'",
+                        DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=" +
+                        DataUsageStatColumns.USAGE_TYPE_INT_CALL)
+                : "");
+            // Use INNER JOIN for maximum performance, ommiting unnecessary rows as much as
+            // possible.
+            sb.append(" INNER JOIN " +
+                    mDbHelper.getDataUsageStatView() + " AS " + Tables.DATA_USAGE_STAT +
+                    " ON (" +
+                    DbQueryUtils.concatenateClauses(
+                            DataUsageStatColumns.CONCRETE_TIMES_USED + " > 0",
+                            RawContacts.CONTACT_ID + "=" + viewName + "." + Contacts._ID,
+                            strequentPhoneCallOnlyClause) +
+                    ")");
+        }
+
         appendContactPresenceJoin(sb, projection, Contacts._ID);
         appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
         qb.setTables(sb.toString());
