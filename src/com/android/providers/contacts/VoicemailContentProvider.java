@@ -26,6 +26,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -388,6 +389,7 @@ public class VoicemailContentProvider extends ContentProvider {
     private void notifyChange(Uri notificationUri, String... intentActions) {
         // Notify the observers.
         mContentResolver.notifyChange(notificationUri, null, true);
+        String callingPackage = getCallingPackage();
         // Fire notification intents.
         for (String intentAction : intentActions) {
             // TODO: We can possibly be more intelligent here and send targeted intents based on
@@ -396,9 +398,16 @@ public class VoicemailContentProvider extends ContentProvider {
             // 1) Send it to all packages that have READ_WRITE_ALL_VOICEMAIL permission.
             // 2) Send it to only the owner package that has just READ_WRITE_OWN_VOICEMAIL, if not
             // already sent in (1).
-            Intent intent = new Intent(intentAction, notificationUri);
-            intent.putExtra(VoicemailContract.EXTRA_CHANGED_BY, getCallingPackage());
-            context().sendOrderedBroadcast(intent, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+            List<ResolveInfo> resolveInfos = context().getPackageManager()
+                    .queryBroadcastReceivers(new Intent(intentAction, notificationUri), 0);
+            for (ResolveInfo resolveInfo : resolveInfos) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                Intent intent = new Intent(intentAction, notificationUri);
+                intent.setPackage(packageName);
+                intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
+                        callingPackage.equals(packageName));
+                context().sendBroadcast(intent, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+            }
         }
     }
 
