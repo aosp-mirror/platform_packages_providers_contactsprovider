@@ -57,10 +57,12 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
+import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneticNameStyle;
+import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
@@ -100,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 607;
+    static final int DATABASE_VERSION = 608;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -110,6 +112,7 @@ import java.util.Locale;
         public static final String RAW_CONTACTS = "raw_contacts";
         public static final String STREAM_ITEMS = "stream_items";
         public static final String STREAM_ITEM_PHOTOS = "stream_item_photos";
+        public static final String PHOTO_FILES = "photo_files";
         public static final String PACKAGES = "packages";
         public static final String MIMETYPES = "mimetypes";
         public static final String PHONE_LOOKUP = "phone_lookup";
@@ -260,6 +263,8 @@ import java.util.Locale;
 
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
 
+        public static final String CONCRETE_PHOTO_FILE_ID = Tables.CONTACTS + "."
+                + Contacts.PHOTO_FILE_ID;
         public static final String CONCRETE_TIMES_CONTACTED = Tables.CONTACTS + "."
                 + Contacts.TIMES_CONTACTED;
         public static final String CONCRETE_LAST_TIME_CONTACTED = Tables.CONTACTS + "."
@@ -506,6 +511,13 @@ import java.util.Locale;
         String CONCRETE_PICTURE = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.PICTURE;
         String CONCRETE_ACTION = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION;
         String CONCRETE_ACTION_URI = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION_URI;
+    }
+
+    public interface PhotoFilesColumns {
+        String CONCRETE_ID = Tables.PHOTO_FILES + "." + BaseColumns._ID;
+        String CONCRETE_HEIGHT = Tables.PHOTO_FILES + "." + PhotoFiles.HEIGHT;
+        String CONCRETE_WIDTH = Tables.PHOTO_FILES + "." + PhotoFiles.WIDTH;
+        String CONCRETE_FILESIZE = Tables.PHOTO_FILES + "." + PhotoFiles.FILESIZE;
     }
 
     public interface PropertiesColumns {
@@ -801,6 +813,7 @@ import java.util.Locale;
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
                 Contacts.PHOTO_ID + " INTEGER REFERENCES data(_id)," +
+                Contacts.PHOTO_FILE_ID + " INTEGER REFERENCES photo_files(_id)," +
                 Contacts.CUSTOM_RINGTONE + " TEXT," +
                 Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
@@ -888,6 +901,12 @@ import java.util.Locale;
                 StreamItemPhotos.ACTION_URI + " TEXT, " +
                 "FOREIGN KEY(" + StreamItemPhotos.STREAM_ITEM_ID + ") REFERENCES " +
                         Tables.STREAM_ITEMS + "(" + StreamItems._ID + "));");
+
+        db.execSQL("CREATE TABLE " + Tables.PHOTO_FILES + " (" +
+                PhotoFiles._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                PhotoFiles.HEIGHT + " INTEGER NOT NULL, " +
+                PhotoFiles.WIDTH + " INTEGER NOT NULL, " +
+                PhotoFiles.FILESIZE + " INTEGER NOT NULL);");
 
         // TODO readd the index and investigate a controlled use of it
 //        db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
@@ -1399,6 +1418,7 @@ import java.util.Locale;
                 + Contacts.NAME_RAW_CONTACT_ID + ", "
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
+                + Contacts.PHOTO_FILE_ID + ", "
                 + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID;
 
@@ -1439,9 +1459,9 @@ import java.util.Locale;
                 + contactOptionColumns + ", "
                 + contactNameColumns + ", "
                 + baseContactColumns + ", "
-                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                + buildDisplayPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_URI) + ", "
-                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                + buildThumbnailPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
                 + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
                     " WHERE " + DataColumns.CONCRETE_RAW_CONTACT_ID +
@@ -1513,8 +1533,8 @@ import java.util.Locale;
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
                 + contactsColumns + ", "
-                + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_URI) + ", "
-                + buildPhotoUriAlias(ContactsColumns.CONCRETE_ID,
+                + buildDisplayPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_URI) + ", "
+                + buildThumbnailPhotoUriAlias(ContactsColumns.CONCRETE_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
                 + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
                     " JOIN " + Tables.RAW_CONTACTS + " ON " + RawContactsColumns.CONCRETE_ID + "=" +
@@ -1567,9 +1587,9 @@ import java.util.Locale;
                 + dataColumns + ", "
                 + syncColumns + ", "
                 + contactsColumns + ", "
-                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                + buildDisplayPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_URI) + ", "
-                + buildPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
+                + buildThumbnailPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
                 + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
                     " JOIN " + Tables.RAW_CONTACTS + " ON " + RawContactsColumns.CONCRETE_ID + "=" +
@@ -1623,11 +1643,24 @@ import java.util.Locale;
         db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT + " AS " + dataUsageStatSelect);
     }
 
-    private static String buildPhotoUriAlias(String contactIdColumn, String alias) {
-        return "(CASE WHEN " + Contacts.PHOTO_ID + " IS NULL"
+    private static String buildDisplayPhotoUriAlias(String contactIdColumn, String alias) {
+        return "(CASE WHEN " + Contacts.PHOTO_FILE_ID + " IS NULL THEN (CASE WHEN "
+                + Contacts.PHOTO_ID + " IS NULL"
                 + " OR " + Contacts.PHOTO_ID + "=0"
                 + " THEN NULL"
-                + " ELSE " + "'" + Contacts.CONTENT_URI + "/'||"
+                + " ELSE '" + Contacts.CONTENT_URI + "/'||"
+                        + contactIdColumn + "|| '/" + Photo.CONTENT_DIRECTORY + "'"
+                + " END) ELSE '" + DisplayPhoto.CONTENT_URI + "/'||"
+                        + Contacts.PHOTO_FILE_ID + " END)"
+                + " AS " + alias;
+    }
+
+    private static String buildThumbnailPhotoUriAlias(String contactIdColumn, String alias) {
+        return "(CASE WHEN "
+                + Contacts.PHOTO_ID + " IS NULL"
+                + " OR " + Contacts.PHOTO_ID + "=0"
+                + " THEN NULL"
+                + " ELSE '" + Contacts.CONTENT_URI + "/'||"
                         + contactIdColumn + "|| '/" + Photo.CONTENT_DIRECTORY + "'"
                 + " END)"
                 + " AS " + alias;
@@ -1985,6 +2018,7 @@ import java.util.Locale;
         }
 
         if (oldVersion < 605) {
+            upgradeViewsAndTriggers = true;
             upgradeToVersion605(db);
             oldVersion = 605;
         }
@@ -2001,6 +2035,13 @@ import java.util.Locale;
             upgradeToVersion607(db);
             oldVersion = 607;
         }
+
+        if (oldVersion < 608) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion608(db);
+            oldVersion = 608;
+        }
+
 
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
@@ -3130,6 +3171,16 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE groups ADD COLUMN action_uri TEXT");
     }
 
+    private void upgradeToVersion608(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE contacts ADD photo_file_id INTEGER REFERENCES photo_files(_id);");
+
+        db.execSQL("CREATE TABLE photo_files(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "height INTEGER NOT NULL, " +
+                "width INTEGER NOT NULL, " +
+                "filesize INTEGER NOT NULL);");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -3263,6 +3314,7 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.STREAM_ITEMS + ";");
         db.execSQL("DELETE FROM " + Tables.STREAM_ITEM_PHOTOS + ";");
+        db.execSQL("DELETE FROM " + Tables.PHOTO_FILES + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");

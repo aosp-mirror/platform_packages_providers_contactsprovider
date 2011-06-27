@@ -32,6 +32,8 @@ import android.test.mock.MockContext;
 import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
 
+import java.io.File;
+
 /**
  * Performance test for {@link ContactAggregator}. Run the test like this:
  * <code>
@@ -94,7 +96,13 @@ public class LegacyContactImporterPerformanceTest extends AndroidTestCase {
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 targetContext, "perf_imp.");
         targetContextWrapper.makeExistingFilesAndDbsAccessible();
-        IsolatedContext providerContext = new IsolatedContext(resolver, targetContextWrapper);
+        IsolatedContext providerContext = new IsolatedContext(resolver, targetContextWrapper) {
+            @Override
+            public File getFilesDir() {
+                // TODO: Need to figure out something more graceful than this.
+                return new File("/data/data/com.android.providers.contacts.tests/files");
+            }
+        };
         SynchronousContactsProvider2 provider = new SynchronousContactsProvider2();
         provider.setDataWipeEnabled(false);
         provider.attachInfo(providerContext, null);

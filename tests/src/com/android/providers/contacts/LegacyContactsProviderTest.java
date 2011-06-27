@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.tests.*;
+
 import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -707,7 +709,10 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
     }
 
     public void testPhotoUpdate() throws Exception {
-        byte[] photo = loadTestPhoto();
+        byte[] photo = loadPhotoFromResource(
+                com.android.providers.contacts.tests.R.drawable.earth_small, PhotoSize.ORIGINAL);
+        byte[] thumbnailedPhoto = loadPhotoFromResource(
+                com.android.providers.contacts.tests.R.drawable.earth_small, PhotoSize.THUMBNAIL);
 
         ContentValues values = new ContentValues();
         Uri personUri = mResolver.insert(People.CONTENT_URI, values);
@@ -722,13 +727,16 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         Uri photoUri = Uri.withAppendedPath(personUri, Photos.CONTENT_DIRECTORY);
         mResolver.update(photoUri, values, null, null);
+        values.put(Photos.DATA, thumbnailedPhoto);
         assertStoredValues(photoUri, values);
 
         long photoId = Long.parseLong(getStoredValue(photoUri, Photos._ID));
 
         values.put(Photos.LOCAL_VERSION, "11");
+        values.put(Photos.DATA, photo);
         Uri contentUri = ContentUris.withAppendedId(Photos.CONTENT_URI, photoId);
         mResolver.update(contentUri, values, null, null);
+        values.put(Photos.DATA, thumbnailedPhoto);
         assertStoredValues(contentUri, values);
         assertStoredValues(photoUri, values);
     }
