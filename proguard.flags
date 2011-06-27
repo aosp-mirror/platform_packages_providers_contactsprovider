@@ -2,6 +2,11 @@
   <init>(...);
 }
 
+-keep class com.android.vcard.VCardComposer {
+  boolean init();
+  int getCount();
+}
+
 # Any methods whose name is '*ForTest' are preserved.
 -keep class ** {
   *** *ForTest(...);
