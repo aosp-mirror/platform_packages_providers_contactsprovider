@@ -1633,7 +1633,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long nonProfileContactId = queryContactId(nonProfileRawContactId);
 
         Uri contactWithProfilesUri = Contacts.CONTENT_URI.buildUpon()
-                .appendQueryParameter(ContactsContract.INCLUDE_PROFILE, "1").build();
+                .appendQueryParameter(ContactsContract.ALLOW_PROFILE, "1").build();
         assertStoredValuesOrderly(contactWithProfilesUri,
                 new ContentValues[]{profileValues, nonProfileValues});
         assertSelection(contactWithProfilesUri, profileValues, Contacts._ID, profileContactId);

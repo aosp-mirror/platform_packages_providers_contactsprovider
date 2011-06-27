@@ -5115,7 +5115,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean shouldIncludeProfile(Uri uri) {
         // The user's profile may be returned alongside other contacts if it was requested and
         // the calling application has permission to read profile data.
-        boolean profileRequested = readBooleanQueryParameter(uri, ContactsContract.INCLUDE_PROFILE,
+        boolean profileRequested = readBooleanQueryParameter(uri, ContactsContract.ALLOW_PROFILE,
                 false);
         if (profileRequested) {
             enforceProfilePermission(false);
@@ -5301,7 +5301,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     inBuilder.append(contactId);
                     if (mProfileIdCache.profileContactId == contactId) {
                         queryUri = queryUri.buildUpon().appendQueryParameter(
-                                ContactsContract.INCLUDE_PROFILE, "true").build();
+                                ContactsContract.ALLOW_PROFILE, "true").build();
                     }
                     index++;
                 }
