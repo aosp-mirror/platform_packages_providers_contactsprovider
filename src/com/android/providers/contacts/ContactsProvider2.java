@@ -3748,11 +3748,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (selectionArgs != null) {
                     final int length = selectionArgs.length;
                     doubledSelectionArgs = new String[length * 2];
-                    for (int i = 0; i < length; i++) {
-                        final String arg = selectionArgs[i];
-                        doubledSelectionArgs[i] = arg;
-                        doubledSelectionArgs[length + i] = arg;
-                    }
+                    System.arraycopy(selectionArgs, 0, doubledSelectionArgs, 0, length);
+                    System.arraycopy(selectionArgs, 0, doubledSelectionArgs, length, length);
                 }
 
                 Cursor cursor = db.rawQuery(unionQuery, doubledSelectionArgs);
