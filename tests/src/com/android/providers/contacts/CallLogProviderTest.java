@@ -18,24 +18,22 @@ package com.android.providers.contacts;
 
 import com.android.internal.telephony.CallerInfo;
 import com.android.internal.telephony.Connection;
-import com.android.providers.contacts.EvenMoreAsserts;
-
-import java.util.Arrays;
-import java.util.List;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.provider.CallLog;
-import android.provider.ContactsContract;
 import android.provider.CallLog.Calls;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Unit tests for {@link CallLogProvider}.
@@ -52,8 +50,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
     private static final String VOICEMAIL_OWN_PERMISSION =
             "com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL";
-
-    private static final Uri VOICEMAIL_CONTENT_URI = CallLogProvider.CONTENT_URI_WITH_VOICEMAIL;
 
     /** Fields specific to voicemail provider that should not be exposed by call_log*/
     private static final String[] VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS = new String[] {
@@ -85,7 +81,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     @Override
     protected void tearDown() throws Exception {
         setUpWithVoicemailPermissions();
-        mResolver.delete(VOICEMAIL_CONTENT_URI, null, null);
+        mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
         super.tearDown();
     }
 
@@ -122,7 +118,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         });
 
         // Now grant voicemail permission - should succeed.
-        Uri uri  = mResolver.insert(VOICEMAIL_CONTENT_URI, values);
+        Uri uri  = mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, values);
         assertStoredValues(uri, values);
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
     }
@@ -206,7 +202,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         // With the default uri, only 2 call entries should be returned.
         // With the voicemail uri all 3 should be returned.
         assertEquals(2, getCount(Calls.CONTENT_URI, null, null));
-        assertEquals(3, getCount(VOICEMAIL_CONTENT_URI, null, null));
+        assertEquals(3, getCount(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null));
     }
 
     // Test to check that none of the voicemail provider specific fields are
@@ -260,48 +256,49 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
-                mResolver.insert(VOICEMAIL_CONTENT_URI, getDefaultVoicemailValues());
+                mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultVoicemailValues());
             }
         });
         // Should now succeed with permissions granted.
         setUpWithVoicemailPermissions();
-        mResolver.insert(VOICEMAIL_CONTENT_URI, getDefaultVoicemailValues());
+        mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultVoicemailValues());
     }
 
     public void testVoicemailPermissions_Update() {
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
-                mResolver.update(VOICEMAIL_CONTENT_URI, getDefaultVoicemailValues(), null, null);
+                mResolver.update(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultVoicemailValues(),
+                        null, null);
             }
         });
         // Should now succeed with permissions granted.
         setUpWithVoicemailPermissions();
-        mResolver.update(VOICEMAIL_CONTENT_URI, getDefaultCallValues(), null, null);
+        mResolver.update(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultCallValues(), null, null);
     }
 
     public void testVoicemailPermissions_Query() {
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
-                mResolver.query(VOICEMAIL_CONTENT_URI, null, null, null, null);
+                mResolver.query(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null, null, null);
             }
         });
         // Should now succeed with permissions granted.
         setUpWithVoicemailPermissions();
-        mResolver.query(VOICEMAIL_CONTENT_URI, null, null, null, null);
+        mResolver.query(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null, null, null);
     }
 
     public void testVoicemailPermissions_Delete() {
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
-                mResolver.delete(VOICEMAIL_CONTENT_URI, null, null);
+                mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
             }
         });
         // Should now succeed with permissions granted.
         setUpWithVoicemailPermissions();
-        mResolver.delete(VOICEMAIL_CONTENT_URI, null, null);
+        mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
     }
 
     private ContentValues getDefaultValues(int callType) {
@@ -327,7 +324,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     }
 
     private Uri insertVoicemailRecord() {
-        return mResolver.insert(VOICEMAIL_CONTENT_URI, getDefaultVoicemailValues());
+        return mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultVoicemailValues());
     }
 
     public static class TestCallLogProvider extends CallLogProvider {

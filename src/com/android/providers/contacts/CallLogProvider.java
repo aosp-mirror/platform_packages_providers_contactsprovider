@@ -21,7 +21,6 @@ import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause
 import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.SelectionBuilder;
 
 import android.content.ContentProvider;
@@ -36,38 +35,13 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
-import android.provider.ContactsContract;
-import android.util.Log;
 
 import java.util.HashMap;
-import java.util.Set;
 
 /**
  * Call log content provider.
  */
 public class CallLogProvider extends ContentProvider {
-
-    /**
-     * An optional URI parameter for call_log operations which instructs the
-     * provider to allow the operation to be applied to voicemail records as well.
-     * <p> TYPE: Boolean
-     *
-     * <p> Using this parameter with a value true will result in a security
-     * error if the calling application does not have appropriate permissions
-     * to access voicemails.
-     */
-    // TODO: Move this to ContactsContract.Calls once we are happy with the changes.
-    public static final String ALLOW_VOICEMAILS_PARAM_KEY = "allow_voicemails";
-
-    /**
-     * Content uri with {@link #ALLOW_VOICEMAILS_PARAM_KEY} set. This can directly
-     * be used to access call log entries that includes voicemail records.
-     */
-    // TODO: Move this to ContactsContract.Calls once we are happy with the changes.
-    public static Uri CONTENT_URI_WITH_VOICEMAIL = Calls.CONTENT_URI.buildUpon()
-            .appendQueryParameter(CallLogProvider.ALLOW_VOICEMAILS_PARAM_KEY, "true")
-            .build();
-
     /** Selection clause to use to exclude voicemail records.  */
     private static final String EXCLUDE_VOICEMAIL_SELECTION = getInequalityClause(
             Calls.TYPE, Integer.toString(Calls.VOICEMAIL_TYPE));
@@ -297,7 +271,7 @@ public class CallLogProvider extends ContentProvider {
      * included.
      */
     private boolean isAllowVoicemailRequest(Uri uri) {
-        return uri.getBooleanQueryParameter(ALLOW_VOICEMAILS_PARAM_KEY, false);
+        return uri.getBooleanQueryParameter(Calls.ALLOW_VOICEMAILS_PARAM_KEY, false);
     }
 
     /**
@@ -310,7 +284,8 @@ public class CallLogProvider extends ContentProvider {
         if (!isAllowVoicemailRequest(uri)) {
             throw new IllegalArgumentException(
                     String.format("Uri %s cannot be used for voicemail record." +
-                            " Please set '%s=true' in the uri.", uri, ALLOW_VOICEMAILS_PARAM_KEY));
+                            " Please set '%s=true' in the uri.", uri,
+                            Calls.ALLOW_VOICEMAILS_PARAM_KEY));
         }
     }
 
