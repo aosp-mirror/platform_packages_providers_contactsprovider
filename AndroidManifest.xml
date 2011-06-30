@@ -17,7 +17,7 @@
             android:label="@string/read_write_all_voicemail_label"
             android:description="@string/read_write_all_voicemail_description"
             android:permissionGroup="android.permission-group.PERSONAL_INFO"
-            android:protectionLevel="dangerous"
+            android:protectionLevel="signature"
             />
 
     <uses-permission android:name="android.permission.READ_CONTACTS" />
