@@ -23,12 +23,14 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.CloseUtils;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
 
+import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -394,26 +396,28 @@ public class VoicemailContentProvider extends ContentProvider {
             // 1) Send it to all packages that have READ_WRITE_ALL_VOICEMAIL permission.
             // 2) Send it to only the owner package that has just READ_WRITE_OWN_VOICEMAIL, if not
             // already sent in (1).
-            for (String packageName : getBroadcastReceiverPackages(intentAction, notificationUri)) {
+            for (ComponentName component :
+                    getBroadcastReceiverComponents(intentAction, notificationUri)) {
                 Intent intent = new Intent(intentAction, notificationUri);
-                intent.setPackage(packageName);
+                intent.setComponent(component);
                 intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
-                        callingPackage.equals(packageName));
+                        callingPackage.equals(component.getPackageName()));
                 context().sendBroadcast(intent, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
             }
         }
     }
 
     /** Determines the packages that can possibly receive the specified intent. */
-    protected List<String> getBroadcastReceiverPackages(String intentAction, Uri uri) {
+    protected List<ComponentName> getBroadcastReceiverComponents(String intentAction, Uri uri) {
         Intent intent = new Intent(intentAction, uri);
-        List<String> receiverPackages = new ArrayList<String>();
+        List<ComponentName> receiverComponents = new ArrayList<ComponentName>();
         // For broadcast receivers ResolveInfo.activityInfo is the one that is populated.
         for (ResolveInfo resolveInfo :
                 context().getPackageManager().queryBroadcastReceivers(intent, 0)) {
-            receiverPackages.add(resolveInfo.activityInfo.packageName);
+            ActivityInfo activityInfo = resolveInfo.activityInfo;
+            receiverComponents.add(new ComponentName(activityInfo.packageName, activityInfo.name));
         }
-        return receiverPackages;
+        return receiverComponents;
     }
 
     /** Generates a random file for storing audio data. */

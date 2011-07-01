@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -356,10 +357,11 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         }
 
         @Override
-        protected List<String> getBroadcastReceiverPackages(String intentAction, Uri uri) {
-            List<String> broadcastReceiverPackages = new ArrayList<String>();
-            broadcastReceiverPackages.add(getContext().getPackageName());
-            return broadcastReceiverPackages;
+        protected List<ComponentName> getBroadcastReceiverComponents(String intentAction, Uri uri) {
+            List<ComponentName> broadcastReceiverComponents = new ArrayList<ComponentName>();
+            broadcastReceiverComponents.add(new ComponentName(
+                    getContext().getPackageName(), "TestReceiverClass"));
+            return broadcastReceiverComponents;
         }
     }
 
