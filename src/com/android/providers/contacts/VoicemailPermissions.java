@@ -86,6 +86,12 @@ public class VoicemailPermissions {
 
     /** Determines if the calling process has the given permission. */
     private boolean callerHasPermission(String permission) {
-        return mContext.checkCallingPermission(permission) == PackageManager.PERMISSION_GRANTED;
+        // We need to check against both the calling or self permission in order for the Contacts
+        // app to be allowed access.
+        // The reason is that the Contacts app shares its process with the ContactsProvider and
+        // therefore its requests are not considered to be IPCs, since they are coming from the same
+        // process, even if, technically, from a different package.
+        return mContext.checkCallingOrSelfPermission(permission)
+                == PackageManager.PERMISSION_GRANTED;
     }
 }
