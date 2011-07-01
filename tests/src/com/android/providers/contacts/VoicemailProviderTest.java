@@ -24,8 +24,8 @@ import android.content.ContextWrapper;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.VoicemailContract;
 import android.provider.CallLog.Calls;
+import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 
@@ -343,12 +343,23 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
                 public File getDir(String name, int mode) {
                     return mDelgate.getDir(name, mode);
                 }
+                @Override
+                public void sendBroadcast(Intent intent, String receiverPermission) {
+                    // Stub. Does nothing.
+                }
             };
         }
 
         @Override
         protected String getCallingPackage() {
             return getContext().getPackageName();
+        }
+
+        @Override
+        protected List<String> getBroadcastReceiverPackages(String intentAction, Uri uri) {
+            List<String> broadcastReceiverPackages = new ArrayList<String>();
+            broadcastReceiverPackages.add(getContext().getPackageName());
+            return broadcastReceiverPackages;
         }
     }
 

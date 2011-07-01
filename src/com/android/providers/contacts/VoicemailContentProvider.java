@@ -19,13 +19,16 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.CloseUtils;
+import com.android.providers.contacts.util.TypedUriMatcherImpl;
+
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -38,18 +41,11 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsDatabaseHelper.Views;
-import com.android.providers.contacts.util.CloseUtils;
-import com.android.providers.contacts.util.DbQueryUtils;
-import com.android.providers.contacts.util.TypedUriMatcherImpl;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 // TODO: Restrict access to only voicemail columns (i.e no access to call_log
 // specific fields)
@@ -398,10 +394,7 @@ public class VoicemailContentProvider extends ContentProvider {
             // 1) Send it to all packages that have READ_WRITE_ALL_VOICEMAIL permission.
             // 2) Send it to only the owner package that has just READ_WRITE_OWN_VOICEMAIL, if not
             // already sent in (1).
-            List<ResolveInfo> resolveInfos = context().getPackageManager()
-                    .queryBroadcastReceivers(new Intent(intentAction, notificationUri), 0);
-            for (ResolveInfo resolveInfo : resolveInfos) {
-                String packageName = resolveInfo.activityInfo.packageName;
+            for (String packageName : getBroadcastReceiverPackages(intentAction, notificationUri)) {
                 Intent intent = new Intent(intentAction, notificationUri);
                 intent.setPackage(packageName);
                 intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
@@ -409,6 +402,18 @@ public class VoicemailContentProvider extends ContentProvider {
                 context().sendBroadcast(intent, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
             }
         }
+    }
+
+    /** Determines the packages that can possibly receive the specified intent. */
+    protected List<String> getBroadcastReceiverPackages(String intentAction, Uri uri) {
+        Intent intent = new Intent(intentAction, uri);
+        List<String> receiverPackages = new ArrayList<String>();
+        // For broadcast receivers ResolveInfo.activityInfo is the one that is populated.
+        for (ResolveInfo resolveInfo :
+                context().getPackageManager().queryBroadcastReceivers(intent, 0)) {
+            receiverPackages.add(resolveInfo.activityInfo.packageName);
+        }
+        return receiverPackages;
     }
 
     /** Generates a random file for storing audio data. */
