@@ -65,6 +65,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.SocialContract.Activities;
+import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
@@ -97,7 +98,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 603;
+    static final int DATABASE_VERSION = 604;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -124,6 +125,7 @@ import java.util.Locale;
         public static final String DIRECTORIES = "directories";
         public static final String DEFAULT_DIRECTORY = "default_directory";
         public static final String SEARCH_INDEX = "search_index";
+        public static final String VOICEMAIL_STATUS = "voicemail_status";
 
         /**
          * For {@link ContactsContract.DataUsageFeedback}. The table structure itself
@@ -792,7 +794,7 @@ import java.util.Locale;
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        Log.i(TAG, "Bootstrapping database");
+        Log.i(TAG, "Bootstrapping database version: " + DATABASE_VERSION);
 
         mSyncState.createDatabase(db);
 
@@ -1078,6 +1080,17 @@ import java.util.Locale;
                 Voicemails.SOURCE_DATA + " TEXT," +
                 Voicemails.SOURCE_PACKAGE + " TEXT," +
                 Voicemails.STATE + " INTEGER" +
+        ");");
+
+        // Voicemail source status table.
+        db.execSQL("CREATE TABLE " + Tables.VOICEMAIL_STATUS + " (" +
+                VoicemailContract.Status._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                VoicemailContract.Status.SOURCE_PACKAGE + " TEXT UNIQUE NOT NULL," +
+                VoicemailContract.Status.SETTINGS_URI + " TEXT," +
+                VoicemailContract.Status.VOICEMAIL_ACCESS_URI + " TEXT," +
+                VoicemailContract.Status.CONFIGURATION_STATE + " INTEGER," +
+                VoicemailContract.Status.DATA_CHANNEL_STATE + " INTEGER," +
+                VoicemailContract.Status.NOTIFICATION_CHANNEL_STATE + " INTEGER" +
         ");");
 
         // Activities table
@@ -1967,6 +1980,11 @@ import java.util.Locale;
         if (oldVersion < 603) {
             upgradeViewsAndTriggers = true;
             oldVersion = 603;
+        }
+
+        if (oldVersion < 604) {
+            upgradeToVersion604(db);
+            oldVersion = 604;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3041,6 +3059,18 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE calls ADD source_data TEXT;");
         db.execSQL("ALTER TABLE calls ADD source_package TEXT;");
         db.execSQL("ALTER TABLE calls ADD state INTEGER;");
+    }
+
+    private void upgradeToVersion604(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE voicemail_status (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "source_package TEXT UNIQUE NOT NULL," +
+                "settings_uri TEXT," +
+                "voicemail_access_uri TEXT," +
+                "configuration_state INTEGER," +
+                "data_channel_state INTEGER," +
+                "notification_channel_state INTEGER" +
+        ");");
     }
 
     public String extractHandleFromEmailAddress(String email) {
