@@ -166,7 +166,7 @@ public class VoicemailContentProvider extends ContentProvider {
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
         Cursor c = qb.query(db, projection, combinedClause, selectionArgs, null, null, sortOrder);
         if (c != null) {
-            c.setNotificationUri(mContentResolver, VoicemailContract.CONTENT_URI);
+            c.setNotificationUri(mContentResolver, Voicemails.CONTENT_URI);
         }
         return c;
     }
