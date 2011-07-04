@@ -116,7 +116,7 @@ public class VoicemailContentProvider extends ContentProvider {
             return lookupMimeType(uriData);
         }
         // Not an individual voicemail - must be a directory listing type.
-        return VoicemailContract.DIR_TYPE;
+        return Voicemails.DIR_TYPE;
     }
 
     /** Query the db for the MIME type of the given URI, called only from {@link #getType(Uri)}. */
@@ -222,10 +222,7 @@ public class VoicemailContentProvider extends ContentProvider {
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
         long rowId = db.insert(VOICEMAILS_TABLE_NAME, null, copiedValues);
         if (rowId > 0) {
-            Uri newUri = ContentUris.withAppendedId(
-                    Uri.withAppendedPath(VoicemailContract.CONTENT_URI_SOURCE,
-                            copiedValues.getAsString(Voicemails.SOURCE_PACKAGE)), rowId);
-
+            Uri newUri = ContentUris.withAppendedId(uriData.getUri(), rowId);
             if (sendProviderChangedNotification) {
                 notifyChange(newUri, VoicemailContract.ACTION_NEW_VOICEMAIL,
                         Intent.ACTION_PROVIDER_CHANGED);
@@ -501,16 +498,13 @@ public class VoicemailContentProvider extends ContentProvider {
 
     /** Get a {@link UriData} corresponding to a given uri. */
     private UriData createUriData(Uri uri) {
+        String sourcePackage = uri.getQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE);
         List<String> segments = uri.getPathSegments();
         switch (createUriMatcher().match(uri)) {
             case VOICEMAILS:
-                return new UriData(uri, null, null);
+                return new UriData(uri, null, sourcePackage);
             case VOICEMAILS_ID:
-                return new UriData(uri, segments.get(1), null);
-            case VOICEMAILS_SOURCE:
-                return new UriData(uri, null, segments.get(2));
-            case VOICEMAILS_SOURCE_ID:
-                return new UriData(uri, segments.get(3), segments.get(2));
+                return new UriData(uri, segments.get(1), sourcePackage);
             case NO_MATCH:
                 throw new IllegalArgumentException("Invalid URI: " + uri);
             default:

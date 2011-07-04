@@ -95,13 +95,13 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         // Give away full permission, in case it was granted previously.
         mActor.removePermissions(ALL_PERMISSION);
         mActor.addPermissions(OWN_PERMISSION);
-        mUseSourceUri = false;
+        mUseSourceUri = true;
     }
 
     private void setUpForFullPermission() {
         mActor.addPermissions(OWN_PERMISSION);
         mActor.addPermissions(ALL_PERMISSION);
-        mUseSourceUri = true;
+        mUseSourceUri = false;
     }
 
     private void setUpForNoPermission() {
@@ -111,12 +111,8 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
     }
 
     private Uri contentUri() {
-         if (mUseSourceUri) {
-             return VoicemailContract.CONTENT_URI;
-         } else {
-             return Uri.withAppendedPath(VoicemailContract.CONTENT_URI_SOURCE,
-                     mActor.packageName);
-         }
+        return mUseSourceUri ?
+                Voicemails.buildSourceUri(mActor.packageName) : Voicemails.CONTENT_URI;
     }
 
     public void testInsert() throws Exception {
@@ -198,8 +194,9 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         // Now give away full permission and check that we can update and delete only
         // the own voicemail.
         setUpForOwnPermission();
-        mResolver.update(ownVoicemail, getDefaultVoicemailValues(), null, null);
-        mResolver.delete(ownVoicemail, null, null);
+        mResolver.update(withSourcePackageParam(ownVoicemail),
+                getDefaultVoicemailValues(), null, null);
+        mResolver.delete(withSourcePackageParam(ownVoicemail), null, null);
 
         // However, attempting to update or delete another-package's voicemail should fail.
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
@@ -214,6 +211,12 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
                 mResolver.delete(anotherVoicemail, null, null);
             }
         });
+    }
+
+    private Uri withSourcePackageParam(Uri uri) {
+        return uri.buildUpon()
+            .appendQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, mActor.packageName)
+            .build();
     }
 
     // Test to ensure that all operations fail when no voicemail permission is granted.
