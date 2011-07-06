@@ -163,6 +163,54 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         assertEquals(0, getCount(uri, null, null));
     }
 
+    public void testGetType() throws Exception {
+        // voicemail with no MIME type.
+        ContentValues values = getDefaultVoicemailValues();
+        Uri uri = mResolver.insert(contentUri(), values);
+        assertEquals(null, mResolver.getType(uri));
+
+        values.put(Voicemails.MIME_TYPE, "foo/bar");
+        uri = mResolver.insert(contentUri(), values);
+        assertEquals("foo/bar", mResolver.getType(uri));
+
+        // base URIs.
+        assertEquals(Voicemails.DIR_TYPE, mResolver.getType(Voicemails.CONTENT_URI));
+        assertEquals(Voicemails.DIR_TYPE, mResolver.getType(Voicemails.buildSourceUri("foo")));
+    }
+
+    // Test to ensure that without full permission it is not possible to use the base uri (i.e. with
+    // no package URI specified).
+    public void testMustUsePackageUriWithoutFullPermission() {
+        setUpForOwnPermission();
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.insert(Voicemails.CONTENT_URI, getDefaultVoicemailValues());
+            }
+        });
+
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.update(Voicemails.CONTENT_URI, getDefaultVoicemailValues(), null, null);
+            }
+        });
+
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.query(Voicemails.CONTENT_URI, null, null, null, null);
+            }
+        });
+
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.delete(Voicemails.CONTENT_URI, null, null);
+            }
+        });
+    }
+
     public void testPermissions_InsertAndQuery() {
         setUpForFullPermission();
         // Insert two records - one each with own and another package.
@@ -349,7 +397,7 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
                 }
                 @Override
                 public void sendBroadcast(Intent intent, String receiverPermission) {
-                    // Stub. Does nothing.
+                    mDelgate.sendOrderedBroadcast(intent, receiverPermission);
                 }
             };
         }
@@ -417,7 +465,7 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         return new VvmProviderCalls() {
             @Override
             public void sendOrderedBroadcast(Intent intent, String receiverPermission) {
-                // TODO: Auto-generated method stub
+                // Do nothing for now.
             }
 
             @Override
