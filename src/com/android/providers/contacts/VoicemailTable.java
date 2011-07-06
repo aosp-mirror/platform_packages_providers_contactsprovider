@@ -22,6 +22,8 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 
+import java.io.FileNotFoundException;
+
 /**
  * Defines interfaces for communication between voicemail content provider and voicemail table
  * implementations.
@@ -40,8 +42,8 @@ public interface VoicemailTable {
         public int update(UriData uriData, ContentValues values, String selection,
                 String[] selectionArgs);
         public String getType(UriData uriData);
-        public ParcelFileDescriptor openFile(UriData uriData, String mode,
-                ParcelFileDescriptor openFileHelper);
+        public ParcelFileDescriptor openFile(UriData uriData, String mode)
+                throws FileNotFoundException;
     }
 
     /**
@@ -63,5 +65,12 @@ public interface VoicemailTable {
          * Inserts source_package field into ContentValues. Used in insert operations.
          */
         public void checkAndAddSourcePackageIntoValues(UriData uriData, ContentValues values);
+
+        /**
+         * Opens the file pointed to by the column "_data".
+         * @throws FileNotFoundException
+         */
+        public ParcelFileDescriptor openDataFile(UriData uriData, String mode)
+                throws FileNotFoundException;
     }
 }

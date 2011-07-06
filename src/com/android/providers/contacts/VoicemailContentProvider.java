@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import static android.provider.VoicemailContract.SOURCE_PACKAGE_FIELD;
+import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
@@ -33,6 +35,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.ParcelFileDescriptor;
+import android.provider.BaseColumns;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 
@@ -41,23 +44,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * An implementation of the Voicemail content provider.
+ * An implementation of the Voicemail content provider. This class in the entry point for both
+ * voicemail content ('calls') table and 'voicemail_status' table. This class performs all common
+ * permission checks and then delegates database level operations to respective table delegate
+ * objects.
  */
 public class VoicemailContentProvider extends ContentProvider
         implements VoicemailTable.DelegateHelper {
     private static final String TAG = "VoicemailContentProvider";
-    private static final String VOICEMAILS_TABLE_NAME = Tables.CALLS;
 
     private ContentResolver mContentResolver;
     private VoicemailPermissions mVoicemailPermissions;
     private VoicemailTable.Delegate mVoicemailContentTable;
+    private VoicemailTable.Delegate mVoicemailStatusTable;
 
     @Override
     public boolean onCreate() {
         Context context = context();
         mContentResolver = context.getContentResolver();
         mVoicemailPermissions = new VoicemailPermissions(context);
-        mVoicemailContentTable = new VoicemailContentTable(VOICEMAILS_TABLE_NAME, context,
+        mVoicemailContentTable = new VoicemailContentTable(Tables.CALLS, context,
+                getDatabaseHelper(context), this);
+        mVoicemailStatusTable = new VoicemailStatusTable(Tables.VOICEMAIL_STATUS, context,
                 getDatabaseHelper(context), this);
         return true;
     }
@@ -79,19 +87,19 @@ public class VoicemailContentProvider extends ContentProvider
             // Special case: for illegal URIs, we return null rather than thrown an exception.
             return null;
         }
-        return mVoicemailContentTable.getType(uriData);
+        return getTableDelegate(uriData).getType(uriData);
     }
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] valuesArray) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
-        return mVoicemailContentTable.bulkInsert(uriData, valuesArray);
+        UriData uriData = checkPermissionsAndCreateUriData(uri, valuesArray);
+        return getTableDelegate(uriData).bulkInsert(uriData, valuesArray);
     }
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
-        return mVoicemailContentTable.insert(uriData, values);
+        UriData uriData = checkPermissionsAndCreateUriData(uri, values);
+        return getTableDelegate(uriData).insert(uriData, values);
     }
 
     @Override
@@ -100,16 +108,16 @@ public class VoicemailContentProvider extends ContentProvider
         UriData uriData = checkPermissionsAndCreateUriData(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause());
-        return mVoicemailContentTable.query(uriData, projection, selectionBuilder.build(),
+        return getTableDelegate(uriData).query(uriData, projection, selectionBuilder.build(),
                 selectionArgs, sortOrder);
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
+        UriData uriData = checkPermissionsAndCreateUriData(uri, values);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause());
-        return mVoicemailContentTable.update(uriData, values, selectionBuilder.build(),
+        return getTableDelegate(uriData).update(uriData, values, selectionBuilder.build(),
                 selectionArgs);
     }
 
@@ -118,14 +126,30 @@ public class VoicemailContentProvider extends ContentProvider
         UriData uriData = checkPermissionsAndCreateUriData(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause());
-        return mVoicemailContentTable.delete(uriData, selectionBuilder.build(), selectionArgs);
+        return getTableDelegate(uriData).delete(uriData, selectionBuilder.build(), selectionArgs);
     }
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         UriData uriData = checkPermissionsAndCreateUriData(uri);
         // openFileHelper() relies on "_data" column to be populated with the file path.
-        return mVoicemailContentTable.openFile(uriData, mode, openFileHelper(uri, mode));
+        return getTableDelegate(uriData).openFile(uriData, mode);
+    }
+
+    /** Returns the correct table delegate object that can handle this URI. */
+    private VoicemailTable.Delegate getTableDelegate(UriData uriData) {
+        switch (uriData.getUriType()) {
+            case STATUS:
+            case STATUS_ID:
+                return mVoicemailStatusTable;
+            case VOICEMAILS:
+            case VOICEMAILS_ID:
+                return mVoicemailContentTable;
+            case NO_MATCH:
+                throw new IllegalStateException("Invalid uri type for uri: " + uriData.getUri());
+            default:
+                throw new IllegalStateException("Impossible, all cases are covered.");
+        }
     }
 
     /**
@@ -135,8 +159,10 @@ public class VoicemailContentProvider extends ContentProvider
         private final Uri mUri;
         private final String mId;
         private final String mSourcePackage;
+        private final VoicemailUriType mUriType;
 
-        public UriData(Uri uri, String id, String sourcePackage) {
+        public UriData(Uri uri, VoicemailUriType uriType, String id, String sourcePackage) {
+            mUriType = uriType;
             mUri = uri;
             mId = id;
             mSourcePackage = sourcePackage;
@@ -167,21 +193,42 @@ public class VoicemailContentProvider extends ContentProvider
             return mSourcePackage;
         }
 
+        /** Gets the Voicemail URI type. */
+        public final VoicemailUriType getUriType() {
+            return mUriType;
+        }
+
+        /** Builds a where clause from the URI data. */
+        public final String getWhereClause() {
+            return concatenateClauses(
+                    (hasId() ? getEqualityClause(BaseColumns._ID, getId()) : null),
+                    (hasSourcePackage() ? getEqualityClause(SOURCE_PACKAGE_FIELD,
+                            getSourcePackage()) : null));
+        }
+
         /** Create a {@link UriData} corresponding to a given uri. */
         public static UriData createUriData(Uri uri) {
             String sourcePackage = uri.getQueryParameter(
                     VoicemailContract.PARAM_KEY_SOURCE_PACKAGE);
             List<String> segments = uri.getPathSegments();
-            switch (createUriMatcher().match(uri)) {
+            VoicemailUriType uriType = createUriMatcher().match(uri);
+            switch (uriType) {
                 case VOICEMAILS:
-                    return new UriData(uri, null, sourcePackage);
+                case STATUS:
+                    return new UriData(uri, uriType, null, sourcePackage);
                 case VOICEMAILS_ID:
-                    return new UriData(uri, segments.get(1), sourcePackage);
+                case STATUS_ID:
+                    return new UriData(uri, uriType, segments.get(1), sourcePackage);
                 case NO_MATCH:
                     throw new IllegalArgumentException("Invalid URI: " + uri);
                 default:
                     throw new IllegalStateException("Impossible, all cases are covered");
             }
+        }
+
+        private static TypedUriMatcherImpl<VoicemailUriType> createUriMatcher() {
+            return new TypedUriMatcherImpl<VoicemailUriType>(
+                    VoicemailContract.AUTHORITY, VoicemailUriType.values());
         }
     }
 
@@ -214,21 +261,10 @@ public class VoicemailContentProvider extends ContentProvider
     // VoicemailTable.DelegateHelper interface.
     public void checkAndAddSourcePackageIntoValues(UriData uriData, ContentValues values) {
         // If content values don't contain the provider, calculate the right provider to use.
-        if (!values.containsKey(VoicemailContract.SOURCE_PACKAGE_FIELD)) {
+        if (!values.containsKey(SOURCE_PACKAGE_FIELD)) {
             String provider = uriData.hasSourcePackage() ?
                     uriData.getSourcePackage() : getCallingPackage();
-            values.put(VoicemailContract.SOURCE_PACKAGE_FIELD, provider);
-        }
-        // If you put a provider in the URI and in the values, they must match.
-        if (uriData.hasSourcePackage() &&
-                values.containsKey(VoicemailContract.SOURCE_PACKAGE_FIELD)) {
-            if (!uriData.getSourcePackage().equals(
-                    values.get(VoicemailContract.SOURCE_PACKAGE_FIELD))) {
-                throw new SecurityException(
-                        "Provider in URI was " + uriData.getSourcePackage() +
-                        " but doesn't match provider in ContentValues which was "
-                        + values.get(VoicemailContract.SOURCE_PACKAGE_FIELD));
-            }
+            values.put(SOURCE_PACKAGE_FIELD, provider);
         }
         // You must have access to the provider given in values.
         if (!mVoicemailPermissions.callerHasFullAccess()) {
@@ -238,9 +274,26 @@ public class VoicemailContentProvider extends ContentProvider
         }
     }
 
-    private static TypedUriMatcherImpl<VoicemailUriType> createUriMatcher() {
-        return new TypedUriMatcherImpl<VoicemailUriType>(
-                VoicemailContract.AUTHORITY, VoicemailUriType.values());
+    /**
+     * Checks that the source_package field is same in uriData and ContentValues, if it happens
+     * to be set in both.
+     */
+    private void checkSourcePackageSameIfSet(UriData uriData, ContentValues values) {
+        if (uriData.hasSourcePackage() && values.containsKey(SOURCE_PACKAGE_FIELD)) {
+            if (!uriData.getSourcePackage().equals(values.get(SOURCE_PACKAGE_FIELD))) {
+                throw new SecurityException(
+                        "source_package in URI was " + uriData.getSourcePackage() +
+                        " but doesn't match source_package in ContentValues which was "
+                        + values.get(SOURCE_PACKAGE_FIELD));
+            }
+        }
+    }
+
+    @Override
+    /** Implementation of  {@link VoicemailTable.DelegateHelper#openDataFile(UriData, String)} */
+    public ParcelFileDescriptor openDataFile(UriData uriData, String mode)
+            throws FileNotFoundException {
+        return openFileHelper(uriData.getUri(), mode);
     }
 
     /**
@@ -255,15 +308,27 @@ public class VoicemailContentProvider extends ContentProvider
     }
 
     /**
-     * Checks that the callingProvider is same as voicemailProvider. Throws {@link
+     * Same as {@link #checkPackagePermission(UriData)}. In addition does permission check
+     * on the ContentValues.
+     */
+    private UriData checkPermissionsAndCreateUriData(Uri uri, ContentValues... valuesArray) {
+        UriData uriData = checkPermissionsAndCreateUriData(uri);
+        for (ContentValues values : valuesArray) {
+            checkSourcePackageSameIfSet(uriData, values);
+        }
+        return uriData;
+    }
+
+    /**
+     * Checks that the callingPackage is same as voicemailSourcePackage. Throws {@link
      * SecurityException} if they don't match.
      */
-    private final void checkPackagesMatch(String callingProvider, String voicemailProvider,
+    private final void checkPackagesMatch(String callingPackage, String voicemailSourcePackage,
             Uri uri) {
-        if (!voicemailProvider.equals(callingProvider)) {
+        if (!voicemailSourcePackage.equals(callingPackage)) {
             String errorMsg = String.format("Permission denied for URI: %s\n. " +
-                    "Provider %s cannot perform this operation for %s. Requires %s permission.",
-                    uri, callingProvider, voicemailProvider,
+                    "Package %s cannot perform this operation for %s. Requires %s permission.",
+                    uri, callingPackage, voicemailSourcePackage,
                     Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
             throw new SecurityException(errorMsg);
         }
@@ -272,7 +337,7 @@ public class VoicemailContentProvider extends ContentProvider
     /**
      * Checks that either the caller has READ_WRITE_ALL_VOICEMAIL permission, or has the
      * READ_WRITE_OWN_VOICEMAIL permission and is using a URI that matches
-     * /voicemail/source/[source-package] where [source-package] is the same as the calling
+     * /voicemail/?source_package=[source-package] where [source-package] is the same as the calling
      * package.
      *
      * @throws SecurityException if the check fails.
@@ -280,7 +345,7 @@ public class VoicemailContentProvider extends ContentProvider
     private void checkPackagePermission(UriData uriData) {
         if (!mVoicemailPermissions.callerHasFullAccess()) {
             if (!uriData.hasSourcePackage()) {
-                // You cannot have a match if this is not a provider uri.
+                // You cannot have a match if this is not a provider URI.
                 throw new SecurityException(String.format(
                         "Provider %s does not have %s permission." +
                                 "\nPlease set query parameter '%s' in the URI.\nURI: %s",

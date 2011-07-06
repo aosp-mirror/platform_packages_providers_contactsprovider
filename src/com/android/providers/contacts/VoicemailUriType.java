@@ -23,7 +23,9 @@ import com.android.providers.contacts.util.UriType;
 enum VoicemailUriType implements UriType {
     NO_MATCH(null),
     VOICEMAILS("voicemail"),
-    VOICEMAILS_ID("voicemail/#");
+    VOICEMAILS_ID("voicemail/#"),
+    STATUS("status"),
+    STATUS_ID("status/#");
 
     private final String path;
 
