@@ -62,6 +62,7 @@ public class GlobalSearchSupport {
             SearchManager.SUGGEST_COLUMN_INTENT_DATA,
             SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
             SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA,
+            SearchManager.SUGGEST_COLUMN_LAST_ACCESS_HINT,
     };
 
     private static final char SNIPPET_START_MATCH = '\u0001';
@@ -109,6 +110,7 @@ public class GlobalSearchSupport {
         String icon1;
         String icon2;
         String filter;
+        String lastAccessTime;
 
         @SuppressWarnings({"unchecked"})
         public ArrayList asList(String[] projection) {
@@ -132,6 +134,7 @@ public class GlobalSearchSupport {
                 list.add(buildUri());
                 list.add(lookupKey);
                 list.add(filter);
+                list.add(lastAccessTime);
             } else {
                 for (int i = 0; i < projection.length; i++) {
                     addColumnValue(list, projection[i]);
@@ -159,6 +162,8 @@ public class GlobalSearchSupport {
                 list.add(lookupKey);
             } else if (SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA.equals(column)) {
                 list.add(filter);
+            } else if (SearchManager.SUGGEST_COLUMN_LAST_ACCESS_HINT.equals(column)) {
+                list.add(lastAccessTime);
             } else {
                 throw new IllegalArgumentException("Invalid column name: " + column);
             }
@@ -280,7 +285,8 @@ public class GlobalSearchSupport {
                         + Contacts.LOOKUP_KEY + ", "
                         + Contacts.PHOTO_THUMBNAIL_URI + ", "
                         + Contacts.DISPLAY_NAME + ", "
-                        + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE);
+                        + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE + ", "
+                        + Contacts.LAST_TIME_CONTACTED);
         if (haveFilter) {
             sb.append(", " + SearchSnippetColumns.SNIPPET);
         }
@@ -315,8 +321,9 @@ public class GlobalSearchSupport {
                 suggestion.photoUri = c.getString(2);
                 suggestion.text1 = c.getString(3);
                 suggestion.presence = c.isNull(4) ? -1 : c.getInt(4);
+                suggestion.lastAccessTime = c.getString(5);
                 if (haveFilter) {
-                    suggestion.text2 = shortenSnippet(c.getString(5));
+                    suggestion.text2 = shortenSnippet(c.getString(6));
                 }
                 cursor.addRow(suggestion.asList(projection));
             }
