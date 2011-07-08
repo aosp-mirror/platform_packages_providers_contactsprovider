@@ -64,6 +64,8 @@ import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract.StreamItems;
+import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.SocialContract.Activities;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
@@ -98,7 +100,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 604;
+    static final int DATABASE_VERSION = 605;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -106,6 +108,8 @@ import java.util.Locale;
     public interface Tables {
         public static final String CONTACTS = "contacts";
         public static final String RAW_CONTACTS = "raw_contacts";
+        public static final String STREAM_ITEMS = "stream_items";
+        public static final String STREAM_ITEM_PHOTOS = "stream_item_photos";
         public static final String PACKAGES = "packages";
         public static final String MIMETYPES = "mimetypes";
         public static final String PHONE_LOOKUP = "phone_lookup";
@@ -498,6 +502,29 @@ import java.util.Locale;
         String CONCRETE_STATUS_ICON = ALIAS + "." + StatusUpdates.STATUS_ICON;
     }
 
+    public interface StreamItemsColumns {
+        String CONCRETE_ID = Tables.STREAM_ITEMS + "." + BaseColumns._ID;
+        String CONCRETE_RAW_CONTACT_ID = Tables.STREAM_ITEMS + "." + StreamItems.RAW_CONTACT_ID;
+        String CONCRETE_PACKAGE = Tables.STREAM_ITEMS + "." + StreamItems.RES_PACKAGE;
+        String CONCRETE_ICON = Tables.STREAM_ITEMS + "." + StreamItems.RES_ICON;
+        String CONCRETE_LABEL = Tables.STREAM_ITEMS + "." + StreamItems.RES_LABEL;
+        String CONCRETE_TEXT = Tables.STREAM_ITEMS + "." + StreamItems.TEXT;
+        String CONCRETE_TIMESTAMP = Tables.STREAM_ITEMS + "." + StreamItems.TIMESTAMP;
+        String CONCRETE_COMMENTS = Tables.STREAM_ITEMS + "." + StreamItems.COMMENTS;
+        String CONCRETE_ACTION = Tables.STREAM_ITEMS + "." + StreamItems.ACTION;
+        String CONCRETE_ACTION_URI = Tables.STREAM_ITEMS + "." + StreamItems.ACTION_URI;
+    }
+
+    public interface StreamItemPhotosColumns {
+        String CONCRETE_ID = Tables.STREAM_ITEM_PHOTOS + "." + BaseColumns._ID;
+        String CONCRETE_STREAM_ITEM_ID = Tables.STREAM_ITEM_PHOTOS + "."
+                + StreamItemPhotos.STREAM_ITEM_ID;
+        String CONCRETE_SORT_INDEX = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SORT_INDEX;
+        String CONCRETE_PICTURE = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.PICTURE;
+        String CONCRETE_ACTION = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION;
+        String CONCRETE_ACTION_URI = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION_URI;
+    }
+
     public interface PropertiesColumns {
         String PROPERTY_KEY = "property_key";
         String PROPERTY_VALUE = "property_value";
@@ -872,6 +899,30 @@ import java.util.Locale;
                 RawContacts.ACCOUNT_TYPE + ", " +
                 RawContacts.ACCOUNT_NAME +
         ");");
+
+        db.execSQL("CREATE TABLE " + Tables.STREAM_ITEMS + " (" +
+                StreamItems._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                StreamItems.RAW_CONTACT_ID + " INTEGER NOT NULL, " +
+                StreamItems.RES_PACKAGE + " INTEGER NOT NULL, " +
+                StreamItems.RES_ICON + " INTEGER, " +
+                StreamItems.RES_LABEL + " INTEGER, " +
+                StreamItems.TEXT + " TEXT NOT NULL, " +
+                StreamItems.TIMESTAMP + " INTEGER NOT NULL, " +
+                StreamItems.COMMENTS + " TEXT NOT NULL, " +
+                StreamItems.ACTION + " TEXT, " +
+                StreamItems.ACTION_URI + " TEXT, " +
+                "FOREIGN KEY(" + StreamItems.RAW_CONTACT_ID + ") REFERENCES " +
+                        Tables.RAW_CONTACTS + "(" + RawContacts._ID + "));");
+
+        db.execSQL("CREATE TABLE " + Tables.STREAM_ITEM_PHOTOS + " (" +
+                StreamItemPhotos._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                StreamItemPhotos.STREAM_ITEM_ID + " INTEGER NOT NULL, " +
+                StreamItemPhotos.SORT_INDEX + " INTEGER, " +
+                StreamItemPhotos.PICTURE + " BLOB, " +
+                StreamItemPhotos.ACTION + " TEXT, " +
+                StreamItemPhotos.ACTION_URI + " TEXT, " +
+                "FOREIGN KEY(" + StreamItemPhotos.STREAM_ITEM_ID + ") REFERENCES " +
+                        Tables.STREAM_ITEMS + "(" + StreamItems._ID + "));");
 
         // TODO readd the index and investigate a controlled use of it
 //        db.execSQL("CREATE INDEX raw_contacts_agg_index ON " + Tables.RAW_CONTACTS + " (" +
@@ -1987,6 +2038,11 @@ import java.util.Locale;
             oldVersion = 604;
         }
 
+        if (oldVersion < 605) {
+            upgradeToVersion605(db);
+            oldVersion = 605;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -3073,6 +3129,30 @@ import java.util.Locale;
         ");");
     }
 
+    private void upgradeToVersion605(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE stream_items(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "raw_contact_id INTEGER NOT NULL, " +
+                "package_id INTEGER NOT NULL, " +
+                "icon INTEGER, " +
+                "label INTEGER, " +
+                "text TEXT NOT NULL, " +
+                "timestamp INTEGER NOT NULL, " +
+                "comments TEXT NOT NULL, " +
+                "action TEXT, " +
+                "action_uri TEXT, " +
+                "FOREIGN KEY(raw_contact_id) REFERENCES raw_contacts(_id));");
+
+        db.execSQL("CREATE TABLE stream_item_photos(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "stream_item_id INTEGER NOT NULL, " +
+                "sort_index INTEGER, " +
+                "picture BLOB, " +
+                "action TEXT, " +
+                "action_uri TEXT, " +
+                "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -3206,6 +3286,8 @@ import java.util.Locale;
 
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
+        db.execSQL("DELETE FROM " + Tables.STREAM_ITEMS + ";");
+        db.execSQL("DELETE FROM " + Tables.STREAM_ITEM_PHOTOS + ";");
         db.execSQL("DELETE FROM " + Tables.DATA + ";");
         db.execSQL("DELETE FROM " + Tables.PHONE_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");

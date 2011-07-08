@@ -58,6 +58,8 @@ import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract.StreamItems;
+import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
@@ -67,7 +69,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.Collator;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -2773,6 +2777,603 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(StatusUpdates.PRESENCE, presence);
         values.put(StatusUpdates.STATUS, status);
         assertCursorValues(c, values);
+    }
+
+    // Stream item query test cases.
+
+    public void testQueryStreamItemsByRawContactId() {
+        long rawContactId = createRawContact(mAccount);
+        ContentValues values = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, values, mAccount);
+        assertStoredValues(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                        RawContacts.StreamItems.CONTENT_DIRECTORY),
+                values);
+    }
+
+    public void testQueryStreamItemsByContactId() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        ContentValues values = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, values, null);
+        assertStoredValues(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                        Contacts.StreamItems.CONTENT_DIRECTORY),
+                values);
+    }
+
+    public void testQueryStreamItemsByLookupKey() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        ContentValues values = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, values, null);
+        assertStoredValues(
+                Uri.withAppendedPath(
+                        Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey),
+                        Contacts.StreamItems.CONTENT_DIRECTORY),
+                values);
+    }
+
+    public void testQueryStreamItemsByLookupKeyAndContactId() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        ContentValues values = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, values, null);
+        assertStoredValues(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(
+                                Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey),
+                                contactId),
+                        Contacts.StreamItems.CONTENT_DIRECTORY),
+                values);
+    }
+
+    public void testQueryStreamItems() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, values, null);
+        assertStoredValues(StreamItems.CONTENT_URI, values);
+    }
+
+    public void testQueryStreamItemsWithSelection() {
+        long rawContactId = createRawContact();
+        ContentValues firstValues = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, firstValues, null);
+
+        ContentValues secondValues = buildGenericStreamItemValues();
+        secondValues.put(StreamItems.TEXT, "Goodbye world");
+        insertStreamItem(rawContactId, secondValues, null);
+
+        // Select only the first stream item.
+        assertStoredValues(StreamItems.CONTENT_URI, StreamItems.TEXT + "=?",
+                new String[]{"Hello world"}, firstValues);
+
+        // Select only the second stream item.
+        assertStoredValues(StreamItems.CONTENT_URI, StreamItems.TEXT + "=?",
+                new String[]{"Goodbye world"}, secondValues);
+    }
+
+    public void testQueryStreamItemById() {
+        long rawContactId = createRawContact();
+        ContentValues firstValues = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, firstValues, null);
+        long firstStreamItemId = ContentUris.parseId(resultUri);
+
+        ContentValues secondValues = buildGenericStreamItemValues();
+        secondValues.put(StreamItems.TEXT, "Goodbye world");
+        resultUri = insertStreamItem(rawContactId, secondValues, null);
+        long secondStreamItemId = ContentUris.parseId(resultUri);
+
+        // Select only the first stream item.
+        assertStoredValues(ContentUris.withAppendedId(StreamItems.CONTENT_URI, firstStreamItemId),
+                firstValues);
+
+        // Select only the second stream item.
+        assertStoredValues(ContentUris.withAppendedId(StreamItems.CONTENT_URI, secondStreamItemId),
+                secondValues);
+    }
+
+    // Stream item photo insertion + query test cases.
+
+    public void testQueryStreamItemPhotoWithSelection() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, null);
+        long streamItemId = ContentUris.parseId(resultUri);
+
+        ContentValues photo1Values = buildGenericStreamItemPhotoValues(1);
+        insertStreamItemPhoto(streamItemId, photo1Values, null);
+        ContentValues photo2Values = buildGenericStreamItemPhotoValues(2);
+        insertStreamItemPhoto(streamItemId, photo2Values, null);
+
+        // Select only the first photo.
+        assertStoredValues(StreamItems.CONTENT_PHOTO_URI, StreamItemPhotos.SORT_INDEX + "=?",
+                new String[]{"1"}, photo1Values);
+    }
+
+    public void testQueryStreamItemPhotoByStreamItemId() {
+        long rawContactId = createRawContact();
+
+        // Insert a first stream item.
+        ContentValues firstValues = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, firstValues, null);
+        long firstStreamItemId = ContentUris.parseId(resultUri);
+
+        // Insert a second stream item.
+        ContentValues secondValues = buildGenericStreamItemValues();
+        resultUri = insertStreamItem(rawContactId, secondValues, null);
+        long secondStreamItemId = ContentUris.parseId(resultUri);
+
+        // Add a photo to the first stream item.
+        ContentValues photo1Values = buildGenericStreamItemPhotoValues(1);
+        insertStreamItemPhoto(firstStreamItemId, photo1Values, null);
+
+        // Add a photo to the second stream item.
+        ContentValues photo2Values = buildGenericStreamItemPhotoValues(1);
+        photo2Values.put(StreamItemPhotos.PICTURE, "Some other picture".getBytes());
+        insertStreamItemPhoto(secondStreamItemId, photo2Values, null);
+
+        // Select only the photos from the second stream item.
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(StreamItems.CONTENT_URI, secondStreamItemId),
+                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY), photo2Values);
+    }
+
+    public void testQueryStreamItemPhotoByStreamItemPhotoId() {
+        long rawContactId = createRawContact();
+
+        // Insert a first stream item.
+        ContentValues firstValues = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, firstValues, null);
+        long firstStreamItemId = ContentUris.parseId(resultUri);
+
+        // Insert a second stream item.
+        ContentValues secondValues = buildGenericStreamItemValues();
+        resultUri = insertStreamItem(rawContactId, secondValues, null);
+        long secondStreamItemId = ContentUris.parseId(resultUri);
+
+        // Add a photo to the first stream item.
+        ContentValues photo1Values = buildGenericStreamItemPhotoValues(1);
+        resultUri = insertStreamItemPhoto(firstStreamItemId, photo1Values, null);
+        long firstPhotoId = ContentUris.parseId(resultUri);
+
+        // Add a photo to the second stream item.
+        ContentValues photo2Values = buildGenericStreamItemPhotoValues(1);
+        photo2Values.put(StreamItemPhotos.PICTURE, "Some other picture".getBytes());
+        resultUri = insertStreamItemPhoto(secondStreamItemId, photo2Values, null);
+        long secondPhotoId = ContentUris.parseId(resultUri);
+
+        // Select the first photo.
+        assertStoredValues(ContentUris.withAppendedId(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(StreamItems.CONTENT_URI, firstStreamItemId),
+                        StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                firstPhotoId),
+                photo1Values);
+
+        // Select the second photo.
+        assertStoredValues(ContentUris.withAppendedId(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(StreamItems.CONTENT_URI, secondStreamItemId),
+                        StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                secondPhotoId),
+                photo2Values);
+    }
+
+    // Stream item insertion test cases.
+
+    public void testInsertStreamItemIntoOtherAccount() {
+        long rawContactId = createRawContact(mAccount);
+        ContentValues values = buildGenericStreamItemValues();
+        try {
+            insertStreamItem(rawContactId, values, mAccountTwo);
+            fail("Stream insertion was allowed in another account's raw contact.");
+        } catch (SecurityException expected) {
+            // Trying to insert stream items into account one's raw contact is forbidden.
+        }
+    }
+
+    public void testInsertStreamItemInProfileRequiresWriteProfileAccess() {
+        long profileRawContactId = createBasicProfileContact(new ContentValues());
+
+        // With our (default) write profile permission, we should be able to insert a stream item.
+        ContentValues values = buildGenericStreamItemValues();
+        insertStreamItem(profileRawContactId, values, null);
+
+        // Now take away write profile permission.
+        mActor.removePermissions("android.permission.WRITE_PROFILE");
+
+        // Try inserting another stream item.
+        try {
+            insertStreamItem(profileRawContactId, values, null);
+            fail("Should require WRITE_PROFILE access to insert a stream item in the profile.");
+        } catch (SecurityException expected) {
+            // Trying to insert a stream item in the profile without WRITE_PROFILE permission
+            // should fail.
+        }
+    }
+
+    public void testInsertStreamItemWithContentValues() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        values.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+        mResolver.insert(StreamItems.CONTENT_URI, values);
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                RawContacts.StreamItems.CONTENT_DIRECTORY), values);
+    }
+
+    public void testInsertStreamItemOverLimit() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        values.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+
+        List<Long> streamItemIds = Lists.newArrayList();
+
+        // Insert MAX + 1 stream items.
+        long baseTime = System.currentTimeMillis();
+        for (int i = 0; i < 6; i++) {
+            values.put(StreamItems.TIMESTAMP, baseTime + i);
+            Uri resultUri = mResolver.insert(StreamItems.CONTENT_URI, values);
+            streamItemIds.add(ContentUris.parseId(resultUri));
+        }
+        Long doomedStreamItemId = streamItemIds.get(0);
+
+        // There should only be MAX items.  The oldest one should have been cleaned up.
+        Cursor c = mResolver.query(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                        RawContacts.StreamItems.CONTENT_DIRECTORY),
+                new String[]{StreamItems._ID}, null, null, null);
+        try {
+            while(c.moveToNext()) {
+                long streamItemId = c.getLong(0);
+                streamItemIds.remove(streamItemId);
+            }
+        } finally {
+            c.close();
+        }
+
+        assertEquals(1, streamItemIds.size());
+        assertEquals(doomedStreamItemId, streamItemIds.get(0));
+    }
+
+    public void testInsertStreamItemOlderThanOldestInLimit() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        values.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+
+        // Insert MAX stream items.
+        long baseTime = System.currentTimeMillis();
+        for (int i = 0; i < 5; i++) {
+            values.put(StreamItems.TIMESTAMP, baseTime + i);
+            Uri resultUri = mResolver.insert(StreamItems.CONTENT_URI, values);
+            assertNotSame("Expected non-0 stream item ID to be inserted",
+                    0L, ContentUris.parseId(resultUri));
+        }
+
+        // Now try to insert a stream item that's older.  It should be deleted immediately
+        // and return an ID of 0.
+        values.put(StreamItems.TIMESTAMP, baseTime - 1);
+        Uri resultUri = mResolver.insert(StreamItems.CONTENT_URI, values);
+        assertEquals(0L, ContentUris.parseId(resultUri));
+    }
+
+    // Stream item photo insertion test cases.
+
+    public void testInsertOversizedPhoto() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        values.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+        Uri resultUri = insertStreamItem(rawContactId, values, null);
+        long streamItemId = ContentUris.parseId(resultUri);
+
+        // Add a huge photo to the stream item.
+        ContentValues photoValues = buildGenericStreamItemPhotoValues(1);
+        byte[] photoBytes = new byte[(70 * 1024) + 1];
+        photoValues.put(StreamItemPhotos.PICTURE, photoBytes);
+        try {
+            insertStreamItemPhoto(streamItemId, photoValues, null);
+            fail("Should have failed due to image size");
+        } catch (IllegalArgumentException expected) {
+            // Huzzah!
+        }
+    }
+
+    public void testInsertStreamItemsAndPhotosInBatch() throws Exception {
+        long rawContactId = createRawContact();
+        ContentValues streamItemValues = buildGenericStreamItemValues();
+        ContentValues streamItemPhotoValues = buildGenericStreamItemPhotoValues(0);
+
+        ArrayList<ContentProviderOperation> ops = Lists.newArrayList();
+        ops.add(ContentProviderOperation.newInsert(
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                        RawContacts.StreamItems.CONTENT_DIRECTORY))
+                .withValues(streamItemValues).build());
+        for (int i = 0; i < 5; i++) {
+            streamItemPhotoValues.put(StreamItemPhotos.SORT_INDEX, i);
+            ops.add(ContentProviderOperation.newInsert(StreamItems.CONTENT_PHOTO_URI)
+                    .withValues(streamItemPhotoValues)
+                    .withValueBackReference(StreamItemPhotos.STREAM_ITEM_ID, 0)
+                    .build());
+        }
+        mResolver.applyBatch(ContactsContract.AUTHORITY, ops);
+
+        // Check that all five photos were inserted under the raw contact.
+        Cursor c = mResolver.query(StreamItems.CONTENT_URI, new String[]{StreamItems._ID},
+                StreamItems.RAW_CONTACT_ID + "=?", new String[]{String.valueOf(rawContactId)},
+                null);
+        long streamItemId = 0;
+        try {
+            assertEquals(1, c.getCount());
+            c.moveToFirst();
+            streamItemId = c.getLong(0);
+        } finally {
+            c.close();
+        }
+
+        c = mResolver.query(Uri.withAppendedPath(
+                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY), new String[]{StreamItemPhotos._ID},
+                null, null, null);
+        try {
+            assertEquals(5, c.getCount());
+        } finally {
+            c.close();
+        }
+    }
+
+    // Stream item update test cases.
+
+    public void testUpdateStreamItemById() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, null);
+        long streamItemId = ContentUris.parseId(resultUri);
+        values.put(StreamItems.TEXT, "Goodbye world");
+        mResolver.update(ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId), values,
+                null, null);
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                RawContacts.StreamItems.CONTENT_DIRECTORY), values);
+    }
+
+    public void testUpdateStreamItemWithContentValues() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, null);
+        long streamItemId = ContentUris.parseId(resultUri);
+        values.put(StreamItems._ID, streamItemId);
+        values.put(StreamItems.TEXT, "Goodbye world");
+        mResolver.update(StreamItems.CONTENT_URI, values, null, null);
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                RawContacts.StreamItems.CONTENT_DIRECTORY), values);
+    }
+
+    public void testUpdateStreamItemFromOtherAccount() {
+        long rawContactId = createRawContact(mAccount);
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, mAccount);
+        long streamItemId = ContentUris.parseId(resultUri);
+        values.put(StreamItems._ID, streamItemId);
+        values.put(StreamItems.TEXT, "Goodbye world");
+        try {
+            mResolver.update(maybeAddAccountQueryParameters(StreamItems.CONTENT_URI, mAccountTwo),
+                    values, null, null);
+            fail("Should not be able to update stream items inserted by another account");
+        } catch (SecurityException expected) {
+            // Can't update the stream items from another account.
+        }
+    }
+
+    // Stream item photo update test cases.
+
+    public void testUpdateStreamItemPhotoById() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, null);
+        long streamItemId = ContentUris.parseId(resultUri);
+        ContentValues photoValues = buildGenericStreamItemPhotoValues(1);
+        resultUri = insertStreamItemPhoto(streamItemId, photoValues, null);
+        long streamItemPhotoId = ContentUris.parseId(resultUri);
+
+        photoValues.put(StreamItemPhotos.PICTURE, "ABCDEFG".getBytes());
+        Uri photoUri =
+                ContentUris.withAppendedId(
+                        Uri.withAppendedPath(
+                                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                        streamItemPhotoId);
+        mResolver.update(photoUri, photoValues, null, null);
+        assertStoredValues(photoUri, photoValues);
+    }
+
+    public void testUpdateStreamItemPhotoWithContentValues() {
+        long rawContactId = createRawContact();
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, null);
+        long streamItemId = ContentUris.parseId(resultUri);
+        ContentValues photoValues = buildGenericStreamItemPhotoValues(1);
+        resultUri = insertStreamItemPhoto(streamItemId, photoValues, null);
+        long streamItemPhotoId = ContentUris.parseId(resultUri);
+
+        photoValues.put(StreamItemPhotos._ID, streamItemPhotoId);
+        photoValues.put(StreamItemPhotos.PICTURE, "ABCDEFG".getBytes());
+        Uri photoUri =
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                        StreamItems.StreamItemPhotos.CONTENT_DIRECTORY);
+        mResolver.update(photoUri, photoValues, null, null);
+        assertStoredValues(photoUri, photoValues);
+    }
+
+    public void testUpdateStreamItemPhotoFromOtherAccount() {
+        long rawContactId = createRawContact(mAccount);
+        ContentValues values = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, values, mAccount);
+        long streamItemId = ContentUris.parseId(resultUri);
+        ContentValues photoValues = buildGenericStreamItemPhotoValues(1);
+        resultUri = insertStreamItemPhoto(streamItemId, photoValues, mAccount);
+        long streamItemPhotoId = ContentUris.parseId(resultUri);
+
+        photoValues.put(StreamItemPhotos._ID, streamItemPhotoId);
+        photoValues.put(StreamItemPhotos.PICTURE, "ABCDEFG".getBytes());
+        Uri photoUri =
+                maybeAddAccountQueryParameters(
+                        Uri.withAppendedPath(
+                                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                        mAccountTwo);
+        try {
+            mResolver.update(photoUri, photoValues, null, null);
+            fail("Should not be able to update stream item photos inserted by another account");
+        } catch (SecurityException expected) {
+            // Can't update a stream item photo inserted by another account.
+        }
+    }
+
+    // Stream item deletion test cases.
+
+    public void testDeleteStreamItemById() {
+        long rawContactId = createRawContact();
+        ContentValues firstValues = buildGenericStreamItemValues();
+        Uri resultUri = insertStreamItem(rawContactId, firstValues, null);
+        long firstStreamItemId = ContentUris.parseId(resultUri);
+
+        ContentValues secondValues = buildGenericStreamItemValues();
+        secondValues.put(StreamItems.TEXT, "Goodbye world");
+        insertStreamItem(rawContactId, secondValues, null);
+
+        // Delete the first stream item.
+        mResolver.delete(ContentUris.withAppendedId(StreamItems.CONTENT_URI, firstStreamItemId),
+                null, null);
+
+        // Check that only the second item remains.
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                RawContacts.StreamItems.CONTENT_DIRECTORY), secondValues);
+    }
+
+    public void testDeleteStreamItemWithSelection() {
+        long rawContactId = createRawContact();
+        ContentValues firstValues = buildGenericStreamItemValues();
+        insertStreamItem(rawContactId, firstValues, null);
+
+        ContentValues secondValues = buildGenericStreamItemValues();
+        secondValues.put(StreamItems.TEXT, "Goodbye world");
+        insertStreamItem(rawContactId, secondValues, null);
+
+        // Delete the first stream item with a custom selection.
+        mResolver.delete(StreamItems.CONTENT_URI, StreamItems.TEXT + "=?",
+                new String[]{"Hello world"});
+
+        // Check that only the second item remains.
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                RawContacts.StreamItems.CONTENT_DIRECTORY), secondValues);
+    }
+
+    public void testDeleteStreamItemFromOtherAccount() {
+        long rawContactId = createRawContact(mAccount);
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), mAccount));
+        try {
+            mResolver.delete(
+                    maybeAddAccountQueryParameters(
+                            ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                            mAccountTwo), null, null);
+            fail("Should not be able to delete stream item inserted by another account");
+        } catch (SecurityException expected) {
+            // Can't delete a stream item from another account.
+        }
+    }
+
+    // Stream item photo deletion test cases.
+
+    public void testDeleteStreamItemPhotoById() {
+        long rawContactId = createRawContact();
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), null));
+        long streamItemPhotoId = ContentUris.parseId(
+                insertStreamItemPhoto(streamItemId, buildGenericStreamItemPhotoValues(0), null));
+        mResolver.delete(
+                ContentUris.withAppendedId(
+                        Uri.withAppendedPath(
+                                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                        streamItemPhotoId), null, null);
+
+        Cursor c = mResolver.query(StreamItems.CONTENT_PHOTO_URI,
+                new String[]{StreamItemPhotos._ID},
+                StreamItemPhotos.STREAM_ITEM_ID + "=?", new String[]{String.valueOf(streamItemId)},
+                null);
+        try {
+            assertEquals("Expected photo to be deleted.", 0, c.getCount());
+        } finally {
+            c.close();
+        }
+    }
+
+    public void testDeleteStreamItemPhotoWithSelection() {
+        long rawContactId = createRawContact();
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), null));
+        ContentValues firstPhotoValues = buildGenericStreamItemPhotoValues(0);
+        ContentValues secondPhotoValues = buildGenericStreamItemPhotoValues(1);
+        insertStreamItemPhoto(streamItemId, firstPhotoValues, null);
+        insertStreamItemPhoto(streamItemId, secondPhotoValues, null);
+        Uri photoUri = Uri.withAppendedPath(
+                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY);
+        mResolver.delete(photoUri, StreamItemPhotos.SORT_INDEX + "=1", null);
+
+        assertStoredValues(photoUri, firstPhotoValues);
+    }
+
+    public void testDeleteStreamItemPhotoFromOtherAccount() {
+        long rawContactId = createRawContact(mAccount);
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), mAccount));
+        insertStreamItemPhoto(streamItemId, buildGenericStreamItemPhotoValues(0), mAccount);
+        try {
+            mResolver.delete(maybeAddAccountQueryParameters(
+                    Uri.withAppendedPath(
+                            ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                            StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                    mAccountTwo), null, null);
+            fail("Should not be able to delete stream item photo inserted by another account");
+        } catch (SecurityException expected) {
+            // Can't delete a stream item photo from another account.
+        }
+    }
+
+    public void testQueryStreamItemLimit() {
+        ContentValues values = new ContentValues();
+        values.put(StreamItems.MAX_ITEMS, 5);
+        values.put(StreamItems.PHOTO_MAX_BYTES, 70 * 1024);
+        assertStoredValues(StreamItems.CONTENT_LIMIT_URI, values);
+    }
+
+    private ContentValues buildGenericStreamItemValues() {
+        ContentValues values = new ContentValues();
+        values.put(StreamItems.RES_PACKAGE, "com.foo.bar");
+        values.put(StreamItems.TEXT, "Hello world");
+        values.put(StreamItems.TIMESTAMP, System.currentTimeMillis());
+        values.put(StreamItems.COMMENTS, "Reshared by 123 others");
+        return values;
+    }
+
+    private ContentValues buildGenericStreamItemPhotoValues(int sortIndex) {
+        ContentValues values = new ContentValues();
+        values.put(StreamItemPhotos.SORT_INDEX, sortIndex);
+        values.put(StreamItemPhotos.PICTURE, "DEADBEEF".getBytes());
+        return values;
     }
 
     public void testSingleStatusUpdateRowPerContact() {

@@ -39,6 +39,8 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemPhotosColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.vcard.VCardComposer;
@@ -67,6 +69,7 @@ import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
 import android.content.res.AssetFileDescriptor;
+import android.content.res.Resources;
 import android.database.CrossProcessCursor;
 import android.database.Cursor;
 import android.database.CursorWindow;
@@ -118,6 +121,8 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract.StreamItems;
+import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
@@ -169,6 +174,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
+
+    /** Limit for the maximum number of social stream items to store under a raw contact. */
+    private static final int MAX_STREAM_ITEMS_PER_RAW_CONTACT = 5;
 
     /**
      * Property key for the legacy contact import version. The need for a version
@@ -232,11 +240,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_ID_ENTITIES = 1014;
     private static final int CONTACTS_LOOKUP_ENTITIES = 1015;
     private static final int CONTACTS_LOOKUP_ID_ENTITIES = 1016;
+    private static final int CONTACTS_ID_STREAM_ITEMS = 1017;
+    private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1018;
+    private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1019;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
     private static final int RAW_CONTACTS_DATA = 2004;
     private static final int RAW_CONTACT_ENTITY_ID = 2005;
+    private static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2006;
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
@@ -297,6 +309,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
 
     private static final int DATA_USAGE_FEEDBACK_ID = 20001;
+
+    private static final int STREAM_ITEMS = 21000;
+    private static final int STREAM_ITEMS_PHOTOS = 21001;
+    private static final int STREAM_ITEMS_ID = 21002;
+    private static final int STREAM_ITEMS_ID_PHOTOS = 21003;
+    private static final int STREAM_ITEMS_ID_PHOTOS_ID = 21004;
+    private static final int STREAM_ITEMS_LIMIT = 21005;
 
     private static final String SELECTION_FAVORITES_GROUPS_BY_RAW_CONTACT_ID =
             RawContactsColumns.CONCRETE_ID + "=? AND "
@@ -833,6 +852,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(StatusUpdates.STATUS_LABEL)
             .build();
 
+    /** Contains StreamItems columns */
+    private static final ProjectionMap sStreamItemsProjectionMap = ProjectionMap.builder()
+            .add(StreamItems._ID, StreamItemsColumns.CONCRETE_ID)
+            .add(RawContacts.CONTACT_ID)
+            .add(StreamItems.RAW_CONTACT_ID)
+            .add(StreamItems.RES_PACKAGE)
+            .add(StreamItems.RES_ICON)
+            .add(StreamItems.RES_LABEL)
+            .add(StreamItems.TEXT)
+            .add(StreamItems.TIMESTAMP)
+            .add(StreamItems.COMMENTS)
+            .add(StreamItems.ACTION)
+            .add(StreamItems.ACTION_URI)
+            .build();
+
+    private static final ProjectionMap sStreamItemPhotosProjectionMap = ProjectionMap.builder()
+            .add(StreamItemPhotos._ID, StreamItemPhotosColumns.CONCRETE_ID)
+            .add(StreamItems.RAW_CONTACT_ID)
+            .add(StreamItemPhotos.STREAM_ITEM_ID)
+            .add(StreamItemPhotos.SORT_INDEX)
+            .add(StreamItemPhotos.PICTURE)
+            .add(StreamItemPhotos.ACTION, StreamItemPhotosColumns.CONCRETE_ACTION)
+            .add(StreamItemPhotos.ACTION_URI, StreamItemPhotosColumns.CONCRETE_ACTION_URI)
+            .build();
+
     /** Contains Live Folders columns */
     private static final ProjectionMap sLiveFoldersProjectionMap = ProjectionMap.builder()
             .add(LiveFolders._ID, Contacts._ID)
@@ -902,6 +946,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions/*",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_ID_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/stream_items",
+                CONTACTS_ID_STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
@@ -913,6 +959,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 CONTACTS_LOOKUP_ENTITIES);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/entities",
                 CONTACTS_LOOKUP_ID_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/stream_items",
+                CONTACTS_LOOKUP_STREAM_ITEMS);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/stream_items",
+                CONTACTS_LOOKUP_ID_STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_vcard/*", CONTACTS_AS_VCARD);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_multi_vcard/*",
                 CONTACTS_AS_MULTI_VCARD);
@@ -925,6 +975,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ENTITY_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items",
+                RAW_CONTACTS_ID_STREAM_ITEMS);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contact_entities", RAW_CONTACT_ENTITIES);
 
@@ -999,6 +1051,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 PROFILE_RAW_CONTACTS_ID_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#/entity",
                 PROFILE_RAW_CONTACTS_ID_ENTITIES);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "stream_items", STREAM_ITEMS);
+        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/photo", STREAM_ITEMS_PHOTOS);
+        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#", STREAM_ITEMS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#/photo", STREAM_ITEMS_ID_PHOTOS);
+        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#/photo/#",
+                STREAM_ITEMS_ID_PHOTOS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "stream_items_limit", STREAM_ITEMS_LIMIT);
 
         HashMap<String, Integer> tmpTypeMap = new HashMap<String, Integer>();
         tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_CALL, DataUsageStatColumns.USAGE_TYPE_INT_CALL);
@@ -1085,6 +1145,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private ProfileIdCache mProfileIdCache;
 
+    /** Limit for the maximum byte size of social stream item photos (loaded from config.xml). */
+    private int mMaxStreamItemPhotoSizeBytes;
+
     private HashMap<String, DataRowHandler> mDataRowHandlers;
     private ContactsDatabaseHelper mDbHelper;
 
@@ -1137,6 +1200,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean initialize() {
         StrictMode.setThreadPolicy(
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
+
+        Resources resources = getContext().getResources();
+        mMaxStreamItemPhotoSizeBytes = resources.getInteger(
+                R.integer.config_stream_item_photo_max_bytes);
 
         mProfileIdCache = new ProfileIdCache();
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
@@ -1812,6 +1879,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case RAW_CONTACTS_ID_STREAM_ITEMS: {
+                values.put(StreamItems.RAW_CONTACT_ID, uri.getPathSegments().get(1));
+                id = insertStreamItem(uri, values);
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                break;
+            }
+
             case PROFILE_RAW_CONTACTS: {
                 enforceProfilePermission(true);
                 id = insertRawContact(uri, values, callerIsSyncAdapter, true);
@@ -1839,6 +1913,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case STATUS_UPDATES: {
                 id = insertStatusUpdate(values);
+                break;
+            }
+
+            case STREAM_ITEMS: {
+                id = insertStreamItem(uri, values);
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                break;
+            }
+
+            case STREAM_ITEMS_PHOTOS: {
+                id = insertStreamItemPhoto(uri, values);
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                break;
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS: {
+                values.put(StreamItemPhotos.STREAM_ITEM_ID, uri.getPathSegments().get(1));
+                id = insertStreamItemPhoto(uri, values);
+                mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
@@ -2075,6 +2168,238 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         mTransactionContext.rawContactUpdated(rawContactId);
         return id;
+    }
+
+    /**
+     * Inserts an item in the stream_items table.  The account is checked against the
+     * account in the raw contact for which the stream item is being inserted.  If the
+     * new stream item results in more stream items under this raw contact than the limit,
+     * the oldest one will be deleted (note that if the stream item inserted was the
+     * oldest, it will be immediately deleted, and this will return 0).
+     *
+     * @param uri the insertion URI
+     * @param values the values for the new row
+     * @return the stream item _ID of the newly created row, or 0 if it was not created
+     */
+    private long insertStreamItem(Uri uri, ContentValues values) {
+        long id = 0;
+        mValues.clear();
+        mValues.putAll(values);
+
+        long rawContactId = mValues.getAsLong(StreamItems.RAW_CONTACT_ID);
+
+        // If the data being inserted belongs to the user's profile entry, check for the
+        // WRITE_PROFILE permission before proceeding.
+        enforceProfilePermissionForRawContact(rawContactId, true);
+
+        // Ensure that the raw contact exists and belongs to the caller's account.
+        Account account = resolveAccount(uri, mValues);
+        enforceModifyingAccount(account, rawContactId);
+
+        // Insert the new stream item.
+        id = mDb.insert(Tables.STREAM_ITEMS, null, values);
+
+        // Check to see if we're over the limit for stream items under this raw contact.
+        // It's possible that the inserted stream item is older than the the existing
+        // ones, in which case it may be deleted immediately (resetting the ID to 0).
+        id = cleanUpOldStreamItems(rawContactId, id);
+
+        return id;
+    }
+
+    /**
+     * Inserts an item in the stream_item_photos table.  The account is checked against
+     * the account in the raw contact that owns the stream item being modified.
+     *
+     * @param uri the insertion URI
+     * @param values the values for the new row
+     * @return the stream item photo _ID of the newly created row
+     */
+    private long insertStreamItemPhoto(Uri uri, ContentValues values) {
+        long id = 0;
+        mValues.clear();
+        mValues.putAll(values);
+
+        long streamItemId = mValues.getAsLong(StreamItemPhotos.STREAM_ITEM_ID);
+        if (streamItemId != 0) {
+            long rawContactId = lookupRawContactIdForStreamId(streamItemId);
+
+            // If the data being inserted belongs to the user's profile entry, check for the
+            // WRITE_PROFILE permission before proceeding.
+            enforceProfilePermissionForRawContact(rawContactId, true);
+
+            // Ensure that the raw contact exists and belongs to the caller's account.
+            Account account = resolveAccount(uri, mValues);
+            enforceModifyingAccount(account, rawContactId);
+
+            // Make certain that the photo doesn't exceed our maximum byte size.
+            byte[] photoBytes = values.getAsByteArray(StreamItemPhotos.PICTURE);
+            Log.i(TAG, "Inserting " + photoBytes.length + "-byte photo (max allowed " +
+                    mMaxStreamItemPhotoSizeBytes + " bytes)");
+            if (photoBytes.length > mMaxStreamItemPhotoSizeBytes) {
+                throw new IllegalArgumentException("Stream item photos cannot be more than " +
+                    mMaxStreamItemPhotoSizeBytes + " bytes (received picture with " +
+                        photoBytes.length + " bytes)");
+            }
+
+            id = mDb.insert(Tables.STREAM_ITEM_PHOTOS, null, values);
+        }
+        return id;
+    }
+
+    /**
+     * Looks up the raw contact ID that owns the specified stream item.
+     * @param streamItemId The ID of the stream item.
+     * @return The associated raw contact ID, or -1 if no such stream item exists.
+     */
+    private long lookupRawContactIdForStreamId(long streamItemId) {
+        long rawContactId = -1;
+        Cursor c = mDb.query(Tables.STREAM_ITEMS, new String[]{StreamItems.RAW_CONTACT_ID},
+                StreamItems._ID + "=?", new String[]{String.valueOf(streamItemId)},
+                null, null, null);
+        try {
+            if (c.moveToFirst()) {
+                rawContactId = c.getLong(0);
+            }
+        } finally {
+            c.close();
+        }
+        return rawContactId;
+    }
+
+    /**
+     * Checks whether the given raw contact ID is owned by the given account.
+     * If the resolved account is null, this will return true iff the raw contact
+     * is also associated with the "null" account.
+     *
+     * If the resolved account does not match, this will throw a security exception.
+     * @param account The resolved account (may be null).
+     * @param rawContactId The raw contact ID to check for.
+     */
+    private void enforceModifyingAccount(Account account, long rawContactId) {
+        String accountSelection = RawContactsColumns.CONCRETE_ID + "=? AND "
+                + RawContactsColumns.CONCRETE_ACCOUNT_NAME + "=? AND "
+                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + "=?";
+        String noAccountSelection = RawContactsColumns.CONCRETE_ID + "=? AND "
+                + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL AND "
+                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL";
+        Cursor c;
+        if (account != null) {
+            c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContactsColumns.CONCRETE_ID},
+                    accountSelection,
+                    new String[]{String.valueOf(rawContactId), mAccount.name, mAccount.type},
+                    null, null, null);
+        } else {
+            c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContactsColumns.CONCRETE_ID},
+                    noAccountSelection, new String[]{String.valueOf(rawContactId)},
+                    null, null, null);
+        }
+        try {
+            if(c.getCount() == 0) {
+                throw new SecurityException("Caller account does not match raw contact ID "
+                    + rawContactId);
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Checks whether the given selection of stream items matches up with the given
+     * account.  If any of the raw contacts fail the account check, this will throw a
+     * security exception.
+     * @param account The resolved account (may be null).
+     * @param selection The selection.
+     * @param selectionArgs The selection arguments.
+     * @return The list of stream item IDs that would be included in this selection.
+     */
+    private List<Long> enforceModifyingAccountForStreamItems(Account account, String selection,
+            String[] selectionArgs) {
+        List<Long> streamItemIds = Lists.newArrayList();
+        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        setTablesAndProjectionMapForStreamItems(qb);
+        Cursor c = qb.query(mDb,
+                new String[]{StreamItems._ID, StreamItems.RAW_CONTACT_ID},
+                selection, selectionArgs, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                streamItemIds.add(c.getLong(0));
+
+                // Throw a security exception if the account doesn't match the raw contact's.
+                enforceModifyingAccount(account, c.getLong(1));
+            }
+        } finally {
+            c.close();
+        }
+        return streamItemIds;
+    }
+
+    /**
+     * Checks whether the given selection of stream item photos matches up with the given
+     * account.  If any of the raw contacts fail the account check, this will throw a
+     * security exception.
+     * @param account The resolved account (may be null).
+     * @param selection The selection.
+     * @param selectionArgs The selection arguments.
+     * @return The list of stream item photo IDs that would be included in this selection.
+     */
+    private List<Long> enforceModifyingAccountForStreamItemPhotos(Account account, String selection,
+            String[] selectionArgs) {
+        List<Long> streamItemPhotoIds = Lists.newArrayList();
+        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        setTablesAndProjectionMapForStreamItemPhotos(qb);
+        Cursor c = qb.query(mDb, new String[]{StreamItemPhotos._ID, StreamItems.RAW_CONTACT_ID},
+                selection, selectionArgs, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                streamItemPhotoIds.add(c.getLong(0));
+
+                // Throw a security exception if the account doesn't match the raw contact's.
+                enforceModifyingAccount(account, c.getLong(1));
+            }
+        } finally {
+            c.close();
+        }
+        return streamItemPhotoIds;
+    }
+
+    /**
+     * Queries the database for stream items under the given raw contact.  If there are
+     * more entries than {@link ContactsProvider2#MAX_STREAM_ITEMS_PER_RAW_CONTACT},
+     * the oldest entries (as determined by timestamp) will be deleted.
+     * @param rawContactId The raw contact ID to examine for stream items.
+     * @param insertedStreamItemId The ID of the stream item that was just inserted,
+     *     prompting this cleanup.  Callers may pass 0 if no insertion prompted the
+     *     cleanup.
+     * @return The ID of the inserted stream item if it still exists after cleanup;
+     *     0 otherwise.
+     */
+    private long cleanUpOldStreamItems(long rawContactId, long insertedStreamItemId) {
+        long postCleanupInsertedStreamId = insertedStreamItemId;
+        Cursor c = mDb.query(Tables.STREAM_ITEMS, new String[]{StreamItems._ID},
+                StreamItems.RAW_CONTACT_ID + "=?", new String[]{String.valueOf(rawContactId)},
+                null, null, StreamItems.TIMESTAMP + " DESC, " + StreamItems._ID + " DESC");
+        try {
+            int streamItemCount = c.getCount();
+            if (streamItemCount <= MAX_STREAM_ITEMS_PER_RAW_CONTACT) {
+                // Still under the limit - nothing to clean up!
+                return insertedStreamItemId;
+            } else {
+                c.moveToLast();
+                while (c.getPosition() >= MAX_STREAM_ITEMS_PER_RAW_CONTACT) {
+                    long streamItemId = c.getLong(0);
+                    if (insertedStreamItemId == streamItemId) {
+                        // The stream item just inserted is being deleted.
+                        postCleanupInsertedStreamId = 0;
+                    }
+                    deleteStreamItem(c.getLong(0));
+                    c.moveToPrevious();
+                }
+            }
+        } finally {
+            c.close();
+        }
+        return postCleanupInsertedStreamId;
     }
 
     public void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
@@ -2529,6 +2854,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return deleteStatusUpdates(selection, selectionArgs);
             }
 
+            case STREAM_ITEMS: {
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                return deleteStreamItems(uri, new ContentValues(), selection, selectionArgs);
+            }
+
+            case STREAM_ITEMS_ID: {
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                return deleteStreamItems(uri, new ContentValues(),
+                        StreamItemsColumns.CONCRETE_ID + "=?",
+                        new String[]{uri.getLastPathSegment()});
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS: {
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                return deleteStreamItemPhotos(uri, new ContentValues(), selection, selectionArgs);
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS_ID: {
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                String streamItemId = uri.getPathSegments().get(1);
+                String streamItemPhotoId = uri.getPathSegments().get(3);
+                return deleteStreamItemPhotos(uri, new ContentValues(),
+                        StreamItemPhotosColumns.CONCRETE_ID + "=? AND "
+                                + StreamItemPhotos.STREAM_ITEM_ID + "=?",
+                        new String[]{streamItemPhotoId, streamItemId});
+            }
+
             default: {
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
@@ -2609,6 +2961,47 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
       mDb.delete(Tables.STATUS_UPDATES, getWhereClauseForStatusUpdatesTable(selection),
           selectionArgs);
       return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
+    }
+
+    private int deleteStreamItems(Uri uri, ContentValues values, String selection,
+            String[] selectionArgs) {
+        // First query for the stream items to be deleted, and check that they belong
+        // to the account.
+        Account account = resolveAccount(uri, values);
+        List<Long> streamItemIds = enforceModifyingAccountForStreamItems(
+                account, selection, selectionArgs);
+
+        // If no security exception has been thrown, we're fine to delete.
+        for (long streamItemId : streamItemIds) {
+            deleteStreamItem(streamItemId);
+        }
+
+        mVisibleTouched = true;
+        return streamItemIds.size();
+    }
+
+    private int deleteStreamItem(long streamItemId) {
+        // Note that this does not enforce the modifying account.
+        deleteStreamItemPhotos(streamItemId);
+        return mDb.delete(Tables.STREAM_ITEMS, StreamItems._ID + "=?",
+                new String[]{String.valueOf(streamItemId)});
+    }
+
+    private int deleteStreamItemPhotos(Uri uri, ContentValues values, String selection,
+            String[] selectionArgs) {
+        // First query for the stream item photos to be deleted, and check that they
+        // belong to the account.
+        Account account = resolveAccount(uri, values);
+        enforceModifyingAccountForStreamItemPhotos(account, selection, selectionArgs);
+
+        // If no security exception has been thrown, we're fine to delete.
+        return mDb.delete(Tables.STREAM_ITEM_PHOTOS, selection, selectionArgs);
+    }
+
+    private int deleteStreamItemPhotos(long streamItemId) {
+        // Note that this does not enforce the modifying account.
+        return mDb.delete(Tables.STREAM_ITEM_PHOTOS, StreamItemPhotos.STREAM_ITEM_ID + "=?",
+                new String[]{String.valueOf(streamItemId)});
     }
 
     private int markRawContactAsDeleted(long rawContactId, boolean callerIsSyncAdapter) {
@@ -2782,6 +3175,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case STREAM_ITEMS: {
+                count = updateStreamItems(uri, values, selection, selectionArgs);
+                break;
+            }
+
+            case STREAM_ITEMS_ID: {
+                count = updateStreamItems(uri, values, StreamItemsColumns.CONCRETE_ID + "=?",
+                        new String[]{uri.getLastPathSegment()});
+                break;
+            }
+
+            case STREAM_ITEMS_PHOTOS: {
+                count = updateStreamItemPhotos(uri, values, selection, selectionArgs);
+                break;
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS: {
+                String streamItemId = uri.getPathSegments().get(1);
+                count = updateStreamItemPhotos(uri, values,
+                        StreamItemPhotos.STREAM_ITEM_ID + "=?", new String[]{streamItemId});
+                break;
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS_ID: {
+                String streamItemId = uri.getPathSegments().get(1);
+                String streamItemPhotoId = uri.getPathSegments().get(3);
+                count = updateStreamItemPhotos(uri, values,
+                        StreamItemPhotosColumns.CONCRETE_ID + "=? AND " +
+                                StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "=?",
+                        new String[]{streamItemPhotoId, streamItemId});
+                break;
+            }
+
             case DIRECTORIES: {
                 mContactDirectoryManager.scanPackagesByUid(Binder.getCallingUid());
                 count = 1;
@@ -2828,6 +3254,32 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // TODO updateCount is not entirely a valid count of updated rows because 2 tables could
         // potentially get updated in this method.
         return updateCount;
+    }
+
+    private int updateStreamItems(Uri uri, ContentValues values, String selection,
+            String[] selectionArgs) {
+        // Stream items can't be moved to a new raw contact.
+        values.remove(StreamItems.RAW_CONTACT_ID);
+
+        // Check that the stream items being updated belong to the account.
+        Account account = resolveAccount(uri, values);
+        enforceModifyingAccountForStreamItems(account, selection, selectionArgs);
+
+        // If there's been no exception, the update should be fine.
+        return mDb.update(Tables.STREAM_ITEMS, values, selection, selectionArgs);
+    }
+
+    private int updateStreamItemPhotos(Uri uri, ContentValues values, String selection,
+            String[] selectionArgs) {
+        // Stream item photos can't be moved to a new stream item.
+        values.remove(StreamItemPhotos.STREAM_ITEM_ID);
+
+        // Check that the stream item photos being updated belong to the account.
+        Account account = resolveAccount(uri, values);
+        enforceModifyingAccountForStreamItemPhotos(account, selection, selectionArgs);
+
+        // If there's been no exception, the update should be fine.
+        return mDb.update(Tables.STREAM_ITEM_PHOTOS, values, selection, selectionArgs);
     }
 
     /**
@@ -3649,6 +4101,45 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case CONTACTS_ID_STREAM_ITEMS: {
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                enforceProfilePermissionForContact(contactId, false);
+                setTablesAndProjectionMapForStreamItems(qb);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
+                qb.appendWhere(RawContactsColumns.CONCRETE_CONTACT_ID + "=?");
+                break;
+            }
+
+            case CONTACTS_LOOKUP_STREAM_ITEMS:
+            case CONTACTS_LOOKUP_ID_STREAM_ITEMS: {
+                List<String> pathSegments = uri.getPathSegments();
+                int segmentCount = pathSegments.size();
+                if (segmentCount < 4) {
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Missing a lookup key", uri));
+                }
+                String lookupKey = pathSegments.get(2);
+                if (segmentCount == 5) {
+                    long contactId = Long.parseLong(pathSegments.get(3));
+                    enforceProfilePermissionForContact(contactId, false);
+                    SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
+                    setTablesAndProjectionMapForStreamItems(lookupQb);
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                            projection, selection, selectionArgs, sortOrder, groupBy, limit,
+                            RawContacts.CONTACT_ID, contactId, Contacts.LOOKUP_KEY, lookupKey);
+                    if (c != null) {
+                        return c;
+                    }
+                }
+
+                setTablesAndProjectionMapForStreamItems(qb);
+                long contactId = lookupContactIdByLookupKey(db, lookupKey);
+                enforceProfilePermissionForContact(contactId, false);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
+                qb.appendWhere(RawContacts.CONTACT_ID + "=?");
+                break;
+            }
+
             case CONTACTS_AS_VCARD: {
                 // When reading as vCard always use restricted view
                 final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
@@ -3864,6 +4355,53 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case STREAM_ITEMS: {
+                setTablesAndProjectionMapForStreamItems(qb);
+                break;
+            }
+
+            case STREAM_ITEMS_ID: {
+                setTablesAndProjectionMapForStreamItems(qb);
+                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                qb.appendWhere(StreamItemsColumns.CONCRETE_ID + "=?");
+                break;
+            }
+
+            case STREAM_ITEMS_LIMIT: {
+                MatrixCursor cursor = new MatrixCursor(
+                        new String[]{StreamItems.MAX_ITEMS, StreamItems.PHOTO_MAX_BYTES}, 1);
+                cursor.addRow(
+                        new Object[]{
+                                MAX_STREAM_ITEMS_PER_RAW_CONTACT,
+                                mMaxStreamItemPhotoSizeBytes
+                        });
+                return cursor;
+            }
+
+            case STREAM_ITEMS_PHOTOS: {
+                setTablesAndProjectionMapForStreamItemPhotos(qb);
+                break;
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS: {
+                setTablesAndProjectionMapForStreamItemPhotos(qb);
+                String streamItemId = uri.getPathSegments().get(1);
+                selectionArgs = insertSelectionArg(selectionArgs, streamItemId);
+                qb.appendWhere(StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "=?");
+                break;
+            }
+
+            case STREAM_ITEMS_ID_PHOTOS_ID: {
+                setTablesAndProjectionMapForStreamItemPhotos(qb);
+                String streamItemId = uri.getPathSegments().get(1);
+                String streamItemPhotoId = uri.getPathSegments().get(3);
+                selectionArgs = insertSelectionArg(selectionArgs, streamItemPhotoId);
+                selectionArgs = insertSelectionArg(selectionArgs, streamItemId);
+                qb.appendWhere(StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "=? AND " +
+                        StreamItemPhotosColumns.CONCRETE_ID + "=?");
+                break;
+            }
+
             case PHONES: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
@@ -4068,6 +4606,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case RAW_CONTACTS_ID_STREAM_ITEMS: {
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                enforceProfilePermissionForRawContact(rawContactId, false);
+                setTablesAndProjectionMapForStreamItems(qb);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
+                qb.appendWhere(StreamItems.RAW_CONTACT_ID + "=?");
+                break;
+            }
 
             case PROFILE_RAW_CONTACTS: {
                 enforceProfilePermission(false);
@@ -5069,6 +5615,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sStatusUpdatesProjectionMap);
+    }
+
+    private void setTablesAndProjectionMapForStreamItems(SQLiteQueryBuilder qb) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Tables.STREAM_ITEMS).append(" JOIN ").append(Tables.RAW_CONTACTS)
+                .append(" ON ").append(StreamItemsColumns.CONCRETE_RAW_CONTACT_ID).append("=")
+                .append(RawContactsColumns.CONCRETE_ID)
+                .append(" JOIN ").append(Tables.CONTACTS)
+                .append(" ON ").append(RawContactsColumns.CONCRETE_CONTACT_ID).append("=")
+                .append(ContactsColumns.CONCRETE_ID);
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(sStreamItemsProjectionMap);
+    }
+
+    private void setTablesAndProjectionMapForStreamItemPhotos(SQLiteQueryBuilder qb) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Tables.STREAM_ITEM_PHOTOS).append(" JOIN ").append(Tables.STREAM_ITEMS)
+                .append(" ON ").append(StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID).append("=")
+                .append(StreamItemsColumns.CONCRETE_ID);
+        qb.setTables(sb.toString());
+        qb.setProjectionMap(sStreamItemPhotosProjectionMap);
     }
 
     private void setTablesAndProjectionMapForEntities(SQLiteQueryBuilder qb, Uri uri,

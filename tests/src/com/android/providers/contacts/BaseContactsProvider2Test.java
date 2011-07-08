@@ -49,6 +49,8 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
+import android.provider.ContactsContract.StreamItems;
+import android.provider.ContactsContract.StreamItemPhotos;
 import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
@@ -419,6 +421,26 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
 
         Uri resultUri = mResolver.insert(StatusUpdates.CONTENT_URI, values);
         return resultUri;
+    }
+
+    protected Uri insertStreamItem(long rawContactId, ContentValues values, Account account) {
+        return mResolver.insert(
+                maybeAddAccountQueryParameters(
+                        Uri.withAppendedPath(
+                                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                                RawContacts.StreamItems.CONTENT_DIRECTORY),
+                        account),
+                values);
+    }
+
+    protected Uri insertStreamItemPhoto(long streamItemId, ContentValues values, Account account) {
+        return mResolver.insert(
+                maybeAddAccountQueryParameters(
+                        Uri.withAppendedPath(
+                                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                        account),
+                values);
     }
 
     protected Uri insertImHandle(long rawContactId, int protocol, String customProtocol,

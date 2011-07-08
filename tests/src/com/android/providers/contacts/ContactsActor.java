@@ -354,6 +354,11 @@ public class ContactsActor {
         public String getResourceName(int resid) throws NotFoundException {
             return String.valueOf(resid);
         }
+
+        @Override
+        public int getInteger(int id) throws NotFoundException {
+            return mRes.getInteger(id);
+        }
     }
 
     static String sCallingPackage = null;
