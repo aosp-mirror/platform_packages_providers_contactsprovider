@@ -38,6 +38,7 @@ import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**
@@ -152,14 +153,13 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         // Directly update the db because we cannot update voicemail_uri through external
         // update() due to projectionMap check. This also avoids unnecessary permission
         // checks that are already done as part of insert request.
-        db.update(mTableName, values, getWhereClause(
-                UriData.createUriData(newUri)), null);
+        db.update(mTableName, values, UriData.createUriData(newUri).getWhereClause(), null);
     }
 
     @Override
     public int delete(UriData uriData, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        String combinedClause = concatenateClauses(selection, getWhereClause(uriData),
+        String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
                 getCallTypeClause());
 
         // Delete all the files associated with this query.  Once we've deleted the rows, there will
@@ -196,7 +196,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         qb.setProjectionMap(sVoicemailProjectionMap);
         qb.setStrict(true);
 
-        String combinedClause = concatenateClauses(selection, getWhereClause(uriData),
+        String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
                 getCallTypeClause());
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
         Cursor c = qb.query(db, projection, combinedClause, selectionArgs, null, null, sortOrder);
@@ -214,7 +214,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         // TODO: This implementation does not allow bulk update because it only accepts
         // URI that include message Id. I think we do want to support bulk update.
-        String combinedClause = concatenateClauses(selection, getWhereClause(uriData),
+        String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
                 getCallTypeClause());
         int count = db.update(mTableName, values, combinedClause, selectionArgs);
         if (count > 0) {
@@ -261,25 +261,16 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     }
 
     @Override
-    public ParcelFileDescriptor openFile(UriData uriData, String mode,
-            ParcelFileDescriptor openFileHelper) {
+    public ParcelFileDescriptor openFile(UriData uriData, String mode)
+            throws FileNotFoundException {
+        ParcelFileDescriptor fileDescriptor = mDelegateHelper.openDataFile(uriData, mode);
         // If the open succeeded, then update the has_content bit in the table.
         if (mode.contains("w")) {
             ContentValues contentValues = new ContentValues();
             contentValues.put(Voicemails.HAS_CONTENT, 1);
             update(uriData, contentValues, null, null);
         }
-        return openFileHelper;
-    }
-
-    private String getWhereClause(UriData uriData) {
-        return concatenateClauses(
-                (uriData.hasId() ?
-                        getEqualityClause(Voicemails._ID, uriData.getId())
-                        : null),
-                (uriData.hasSourcePackage() ?
-                        getEqualityClause(Voicemails.SOURCE_PACKAGE, uriData.getSourcePackage())
-                        : null));
+        return fileDescriptor;
     }
 
     /** Creates a clause to restrict the selection to only voicemail call type.*/
