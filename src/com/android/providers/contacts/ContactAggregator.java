@@ -1531,7 +1531,6 @@ public class ContactAggregator {
                         + RawContacts.LAST_TIME_CONTACTED + ","
                         + RawContacts.TIMES_CONTACTED + ","
                         + RawContacts.STARRED + ","
-                        + RawContacts.IS_RESTRICTED + ","
                         + RawContacts.NAME_VERIFIED + ","
                         + DataColumns.CONCRETE_ID + ","
                         + DataColumns.CONCRETE_MIMETYPE_ID + ","
@@ -1562,11 +1561,10 @@ public class ContactAggregator {
         int LAST_TIME_CONTACTED = 8;
         int TIMES_CONTACTED = 9;
         int STARRED = 10;
-        int IS_RESTRICTED = 11;
-        int NAME_VERIFIED = 12;
-        int DATA_ID = 13;
-        int MIMETYPE_ID = 14;
-        int IS_SUPER_PRIMARY = 15;
+        int NAME_VERIFIED = 11;
+        int DATA_ID = 12;
+        int MIMETYPE_ID = 13;
+        int IS_SUPER_PRIMARY = 14;
     }
 
     private interface ContactReplaceSqlStatement {
@@ -1581,7 +1579,6 @@ public class ContactAggregator {
                         + Contacts.TIMES_CONTACTED + "=?, "
                         + Contacts.STARRED + "=?, "
                         + Contacts.HAS_PHONE_NUMBER + "=?, "
-                        + ContactsColumns.SINGLE_IS_RESTRICTED + "=?, "
                         + Contacts.LOOKUP_KEY + "=? " +
                 " WHERE " + Contacts._ID + "=?";
 
@@ -1595,9 +1592,8 @@ public class ContactAggregator {
                         + Contacts.TIMES_CONTACTED + ", "
                         + Contacts.STARRED + ", "
                         + Contacts.HAS_PHONE_NUMBER + ", "
-                        + ContactsColumns.SINGLE_IS_RESTRICTED + ", "
                         + Contacts.LOOKUP_KEY + ") " +
-                " VALUES (?,?,?,?,?,?,?,?,?,?)";
+                " VALUES (?,?,?,?,?,?,?,?,?)";
 
         int NAME_RAW_CONTACT_ID = 1;
         int PHOTO_ID = 2;
@@ -1607,9 +1603,8 @@ public class ContactAggregator {
         int TIMES_CONTACTED = 6;
         int STARRED = 7;
         int HAS_PHONE_NUMBER = 8;
-        int SINGLE_IS_RESTRICTED = 9;
-        int LOOKUP_KEY = 10;
-        int CONTACT_ID = 11;
+        int LOOKUP_KEY = 9;
+        int CONTACT_ID = 10;
     }
 
     /**
@@ -1636,7 +1631,6 @@ public class ContactAggregator {
         long contactLastTimeContacted = 0;
         int contactTimesContacted = 0;
         int contactStarred = 0;
-        int singleIsRestricted = 1;
         int hasPhoneNumber = 0;
 
         mDisplayNameCandidate.clear();
@@ -1685,19 +1679,6 @@ public class ContactAggregator {
 
                     if (c.getInt(RawContactsQuery.STARRED) != 0) {
                         contactStarred = 1;
-                    }
-
-                    // Single restricted
-                    if (totalRowCount > 1) {
-                        // Not single
-                        singleIsRestricted = 0;
-                    } else {
-                        int isRestricted = c.getInt(RawContactsQuery.IS_RESTRICTED);
-
-                        if (isRestricted == 0) {
-                            // Not restricted
-                            singleIsRestricted = 0;
-                        }
                     }
 
                     ContactLookupKey.appendToLookupKey(mSb,
@@ -1752,8 +1733,6 @@ public class ContactAggregator {
                 contactStarred);
         statement.bindLong(ContactReplaceSqlStatement.HAS_PHONE_NUMBER,
                 hasPhoneNumber);
-        statement.bindLong(ContactReplaceSqlStatement.SINGLE_IS_RESTRICTED,
-                singleIsRestricted);
         statement.bindString(ContactReplaceSqlStatement.LOOKUP_KEY,
                 Uri.encode(mSb.toString()));
     }

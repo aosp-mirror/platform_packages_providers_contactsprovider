@@ -42,6 +42,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumn
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemPhotosColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -669,7 +670,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(RawContacts._ID)
             .add(RawContacts.CONTACT_ID)
             .add(RawContacts.Entity.DATA_ID)
-            .add(RawContacts.IS_RESTRICTED)
             .add(RawContacts.DELETED)
             .add(RawContacts.STARRED)
             .add(RawContacts.RAW_CONTACT_IS_USER_PROFILE)
@@ -686,7 +686,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Contacts.Entity.DATA_ID)
             .add(Contacts.Entity.NAME_RAW_CONTACT_ID)
             .add(Contacts.Entity.DELETED)
-            .add(Contacts.Entity.IS_RESTRICTED)
             .add(Contacts.IS_USER_PROFILE)
             .addAll(sContactsColumns)
             .addAll(sContactPresenceColumns)
@@ -2628,7 +2627,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mSelectionArgs.add(values.getAsString(StatusUpdates.DATA_ID));
             }
         }
-        mSb.append(" AND ").append(getContactsRestrictions());
 
         Cursor cursor = null;
         try {
@@ -3383,7 +3381,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         int count = 0;
-        Cursor cursor = mDb.query(mDbHelper.getRawContactView(),
+        Cursor cursor = mDb.query(Views.RAW_CONTACTS,
                 new String[] { RawContacts._ID }, selection,
                 selectionArgs, null, null, null);
         try {
@@ -3541,7 +3539,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private int updateContactOptions(ContentValues values, String selection,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
         int count = 0;
-        Cursor cursor = mDb.query(mDbHelper.getContactView(),
+        Cursor cursor = mDb.query(Views.CONTACTS,
                 new String[] { Contacts._ID, Contacts.IS_USER_PROFILE }, selection,
                 selectionArgs, null, null, null);
         try {
@@ -3597,7 +3595,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + " AND " + RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0", mSelectionArgs1);
 
         if (mValues.containsKey(RawContacts.STARRED) && !callerIsSyncAdapter) {
-            Cursor cursor = mDb.query(mDbHelper.getRawContactView(),
+            Cursor cursor = mDb.query(Views.RAW_CONTACTS,
                     new String[] { RawContacts._ID }, RawContacts.CONTACT_ID + "=?",
                     mSelectionArgs1, null, null, null);
             try {
@@ -4011,8 +4009,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String groupBy = null;
         String limit = getLimit(uri);
 
-        // TODO: Consider writing a test case for RestrictionExceptions when you
-        // write a new query() block to make sure it protects restricted data.
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
@@ -4141,11 +4137,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_AS_VCARD: {
-                // When reading as vCard always use restricted view
                 final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
                 long contactId = lookupContactIdByLookupKey(db, lookupKey);
                 enforceProfilePermissionForContact(contactId, false);
-                qb.setTables(mDbHelper.getContactView(true /* require restricted */));
+                qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sContactsVCardProjectionMap);
                 selectionArgs = insertSelectionArg(selectionArgs,
                         String.valueOf(contactId));
@@ -4292,8 +4287,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case PROFILE_AS_VCARD: {
                 enforceProfilePermission(false);
-                // When reading as vCard always use restricted view
-                qb.setTables(mDbHelper.getContactView(true /* require restricted */));
+                qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sContactsVCardProjectionMap);
                 qb.appendWhere(Contacts.IS_USER_PROFILE + "=1");
                 break;
@@ -4689,14 +4683,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS: {
-                qb.setTables(mDbHelper.getGroupView());
+                qb.setTables(Views.GROUPS);
                 qb.setProjectionMap(sGroupsProjectionMap);
                 appendAccountFromParameter(qb, uri);
                 break;
             }
 
             case GROUPS_ID: {
-                qb.setTables(mDbHelper.getGroupView());
+                qb.setTables(Views.GROUPS);
                 qb.setProjectionMap(sGroupsProjectionMap);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 qb.appendWhere(Groups._ID + "=?");
@@ -4704,7 +4698,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS_SUMMARY: {
-                qb.setTables(mDbHelper.getGroupView() + " AS groups");
+                qb.setTables(Views.GROUPS + " AS groups");
                 qb.setProjectionMap(sGroupsSummaryProjectionMap);
                 appendAccountFromParameter(qb, uri);
                 groupBy = Groups._ID;
@@ -4799,24 +4793,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case LIVE_FOLDERS_CONTACTS:
-                qb.setTables(mDbHelper.getContactView());
+                qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
                 break;
 
             case LIVE_FOLDERS_CONTACTS_WITH_PHONES:
-                qb.setTables(mDbHelper.getContactView());
+                qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
                 qb.appendWhere(Contacts.HAS_PHONE_NUMBER + "=1");
                 break;
 
             case LIVE_FOLDERS_CONTACTS_FAVORITES:
-                qb.setTables(mDbHelper.getContactView());
+                qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
                 qb.appendWhere(Contacts.STARRED + "=1");
                 break;
 
             case LIVE_FOLDERS_CONTACTS_GROUP_NAME:
-                qb.setTables(mDbHelper.getContactView());
+                qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
                 qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
@@ -5002,7 +4996,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         HashMap<String, String> projectionMap = Maps.newHashMap();
 
         // The user profile column varies depending on the view.
-        String profileColumn = qb.getTables().contains(mDbHelper.getContactView())
+        String profileColumn = qb.getTables().contains(Views.CONTACTS)
                 ? Contacts.IS_USER_PROFILE
                 : RawContacts.RAW_CONTACT_IS_USER_PROFILE;
         String sectionHeading = String.format(
@@ -5338,8 +5332,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean forStrequentFrequent, boolean strequentPhoneCallOnly) {
         StringBuilder sb = new StringBuilder();
-        String viewName = mDbHelper.getContactView(shouldExcludeRestrictedData(uri));
-        sb.append(viewName);
+        sb.append(Views.CONTACTS);
 
         // Just for frequently contacted contacts in Strequent Uri handling.
         if (forStrequentFrequent) {
@@ -5352,11 +5345,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // Use INNER JOIN for maximum performance, ommiting unnecessary rows as much as
             // possible.
             sb.append(" INNER JOIN " +
-                    mDbHelper.getDataUsageStatView() + " AS " + Tables.DATA_USAGE_STAT +
+                    Views.DATA_USAGE_STAT + " AS " + Tables.DATA_USAGE_STAT +
                     " ON (" +
                     DbQueryUtils.concatenateClauses(
                             DataUsageStatColumns.CONCRETE_TIMES_USED + " > 0",
-                            RawContacts.CONTACT_ID + "=" + viewName + "." + Contacts._ID,
+                            RawContacts.CONTACT_ID + "=" + Views.CONTACTS + "." + Contacts._ID,
                             strequentPhoneCallOnlyClause) +
                     ")");
         }
@@ -5375,7 +5368,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String[] projection, String filter, long directoryId) {
 
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getContactView(shouldExcludeRestrictedData(uri)));
+        sb.append(Views.CONTACTS);
 
         if (filter != null) {
             filter = filter.trim();
@@ -5560,14 +5553,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void setTablesAndProjectionMapForRawContacts(SQLiteQueryBuilder qb, Uri uri) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getRawContactView(shouldExcludeRestrictedData(uri)));
+        sb.append(Views.RAW_CONTACTS);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sRawContactsProjectionMap);
         appendAccountFromParameter(qb, uri);
     }
 
     private void setTablesAndProjectionMapForRawEntities(SQLiteQueryBuilder qb, Uri uri) {
-        qb.setTables(mDbHelper.getRawEntitiesView(shouldExcludeRestrictedData(uri)));
+        qb.setTables(Views.RAW_ENTITIES);
         qb.setProjectionMap(sRawEntityProjectionMap);
         appendAccountFromParameter(qb, uri);
     }
@@ -5584,7 +5577,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean distinct, Integer usageType) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getDataView(shouldExcludeRestrictedData(uri)));
+        sb.append(Views.DATA);
         sb.append(" data");
 
         appendContactPresenceJoin(sb, projection, RawContacts.CONTACT_ID);
@@ -5608,7 +5601,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTableAndProjectionMapForStatusUpdates(SQLiteQueryBuilder qb,
             String[] projection) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getDataView());
+        sb.append(Views.DATA);
         sb.append(" data");
         appendDataPresenceJoin(sb, projection, DataColumns.CONCRETE_ID);
         appendDataStatusUpdateJoin(sb, projection, DataColumns.CONCRETE_ID);
@@ -5641,7 +5634,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void setTablesAndProjectionMapForEntities(SQLiteQueryBuilder qb, Uri uri,
             String[] projection) {
         StringBuilder sb = new StringBuilder();
-        sb.append(mDbHelper.getEntitiesView(shouldExcludeRestrictedData(uri)));
+        sb.append(Views.ENTITIES);
         sb.append(" data");
 
         appendContactPresenceJoin(sb, projection, Contacts.Entity.CONTACT_ID);
@@ -5750,23 +5743,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return profileRequested;
     }
 
-    private boolean shouldExcludeRestrictedData(Uri uri) {
-        // Note: currently, "export only" equals to "restricted", but may not in the future.
-        boolean excludeRestrictedData = readBooleanQueryParameter(uri,
-                Data.FOR_EXPORT_ONLY, false);
-        if (excludeRestrictedData) {
-            return true;
-        }
-
-        String requestingPackage = getQueryParameter(uri,
-                ContactsContract.REQUESTING_PACKAGE_PARAM_KEY);
-        if (requestingPackage != null) {
-            return !mDbHelper.hasAccessToRestrictedData(requestingPackage);
-        }
-
-        return false;
-    }
-
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
@@ -5843,23 +5819,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         } catch (NumberFormatException ex) {
             Log.w(TAG, "Invalid limit parameter: " + limitParam);
             return null;
-        }
-    }
-
-    String getContactsRestrictions() {
-        if (mDbHelper.hasAccessToRestrictedData()) {
-            return "1";
-        } else {
-            return RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0";
-        }
-    }
-
-    public String getContactsRestrictionExceptionAsNestedQuery(String contactIdColumn) {
-        if (mDbHelper.hasAccessToRestrictedData()) {
-            return "1";
-        } else {
-            return "(SELECT " + RawContacts.IS_RESTRICTED + " FROM " + Tables.RAW_CONTACTS
-                    + " WHERE " + RawContactsColumns.CONCRETE_ID + "=" + contactIdColumn + ")=0";
         }
     }
 
@@ -5958,7 +5917,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         String sql =
-                "SELECT " + Photo.PHOTO + " FROM " + mDbHelper.getDataView() +
+                "SELECT " + Photo.PHOTO + " FROM " + Views.DATA +
                 " WHERE " + selection;
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
         try {
@@ -6016,7 +5975,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 new VCardComposer(context, vcardconfig, false);
         Writer writer = null;
         try {
-            // No extra checks since composer always uses restricted views.
             writer = new BufferedWriter(new OutputStreamWriter(stream));
             if (!composer.init(uri, selection, selectionArgs, null)) {
                 Log.w(TAG, "Failed to init VCardComposer");
@@ -6490,7 +6448,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Arrays.fill(questionMarks, "?");
         final String where = Data._ID + " IN (" + TextUtils.join(",", questionMarks) + ")";
         final Cursor cursor = mDb.query(
-                mDbHelper.getDataView(shouldExcludeRestrictedData(uri)),
+                Views.DATA,
                 new String[] { Data.CONTACT_ID },
                 where, ids, null, null, null);
         try {

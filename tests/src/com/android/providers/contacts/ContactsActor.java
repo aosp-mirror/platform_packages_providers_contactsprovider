@@ -63,7 +63,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Helper class that encapsulates an "actor" which is owned by a specific
@@ -228,7 +227,7 @@ public class ContactsActor {
             Configuration configuration = new Configuration(resources.getConfiguration());
             configuration.locale = Locale.US;
             resources.updateConfiguration(configuration, resources.getDisplayMetrics());
-            mRes = new RestrictionMockResources(resources);
+            mRes = resources;
         }
 
         @Override
@@ -297,97 +296,30 @@ public class ContactsActor {
         }
     }
 
-    private static class RestrictionMockResources extends MockResources {
-        private static final String UNRESTRICTED = "unrestricted_packages";
-        private static final int UNRESTRICTED_ID = 1024;
-
-        private static final String[] UNRESTRICTED_LIST = new String[] {
-            PACKAGE_GREY
-        };
-
-        private final Resources mRes;
-
-        public RestrictionMockResources(Resources res) {
-            mRes = res;
-        }
-
-        @Override
-        public int getIdentifier(String name, String defType, String defPackage) {
-            if (UNRESTRICTED.equals(name)) {
-                return UNRESTRICTED_ID;
-            } else {
-                return mRes.getIdentifier(name, defType, defPackage);
-            }
-        }
-
-        @Override
-        public String[] getStringArray(int id) throws NotFoundException {
-            if (id == UNRESTRICTED_ID) {
-                return UNRESTRICTED_LIST;
-            } else {
-                return mRes.getStringArray(id);
-            }
-        }
-
-        @Override
-        public void getValue(int id, TypedValue outValue, boolean resolveRefs)
-                throws NotFoundException {
-            mRes.getValue(id, outValue, resolveRefs);
-        }
-
-        @Override
-        public String getString(int id) throws NotFoundException {
-            return mRes.getString(id);
-        }
-
-        @Override
-        public String getString(int id, Object... formatArgs) throws NotFoundException {
-            return mRes.getString(id, formatArgs);
-        }
-
-        @Override
-        public CharSequence getText(int id) throws NotFoundException {
-            return mRes.getText(id);
-        }
-
-        @Override
-        public String getResourceName(int resid) throws NotFoundException {
-            return String.valueOf(resid);
-        }
-
-        @Override
-        public int getInteger(int id) throws NotFoundException {
-            return mRes.getInteger(id);
-        }
-    }
-
     static String sCallingPackage = null;
 
     void ensureCallingPackage() {
         sCallingPackage = this.packageName;
     }
 
-    public long createRawContact(boolean isRestricted, String name) {
+    public long createRawContact(String name) {
         ensureCallingPackage();
-        long rawContactId = createRawContact(isRestricted);
+        long rawContactId = createRawContact();
         createName(rawContactId, name);
         return rawContactId;
     }
 
-    public long createRawContact(boolean isRestricted) {
+    public long createRawContact() {
         ensureCallingPackage();
         final ContentValues values = new ContentValues();
-        if (isRestricted) {
-            values.put(RawContacts.IS_RESTRICTED, 1);
-        }
 
         Uri rawContactUri = resolver.insert(RawContacts.CONTENT_URI, values);
         return ContentUris.parseId(rawContactUri);
     }
 
-    public long createRawContactWithStatus(boolean isRestricted, String name, String address,
+    public long createRawContactWithStatus(String name, String address,
             String status) {
-        final long rawContactId = createRawContact(isRestricted, name);
+        final long rawContactId = createRawContact(name);
         final long dataId = createEmail(rawContactId, address);
         createStatus(dataId, status);
         return rawContactId;

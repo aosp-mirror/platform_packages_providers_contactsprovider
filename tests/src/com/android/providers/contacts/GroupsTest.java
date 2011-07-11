@@ -28,10 +28,10 @@ import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Settings;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.MediumTest;
 
@@ -78,13 +78,13 @@ public class GroupsTest extends BaseContactsProvider2Test {
         long groupBlue = mActor.createGroup(GROUP_BLUE);
 
         // Create a handful of contacts
-        long contactAlpha = mActor.createRawContact(false, PERSON_ALPHA);
-        long contactBravo = mActor.createRawContact(false, PERSON_BRAVO);
-        long contactCharlie = mActor.createRawContact(false, PERSON_CHARLIE);
-        long contactCharlieDupe = mActor.createRawContact(false, PERSON_CHARLIE);
+        long contactAlpha = mActor.createRawContact(PERSON_ALPHA);
+        long contactBravo = mActor.createRawContact(PERSON_BRAVO);
+        long contactCharlie = mActor.createRawContact(PERSON_CHARLIE);
+        long contactCharlieDupe = mActor.createRawContact(PERSON_CHARLIE);
         setAggregationException(
                 AggregationExceptions.TYPE_KEEP_TOGETHER, contactCharlie, contactCharlieDupe);
-        long contactDelta = mActor.createRawContact(false, PERSON_DELTA);
+        long contactDelta = mActor.createRawContact(PERSON_DELTA);
 
         assertAggregated(contactCharlie, contactCharlieDupe);
 

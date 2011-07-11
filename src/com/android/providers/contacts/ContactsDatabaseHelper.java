@@ -64,8 +64,8 @@ import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.StreamItems;
 import android.provider.ContactsContract.StreamItemPhotos;
+import android.provider.ContactsContract.StreamItems;
 import android.provider.SocialContract.Activities;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
@@ -100,7 +100,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 605;
+    static final int DATABASE_VERSION = 606;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -201,26 +201,13 @@ import java.util.Locale;
     }
 
     public interface Views {
-        public static final String DATA_ALL = "view_data";
-        public static final String DATA_RESTRICTED = "view_data_restricted";
-
-        public static final String RAW_CONTACTS_ALL = "view_raw_contacts";
-        public static final String RAW_CONTACTS_RESTRICTED = "view_raw_contacts_restricted";
-
-        public static final String CONTACTS_ALL = "view_contacts";
-        public static final String CONTACTS_RESTRICTED = "view_contacts_restricted";
-
+        public static final String DATA = "view_data";
+        public static final String RAW_CONTACTS = "view_raw_contacts";
+        public static final String CONTACTS = "view_contacts";
         public static final String ENTITIES = "view_entities";
-        public static final String ENTITIES_RESTRICTED = "view_entities_restricted";
-
         public static final String RAW_ENTITIES = "view_raw_entities";
-        public static final String RAW_ENTITIES_RESTRICTED = "view_raw_entities_restricted";
-
-        public static final String GROUPS_ALL = "view_groups";
-
-        public static final String DATA_USAGE_STAT_ALL = "view_data_usage_stat";
-        public static final String DATA_USAGE_STAT_RESTRICTED =
-                "view_data_usage_stat_restricted";
+        public static final String GROUPS = "view_groups";
+        public static final String DATA_USAGE_STAT = "view_data_usage_stat";
     }
 
     public interface Clauses {
@@ -269,12 +256,6 @@ import java.util.Locale;
     }
 
     public interface ContactsColumns {
-        /**
-         * This flag is set for a contact if it has only one constituent raw contact and
-         * it is restricted.
-         */
-        public static final String SINGLE_IS_RESTRICTED = "single_is_restricted";
-
         public static final String LAST_STATUS_UPDATE_ID = "status_update_id";
 
         public static final String CONCRETE_ID = Tables.CONTACTS + "." + BaseColumns._ID;
@@ -325,8 +306,6 @@ import java.util.Locale;
                 Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
-        public static final String CONCRETE_IS_RESTRICTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.IS_RESTRICTED;
 
         public static final String DISPLAY_NAME = RawContacts.DISPLAY_NAME_PRIMARY;
         public static final String DISPLAY_NAME_SOURCE = RawContacts.DISPLAY_NAME_SOURCE;
@@ -638,11 +617,6 @@ import java.util.Locale;
 
     private boolean mUseStrictPhoneNumberComparison;
 
-    /**
-     * List of package names with access to {@link RawContacts#IS_RESTRICTED} data.
-     */
-    private String[] mUnrestrictedPackages;
-
     private String[] mSelectionArgs1 = new String[1];
     private NameSplitter.Name mName = new NameSplitter.Name();
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
@@ -675,13 +649,6 @@ import java.util.Locale;
         mUseStrictPhoneNumberComparison =
                 resources.getBoolean(
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
-        int resourceId = resources.getIdentifier("unrestricted_packages", "array",
-                context.getPackageName());
-        if (resourceId != 0) {
-            mUnrestrictedPackages = resources.getStringArray(resourceId);
-        } else {
-            mUnrestrictedPackages = new String[0];
-        }
     }
 
     private void refreshDatabaseCaches(SQLiteDatabase db) {
@@ -837,16 +804,11 @@ import java.util.Locale;
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LOOKUP_KEY + " TEXT," +
-                ContactsColumns.LAST_STATUS_UPDATE_ID + " INTEGER REFERENCES data(_id)," +
-                ContactsColumns.SINGLE_IS_RESTRICTED + " INTEGER NOT NULL DEFAULT 0" +
+                ContactsColumns.LAST_STATUS_UPDATE_ID + " INTEGER REFERENCES data(_id)" +
         ");");
 
         db.execSQL("CREATE INDEX contacts_has_phone_index ON " + Tables.CONTACTS + " (" +
                 Contacts.HAS_PHONE_NUMBER +
-        ");");
-
-        db.execSQL("CREATE INDEX contacts_restricted_index ON " + Tables.CONTACTS + " (" +
-                ContactsColumns.SINGLE_IS_RESTRICTED +
         ");");
 
         db.execSQL("CREATE INDEX contacts_name_raw_contact_id_index ON " + Tables.CONTACTS + " (" +
@@ -856,7 +818,6 @@ import java.util.Locale;
         // Contacts table
         db.execSQL("CREATE TABLE " + Tables.RAW_CONTACTS + " (" +
                 RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                RawContacts.IS_RESTRICTED + " INTEGER DEFAULT 0," +
                 RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 RawContacts.SOURCE_ID + " TEXT," +
@@ -1381,18 +1342,12 @@ import java.util.Locale;
     }
 
     private static void createContactsViews(SQLiteDatabase db) {
-        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES_RESTRICTED + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES_RESTRICTED + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT_ALL + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT_RESTRICTED + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT + ";");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1503,9 +1458,7 @@ import java.util.Locale;
                 +   "' AND " + GroupsColumns.CONCRETE_ID + "="
                         + Tables.DATA + "." + GroupMembership.GROUP_ROW_ID + ")";
 
-        db.execSQL("CREATE VIEW " + Views.DATA_ALL + " AS " + dataSelect);
-        db.execSQL("CREATE VIEW " + Views.DATA_RESTRICTED + " AS " + dataSelect + " WHERE "
-                + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
+        db.execSQL("CREATE VIEW " + Views.DATA + " AS " + dataSelect);
 
         String rawContactOptionColumns =
                 RawContacts.CUSTOM_RINGTONE + ","
@@ -1535,9 +1488,7 @@ import java.util.Locale;
                 + syncColumns
                 + " FROM " + Tables.RAW_CONTACTS;
 
-        db.execSQL("CREATE VIEW " + Views.RAW_CONTACTS_ALL + " AS " + rawContactsSelect);
-        db.execSQL("CREATE VIEW " + Views.RAW_CONTACTS_RESTRICTED + " AS " + rawContactsSelect
-                + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
+        db.execSQL("CREATE VIEW " + Views.RAW_CONTACTS + " AS " + rawContactsSelect);
 
         String contactsColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
@@ -1569,9 +1520,7 @@ import java.util.Locale;
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
                 +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
 
-        db.execSQL("CREATE VIEW " + Views.CONTACTS_ALL + " AS " + contactsSelect);
-        db.execSQL("CREATE VIEW " + Views.CONTACTS_RESTRICTED + " AS " + contactsSelect
-                + " WHERE " + ContactsColumns.SINGLE_IS_RESTRICTED + "=0");
+        db.execSQL("CREATE VIEW " + Views.CONTACTS + " AS " + contactsSelect);
 
         String rawEntitiesSelect = "SELECT "
                 + RawContacts.CONTACT_ID + ", "
@@ -1585,8 +1534,6 @@ import java.util.Locale;
                 + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ", "
                 + DataColumns.CONCRETE_ID + " AS " + RawContacts.Entity.DATA_ID + ","
                 + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
-                + RawContactsColumns.CONCRETE_IS_RESTRICTED + " AS "
-                        + RawContacts.IS_RESTRICTED + ","
                 + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
                     " WHERE " + RawContactsColumns.CONCRETE_ID +
                     "=" + AccountsColumns.PROFILE_RAW_CONTACT_ID + ") AS " +
@@ -1606,15 +1553,11 @@ import java.util.Locale;
 
         db.execSQL("CREATE VIEW " + Views.RAW_ENTITIES + " AS "
                 + rawEntitiesSelect);
-        db.execSQL("CREATE VIEW " + Views.RAW_ENTITIES_RESTRICTED + " AS "
-                + rawEntitiesSelect + " WHERE " + RawContacts.IS_RESTRICTED + "=0");
 
         String entitiesSelect = "SELECT "
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + Contacts._ID + ", "
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
                 + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
-                + RawContactsColumns.CONCRETE_IS_RESTRICTED
-                        + " AS " + RawContacts.IS_RESTRICTED + ","
                 + dataColumns + ", "
                 + syncColumns + ", "
                 + contactsColumns + ", "
@@ -1653,8 +1596,6 @@ import java.util.Locale;
 
         db.execSQL("CREATE VIEW " + Views.ENTITIES + " AS "
                 + entitiesSelect);
-        db.execSQL("CREATE VIEW " + Views.ENTITIES_RESTRICTED + " AS "
-                + entitiesSelect + " WHERE " + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
 
         String dataUsageStatSelect = "SELECT "
                 + DataUsageStatColumns.CONCRETE_ID + " AS " + DataUsageStatColumns._ID + ", "
@@ -1673,10 +1614,7 @@ import java.util.Locale;
                 + " JOIN " + Tables.MIMETYPES + " ON ("
                 +   MimetypesColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_MIMETYPE_ID + ")";
 
-        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT_ALL + " AS " + dataUsageStatSelect);
-        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT_RESTRICTED + " AS "
-                + dataUsageStatSelect + " WHERE "
-                + RawContactsColumns.CONCRETE_IS_RESTRICTED + "=0");
+        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT + " AS " + dataUsageStatSelect);
     }
 
     private static String buildPhotoUriAlias(String contactIdColumn, String alias) {
@@ -1690,7 +1628,7 @@ import java.util.Locale;
     }
 
     private static void createGroupsView(SQLiteDatabase db) {
-        db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS_ALL + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS + ";");
         String groupsColumns =
                 Groups.ACCOUNT_NAME + ","
                 + Groups.ACCOUNT_TYPE + ","
@@ -1718,7 +1656,7 @@ import java.util.Locale;
                 + groupsColumns
                 + " FROM " + Tables.GROUPS_JOIN_PACKAGES;
 
-        db.execSQL("CREATE VIEW " + Views.GROUPS_ALL + " AS " + groupsSelect);
+        db.execSQL("CREATE VIEW " + Views.GROUPS + " AS " + groupsSelect);
     }
 
     @Override
@@ -2041,6 +1979,13 @@ import java.util.Locale;
         if (oldVersion < 605) {
             upgradeToVersion605(db);
             oldVersion = 605;
+        }
+
+        if (oldVersion < 606) {
+            upgradeViewsAndTriggers = true;
+            upgradeLegacyApiSupport = true;
+            upgradeToVersion606(db);
+            oldVersion = 606;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3153,6 +3098,19 @@ import java.util.Locale;
                 "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
     }
 
+    private void upgradeToVersion606(SQLiteDatabase db) {
+        db.execSQL("DROP VIEW IF EXISTS view_contacts_restricted;");
+        db.execSQL("DROP VIEW IF EXISTS view_data_restricted;");
+        db.execSQL("DROP VIEW IF EXISTS view_raw_contacts_restricted;");
+        db.execSQL("DROP VIEW IF EXISTS view_raw_entities_restricted;");
+        db.execSQL("DROP VIEW IF EXISTS view_entities_restricted;");
+        db.execSQL("DROP VIEW IF EXISTS view_data_usage_stat_restricted;");
+        db.execSQL("DROP INDEX IF EXISTS contacts_restricted_index");
+
+        // We should remove the restricted columns here as well, but unfortunately SQLite doesn't
+        // provide ALTER TABLE DROP COLUMN. As they have DEFAULT 0, we can keep but ignore them
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -3212,8 +3170,6 @@ import java.util.Locale;
 
         // Specific stats strings are based on an actual large database after running ANALYZE
         try {
-            updateIndexStats(db, Tables.CONTACTS,
-                    "contacts_restricted_index", "10000 9000");
             updateIndexStats(db, Tables.CONTACTS,
                     "contacts_has_phone_index", "10000 500");
 
@@ -3661,7 +3617,7 @@ import java.util.Locale;
             boolean joinContacts) {
         sb.append(Tables.RAW_CONTACTS);
         if (joinContacts) {
-            sb.append(" JOIN " + getContactView() + " contacts_view"
+            sb.append(" JOIN " + Views.CONTACTS + " contacts_view"
                     + " ON (contacts_view._id = raw_contacts.contact_id)");
         }
         sb.append(", (SELECT data_id, normalized_number, length(normalized_number) as len "
@@ -3826,98 +3782,6 @@ import java.util.Locale;
         values.put(PropertiesColumns.PROPERTY_KEY, key);
         values.put(PropertiesColumns.PROPERTY_VALUE, value);
         db.replace(Tables.PROPERTIES, null, values);
-    }
-
-    /**
-     * Check if {@link Binder#getCallingUid()} should be allowed access to
-     * {@link RawContacts#IS_RESTRICTED} data.
-     */
-    boolean hasAccessToRestrictedData() {
-        final PackageManager pm = mContext.getPackageManager();
-        int caller = Binder.getCallingUid();
-        if (caller == 0) return true; // root can do anything
-        final String[] callerPackages = pm.getPackagesForUid(caller);
-
-        // Has restricted access if caller matches any packages
-        for (String callerPackage : callerPackages) {
-            if (hasAccessToRestrictedData(callerPackage)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Check if requestingPackage should be allowed access to
-     * {@link RawContacts#IS_RESTRICTED} data.
-     */
-    boolean hasAccessToRestrictedData(String requestingPackage) {
-        if (mUnrestrictedPackages != null) {
-            for (String allowedPackage : mUnrestrictedPackages) {
-                if (allowedPackage.equals(requestingPackage)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public String getDataView() {
-        return getDataView(false);
-    }
-
-    public String getDataView(boolean requireRestrictedView) {
-        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Views.DATA_ALL : Views.DATA_RESTRICTED;
-    }
-
-    public String getRawContactView() {
-        return getRawContactView(false);
-    }
-
-    public String getRawContactView(boolean requireRestrictedView) {
-        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Views.RAW_CONTACTS_ALL : Views.RAW_CONTACTS_RESTRICTED;
-    }
-
-    public String getContactView() {
-        return getContactView(false);
-    }
-
-    public String getContactView(boolean requireRestrictedView) {
-        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Views.CONTACTS_ALL : Views.CONTACTS_RESTRICTED;
-    }
-
-    public String getGroupView() {
-        return Views.GROUPS_ALL;
-    }
-
-    public String getRawEntitiesView() {
-        return getRawEntitiesView(false);
-    }
-
-    public String getRawEntitiesView(boolean requireRestrictedView) {
-        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Views.RAW_ENTITIES : Views.RAW_ENTITIES_RESTRICTED;
-    }
-
-    public String getEntitiesView() {
-        return getEntitiesView(false);
-    }
-
-    public String getEntitiesView(boolean requireRestrictedView) {
-        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Views.ENTITIES : Views.ENTITIES_RESTRICTED;
-    }
-
-    public String getDataUsageStatView() {
-        return getDataUsageStatView(false);
-    }
-
-    public String getDataUsageStatView(boolean requireRestrictedView) {
-        return (hasAccessToRestrictedData() && !requireRestrictedView) ?
-                Views.DATA_USAGE_STAT_ALL : Views.DATA_USAGE_STAT_RESTRICTED;
     }
 
     /**

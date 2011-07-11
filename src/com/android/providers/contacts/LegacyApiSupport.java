@@ -596,8 +596,7 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.People._ID + ", " +
                 peopleColumns +
                 " FROM " + Tables.RAW_CONTACTS + PEOPLE_JOINS +
-                " WHERE " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
-                " AND " + RawContacts.IS_RESTRICTED + "=0" + ";");
+                " WHERE " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0;");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.ORGANIZATIONS + ";");
         db.execSQL("CREATE VIEW " + LegacyTables.ORGANIZATIONS + " AS SELECT " +
@@ -620,8 +619,7 @@ public class LegacyApiSupport {
                 " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Organization.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
-                        + " AND " + RawContacts.IS_RESTRICTED + "=0" +
+                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.CONTACT_METHODS + ";");
@@ -645,8 +643,7 @@ public class LegacyApiSupport {
                 peopleColumns +
                 " FROM " + Tables.DATA + DATA_JOINS +
                 " WHERE " + ContactMethods.KIND + " IS NOT NULL"
-                    + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
-                    + " AND " + RawContacts.IS_RESTRICTED + "=0" +
+                    + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
 
@@ -674,8 +671,7 @@ public class LegacyApiSupport {
                         + DATA_JOINS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Phone.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
-                        + " AND " + RawContacts.IS_RESTRICTED + "=0" +
+                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.EXTENSIONS + ";");
@@ -693,8 +689,7 @@ public class LegacyApiSupport {
                 " FROM " + Tables.DATA_JOIN_MIMETYPE_RAW_CONTACTS +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + android.provider.Contacts.Extensions.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
-                        + " AND " + RawContacts.IS_RESTRICTED + "=0" +
+                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.GROUPS + ";");
@@ -762,8 +757,7 @@ public class LegacyApiSupport {
                 " FROM " + Tables.DATA + DATA_JOINS + LEGACY_PHOTO_JOIN +
                 " WHERE " + MimetypesColumns.CONCRETE_MIMETYPE + "='"
                         + Photo.CONTENT_ITEM_TYPE + "'"
-                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0"
-                        + " AND " + RawContacts.IS_RESTRICTED + "=0" +
+                        + " AND " + Tables.RAW_CONTACTS + "." + RawContacts.DELETED + "=0" +
         ";");
 
     }

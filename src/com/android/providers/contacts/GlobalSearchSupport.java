@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 
 import android.app.SearchManager;
 import android.content.res.Resources;
@@ -291,7 +292,7 @@ public class GlobalSearchSupport {
             sb.append(", " + SearchSnippetColumns.SNIPPET);
         }
         sb.append(" FROM ");
-        sb.append(getDatabaseHelper().getContactView(false));
+        sb.append(Views.CONTACTS);
         sb.append(" AS contacts");
         if (haveFilter) {
             mContactsProvider.appendSearchIndexJoin(sb, filter, true,
