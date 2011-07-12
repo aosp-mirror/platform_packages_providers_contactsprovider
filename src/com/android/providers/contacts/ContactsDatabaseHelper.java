@@ -100,7 +100,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 606;
+    static final int DATABASE_VERSION = 607;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -370,8 +370,12 @@ import java.util.Locale;
 
         public static final String CONCRETE_ID = Tables.GROUPS + "." + BaseColumns._ID;
         public static final String CONCRETE_SOURCE_ID = Tables.GROUPS + "." + Groups.SOURCE_ID;
-        public static final String CONCRETE_ACCOUNT_NAME = Tables.GROUPS + "." + Groups.ACCOUNT_NAME;
-        public static final String CONCRETE_ACCOUNT_TYPE = Tables.GROUPS + "." + Groups.ACCOUNT_TYPE;
+        public static final String CONCRETE_ACCOUNT_NAME =
+                Tables.GROUPS + "." + Groups.ACCOUNT_NAME;
+        public static final String CONCRETE_ACCOUNT_TYPE =
+                Tables.GROUPS + "." + Groups.ACCOUNT_TYPE;
+        public static final String CONCRETE_ACTION = Tables.GROUPS + "." + Groups.ACTION;
+        public static final String CONCRETE_ACTION_URI = Tables.GROUPS + "." + Groups.ACTION_URI;
     }
 
     public interface ActivitiesColumns {
@@ -1015,6 +1019,8 @@ import java.util.Locale;
                 Groups.TITLE + " TEXT," +
                 Groups.TITLE_RES + " INTEGER," +
                 Groups.NOTES + " TEXT," +
+                Groups.ACTION + " TEXT," +
+                Groups.ACTION_URI + " TEXT," +
                 Groups.SYSTEM_ID + " TEXT," +
                 Groups.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.GROUP_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
@@ -1638,6 +1644,8 @@ import java.util.Locale;
                 + Groups.TITLE + ","
                 + Groups.TITLE_RES + ","
                 + Groups.NOTES + ","
+                + Groups.ACTION + ", "
+                + Groups.ACTION_URI + ", "
                 + Groups.SYSTEM_ID + ","
                 + Groups.DELETED + ","
                 + Groups.GROUP_VISIBLE + ","
@@ -1986,6 +1994,12 @@ import java.util.Locale;
             upgradeLegacyApiSupport = true;
             upgradeToVersion606(db);
             oldVersion = 606;
+        }
+
+        if (oldVersion < 607) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion607(db);
+            oldVersion = 607;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3109,6 +3123,11 @@ import java.util.Locale;
 
         // We should remove the restricted columns here as well, but unfortunately SQLite doesn't
         // provide ALTER TABLE DROP COLUMN. As they have DEFAULT 0, we can keep but ignore them
+    }
+
+    private void upgradeToVersion607(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE groups ADD COLUMN action TEXT");
+        db.execSQL("ALTER TABLE groups ADD COLUMN action_uri TEXT");
     }
 
     public String extractHandleFromEmailAddress(String email) {

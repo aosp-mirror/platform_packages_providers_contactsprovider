@@ -756,6 +756,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Groups.SYSTEM_ID)
             .add(Groups.DELETED)
             .add(Groups.NOTES)
+            .add(Groups.ACTION)
+            .add(Groups.ACTION_URI)
             .add(Groups.SHOULD_SYNC)
             .add(Groups.FAVORITES)
             .add(Groups.AUTO_ADD)
