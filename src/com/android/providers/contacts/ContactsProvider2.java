@@ -142,10 +142,7 @@ import android.util.Log;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -349,7 +346,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + GroupsColumns.CONCRETE_ACCOUNT_NAME
                     + "=" + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AND "
                     + GroupsColumns.CONCRETE_ACCOUNT_TYPE
-                    + "=" + RawContactsColumns.CONCRETE_ACCOUNT_TYPE
+                    + "=" + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AND ("
+                    + GroupsColumns.CONCRETE_DATA_SET
+                    + "=" + RawContactsColumns.CONCRETE_DATA_SET + " OR "
+                    + GroupsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                    + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL)"
                     + " AND " + Groups.FAVORITES + " != 0";
 
     private static final String SELECTION_AUTO_ADD_GROUPS_BY_RAW_CONTACT_ID =
@@ -357,8 +358,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + GroupsColumns.CONCRETE_ACCOUNT_NAME + "="
                     + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AND "
                     + GroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
-                    + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AND "
-                    + Groups.AUTO_ADD + " != 0";
+                    + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AND ("
+                    + GroupsColumns.CONCRETE_DATA_SET + "="
+                    + RawContactsColumns.CONCRETE_DATA_SET + " OR "
+                    + GroupsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                    + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL)"
+                    + " AND " + Groups.AUTO_ADD + " != 0";
 
     private static final String[] PROJECTION_GROUP_ID
             = new String[]{Tables.GROUPS + "." + Groups._ID};
@@ -413,6 +418,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             RawContactsColumns.CONCRETE_ID,
             RawContactsColumns.CONCRETE_ACCOUNT_TYPE,
             RawContactsColumns.CONCRETE_ACCOUNT_NAME,
+            RawContactsColumns.CONCRETE_DATA_SET,
             DataColumns.CONCRETE_ID,
             ContactsColumns.CONCRETE_ID
         };
@@ -420,8 +426,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public static final int RAW_CONTACT_ID = 0;
         public static final int ACCOUNT_TYPE = 1;
         public static final int ACCOUNT_NAME = 2;
-        public static final int DATA_ID = 3;
-        public static final int CONTACT_ID = 4;
+        public static final int DATA_SET = 3;
+        public static final int DATA_ID = 4;
+        public static final int CONTACT_ID = 5;
     }
 
     interface RawContactsQuery {
@@ -431,11 +438,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 RawContacts.DELETED,
                 RawContacts.ACCOUNT_TYPE,
                 RawContacts.ACCOUNT_NAME,
+                RawContacts.DATA_SET,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
         };
 
         int DELETED = 0;
         int ACCOUNT_TYPE = 1;
         int ACCOUNT_NAME = 2;
+        int DATA_SET = 3;
+        int ACCOUNT_TYPE_AND_DATA_SET = 4;
     }
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google";
@@ -517,6 +528,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Data.NAME_RAW_CONTACT_ID,
             RawContacts.ACCOUNT_NAME,
             RawContacts.ACCOUNT_TYPE,
+            RawContacts.DATA_SET,
+            RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
             RawContacts.DIRTY,
             RawContacts.NAME_VERIFIED,
             RawContacts.SOURCE_ID,
@@ -569,6 +582,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final ProjectionMap sRawContactColumns = ProjectionMap.builder()
             .add(RawContacts.ACCOUNT_NAME)
             .add(RawContacts.ACCOUNT_TYPE)
+            .add(RawContacts.DATA_SET)
+            .add(RawContacts.ACCOUNT_TYPE_AND_DATA_SET)
             .add(RawContacts.DIRTY)
             .add(RawContacts.NAME_VERIFIED)
             .add(RawContacts.SOURCE_ID)
@@ -810,6 +825,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Groups._ID)
             .add(Groups.ACCOUNT_NAME)
             .add(Groups.ACCOUNT_TYPE)
+            .add(Groups.DATA_SET)
+            .add(Groups.ACCOUNT_TYPE_AND_DATA_SET)
             .add(Groups.SOURCE_ID)
             .add(Groups.DIRTY)
             .add(Groups.VERSION)
@@ -1181,12 +1198,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private boolean mDirectoryCacheValid = false;
 
     /**
-     * An entry in group id cache. It maps the combination of (account type, account name
+     * An entry in group id cache. It maps the combination of (account type, account name, data set,
      * and source id) to group row id.
      */
     public static class GroupIdCacheEntry {
         String accountType;
         String accountName;
+        String dataSet;
         String sourceId;
         long groupId;
     }
@@ -1913,7 +1931,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mContactAggregator.onRawContactInsert(mTransactionContext, mDb, rawContactId);
         }
 
-        Map<Long, Account> insertedProfileRawContactAccountMap =
+        Map<Long, AccountWithDataSet> insertedProfileRawContactAccountMap =
                 mTransactionContext.getInsertedProfileRawContactIds();
         if (!insertedProfileRawContactAccountMap.isEmpty()) {
             for (long profileRawContactId : insertedProfileRawContactAccountMap.keySet()) {
@@ -2239,6 +2257,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
+     * Resolves the account and builds an {@link AccountWithDataSet} based on the data set specified
+     * in the URI or values (if any).
+     * @param uri Current {@link Uri} being operated on.
+     * @param values {@link ContentValues} to read and possibly update.
+     */
+    private AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values) {
+        final Account account = resolveAccount(uri, mValues);
+        AccountWithDataSet accountWithDataSet = null;
+        if (account != null) {
+            String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
+            if (dataSet == null) {
+                dataSet = mValues.getAsString(RawContacts.DATA_SET);
+            }
+            accountWithDataSet = new AccountWithDataSet(account.name, account.type, dataSet);
+        }
+        return accountWithDataSet;
+    }
+
+    /**
      * Inserts an item in the contacts table
      *
      * @param values the values for the new row
@@ -2263,7 +2300,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.putAll(values);
         mValues.putNull(RawContacts.CONTACT_ID);
 
-        final Account account = resolveAccount(uri, mValues);
+        AccountWithDataSet accountWithDataSet = resolveAccountWithDataSet(uri, mValues);
 
         if (values.containsKey(RawContacts.DELETED)
                 && values.getAsInteger(RawContacts.DELETED) != 0) {
@@ -2284,10 +2321,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (forProfile) {
             // Trigger creation of the user profile Contact (or association with the existing one)
             // at the end of the transaction.
-            mTransactionContext.profileRawContactInserted(rawContactId, account);
+            mTransactionContext.profileRawContactInserted(rawContactId, accountWithDataSet);
         } else {
             // Trigger creation of a Contact based on this RawContact at the end of transaction
-            mTransactionContext.rawContactInserted(rawContactId, account);
+            mTransactionContext.rawContactInserted(rawContactId, accountWithDataSet);
         }
 
         if (!callerIsSyncAdapter) {
@@ -2759,6 +2796,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.putAll(values);
 
         final Account account = resolveAccount(uri, mValues);
+        String dataSet = null;
+        if (account != null && mValues.containsKey(Groups.DATA_SET)) {
+            dataSet = mValues.getAsString(Groups.DATA_SET);
+        }
 
         // Replace package with internal mapping
         final String packageName = mValues.getAsString(Groups.RES_PACKAGE);
@@ -2783,12 +2824,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String[] selectionArgs;
             if (account == null) {
                 selection = RawContacts.ACCOUNT_NAME + " IS NULL AND "
-                        + RawContacts.ACCOUNT_TYPE + " IS NULL";
+                        + RawContacts.ACCOUNT_TYPE + " IS NULL AND "
+                        + RawContacts.DATA_SET + " IS NULL";
                 selectionArgs = null;
-            } else {
+            } else if (dataSet == null) {
                 selection = RawContacts.ACCOUNT_NAME + "=? AND "
                         + RawContacts.ACCOUNT_TYPE + "=?";
                 selectionArgs = new String[]{account.name, account.type};
+            } else {
+                selection = RawContacts.ACCOUNT_NAME + "=? AND "
+                        + RawContacts.ACCOUNT_TYPE + "=? AND "
+                        + RawContacts.DATA_SET + "=?";
+                selectionArgs = new String[]{account.name, account.type, dataSet};
             }
             Cursor c = mDb.query(Tables.RAW_CONTACTS,
                     new String[]{RawContacts._ID, RawContacts.STARRED},
@@ -2997,7 +3044,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     // updates didn't do any sort of account enforcement, while social stream item
                     // updates do.  We can't expect callers of the old API to start passing account
                     // information along, so we just populate the account params appropriately for
-                    // the raw contact.
+                    // the raw contact.  Data set is not relevant here, as we only check account
+                    // name and type.
                     if (accountName != null && accountType != null) {
                         streamItemValues.put(RawContacts.ACCOUNT_NAME, accountName);
                         streamItemValues.put(RawContacts.ACCOUNT_TYPE, accountType);
@@ -3671,6 +3719,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (updatedValues.containsKey(Groups.GROUP_VISIBLE)) {
             mVisibleTouched = true;
         }
+
+        // TODO: This will not work for groups that have a data set specified, since the content
+        // resolver will not be able to request a sync for the right source (unless it is updated
+        // to key off account with data set).
         if (updatedValues.containsKey(Groups.SHOULD_SYNC)
                 && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
             Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
@@ -3747,6 +3799,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int previousDeleted = 0;
         String accountType = null;
         String accountName = null;
+        String dataSet = null;
         if (requestUndoDelete) {
             Cursor cursor = mDb.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS, selection,
                     mSelectionArgs1, null, null, null);
@@ -3755,6 +3808,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     previousDeleted = cursor.getInt(RawContactsQuery.DELETED);
                     accountType = cursor.getString(RawContactsQuery.ACCOUNT_TYPE);
                     accountName = cursor.getString(RawContactsQuery.ACCOUNT_NAME);
+                    dataSet = cursor.getString(RawContactsQuery.DATA_SET);
                 }
             } finally {
                 cursor.close();
@@ -3813,7 +3867,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
             if (requestUndoDelete && previousDeleted == 1) {
                 mTransactionContext.rawContactInserted(rawContactId,
-                        new Account(accountName, accountType));
+                        new AccountWithDataSet(accountName, accountType, dataSet));
             }
         }
         return count;
@@ -4027,61 +4081,95 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     protected boolean updateAccountsInBackground(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
-        HashSet<Account> existingAccounts = new HashSet<Account>();
         mDb = mDbHelper.getWritableDatabase();
         mDb.beginTransaction();
         try {
-            findValidAccounts(existingAccounts);
+            Set<AccountWithDataSet> existingAccountsWithDataSets =
+                    findValidAccountsWithDataSets(Tables.ACCOUNTS);
 
-            // Add a row to the ACCOUNTS table for each new account
+            // Add a row to the ACCOUNTS table (with no data set) for each new account.
             for (Account account : accounts) {
-                if (!existingAccounts.contains(account)) {
+                AccountWithDataSet accountWithDataSet = new AccountWithDataSet(
+                        account.name, account.type, null);
+                if (!existingAccountsWithDataSets.contains(accountWithDataSet)) {
                     accountsChanged = true;
+
+                    // Add an account entry with an empty data set to match the account.
                     mDb.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
-                            + ", " + RawContacts.ACCOUNT_TYPE + ") VALUES (?, ?)",
-                            new String[] {account.name, account.type});
+                            + ", " + RawContacts.ACCOUNT_TYPE + ", " + RawContacts.DATA_SET
+                            + ") VALUES (?, ?, ?)",
+                            new String[] {
+                                    accountWithDataSet.getAccountName(),
+                                    accountWithDataSet.getAccountType(),
+                                    accountWithDataSet.getDataSet()
+                            });
                 }
             }
 
-            // Remove all valid accounts from the existing account set. What is left
-            // in the accountsToDelete set will be extra accounts whose data must be deleted.
-            HashSet<Account> accountsToDelete = new HashSet<Account>(existingAccounts);
-            for (Account account : accounts) {
-                accountsToDelete.remove(account);
+            // Check each of the existing sub-accounts against the account list.  If the owning
+            // account no longer exists, the sub-account and all its data should be deleted.
+            List<AccountWithDataSet> accountsWithDataSetsToDelete =
+                    new ArrayList<AccountWithDataSet>();
+            List<Account> accountList = Arrays.asList(accounts);
+            for (AccountWithDataSet accountWithDataSet : existingAccountsWithDataSets) {
+                Account owningAccount = new Account(
+                        accountWithDataSet.getAccountName(), accountWithDataSet.getAccountType());
+                if (!accountList.contains(owningAccount)) {
+                    accountsWithDataSetsToDelete.add(accountWithDataSet);
+                }
             }
 
-            if (!accountsToDelete.isEmpty()) {
+            if (!accountsWithDataSetsToDelete.isEmpty()) {
                 accountsChanged = true;
-                for (Account account : accountsToDelete) {
-                    Log.d(TAG, "removing data for removed account " + account);
-                    String[] params = new String[] {account.name, account.type};
+                for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
+                    Log.d(TAG, "removing data for removed account " + accountWithDataSet);
+                    String[] accountParams = new String[] {
+                            accountWithDataSet.getAccountName(),
+                            accountWithDataSet.getAccountType()
+                    };
+                    String[] accountWithDataSetParams = accountWithDataSet.getDataSet() == null
+                            ? accountParams
+                            : new String[] {
+                                    accountWithDataSet.getAccountName(),
+                                    accountWithDataSet.getAccountType(),
+                                    accountWithDataSet.getDataSet()
+                            };
+                    String groupsDataSetClause = " AND " + Groups.DATA_SET
+                            + (accountWithDataSet.getDataSet() == null ? " IS NULL" : " = ?");
+                    String rawContactsDataSetClause = " AND " + RawContacts.DATA_SET
+                            + (accountWithDataSet.getDataSet() == null ? " IS NULL" : " = ?");
+
                     mDb.execSQL(
                             "DELETE FROM " + Tables.GROUPS +
                             " WHERE " + Groups.ACCOUNT_NAME + " = ?" +
-                                    " AND " + Groups.ACCOUNT_TYPE + " = ?", params);
+                                    " AND " + Groups.ACCOUNT_TYPE + " = ?" +
+                                    groupsDataSetClause, accountWithDataSetParams);
                     mDb.execSQL(
                             "DELETE FROM " + Tables.PRESENCE +
                             " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
                                     "SELECT " + RawContacts._ID +
                                     " FROM " + Tables.RAW_CONTACTS +
                                     " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
-                                    " AND " + RawContacts.ACCOUNT_TYPE + " = ?)", params);
+                                    " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
+                                    rawContactsDataSetClause + ")", accountWithDataSetParams);
                     mDb.execSQL(
                             "DELETE FROM " + Tables.RAW_CONTACTS +
                             " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
-                            " AND " + RawContacts.ACCOUNT_TYPE + " = ?", params);
+                            " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
+                            rawContactsDataSetClause, accountWithDataSetParams);
                     mDb.execSQL(
                             "DELETE FROM " + Tables.SETTINGS +
                             " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
-                            " AND " + Settings.ACCOUNT_TYPE + " = ?", params);
+                            " AND " + Settings.ACCOUNT_TYPE + " = ?", accountParams);
                     mDb.execSQL(
                             "DELETE FROM " + Tables.ACCOUNTS +
                             " WHERE " + RawContacts.ACCOUNT_NAME + "=?" +
-                            " AND " + RawContacts.ACCOUNT_TYPE + "=?", params);
+                            " AND " + RawContacts.ACCOUNT_TYPE + "=?" +
+                            rawContactsDataSetClause, accountWithDataSetParams);
                     mDb.execSQL(
                             "DELETE FROM " + Tables.DIRECTORIES +
                             " WHERE " + Directory.ACCOUNT_NAME + "=?" +
-                            " AND " + Directory.ACCOUNT_TYPE + "=?", params);
+                            " AND " + Directory.ACCOUNT_TYPE + "=?", accountParams);
                     resetDirectoryCache();
                 }
 
@@ -4114,7 +4202,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 updateSearchIndexInTransaction();
             }
 
+            // Now that we've done the account-based additions and subtractions from the Accounts
+            // table, check for raw contacts that have been added with a data set and add Accounts
+            // entries for those if necessary.
+            existingAccountsWithDataSets = findValidAccountsWithDataSets(Tables.ACCOUNTS);
+            Set<AccountWithDataSet> rawContactAccountsWithDataSets =
+                    findValidAccountsWithDataSets(Tables.RAW_CONTACTS);
+            rawContactAccountsWithDataSets.removeAll(existingAccountsWithDataSets);
+
+            // Any remaining raw contact sub-accounts need to be added to the Accounts table.
+            for (AccountWithDataSet accountWithDataSet : rawContactAccountsWithDataSets) {
+                accountsChanged = true;
+
+                // Add an account entry to match the raw contact.
+                mDb.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
+                        + ", " + RawContacts.ACCOUNT_TYPE + ", " + RawContacts.DATA_SET
+                        + ") VALUES (?, ?, ?)",
+                        new String[] {
+                                accountWithDataSet.getAccountName(),
+                                accountWithDataSet.getAccountType(),
+                                accountWithDataSet.getDataSet()
+                        });
+            }
+
             if (accountsChanged) {
+                // TODO: Should sync state take data set into consideration?
                 mDbHelper.getSyncState().onAccountsChanged(mDb, accounts);
             }
             mDb.setTransactionSuccessful();
@@ -4156,21 +4268,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Finds all distinct accounts present in the specified table.
+     * Finds all distinct account types and data sets present in the specified table.
      */
-    private void findValidAccounts(Set<Account> validAccounts) {
+    private Set<AccountWithDataSet> findValidAccountsWithDataSets(String table) {
+        Set<AccountWithDataSet> accountsWithDataSets = new HashSet<AccountWithDataSet>();
         Cursor c = mDb.rawQuery(
-                "SELECT " + RawContacts.ACCOUNT_NAME + "," + RawContacts.ACCOUNT_TYPE +
-                " FROM " + Tables.ACCOUNTS, null);
+                "SELECT DISTINCT " + RawContacts.ACCOUNT_NAME + "," + RawContacts.ACCOUNT_TYPE +
+                "," + RawContacts.DATA_SET +
+                " FROM " + table, null);
         try {
             while (c.moveToNext()) {
                 if (!c.isNull(0) || !c.isNull(1)) {
-                    validAccounts.add(new Account(c.getString(0), c.getString(1)));
+                    accountsWithDataSets.add(
+                            new AccountWithDataSet(c.getString(0), c.getString(1), c.getString(2)));
                 }
             }
         } finally {
             c.close();
         }
+        return accountsWithDataSets;
     }
 
     @Override
@@ -5086,7 +5202,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case GROUPS: {
                 qb.setTables(Views.GROUPS);
                 qb.setProjectionMap(sGroupsProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                appendAccountFromParameter(qb, uri, true);
                 break;
             }
 
@@ -5106,7 +5222,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.setProjectionMap(returnGroupCountPerAccount ?
                         sGroupsSummaryProjectionMapWithGroupCountPerAccount
                         : sGroupsSummaryProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                appendAccountFromParameter(qb, uri, true);
                 groupBy = GroupsColumns.CONCRETE_ID;
                 break;
             }
@@ -5155,7 +5271,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case SETTINGS: {
                 qb.setTables(Tables.SETTINGS);
                 qb.setProjectionMap(sSettingsProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                appendAccountFromParameter(qb, uri, false);
 
                 // When requesting specific columns, this query requires
                 // late-binding of the GroupMembership MIME-type.
@@ -5503,17 +5619,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private interface LookupBySourceIdQuery {
-        String TABLE = Tables.RAW_CONTACTS;
+        String TABLE = Views.RAW_CONTACTS;
 
         String COLUMNS[] = {
                 RawContacts.CONTACT_ID,
-                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.SOURCE_ID
         };
 
         int CONTACT_ID = 0;
-        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_TYPE_AND_DATA_SET = 1;
         int ACCOUNT_NAME = 2;
         int SOURCE_ID = 3;
     }
@@ -5536,10 +5652,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                  sb.toString(), null, null, null, null);
         try {
             while (c.moveToNext()) {
-                String accountType = c.getString(LookupBySourceIdQuery.ACCOUNT_TYPE);
+                String accountTypeAndDataSet =
+                        c.getString(LookupBySourceIdQuery.ACCOUNT_TYPE_AND_DATA_SET);
                 String accountName = c.getString(LookupBySourceIdQuery.ACCOUNT_NAME);
                 int accountHashCode =
-                        ContactLookupKey.getAccountHashCode(accountType, accountName);
+                        ContactLookupKey.getAccountHashCode(accountTypeAndDataSet, accountName);
                 String sourceId = c.getString(LookupBySourceIdQuery.SOURCE_ID);
                 for (int i = 0; i < segments.size(); i++) {
                     LookupKeySegment segment = segments.get(i);
@@ -5559,17 +5676,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private interface LookupByRawContactIdQuery {
-        String TABLE = Tables.RAW_CONTACTS;
+        String TABLE = Views.RAW_CONTACTS;
 
         String COLUMNS[] = {
                 RawContacts.CONTACT_ID,
-                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts._ID,
         };
 
         int CONTACT_ID = 0;
-        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_TYPE_AND_DATA_SET = 1;
         int ACCOUNT_NAME = 2;
         int ID = 3;
     }
@@ -5592,10 +5709,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                  sb.toString(), null, null, null, null);
         try {
             while (c.moveToNext()) {
-                String accountType = c.getString(LookupByRawContactIdQuery.ACCOUNT_TYPE);
+                String accountTypeAndDataSet = c.getString(
+                        LookupByRawContactIdQuery.ACCOUNT_TYPE_AND_DATA_SET);
                 String accountName = c.getString(LookupByRawContactIdQuery.ACCOUNT_NAME);
                 int accountHashCode =
-                        ContactLookupKey.getAccountHashCode(accountType, accountName);
+                        ContactLookupKey.getAccountHashCode(accountTypeAndDataSet, accountName);
                 String rawContactId = c.getString(LookupByRawContactIdQuery.ID);
                 for (int i = 0; i < segments.size(); i++) {
                     LookupKeySegment segment = segments.get(i);
@@ -5619,13 +5737,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         String COLUMNS[] = {
                 RawContacts.CONTACT_ID,
-                RawContacts.ACCOUNT_TYPE,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.ACCOUNT_NAME,
                 NameLookupColumns.NORMALIZED_NAME
         };
 
         int CONTACT_ID = 0;
-        int ACCOUNT_TYPE = 1;
+        int ACCOUNT_TYPE_AND_DATA_SET = 1;
         int ACCOUNT_NAME = 2;
         int NORMALIZED_NAME = 3;
     }
@@ -5650,10 +5768,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                  sb.toString(), null, null, null, null);
         try {
             while (c.moveToNext()) {
-                String accountType = c.getString(LookupByDisplayNameQuery.ACCOUNT_TYPE);
+                String accountTypeAndDataSet =
+                        c.getString(LookupByDisplayNameQuery.ACCOUNT_TYPE_AND_DATA_SET);
                 String accountName = c.getString(LookupByDisplayNameQuery.ACCOUNT_NAME);
                 int accountHashCode =
-                        ContactLookupKey.getAccountHashCode(accountType, accountName);
+                        ContactLookupKey.getAccountHashCode(accountTypeAndDataSet, accountName);
                 String name = c.getString(LookupByDisplayNameQuery.NORMALIZED_NAME);
                 for (int i = 0; i < segments.size(); i++) {
                     LookupKeySegment segment = segments.get(i);
@@ -5951,13 +6070,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(Views.RAW_CONTACTS);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sRawContactsProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountFromParameter(qb, uri, true);
     }
 
     private void setTablesAndProjectionMapForRawEntities(SQLiteQueryBuilder qb, Uri uri) {
         qb.setTables(Views.RAW_ENTITIES);
         qb.setProjectionMap(sRawEntityProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountFromParameter(qb, uri, true);
     }
 
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
@@ -5990,7 +6109,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 || !mDbHelper.isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
         qb.setDistinct(useDistinct);
         qb.setProjectionMap(useDistinct ? sDistinctDataProjectionMap : sDataProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountFromParameter(qb, uri, true);
     }
 
     private void setTableAndProjectionMapForStatusUpdates(SQLiteQueryBuilder qb,
@@ -6038,7 +6157,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sEntityProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountFromParameter(qb, uri, true);
     }
 
     private void appendContactStatusUpdateJoin(StringBuilder sb, String[] projection,
@@ -6138,9 +6257,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return profileRequested;
     }
 
-    private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
+    private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri,
+            boolean includeDataSet) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
+        final String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
 
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
         if (partialUri) {
@@ -6153,10 +6274,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // already ruled out partial accounts.
         final boolean validAccount = !TextUtils.isEmpty(accountName);
         if (validAccount) {
-            qb.appendWhere(RawContacts.ACCOUNT_NAME + "="
+            String toAppend = RawContacts.ACCOUNT_NAME + "="
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
-                    + DatabaseUtils.sqlEscapeString(accountType));
+                    + DatabaseUtils.sqlEscapeString(accountType);
+            if (includeDataSet) {
+                if (dataSet == null) {
+                    toAppend += " AND " + RawContacts.DATA_SET + " IS NULL";
+                } else {
+                    toAppend += " AND " + RawContacts.DATA_SET + "=" +
+                            DatabaseUtils.sqlEscapeString(dataSet);
+                }
+            }
+            qb.appendWhere(toAppend);
         } else {
             qb.appendWhere("1");
         }
@@ -6165,6 +6295,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private String appendAccountToSelection(Uri uri, String selection) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
+        final String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
 
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
         if (partialUri) {
@@ -6181,6 +6312,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
                     + DatabaseUtils.sqlEscapeString(accountType));
+            if (!TextUtils.isEmpty(dataSet)) {
+                selectionSb.append(" AND " + RawContacts.DATA_SET + "=")
+                        .append(DatabaseUtils.sqlEscapeString(dataSet));
+            }
             if (!TextUtils.isEmpty(selection)) {
                 selectionSb.append(" AND (");
                 selectionSb.append(selection);
@@ -6886,23 +7021,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Returns true if the specified account type is writable.
+     * Returns true if the specified account type and data set is writable.
      */
-    protected boolean isWritableAccount(String accountType) {
-        if (accountType == null) {
+    protected boolean isWritableAccountWithDataSet(String accountTypeAndDataSet) {
+        if (accountTypeAndDataSet == null) {
             return true;
         }
 
-        Boolean writable = mAccountWritability.get(accountType);
+        Boolean writable = mAccountWritability.get(accountTypeAndDataSet);
         if (writable != null) {
             return writable;
         }
 
         IContentService contentService = ContentResolver.getContentService();
         try {
+            // TODO(dsantoro): Need to update this logic to allow for sub-accounts.
             for (SyncAdapterType sync : contentService.getSyncAdapterTypes()) {
                 if (ContactsContract.AUTHORITY.equals(sync.authority) &&
-                        accountType.equals(sync.accountType)) {
+                        accountTypeAndDataSet.equals(sync.accountType)) {
                     writable = sync.supportsUploading();
                     break;
                 }
@@ -6915,7 +7051,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             writable = false;
         }
 
-        mAccountWritability.put(accountType, writable);
+        mAccountWritability.put(accountTypeAndDataSet, writable);
         return writable;
     }
 
@@ -7025,7 +7161,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     "r1." + RawContacts._ID + "!=r2." + RawContacts._ID +
                     " AND r1." + RawContacts.CONTACT_ID + "=r2." + RawContacts.CONTACT_ID +
                     " AND r1." + RawContacts.ACCOUNT_NAME + "=r2." + RawContacts.ACCOUNT_NAME +
-                    " AND r1." + RawContacts.ACCOUNT_TYPE + "=r2." + RawContacts.ACCOUNT_TYPE,
+                    " AND r1." + RawContacts.ACCOUNT_TYPE + "=r2." + RawContacts.ACCOUNT_TYPE +
+                    " AND r1." + RawContacts.DATA_SET + "=r2." + RawContacts.DATA_SET,
                     null, null, null, null, null);
             try {
                 while (cursor.moveToNext()) {

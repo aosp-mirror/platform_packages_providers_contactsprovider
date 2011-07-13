@@ -15,13 +15,13 @@
  */
 package com.android.providers.contacts;
 
+import com.android.internal.util.Objects;
 import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsProvider2.GroupIdCacheEntry;
 
-import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -47,11 +47,13 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
                 RawContacts.DELETED,
                 RawContacts.ACCOUNT_TYPE,
                 RawContacts.ACCOUNT_NAME,
+                RawContacts.DATA_SET,
         };
 
         int DELETED = 0;
         int ACCOUNT_TYPE = 1;
         int ACCOUNT_NAME = 2;
+        int DATA_SET = 3;
     }
 
     private static final String SELECTION_RAW_CONTACT_ID = RawContacts._ID + "=?";
@@ -168,7 +170,7 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         if (containsGroupSourceId) {
             final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
             final long groupId = getOrMakeGroup(db, rawContactId, sourceId,
-                    txContext.getAccountForRawContact(rawContactId));
+                    txContext.getAccountWithDataSetForRawContact(rawContactId));
             values.remove(GroupMembership.GROUP_SOURCE_ID);
             values.put(GroupMembership.GROUP_ROW_ID, groupId);
         }
@@ -185,9 +187,9 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
      * @throws IllegalStateException if a group needs to be created but the creation failed
      */
     private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId,
-            Account account) {
+            AccountWithDataSet accountWithDataSet) {
 
-        if (account == null) {
+        if (accountWithDataSet == null) {
             mSelectionArgs1[0] = String.valueOf(rawContactId);
             Cursor c = db.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
                     RawContacts._ID + "=?", mSelectionArgs1, null, null, null);
@@ -195,8 +197,10 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
                 if (c.moveToFirst()) {
                     String accountName = c.getString(RawContactsQuery.ACCOUNT_NAME);
                     String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
+                    String dataSet = c.getString(RawContactsQuery.DATA_SET);
                     if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                        account = new Account(accountName, accountType);
+                        accountWithDataSet = new AccountWithDataSet(
+                                accountName, accountType, dataSet);
                     }
                 }
             } finally {
@@ -204,7 +208,7 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
             }
         }
 
-        if (account == null) {
+        if (accountWithDataSet == null) {
             throw new IllegalArgumentException("if the groupmembership only "
                     + "has a sourceid the the contact must be associated with "
                     + "an account");
@@ -219,29 +223,49 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         int count = entries.size();
         for (int i = 0; i < count; i++) {
             GroupIdCacheEntry entry = entries.get(i);
-            if (entry.accountName.equals(account.name) && entry.accountType.equals(account.type)) {
+            if (entry.accountName.equals(accountWithDataSet.getAccountName())
+                    && entry.accountType.equals(accountWithDataSet.getAccountType())
+                    && Objects.equal(entry.dataSet, accountWithDataSet.getDataSet())) {
                 return entry.groupId;
             }
         }
 
         GroupIdCacheEntry entry = new GroupIdCacheEntry();
-        entry.accountName = account.name;
-        entry.accountType = account.type;
+        entry.accountName = accountWithDataSet.getAccountName();
+        entry.accountType = accountWithDataSet.getAccountType();
+        entry.dataSet = accountWithDataSet.getDataSet();
         entry.sourceId = sourceId;
         entries.add(0, entry);
 
-        // look up the group that contains this sourceId and has the same account name and type
-        // as the contact refered to by rawContactId
-        Cursor c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
+        // look up the group that contains this sourceId and has the same account name, type, and
+        // data set as the contact refered to by rawContactId
+        Cursor c;
+        if (accountWithDataSet.getDataSet() == null) {
+            c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
                 Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
-                new String[]{sourceId, account.name, account.type}, null, null, null);
+                new String[]{
+                        sourceId,
+                        accountWithDataSet.getAccountName(),
+                        accountWithDataSet.getAccountType()
+                }, null, null, null);
+        } else {
+            c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
+                Clauses.GROUP_HAS_ACCOUNT_AND_DATA_SET_AND_SOURCE_ID,
+                new String[]{
+                        sourceId,
+                        accountWithDataSet.getAccountName(),
+                        accountWithDataSet.getAccountType(),
+                        accountWithDataSet.getDataSet()
+                }, null, null, null);
+        }
         try {
             if (c.moveToFirst()) {
                 entry.groupId = c.getLong(0);
             } else {
                 ContentValues groupValues = new ContentValues();
-                groupValues.put(Groups.ACCOUNT_NAME, account.name);
-                groupValues.put(Groups.ACCOUNT_TYPE, account.type);
+                groupValues.put(Groups.ACCOUNT_NAME, accountWithDataSet.getAccountName());
+                groupValues.put(Groups.ACCOUNT_TYPE, accountWithDataSet.getAccountType());
+                groupValues.put(Groups.DATA_SET, accountWithDataSet.getDataSet());
                 groupValues.put(Groups.SOURCE_ID, sourceId);
                 long groupId = db.insert(Tables.GROUPS, Groups.ACCOUNT_NAME, groupValues);
                 if (groupId < 0) {

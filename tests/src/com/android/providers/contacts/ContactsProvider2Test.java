@@ -33,7 +33,6 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -173,6 +172,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.CONTACT_ID,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.ACCOUNT_TYPE,
+                RawContacts.DATA_SET,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
                 RawContacts.RAW_CONTACT_IS_USER_PROFILE,
@@ -237,6 +238,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.STATUS_ICON,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.ACCOUNT_TYPE,
+                RawContacts.DATA_SET,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
                 RawContacts.DIRTY,
@@ -384,6 +387,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.STATUS_ICON,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.ACCOUNT_TYPE,
+                RawContacts.DATA_SET,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
                 RawContacts.DELETED,
@@ -433,6 +438,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.CONTACT_ID,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.ACCOUNT_TYPE,
+                RawContacts.DATA_SET,
+                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
                 RawContacts.SOURCE_ID,
                 RawContacts.VERSION,
                 RawContacts.DIRTY,
@@ -500,6 +507,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Groups._ID,
                 Groups.ACCOUNT_NAME,
                 Groups.ACCOUNT_TYPE,
+                Groups.DATA_SET,
+                Groups.ACCOUNT_TYPE_AND_DATA_SET,
                 Groups.SOURCE_ID,
                 Groups.DIRTY,
                 Groups.VERSION,
@@ -528,6 +537,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Groups._ID,
                 Groups.ACCOUNT_NAME,
                 Groups.ACCOUNT_TYPE,
+                Groups.DATA_SET,
+                Groups.ACCOUNT_TYPE_AND_DATA_SET,
                 Groups.SOURCE_ID,
                 Groups.DIRTY,
                 Groups.VERSION,

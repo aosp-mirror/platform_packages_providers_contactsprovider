@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 610;
+    static final int DATABASE_VERSION = 611;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -235,7 +235,8 @@ import java.util.Locale;
                 + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "," + RawContacts.CONTACT_ID;
 
         final String RAW_CONTACT_IS_LOCAL = RawContactsColumns.CONCRETE_ACCOUNT_NAME
-                + " IS NULL AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL";
+                + " IS NULL AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL AND "
+                + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL";
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
@@ -259,7 +260,12 @@ import java.util.Locale;
                 " GROUP BY " + RawContacts.CONTACT_ID;
 
         final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
-                + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=?";
+                + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=? AND "
+                + Groups.DATA_SET + " IS NULL";
+
+        final String GROUP_HAS_ACCOUNT_AND_DATA_SET_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
+                + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=? AND "
+                + Groups.DATA_SET + "=?";
 
         public static final String CONTACT_VISIBLE =
             "EXISTS (SELECT _id FROM " + Tables.VISIBLE_CONTACTS
@@ -294,6 +300,10 @@ import java.util.Locale;
                 Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_NAME;
         public static final String CONCRETE_ACCOUNT_TYPE =
                 Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
+        public static final String CONCRETE_DATA_SET =
+                Tables.RAW_CONTACTS + "." + RawContacts.DATA_SET;
+        public static final String CONCRETE_ACCOUNT_TYPE_AND_DATA_SET =
+                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE_AND_DATA_SET;
         public static final String CONCRETE_SOURCE_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.SOURCE_ID;
         public static final String CONCRETE_VERSION =
@@ -388,6 +398,9 @@ import java.util.Locale;
                 Tables.GROUPS + "." + Groups.ACCOUNT_NAME;
         public static final String CONCRETE_ACCOUNT_TYPE =
                 Tables.GROUPS + "." + Groups.ACCOUNT_TYPE;
+        public static final String CONCRETE_DATA_SET = Tables.GROUPS + "." + Groups.DATA_SET;
+        public static final String CONCRETE_ACCOUNT_TYPE_AND_DATA_SET = Tables.GROUPS + "." +
+                Groups.ACCOUNT_TYPE_AND_DATA_SET;
         public static final String CONCRETE_ACTION = Tables.GROUPS + "." + Groups.ACTION;
         public static final String CONCRETE_ACTION_URI = Tables.GROUPS + "." + Groups.ACTION_URI;
     }
@@ -538,6 +551,7 @@ import java.util.Locale;
     public interface AccountsColumns {
         String ACCOUNT_NAME = RawContacts.ACCOUNT_NAME;
         String ACCOUNT_TYPE = RawContacts.ACCOUNT_TYPE;
+        String DATA_SET = RawContacts.DATA_SET;
         String PROFILE_RAW_CONTACT_ID = "profile_raw_contact_id";
     }
 
@@ -847,6 +861,7 @@ import java.util.Locale;
                 RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
+                RawContacts.DATA_SET + " STRING DEFAULT NULL, " +
                 RawContacts.SOURCE_ID + " TEXT," +
                 RawContacts.RAW_CONTACT_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
@@ -887,6 +902,14 @@ import java.util.Locale;
                 RawContacts.ACCOUNT_TYPE + ", " +
                 RawContacts.ACCOUNT_NAME +
         ");");
+
+        db.execSQL("CREATE INDEX raw_contacts_source_id_data_set_index ON " +
+                Tables.RAW_CONTACTS + " (" +
+                    RawContacts.SOURCE_ID + ", " +
+                    RawContacts.ACCOUNT_TYPE + ", " +
+                    RawContacts.ACCOUNT_NAME + ", " +
+                    RawContacts.DATA_SET +
+                ");");
 
         db.execSQL("CREATE TABLE " + Tables.STREAM_ITEMS + " (" +
                 StreamItems._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -1042,6 +1065,7 @@ import java.util.Locale;
                 GroupsColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 Groups.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 Groups.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
+                Groups.DATA_SET + " STRING DEFAULT NULL, " +
                 Groups.SOURCE_ID + " TEXT," +
                 Groups.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
@@ -1067,6 +1091,13 @@ import java.util.Locale;
                 Groups.SOURCE_ID + ", " +
                 Groups.ACCOUNT_TYPE + ", " +
                 Groups.ACCOUNT_NAME +
+        ");");
+
+        db.execSQL("CREATE INDEX groups_source_id_data_set_index ON " + Tables.GROUPS + " (" +
+                Groups.SOURCE_ID + ", " +
+                Groups.ACCOUNT_TYPE + ", " +
+                Groups.ACCOUNT_NAME + ", " +
+                Groups.DATA_SET +
         ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
@@ -1175,6 +1206,7 @@ import java.util.Locale;
         db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
                 AccountsColumns.ACCOUNT_NAME + " TEXT, " +
                 AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
+                AccountsColumns.DATA_SET + " TEXT, " +
                 AccountsColumns.PROFILE_RAW_CONTACT_ID + " INTEGER" +
         ");");
 
@@ -1185,9 +1217,7 @@ import java.util.Locale;
 
         // Allow contacts without any account to be created for now.  Achieve that
         // by inserting a fake account with both type and name as NULL.
-        // This "account" should be eliminated as soon as the first real writable account
-        // is added to the phone.
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL, NULL)");
 
         createDirectoriesTable(db);
         createSearchIndexTable(db);
@@ -1415,8 +1445,15 @@ import java.util.Locale;
         String syncColumns =
                 RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
                 + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
+                + RawContactsColumns.CONCRETE_DATA_SET + " AS " + RawContacts.DATA_SET + ","
+                + "(CASE WHEN " + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL THEN "
+                        + RawContactsColumns.CONCRETE_ACCOUNT_TYPE
+                        + " ELSE " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + "||'/'||"
+                        + RawContactsColumns.CONCRETE_DATA_SET + " END) AS "
+                        + RawContacts.ACCOUNT_TYPE_AND_DATA_SET + ","
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
-                + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS " + RawContacts.NAME_VERIFIED + ","
+                + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS "
+                        + RawContacts.NAME_VERIFIED + ","
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ","
@@ -1682,6 +1719,10 @@ import java.util.Locale;
         String groupsColumns =
                 Groups.ACCOUNT_NAME + ","
                 + Groups.ACCOUNT_TYPE + ","
+                + Groups.DATA_SET + ","
+                + "(CASE WHEN " + Groups.DATA_SET + " IS NULL THEN " + Groups.ACCOUNT_TYPE
+                    + " ELSE " + Groups.ACCOUNT_TYPE + "||" + Groups.DATA_SET + " END) AS "
+                    + Groups.ACCOUNT_TYPE_AND_DATA_SET + ","
                 + Groups.SOURCE_ID + ","
                 + Groups.VERSION + ","
                 + Groups.DIRTY + ","
@@ -2063,6 +2104,11 @@ import java.util.Locale;
             oldVersion = 610;
         }
 
+        if (oldVersion < 611) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion611(db);
+            oldVersion = 611;
+        }
 
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
@@ -3221,6 +3267,18 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE calls ADD is_read INTEGER;");
     }
 
+    private void upgradeToVersion611(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE raw_contacts ADD data_set TEXT DEFAULT NULL;");
+        db.execSQL("ALTER TABLE groups ADD data_set TEXT DEFAULT NULL;");
+        db.execSQL("ALTER TABLE accounts ADD data_set TEXT DEFAULT NULL;");
+
+        db.execSQL("CREATE INDEX raw_contacts_source_id_data_set_index ON raw_contacts " +
+                "(sourceid, account_type, account_name, data_set);");
+
+        db.execSQL("CREATE INDEX groups_source_id_data_set_index ON groups " +
+                "(sourceid, account_type, account_name, data_set);");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -3348,7 +3406,7 @@ import java.util.Locale;
         SQLiteDatabase db = getWritableDatabase();
 
         db.execSQL("DELETE FROM " + Tables.ACCOUNTS + ";");
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL, NULL)");
 
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
@@ -3594,6 +3652,10 @@ import java.util.Locale;
                                 + GroupsColumns.CONCRETE_ACCOUNT_NAME +
                         "  AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
                                 + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                        "  AND (" + RawContactsColumns.CONCRETE_DATA_SET + " = "
+                                + GroupsColumns.CONCRETE_DATA_SET
+                                + " OR " + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                                + GroupsColumns.CONCRETE_DATA_SET + " IS NULL)" +
                         "  AND " + Groups.AUTO_ADD + " != 0" +
                         ")" +
                 ") OR EXISTS (" +
@@ -3602,6 +3664,7 @@ import java.util.Locale;
                     " WHERE " + RawContacts.CONTACT_ID + "=?" +
                     "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
                     "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL" +
+                    "   AND " + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL" +
                 ")",
                 new String[] {
                     contactIdAsString,

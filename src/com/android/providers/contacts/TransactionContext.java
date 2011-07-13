@@ -19,8 +19,6 @@ package com.android.providers.contacts;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 
-import android.accounts.Account;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -33,24 +31,25 @@ import java.util.Set;
  */
 public class TransactionContext  {
 
-    private HashMap<Long, Account> mInsertedRawContacts = Maps.newHashMap();
+    private HashMap<Long, AccountWithDataSet> mInsertedRawContacts = Maps.newHashMap();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
-    private HashMap<Long, Account> mInsertedProfileRawContacts = Maps.newHashMap();
+    private HashMap<Long, AccountWithDataSet> mInsertedProfileRawContacts = Maps.newHashMap();
     private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
 
-    public void rawContactInserted(long rawContactId, Account account) {
-        mInsertedRawContacts.put(rawContactId, account);
+    public void rawContactInserted(long rawContactId, AccountWithDataSet accountWithDataSet) {
+        mInsertedRawContacts.put(rawContactId, accountWithDataSet);
     }
 
     public void rawContactUpdated(long rawContactId) {
         mUpdatedRawContacts.add(rawContactId);
     }
 
-    public void profileRawContactInserted(long rawContactId, Account account) {
-        mInsertedProfileRawContacts.put(rawContactId, account);
+    public void profileRawContactInserted(long rawContactId,
+            AccountWithDataSet accountWithDataSet) {
+        mInsertedProfileRawContacts.put(rawContactId, accountWithDataSet);
     }
 
     public void markRawContactDirty(long rawContactId) {
@@ -77,7 +76,7 @@ public class TransactionContext  {
         return mUpdatedRawContacts;
     }
 
-    public Map<Long, Account> getInsertedProfileRawContactIds() {
+    public Map<Long, AccountWithDataSet> getInsertedProfileRawContactIds() {
         return mInsertedProfileRawContacts;
     }
 
@@ -97,7 +96,7 @@ public class TransactionContext  {
         return mUpdatedSyncStates.entrySet();
     }
 
-    public Account getAccountForRawContact(long rawContactId) {
+    public AccountWithDataSet getAccountWithDataSetForRawContact(long rawContactId) {
         return mInsertedRawContacts.get(rawContactId);
     }
 
