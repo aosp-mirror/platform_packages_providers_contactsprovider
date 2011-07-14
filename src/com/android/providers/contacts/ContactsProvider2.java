@@ -3625,10 +3625,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // so we don't need to worry about updating data we don't have permission to read.
         // This query will be allowed to return profiles, and we'll do the permission check
         // within the loop.
-        Cursor c = query(uri.buildUpon()
+        Cursor c = queryLocal(uri.buildUpon()
                 .appendQueryParameter(ContactsContract.ALLOW_PROFILE, "1").build(),
                 DataRowHandler.DataUpdateQuery.COLUMNS,
-                selection, selectionArgs, null);
+                selection, selectionArgs, null, -1 /* directory ID */,
+                true /* suppress profile check */);
         try {
             while(c.moveToNext()) {
                 // Check profile permission for the raw contact that owns each data record.
@@ -3962,15 +3963,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
             return wrapCursor(uri,
-                    queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1));
+                    queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1, false));
         } else if (directory.equals("0")) {
             return wrapCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                            Directory.DEFAULT));
+                            Directory.DEFAULT, false));
         } else if (directory.equals("1")) {
             return wrapCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                            Directory.LOCAL_INVISIBLE));
+                            Directory.LOCAL_INVISIBLE, false));
         }
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -4120,8 +4121,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    public Cursor queryLocal(Uri uri, String[] projection, String selection, String[] selectionArgs,
-                String sortOrder, long directoryId) {
+    private Cursor queryLocal(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, long directoryId,
+            boolean suppressProfileCheck) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: " + uri);
         }
@@ -4141,8 +4143,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
                 boolean existingWhere = appendLocalDirectorySelectionIfNeeded(qb, directoryId);
-                appendProfileRestriction(qb, uri, Contacts.IS_USER_PROFILE, existingWhere);
-                sortOrder = prependProfileSortIfNeeded(uri, sortOrder);
+                appendProfileRestriction(qb, uri, Contacts.IS_USER_PROFILE, existingWhere,
+                        suppressProfileCheck);
+                sortOrder = prependProfileSortIfNeeded(uri, sortOrder, suppressProfileCheck);
                 break;
             }
 
@@ -4288,8 +4291,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 setTablesAndProjectionMapForContactsWithSnippet(
                         qb, uri, projection, filterParam, directoryId);
-                appendProfileRestriction(qb, uri, Contacts.IS_USER_PROFILE, false);
-                sortOrder = prependProfileSortIfNeeded(uri, sortOrder);
+                appendProfileRestriction(qb, uri, Contacts.IS_USER_PROFILE, false,
+                        suppressProfileCheck);
+                sortOrder = prependProfileSortIfNeeded(uri, sortOrder, suppressProfileCheck);
                 break;
             }
 
@@ -4710,7 +4714,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS: {
                 setTablesAndProjectionMapForRawContacts(qb, uri);
-                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true);
+                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true,
+                        suppressProfileCheck);
                 break;
             }
 
@@ -4728,7 +4733,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
-                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true);
+                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true,
+                        suppressProfileCheck);
                 break;
             }
 
@@ -4780,7 +4786,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case DATA: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true);
+                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true,
+                        suppressProfileCheck);
                 break;
             }
 
@@ -5844,8 +5851,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void appendProfileRestriction(SQLiteQueryBuilder qb, Uri uri, String profileColumn,
-            boolean andRequired) {
-        if (!shouldIncludeProfile(uri)) {
+            boolean andRequired, boolean suppressProfileCheck) {
+        if (!shouldIncludeProfile(uri, suppressProfileCheck)) {
             qb.appendWhere((andRequired ? " AND (" : "")
                     + profileColumn + " IS NULL OR "
                     + profileColumn + "=0"
@@ -5853,8 +5860,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private String prependProfileSortIfNeeded(Uri uri, String sortOrder) {
-        if (shouldIncludeProfile(uri)) {
+    private String prependProfileSortIfNeeded(Uri uri, String sortOrder,
+            boolean suppressProfileCheck) {
+        if (shouldIncludeProfile(uri, suppressProfileCheck)) {
             if (TextUtils.isEmpty(sortOrder)) {
                 return Contacts.IS_USER_PROFILE + " DESC";
             } else {
@@ -5864,12 +5872,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return sortOrder;
     }
 
-    private boolean shouldIncludeProfile(Uri uri) {
+    private boolean shouldIncludeProfile(Uri uri, boolean suppressProfileCheck) {
         // The user's profile may be returned alongside other contacts if it was requested and
         // the calling application has permission to read profile data.
         boolean profileRequested = readBooleanQueryParameter(uri, ContactsContract.ALLOW_PROFILE,
                 false);
-        if (profileRequested) {
+        if (profileRequested && !suppressProfileCheck) {
             enforceProfilePermission(false);
         }
         return profileRequested;
