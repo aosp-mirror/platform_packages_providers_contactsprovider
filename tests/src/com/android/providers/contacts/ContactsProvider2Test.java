@@ -1685,6 +1685,28 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testUpdateDataDoesNotRequireProfilePermission() {
+        mActor.removePermissions("android.permission.READ_PROFILE");
+        mActor.removePermissions("android.permission.WRITE_PROFILE");
+
+        // Create a non-profile contact.
+        long rawContactId = createRawContactWithName("Domo", "Arigato");
+        long dataId = getStoredLongValue(Data.CONTENT_URI,
+                Data.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
+                new String[]{String.valueOf(rawContactId), StructuredName.CONTENT_ITEM_TYPE},
+                Data._ID);
+
+        // Updates its name using a selection.
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.GIVEN_NAME, "Bob");
+        values.put(StructuredName.FAMILY_NAME, "Blob");
+        mResolver.update(Data.CONTENT_URI, values, Data._ID + "=?",
+                new String[]{String.valueOf(dataId)});
+
+        // Check that the update went through.
+        assertStoredValues(ContentUris.withAppendedId(Data.CONTENT_URI, dataId), values);
+    }
+
     public void testQueryContactIncludeProfile() {
         ContentValues profileValues = new ContentValues();
         long profileRawContactId = createBasicProfileContact(profileValues);
