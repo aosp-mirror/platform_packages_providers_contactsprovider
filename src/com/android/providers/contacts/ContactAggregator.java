@@ -313,7 +313,7 @@ public class ContactAggregator {
 
         mPhotoIdUpdate = db.compileStatement(
                 "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.PHOTO_ID + "=? " +
+                " SET " + Contacts.PHOTO_ID + "=?," + Contacts.PHOTO_FILE_ID + "=? " +
                 " WHERE " + Contacts._ID + "=?");
 
         mDisplayNameUpdate = db.compileStatement(
@@ -1534,7 +1534,8 @@ public class ContactAggregator {
                         + RawContacts.NAME_VERIFIED + ","
                         + DataColumns.CONCRETE_ID + ","
                         + DataColumns.CONCRETE_MIMETYPE_ID + ","
-                        + Data.IS_SUPER_PRIMARY +
+                        + Data.IS_SUPER_PRIMARY + ","
+                        + Photo.PHOTO_FILE_ID +
                 " FROM " + Tables.RAW_CONTACTS +
                 " LEFT OUTER JOIN " + Tables.DATA +
                 " ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
@@ -1565,6 +1566,7 @@ public class ContactAggregator {
         int DATA_ID = 12;
         int MIMETYPE_ID = 13;
         int IS_SUPER_PRIMARY = 14;
+        int PHOTO_FILE_ID = 15;
     }
 
     private interface ContactReplaceSqlStatement {
@@ -1573,6 +1575,7 @@ public class ContactAggregator {
                 " SET "
                         + Contacts.NAME_RAW_CONTACT_ID + "=?, "
                         + Contacts.PHOTO_ID + "=?, "
+                        + Contacts.PHOTO_FILE_ID + "=?, "
                         + Contacts.SEND_TO_VOICEMAIL + "=?, "
                         + Contacts.CUSTOM_RINGTONE + "=?, "
                         + Contacts.LAST_TIME_CONTACTED + "=?, "
@@ -1586,6 +1589,7 @@ public class ContactAggregator {
                 "INSERT INTO " + Tables.CONTACTS + " ("
                         + Contacts.NAME_RAW_CONTACT_ID + ", "
                         + Contacts.PHOTO_ID + ", "
+                        + Contacts.PHOTO_FILE_ID + ", "
                         + Contacts.SEND_TO_VOICEMAIL + ", "
                         + Contacts.CUSTOM_RINGTONE + ", "
                         + Contacts.LAST_TIME_CONTACTED + ", "
@@ -1593,18 +1597,19 @@ public class ContactAggregator {
                         + Contacts.STARRED + ", "
                         + Contacts.HAS_PHONE_NUMBER + ", "
                         + Contacts.LOOKUP_KEY + ") " +
-                " VALUES (?,?,?,?,?,?,?,?,?)";
+                " VALUES (?,?,?,?,?,?,?,?,?,?)";
 
         int NAME_RAW_CONTACT_ID = 1;
         int PHOTO_ID = 2;
-        int SEND_TO_VOICEMAIL = 3;
-        int CUSTOM_RINGTONE = 4;
-        int LAST_TIME_CONTACTED = 5;
-        int TIMES_CONTACTED = 6;
-        int STARRED = 7;
-        int HAS_PHONE_NUMBER = 8;
-        int LOOKUP_KEY = 9;
-        int CONTACT_ID = 10;
+        int PHOTO_FILE_ID = 3;
+        int SEND_TO_VOICEMAIL = 4;
+        int CUSTOM_RINGTONE = 5;
+        int LAST_TIME_CONTACTED = 6;
+        int TIMES_CONTACTED = 7;
+        int STARRED = 8;
+        int HAS_PHONE_NUMBER = 9;
+        int LOOKUP_KEY = 10;
+        int CONTACT_ID = 11;
     }
 
     /**
@@ -1623,6 +1628,7 @@ public class ContactAggregator {
             SQLiteStatement statement) {
         long currentRawContactId = -1;
         long bestPhotoId = -1;
+        long bestPhotoFileId = 0;
         boolean foundSuperPrimaryPhoto = false;
         int photoPriority = -1;
         int totalRowCount = 0;
@@ -1691,6 +1697,7 @@ public class ContactAggregator {
 
                 if (!c.isNull(RawContactsQuery.DATA_ID)) {
                     long dataId = c.getLong(RawContactsQuery.DATA_ID);
+                    long photoFileId = c.getLong(RawContactsQuery.PHOTO_FILE_ID);
                     int mimetypeId = c.getInt(RawContactsQuery.MIMETYPE_ID);
                     boolean superPrimary = c.getInt(RawContactsQuery.IS_SUPER_PRIMARY) != 0;
                     if (mimetypeId == mMimeTypeIdPhoto) {
@@ -1700,6 +1707,7 @@ public class ContactAggregator {
                             if (superPrimary || priority > photoPriority) {
                                 photoPriority = priority;
                                 bestPhotoId = dataId;
+                                bestPhotoFileId = photoFileId;
                                 foundSuperPrimaryPhoto |= superPrimary;
                             }
                         }
@@ -1719,6 +1727,12 @@ public class ContactAggregator {
             statement.bindLong(ContactReplaceSqlStatement.PHOTO_ID, bestPhotoId);
         } else {
             statement.bindNull(ContactReplaceSqlStatement.PHOTO_ID);
+        }
+
+        if (bestPhotoFileId != 0) {
+            statement.bindLong(ContactReplaceSqlStatement.PHOTO_FILE_ID, bestPhotoFileId);
+        } else {
+            statement.bindNull(ContactReplaceSqlStatement.PHOTO_FILE_ID);
         }
 
         statement.bindLong(ContactReplaceSqlStatement.SEND_TO_VOICEMAIL,
@@ -1785,11 +1799,13 @@ public class ContactAggregator {
             RawContacts.ACCOUNT_TYPE,
             DataColumns.CONCRETE_ID,
             Data.IS_SUPER_PRIMARY,
+            Photo.PHOTO_FILE_ID,
         };
 
         int ACCOUNT_TYPE = 0;
         int DATA_ID = 1;
         int IS_SUPER_PRIMARY = 2;
+        int PHOTO_FILE_ID = 3;
     }
 
     public void updatePhotoId(SQLiteDatabase db, long rawContactId) {
@@ -1800,6 +1816,7 @@ public class ContactAggregator {
         }
 
         long bestPhotoId = -1;
+        long bestPhotoFileId = 0;
         int photoPriority = -1;
 
         long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
@@ -1815,9 +1832,11 @@ public class ContactAggregator {
         try {
             while (c.moveToNext()) {
                 long dataId = c.getLong(PhotoIdQuery.DATA_ID);
+                long photoFileId = c.getLong(PhotoIdQuery.PHOTO_FILE_ID);
                 boolean superprimary = c.getInt(PhotoIdQuery.IS_SUPER_PRIMARY) != 0;
                 if (superprimary) {
                     bestPhotoId = dataId;
+                    bestPhotoFileId = photoFileId;
                     break;
                 }
 
@@ -1826,6 +1845,7 @@ public class ContactAggregator {
                 if (priority > photoPriority) {
                     photoPriority = priority;
                     bestPhotoId = dataId;
+                    bestPhotoFileId = photoFileId;
                 }
             }
         } finally {
@@ -1837,7 +1857,14 @@ public class ContactAggregator {
         } else {
             mPhotoIdUpdate.bindLong(1, bestPhotoId);
         }
-        mPhotoIdUpdate.bindLong(2, contactId);
+
+        if (bestPhotoFileId == 0) {
+            mPhotoIdUpdate.bindNull(2);
+        } else {
+            mPhotoIdUpdate.bindLong(2, bestPhotoFileId);
+        }
+
+        mPhotoIdUpdate.bindLong(3, contactId);
         mPhotoIdUpdate.execute();
     }
 

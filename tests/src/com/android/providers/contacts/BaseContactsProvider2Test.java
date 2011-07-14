@@ -16,8 +16,7 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
-
+import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 
 import android.accounts.Account;
@@ -50,7 +49,6 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.ContactsContract.StreamItemPhotos;
 import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
@@ -67,10 +65,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
+
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
  */
-public abstract class BaseContactsProvider2Test extends AndroidTestCase {
+public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     protected static final String PACKAGE = "ContactsProvider2Test";
     public static final String READ_ONLY_ACCOUNT_TYPE =
@@ -80,8 +80,6 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
     protected MockContentResolver mResolver;
     protected Account mAccount = new Account("account1", "account type1");
     protected Account mAccountTwo = new Account("account2", "account type2");
-
-    private byte[] mTestPhoto;
 
     protected final static Long NO_LONG = new Long(0);
     protected final static String NO_STRING = new String("");
@@ -359,6 +357,15 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
         values.put(Photo.PHOTO, loadTestPhoto());
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertPhoto(long rawContactId, int resourceId) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.put(Photo.PHOTO, loadPhotoFromResource(resourceId, PhotoSize.ORIGINAL));
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }
@@ -830,6 +837,10 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         return value;
     }
 
+    protected Long getStoredLongValue(Uri uri, String column) {
+        return getStoredLongValue(uri, null, null, column);
+    }
+
     protected void assertStoredValues(Uri rowUri, ContentValues expectedValues) {
         assertStoredValues(rowUri, null, null, expectedValues);
     }
@@ -1023,26 +1034,6 @@ public abstract class BaseContactsProvider2Test extends AndroidTestCase {
         } finally {
             c.close();
         }
-    }
-
-    protected byte[] loadTestPhoto() {
-        if (mTestPhoto == null) {
-            final Resources resources = getContext().getResources();
-            InputStream is = resources
-                    .openRawResource(com.android.internal.R.drawable.ic_contact_picture);
-            ByteArrayOutputStream os = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1000];
-            int count;
-            try {
-                while ((count = is.read(buffer)) != -1) {
-                    os.write(buffer, 0, count);
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            mTestPhoto = os.toByteArray();
-        }
-        return mTestPhoto;
     }
 
     public static void dump(ContentResolver resolver, boolean aggregatedOnly) {

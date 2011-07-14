@@ -59,6 +59,7 @@ import android.test.mock.MockContext;
 import android.test.mock.MockResources;
 import android.util.TypedValue;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Locale;
@@ -150,6 +151,12 @@ public class ContactsActor {
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 overallContext, FILENAME_PREFIX);
         mProviderContext = new IsolatedContext(resolver, targetContextWrapper){
+
+            @Override
+            public File getFilesDir() {
+                // TODO: Need to figure out something more graceful than this.
+                return new File("/data/data/com.android.providers.contacts.tests/files");
+            }
 
             @Override
             public Object getSystemService(String name) {

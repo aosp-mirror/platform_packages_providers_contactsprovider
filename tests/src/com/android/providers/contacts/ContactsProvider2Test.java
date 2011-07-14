@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
 
 import android.accounts.Account;
@@ -47,6 +48,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
+import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
@@ -58,16 +60,18 @@ import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.StreamItems;
 import android.provider.ContactsContract.StreamItemPhotos;
+import android.provider.ContactsContract.StreamItems;
 import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.text.TextUtils;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -104,6 +108,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_FILE_ID,
                 Contacts.PHOTO_URI,
                 Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
@@ -138,6 +143,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_FILE_ID,
                 Contacts.PHOTO_URI,
                 Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
@@ -246,6 +252,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_FILE_ID,
                 Contacts.PHOTO_URI,
                 Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
@@ -314,6 +321,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_FILE_ID,
                 Contacts.PHOTO_URI,
                 Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.HAS_PHONE_NUMBER,
@@ -395,6 +403,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.STARRED,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
+                Contacts.PHOTO_FILE_ID,
                 Contacts.PHOTO_URI,
                 Contacts.PHOTO_THUMBNAIL_URI,
                 Contacts.CUSTOM_RINGTONE,
@@ -4016,28 +4025,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
         long rawContactId = ContentUris.parseId(rawContactUri);
         insertStructuredName(rawContactId, "John", "Doe");
-        Uri photoUri = insertPhoto(rawContactId);
-
-        Uri twigUri = Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI,
-                queryContactId(rawContactId)), Contacts.Photo.CONTENT_DIRECTORY);
+        long dataId = ContentUris.parseId(insertPhoto(rawContactId, R.drawable.earth_normal));
+        long photoFileId = getStoredLongValue(Data.CONTENT_URI, Data._ID + "=?",
+                new String[]{String.valueOf(dataId)}, Photo.PHOTO_FILE_ID);
+        String photoUri = ContentUris.withAppendedId(DisplayPhoto.CONTENT_URI, photoFileId)
+                .toString();
 
         assertStoredValue(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId)),
-                Contacts.PHOTO_URI, twigUri.toString());
-
-        long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
-        assertEquals(ContentUris.parseId(photoUri), twigId);
+                Contacts.PHOTO_URI, photoUri);
     }
 
     public void testInputStreamForPhoto() throws Exception {
         long rawContactId = createRawContact();
-        Uri photoUri = insertPhoto(rawContactId);
-        assertInputStreamContent(loadTestPhoto(), mResolver.openInputStream(photoUri));
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        insertPhoto(rawContactId);
+        Uri photoUri = Uri.parse(getStoredValue(contactUri, Contacts.PHOTO_URI));
+        Uri photoThumbnailUri = Uri.parse(getStoredValue(contactUri, Contacts.PHOTO_THUMBNAIL_URI));
 
-        Uri contactPhotoUri = Uri.withAppendedPath(
-                ContentUris.withAppendedId(Contacts.CONTENT_URI, queryContactId(rawContactId)),
-                Contacts.Photo.CONTENT_DIRECTORY);
-        assertInputStreamContent(loadTestPhoto(), mResolver.openInputStream(contactPhotoUri));
+        assertInputStreamContent(loadTestPhoto(PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(photoUri));
+        assertInputStreamContent(loadTestPhoto(PhotoSize.THUMBNAIL),
+                mResolver.openInputStream(photoThumbnailUri));
     }
 
     private static void assertInputStreamContent(byte[] expected, InputStream is)
@@ -4055,11 +4065,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testSuperPrimaryPhoto() {
         long rawContactId1 = createRawContact(new Account("a", "a"));
-        Uri photoUri1 = insertPhoto(rawContactId1);
+        Uri photoUri1 = insertPhoto(rawContactId1, R.drawable.earth_normal);
         long photoId1 = ContentUris.parseId(photoUri1);
 
         long rawContactId2 = createRawContact(new Account("b", "b"));
-        Uri photoUri2 = insertPhoto(rawContactId2);
+        Uri photoUri2 = insertPhoto(rawContactId2, R.drawable.earth_normal);
         long photoId2 = ContentUris.parseId(photoUri2);
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
@@ -4067,9 +4077,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId1));
+
+        long photoFileId1 = getStoredLongValue(Data.CONTENT_URI, Data._ID + "=?",
+                new String[]{String.valueOf(photoId1)}, Photo.PHOTO_FILE_ID);
+        String photoUri = ContentUris.withAppendedId(DisplayPhoto.CONTENT_URI, photoFileId1)
+                .toString();
         assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId1);
-        assertStoredValue(contactUri, Contacts.PHOTO_URI,
-                Uri.withAppendedPath(contactUri, Contacts.Photo.CONTENT_DIRECTORY));
+        assertStoredValue(contactUri, Contacts.PHOTO_URI, photoUri);
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
@@ -4111,7 +4125,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(dataUri, values, null, null);
         assertNetworkNotified(true);
 
-        long twigId = Long.parseLong(getStoredValue(twigUri, Data._ID));
+        long twigId = getStoredLongValue(twigUri, Data._ID);
         assertEquals(photoId, twigId);
     }
 
@@ -4146,8 +4160,311 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Cursor storedPhoto = mResolver.query(dataUri, new String[] {Photo.PHOTO},
                 Data.MIMETYPE + "=?", new String[] {Photo.CONTENT_ITEM_TYPE}, null);
         storedPhoto.moveToFirst();
-        MoreAsserts.assertEquals(loadTestPhoto(), storedPhoto.getBlob(0));
+        MoreAsserts.assertEquals(loadTestPhoto(PhotoSize.THUMBNAIL), storedPhoto.getBlob(0));
         storedPhoto.close();
+    }
+
+    public void testOpenDisplayPhotoForContactId() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+        Uri photoUri = Contacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(contactId))
+                .appendPath(Contacts.Photo.DISPLAY_PHOTO).build();
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(photoUri));
+    }
+
+    public void testOpenDisplayPhotoForContactLookupKey() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+        Uri photoUri = Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                .appendPath(lookupKey)
+                .appendPath(Contacts.Photo.DISPLAY_PHOTO).build();
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(photoUri));
+    }
+
+    public void testOpenDisplayPhotoForContactLookupKeyAndId() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+        Uri photoUri = Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                .appendPath(lookupKey)
+                .appendPath(String.valueOf(contactId))
+                .appendPath(Contacts.Photo.DISPLAY_PHOTO).build();
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(photoUri));
+    }
+
+    public void testOpenDisplayPhotoForRawContactId() throws IOException {
+        long rawContactId = createRawContactWithName();
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+        Uri photoUri = RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(rawContactId))
+                .appendPath(RawContacts.DisplayPhoto.CONTENT_DIRECTORY).build();
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(photoUri));
+    }
+
+    public void testOpenDisplayPhotoByPhotoUri() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+
+        // Get the photo URI out and check the content.
+        String photoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_URI);
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(Uri.parse(photoUri)));
+    }
+
+    public void testPhotoUriForDisplayPhoto() {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+
+        // Photo being inserted is larger than a thumbnail, so it will be stored as a file.
+        long dataId = ContentUris.parseId(insertPhoto(rawContactId, R.drawable.earth_normal));
+        String photoFileId = getStoredValue(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
+                Photo.PHOTO_FILE_ID);
+        String photoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_URI);
+
+        // Check that the photo URI differs from the thumbnail.
+        String thumbnailUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_THUMBNAIL_URI);
+        assertFalse(photoUri.equals(thumbnailUri));
+
+        // URI should be of the form display_photo/ID
+        assertEquals(Uri.withAppendedPath(DisplayPhoto.CONTENT_URI, photoFileId).toString(),
+                photoUri);
+    }
+
+    public void testPhotoUriForThumbnailPhoto() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+
+        // Photo being inserted is a thumbnail, so it will only be stored in a BLOB.  The photo URI
+        // will fall back to the thumbnail URI.
+        insertPhoto(rawContactId, R.drawable.earth_small);
+        String photoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_URI);
+
+        // Check that the photo URI is equal to the thumbnail URI.
+        String thumbnailUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_THUMBNAIL_URI);
+        assertEquals(photoUri, thumbnailUri);
+
+        // URI should be of the form contacts/ID/photo
+        assertEquals(Uri.withAppendedPath(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.Photo.CONTENT_DIRECTORY).toString(),
+                photoUri);
+
+        // Loading the photo URI content should get the thumbnail.
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_small, PhotoSize.THUMBNAIL),
+                mResolver.openInputStream(Uri.parse(photoUri)));
+    }
+
+    public void testWriteNewPhotoToAssetFile() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+
+        // Load in a huge photo.
+        byte[] originalPhoto = loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.ORIGINAL);
+
+        // Write it out.
+        Uri writeablePhotoUri = RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(rawContactId))
+                .appendPath(RawContacts.DisplayPhoto.CONTENT_DIRECTORY).build();
+        OutputStream os = mResolver.openOutputStream(writeablePhotoUri, "rw");
+        try {
+            os.write(originalPhoto);
+        } finally {
+            os.close();
+        }
+
+        // Check that the display photo and thumbnail have been set.
+        String photoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), Contacts.PHOTO_URI);
+        assertFalse(TextUtils.isEmpty(photoUri));
+        String thumbnailUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_THUMBNAIL_URI);
+        assertFalse(TextUtils.isEmpty(thumbnailUri));
+        assertFalse(photoUri.equals(thumbnailUri));
+
+        // Check the content of the display photo and thumbnail.
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(Uri.parse(photoUri)));
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.THUMBNAIL),
+                mResolver.openInputStream(Uri.parse(thumbnailUri)));
+    }
+
+    public void testWriteUpdatedPhotoToAssetFile() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+
+        // Insert a large photo first.
+        insertPhoto(rawContactId, R.drawable.earth_large);
+        String largeEarthPhotoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), Contacts.PHOTO_URI);
+
+        // Load in a huge photo.
+        byte[] originalPhoto = loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.ORIGINAL);
+
+        // Write it out.
+        Uri writeablePhotoUri = RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(rawContactId))
+                .appendPath(RawContacts.DisplayPhoto.CONTENT_DIRECTORY).build();
+        OutputStream os = mResolver.openOutputStream(writeablePhotoUri, "rw");
+        try {
+            os.write(originalPhoto);
+        } finally {
+            os.close();
+        }
+
+        // Check that the display photo URI has been modified.
+        String hugeEarthPhotoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), Contacts.PHOTO_URI);
+        assertFalse(hugeEarthPhotoUri.equals(largeEarthPhotoUri));
+
+        // Check the content of the display photo and thumbnail.
+        String hugeEarthThumbnailUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_THUMBNAIL_URI);
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(Uri.parse(hugeEarthPhotoUri)));
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.THUMBNAIL),
+                mResolver.openInputStream(Uri.parse(hugeEarthThumbnailUri)));
+
+    }
+
+    public void testPhotoDimensionLimits() {
+        ContentValues values = new ContentValues();
+        values.put(DisplayPhoto.DISPLAY_MAX_DIM, 256);
+        values.put(DisplayPhoto.THUMBNAIL_MAX_DIM, 96);
+        assertStoredValues(DisplayPhoto.CONTENT_MAX_DIMENSIONS_URI, values);
+    }
+
+    public void testPhotoStoreCleanup() throws IOException {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+
+        // Trigger an initial cleanup so another one won't happen while we're running this test.
+        provider.cleanupPhotoStore();
+
+        // Insert a couple of contacts with photos.
+        long rawContactId1 = createRawContactWithName();
+        long contactId1 = queryContactId(rawContactId1);
+        long dataId1 = ContentUris.parseId(insertPhoto(rawContactId1, R.drawable.earth_normal));
+        long photoFileId1 =
+                getStoredLongValue(ContentUris.withAppendedId(Data.CONTENT_URI, dataId1),
+                        Photo.PHOTO_FILE_ID);
+
+        long rawContactId2 = createRawContactWithName();
+        long contactId2 = queryContactId(rawContactId2);
+        long dataId2 = ContentUris.parseId(insertPhoto(rawContactId2, R.drawable.earth_normal));
+        long photoFileId2 =
+                getStoredLongValue(ContentUris.withAppendedId(Data.CONTENT_URI, dataId2),
+                        Photo.PHOTO_FILE_ID);
+
+        // Update the second raw contact with a different photo.
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId2);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.put(Photo.PHOTO, loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.ORIGINAL));
+        assertEquals(1, mResolver.update(Data.CONTENT_URI, values, Data._ID + "=?",
+                new String[]{String.valueOf(dataId2)}));
+        long replacementPhotoFileId =
+                getStoredLongValue(ContentUris.withAppendedId(Data.CONTENT_URI, dataId2),
+                        Photo.PHOTO_FILE_ID);
+
+        // Insert a third raw contact that has a bogus photo file ID.
+        long bogusFileId = 1234567;
+        long rawContactId3 = createRawContactWithName();
+        long contactId3 = queryContactId(rawContactId3);
+        values.clear();
+        values.put(Data.RAW_CONTACT_ID, rawContactId3);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.put(Photo.PHOTO, loadPhotoFromResource(R.drawable.earth_normal,
+                PhotoSize.THUMBNAIL));
+        values.put(Photo.PHOTO_FILE_ID, bogusFileId);
+        values.put(DataRowHandlerForPhoto.SKIP_PROCESSING_KEY, true);
+        mResolver.insert(Data.CONTENT_URI, values);
+
+        // Also insert a bogus photo that nobody is using.
+        PhotoStore photoStore = provider.getPhotoStore();
+        long bogusPhotoId = photoStore.insert(new PhotoProcessor(loadPhotoFromResource(
+                R.drawable.earth_huge, PhotoSize.ORIGINAL), 256, 96));
+
+        // Manually trigger another cleanup in the provider.
+        provider.cleanupPhotoStore();
+
+        // The following things should have happened.
+
+        // 1. Raw contact 1 and its photo remain unaffected.
+        assertEquals(photoFileId1, (long) getStoredLongValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId1),
+                Contacts.PHOTO_FILE_ID));
+
+        // 2. Raw contact 2 retains its new photo.  The old one is deleted from the photo store.
+        assertEquals(replacementPhotoFileId, (long) getStoredLongValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId2),
+                Contacts.PHOTO_FILE_ID));
+        assertNull(photoStore.get(photoFileId2));
+
+        // 3. Raw contact 3 should have its photo file reference cleared.
+        assertNull(getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId3),
+                Contacts.PHOTO_FILE_ID));
+
+        // 4. The bogus photo that nobody was using should be cleared from the photo store.
+        assertNull(photoStore.get(bogusPhotoId));
+    }
+
+    public void testOverwritePhotoWithThumbnail() throws IOException {
+        long rawContactId = createRawContactWithName();
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+
+        // Write a regular-size photo.
+        long dataId = ContentUris.parseId(insertPhoto(rawContactId, R.drawable.earth_normal));
+        Long photoFileId = getStoredLongValue(contactUri, Contacts.PHOTO_FILE_ID);
+        assertTrue(photoFileId != null && photoFileId > 0);
+
+        // Now overwrite the photo with a thumbnail-sized photo.
+        ContentValues update = new ContentValues();
+        update.put(Photo.PHOTO, loadPhotoFromResource(R.drawable.earth_small, PhotoSize.ORIGINAL));
+        mResolver.update(ContentUris.withAppendedId(Data.CONTENT_URI, dataId), update, null, null);
+
+        // Photo file ID should have been nulled out, and the photo URI should be the same as the
+        // thumbnail URI.
+        assertNull(getStoredValue(contactUri, Contacts.PHOTO_FILE_ID));
+        String photoUri = getStoredValue(contactUri, Contacts.PHOTO_URI);
+        String thumbnailUri = getStoredValue(contactUri, Contacts.PHOTO_THUMBNAIL_URI);
+        assertEquals(photoUri, thumbnailUri);
+
+        // Retrieving the photo URI should get the thumbnail content.
+        assertInputStreamContent(loadPhotoFromResource(R.drawable.earth_small, PhotoSize.THUMBNAIL),
+                mResolver.openInputStream(Uri.parse(photoUri)));
     }
 
     public void testUpdateRawContactSetStarred() {

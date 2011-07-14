@@ -39,8 +39,8 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemPhotosColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.util.DbQueryUtils;
@@ -81,6 +81,8 @@ import android.database.MatrixCursor.RowBuilder;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.net.Uri.Builder;
 import android.os.Binder;
@@ -114,6 +116,7 @@ import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.Directory;
+import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
@@ -122,8 +125,8 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
-import android.provider.ContactsContract.StreamItems;
 import android.provider.ContactsContract.StreamItemPhotos;
+import android.provider.ContactsContract.StreamItems;
 import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
@@ -134,7 +137,11 @@ import android.util.Log;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -172,12 +179,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 7;
     private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 8;
     private static final int BACKGROUND_TASK_CHANGE_LOCALE = 9;
+    private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
     /** Limit for the maximum number of social stream items to store under a raw contact. */
     private static final int MAX_STREAM_ITEMS_PER_RAW_CONTACT = 5;
+
+    /** Rate limit (in ms) for photo cleanup.  Do it at most once per day. */
+    private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
 
     /**
      * Property key for the legacy contact import version. The need for a version
@@ -234,22 +245,26 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_STREQUENT_FILTER = 1007;
     private static final int CONTACTS_GROUP = 1008;
     private static final int CONTACTS_ID_PHOTO = 1009;
-    private static final int CONTACTS_AS_VCARD = 1010;
-    private static final int CONTACTS_AS_MULTI_VCARD = 1011;
-    private static final int CONTACTS_LOOKUP_DATA = 1012;
-    private static final int CONTACTS_LOOKUP_ID_DATA = 1013;
-    private static final int CONTACTS_ID_ENTITIES = 1014;
-    private static final int CONTACTS_LOOKUP_ENTITIES = 1015;
-    private static final int CONTACTS_LOOKUP_ID_ENTITIES = 1016;
-    private static final int CONTACTS_ID_STREAM_ITEMS = 1017;
-    private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1018;
-    private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1019;
+    private static final int CONTACTS_ID_DISPLAY_PHOTO = 1010;
+    private static final int CONTACTS_LOOKUP_DISPLAY_PHOTO = 1011;
+    private static final int CONTACTS_LOOKUP_ID_DISPLAY_PHOTO = 1012;
+    private static final int CONTACTS_AS_VCARD = 1013;
+    private static final int CONTACTS_AS_MULTI_VCARD = 1014;
+    private static final int CONTACTS_LOOKUP_DATA = 1015;
+    private static final int CONTACTS_LOOKUP_ID_DATA = 1016;
+    private static final int CONTACTS_ID_ENTITIES = 1017;
+    private static final int CONTACTS_LOOKUP_ENTITIES = 1018;
+    private static final int CONTACTS_LOOKUP_ID_ENTITIES = 1019;
+    private static final int CONTACTS_ID_STREAM_ITEMS = 1020;
+    private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1021;
+    private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1022;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
     private static final int RAW_CONTACTS_DATA = 2004;
     private static final int RAW_CONTACT_ENTITY_ID = 2005;
-    private static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2006;
+    private static final int RAW_CONTACTS_ID_DISPLAY_PHOTO = 2006;
+    private static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2007;
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
@@ -317,6 +332,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int STREAM_ITEMS_ID_PHOTOS = 21003;
     private static final int STREAM_ITEMS_ID_PHOTOS_ID = 21004;
     private static final int STREAM_ITEMS_LIMIT = 21005;
+
+    private static final int DISPLAY_PHOTO = 22000;
+    private static final int PHOTO_DIMENSIONS = 22001;
 
     private static final String SELECTION_FAVORITES_GROUPS_BY_RAW_CONTACT_ID =
             RawContactsColumns.CONCRETE_ID + "=? AND "
@@ -501,6 +519,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Contacts.PHONETIC_NAME)
             .add(Contacts.PHONETIC_NAME_STYLE)
             .add(Contacts.PHOTO_ID)
+            .add(Contacts.PHOTO_FILE_ID)
             .add(Contacts.PHOTO_URI)
             .add(Contacts.PHOTO_THUMBNAIL_URI)
             .add(Contacts.SEND_TO_VOICEMAIL)
@@ -947,6 +966,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions/*",
                 AGGREGATION_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_ID_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/display_photo",
+                CONTACTS_ID_DISPLAY_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/stream_items",
                 CONTACTS_ID_STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter", CONTACTS_FILTER);
@@ -956,6 +977,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/data",
                 CONTACTS_LOOKUP_ID_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/display_photo",
+                CONTACTS_LOOKUP_DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/display_photo",
+                CONTACTS_LOOKUP_ID_DISPLAY_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/entities",
                 CONTACTS_LOOKUP_ENTITIES);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/entities",
@@ -975,6 +1000,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/display_photo",
+                RAW_CONTACTS_ID_DISPLAY_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ENTITY_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items",
                 RAW_CONTACTS_ID_STREAM_ITEMS);
@@ -1060,6 +1087,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#/photo/#",
                 STREAM_ITEMS_ID_PHOTOS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items_limit", STREAM_ITEMS_LIMIT);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "display_photo/*", DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "photo_dimensions", PHOTO_DIMENSIONS);
 
         HashMap<String, Integer> tmpTypeMap = new HashMap<String, Integer>();
         tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_CALL, DataUsageStatColumns.USAGE_TYPE_INT_CALL);
@@ -1149,8 +1179,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     /** Limit for the maximum byte size of social stream item photos (loaded from config.xml). */
     private int mMaxStreamItemPhotoSizeBytes;
 
+    /**
+     * Maximum dimension (height or width) of display photos.  Larger images will be scaled
+     * to fit.
+     */
+    private int mMaxDisplayPhotoDim;
+
+    /**
+     * Maximum dimension (height or width) of photo thumbnails.
+     */
+    private int mMaxThumbnailPhotoDim;
+
     private HashMap<String, DataRowHandler> mDataRowHandlers;
     private ContactsDatabaseHelper mDbHelper;
+
+    private PhotoStore mPhotoStore;
 
     private NameSplitter mNameSplitter;
     private NameLookupBuilder mNameLookupBuilder;
@@ -1187,6 +1230,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler;
 
+    private long mLastPhotoCleanup = 0;
+
     @Override
     public boolean onCreate() {
         super.onCreate();
@@ -1205,11 +1250,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Resources resources = getContext().getResources();
         mMaxStreamItemPhotoSizeBytes = resources.getInteger(
                 R.integer.config_stream_item_photo_max_bytes);
+        mMaxDisplayPhotoDim = resources.getInteger(
+                R.integer.config_max_display_photo_dim);
+        mMaxThumbnailPhotoDim = resources.getInteger(
+                R.integer.config_max_thumbnail_photo_dim);
 
         mProfileIdCache = new ProfileIdCache();
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
+        mPhotoStore = new PhotoStore(getContext().getFilesDir(), mDbHelper);
 
         // The provider is closed for business until fully initialized
         mReadAccessLatch = new CountDownLatch(1);
@@ -1233,6 +1283,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_SEARCH_INDEX);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_PROVIDER_STATUS);
         scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
+        scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
 
         return true;
     }
@@ -1276,7 +1327,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 new DataRowHandlerForGroupMembership(context, mDbHelper, mContactAggregator,
                         mGroupIdCache));
         mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForPhoto(context, mDbHelper, mContactAggregator));
+                new DataRowHandlerForPhoto(context, mDbHelper, mContactAggregator, mPhotoStore));
         mDataRowHandlers.put(Note.CONTENT_ITEM_TYPE,
                 new DataRowHandlerForNote(context, mDbHelper, mContactAggregator));
     }
@@ -1367,6 +1418,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 break;
             }
+
+            case BACKGROUND_TASK_CLEANUP_PHOTOS: {
+                // Check rate limit.
+                long now = System.currentTimeMillis();
+                if (now - mLastPhotoCleanup > PHOTO_CLEANUP_RATE_LIMIT) {
+                    mLastPhotoCleanup = now;
+                    cleanupPhotoStore();
+                    break;
+                }
+            }
         }
     }
 
@@ -1451,9 +1512,63 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /* Visible for testing */
+    protected void cleanupPhotoStore() {
+        // Assemble the set of photo store keys that are in use, and send those to the photo
+        // store.  Any photos that aren't in that set will be deleted, and any photos that no
+        // longer exist in the photo store will be returned for us to clear out in the DB.
+        Cursor c = mDb.query(Views.DATA, new String[]{Data._ID, Photo.PHOTO_FILE_ID},
+                Data.MIMETYPE + "=" + Photo.MIMETYPE + " AND "
+                        + Photo.PHOTO_FILE_ID + " IS NOT NULL", null, null, null, null);
+        Set<Long> usedKeys = Sets.newHashSet();
+        Map<Long, List<Long>> keysToIdList = Maps.newHashMap();
+        try {
+            while (c.moveToNext()) {
+                long id = c.getLong(0);
+                long key = c.getLong(1);
+                usedKeys.add(key);
+                List<Long> ids = keysToIdList.get(key);
+                if (ids == null) {
+                    ids = Lists.newArrayList();
+                }
+                ids.add(id);
+                keysToIdList.put(key, ids);
+            }
+        } finally {
+            c.close();
+        }
+
+        // Run the photo store cleanup.
+        Set<Long> missingKeys = mPhotoStore.cleanup(usedKeys);
+
+        // If any of the keys we're using no longer exist, clean them up.
+        if (!missingKeys.isEmpty()) {
+            ArrayList<ContentProviderOperation> ops = Lists.newArrayList();
+            for (long key : missingKeys) {
+                for (long id : keysToIdList.get(key)) {
+                    ContentValues updateValues = new ContentValues();
+                    updateValues.putNull(Photo.PHOTO_FILE_ID);
+                    ops.add(ContentProviderOperation.newUpdate(
+                            ContentUris.withAppendedId(Data.CONTENT_URI, id))
+                            .withValues(updateValues).build());
+                }
+            }
+            try {
+                applyBatch(ops);
+            } catch (OperationApplicationException oae) {
+                // Not a fatal problem (and we'll try again on the next cleanup).
+                Log.e(TAG, "Failed to clean up outdated photo references", oae);
+            }
+        }
+    }
+
+    /* Visible for testing */
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
+    }
+
+    /* package */ PhotoStore getPhotoStore() {
+        return mPhotoStore;
     }
 
     /* package */ NameSplitter getNameSplitter() {
@@ -1567,6 +1682,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     /* package */ void wipeData() {
         mDbHelper.wipeData();
+        mPhotoStore.clear();
         mProviderStatus = ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS;
     }
 
@@ -3507,7 +3623,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about updating data we don't have permission to read.
-        Cursor c = query(uri, DataRowHandler.DataUpdateQuery.COLUMNS,
+        // This query will be allowed to return profiles, and we'll do the permission check
+        // within the loop.
+        Cursor c = query(uri.buildUpon()
+                .appendQueryParameter(ContactsContract.ALLOW_PROFILE, "1").build(),
+                DataRowHandler.DataUpdateQuery.COLUMNS,
                 selection, selectionArgs, null);
         try {
             while(c.moveToNext()) {
@@ -3531,11 +3651,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         final String mimeType = c.getString(DataRowHandler.DataUpdateQuery.MIMETYPE);
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
-        if (rowHandler.update(mDb, mTransactionContext, values, c, callerIsSyncAdapter)) {
-            return 1;
-        } else {
-            return 0;
+        boolean updated =
+                rowHandler.update(mDb, mTransactionContext, values, c, callerIsSyncAdapter);
+        if (Photo.CONTENT_ITEM_TYPE.equals(mimeType)) {
+            scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
         }
+        return updated ? 1 : 0;
     }
 
     private int updateContactOptions(ContentValues values, String selection,
@@ -4305,6 +4426,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_ID_PHOTO: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                enforceProfilePermissionForContact(contactId, false);
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
                 qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=?");
@@ -4396,6 +4518,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.appendWhere(StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "=? AND " +
                         StreamItemPhotosColumns.CONCRETE_ID + "=?");
                 break;
+            }
+
+            case PHOTO_DIMENSIONS: {
+                MatrixCursor cursor = new MatrixCursor(
+                        new String[]{DisplayPhoto.DISPLAY_MAX_DIM, DisplayPhoto.THUMBNAIL_MAX_DIM},
+                        1);
+                cursor.addRow(new Object[]{mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim});
+                return cursor;
             }
 
             case PHONES: {
@@ -5827,7 +5957,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
 
-        waitForAccess(mReadAccessLatch);
+        if (mode.equals("r")) {
+            waitForAccess(mReadAccessLatch);
+        } else {
+            waitForAccess(mWriteAccessLatch);
+        }
 
         int match = sUriMatcher.match(uri);
         switch (match) {
@@ -5838,6 +5972,118 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         Data._ID + "=" + Contacts.PHOTO_ID + " AND " +
                                 RawContacts.CONTACT_ID + "=?",
                         new String[]{String.valueOf(rawContactId)});
+            }
+
+            case CONTACTS_ID_DISPLAY_PHOTO: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException(
+                            "Display photos retrieved by contact ID can only be read.");
+                }
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                enforceProfilePermissionForContact(contactId, false);
+                Cursor c = mDb.query(Tables.CONTACTS,
+                        new String[]{Contacts.PHOTO_FILE_ID},
+                        Contacts._ID + "=?", new String[]{String.valueOf(contactId)},
+                        null, null, null);
+                try {
+                    c.moveToFirst();
+                    long photoFileId = c.getLong(0);
+                    return openDisplayPhotoForRead(photoFileId);
+                } finally {
+                    c.close();
+                }
+            }
+
+            case CONTACTS_LOOKUP_DISPLAY_PHOTO:
+            case CONTACTS_LOOKUP_ID_DISPLAY_PHOTO: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException(
+                            "Display photos retrieved by contact lookup key can only be read.");
+                }
+                List<String> pathSegments = uri.getPathSegments();
+                int segmentCount = pathSegments.size();
+                if (segmentCount < 4) {
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Missing a lookup key", uri));
+                }
+                String lookupKey = pathSegments.get(2);
+                String[] projection = new String[]{Contacts.PHOTO_FILE_ID};
+                if (segmentCount == 5) {
+                    long contactId = Long.parseLong(pathSegments.get(3));
+                    enforceProfilePermissionForContact(contactId, false);
+                    SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
+                    setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, mDb, uri,
+                            projection, null, null, null, null, null,
+                            Contacts._ID, contactId, Contacts.LOOKUP_KEY, lookupKey);
+                    if (c != null) {
+                        try {
+                            c.moveToFirst();
+                            long photoFileId = c.getLong(c.getColumnIndex(Contacts.PHOTO_FILE_ID));
+                            return openDisplayPhotoForRead(photoFileId);
+                        } finally {
+                            c.close();
+                        }
+                    }
+                }
+
+                SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
+                enforceProfilePermissionForContact(contactId, false);
+                Cursor c = qb.query(mDb, projection, Contacts._ID + "=?",
+                        new String[]{String.valueOf(contactId)}, null, null, null);
+                try {
+                    c.moveToFirst();
+                    long photoFileId = c.getLong(c.getColumnIndex(Contacts.PHOTO_FILE_ID));
+                    return openDisplayPhotoForRead(photoFileId);
+                } finally {
+                    c.close();
+                }
+            }
+
+            case RAW_CONTACTS_ID_DISPLAY_PHOTO: {
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                boolean writeable = !mode.equals("r");
+                enforceProfilePermissionForRawContact(rawContactId, writeable);
+
+                // Find the primary photo data record for this raw contact.
+                SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+                String[] projection = new String[]{Data._ID, Photo.PHOTO_FILE_ID};
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
+                Cursor c = qb.query(mDb, projection,
+                        Data.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
+                        new String[]{String.valueOf(rawContactId), Photo.CONTENT_ITEM_TYPE},
+                        null, null, Data.IS_PRIMARY + " DESC");
+                long dataId = 0;
+                long photoFileId = 0;
+                try {
+                    if (c.getCount() >= 1) {
+                        c.moveToFirst();
+                        dataId = c.getLong(0);
+                        photoFileId = c.getLong(1);
+                    }
+                } finally {
+                    c.close();
+                }
+
+                // If writeable, open a writeable file descriptor that we can monitor.
+                // When the caller finishes writing content, we'll process the photo and
+                // update the data record.
+                if (writeable) {
+                    return openDisplayPhotoForWrite(rawContactId, dataId, uri, mode);
+                } else {
+                    return openDisplayPhotoForRead(photoFileId);
+                }
+            }
+
+            case DISPLAY_PHOTO: {
+                long photoFileId = ContentUris.parseId(uri);
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException(
+                            "Display photos retrieved by key can only be read.");
+                }
+                return openDisplayPhotoForRead(photoFileId);
             }
 
             case DATA_ID: {
@@ -5931,6 +6177,121 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
+    /**
+     * Opens a display photo from the photo store for reading.
+     * @param photoFileId The display photo file ID
+     * @return An asset file descriptor that allows the file to be read.
+     * @throws FileNotFoundException If no photo file for the given ID exists.
+     */
+    private AssetFileDescriptor openDisplayPhotoForRead(long photoFileId)
+            throws FileNotFoundException {
+        PhotoStore.Entry entry = mPhotoStore.get(photoFileId);
+        if (entry != null) {
+            return makeAssetFileDescriptor(
+                    ParcelFileDescriptor.open(new File(entry.path),
+                            ParcelFileDescriptor.MODE_READ_ONLY),
+                    entry.size);
+        } else {
+            scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
+            throw new FileNotFoundException("No photo file found for ID " + photoFileId);
+        }
+    }
+
+    /**
+     * Opens a file descriptor for a photo to be written.  When the caller completes writing
+     * to the file (closing the output stream), the image will be parsed out and processed.
+     * If processing succeeds, the given raw contact ID's primary photo record will be
+     * populated with the inserted image (if no primary photo record exists, the data ID can
+     * be left as 0, and a new data record will be inserted).
+     * @param rawContactId Raw contact ID this photo entry should be associated with.
+     * @param dataId Data ID for a photo mimetype that will be updated with the inserted
+     *     image.  May be set to 0, in which case the inserted image will trigger creation
+     *     of a new primary photo image data row for the raw contact.
+     * @param uri The URI being used to access this file.
+     * @param mode Read/write mode string.
+     * @return An asset file descriptor the caller can use to write an image file for the
+     *     raw contact.
+     */
+    private AssetFileDescriptor openDisplayPhotoForWrite(long rawContactId, long dataId, Uri uri,
+            String mode) {
+        try {
+            return new AssetFileDescriptor(new MonitoredParcelFileDescriptor(rawContactId, dataId,
+                    ParcelFileDescriptor.open(File.createTempFile("img", null),
+                            ContentResolver.modeToMode(uri, mode))),
+                    0, AssetFileDescriptor.UNKNOWN_LENGTH);
+        } catch (IOException ioe) {
+            Log.e(TAG, "Could not create temp image file in mode " + mode);
+            return null;
+        }
+    }
+
+    /**
+     * Parcel file descriptor wrapper that monitors when the file is closed.
+     * If the file contains a valid image, the image is either inserted into the given
+     * raw contact or updated in the given data row.
+     */
+    private class MonitoredParcelFileDescriptor extends ParcelFileDescriptor {
+        private final long mRawContactId;
+        private final long mDataId;
+        private MonitoredParcelFileDescriptor(long rawContactId, long dataId,
+                ParcelFileDescriptor descriptor) {
+            super(descriptor);
+            mRawContactId = rawContactId;
+            mDataId = dataId;
+        }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                // Check to see whether a valid image was written out.
+                Bitmap b = BitmapFactory.decodeFileDescriptor(getFileDescriptor());
+                if (b != null) {
+                    PhotoProcessor processor = new PhotoProcessor(b, mMaxDisplayPhotoDim,
+                            mMaxThumbnailPhotoDim);
+
+                    // Store the compressed photo in the photo store.
+                    long photoFileId = mPhotoStore.insert(processor);
+
+                    // Depending on whether we already had a data row to attach the photo to,
+                    // do an update or insert.
+                    if (mDataId != 0) {
+                        // Update the data record with the new photo.
+                        ContentValues updateValues = new ContentValues();
+
+                        // Signal that photo processing has already been handled.
+                        updateValues.put(DataRowHandlerForPhoto.SKIP_PROCESSING_KEY, true);
+
+                        if (photoFileId != 0) {
+                            updateValues.put(Photo.PHOTO_FILE_ID, photoFileId);
+                        }
+                        updateValues.put(Photo.PHOTO, processor.getThumbnailPhotoBytes());
+                        update(ContentUris.withAppendedId(Data.CONTENT_URI, mDataId), updateValues,
+                                null, null);
+                    } else {
+                        // Insert a new primary data record with the photo.
+                        ContentValues insertValues = new ContentValues();
+
+                        // Signal that photo processing has already been handled.
+                        insertValues.put(DataRowHandlerForPhoto.SKIP_PROCESSING_KEY, true);
+
+                        insertValues.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+                        insertValues.put(Data.IS_PRIMARY, 1);
+                        if (photoFileId != 0) {
+                            insertValues.put(Photo.PHOTO_FILE_ID, photoFileId);
+                        }
+                        insertValues.put(Photo.PHOTO, processor.getThumbnailPhotoBytes());
+                        insert(RawContacts.CONTENT_URI.buildUpon()
+                                .appendPath(String.valueOf(mRawContactId))
+                                .appendPath(RawContacts.Data.CONTENT_DIRECTORY).build(),
+                                insertValues);
+                    }
+                }
+            } finally {
+                super.close();
+            }
+        }
+    }
+
     private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";
 
     /**
@@ -6019,7 +6380,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PROFILE_AS_VCARD:
                 return Contacts.CONTENT_VCARD_TYPE;
             case CONTACTS_ID_PHOTO:
-                return "image/png";
+            case CONTACTS_ID_DISPLAY_PHOTO:
+            case CONTACTS_LOOKUP_DISPLAY_PHOTO:
+            case CONTACTS_LOOKUP_ID_DISPLAY_PHOTO:
+            case RAW_CONTACTS_ID_DISPLAY_PHOTO:
+            case DISPLAY_PHOTO:
+                return "image/jpeg";
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS:
                 return RawContacts.CONTENT_TYPE;
