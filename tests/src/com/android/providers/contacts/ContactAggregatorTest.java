@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
 
 import android.accounts.Account;
@@ -30,6 +31,7 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
@@ -848,6 +850,124 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertPhoto(rawContactId3);
 
         assertEquals(cupcakeId, queryPhotoId(queryContactId(rawContactId2)));
+    }
+
+    // Note that for the following tests of photo aggregation, the accounts are being used to
+    // set the typical photo priority that each raw contact would have, based on
+    // SynchronousContactsProvider2.createPhotoPriorityResolver.  The relative priorities
+    // specified there are:
+    // cupcake: 3
+    // donut: 2
+    // froyo: 1
+    // <other>: 0
+
+    public void testChooseLargerPhotoByDimensions() {
+        // Donut photo is 256x256.
+        long rawContactId1 = createRawContact();
+        setContactAccount(rawContactId1, "donut", "donut_act");
+        long normalEarthDataId = ContentUris.parseId(
+                insertPhoto(rawContactId1, R.drawable.earth_normal));
+        long normalEarthPhotoFileId = getStoredLongValue(
+                ContentUris.withAppendedId(Data.CONTENT_URI, normalEarthDataId),
+                Photo.PHOTO_FILE_ID);
+
+        // Cupcake would normally have priority, but its photo is 200x200.
+        long rawContactId2 = createRawContact();
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
+        insertPhoto(rawContactId2, R.drawable.earth_200);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // Larger photo (by dimensions) wins.
+        assertEquals(normalEarthPhotoFileId, queryPhotoFileId(queryContactId(rawContactId1)));
+    }
+
+    public void testChooseLargerPhotoByFileSize() {
+        // Donut photo is a 256x256 photo of a nebula.
+        long rawContactId1 = createRawContact();
+        setContactAccount(rawContactId1, "donut", "donut_act");
+        long nebulaDataId = ContentUris.parseId(
+                insertPhoto(rawContactId1, R.drawable.nebula));
+        long nebulaPhotoFileId = getStoredLongValue(
+                ContentUris.withAppendedId(Data.CONTENT_URI, nebulaDataId),
+                Photo.PHOTO_FILE_ID);
+
+        // Cupcake would normally have priority, but its photo (of a galaxy) has the same dimensions
+        // as Donut's, but a smaller filesize.
+        long rawContactId2 = createRawContact();
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
+        insertPhoto(rawContactId2, R.drawable.galaxy);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // Larger photo (by filesize) wins.
+        assertEquals(nebulaPhotoFileId, queryPhotoFileId(queryContactId(rawContactId1)));
+    }
+
+    public void testChooseFilePhotoOverThumbnail() {
+        // Donut photo is a 256x256 photo of Earth.
+        long rawContactId1 = createRawContact();
+        setContactAccount(rawContactId1, "donut", "donut_act");
+        long normalEarthDataId = ContentUris.parseId(
+                insertPhoto(rawContactId1, R.drawable.earth_normal));
+        long normalEarthPhotoFileId = getStoredLongValue(
+                ContentUris.withAppendedId(Data.CONTENT_URI, normalEarthDataId),
+                Photo.PHOTO_FILE_ID);
+
+        // Cupcake would normally have priority, but its photo of Earth is thumbnail-sized.
+        long rawContactId2 = createRawContact();
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
+        insertPhoto(rawContactId2, R.drawable.earth_small);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // Larger photo (by filesize) wins.
+        assertEquals(normalEarthPhotoFileId, queryPhotoFileId(queryContactId(rawContactId1)));
+    }
+
+    public void testFallbackToAccountPriorityForSamePhoto() {
+        // Donut photo is a 256x256 photo of Earth.
+        long rawContactId1 = createRawContact();
+        setContactAccount(rawContactId1, "donut", "donut_act");
+        insertPhoto(rawContactId1, R.drawable.earth_normal);
+
+        // Cupcake has the same 256x256 photo of Earth.
+        long rawContactId2 = createRawContact();
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
+        long cupcakeEarthDataId = ContentUris.parseId(
+                insertPhoto(rawContactId2, R.drawable.earth_normal));
+        long cupcakeEarthPhotoFileId = getStoredLongValue(
+                ContentUris.withAppendedId(Data.CONTENT_URI, cupcakeEarthDataId),
+                Photo.PHOTO_FILE_ID);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // Cupcake's version of the photo wins, falling back to account priority.
+        assertEquals(cupcakeEarthPhotoFileId, queryPhotoFileId(queryContactId(rawContactId1)));
+    }
+
+    public void testFallbackToAccountPriorityForDifferingThumbnails() {
+        // Donut photo is a 96x96 thumbnail of Earth.
+        long rawContactId1 = createRawContact();
+        setContactAccount(rawContactId1, "donut", "donut_act");
+        insertPhoto(rawContactId1, R.drawable.earth_small);
+
+        // Cupcake photo is the 96x96 "no contact" placeholder (smaller filesize than the Earth
+        // picture, but thumbnail filesizes are ignored in the aggregator).
+        long rawContactId2 = createRawContact();
+        setContactAccount(rawContactId2, "cupcake", "cupcake_act");
+        long cupcakeDataId = ContentUris.parseId(
+                insertPhoto(rawContactId2, R.drawable.ic_contact_picture));
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // The Cupcake thumbnail wins, by account priority..
+        assertEquals(cupcakeDataId, queryPhotoId(queryContactId(rawContactId1)));
     }
 
     public void testDisplayNameSources() {

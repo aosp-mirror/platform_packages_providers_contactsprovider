@@ -31,6 +31,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import android.accounts.Account;
 import android.content.ContentValues;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
@@ -47,6 +48,7 @@ import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
+import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
@@ -1622,6 +1624,16 @@ public class ContactAggregator {
     }
 
     /**
+     * Indicates whether the given photo entry and priority gives this photo a higher overall
+     * priority than the current best photo entry and priority.
+     */
+    private boolean hasHigherPhotoPriority(PhotoEntry photoEntry, int priority,
+            PhotoEntry bestPhotoEntry, int bestPriority) {
+        int photoComparison = photoEntry.compareTo(bestPhotoEntry);
+        return photoComparison < 0 || photoComparison == 0 && priority > bestPriority;
+    }
+
+    /**
      * Computes aggregate-level data from constituent raw contacts.
      */
     private void computeAggregateData(final SQLiteDatabase db, String sql, String[] sqlArgs,
@@ -1629,6 +1641,7 @@ public class ContactAggregator {
         long currentRawContactId = -1;
         long bestPhotoId = -1;
         long bestPhotoFileId = 0;
+        PhotoEntry bestPhotoEntry = null;
         boolean foundSuperPrimaryPhoto = false;
         int photoPriority = -1;
         int totalRowCount = 0;
@@ -1702,9 +1715,13 @@ public class ContactAggregator {
                     boolean superPrimary = c.getInt(RawContactsQuery.IS_SUPER_PRIMARY) != 0;
                     if (mimetypeId == mMimeTypeIdPhoto) {
                         if (!foundSuperPrimaryPhoto) {
+                            // Lookup the metadata for the photo, if available.
+                            PhotoEntry photoEntry = getPhotoMetadata(db, photoFileId);
                             String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
                             int priority = mPhotoPriorityResolver.getPhotoPriority(accountType);
-                            if (superPrimary || priority > photoPriority) {
+                            if (superPrimary || hasHigherPhotoPriority(
+                                    photoEntry, priority, bestPhotoEntry, photoPriority)) {
+                                bestPhotoEntry = photoEntry;
                                 photoPriority = priority;
                                 bestPhotoId = dataId;
                                 bestPhotoFileId = photoFileId;
@@ -1795,7 +1812,7 @@ public class ContactAggregator {
     }
 
     private interface PhotoIdQuery {
-        String[] COLUMNS = new String[] {
+        final String[] COLUMNS = new String[] {
             RawContacts.ACCOUNT_TYPE,
             DataColumns.CONCRETE_ID,
             Data.IS_SUPER_PRIMARY,
@@ -1830,22 +1847,23 @@ public class ContactAggregator {
         final Cursor c = db.query(tables, PhotoIdQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
         try {
+            PhotoEntry bestPhotoEntry = null;
             while (c.moveToNext()) {
                 long dataId = c.getLong(PhotoIdQuery.DATA_ID);
                 long photoFileId = c.getLong(PhotoIdQuery.PHOTO_FILE_ID);
-                boolean superprimary = c.getInt(PhotoIdQuery.IS_SUPER_PRIMARY) != 0;
-                if (superprimary) {
-                    bestPhotoId = dataId;
-                    bestPhotoFileId = photoFileId;
-                    break;
-                }
-
+                boolean superPrimary = c.getInt(PhotoIdQuery.IS_SUPER_PRIMARY) != 0;
+                PhotoEntry photoEntry = getPhotoMetadata(db, photoFileId);
                 String accountType = c.getString(PhotoIdQuery.ACCOUNT_TYPE);
                 int priority = mPhotoPriorityResolver.getPhotoPriority(accountType);
-                if (priority > photoPriority) {
+                if (superPrimary || hasHigherPhotoPriority(
+                        photoEntry, priority, bestPhotoEntry, photoPriority)) {
+                    bestPhotoEntry = photoEntry;
                     photoPriority = priority;
                     bestPhotoId = dataId;
                     bestPhotoFileId = photoFileId;
+                    if (superPrimary) {
+                        break;
+                    }
                 }
             }
         } finally {
@@ -1866,6 +1884,68 @@ public class ContactAggregator {
 
         mPhotoIdUpdate.bindLong(3, contactId);
         mPhotoIdUpdate.execute();
+    }
+
+    private interface PhotoFileQuery {
+        final String[] COLUMNS = new String[] {
+                PhotoFiles._ID,
+                PhotoFiles.HEIGHT,
+                PhotoFiles.WIDTH,
+                PhotoFiles.FILESIZE
+        };
+
+        int _ID = 0;
+        int HEIGHT = 1;
+        int WIDTH = 2;
+        int FILESIZE = 3;
+    }
+
+    private class PhotoEntry implements Comparable<PhotoEntry> {
+        // Pixel count (width * height) for the image.
+        final int pixelCount;
+
+        // File size (in bytes) of the image.  Not populated if the image is a thumbnail.
+        final int fileSize;
+
+        private PhotoEntry(int pixelCount, int fileSize) {
+            this.pixelCount = pixelCount;
+            this.fileSize = fileSize;
+        }
+
+        @Override
+        public int compareTo(PhotoEntry pe) {
+            if (pe == null) {
+                return -1;
+            }
+            if (pixelCount == pe.pixelCount) {
+                return pe.fileSize - fileSize;
+            } else {
+                return pe.pixelCount - pixelCount;
+            }
+        }
+    }
+
+    private PhotoEntry getPhotoMetadata(SQLiteDatabase db, long photoFileId) {
+        if (photoFileId == 0) {
+            // Assume standard thumbnail size.  Don't bother getting a file size for priority;
+            // we should fall back to photo priority resolver if all we have are thumbnails.
+            int thumbDim = mContactsProvider.getMaxThumbnailPhotoDim();
+            return new PhotoEntry(thumbDim * thumbDim, 0);
+        } else {
+            Cursor c = db.query(Tables.PHOTO_FILES, PhotoFileQuery.COLUMNS, PhotoFiles._ID + "=?",
+                    new String[]{String.valueOf(photoFileId)}, null, null, null);
+            try {
+                if (c.getCount() == 1) {
+                    c.moveToFirst();
+                    int pixelCount =
+                            c.getInt(PhotoFileQuery.HEIGHT) * c.getInt(PhotoFileQuery.WIDTH);
+                    return new PhotoEntry(pixelCount, c.getInt(PhotoFileQuery.FILESIZE));
+                }
+            } finally {
+                c.close();
+            }
+        }
+        return new PhotoEntry(0, 0);
     }
 
     private interface DisplayNameQuery {

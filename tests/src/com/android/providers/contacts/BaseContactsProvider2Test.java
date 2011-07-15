@@ -535,6 +535,11 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return photoId;
     }
 
+    protected long queryPhotoFileId(long contactId) {
+        return getStoredLongValue(ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_FILE_ID);
+    }
+
     protected boolean queryRawContactIsStarred(long rawContactId) {
         Cursor c = queryRawContact(rawContactId);
         try {

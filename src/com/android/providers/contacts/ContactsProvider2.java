@@ -1571,6 +1571,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return mPhotoStore;
     }
 
+    /* package */ int getMaxDisplayPhotoDim() {
+        return mMaxDisplayPhotoDim;
+    }
+
+    /* package */ int getMaxThumbnailPhotoDim() {
+        return mMaxThumbnailPhotoDim;
+    }
+
     /* package */ NameSplitter getNameSplitter() {
         return mNameSplitter;
     }
