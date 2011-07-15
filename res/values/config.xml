@@ -16,10 +16,10 @@
 
 <resources>
 
-    <!-- Maximum size of photos inserted in social stream items -->
-    <integer name="config_stream_item_photo_max_bytes">71680</integer>
-
-    <!-- Maximum dimension (height or width) of contact display photos -->
+    <!--
+      Maximum dimension (height or width) of contact display photos or
+      photos from the social stream.
+    -->
     <integer name="config_max_display_photo_dim">256</integer>
 
     <!-- Maximum dimension (height or width) of contact photo thumbnails -->

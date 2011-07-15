@@ -404,13 +404,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         public static final String[] PROJECTION = new String[] {
             RawContactsColumns.CONCRETE_ID,
+            RawContactsColumns.CONCRETE_ACCOUNT_TYPE,
+            RawContactsColumns.CONCRETE_ACCOUNT_NAME,
             DataColumns.CONCRETE_ID,
             ContactsColumns.CONCRETE_ID
         };
 
         public static final int RAW_CONTACT_ID = 0;
-        public static final int DATA_ID = 1;
-        public static final int CONTACT_ID = 2;
+        public static final int ACCOUNT_TYPE = 1;
+        public static final int ACCOUNT_NAME = 2;
+        public static final int DATA_ID = 3;
+        public static final int CONTACT_ID = 4;
     }
 
     interface RawContactsQuery {
@@ -896,7 +900,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(StreamItems.RAW_CONTACT_ID)
             .add(StreamItemPhotos.STREAM_ITEM_ID)
             .add(StreamItemPhotos.SORT_INDEX)
-            .add(StreamItemPhotos.PICTURE)
+            .add(StreamItemPhotos.PHOTO_FILE_ID)
+            .add(StreamItemPhotos.PHOTO_URI,
+                    "'" + DisplayPhoto.CONTENT_URI + "'||'/'||" + StreamItemPhotos.PHOTO_FILE_ID)
             .add(StreamItemPhotos.ACTION, StreamItemPhotosColumns.CONCRETE_ACTION)
             .add(StreamItemPhotos.ACTION_URI, StreamItemPhotosColumns.CONCRETE_ACTION_URI)
             .build();
@@ -1180,9 +1186,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private ProfileIdCache mProfileIdCache;
 
-    /** Limit for the maximum byte size of social stream item photos (loaded from config.xml). */
-    private int mMaxStreamItemPhotoSizeBytes;
-
     /**
      * Maximum dimension (height or width) of display photos.  Larger images will be scaled
      * to fit.
@@ -1252,8 +1255,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
 
         Resources resources = getContext().getResources();
-        mMaxStreamItemPhotoSizeBytes = resources.getInteger(
-                R.integer.config_stream_item_photo_max_bytes);
         mMaxDisplayPhotoDim = resources.getInteger(
                 R.integer.config_max_display_photo_dim);
         mMaxThumbnailPhotoDim = resources.getInteger(
@@ -1517,43 +1518,76 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /* Visible for testing */
     protected void cleanupPhotoStore() {
-        // Assemble the set of photo store keys that are in use, and send those to the photo
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+
+        // Assemble the set of photo store file IDs that are in use, and send those to the photo
         // store.  Any photos that aren't in that set will be deleted, and any photos that no
         // longer exist in the photo store will be returned for us to clear out in the DB.
-        Cursor c = mDb.query(Views.DATA, new String[]{Data._ID, Photo.PHOTO_FILE_ID},
+        Cursor c = db.query(Views.DATA, new String[]{Data._ID, Photo.PHOTO_FILE_ID},
                 Data.MIMETYPE + "=" + Photo.MIMETYPE + " AND "
                         + Photo.PHOTO_FILE_ID + " IS NOT NULL", null, null, null, null);
-        Set<Long> usedKeys = Sets.newHashSet();
-        Map<Long, List<Long>> keysToIdList = Maps.newHashMap();
+        Set<Long> usedPhotoFileIds = Sets.newHashSet();
+        Map<Long, Long> photoFileIdToDataId = Maps.newHashMap();
         try {
             while (c.moveToNext()) {
-                long id = c.getLong(0);
-                long key = c.getLong(1);
-                usedKeys.add(key);
-                List<Long> ids = keysToIdList.get(key);
-                if (ids == null) {
-                    ids = Lists.newArrayList();
-                }
-                ids.add(id);
-                keysToIdList.put(key, ids);
+                long dataId = c.getLong(0);
+                long photoFileId = c.getLong(1);
+                usedPhotoFileIds.add(photoFileId);
+                photoFileIdToDataId.put(photoFileId, dataId);
+            }
+        } finally {
+            c.close();
+        }
+
+        // Also query for all social stream item photos.
+        c = db.query(Tables.STREAM_ITEM_PHOTOS,
+                new String[]{
+                        StreamItemPhotos._ID,
+                        StreamItemPhotos.STREAM_ITEM_ID,
+                        StreamItemPhotos.PHOTO_FILE_ID
+                },
+                null, null, null, null, null);
+        Map<Long, Long> photoFileIdToStreamItemPhotoId = Maps.newHashMap();
+        Map<Long, Long> streamItemPhotoIdToStreamItemId = Maps.newHashMap();
+        try {
+            while (c.moveToNext()) {
+                long streamItemPhotoId = c.getLong(0);
+                long streamItemId = c.getLong(1);
+                long photoFileId = c.getLong(2);
+                usedPhotoFileIds.add(photoFileId);
+                photoFileIdToStreamItemPhotoId.put(photoFileId, streamItemPhotoId);
+                streamItemPhotoIdToStreamItemId.put(streamItemPhotoId, streamItemId);
             }
         } finally {
             c.close();
         }
 
         // Run the photo store cleanup.
-        Set<Long> missingKeys = mPhotoStore.cleanup(usedKeys);
+        Set<Long> missingPhotoIds = mPhotoStore.cleanup(usedPhotoFileIds);
 
         // If any of the keys we're using no longer exist, clean them up.
-        if (!missingKeys.isEmpty()) {
+        if (!missingPhotoIds.isEmpty()) {
             ArrayList<ContentProviderOperation> ops = Lists.newArrayList();
-            for (long key : missingKeys) {
-                for (long id : keysToIdList.get(key)) {
+            for (long missingPhotoId : missingPhotoIds) {
+                if (photoFileIdToDataId.containsKey(missingPhotoId)) {
+                    long dataId = photoFileIdToDataId.get(missingPhotoId);
                     ContentValues updateValues = new ContentValues();
                     updateValues.putNull(Photo.PHOTO_FILE_ID);
                     ops.add(ContentProviderOperation.newUpdate(
-                            ContentUris.withAppendedId(Data.CONTENT_URI, id))
+                            ContentUris.withAppendedId(Data.CONTENT_URI, dataId))
                             .withValues(updateValues).build());
+                }
+                if (photoFileIdToStreamItemPhotoId.containsKey(missingPhotoId)) {
+                    // For missing photos that were in stream item photos, just delete the stream
+                    // item photo.
+                    long streamItemPhotoId = photoFileIdToStreamItemPhotoId.get(missingPhotoId);
+                    long streamItemId = streamItemPhotoIdToStreamItemId.get(streamItemPhotoId);
+                    ops.add(ContentProviderOperation.newDelete(
+                            StreamItems.CONTENT_URI.buildUpon()
+                                    .appendPath(String.valueOf(streamItemId))
+                                    .appendPath(StreamItems.StreamItemPhotos.CONTENT_DIRECTORY)
+                                    .appendPath(String.valueOf(streamItemPhotoId))
+                                    .build()).build());
                 }
             }
             try {
@@ -2330,8 +2364,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Account account = resolveAccount(uri, mValues);
         enforceModifyingAccount(account, rawContactId);
 
+        // Don't attempt to insert accounts params - they don't exist in the stream items table.
+        mValues.remove(RawContacts.ACCOUNT_NAME);
+        mValues.remove(RawContacts.ACCOUNT_TYPE);
+
         // Insert the new stream item.
-        id = mDb.insert(Tables.STREAM_ITEMS, null, values);
+        id = mDb.insert(Tables.STREAM_ITEMS, null, mValues);
+        if (id == -1) {
+            // Insertion failed.
+            return 0;
+        }
 
         // Check to see if we're over the limit for stream items under this raw contact.
         // It's possible that the inserted stream item is older than the the existing
@@ -2347,7 +2389,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      *
      * @param uri the insertion URI
      * @param values the values for the new row
-     * @return the stream item photo _ID of the newly created row
+     * @return the stream item photo _ID of the newly created row, or 0 if there was an issue
+     *     with processing the photo or creating the row
      */
     private long insertStreamItemPhoto(Uri uri, ContentValues values) {
         long id = 0;
@@ -2366,19 +2409,57 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Account account = resolveAccount(uri, mValues);
             enforceModifyingAccount(account, rawContactId);
 
-            // Make certain that the photo doesn't exceed our maximum byte size.
-            byte[] photoBytes = values.getAsByteArray(StreamItemPhotos.PICTURE);
-            Log.i(TAG, "Inserting " + photoBytes.length + "-byte photo (max allowed " +
-                    mMaxStreamItemPhotoSizeBytes + " bytes)");
-            if (photoBytes.length > mMaxStreamItemPhotoSizeBytes) {
-                throw new IllegalArgumentException("Stream item photos cannot be more than " +
-                    mMaxStreamItemPhotoSizeBytes + " bytes (received picture with " +
-                        photoBytes.length + " bytes)");
-            }
+            // Don't attempt to insert accounts params - they don't exist in the stream item
+            // photos table.
+            mValues.remove(RawContacts.ACCOUNT_NAME);
+            mValues.remove(RawContacts.ACCOUNT_TYPE);
 
-            id = mDb.insert(Tables.STREAM_ITEM_PHOTOS, null, values);
+            // Process the photo and store it.
+            if (processStreamItemPhoto(mValues, false)) {
+                // Insert the stream item photo.
+                id = mDb.insert(Tables.STREAM_ITEM_PHOTOS, null, mValues);
+            }
         }
         return id;
+    }
+
+    /**
+     * Processes the photo contained in the {@link ContactsContract.StreamItemPhotos#PHOTO}
+     * field of the given values, attempting to store it in the photo store.  If successful,
+     * the resulting photo file ID will be added to the values for insert/update in the table.
+     * <p>
+     * If updating, it is valid for the picture to be empty or unspecified (the function will
+     * still return true).  If inserting, a valid picture must be specified.
+     * @param values The content values provided by the caller.
+     * @param forUpdate Whether this photo is being processed for update (vs. insert).
+     * @return Whether the insert or update should proceed.
+     */
+    private boolean processStreamItemPhoto(ContentValues values, boolean forUpdate) {
+        if (!values.containsKey(StreamItemPhotos.PHOTO)) {
+            return forUpdate;
+        }
+        byte[] photoBytes = values.getAsByteArray(StreamItemPhotos.PHOTO);
+        if (photoBytes == null) {
+            return forUpdate;
+        }
+
+        // Process the photo and store it.
+        try {
+            long photoFileId = mPhotoStore.insert(new PhotoProcessor(photoBytes,
+                    mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim), true);
+            if (photoFileId != 0) {
+                values.put(StreamItemPhotos.PHOTO_FILE_ID, photoFileId);
+                values.remove(StreamItemPhotos.PHOTO);
+                return true;
+            } else {
+                // Couldn't store the photo, return 0.
+                Log.e(TAG, "Could not process stream item photo for insert");
+                return false;
+            }
+        } catch (IOException ioe) {
+            Log.e(TAG, "Could not process stream item photo for insert", ioe);
+            return false;
+        }
     }
 
     /**
@@ -2703,6 +2784,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         long rawContactId = -1;
         long contactId = -1;
         Long dataId = values.getAsLong(StatusUpdates.DATA_ID);
+        String accountType = null;
+        String accountName = null;
         mSb.setLength(0);
         mSelectionArgs.clear();
         if (dataId != null) {
@@ -2771,6 +2854,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             if (cursor.moveToFirst()) {
                 dataId = cursor.getLong(DataContactsQuery.DATA_ID);
                 rawContactId = cursor.getLong(DataContactsQuery.RAW_CONTACT_ID);
+                accountType = cursor.getString(DataContactsQuery.ACCOUNT_TYPE);
+                accountName = cursor.getString(DataContactsQuery.ACCOUNT_NAME);
                 contactId = cursor.getLong(DataContactsQuery.CONTACT_ID);
             } else {
                 // No contact found, return a null URI
@@ -2825,13 +2910,59 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             if (TextUtils.isEmpty(status)) {
                 mDbHelper.deleteStatusUpdate(dataId);
-            } else if (values.containsKey(StatusUpdates.STATUS_TIMESTAMP)) {
-                long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
-                mDbHelper.replaceStatusUpdate(dataId, timestamp, status, resPackage, iconResource,
-                        labelResource);
             } else {
-                mDbHelper.insertStatusUpdate(dataId, status, resPackage, iconResource,
-                        labelResource);
+                Long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
+                if (timestamp != null) {
+                    mDbHelper.replaceStatusUpdate(dataId, timestamp, status, resPackage,
+                            iconResource, labelResource);
+                } else {
+                    mDbHelper.insertStatusUpdate(dataId, status, resPackage, iconResource,
+                            labelResource);
+                }
+
+                // For forward compatibility with the new stream item API, insert this status update
+                // there as well.  If we already have a stream item from this source, update that
+                // one instead of inserting a new one (since the semantics of the old status update
+                // API is to only have a single record).
+                if (rawContactId != -1 && !TextUtils.isEmpty(status)) {
+                    ContentValues streamItemValues = new ContentValues();
+                    streamItemValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+                    streamItemValues.put(StreamItems.TEXT, status);
+                    streamItemValues.put(StreamItems.COMMENTS, "");
+                    streamItemValues.put(StreamItems.RES_PACKAGE, resPackage);
+                    streamItemValues.put(StreamItems.RES_ICON, iconResource);
+                    streamItemValues.put(StreamItems.RES_LABEL, labelResource);
+                    streamItemValues.put(StreamItems.TIMESTAMP,
+                            timestamp == null ? System.currentTimeMillis() : timestamp);
+
+                    // Note: The following is basically a workaround for the fact that status
+                    // updates didn't do any sort of account enforcement, while social stream item
+                    // updates do.  We can't expect callers of the old API to start passing account
+                    // information along, so we just populate the account params appropriately for
+                    // the raw contact.
+                    if (accountName != null && accountType != null) {
+                        streamItemValues.put(RawContacts.ACCOUNT_NAME, accountName);
+                        streamItemValues.put(RawContacts.ACCOUNT_TYPE, accountType);
+                    }
+
+                    // Check for an existing stream item from this source, and insert or update.
+                    Uri streamUri = StreamItems.CONTENT_URI;
+                    Cursor c = query(streamUri, new String[]{StreamItems._ID},
+                            StreamItems.RAW_CONTACT_ID + "=?",
+                            new String[]{String.valueOf(rawContactId)}, null);
+                    try {
+                        if (c.getCount() > 0) {
+                            c.moveToFirst();
+                            update(ContentUris.withAppendedId(streamUri, c.getLong(0)),
+                                    streamItemValues, null, null);
+                        } else {
+                            insert(streamUri, streamItemValues);
+                        }
+                    } finally {
+                        c.close();
+                    }
+
+                }
             }
         }
 
@@ -3398,6 +3529,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Account account = resolveAccount(uri, values);
         enforceModifyingAccountForStreamItems(account, selection, selectionArgs);
 
+        // Don't attempt to update accounts params - they don't exist in the stream items table.
+        values.remove(RawContacts.ACCOUNT_NAME);
+        values.remove(RawContacts.ACCOUNT_TYPE);
+
         // If there's been no exception, the update should be fine.
         return mDb.update(Tables.STREAM_ITEMS, values, selection, selectionArgs);
     }
@@ -3411,8 +3546,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Account account = resolveAccount(uri, values);
         enforceModifyingAccountForStreamItemPhotos(account, selection, selectionArgs);
 
-        // If there's been no exception, the update should be fine.
-        return mDb.update(Tables.STREAM_ITEM_PHOTOS, values, selection, selectionArgs);
+        // Don't attempt to update accounts params - they don't exist in the stream item
+        // photos table.
+        values.remove(RawContacts.ACCOUNT_NAME);
+        values.remove(RawContacts.ACCOUNT_TYPE);
+
+        // Process the photo (since we're updating, it's valid for the photo to not be present).
+        if (processStreamItemPhoto(values, true)) {
+            // If there's been no exception, the update should be fine.
+            return mDb.update(Tables.STREAM_ITEM_PHOTOS, values, selection, selectionArgs);
+        }
+        return 0;
     }
 
     /**
@@ -4507,13 +4651,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case STREAM_ITEMS_LIMIT: {
-                MatrixCursor cursor = new MatrixCursor(
-                        new String[]{StreamItems.MAX_ITEMS, StreamItems.PHOTO_MAX_BYTES}, 1);
-                cursor.addRow(
-                        new Object[]{
-                                MAX_STREAM_ITEMS_PER_RAW_CONTACT,
-                                mMaxStreamItemPhotoSizeBytes
-                        });
+                MatrixCursor cursor = new MatrixCursor(new String[]{StreamItems.MAX_ITEMS}, 1);
+                cursor.addRow(new Object[]{MAX_STREAM_ITEMS_PER_RAW_CONTACT});
                 return cursor;
             }
 

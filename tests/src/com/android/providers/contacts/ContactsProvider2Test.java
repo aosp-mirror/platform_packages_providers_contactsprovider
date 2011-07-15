@@ -2987,6 +2987,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues photo1Values = buildGenericStreamItemPhotoValues(1);
         insertStreamItemPhoto(streamItemId, photo1Values, null);
+        photo1Values.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
         ContentValues photo2Values = buildGenericStreamItemPhotoValues(2);
         insertStreamItemPhoto(streamItemId, photo2Values, null);
 
@@ -3011,11 +3012,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Add a photo to the first stream item.
         ContentValues photo1Values = buildGenericStreamItemPhotoValues(1);
         insertStreamItemPhoto(firstStreamItemId, photo1Values, null);
+        photo1Values.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
 
         // Add a photo to the second stream item.
         ContentValues photo2Values = buildGenericStreamItemPhotoValues(1);
-        photo2Values.put(StreamItemPhotos.PICTURE, "Some other picture".getBytes());
+        photo2Values.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(
+                R.drawable.nebula, PhotoSize.ORIGINAL));
         insertStreamItemPhoto(secondStreamItemId, photo2Values, null);
+        photo2Values.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
 
         // Select only the photos from the second stream item.
         assertStoredValues(Uri.withAppendedPath(
@@ -3040,12 +3044,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues photo1Values = buildGenericStreamItemPhotoValues(1);
         resultUri = insertStreamItemPhoto(firstStreamItemId, photo1Values, null);
         long firstPhotoId = ContentUris.parseId(resultUri);
+        photo1Values.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
 
         // Add a photo to the second stream item.
         ContentValues photo2Values = buildGenericStreamItemPhotoValues(1);
-        photo2Values.put(StreamItemPhotos.PICTURE, "Some other picture".getBytes());
+        photo2Values.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(
+                R.drawable.galaxy, PhotoSize.ORIGINAL));
         resultUri = insertStreamItemPhoto(secondStreamItemId, photo2Values, null);
         long secondPhotoId = ContentUris.parseId(resultUri);
+        photo2Values.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
 
         // Select the first photo.
         assertStoredValues(ContentUris.withAppendedId(
@@ -3165,25 +3172,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item photo insertion test cases.
 
-    public void testInsertOversizedPhoto() {
-        long rawContactId = createRawContact();
-        ContentValues values = buildGenericStreamItemValues();
-        values.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-        Uri resultUri = insertStreamItem(rawContactId, values, null);
-        long streamItemId = ContentUris.parseId(resultUri);
-
-        // Add a huge photo to the stream item.
-        ContentValues photoValues = buildGenericStreamItemPhotoValues(1);
-        byte[] photoBytes = new byte[(70 * 1024) + 1];
-        photoValues.put(StreamItemPhotos.PICTURE, photoBytes);
-        try {
-            insertStreamItemPhoto(streamItemId, photoValues, null);
-            fail("Should have failed due to image size");
-        } catch (IllegalArgumentException expected) {
-            // Huzzah!
-        }
-    }
-
     public void testInsertStreamItemsAndPhotosInBatch() throws Exception {
         long rawContactId = createRawContact();
         ContentValues streamItemValues = buildGenericStreamItemValues();
@@ -3219,10 +3207,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         c = mResolver.query(Uri.withAppendedPath(
                 ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
-                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY), new String[]{StreamItemPhotos._ID},
+                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                new String[]{StreamItemPhotos._ID, StreamItemPhotos.PHOTO_URI},
                 null, null, null);
         try {
             assertEquals(5, c.getCount());
+            byte[] expectedPhotoBytes = loadPhotoFromResource(
+                    R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO);
+            while (c.moveToNext()) {
+                String photoUri = c.getString(1);
+                assertInputStreamContent(expectedPhotoBytes,
+                        mResolver.openInputStream(Uri.parse(photoUri)));
+            }
         } finally {
             c.close();
         }
@@ -3274,7 +3270,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item photo update test cases.
 
-    public void testUpdateStreamItemPhotoById() {
+    public void testUpdateStreamItemPhotoById() throws IOException {
         long rawContactId = createRawContact();
         ContentValues values = buildGenericStreamItemValues();
         Uri resultUri = insertStreamItem(rawContactId, values, null);
@@ -3283,7 +3279,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         resultUri = insertStreamItemPhoto(streamItemId, photoValues, null);
         long streamItemPhotoId = ContentUris.parseId(resultUri);
 
-        photoValues.put(StreamItemPhotos.PICTURE, "ABCDEFG".getBytes());
+        photoValues.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(
+                R.drawable.nebula, PhotoSize.ORIGINAL));
         Uri photoUri =
                 ContentUris.withAppendedId(
                         Uri.withAppendedPath(
@@ -3291,10 +3288,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                                 StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
                         streamItemPhotoId);
         mResolver.update(photoUri, photoValues, null, null);
+        photoValues.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
         assertStoredValues(photoUri, photoValues);
+
+        // Check that the photo stored is the expected one.
+        String displayPhotoUri = getStoredValue(photoUri, StreamItemPhotos.PHOTO_URI);
+        assertInputStreamContent(loadPhotoFromResource(R.drawable.nebula, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(Uri.parse(displayPhotoUri)));
     }
 
-    public void testUpdateStreamItemPhotoWithContentValues() {
+    public void testUpdateStreamItemPhotoWithContentValues() throws IOException {
         long rawContactId = createRawContact();
         ContentValues values = buildGenericStreamItemValues();
         Uri resultUri = insertStreamItem(rawContactId, values, null);
@@ -3304,13 +3307,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long streamItemPhotoId = ContentUris.parseId(resultUri);
 
         photoValues.put(StreamItemPhotos._ID, streamItemPhotoId);
-        photoValues.put(StreamItemPhotos.PICTURE, "ABCDEFG".getBytes());
+        photoValues.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(
+                R.drawable.nebula, PhotoSize.ORIGINAL));
         Uri photoUri =
                 Uri.withAppendedPath(
                         ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
                         StreamItems.StreamItemPhotos.CONTENT_DIRECTORY);
         mResolver.update(photoUri, photoValues, null, null);
+        photoValues.remove(StreamItemPhotos.PHOTO);  // Removed during processing.
         assertStoredValues(photoUri, photoValues);
+
+        // Check that the photo stored is the expected one.
+        String displayPhotoUri = getStoredValue(photoUri, StreamItemPhotos.PHOTO_URI);
+        assertInputStreamContent(loadPhotoFromResource(R.drawable.nebula, PhotoSize.DISPLAY_PHOTO),
+                mResolver.openInputStream(Uri.parse(displayPhotoUri)));
     }
 
     public void testUpdateStreamItemPhotoFromOtherAccount() {
@@ -3323,7 +3333,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long streamItemPhotoId = ContentUris.parseId(resultUri);
 
         photoValues.put(StreamItemPhotos._ID, streamItemPhotoId);
-        photoValues.put(StreamItemPhotos.PICTURE, "ABCDEFG".getBytes());
+        photoValues.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(
+                R.drawable.galaxy, PhotoSize.ORIGINAL));
         Uri photoUri =
                 maybeAddAccountQueryParameters(
                         Uri.withAppendedPath(
@@ -3427,6 +3438,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues firstPhotoValues = buildGenericStreamItemPhotoValues(0);
         ContentValues secondPhotoValues = buildGenericStreamItemPhotoValues(1);
         insertStreamItemPhoto(streamItemId, firstPhotoValues, null);
+        firstPhotoValues.remove(StreamItemPhotos.PHOTO);  // Removed while processing.
         insertStreamItemPhoto(streamItemId, secondPhotoValues, null);
         Uri photoUri = Uri.withAppendedPath(
                 ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
@@ -3456,13 +3468,56 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryStreamItemLimit() {
         ContentValues values = new ContentValues();
         values.put(StreamItems.MAX_ITEMS, 5);
-        values.put(StreamItems.PHOTO_MAX_BYTES, 70 * 1024);
         assertStoredValues(StreamItems.CONTENT_LIMIT_URI, values);
+    }
+
+    // Tests for inserting or updating stream items as a side-effect of making status updates
+    // (forward-compatibility of status updates into the new social stream API).
+
+    public void testStreamItemInsertedOnStatusUpdate() {
+
+        // This method of creating a raw contact automatically inserts a status update with
+        // the status message "hacking".
+        ContentValues values = new ContentValues();
+        long rawContactId = createRawContact(values, "18004664411",
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO |
+                        StatusUpdates.CAPABILITY_HAS_VOICE);
+
+        ContentValues expectedValues = new ContentValues();
+        expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+        expectedValues.put(StreamItems.TEXT, "hacking");
+        assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(rawContactId))
+                .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
+                expectedValues);
+    }
+
+    public void testStreamItemUpdatedOnSecondStatusUpdate() {
+
+        // This method of creating a raw contact automatically inserts a status update with
+        // the status message "hacking".
+        ContentValues values = new ContentValues();
+        int chatMode = StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO |
+                StatusUpdates.CAPABILITY_HAS_VOICE;
+        long rawContactId = createRawContact(values, "18004664411",
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0, chatMode);
+
+        // Insert a new status update for the raw contact.
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "goog411@acme.com",
+                StatusUpdates.INVISIBLE, "finished hacking", chatMode);
+
+        ContentValues expectedValues = new ContentValues();
+        expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+        expectedValues.put(StreamItems.TEXT, "finished hacking");
+        assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(rawContactId))
+                .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
+                expectedValues);
     }
 
     private ContentValues buildGenericStreamItemValues() {
         ContentValues values = new ContentValues();
-        values.put(StreamItems.RES_PACKAGE, "com.foo.bar");
         values.put(StreamItems.TEXT, "Hello world");
         values.put(StreamItems.TIMESTAMP, System.currentTimeMillis());
         values.put(StreamItems.COMMENTS, "Reshared by 123 others");
@@ -3472,7 +3527,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private ContentValues buildGenericStreamItemPhotoValues(int sortIndex) {
         ContentValues values = new ContentValues();
         values.put(StreamItemPhotos.SORT_INDEX, sortIndex);
-        values.put(StreamItemPhotos.PICTURE, "DEADBEEF".getBytes());
+        values.put(StreamItemPhotos.PHOTO,
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.ORIGINAL));
         return values;
     }
 

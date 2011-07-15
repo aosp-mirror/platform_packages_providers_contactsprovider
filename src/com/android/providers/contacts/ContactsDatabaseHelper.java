@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 608;
+    static final int DATABASE_VERSION = 609;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -508,7 +508,8 @@ import java.util.Locale;
         String CONCRETE_STREAM_ITEM_ID = Tables.STREAM_ITEM_PHOTOS + "."
                 + StreamItemPhotos.STREAM_ITEM_ID;
         String CONCRETE_SORT_INDEX = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SORT_INDEX;
-        String CONCRETE_PICTURE = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.PICTURE;
+        String CONCRETE_PHOTO_FILE_ID = Tables.STREAM_ITEM_PHOTOS + "."
+                + StreamItemPhotos.PHOTO_FILE_ID;
         String CONCRETE_ACTION = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION;
         String CONCRETE_ACTION_URI = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION_URI;
     }
@@ -881,7 +882,7 @@ import java.util.Locale;
         db.execSQL("CREATE TABLE " + Tables.STREAM_ITEMS + " (" +
                 StreamItems._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 StreamItems.RAW_CONTACT_ID + " INTEGER NOT NULL, " +
-                StreamItems.RES_PACKAGE + " INTEGER NOT NULL, " +
+                StreamItems.RES_PACKAGE + " TEXT, " +
                 StreamItems.RES_ICON + " INTEGER, " +
                 StreamItems.RES_LABEL + " INTEGER, " +
                 StreamItems.TEXT + " TEXT NOT NULL, " +
@@ -896,7 +897,7 @@ import java.util.Locale;
                 StreamItemPhotos._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 StreamItemPhotos.STREAM_ITEM_ID + " INTEGER NOT NULL, " +
                 StreamItemPhotos.SORT_INDEX + " INTEGER, " +
-                StreamItemPhotos.PICTURE + " BLOB, " +
+                StreamItemPhotos.PHOTO_FILE_ID + " INTEGER NOT NULL, " +
                 StreamItemPhotos.ACTION + " TEXT, " +
                 StreamItemPhotos.ACTION_URI + " TEXT, " +
                 "FOREIGN KEY(" + StreamItemPhotos.STREAM_ITEM_ID + ") REFERENCES " +
@@ -2042,6 +2043,11 @@ import java.util.Locale;
             oldVersion = 608;
         }
 
+        if (oldVersion < 609) {
+            upgradeToVersion609(db);
+            oldVersion = 609;
+        }
+
 
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
@@ -3130,27 +3136,9 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion605(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE stream_items(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "raw_contact_id INTEGER NOT NULL, " +
-                "package_id INTEGER NOT NULL, " +
-                "icon INTEGER, " +
-                "label INTEGER, " +
-                "text TEXT NOT NULL, " +
-                "timestamp INTEGER NOT NULL, " +
-                "comments TEXT NOT NULL, " +
-                "action TEXT, " +
-                "action_uri TEXT, " +
-                "FOREIGN KEY(raw_contact_id) REFERENCES raw_contacts(_id));");
-
-        db.execSQL("CREATE TABLE stream_item_photos(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "stream_item_id INTEGER NOT NULL, " +
-                "sort_index INTEGER, " +
-                "picture BLOB, " +
-                "action TEXT, " +
-                "action_uri TEXT, " +
-                "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
+        // This version used to create the stream item and stream item photos tables, but a newer
+        // version of those tables is created in version 609 below.  So omitting the creation in
+        // this upgrade step to avoid a create->drop->create.
     }
 
     private void upgradeToVersion606(SQLiteDatabase db) {
@@ -3179,6 +3167,39 @@ import java.util.Locale;
                 "height INTEGER NOT NULL, " +
                 "width INTEGER NOT NULL, " +
                 "filesize INTEGER NOT NULL);");
+    }
+
+    private void upgradeToVersion609(SQLiteDatabase db) {
+        // The stream item and stream item photos APIs were not in-use by anyone in the time
+        // between their initial creation (in v605) and this update.  So we're just dropping
+        // and re-creating them to get appropriate columns.  The delta is as follows:
+        // - In stream_items, package_id was replaced by res_package.
+        // - In stream_item_photos, picture was replaced by photo_file_id.
+
+        db.execSQL("DROP TABLE IF EXISTS stream_items");
+        db.execSQL("DROP TABLE IF EXISTS stream_item_photos");
+
+        db.execSQL("CREATE TABLE stream_items(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "raw_contact_id INTEGER NOT NULL, " +
+                "res_package TEXT, " +
+                "icon INTEGER, " +
+                "label INTEGER, " +
+                "text TEXT NOT NULL, " +
+                "timestamp INTEGER NOT NULL, " +
+                "comments TEXT NOT NULL, " +
+                "action TEXT, " +
+                "action_uri TEXT, " +
+                "FOREIGN KEY(raw_contact_id) REFERENCES raw_contacts(_id));");
+
+        db.execSQL("CREATE TABLE stream_item_photos(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "stream_item_id INTEGER NOT NULL, " +
+                "sort_index INTEGER, " +
+                "photo_file_id INTEGER NOT NULL, " +
+                "action TEXT, " +
+                "action_uri TEXT, " +
+                "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
     }
 
     public String extractHandleFromEmailAddress(String email) {

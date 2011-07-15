@@ -161,13 +161,27 @@ public class PhotoStore {
      *     is thumbnail-sized or smaller.
      */
     public synchronized long insert(PhotoProcessor photoProcessor) {
+        return insert(photoProcessor, false);
+    }
+
+    /**
+     * Inserts the photo in the given photo processor into the photo store.  If the display photo
+     * is already thumbnail-sized or smaller, this will do nothing (and will return 0) unless
+     * allowSmallImageStorage is specified.
+     * @param photoProcessor A photo processor containing the photo data to insert.
+     * @param allowSmallImageStorage Whether thumbnail-sized or smaller photos should still be
+     *     stored in the file store.
+     * @return The photo file ID associated with the file, or 0 if the file could not be created or
+     *     is thumbnail-sized or smaller and allowSmallImageStorage is false.
+     */
+    public synchronized long insert(PhotoProcessor photoProcessor, boolean allowSmallImageStorage) {
         Bitmap displayPhoto = photoProcessor.getDisplayPhoto();
         int width = displayPhoto.getWidth();
         int height = displayPhoto.getHeight();
         int thumbnailDim = photoProcessor.getMaxThumbnailPhotoDim();
-        if (width > thumbnailDim || height > thumbnailDim) {
-            // The display photo is larger than a thumbnail, so write the photo to a temp file,
-            // create the DB record for tracking it, and rename the temp file to match.
+        if (allowSmallImageStorage || width > thumbnailDim || height > thumbnailDim) {
+            // Write the photo to a temp file, create the DB record for tracking it, and rename the
+            // temp file to match.
             File file = null;
             try {
                 // Write the display photo to a temp file.
