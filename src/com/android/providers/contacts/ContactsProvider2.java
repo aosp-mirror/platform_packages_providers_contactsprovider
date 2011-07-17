@@ -49,6 +49,7 @@ import com.android.vcard.VCardConfig;
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
+import com.google.common.annotations.VisibleForTesting;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -460,6 +461,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     // Recent contacts - those contacted within the last 30 days (in seconds)
     private static final long EMAIL_FILTER_RECENT = 30 * 24 * 60 * 60;
 
+    private static final String TIME_SINCE_LAST_USED =
+            "(strftime('%s', 'now') - " + DataUsageStatColumns.LAST_TIME_USED + "/1000)";
+
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
      * second in_visible_group, then the rest.
@@ -472,9 +476,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final String EMAIL_FILTER_SORT_ORDER =
         Contacts.STARRED + " DESC, "
         + Contacts.IN_VISIBLE_GROUP + " DESC, "
-        + "(CASE WHEN " + DataUsageStatColumns.LAST_TIME_USED + " < " + EMAIL_FILTER_CURRENT
+        + "(CASE WHEN " + TIME_SINCE_LAST_USED + " < " + EMAIL_FILTER_CURRENT
         + " THEN 0 "
-                + " WHEN " + DataUsageStatColumns.LAST_TIME_USED + " < " + EMAIL_FILTER_RECENT
+                + " WHEN " + TIME_SINCE_LAST_USED + " < " + EMAIL_FILTER_RECENT
         + " THEN 1 "
         + " ELSE 2 END), "
         + DataUsageStatColumns.TIMES_USED + " DESC, "
@@ -6863,8 +6867,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      *
      * @return the number of rows affected.
      */
-    private int updateDataUsageStat(
-            ArrayList<Long> dataIds, String type, long currentTimeMillis) {
+    @VisibleForTesting
+    /* package */ int updateDataUsageStat(
+            List<Long> dataIds, String type, long currentTimeMillis) {
         final int typeInt = sDataUsageTypeMap.get(type);
         final String where = DataUsageStatColumns.DATA_ID + " =? AND "
                 + DataUsageStatColumns.USAGE_TYPE_INT + " =?";
