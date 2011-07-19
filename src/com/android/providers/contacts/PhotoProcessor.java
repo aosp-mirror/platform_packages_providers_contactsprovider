@@ -30,6 +30,7 @@ import java.io.IOException;
 
     private final int mMaxDisplayPhotoDim;
     private final int mMaxThumbnailPhotoDim;
+    private final boolean mForceCropToSquare;
     private final Bitmap mOriginal;
     private Bitmap mDisplayPhoto;
     private Bitmap mThumbnailPhoto;
@@ -43,10 +44,7 @@ import java.io.IOException;
      */
     public PhotoProcessor(Bitmap original, int maxDisplayPhotoDim, int maxThumbnailPhotoDim)
             throws IOException {
-        mOriginal = original;
-        mMaxDisplayPhotoDim = maxDisplayPhotoDim;
-        mMaxThumbnailPhotoDim = maxThumbnailPhotoDim;
-        process();
+        this(original, maxDisplayPhotoDim, maxThumbnailPhotoDim, false);
     }
 
     /**
@@ -59,7 +57,44 @@ import java.io.IOException;
     public PhotoProcessor(byte[] originalBytes, int maxDisplayPhotoDim, int maxThumbnailPhotoDim)
             throws IOException {
         this(BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.length),
-                maxDisplayPhotoDim, maxThumbnailPhotoDim);
+                maxDisplayPhotoDim, maxThumbnailPhotoDim, false);
+    }
+
+    /**
+     * Initializes a photo processor for the given bitmap.
+     * @param original The bitmap to process.
+     * @param maxDisplayPhotoDim The maximum height and width for the display photo.
+     * @param maxThumbnailPhotoDim The maximum height and width for the thumbnail photo.
+     * @param forceCropToSquare Whether to force the processed images to be square.  If the source
+     *     photo is not square, this will crop to the square at the center of the image's rectangle.
+     *     If this is not set to true, the image will simply be downscaled to fit in the given
+     *     dimensions, retaining its original aspect ratio.
+     * @throws IOException If bitmap decoding or scaling fails.
+     */
+    public PhotoProcessor(Bitmap original, int maxDisplayPhotoDim, int maxThumbnailPhotoDim,
+            boolean forceCropToSquare) throws IOException {
+        mOriginal = original;
+        mMaxDisplayPhotoDim = maxDisplayPhotoDim;
+        mMaxThumbnailPhotoDim = maxThumbnailPhotoDim;
+        mForceCropToSquare = forceCropToSquare;
+        process();
+    }
+
+    /**
+     * Initializes a photo processor for the given bitmap.
+     * @param originalBytes A byte array to decode into a bitmap to process.
+     * @param maxDisplayPhotoDim The maximum height and width for the display photo.
+     * @param maxThumbnailPhotoDim The maximum height and width for the thumbnail photo.
+     * @param forceCropToSquare Whether to force the processed images to be square.  If the source
+     *     photo is not square, this will crop to the square at the center of the image's rectangle.
+     *     If this is not set to true, the image will simply be downscaled to fit in the given
+     *     dimensions, retaining its original aspect ratio.
+     * @throws IOException If bitmap decoding or scaling fails.
+     */
+    public PhotoProcessor(byte[] originalBytes, int maxDisplayPhotoDim, int maxThumbnailPhotoDim,
+            boolean forceCropToSquare) throws IOException {
+        this(BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.length),
+                maxDisplayPhotoDim, maxThumbnailPhotoDim, forceCropToSquare);
     }
 
     /**
@@ -70,29 +105,43 @@ import java.io.IOException;
         if (mOriginal == null) {
             throw new IOException("Invalid image file");
         }
-        mDisplayPhoto = scale(mMaxDisplayPhotoDim);
-        mThumbnailPhoto = scale(mMaxThumbnailPhotoDim);
+        mDisplayPhoto = getScaledBitmap(mMaxDisplayPhotoDim);
+        mThumbnailPhoto = getScaledBitmap(mMaxThumbnailPhotoDim);
     }
 
     /**
      * Scales down the original bitmap to fit within the given maximum width and height.
      * If the bitmap already fits in those dimensions, the original bitmap will be
-     * returned unmodified.
+     * returned unmodified unless the photo processor is set up to crop it to a square.
      * @param maxDim Maximum width and height (in pixels) for the image.
      * @return A bitmap that fits the maximum dimensions.
      */
-    private Bitmap scale(int maxDim) {
-        Bitmap b = mOriginal;
+    @SuppressWarnings({"SuspiciousNameCombination"})
+    private Bitmap getScaledBitmap(int maxDim) {
+        Bitmap scaledBitmap = mOriginal;
         int width = mOriginal.getWidth();
         int height = mOriginal.getHeight();
+        int cropLeft = 0;
+        int cropTop = 0;
+        if (mForceCropToSquare && width != height) {
+            // Crop the image to the square at its center.
+            if (height > width) {
+                cropTop = (height - width) / 2;
+                height = width;
+            } else {
+                cropLeft = (width - height) / 2;
+                width = height;
+            }
+        }
         float scaleFactor = ((float) maxDim) / Math.max(width, height);
-        if (scaleFactor < 1.0) {
-            // Need to scale down the photo.
+        if (scaleFactor < 1.0 || cropLeft != 0 || cropTop != 0) {
+            // Need to scale or crop the photo.
             Matrix matrix = new Matrix();
             matrix.setScale(scaleFactor, scaleFactor);
-            b = Bitmap.createBitmap(mOriginal, 0, 0, width, height, matrix, false);
+            scaledBitmap = Bitmap.createBitmap(
+                    mOriginal, cropLeft, cropTop, width, height, matrix, false);
         }
-        return b;
+        return scaledBitmap;
     }
 
     /**

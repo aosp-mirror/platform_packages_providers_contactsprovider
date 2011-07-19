@@ -34,6 +34,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
@@ -121,6 +122,7 @@ import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
+import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
@@ -905,6 +907,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     "'" + DisplayPhoto.CONTENT_URI + "'||'/'||" + StreamItemPhotos.PHOTO_FILE_ID)
             .add(StreamItemPhotos.ACTION, StreamItemPhotosColumns.CONCRETE_ACTION)
             .add(StreamItemPhotos.ACTION_URI, StreamItemPhotosColumns.CONCRETE_ACTION_URI)
+            .add(PhotoFiles.HEIGHT)
+            .add(PhotoFiles.WIDTH)
+            .add(PhotoFiles.FILESIZE)
             .build();
 
     /** Contains Live Folders columns */
@@ -2446,7 +2451,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Process the photo and store it.
         try {
             long photoFileId = mPhotoStore.insert(new PhotoProcessor(photoBytes,
-                    mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim), true);
+                    mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim, true), true);
             if (photoFileId != 0) {
                 values.put(StreamItemPhotos.PHOTO_FILE_ID, photoFileId);
                 values.remove(StreamItemPhotos.PHOTO);
@@ -5906,23 +5911,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void setTablesAndProjectionMapForStreamItems(SQLiteQueryBuilder qb) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(Tables.STREAM_ITEMS).append(" JOIN ").append(Tables.RAW_CONTACTS)
-                .append(" ON ").append(StreamItemsColumns.CONCRETE_RAW_CONTACT_ID).append("=")
-                .append(RawContactsColumns.CONCRETE_ID)
-                .append(" JOIN ").append(Tables.CONTACTS)
-                .append(" ON ").append(RawContactsColumns.CONCRETE_CONTACT_ID).append("=")
-                .append(ContactsColumns.CONCRETE_ID);
-        qb.setTables(sb.toString());
+        qb.setTables(Tables.STREAM_ITEMS
+                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
+                + StreamItemsColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                + ") JOIN " + Tables.CONTACTS + " ON ("
+                + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")");
         qb.setProjectionMap(sStreamItemsProjectionMap);
     }
 
     private void setTablesAndProjectionMapForStreamItemPhotos(SQLiteQueryBuilder qb) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(Tables.STREAM_ITEM_PHOTOS).append(" JOIN ").append(Tables.STREAM_ITEMS)
-                .append(" ON ").append(StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID).append("=")
-                .append(StreamItemsColumns.CONCRETE_ID);
-        qb.setTables(sb.toString());
+        qb.setTables(Tables.PHOTO_FILES
+                + " JOIN " + Tables.STREAM_ITEM_PHOTOS + " ON ("
+                + StreamItemPhotosColumns.CONCRETE_PHOTO_FILE_ID + "="
+                + PhotoFilesColumns.CONCRETE_ID
+                + ") JOIN " + Tables.STREAM_ITEMS + " ON ("
+                + StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "="
+                + StreamItemsColumns.CONCRETE_ID + ")");
         qb.setProjectionMap(sStreamItemPhotosProjectionMap);
     }
 
