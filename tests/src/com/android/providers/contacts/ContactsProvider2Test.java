@@ -1202,10 +1202,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /** Tests {@link DataUsageFeedback} correctly promotes a data row instead of a raw contact. */
     public void testEmailFilterSortOrderWithFeedback() {
         long rawContactId1 = createRawContact();
-        insertEmail(rawContactId1, "address1@email.com");
+        String address1 = "address1@email.com";
+        insertEmail(rawContactId1, address1);
         long rawContactId2 = createRawContact();
-        insertEmail(rawContactId2, "address2@email.com");
-        long dataId = ContentUris.parseId(insertEmail(rawContactId2, "address3@email.com"));
+        String address2 = "address2@email.com";
+        insertEmail(rawContactId2, address2);
+        String address3 = "address3@email.com";
+        ContentUris.parseId(insertEmail(rawContactId2, address3));
 
         ContentValues v1 = new ContentValues();
         v1.put(Email.ADDRESS, "address1@email.com");
@@ -1232,13 +1235,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesOrderly(filterUri3, new ContentValues[] { v1, v2, v3 });
         assertStoredValuesOrderly(filterUri4, new ContentValues[] { v1, v2, v3 });
 
-        // Send feedback for address3 in the second account.
-        Uri feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
-                .appendPath(String.valueOf(dataId))
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
-                        DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
-                .build();
-        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+        sendFeedback(address3, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, v3);
 
         // account3@email.com should be the first. account2@email.com should also be promoted as
         // it has same contact id.
@@ -1454,8 +1451,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         createContact(values1, "Noah", "Tever", "18004664411",
                 email1, StatusUpdates.OFFLINE, timesContacted1, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
+        final String phoneNumber2 = "18004664412";
         ContentValues values2 = new ContentValues();
-        createContact(values2, "Sam", "Times", "18004664412",
+        createContact(values2, "Sam", "Times", phoneNumber2,
                 "b@acme.com", StatusUpdates.INVISIBLE, 3, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_CAMERA);
         ContentValues values3 = new ContentValues();
@@ -1473,20 +1471,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // usage feedback should be used for "frequently contacted" listing.
         assertStoredValues(Contacts.CONTENT_STREQUENT_URI, values4);
 
-        final long dataIdPhone3 = getStoredLongValue(Phone.CONTENT_URI,
-                Phone.NUMBER + "=?", new String[] { phoneNumber3 },
-                Data._ID);
-
         // Send feedback for the 3rd phone number, pretending we called that person via phone.
-        Uri feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
-                .appendPath(String.valueOf(dataIdPhone3))
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
-                        DataUsageFeedback.USAGE_TYPE_CALL)
-                .build();
-        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
-
-        // After the feedback, times contacted should be incremented
-        values3.put(RawContacts.TIMES_CONTACTED, timesContacted3 + 1);
+        sendFeedback(phoneNumber3, DataUsageFeedback.USAGE_TYPE_CALL, values3);
 
         // After the feedback, 3rd contact should be shown after starred one.
         assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
@@ -1497,31 +1483,26 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Email.ADDRESS + "=?", new String[] { email1},
                 Email._ID);
 
-        // Send feedback for the 1st email, pretending we sent the person an email twice.
-        // (we don't define the order for 1st and 3rd contacts with same times contacted)
-        feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
-                .appendPath(String.valueOf(dataIdEmail1))
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
-                        DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
-                .build();
-        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
         // Twice.
-        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
-
-        // After the feedback, times contacted should be incremented
-        values1.put(RawContacts.TIMES_CONTACTED, timesContacted1 + 2);
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
 
         // After the feedback, 1st and 3rd contacts should be shown after starred one.
         assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
-                    new ContentValues[] { values4, values1, values3 });
+                new ContentValues[] { values4, values1, values3 });
 
         // With phone-only parameter, the 1st contact shouldn't be returned, since it is only
         // about email, not phone-call.
         Uri phoneOnlyStrequentUri = Contacts.CONTENT_STREQUENT_URI.buildUpon()
                 .appendQueryParameter(ContactsContract.STREQUENT_PHONE_ONLY, "true")
                 .build();
-        assertStoredValuesOrderly(phoneOnlyStrequentUri,
-                new ContentValues[] { values4, values3 });
+        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values4, values3 });
+
+        // Send feedback for the 2rd phone number, pretending we send the person a SMS message.
+        sendFeedback(phoneNumber2, DataUsageFeedback.USAGE_TYPE_SHORT_TEXT, values1);
+
+        // SMS feedback shouldn't affect phone-only results.
+        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values4, values3 });
 
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_STREQUENT_FILTER_URI, "fay");
         assertStoredValues(filterUri, values4);
@@ -5671,6 +5652,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.SYNC2, "sync2");
         values.put(Data.SYNC3, "sync3");
         values.put(Data.SYNC4, "sync4");
+    }
+
+    /**
+     * @param data1 email address or phone number
+     * @param usageType One of {@link DataUsageFeedback#USAGE_TYPE}
+     * @param values ContentValues for this feedback. Useful for incrementing
+     * {Contacts#TIMES_CONTACTED} in the ContentValue. Can be null.
+     */
+    private void sendFeedback(String data1, String usageType, ContentValues values) {
+        final long dataId = getStoredLongValue(Data.CONTENT_URI,
+                Data.DATA1 + "=?", new String[] { data1 }, Data._ID);
+        final Uri feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
+                .appendPath(String.valueOf(dataId))
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE, usageType)
+                .build();
+        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+        if (values != null && values.containsKey(Contacts.TIMES_CONTACTED)) {
+            values.put(Contacts.TIMES_CONTACTED, values.getAsInteger(Contacts.TIMES_CONTACTED) + 1);
+        }
     }
 }
 

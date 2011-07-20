@@ -110,6 +110,7 @@ import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.ContactCounts;
@@ -662,6 +663,36 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final ProjectionMap sStrequentFrequentProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
             .add(TIMES_USED_SORT_COLUMN, "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED + ")")
+            .build();
+
+    /**
+     * Used for Strequent Uri with {@link ContactsContract#STREQUENT_PHONE_ONLY}, which allows
+     * users to obtain part of Data columns. Right now Starred part just returns NULL for
+     * those data columns (frequent part should return real ones in data table).
+     **/
+    private static final ProjectionMap sStrequentPhoneOnlyStarredProjectionMap
+            = ProjectionMap.builder()
+            .addAll(sContactsProjectionMap)
+            .add(TIMES_USED_SORT_COLUMN, String.valueOf(Long.MAX_VALUE))
+            .add(Phone.NUMBER, "NULL")
+            .add(Phone.TYPE, "NULL")
+            .add(Phone.LABEL, "NULL")
+            .build();
+
+    /**
+     * Used for Strequent Uri with {@link ContactsContract#STREQUENT_PHONE_ONLY}, which allows
+     * users to obtain part of Data columns. We hard-code {@link Contacts#IS_USER_PROFILE} to NULL,
+     * because sContactsProjectionMap specifies a field that doesn't exist in the view behind the
+     * query that uses this projection map.
+     **/
+    private static final ProjectionMap sStrequentPhoneOnlyFrequentProjectionMap
+            = ProjectionMap.builder()
+            .addAll(sContactsProjectionMap)
+            .add(TIMES_USED_SORT_COLUMN, DataUsageStatColumns.CONCRETE_TIMES_USED)
+            .add(Phone.NUMBER)
+            .add(Phone.TYPE)
+            .add(Phone.LABEL)
+            .add(Contacts.IS_USER_PROFILE, "NULL")
             .build();
 
     /** Contains just the contacts vCard columns */
@@ -4487,9 +4518,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 // Build the first query for starred
-                setTablesAndProjectionMapForContacts(qb, uri, projection,
-                        false /* for frequent */, phoneOnly);
-                qb.setProjectionMap(sStrequentStarredProjectionMap);
+                setTablesAndProjectionMapForContacts(qb, uri, projection, false);
+                qb.setProjectionMap(phoneOnly ?
+                        sStrequentPhoneOnlyStarredProjectionMap
+                        : sStrequentStarredProjectionMap);
                 qb.appendWhere(DbQueryUtils.concatenateClauses(
                         selection, Contacts.IS_USER_PROFILE + "=0"));
                 qb.setStrict(true);
@@ -4498,17 +4530,51 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 // Reset the builder.
                 qb = new SQLiteQueryBuilder();
-
-                // Build the second query for frequent
-                setTablesAndProjectionMapForContacts(qb, uri, projection,
-                        true /* for frequent */, phoneOnly);
-                qb.setProjectionMap(sStrequentFrequentProjectionMap);
-                qb.appendWhere(DbQueryUtils.concatenateClauses(
-                        selection, Contacts.IS_USER_PROFILE + "=0"));
                 qb.setStrict(true);
-                final String frequentQuery = qb.buildQuery(subProjection,
-                        "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)",
-                        Contacts._ID, null, null, null);
+
+                // Build the second query for frequent part.
+                final String frequentQuery;
+                if (phoneOnly) {
+                    final StringBuilder tableBuilder = new StringBuilder();
+                    // In phone only mode, we need to look at view_data instead of
+                    // contacts/raw_contacts to obtain actual phone numbers. One problem is that
+                    // view_data is much larger than view_contacts, so our query might become much
+                    // slower.
+                    //
+                    // To avoid the possible slow down, we start from data usage table and join
+                    // view_data to the table, assuming data usage table is quite smaller than
+                    // data rows (almost always it should be), and we don't want any phone
+                    // numbers not used by the user. This way sqlite is able to drop a number of
+                    // rows in view_data in the early stage of data lookup.
+                    tableBuilder.append(Tables.DATA_USAGE_STAT
+                            + " INNER JOIN " + Views.DATA + " " + Tables.DATA
+                            + " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "="
+                                + DataColumns.CONCRETE_ID + " AND "
+                            + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "="
+                                + DataUsageStatColumns.USAGE_TYPE_INT_CALL + ")");
+                    appendContactPresenceJoin(tableBuilder, projection, RawContacts.CONTACT_ID);
+                    appendContactStatusUpdateJoin(tableBuilder, projection,
+                            ContactsColumns.LAST_STATUS_UPDATE_ID);
+
+                    qb.setTables(tableBuilder.toString());
+                    qb.setProjectionMap(sStrequentPhoneOnlyFrequentProjectionMap);
+                    qb.appendWhere(DbQueryUtils.concatenateClauses(
+                            selection,
+                            Contacts.STARRED + "=0 OR " + Contacts.STARRED + " IS NULL",
+                            MimetypesColumns.MIMETYPE + " IN ("
+                            + "'" + Phone.CONTENT_ITEM_TYPE + "', "
+                            + "'" + SipAddress.CONTENT_ITEM_TYPE + "')"));
+                    frequentQuery = qb.buildQuery(subProjection, null, null, null, null, null);
+                } else {
+                    setTablesAndProjectionMapForContacts(qb, uri, projection, true);
+                    qb.setProjectionMap(sStrequentFrequentProjectionMap);
+                    qb.appendWhere(DbQueryUtils.concatenateClauses(
+                            selection,
+                            "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)",
+                            Contacts.IS_USER_PROFILE + "=0"));
+                    frequentQuery = qb.buildQuery(subProjection,
+                            null, Contacts._ID, null, null, null);
+                }
 
                 // Put them together
                 final String unionQuery =
@@ -5619,38 +5685,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
             String[] projection) {
-        setTablesAndProjectionMapForContacts(qb, uri, projection, false, false);
+        setTablesAndProjectionMapForContacts(qb, uri, projection, false);
     }
 
     /**
-     * @param forStrequentFrequent Should be used only in strequent handling.
-     *     true when this is for frequently contacted listing (not starred)
-     * @param strequentPhoneCallOnly Should be used only in strequent handling.
-     *     true when this is for phone-only results. See also
-     * {@link ContactsContract#STREQUENT_PHONE_ONLY}.
+     * @param includeDataUsageStat true when the table should include DataUsageStat table.
+     * Note that this uses INNER JOIN instead of LEFT OUTER JOIN, so some of data in Contacts
+     * may be dropped.
      */
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
-            String[] projection, boolean forStrequentFrequent, boolean strequentPhoneCallOnly) {
+            String[] projection, boolean includeDataUsageStat) {
         StringBuilder sb = new StringBuilder();
         sb.append(Views.CONTACTS);
 
         // Just for frequently contacted contacts in Strequent Uri handling.
-        if (forStrequentFrequent) {
-            final String strequentPhoneCallOnlyClause =
-                (strequentPhoneCallOnly ? DbQueryUtils.concatenateClauses(
-                        MimetypesColumns.MIMETYPE + "=\'" + Phone.CONTENT_ITEM_TYPE + "'",
-                        DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=" +
-                        DataUsageStatColumns.USAGE_TYPE_INT_CALL)
-                : "");
-            // Use INNER JOIN for maximum performance, ommiting unnecessary rows as much as
-            // possible.
+        if (includeDataUsageStat) {
             sb.append(" INNER JOIN " +
                     Views.DATA_USAGE_STAT + " AS " + Tables.DATA_USAGE_STAT +
                     " ON (" +
                     DbQueryUtils.concatenateClauses(
                             DataUsageStatColumns.CONCRETE_TIMES_USED + " > 0",
-                            RawContacts.CONTACT_ID + "=" + Views.CONTACTS + "." + Contacts._ID,
-                            strequentPhoneCallOnlyClause) +
+                            RawContacts.CONTACT_ID + "=" + Views.CONTACTS + "." + Contacts._ID) +
                     ")");
         }
 
