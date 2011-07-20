@@ -255,7 +255,8 @@ public class VoicemailContentProvider extends ContentProvider
                     intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
                             callingPackage.equals(component.getPackageName()));
                 }
-                context().sendBroadcast(intent, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+                context().sendBroadcast(intent,
+                        android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
             }
         }
     }
