@@ -250,8 +250,11 @@ public class VoicemailContentProvider extends ContentProvider
                     getBroadcastReceiverComponents(intentAction, notificationUri)) {
                 Intent intent = new Intent(intentAction, notificationUri);
                 intent.setComponent(component);
-                intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
-                        callingPackage.equals(component.getPackageName()));
+                // self_change extra should be included only for provider_changed events.
+                if (intentAction.equals(Intent.ACTION_PROVIDER_CHANGED)) {
+                    intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
+                            callingPackage.equals(component.getPackageName()));
+                }
                 context().sendBroadcast(intent, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
             }
         }
