@@ -223,6 +223,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
             + Contacts.STARRED + "=1) + 25";
 
+    private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.TIMES_USED + " DESC,"
+            + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
+
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
             "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
             " CASE WHEN " + Contacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
@@ -262,6 +265,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_ID_STREAM_ITEMS = 1020;
     private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1021;
     private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1022;
+    private static final int CONTACTS_FREQUENT = 1023;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -1042,6 +1046,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/filter/*",
                 CONTACTS_STREQUENT_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*", CONTACTS_GROUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/frequent", CONTACTS_FREQUENT);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
@@ -4603,6 +4608,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             ContactsContract.AUTHORITY_URI);
                 }
                 return cursor;
+            }
+
+            case CONTACTS_FREQUENT: {
+                setTablesAndProjectionMapForContacts(qb, uri, projection, true);
+                qb.setProjectionMap(sStrequentFrequentProjectionMap);
+                qb.appendWhere(DbQueryUtils.concatenateClauses(
+                        selection,
+                        Contacts.IS_USER_PROFILE + "=0"));
+                groupBy = Contacts._ID;
+                if (!TextUtils.isEmpty(sortOrder)) {
+                    sortOrder = FREQUENT_ORDER_BY + ", " + sortOrder;
+                } else {
+                    sortOrder = FREQUENT_ORDER_BY;
+                }
+                break;
             }
 
             case CONTACTS_GROUP: {

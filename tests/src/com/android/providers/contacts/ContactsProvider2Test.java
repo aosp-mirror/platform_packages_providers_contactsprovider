@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.common.contacts.DataUsageStatUpdater;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
@@ -1478,11 +1479,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
                 new ContentValues[] { values4, values3 });
 
-        // Obtain data ID for an email address of the 1st contact.
-        final long dataIdEmail1 = getStoredLongValue(Email.CONTENT_URI,
-                Email.ADDRESS + "=?", new String[] { email1},
-                Email._ID);
-
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
         // Twice.
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
@@ -1506,6 +1502,46 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_STREQUENT_FILTER_URI, "fay");
         assertStoredValues(filterUri, values4);
+    }
+
+    /**
+     * Checks ContactsProvider2 works well with frequent Uri. The provider should return frequently
+     * contacted person ordered by number of times contacted.
+     */
+    public void testQueryContactFrequent() {
+        ContentValues values1 = new ContentValues();
+        final String email1 = "a@acme.com";
+        createContact(values1, "Noah", "Tever", "18004664411",
+                email1, StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        ContentValues values2 = new ContentValues();
+        final String email2 = "b@acme.com";
+        createContact(values2, "Sam", "Times", "18004664412",
+                email2, StatusUpdates.INVISIBLE, 0, 0, 0, 0);
+        ContentValues values3 = new ContentValues();
+        final String phoneNumber3 = "18004664413";
+        createContact(values3, "Lotta", "Calling", phoneNumber3,
+                "c@acme.com", StatusUpdates.AWAY, 0, 0, 0, 0);
+        ContentValues values4 = new ContentValues();
+        createContact(values4, "Fay", "Veritt", "18004664414",
+                "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0, 0);
+
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
+
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI, values1);
+
+        // Pretend email was sent to the address twice.
+        sendFeedback(email2, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values2);
+        sendFeedback(email2, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values2);
+
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI, new ContentValues[] {values2, values1});
+
+        // Three times
+        sendFeedback(phoneNumber3, DataUsageFeedback.USAGE_TYPE_CALL, values3);
+        sendFeedback(phoneNumber3, DataUsageFeedback.USAGE_TYPE_CALL, values3);
+        sendFeedback(phoneNumber3, DataUsageFeedback.USAGE_TYPE_CALL, values3);
+
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI,
+                new ContentValues[] {values3, values2, values1});
     }
 
     public void testQueryContactGroup() {
