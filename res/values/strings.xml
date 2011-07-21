@@ -38,9 +38,11 @@
     <!-- The name of the invisible local contact directory -->
     <string name="local_invisible_directory">Other</string>
 
-    <string name="read_write_own_voicemail_label">read and write own voicemails</string>
-    <string name="read_write_own_voicemail_description">The application is allowed to store and access only voicemails it owns on the device.</string>
-    <string name="read_write_all_voicemail_label">read and write all voicemails</string>
-    <string name="read_write_all_voicemail_description">The application is allowed to store and access all voicemails on the device.</string>
-
+    <!-- Title of an application permission, listed so the user can choose whether they want to
+     allow the application to do this.  [CHAR LIMIT=NONE] -->
+    <string name="read_write_all_voicemail_label">Access all voicemails</string>
+    <!-- Description of an application permission, listed so the user can choose whether
+         they want to allow the application to do this. [CHAR LIMIT=NONE] -->
+    <string name="read_write_all_voicemail_description">Allows the application to store and retrieve
+        all voicemails that this device can access.</string>
 </resources>

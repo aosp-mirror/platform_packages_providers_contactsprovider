@@ -33,12 +33,12 @@ public class VoicemailPermissions {
 
     /** Determines if the calling process has access to its own voicemails. */
     public boolean callerHasOwnVoicemailAccess() {
-        return callerHasPermission(Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+        return callerHasPermission(android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
     }
 
     /** Determines if the calling process has access to all voicemails. */
     public boolean callerHasFullAccess() {
-        return callerHasPermission(Manifest.permission.READ_WRITE_OWN_VOICEMAIL) &&
+        return callerHasPermission(android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL) &&
                 callerHasPermission(Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
     }
 
@@ -50,7 +50,7 @@ public class VoicemailPermissions {
     public void checkCallerHasOwnVoicemailAccess() {
         if (!callerHasOwnVoicemailAccess()) {
             throw new SecurityException("The caller must have permission: " +
-                    Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+                    android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
         }
     }
 
@@ -62,19 +62,21 @@ public class VoicemailPermissions {
     public void checkCallerHasFullAccess() {
         if (!callerHasFullAccess()) {
             throw new SecurityException(String.format("The caller must have permissions %s AND %s",
-                    Manifest.permission.READ_WRITE_OWN_VOICEMAIL,
+                    android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL,
                     Manifest.permission.READ_WRITE_ALL_VOICEMAIL));
         }
     }
 
     /** Determines if the given package has access to its own voicemails. */
     public boolean packageHasOwnVoicemailAccess(String packageName) {
-        return packageHasPermission(packageName, Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
+        return packageHasPermission(packageName,
+                android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
     }
 
     /** Determines if the given package has full access. */
     public boolean packageHasFullAccess(String packageName) {
-        return packageHasPermission(packageName, Manifest.permission.READ_WRITE_OWN_VOICEMAIL) &&
+        return packageHasPermission(
+                packageName, android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL) &&
                 packageHasPermission(packageName, Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
     }
 

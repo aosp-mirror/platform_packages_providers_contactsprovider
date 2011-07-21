@@ -2,16 +2,6 @@
         package="com.android.providers.contacts"
         android:sharedUserId="android.uid.shared">
 
-    <!-- TODO: These permissions should be moved to framework/base once voicemail
-    API is approved. -->
-    <permission
-            android:name="com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL"
-            android:label="@string/read_write_own_voicemail_label"
-            android:description="@string/read_write_own_voicemail_description"
-            android:permissionGroup="android.permission-group.PERSONAL_INFO"
-            android:protectionLevel="dangerous"
-            />
-
     <permission
             android:name="com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL"
             android:label="@string/read_write_all_voicemail_label"
