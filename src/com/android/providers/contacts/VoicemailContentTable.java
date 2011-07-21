@@ -53,6 +53,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .add(Voicemails.DATE)
             .add(Voicemails.DURATION)
             .add(Voicemails.NEW)
+            .add(Voicemails.IS_READ)
             .add(Voicemails.STATE)
             .add(Voicemails.SOURCE_DATA)
             .add(Voicemails.SOURCE_PACKAGE)

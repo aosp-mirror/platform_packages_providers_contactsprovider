@@ -57,8 +57,8 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
-import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.DisplayNameSources;
+import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneticNameStyle;
@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 609;
+    static final int DATABASE_VERSION = 610;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1121,6 +1121,7 @@ import java.util.Locale;
                 Calls.CACHED_NUMBER_LABEL + " TEXT," +
                 Calls.COUNTRY_ISO + " TEXT," +
                 Calls.VOICEMAIL_URI + " TEXT," +
+                Calls.IS_READ + " INTEGER," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
                 Voicemails.MIME_TYPE + " TEXT," +
@@ -2055,6 +2056,11 @@ import java.util.Locale;
         if (oldVersion < 609) {
             upgradeToVersion609(db);
             oldVersion = 609;
+        }
+
+        if (oldVersion < 610) {
+            upgradeToVersion610(db);
+            oldVersion = 610;
         }
 
 
@@ -3209,6 +3215,10 @@ import java.util.Locale;
                 "action TEXT, " +
                 "action_uri TEXT, " +
                 "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
+    }
+
+    private void upgradeToVersion610(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD is_read INTEGER;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

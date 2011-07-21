@@ -489,6 +489,7 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         values.put(Voicemails.DATE, 1000);
         values.put(Voicemails.DURATION, 30);
         values.put(Voicemails.NEW, 1);
+        values.put(Voicemails.IS_READ, 0);
         values.put(Voicemails.HAS_CONTENT, 0);
         values.put(Voicemails.SOURCE_DATA, "1234");
         values.put(Voicemails.STATE, Voicemails.STATE_INBOX);

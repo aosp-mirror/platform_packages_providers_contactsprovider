@@ -71,6 +71,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.TYPE, Calls.TYPE);
         sCallsProjectionMap.put(Calls.NEW, Calls.NEW);
         sCallsProjectionMap.put(Calls.VOICEMAIL_URI, Calls.VOICEMAIL_URI);
+        sCallsProjectionMap.put(Calls.IS_READ, Calls.IS_READ);
         sCallsProjectionMap.put(Calls.CACHED_NAME, Calls.CACHED_NAME);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_TYPE, Calls.CACHED_NUMBER_TYPE);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_LABEL, Calls.CACHED_NUMBER_LABEL);
