@@ -16,13 +16,13 @@
 
 package com.android.providers.contacts;
 
-import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.CallLog.Calls;
@@ -540,20 +540,16 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
                 public void sendBroadcast(Intent intent, String receiverPermission) {
                     mDelgate.sendOrderedBroadcast(intent, receiverPermission);
                 }
+                @Override
+                public PackageManager getPackageManager() {
+                    return new MockPackageManager("com.test.package1", "com.test.package2");
+                }
             };
         }
 
         @Override
         protected String getCallingPackage() {
             return getContext().getPackageName();
-        }
-
-        @Override
-        protected List<ComponentName> getBroadcastReceiverComponents(String intentAction, Uri uri) {
-            List<ComponentName> broadcastReceiverComponents = new ArrayList<ComponentName>();
-            broadcastReceiverComponents.add(new ComponentName(
-                    getContext().getPackageName(), "TestReceiverClass"));
-            return broadcastReceiverComponents;
         }
     }
 

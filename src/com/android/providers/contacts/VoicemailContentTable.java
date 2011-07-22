@@ -25,7 +25,6 @@ import com.android.providers.contacts.util.CloseUtils;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -33,7 +32,6 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog.Calls;
-import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
@@ -82,26 +80,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     }
 
     @Override
-    public int bulkInsert(UriData uriData, ContentValues[] valuesArray) {
-        int numInserted = 0;
-        for (ContentValues values : valuesArray) {
-            if (insertInternal(uriData, values, false) != null) {
-                numInserted++;
-            }
-        }
-        if (numInserted > 0) {
-            mDelegateHelper.notifyChange(uriData.getUri(), Intent.ACTION_PROVIDER_CHANGED);
-        }
-        return numInserted;
-    }
-
-    @Override
     public Uri insert(UriData uriData, ContentValues values) {
-        return insertInternal(uriData, values, true);
-    }
-
-    private Uri insertInternal(UriData uriData, ContentValues values,
-            boolean sendProviderChangedNotification) {
         checkForSupportedColumns(sVoicemailProjectionMap, values);
         ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
@@ -115,13 +94,9 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         copiedValues.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
 
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        long rowId = db.insert(mTableName, null, copiedValues);
+        long rowId = getDatabaseModifier(db).insert(mTableName, null, copiedValues);
         if (rowId > 0) {
             Uri newUri = ContentUris.withAppendedId(uriData.getUri(), rowId);
-            mDelegateHelper.notifyChange(newUri, VoicemailContract.ACTION_NEW_VOICEMAIL);
-            if (sendProviderChangedNotification) {
-                mDelegateHelper.notifyChange(newUri, Intent.ACTION_PROVIDER_CHANGED);
-            }
             // Populate the 'voicemail_uri' field to be used by the call_log provider.
             updateVoicemailUri(db, newUri);
             return newUri;
@@ -182,11 +157,8 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         }
 
         // Now delete the rows themselves.
-        int count = db.delete(mTableName, combinedClause, selectionArgs);
-        if (count > 0) {
-            mDelegateHelper.notifyChange(uriData.getUri(), Intent.ACTION_PROVIDER_CHANGED);
-        }
-        return count;
+        return getDatabaseModifier(db).delete(mTableName, combinedClause,
+                selectionArgs);
     }
 
     @Override
@@ -217,11 +189,8 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         // URI that include message Id. I think we do want to support bulk update.
         String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
                 getCallTypeClause());
-        int count = db.update(mTableName, values, combinedClause, selectionArgs);
-        if (count > 0) {
-            mDelegateHelper.notifyChange(uriData.getUri(), Intent.ACTION_PROVIDER_CHANGED);
-        }
-        return count;
+        return getDatabaseModifier(db).update(mTableName, values, combinedClause,
+                selectionArgs);
     }
 
     private void checkUpdateSupported(UriData uriData) {
@@ -277,5 +246,9 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     /** Creates a clause to restrict the selection to only voicemail call type.*/
     private String getCallTypeClause() {
         return getEqualityClause(Calls.TYPE, String.valueOf(Calls.VOICEMAIL_TYPE));
+    }
+
+    private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
+        return new DbModifierWithVmNotification(mTableName, db, mContext);
     }
 }

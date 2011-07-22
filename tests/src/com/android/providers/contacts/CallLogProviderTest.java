@@ -23,6 +23,9 @@ import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.CallLog;
@@ -341,6 +344,21 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         @Override
         protected String getCurrentCountryIso() {
             return "us";
+        }
+
+        @Override
+        protected Context context() {
+            return new ContextWrapper(super.context()) {
+                @Override
+                public PackageManager getPackageManager() {
+                    return new MockPackageManager("com.test.package1", "com.test.package2");
+                }
+
+                @Override
+                public void sendBroadcast(Intent intent, String receiverPermission) {
+                   // Do nothing for now.
+                }
+            };
         }
     }
 }
