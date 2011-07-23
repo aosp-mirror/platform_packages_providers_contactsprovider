@@ -169,10 +169,25 @@ import java.util.Locale;
                     + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
-        public static final String DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS = "data "
-                + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
-                + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
+        public static final String CONTACTS_JOIN_RAW_CONTACTS_DATA_FILTERED_BY_GROUPMEMBERSHIP =
+                Tables.CONTACTS
+                    + " INNER JOIN " + Tables.RAW_CONTACTS
+                        + " ON (" + RawContactsColumns.CONCRETE_CONTACT_ID + "="
+                            + ContactsColumns.CONCRETE_ID
+                        + ")"
+                    + " INNER JOIN " + Tables.DATA
+                        + " ON (" + DataColumns.CONCRETE_DATA1 + "=" + GroupsColumns.CONCRETE_ID
+                        + " AND "
+                        + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                        + " AND "
+                        + DataColumns.CONCRETE_MIMETYPE_ID + "="
+                            + "(SELECT " + MimetypesColumns._ID
+                            + " FROM " + Tables.MIMETYPES
+                            + " WHERE "
+                            + MimetypesColumns.CONCRETE_MIMETYPE + "="
+                                + "'" + GroupMembership.CONTENT_ITEM_TYPE + "'"
+                            + ")"
+                        + ")";
 
         public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
@@ -214,12 +229,6 @@ import java.util.Locale;
     }
 
     public interface Clauses {
-        final String MIMETYPE_IS_GROUP_MEMBERSHIP = MimetypesColumns.CONCRETE_MIMETYPE + "='"
-                + GroupMembership.CONTENT_ITEM_TYPE + "'";
-
-        final String BELONGS_TO_GROUP = DataColumns.CONCRETE_GROUP_ID + "="
-                + GroupsColumns.CONCRETE_ID;
-
         final String HAVING_NO_GROUPS = "COUNT(" + DataColumns.CONCRETE_GROUP_ID + ") == 0";
 
         final String GROUP_BY_ACCOUNT_CONTACT_ID = SettingsColumns.CONCRETE_ACCOUNT_NAME + ","

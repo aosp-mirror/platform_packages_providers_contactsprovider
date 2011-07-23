@@ -1997,6 +1997,134 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(rowUri, values);
     }
 
+    public void testGroupCreationAfterMembershipInsert() {
+        long rawContactId1 = createRawContact(mAccount);
+        Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
+
+        long groupId = assertSingleGroup(NO_LONG, mAccount, "gsid1", null);
+        assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
+                rawContactId1, groupId, "gsid1");
+    }
+
+    public void testGroupReuseAfterMembershipInsert() {
+        long rawContactId1 = createRawContact(mAccount);
+        long groupId1 = createGroup(mAccount, "gsid1", "title1");
+        Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
+
+        assertSingleGroup(groupId1, mAccount, "gsid1", "title1");
+        assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
+                rawContactId1, groupId1, "gsid1");
+    }
+
+    public void testGroupInsertFailureOnGroupIdConflict() {
+        long rawContactId1 = createRawContact(mAccount);
+        long groupId1 = createGroup(mAccount, "gsid1", "title1");
+
+        ContentValues values = new ContentValues();
+        values.put(GroupMembership.RAW_CONTACT_ID, rawContactId1);
+        values.put(GroupMembership.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
+        values.put(GroupMembership.GROUP_SOURCE_ID, "gsid1");
+        values.put(GroupMembership.GROUP_ROW_ID, groupId1);
+        try {
+            mResolver.insert(Data.CONTENT_URI, values);
+            fail("the insert was expected to fail, but it succeeded");
+        } catch (IllegalArgumentException e) {
+            // this was expected
+        }
+    }
+
+    public void testGroupSummaryQuery() {
+        final Account account1 = new Account("accountName1", "accountType1");
+        final Account account2 = new Account("accountName2", "accountType2");
+        final long groupId1 = createGroup(account1, "sourceId1", "title1");
+        final long groupId2 = createGroup(account2, "sourceId2", "title2");
+        final long groupId3 = createGroup(account2, "sourceId3", "title3");
+
+        // Prepare raw contact id not used at all, to test group summary uri won't be confused
+        // with it.
+        final long rawContactId0 = createRawContactWithName("firstName0", "lastName0");
+
+        final long rawContactId1 = createRawContactWithName("firstName1", "lastName1");
+        insertEmail(rawContactId1, "address1@email.com");
+        insertGroupMembership(rawContactId1, groupId1);
+
+        final long rawContactId2 = createRawContactWithName("firstName2", "lastName2");
+        insertEmail(rawContactId2, "address2@email.com");
+        insertPhoneNumber(rawContactId2, "222-222-2222");
+        insertGroupMembership(rawContactId2, groupId1);
+
+        ContentValues v1 = new ContentValues();
+        v1.put(Groups._ID, groupId1);
+        v1.put(Groups.TITLE, "title1");
+        v1.put(Groups.SOURCE_ID, "sourceId1");
+        v1.put(Groups.ACCOUNT_NAME, account1.name);
+        v1.put(Groups.ACCOUNT_TYPE, account1.type);
+        v1.put(Groups.SUMMARY_COUNT, 2);
+        v1.put(Groups.SUMMARY_WITH_PHONES, 1);
+
+        ContentValues v2 = new ContentValues();
+        v2.put(Groups._ID, groupId2);
+        v2.put(Groups.TITLE, "title2");
+        v2.put(Groups.SOURCE_ID, "sourceId2");
+        v2.put(Groups.ACCOUNT_NAME, account2.name);
+        v2.put(Groups.ACCOUNT_TYPE, account2.type);
+        v2.put(Groups.SUMMARY_COUNT, 0);
+        v2.put(Groups.SUMMARY_WITH_PHONES, 0);
+
+        ContentValues v3 = new ContentValues();
+        v3.put(Groups._ID, groupId3);
+        v3.put(Groups.TITLE, "title3");
+        v3.put(Groups.SOURCE_ID, "sourceId3");
+        v3.put(Groups.ACCOUNT_NAME, account2.name);
+        v3.put(Groups.ACCOUNT_TYPE, account2.type);
+        v3.put(Groups.SUMMARY_COUNT, 0);
+        v3.put(Groups.SUMMARY_WITH_PHONES, 0);
+
+        assertStoredValues(Groups.CONTENT_SUMMARY_URI, new ContentValues[] { v1, v2, v3 });
+
+        // Now rawContactId1 has two phone numbers.
+        insertPhoneNumber(rawContactId1, "111-111-1111");
+        insertPhoneNumber(rawContactId1, "111-111-1112");
+        // Result should reflect it correctly (don't count phone numbers but raw contacts)
+        v1.put(Groups.SUMMARY_WITH_PHONES, v1.getAsInteger(Groups.SUMMARY_WITH_PHONES) + 1);
+        assertStoredValues(Groups.CONTENT_SUMMARY_URI, new ContentValues[] { v1, v2, v3 });
+
+        // Introduce new raw contact, pretending the user added another info.
+        final long rawContactId3 = createRawContactWithName("firstName3", "lastName3");
+        insertEmail(rawContactId3, "address3@email.com");
+        insertPhoneNumber(rawContactId3, "333-333-3333");
+        insertGroupMembership(rawContactId3, groupId2);
+        v2.put(Groups.SUMMARY_COUNT, v2.getAsInteger(Groups.SUMMARY_COUNT) + 1);
+        v2.put(Groups.SUMMARY_WITH_PHONES, v2.getAsInteger(Groups.SUMMARY_WITH_PHONES) + 1);
+
+        assertStoredValues(Groups.CONTENT_SUMMARY_URI, new ContentValues[] { v1, v2, v3 });
+
+        final Uri uri = Groups.CONTENT_SUMMARY_URI.buildUpon()
+                .appendQueryParameter(Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT, "true")
+                .build();
+        v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 1);
+        v2.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 2);
+        v3.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 2);
+        assertStoredValues(uri, new ContentValues[] { v1, v2, v3 });
+
+        // Introduce another group in account1, testing SUMMARY_GROUP_COUNT_PER_ACCOUNT correctly
+        // reflects the change.
+        final long groupId4 = createGroup(account1, "sourceId4", "title4");
+        v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
+                v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT) + 1);
+        ContentValues v4 = new ContentValues();
+        v4.put(Groups._ID, groupId4);
+        v4.put(Groups.TITLE, "title4");
+        v4.put(Groups.SOURCE_ID, "sourceId4");
+        v4.put(Groups.ACCOUNT_NAME, account1.name);
+        v4.put(Groups.ACCOUNT_TYPE, account1.type);
+        v4.put(Groups.SUMMARY_COUNT, 0);
+        v4.put(Groups.SUMMARY_WITH_PHONES, 0);
+        v4.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
+                v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT));
+        assertStoredValues(uri, new ContentValues[] { v1, v2, v3, v4 });
+    }
+
     public void testSettingsQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
@@ -3612,42 +3740,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             assertTrue(ArrayUtils.contains(expectedRingtone.split(","), ringtone));
         }
         c.close();
-    }
-
-    public void testGroupCreationAfterMembershipInsert() {
-        long rawContactId1 = createRawContact(mAccount);
-        Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
-
-        long groupId = assertSingleGroup(NO_LONG, mAccount, "gsid1", null);
-        assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
-                rawContactId1, groupId, "gsid1");
-    }
-
-    public void testGroupReuseAfterMembershipInsert() {
-        long rawContactId1 = createRawContact(mAccount);
-        long groupId1 = createGroup(mAccount, "gsid1", "title1");
-        Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
-
-        assertSingleGroup(groupId1, mAccount, "gsid1", "title1");
-        assertSingleGroupMembership(ContentUris.parseId(groupMembershipUri),
-                rawContactId1, groupId1, "gsid1");
-    }
-
-    public void testGroupInsertFailureOnGroupIdConflict() {
-        long rawContactId1 = createRawContact(mAccount);
-        long groupId1 = createGroup(mAccount, "gsid1", "title1");
-
-        ContentValues values = new ContentValues();
-        values.put(GroupMembership.RAW_CONTACT_ID, rawContactId1);
-        values.put(GroupMembership.MIMETYPE, GroupMembership.CONTENT_ITEM_TYPE);
-        values.put(GroupMembership.GROUP_SOURCE_ID, "gsid1");
-        values.put(GroupMembership.GROUP_ROW_ID, groupId1);
-        try {
-            mResolver.insert(Data.CONTENT_URI, values);
-            fail("the insert was expected to fail, but it succeeded");
-        } catch (IllegalArgumentException e) {
-            // this was expected
-        }
     }
 
     public void testContactVisibilityUpdateOnMembershipChange() {

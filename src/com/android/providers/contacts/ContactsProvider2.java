@@ -836,17 +836,34 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final ProjectionMap sGroupsSummaryProjectionMap = ProjectionMap.builder()
             .addAll(sGroupsProjectionMap)
             .add(Groups.SUMMARY_COUNT,
-                    "(SELECT COUNT(DISTINCT " + ContactsColumns.CONCRETE_ID
-                    + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS
-                    + " WHERE " + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP
-                    + " AND " + Clauses.BELONGS_TO_GROUP
-                    + ")")
+                    "(SELECT COUNT(" + ContactsColumns.CONCRETE_ID + ") FROM "
+                        + Tables.CONTACTS_JOIN_RAW_CONTACTS_DATA_FILTERED_BY_GROUPMEMBERSHIP
+                        + ")")
             .add(Groups.SUMMARY_WITH_PHONES,
-                    "(SELECT COUNT(DISTINCT " + ContactsColumns.CONCRETE_ID
-                    + ") FROM " + Tables.DATA_JOIN_MIMETYPES_RAW_CONTACTS_CONTACTS
-                    + " WHERE " + Clauses.MIMETYPE_IS_GROUP_MEMBERSHIP
-                    + " AND " + Clauses.BELONGS_TO_GROUP
-                    + " AND " + Contacts.HAS_PHONE_NUMBER + ")")
+                    "(SELECT COUNT(" + ContactsColumns.CONCRETE_ID + ") FROM "
+                        + Tables.CONTACTS_JOIN_RAW_CONTACTS_DATA_FILTERED_BY_GROUPMEMBERSHIP
+                        + " WHERE " + Contacts.HAS_PHONE_NUMBER + ")")
+            .build();
+
+    // This is only exposed as hidden API for the contacts app, so we can be very specific in
+    // the filtering
+    private static final ProjectionMap sGroupsSummaryProjectionMapWithGroupCountPerAccount =
+            ProjectionMap.builder()
+            .addAll(sGroupsSummaryProjectionMap)
+            .add(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
+                    "(SELECT COUNT(*) FROM " + Views.GROUPS + " WHERE "
+                        + "(" + Groups.ACCOUNT_NAME + "="
+                            + GroupsColumns.CONCRETE_ACCOUNT_NAME
+                            + " AND "
+                            + Groups.ACCOUNT_TYPE + "=" + GroupsColumns.CONCRETE_ACCOUNT_TYPE
+                            + " AND "
+                            + Groups.DELETED + "=0 AND "
+                            + Groups.FAVORITES + "=0 AND "
+                            + Groups.AUTO_ADD + "=0"
+                        + ")"
+                        + " GROUP BY "
+                            + Groups.ACCOUNT_NAME + ", " + Groups.ACCOUNT_TYPE
+                   + ")")
             .build();
 
     /** Contains the agg_exceptions columns */
@@ -5084,10 +5101,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case GROUPS_SUMMARY: {
-                qb.setTables(Views.GROUPS + " AS groups");
-                qb.setProjectionMap(sGroupsSummaryProjectionMap);
+                final boolean returnGroupCountPerAccount =
+                        readBooleanQueryParameter(uri, Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT,
+                                false);
+                qb.setTables(Views.GROUPS + " AS " + Tables.GROUPS);
+                qb.setProjectionMap(returnGroupCountPerAccount ?
+                        sGroupsSummaryProjectionMapWithGroupCountPerAccount
+                        : sGroupsSummaryProjectionMap);
                 appendAccountFromParameter(qb, uri);
-                groupBy = Groups._ID;
+                groupBy = GroupsColumns.CONCRETE_ID;
                 break;
             }
 
