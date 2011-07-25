@@ -4630,9 +4630,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_FREQUENT: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection, true);
                 qb.setProjectionMap(sStrequentFrequentProjectionMap);
-                qb.appendWhere(DbQueryUtils.concatenateClauses(
-                        selection,
-                        Contacts.IS_USER_PROFILE + "=0"));
+                qb.appendWhere(Contacts.IS_USER_PROFILE + "=0");
                 groupBy = Contacts._ID;
                 if (!TextUtils.isEmpty(sortOrder)) {
                     sortOrder = FREQUENT_ORDER_BY + ", " + sortOrder;

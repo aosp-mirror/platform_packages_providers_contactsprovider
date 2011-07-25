@@ -1519,8 +1519,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 email2, StatusUpdates.INVISIBLE, 0, 0, 0, 0);
         ContentValues values3 = new ContentValues();
         final String phoneNumber3 = "18004664413";
-        createContact(values3, "Lotta", "Calling", phoneNumber3,
-                "c@acme.com", StatusUpdates.AWAY, 0, 0, 0, 0);
+        final long contactId3 = createContact(values3, "Lotta", "Calling", phoneNumber3,
+                "c@acme.com", StatusUpdates.AWAY, 0, 1, 0, 0);
         ContentValues values4 = new ContentValues();
         createContact(values4, "Fay", "Veritt", "18004664414",
                 "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0, 0);
@@ -1542,6 +1542,26 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertStoredValues(Contacts.CONTENT_FREQUENT_URI,
                 new ContentValues[] {values3, values2, values1});
+
+        // Test it works with selection/selectionArgs
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI,
+                Contacts.STARRED + "=?", new String[] {"0"},
+                new ContentValues[] {values2, values1});
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI,
+                Contacts.STARRED + "=?", new String[] {"1"},
+                new ContentValues[] {values3});
+
+        values3.put(Contacts.STARRED, 0);
+        assertEquals(1,
+                mResolver.update(Uri.withAppendedPath(Contacts.CONTENT_URI,
+                        String.valueOf(contactId3)),
+                values3, null, null));
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI,
+                Contacts.STARRED + "=?", new String[] {"0"},
+                new ContentValues[] {values3, values2, values1});
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI,
+                Contacts.STARRED + "=?", new String[] {"1"},
+                new ContentValues[] {});
     }
 
     public void testQueryContactGroup() {
