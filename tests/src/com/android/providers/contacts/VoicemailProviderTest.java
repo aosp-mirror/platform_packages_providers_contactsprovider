@@ -64,7 +64,7 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
             Calls.COUNTRY_ISO
     };
     /** Total number of columns exposed by voicemail provider. */
-    private static final int NUM_VOICEMAIL_FIELDS = 11;
+    private static final int NUM_VOICEMAIL_FIELDS = 12;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
