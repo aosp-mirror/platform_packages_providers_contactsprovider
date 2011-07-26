@@ -23,12 +23,8 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Seleccione para concluir a actualização."</string>
     <string name="default_directory" msgid="93961630309570294">"Contactos"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Outro"</string>
-    <!-- no translation found for read_write_own_voicemail_label (4633727212134804596) -->
+    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
     <skip />
-    <!-- no translation found for read_write_own_voicemail_description (7358328813231165233) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_label (5357954571910155610) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (440170132212565839) -->
+    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
     <skip />
 </resources>
