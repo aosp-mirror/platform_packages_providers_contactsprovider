@@ -23,14 +23,9 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
 
-import android.content.ComponentName;
 import android.content.ContentProvider;
-import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
-import android.content.pm.ActivityInfo;
-import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
@@ -40,7 +35,6 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -53,7 +47,6 @@ public class VoicemailContentProvider extends ContentProvider
         implements VoicemailTable.DelegateHelper {
     private static final String TAG = "VoicemailContentProvider";
 
-    private ContentResolver mContentResolver;
     private VoicemailPermissions mVoicemailPermissions;
     private VoicemailTable.Delegate mVoicemailContentTable;
     private VoicemailTable.Delegate mVoicemailStatusTable;
@@ -61,7 +54,6 @@ public class VoicemailContentProvider extends ContentProvider
     @Override
     public boolean onCreate() {
         Context context = context();
-        mContentResolver = context.getContentResolver();
         mVoicemailPermissions = new VoicemailPermissions(context);
         mVoicemailContentTable = new VoicemailContentTable(Tables.CALLS, context,
                 getDatabaseHelper(context), this);
@@ -88,12 +80,6 @@ public class VoicemailContentProvider extends ContentProvider
             return null;
         }
         return getTableDelegate(uriData).getType(uriData);
-    }
-
-    @Override
-    public int bulkInsert(Uri uri, ContentValues[] valuesArray) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri, valuesArray);
-        return getTableDelegate(uriData).bulkInsert(uriData, valuesArray);
     }
 
     @Override
@@ -229,35 +215,6 @@ public class VoicemailContentProvider extends ContentProvider
         private static TypedUriMatcherImpl<VoicemailUriType> createUriMatcher() {
             return new TypedUriMatcherImpl<VoicemailUriType>(
                     VoicemailContract.AUTHORITY, VoicemailUriType.values());
-        }
-    }
-
-    @Override
-    // VoicemailTable.DelegateHelper interface.
-    public void notifyChange(Uri notificationUri, String... intentActions) {
-        // Notify the observers.
-        mContentResolver.notifyChange(notificationUri, null, true);
-        String callingPackage = getCallingPackage();
-        // Fire notification intents.
-        for (String intentAction : intentActions) {
-            // TODO: We can possibly be more intelligent here and send targeted intents based on
-            // what voicemail permission the package has. If possible, here is what we would like to
-            // do for a given broadcast intent -
-            // 1) Send it to all packages that have READ_WRITE_ALL_VOICEMAIL permission.
-            // 2) Send it to only the owner package that has just READ_WRITE_OWN_VOICEMAIL, if not
-            // already sent in (1).
-            for (ComponentName component :
-                    getBroadcastReceiverComponents(intentAction, notificationUri)) {
-                Intent intent = new Intent(intentAction, notificationUri);
-                intent.setComponent(component);
-                // self_change extra should be included only for provider_changed events.
-                if (intentAction.equals(Intent.ACTION_PROVIDER_CHANGED)) {
-                    intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
-                            callingPackage.equals(component.getPackageName()));
-                }
-                context().sendBroadcast(intent,
-                        android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL);
-            }
         }
     }
 
@@ -405,18 +362,5 @@ public class VoicemailContentProvider extends ContentProvider
             return null;
         }
         return getEqualityClause(Voicemails.SOURCE_PACKAGE, getCallingPackage());
-    }
-
-    /** Determines the components that can possibly receive the specified intent. */
-    protected List<ComponentName> getBroadcastReceiverComponents(String intentAction, Uri uri) {
-        Intent intent = new Intent(intentAction, uri);
-        List<ComponentName> receiverComponents = new ArrayList<ComponentName>();
-        // For broadcast receivers ResolveInfo.activityInfo is the one that is populated.
-        for (ResolveInfo resolveInfo :
-                context().getPackageManager().queryBroadcastReceivers(intent, 0)) {
-            ActivityInfo activityInfo = resolveInfo.activityInfo;
-            receiverComponents.add(new ComponentName(activityInfo.packageName, activityInfo.name));
-        }
-        return receiverComponents;
     }
 }

@@ -177,7 +177,7 @@ public class CallLogProvider extends ContentProvider {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
         }
-        long rowId = mCallsInserter.insert(values);
+        long rowId = getDatabaseModifier(mCallsInserter).insert(values);
         if (rowId > 0) {
             notifyChange();
             return ContentUris.withAppendedId(uri, rowId);
@@ -211,7 +211,8 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        int count = db.update(Tables.CALLS, values, selectionBuilder.build(), selectionArgs);
+        int count = getDatabaseModifier(db).update(Tables.CALLS, values,
+                selectionBuilder.build(), selectionArgs);
         if (count > 0) {
             notifyChange();
         }
@@ -227,7 +228,8 @@ public class CallLogProvider extends ContentProvider {
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                int count = db.delete(Tables.CALLS, selectionBuilder.build(), selectionArgs);
+                int count = getDatabaseModifier(db).delete(Tables.CALLS,
+                        selectionBuilder.build(), selectionArgs);
                 if (count > 0) {
                     notifyChange();
                 }
@@ -245,6 +247,20 @@ public class CallLogProvider extends ContentProvider {
 
     protected String getCurrentCountryIso() {
         return mCountryMonitor.getCountryIso();
+    }
+
+    // Work around to let the test code override the context. getContext() is final so cannot be
+    // overridden.
+    protected Context context() {
+        return getContext();
+    }
+
+    private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
+        return new DbModifierWithVmNotification(Tables.CALLS, db, context());
+    }
+
+    private DatabaseModifier getDatabaseModifier(DatabaseUtils.InsertHelper insertHelper) {
+        return new DbModifierWithVmNotification(Tables.CALLS, insertHelper, context());
     }
 
     private boolean hasVoicemailValue(ContentValues values) {

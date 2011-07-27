@@ -35,7 +35,6 @@ public interface VoicemailTable {
      */
     public interface Delegate {
         public Uri insert(UriData uriData, ContentValues values);
-        public int bulkInsert(UriData uriData, ContentValues[] valuesArray);
         public int delete(UriData uriData, String selection, String[] selectionArgs);
         public Cursor query(UriData uriData, String[] projection, String selection,
                 String[] selectionArgs, String sortOrder);
@@ -51,16 +50,6 @@ public interface VoicemailTable {
      * functionality across different voicemail tables.
      */
     public interface DelegateHelper {
-        /**
-         * Notifies the content resolver and fires required broadcast intent(s) to notify about the
-         * change.
-         *
-         * @param notificationUri The URI that got impacted due to the change. This is the URI that
-         *            is included in content resolver and broadcast intent notification.
-         * @param intentActions List of intent actions that needs to be fired. A separate intent is
-         *            fired for each intent action.
-         */
-        public void notifyChange(Uri notificationUri, String... intentActions);
         /**
          * Inserts source_package field into ContentValues. Used in insert operations.
          */

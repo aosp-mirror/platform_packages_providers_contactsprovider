@@ -23,7 +23,6 @@ import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -64,10 +63,9 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
         ContentValues copiedValues = new ContentValues(values);
         mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);
-        long rowId = db.insert(mTableName, null, copiedValues);
+        long rowId = getDatabaseModifier(db).insert(mTableName, null, copiedValues);
         if (rowId > 0) {
             Uri newUri = ContentUris.withAppendedId(uriData.getUri(), rowId);
-            mDelegateHelper.notifyChange(newUri, Intent.ACTION_PROVIDER_CHANGED);
             return newUri;
         } else {
             return null;
@@ -75,19 +73,11 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
     }
 
     @Override
-    public int bulkInsert(UriData uriData, ContentValues[] valuesArray) {
-        throw new UnsupportedOperationException("bulkInsert is not supported for status table");
-    }
-
-    @Override
     public int delete(UriData uriData, String selection, String[] selectionArgs) {
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
         String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-        int count = db.delete(mTableName, combinedClause, selectionArgs);
-        if (count > 0) {
-            mDelegateHelper.notifyChange(uriData.getUri(), Intent.ACTION_PROVIDER_CHANGED);
-        }
-        return count;
+        return getDatabaseModifier(db).delete(mTableName, combinedClause,
+                selectionArgs);
     }
 
     @Override
@@ -112,11 +102,8 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             String[] selectionArgs) {
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
         String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-        int count = db.update(mTableName, values, combinedClause, selectionArgs);
-        if (count > 0) {
-            mDelegateHelper.notifyChange(uriData.getUri(), Intent.ACTION_PROVIDER_CHANGED);
-        }
-        return count;
+        return getDatabaseModifier(db).update(mTableName, values, combinedClause,
+                selectionArgs);
     }
 
     @Override
@@ -131,5 +118,9 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
     @Override
     public ParcelFileDescriptor openFile(UriData uriData, String mode) {
         throw new UnsupportedOperationException("File operation is not supported for status table");
+    }
+
+    private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
+        return new DbModifierWithVmNotification(mTableName, db, mContext);
     }
 }
