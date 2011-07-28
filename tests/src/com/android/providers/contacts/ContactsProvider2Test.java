@@ -1475,7 +1475,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 "c@acme.com", StatusUpdates.AWAY, timesContacted3, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_VIDEO);
         ContentValues values4 = new ContentValues();
-        createContact(values4, "Fay", "Veritt", "18004664414",
+        final long rawContactId4 = createRawContact(values4, "Fay", "Veritt", null,
                 "d@acme.com", StatusUpdates.AVAILABLE, 0, 1, 0,
                 StatusUpdates.CAPABILITY_HAS_VIDEO | StatusUpdates.CAPABILITY_HAS_VOICE);
 
@@ -1498,11 +1498,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
                 new ContentValues[] { values4, values1, values3 });
 
-        // With phone-only parameter, the 1st contact shouldn't be returned, since it is only
-        // about email, not phone-call.
+        // With phone-only parameter, 1st and 4th contacts shouldn't be returned because:
+        // 1st: feedbacks are only about email, not about phone call.
+        // 4th: it has no phone number though starred.
         Uri phoneOnlyStrequentUri = Contacts.CONTENT_STREQUENT_URI.buildUpon()
                 .appendQueryParameter(ContactsContract.STREQUENT_PHONE_ONLY, "true")
                 .build();
+        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values3 });
+
+        // Now the 4th contact has a phone number.
+        insertPhoneNumber(rawContactId4, "18004664414");
+
+        // Phone only strequent should return 4th contact.
         assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values4, values3 });
 
         // Send feedback for the 2rd phone number, pretending we send the person a SMS message.
@@ -5745,8 +5752,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = insertPhoto(rawContactId);
         long photoId = ContentUris.parseId(photoUri);
         values.put(Contacts.PHOTO_ID, photoId);
-        insertPhoneNumber(rawContactId, phoneNumber);
-        insertEmail(rawContactId, email);
+        if (!TextUtils.isEmpty(phoneNumber)) {
+            insertPhoneNumber(rawContactId, phoneNumber);
+        }
+        if (!TextUtils.isEmpty(email)) {
+            insertEmail(rawContactId, email);
+        }
 
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, email, presenceStatus, "hacking",
                 chatMode);
