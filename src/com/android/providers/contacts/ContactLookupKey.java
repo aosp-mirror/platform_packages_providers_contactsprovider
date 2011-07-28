@@ -52,16 +52,17 @@ public class ContactLookupKey {
      * Returns a short hash code that functions as an additional precaution against the exceedingly
      * improbable collision between sync IDs in different accounts.
      */
-    public static int getAccountHashCode(String accountType, String accountName) {
-        if (accountType == null || accountName == null) {
+    public static int getAccountHashCode(String accountTypeWithDataSet, String accountName) {
+        if (accountTypeWithDataSet == null || accountName == null) {
             return 0;
         }
 
-        return (accountType.hashCode() ^ accountName.hashCode()) & 0xFFF;
+        return (accountTypeWithDataSet.hashCode() ^ accountName.hashCode()) & 0xFFF;
     }
 
-    public static void appendToLookupKey(StringBuilder lookupKey, String accountType,
-            String accountName, long rawContactId, String sourceId, String displayName) {
+    public static void appendToLookupKey(StringBuilder lookupKey, String accountTypeWidhtDataSet,
+            String accountName, long rawContactId, String sourceId,
+            String displayName) {
         if (displayName == null) {
             displayName = "";
         }
@@ -70,7 +71,7 @@ public class ContactLookupKey {
             lookupKey.append(".");
         }
 
-        lookupKey.append(getAccountHashCode(accountType, accountName));
+        lookupKey.append(getAccountHashCode(accountTypeWidhtDataSet, accountName));
         if (sourceId == null) {
             lookupKey.append('r').append(rawContactId).append('-').append(
                     NameNormalizer.normalize(displayName));

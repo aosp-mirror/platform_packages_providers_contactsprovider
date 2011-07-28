@@ -149,7 +149,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
-    protected boolean isWritableAccount(String accountType) {
+    protected boolean isWritableAccountWithDataSet(String accountType) {
         return !READ_ONLY_ACCOUNT_TYPE.equals(accountType);
     }
 

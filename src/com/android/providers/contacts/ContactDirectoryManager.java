@@ -44,6 +44,7 @@ import java.util.List;
 /**
  * Manages the contents of the {@link Directory} table.
  */
+// TODO: Determine whether directories need to be aware of data sets under the account.
 public class ContactDirectoryManager {
 
     private static final String TAG = "ContactDirectoryManager";
