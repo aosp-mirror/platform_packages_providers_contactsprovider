@@ -4342,7 +4342,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private Cursor queryLocal(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, long directoryId,
-            boolean suppressProfileCheck) {
+            final boolean suppressProfileCheck) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: " + uri);
         }
@@ -4353,6 +4353,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String groupBy = null;
         String limit = getLimit(uri);
 
+        // Column name for appendProfileRestriction().  We append the profile check to the original
+        // selection if it's not null.
+        String profileRestrictionColumnName = null;
+
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
@@ -4361,9 +4365,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                boolean existingWhere = appendLocalDirectorySelectionIfNeeded(qb, directoryId);
-                appendProfileRestriction(qb, uri, Contacts.IS_USER_PROFILE, existingWhere,
-                        suppressProfileCheck);
+                appendLocalDirectorySelectionIfNeeded(qb, directoryId);
+                profileRestrictionColumnName = Contacts.IS_USER_PROFILE;
                 sortOrder = prependProfileSortIfNeeded(uri, sortOrder, suppressProfileCheck);
                 break;
             }
@@ -4510,8 +4513,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 setTablesAndProjectionMapForContactsWithSnippet(
                         qb, uri, projection, filterParam, directoryId);
-                appendProfileRestriction(qb, uri, Contacts.IS_USER_PROFILE, false,
-                        suppressProfileCheck);
+                profileRestrictionColumnName = Contacts.IS_USER_PROFILE;
                 sortOrder = prependProfileSortIfNeeded(uri, sortOrder, suppressProfileCheck);
                 break;
             }
@@ -4976,8 +4978,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS: {
                 setTablesAndProjectionMapForRawContacts(qb, uri);
-                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true,
-                        suppressProfileCheck);
+                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 break;
             }
 
@@ -4995,8 +4996,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
-                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true,
-                        suppressProfileCheck);
+                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 break;
             }
 
@@ -5048,8 +5048,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case DATA: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                appendProfileRestriction(qb, uri, RawContacts.RAW_CONTACT_IS_USER_PROFILE, true,
-                        suppressProfileCheck);
+                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 break;
             }
 
@@ -5264,6 +5263,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         qb.setStrict(true);
+
+        if (profileRestrictionColumnName != null) {
+            // This check is very slow and most of the rows will pass though this check, so
+            // it should be put after user's selection, so SQLite won't do this check first.
+            selection = appendProfileRestriction(uri, profileRestrictionColumnName,
+                    suppressProfileCheck, selection);
+        }
 
         Cursor cursor =
                 query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
@@ -6105,13 +6111,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return false;
     }
 
-    private void appendProfileRestriction(SQLiteQueryBuilder qb, Uri uri, String profileColumn,
-            boolean andRequired, boolean suppressProfileCheck) {
-        if (!shouldIncludeProfile(uri, suppressProfileCheck)) {
-            qb.appendWhere((andRequired ? " AND (" : "")
-                    + profileColumn + " IS NULL OR "
-                    + profileColumn + "=0"
-                    + (andRequired ? ")" : ""));
+    private String appendProfileRestriction(Uri uri, String profileColumn,
+            boolean suppressProfileCheck, String originalSelection) {
+        if (shouldIncludeProfile(uri, suppressProfileCheck)) {
+            return originalSelection;
+        } else {
+            final String SELECTION = "(" + profileColumn + " IS NULL OR " + profileColumn + "=0)";
+            if (TextUtils.isEmpty(originalSelection)) {
+                return SELECTION;
+            } else {
+                StringBuilder sb = new StringBuilder();
+                sb.append("(");
+                sb.append(originalSelection);
+                sb.append(") AND ");
+                sb.append(SELECTION);
+                return sb.toString();
+            }
         }
     }
 
