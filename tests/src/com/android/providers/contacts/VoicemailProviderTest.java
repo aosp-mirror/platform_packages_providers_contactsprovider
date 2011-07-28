@@ -16,13 +16,8 @@
 
 package com.android.providers.contacts;
 
-import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
-import android.content.ContextWrapper;
-import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.CallLog.Calls;
@@ -31,13 +26,10 @@ import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -49,11 +41,7 @@ import java.util.List;
  * </code>
  */
 // TODO: Test that calltype and voicemail_uri are auto populated by the provider.
-public class VoicemailProviderTest extends BaseContactsProvider2Test {
-    private static final String ALL_PERMISSION =
-            "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
-    private static final String OWN_PERMISSION =
-            "com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL";
+public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     /** Fields specific to call_log provider that should not be exposed by voicemail provider. */
     private static final String[] CALLLOG_PROVIDER_SPECIFIC_COLUMNS = {
             Calls.CACHED_NAME,
@@ -67,49 +55,9 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
     private static final int NUM_VOICEMAIL_FIELDS = 11;
 
     @Override
-    protected Class<? extends ContentProvider> getProviderClass() {
-       return TestVoicemailProvider.class;
-    }
-
-    @Override
-    protected String getAuthority() {
-        return VoicemailContract.AUTHORITY;
-    }
-
-    private boolean mUseSourceUri = false;
-    private File mTestDirectory;
-
-    @Override
     protected void setUp() throws Exception {
         super.setUp();
-        addProvider(TestVoicemailProvider.class, VoicemailContract.AUTHORITY);
         setUpForOwnPermission();
-        TestVoicemailProvider.setVvmProviderCallDelegate(createMockProviderCalls());
-    }
-
-    @Override
-    protected void tearDown() throws Exception {
-        removeTestDirectory();
-        super.tearDown();
-    }
-
-    private void setUpForOwnPermission() {
-        // Give away full permission, in case it was granted previously.
-        mActor.removePermissions(ALL_PERMISSION);
-        mActor.addPermissions(OWN_PERMISSION);
-        mUseSourceUri = true;
-    }
-
-    private void setUpForFullPermission() {
-        mActor.addPermissions(OWN_PERMISSION);
-        mActor.addPermissions(ALL_PERMISSION);
-        mUseSourceUri = false;
-    }
-
-    private void setUpForNoPermission() {
-        mActor.removePermissions(OWN_PERMISSION);
-        mActor.removePermissions(ALL_PERMISSION);
-        mUseSourceUri = true;
     }
 
     /** Returns the appropriate /voicemail URI. */
@@ -123,7 +71,6 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         return mUseSourceUri ?
                 Status.buildSourceUri(mActor.packageName) : Status.CONTENT_URI;
     }
-
 
     public void testInsert() throws Exception {
         ContentValues values = getTestVoicemailValues();
@@ -173,17 +120,18 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         assertEquals(0, getCount(uri, null, null));
     }
 
-    public void testGetType() throws Exception {
-        // Individual item URI with audio mime type set.
+    public void testGetType_ItemUri() throws Exception {
+        // Random item uri.
+        assertEquals(Voicemails.ITEM_TYPE,
+                mResolver.getType(ContentUris.withAppendedId(Voicemails.CONTENT_URI, 100)));
+        // Item uri of an inserted voicemail.
         ContentValues values = getTestVoicemailValues();
         values.put(Voicemails.MIME_TYPE, "foo/bar");
         Uri uri = mResolver.insert(voicemailUri(), values);
         assertEquals(Voicemails.ITEM_TYPE, mResolver.getType(uri));
-        // Made up item uri.
-        assertEquals(Voicemails.ITEM_TYPE,
-                mResolver.getType(ContentUris.withAppendedId(Voicemails.CONTENT_URI, 100)));
+    }
 
-        // base URIs.
+    public void testGetType_DirUri() throws Exception {
         assertEquals(Voicemails.DIR_TYPE, mResolver.getType(Voicemails.CONTENT_URI));
         assertEquals(Voicemails.DIR_TYPE, mResolver.getType(Voicemails.buildSourceUri("foo")));
     }
@@ -508,106 +456,5 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
         values.put(Status.DATA_CHANNEL_STATE, Status.DATA_CHANNEL_STATE_OK);
         values.put(Status.NOTIFICATION_CHANNEL_STATE, Status.NOTIFICATION_CHANNEL_STATE_OK);
         return values;
-    }
-
-    /** The calls that we need to mock out for our VvmProvider, used by TestVoicemailProvider. */
-    public interface VvmProviderCalls {
-        public void sendOrderedBroadcast(Intent intent, String receiverPermission);
-        public File getDir(String name, int mode);
-    }
-
-    public static class TestVoicemailProvider extends VoicemailContentProvider {
-        private static VvmProviderCalls mDelgate;
-
-        public static synchronized void setVvmProviderCallDelegate(VvmProviderCalls delegate) {
-            mDelgate = delegate;
-        }
-
-        @Override
-        protected ContactsDatabaseHelper getDatabaseHelper(Context context) {
-            return new ContactsDatabaseHelper(context);
-        }
-
-        @Override
-        protected Context context() {
-            return new ContextWrapper(getContext()) {
-                @Override
-                public File getDir(String name, int mode) {
-                    return mDelgate.getDir(name, mode);
-                }
-                @Override
-                public void sendBroadcast(Intent intent, String receiverPermission) {
-                    mDelgate.sendOrderedBroadcast(intent, receiverPermission);
-                }
-                @Override
-                public PackageManager getPackageManager() {
-                    return new MockPackageManager("com.test.package1", "com.test.package2");
-                }
-            };
-        }
-
-        @Override
-        protected String getCallingPackage() {
-            return getContext().getPackageName();
-        }
-    }
-
-    /** Lazily construct the test directory when required. */
-    private synchronized File getTestDirectory() {
-        if (mTestDirectory == null) {
-            File baseDirectory = getContext().getCacheDir();
-            mTestDirectory = new File(baseDirectory, Long.toString(System.currentTimeMillis()));
-            assertFalse(mTestDirectory.exists());
-            assertTrue(mTestDirectory.mkdirs());
-        }
-        return mTestDirectory;
-    }
-
-    private void removeTestDirectory() {
-        if (mTestDirectory != null) {
-            recursiveDeleteAll(mTestDirectory);
-        }
-    }
-
-    private static void recursiveDeleteAll(File input) {
-        if (input.isDirectory()) {
-            for (File file : input.listFiles()) {
-                recursiveDeleteAll(file);
-            }
-        }
-        assertTrue("error deleting " + input.getAbsolutePath(), input.delete());
-    }
-
-    private List<File> findAllFiles(File input) {
-        if (input == null) {
-            return Collections.emptyList();
-        }
-        if (!input.isDirectory()) {
-            return Collections.singletonList(input);
-        }
-        List<File> results = new ArrayList<File>();
-        for (File file : input.listFiles()) {
-            results.addAll(findAllFiles(file));
-        }
-        return results;
-    }
-
-    private int countFilesInTestDirectory() {
-        return findAllFiles(mTestDirectory).size();
-    }
-
-    // TODO: Use a mocking framework to mock these calls.
-    private VvmProviderCalls createMockProviderCalls() {
-        return new VvmProviderCalls() {
-            @Override
-            public void sendOrderedBroadcast(Intent intent, String receiverPermission) {
-                // Do nothing for now.
-            }
-
-            @Override
-            public File getDir(String name, int mode) {
-                return getTestDirectory();
-            }
-        };
     }
 }

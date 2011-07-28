@@ -40,5 +40,18 @@ public class PackageIntentReceiver extends BroadcastReceiver {
         if (provider instanceof ContactsProvider2) {
             ((ContactsProvider2)provider).onPackageChanged(packageName);
         }
+        handlePackageChangedForVoicemail(context, intent);
+    }
+
+    private void handlePackageChangedForVoicemail(Context context, Intent intent) {
+        if (intent.getAction().equals(Intent.ACTION_PACKAGE_REMOVED) &&
+                !intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
+            // Forward the intent to the cleanup service for handling the event.
+            Intent intentToForward = new Intent(context, VoicemailCleanupService.class);
+            intentToForward.setData(intent.getData());
+            intentToForward.setAction(intent.getAction());
+            intentToForward.putExtras(intent.getExtras());
+            context.startService(intentToForward);
+        }
     }
 }
