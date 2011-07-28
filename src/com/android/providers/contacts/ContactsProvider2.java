@@ -4546,6 +4546,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         : sStrequentStarredProjectionMap);
                 qb.appendWhere(DbQueryUtils.concatenateClauses(
                         selection, Contacts.IS_USER_PROFILE + "=0"));
+                if (phoneOnly) {
+                    qb.appendWhere(" AND " + Contacts.HAS_PHONE_NUMBER + "=1");
+                }
                 qb.setStrict(true);
                 final String starredQuery = qb.buildQuery(subProjection,
                         Contacts.STARRED + "=1", Contacts._ID, null, null, null);
