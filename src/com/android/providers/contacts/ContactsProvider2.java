@@ -1340,7 +1340,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
-        mPhotoStore = new PhotoStore(getContext().getFilesDir(), mDbHelper);
 
         // The provider is closed for business until fully initialized
         mReadAccessLatch = new CountDownLatch(1);
@@ -1385,6 +1384,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
         mSearchIndexManager = new SearchIndexManager(this);
+        mPhotoStore = new PhotoStore(getContext().getFilesDir(), mDbHelper);
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
 
