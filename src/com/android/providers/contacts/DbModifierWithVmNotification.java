@@ -183,14 +183,19 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
             boolean includeSelfChangeExtra = intentAction.equals(Intent.ACTION_PROVIDER_CHANGED);
             for (ComponentName component :
                     getBroadcastReceiverComponents(intentAction, notificationUri)) {
+                // Ignore any package that is not affected by the change and don't have full access
+                // either.
+                if (!modifiedPackages.contains(component.getPackageName()) &&
+                        !mVoicemailPermissions.packageHasFullAccess(component.getPackageName())) {
+                    continue;
+                }
+
                 Intent intent = new Intent(intentAction, notificationUri);
                 intent.setComponent(component);
                 if (includeSelfChangeExtra && callingPackages != null) {
                     intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
                             callingPackages.contains(component.getPackageName()));
                 }
-                // If this package is not affected by the change then it shall receive the intent
-                // only if it has READ_WRITE_ALL_VOICEMAIL permissions.
                 String permissionNeeded = modifiedPackages.contains(component.getPackageName()) ?
                         READ_WRITE_OWN_VOICEMAIL : READ_WRITE_ALL_VOICEMAIL;
                 mContext.sendBroadcast(intent, permissionNeeded);
