@@ -439,14 +439,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 RawContacts.ACCOUNT_TYPE,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.DATA_SET,
-                RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
         };
 
         int DELETED = 0;
         int ACCOUNT_TYPE = 1;
         int ACCOUNT_NAME = 2;
         int DATA_SET = 3;
-        int ACCOUNT_TYPE_AND_DATA_SET = 4;
     }
 
     public static final String DEFAULT_ACCOUNT_TYPE = "com.google";

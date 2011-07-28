@@ -215,7 +215,8 @@ import java.util.Locale;
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
 
         public static final String NAME_LOOKUP_JOIN_RAW_CONTACTS = "name_lookup "
-                + "INNER JOIN raw_contacts ON (name_lookup.raw_contact_id = raw_contacts._id)";
+                + "INNER JOIN view_raw_contacts ON (name_lookup.raw_contact_id = "
+                + "view_raw_contacts._id)";
     }
 
     public interface Views {
