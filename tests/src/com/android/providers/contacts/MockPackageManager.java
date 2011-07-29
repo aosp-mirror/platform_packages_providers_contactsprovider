@@ -51,4 +51,9 @@ public class MockPackageManager extends android.test.mock.MockPackageManager {
     public String[] getPackagesForUid(int uid) {
         return new String[] {mPackages[0]};
     }
+
+    @Override
+    public int checkPermission(String permName, String pkgName) {
+        return PERMISSION_GRANTED;
+    }
 }
