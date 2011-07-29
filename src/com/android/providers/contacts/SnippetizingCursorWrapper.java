@@ -18,8 +18,6 @@ package com.android.providers.contacts;
 
 import android.database.CrossProcessCursor;
 import android.database.Cursor;
-import android.database.CursorWindow;
-import android.database.CursorWrapper;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.text.TextUtils;
@@ -38,14 +36,11 @@ import java.util.regex.Pattern;
  * Note that this wrapper implements {@link CrossProcessCursor}, but will only behave as such if the
  * cursor it is wrapping is itself a {@link CrossProcessCursor} or another wrapper around the same.
  */
-public class SnippetizingCursorWrapper extends CursorWrapper implements CrossProcessCursor {
+public class SnippetizingCursorWrapper extends CrossProcessCursorWrapper {
 
     // Pattern for splitting a line into tokens.  This matches e-mail addresses as a single token,
     // otherwise splitting on any group of non-alphanumeric characters.
     Pattern SPLIT_PATTERN = Pattern.compile("([\\w-\\.]+)@((?:[\\w]+\\.)+)([a-zA-Z]{2,4})|[\\w]+");
-
-    // The cross process cursor.  Only non-null if the wrapped cursor was a cross-process cursor.
-    private final CrossProcessCursor mCrossProcessCursor;
 
     // Index of the snippet field (if any).
     private final int mSnippetIndex;
@@ -71,10 +66,9 @@ public class SnippetizingCursorWrapper extends CursorWrapper implements CrossPro
      * @param ellipsis Ellipsis characters to use at the start or end of the snippet if appropriate.
      * @param maxTokens Maximum number of tokens to include in the snippet.
      */
-    SnippetizingCursorWrapper(Cursor cursor, String query, String startMatch,
-            String endMatch, String ellipsis, int maxTokens) {
+    SnippetizingCursorWrapper(Cursor cursor, String query, String startMatch, String endMatch,
+            String ellipsis, int maxTokens) {
         super(cursor);
-        mCrossProcessCursor = getCrossProcessCursor(cursor);
         mSnippetIndex = getColumnIndex(SearchSnippetColumns.SNIPPET);
         mQuery = query;
         mStartMatch = startMatch;
@@ -82,43 +76,6 @@ public class SnippetizingCursorWrapper extends CursorWrapper implements CrossPro
         mEllipsis = ellipsis;
         mMaxTokens = maxTokens;
         mDoSnippetizing = mQuery.split(ContactsProvider2.QUERY_TOKENIZER_REGEX).length == 1;
-    }
-
-    private CrossProcessCursor getCrossProcessCursor(Cursor cursor) {
-        if (cursor instanceof CrossProcessCursor) {
-            return (CrossProcessCursor) cursor;
-        } else if (cursor instanceof CursorWrapper) {
-            return getCrossProcessCursor(((CursorWrapper) cursor).getWrappedCursor());
-        } else {
-            return null;
-        }
-    }
-
-    @Override
-    public void fillWindow(int pos, CursorWindow window) {
-        if (mCrossProcessCursor != null) {
-            mCrossProcessCursor.fillWindow(pos, window);
-        } else {
-            throw new UnsupportedOperationException("Wrapped cursor is not a cross-process cursor");
-        }
-    }
-
-    @Override
-    public CursorWindow getWindow() {
-        if (mCrossProcessCursor != null) {
-            return mCrossProcessCursor.getWindow();
-        } else {
-            throw new UnsupportedOperationException("Wrapped cursor is not a cross-process cursor");
-        }
-    }
-
-    @Override
-    public boolean onMove(int oldPosition, int newPosition) {
-        if (mCrossProcessCursor != null) {
-            return mCrossProcessCursor.onMove(oldPosition, newPosition);
-        } else {
-            throw new UnsupportedOperationException("Wrapped cursor is not a cross-process cursor");
-        }
     }
 
     @Override

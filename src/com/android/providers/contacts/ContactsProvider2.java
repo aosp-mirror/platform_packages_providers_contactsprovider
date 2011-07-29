@@ -4354,7 +4354,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // If the cursor doesn't contain a snippet column, don't bother wrapping it.
         if (cursor.getColumnIndex(SearchSnippetColumns.SNIPPET) < 0) {
-            return cursor;
+            if (VERBOSE_LOGGING) {
+                return new InstrumentedCursorWrapper(cursor, uri, TAG);
+            } else {
+                return cursor;
+            }
         }
 
         // Parse out snippet arguments for use when snippets are retrieved from the cursor.
@@ -4375,8 +4379,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
                 : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
 
-        return new SnippetizingCursorWrapper(cursor, query, startMatch, endMatch, ellipsis,
-                maxTokens);
+        if (VERBOSE_LOGGING) {
+            return new InstrumentedCursorWrapper(new SnippetizingCursorWrapper(
+                    cursor, query, startMatch, endMatch, ellipsis, maxTokens), uri, TAG);
+        } else {
+            return new SnippetizingCursorWrapper(cursor, query, startMatch, endMatch, ellipsis,
+                    maxTokens);
+        }
     }
 
     private CrossProcessCursor getCrossProcessCursor(Cursor cursor) {
