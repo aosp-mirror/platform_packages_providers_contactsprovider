@@ -201,32 +201,11 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
 
     @Override
     public String getType(UriData uriData) {
-        // TODO: DB lookup for the mime type may cause strict mode exception for the callers of
-        // getType(). See if this could be avoided.
         if (uriData.hasId()) {
-            // An individual voicemail - so lookup the MIME type in the db.
-            return lookupMimeType(uriData);
+            return Voicemails.ITEM_TYPE;
+        } else {
+            return Voicemails.DIR_TYPE;
         }
-        // Not an individual voicemail - must be a directory listing type.
-        return Voicemails.DIR_TYPE;
-    }
-
-    /** Query the db for the MIME type of the given URI, called only from getType(). */
-    private String lookupMimeType(UriData uriData) {
-        Cursor cursor = null;
-        try {
-            // Use queryInternal, bypassing provider permission check. This is needed because
-            // getType() can be called from any application context (even without voicemail
-            // permissions) to know the MIME type of the URI. There is no security issue here as we
-            // do not expose any sensitive data through this interface.
-            cursor = query(uriData, MIME_TYPE_ONLY_PROJECTION, null, null, null);
-            if (cursor.moveToFirst()) {
-                return cursor.getString(cursor.getColumnIndex(Voicemails.MIME_TYPE));
-            }
-        } finally {
-            CloseUtils.closeQuietly(cursor);
-        }
-        return null;
     }
 
     @Override
