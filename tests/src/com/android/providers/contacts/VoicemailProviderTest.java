@@ -174,14 +174,14 @@ public class VoicemailProviderTest extends BaseContactsProvider2Test {
     }
 
     public void testGetType() throws Exception {
-        // voicemail with no MIME type.
+        // Individual item URI with audio mime type set.
         ContentValues values = getTestVoicemailValues();
-        Uri uri = mResolver.insert(voicemailUri(), values);
-        assertEquals(null, mResolver.getType(uri));
-
         values.put(Voicemails.MIME_TYPE, "foo/bar");
-        uri = mResolver.insert(voicemailUri(), values);
-        assertEquals("foo/bar", mResolver.getType(uri));
+        Uri uri = mResolver.insert(voicemailUri(), values);
+        assertEquals(Voicemails.ITEM_TYPE, mResolver.getType(uri));
+        // Made up item uri.
+        assertEquals(Voicemails.ITEM_TYPE,
+                mResolver.getType(ContentUris.withAppendedId(Voicemails.CONTENT_URI, 100)));
 
         // base URIs.
         assertEquals(Voicemails.DIR_TYPE, mResolver.getType(Voicemails.CONTENT_URI));
