@@ -137,9 +137,11 @@ public class ContactAggregator {
     private SQLiteStatement mMarkForAggregation;
     private SQLiteStatement mPhotoIdUpdate;
     private SQLiteStatement mDisplayNameUpdate;
+    private SQLiteStatement mAccountWithDataSetCheck;
     private SQLiteStatement mProfileUpdate;
     private SQLiteStatement mNoDataSetProfileUpdate;
     private SQLiteStatement mNoAccountProfileUpdate;
+    private SQLiteStatement mAccountWithProfileCreate;
     private SQLiteStatement mHasPhoneNumberUpdate;
     private SQLiteStatement mLookupKeyUpdate;
     private SQLiteStatement mStarredUpdate;
@@ -324,6 +326,12 @@ public class ContactAggregator {
                 " SET " + Contacts.NAME_RAW_CONTACT_ID + "=? " +
                 " WHERE " + Contacts._ID + "=?");
 
+        mAccountWithDataSetCheck = db.compileStatement(
+                "SELECT COUNT(*) FROM " + Tables.ACCOUNTS +
+                " WHERE " + AccountsColumns.ACCOUNT_TYPE + "=?" +
+                " AND " + AccountsColumns.ACCOUNT_NAME + "=?" +
+                " AND " + AccountsColumns.DATA_SET + "=?");
+
         mProfileUpdate = db.compileStatement(
                 "UPDATE " + Tables.ACCOUNTS +
                 " SET " + AccountsColumns.PROFILE_RAW_CONTACT_ID + "=? " +
@@ -344,6 +352,12 @@ public class ContactAggregator {
                 " WHERE " + AccountsColumns.ACCOUNT_TYPE + " IS NULL" +
                 " AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL" +
                 " AND " + AccountsColumns.DATA_SET + " IS NULL");
+
+        mAccountWithProfileCreate = db.compileStatement(
+                "INSERT INTO " + Tables.ACCOUNTS +
+                "(" + AccountsColumns.ACCOUNT_TYPE + "," + AccountsColumns.ACCOUNT_NAME + "," +
+                AccountsColumns.DATA_SET + "," + AccountsColumns.PROFILE_RAW_CONTACT_ID + ")" +
+                " VALUES (?,?,?,?)");
 
         mLookupKeyUpdate = db.compileStatement(
                 "UPDATE " + Tables.CONTACTS +
@@ -618,17 +632,38 @@ public class ContactAggregator {
         if (accountWithDataSet == null) {
             mNoAccountProfileUpdate.bindLong(1, rawContactId);
             mNoAccountProfileUpdate.execute();
-        } else if (accountWithDataSet.getDataSet() == null) {
-            mNoDataSetProfileUpdate.bindLong(1, rawContactId);
-            mNoDataSetProfileUpdate.bindString(2, accountWithDataSet.getAccountType());
-            mNoDataSetProfileUpdate.bindString(3, accountWithDataSet.getAccountName());
-            mNoDataSetProfileUpdate.execute();
         } else {
-            mProfileUpdate.bindLong(1, rawContactId);
-            mProfileUpdate.bindString(2, accountWithDataSet.getAccountType());
-            mProfileUpdate.bindString(3, accountWithDataSet.getAccountName());
-            mProfileUpdate.bindString(4, accountWithDataSet.getDataSet());
-            mProfileUpdate.execute();
+            String accountType = accountWithDataSet.getAccountType();
+            String accountName = accountWithDataSet.getAccountName();
+            String dataSet = accountWithDataSet.getDataSet();
+            if (dataSet == null) {
+                mNoDataSetProfileUpdate.bindLong(1, rawContactId);
+                mNoDataSetProfileUpdate.bindString(2, accountType);
+                mNoDataSetProfileUpdate.bindString(3, accountName);
+                mNoDataSetProfileUpdate.execute();
+            } else {
+                // If there is a data set, it's possible that the account row does not yet exist
+                // (accounts without data sets are automatically created based on the system
+                // accounts). So first check to see if the account exists.
+                mAccountWithDataSetCheck.bindString(1, accountType);
+                mAccountWithDataSetCheck.bindString(2, accountName);
+                mAccountWithDataSetCheck.bindString(3, dataSet);
+                if (mAccountWithDataSetCheck.simpleQueryForLong() == 1) {
+                    // Account record already exists,  Update it with the profile raw contact ID.
+                    mProfileUpdate.bindLong(1, rawContactId);
+                    mProfileUpdate.bindString(2, accountType);
+                    mProfileUpdate.bindString(3, accountName);
+                    mProfileUpdate.bindString(4, dataSet);
+                    mProfileUpdate.execute();
+                } else {
+                    // Account record needed.
+                    mAccountWithProfileCreate.bindString(1, accountType);
+                    mAccountWithProfileCreate.bindString(2, accountName);
+                    mAccountWithProfileCreate.bindString(3, dataSet);
+                    mAccountWithProfileCreate.bindLong(4, rawContactId);
+                    mAccountWithProfileCreate.execute();
+                }
+            }
         }
     }
 

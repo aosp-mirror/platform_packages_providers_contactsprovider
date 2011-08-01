@@ -1945,6 +1945,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 getExpectedProfileDataValues());
     }
 
+    public void testInsertProfileWithDataSetTriggersAccountCreation() {
+        // Check that we have no profile raw contacts.
+        assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, new ContentValues[]{});
+
+        // Insert a profile record with a new data set.
+        Account account = new Account("a", "b");
+        String dataSet = "c";
+        Uri profileUri = maybeAddAccountQueryParameters(Profile.CONTENT_RAW_CONTACTS_URI, account)
+                .buildUpon().appendQueryParameter(RawContacts.DATA_SET, dataSet).build();
+        ContentValues values = new ContentValues();
+        long rawContactId = ContentUris.parseId(mResolver.insert(profileUri, values));
+        values.put(RawContacts._ID, rawContactId);
+
+        // Check that querying for the profile gets the created raw contact.
+        assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, values);
+    }
+
     public void testPhonesWithStatusUpdate() {
 
         ContentValues values = new ContentValues();
