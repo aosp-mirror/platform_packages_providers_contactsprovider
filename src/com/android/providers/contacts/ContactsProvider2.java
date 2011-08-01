@@ -2267,6 +2267,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
             if (dataSet == null) {
                 dataSet = mValues.getAsString(RawContacts.DATA_SET);
+            } else {
+                mValues.put(RawContacts.DATA_SET, dataSet);
             }
             accountWithDataSet = new AccountWithDataSet(account.name, account.type, dataSet);
         }
