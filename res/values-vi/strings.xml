@@ -23,8 +23,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Chọn để hoàn tất nâng cấp."</string>
     <string name="default_directory" msgid="93961630309570294">"Danh bạ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Khác"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
-    <skip />
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Truy cập tất cả các thư thoại"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Cho phép ứng dụng lưu trữ và truy xuất tất cả thư thoại mà thiết bị này có thể truy cập."</string>
 </resources>

@@ -23,8 +23,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"업그레이드를 완료하려면 선택하세요."</string>
     <string name="default_directory" msgid="93961630309570294">"주소록"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"기타"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
-    <skip />
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"모든 음성사서함에 액세스"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"애플리케이션이 이 기기가 액세스할 수 있는 모든 음성사서함을 저장하고 검색할 수 있습니다."</string>
 </resources>
