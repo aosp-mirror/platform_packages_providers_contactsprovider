@@ -45,4 +45,11 @@
          they want to allow the application to do this. [CHAR LIMIT=NONE] -->
     <string name="read_write_all_voicemail_description">Allows the application to store and retrieve
         all voicemails that this device can access.</string>
+
+    <!-- The prefix string before the number used for the display name for the voicemail table.
+         Because of the way this is combined in SQL we can't allow a generic format string.
+         The resulting string will be this string with the number appended to the end.
+         Note that the trailing space is important, and that to achieve it we have to wrap the
+         string in double quotes. -->
+    <string name="voicemail_from_column">"Voicemail from "</string>
 </resources>

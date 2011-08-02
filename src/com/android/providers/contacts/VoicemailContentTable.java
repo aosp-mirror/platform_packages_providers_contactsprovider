@@ -26,12 +26,14 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog.Calls;
+import android.provider.OpenableColumns;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
@@ -44,20 +46,7 @@ import java.io.IOException;
  */
 public class VoicemailContentTable implements VoicemailTable.Delegate {
     private static final String TAG = "VoicemailContentProvider";
-    // Voicemail projection map
-    private static final ProjectionMap sVoicemailProjectionMap = new ProjectionMap.Builder()
-            .add(Voicemails._ID)
-            .add(Voicemails.NUMBER)
-            .add(Voicemails.DATE)
-            .add(Voicemails.DURATION)
-            .add(Voicemails.IS_READ)
-            .add(Voicemails.STATE)
-            .add(Voicemails.SOURCE_DATA)
-            .add(Voicemails.SOURCE_PACKAGE)
-            .add(Voicemails.HAS_CONTENT)
-            .add(Voicemails.MIME_TYPE)
-            .add(Voicemails._DATA)
-            .build();
+    private final ProjectionMap mVoicemailProjectionMap;
 
     /** The private directory in which to store the data associated with the voicemail. */
     private static final String DATA_DIRECTORY = "voicemail-data";
@@ -76,11 +65,37 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         mContext = context;
         mDbHelper = dbHelper;
         mDelegateHelper = contentProviderHelper;
+        mVoicemailProjectionMap = new ProjectionMap.Builder()
+                .add(Voicemails._ID)
+                .add(Voicemails.NUMBER)
+                .add(Voicemails.DATE)
+                .add(Voicemails.DURATION)
+                .add(Voicemails.IS_READ)
+                .add(Voicemails.STATE)
+                .add(Voicemails.SOURCE_DATA)
+                .add(Voicemails.SOURCE_PACKAGE)
+                .add(Voicemails.HAS_CONTENT)
+                .add(Voicemails.MIME_TYPE)
+                .add(Voicemails._DATA)
+                .add(OpenableColumns.DISPLAY_NAME, createDisplayName(context))
+                .add(OpenableColumns.SIZE, "NULL")
+                .build();
+    }
+
+    /**
+     * Calculate a suitable value for the display name column.
+     * <p>
+     * This is a bit of a hack, it uses a suitably localized string and uses SQL to combine this
+     * with the number column.
+     */
+    private static String createDisplayName(Context context) {
+        String prefix = context.getString(R.string.voicemail_from_column);
+        return DatabaseUtils.sqlEscapeString(prefix) + " || " + Voicemails.NUMBER;
     }
 
     @Override
     public Uri insert(UriData uriData, ContentValues values) {
-        checkForSupportedColumns(sVoicemailProjectionMap, values);
+        checkForSupportedColumns(mVoicemailProjectionMap, values);
         ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
         mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);
@@ -165,7 +180,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             String[] selectionArgs, String sortOrder) {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         qb.setTables(mTableName);
-        qb.setProjectionMap(sVoicemailProjectionMap);
+        qb.setProjectionMap(mVoicemailProjectionMap);
         qb.setStrict(true);
 
         String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
@@ -181,7 +196,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     @Override
     public int update(UriData uriData, ContentValues values, String selection,
             String[] selectionArgs) {
-        checkForSupportedColumns(sVoicemailProjectionMap, values);
+        checkForSupportedColumns(mVoicemailProjectionMap, values);
         checkUpdateSupported(uriData);
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         // TODO: This implementation does not allow bulk update because it only accepts
