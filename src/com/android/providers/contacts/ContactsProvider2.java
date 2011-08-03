@@ -1679,6 +1679,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return ContactsDatabaseHelper.getInstance(context);
     }
 
+    @VisibleForTesting
     /* package */ PhotoStore getPhotoStore() {
         return mPhotoStore;
     }
