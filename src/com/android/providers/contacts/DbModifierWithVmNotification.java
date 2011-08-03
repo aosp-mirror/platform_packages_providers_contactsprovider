@@ -17,7 +17,7 @@
 
 package com.android.providers.contacts;
 
-import static android.Manifest.permission.READ_WRITE_OWN_VOICEMAIL;
+import static android.Manifest.permission.ADD_VOICEMAIL;
 import static com.android.providers.contacts.Manifest.permission.READ_WRITE_ALL_VOICEMAIL;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
@@ -197,7 +197,7 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
                             callingPackages.contains(component.getPackageName()));
                 }
                 String permissionNeeded = modifiedPackages.contains(component.getPackageName()) ?
-                        READ_WRITE_OWN_VOICEMAIL : READ_WRITE_ALL_VOICEMAIL;
+                        ADD_VOICEMAIL : READ_WRITE_ALL_VOICEMAIL;
                 mContext.sendBroadcast(intent, permissionNeeded);
                 Log.v(TAG, String.format("Sent intent. act:%s, url:%s, comp:%s, perm:%s," +
                         " self_change:%s", intent.getAction(), intent.getData(),

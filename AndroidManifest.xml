@@ -55,7 +55,7 @@
         <provider android:name="VoicemailContentProvider"
             android:authorities="com.android.voicemail"
             android:syncable="false" android:multiprocess="false"
-            android:permission="com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL">
+            android:permission="com.android.voicemail.permission.ADD_VOICEMAIL">
         </provider>
 
         <!-- TODO: create permissions for social data -->
