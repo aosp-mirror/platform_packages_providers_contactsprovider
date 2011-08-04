@@ -158,7 +158,12 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         try {
             cursor = query(uriData, FILENAME_ONLY_PROJECTION, selection, selectionArgs, null);
             while (cursor.moveToNext()) {
-                File file = new File(cursor.getString(0));
+                String filename = cursor.getString(0);
+                if (filename == null) {
+                    Log.w(TAG, "No filename for uri " + uriData.getUri() + ", cannot delete file");
+                    continue;
+                }
+                File file = new File(filename);
                 if (file.exists()) {
                     boolean success = file.delete();
                     if (!success) {
