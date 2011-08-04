@@ -2262,14 +2262,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * @param values {@link ContentValues} to read and possibly update.
      */
     private AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values) {
-        final Account account = resolveAccount(uri, mValues);
+        final Account account = resolveAccount(uri, values);
         AccountWithDataSet accountWithDataSet = null;
         if (account != null) {
             String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
             if (dataSet == null) {
-                dataSet = mValues.getAsString(RawContacts.DATA_SET);
+                dataSet = values.getAsString(RawContacts.DATA_SET);
             } else {
-                mValues.put(RawContacts.DATA_SET, dataSet);
+                values.put(RawContacts.DATA_SET, dataSet);
             }
             accountWithDataSet = new AccountWithDataSet(account.name, account.type, dataSet);
         }
@@ -2796,11 +2796,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.clear();
         mValues.putAll(values);
 
-        final Account account = resolveAccount(uri, mValues);
-        String dataSet = null;
-        if (account != null && mValues.containsKey(Groups.DATA_SET)) {
-            dataSet = mValues.getAsString(Groups.DATA_SET);
-        }
+        final AccountWithDataSet accountWithDataSet = resolveAccountWithDataSet(uri, mValues);
 
         // Replace package with internal mapping
         final String packageName = mValues.getAsString(Groups.RES_PACKAGE);
@@ -2823,20 +2819,28 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // add all starred raw contacts to this group
             String selection;
             String[] selectionArgs;
-            if (account == null) {
+            if (accountWithDataSet == null) {
                 selection = RawContacts.ACCOUNT_NAME + " IS NULL AND "
                         + RawContacts.ACCOUNT_TYPE + " IS NULL AND "
                         + RawContacts.DATA_SET + " IS NULL";
                 selectionArgs = null;
-            } else if (dataSet == null) {
+            } else if (accountWithDataSet.getDataSet() == null) {
                 selection = RawContacts.ACCOUNT_NAME + "=? AND "
-                        + RawContacts.ACCOUNT_TYPE + "=?";
-                selectionArgs = new String[]{account.name, account.type};
+                        + RawContacts.ACCOUNT_TYPE + "=? AND "
+                        + RawContacts.DATA_SET + " IS NULL";
+                selectionArgs = new String[] {
+                        accountWithDataSet.getAccountName(),
+                        accountWithDataSet.getAccountType()
+                };
             } else {
                 selection = RawContacts.ACCOUNT_NAME + "=? AND "
                         + RawContacts.ACCOUNT_TYPE + "=? AND "
                         + RawContacts.DATA_SET + "=?";
-                selectionArgs = new String[]{account.name, account.type, dataSet};
+                selectionArgs = new String[] {
+                        accountWithDataSet.getAccountName(),
+                        accountWithDataSet.getAccountType(),
+                        accountWithDataSet.getDataSet()
+                };
             }
             Cursor c = mDb.query(Tables.RAW_CONTACTS,
                     new String[]{RawContacts._ID, RawContacts.STARRED},
