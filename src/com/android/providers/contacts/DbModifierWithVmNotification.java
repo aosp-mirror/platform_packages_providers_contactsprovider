@@ -20,6 +20,7 @@ package com.android.providers.contacts;
 import static android.Manifest.permission.ADD_VOICEMAIL;
 import static com.android.providers.contacts.Manifest.permission.READ_WRITE_ALL_VOICEMAIL;
 
+import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.google.android.collect.Lists;
@@ -154,6 +155,7 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         while(cursor.moveToNext()) {
             modifiedPackages.add(cursor.getString(SOURCE_PACKAGE_COLUMN_INDEX));
         }
+        MoreCloseables.closeQuietly(cursor);
         return modifiedPackages;
     }
 
