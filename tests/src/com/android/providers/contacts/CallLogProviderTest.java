@@ -49,10 +49,10 @@ import java.util.List;
  */
 @MediumTest
 public class CallLogProviderTest extends BaseContactsProvider2Test {
-    private static final String VOICEMAIL_ALL_PERMISSION =
+    private static final String READ_WRITE_ALL_PERMISSION =
             "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
-    private static final String VOICEMAIL_OWN_PERMISSION =
-            "com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL";
+    private static final String ADD_VOICEMAIL_PERMISSION =
+            "com.android.voicemail.permission.ADD_VOICEMAIL";
 
     /** Fields specific to voicemail provider that should not be exposed by call_log*/
     private static final String[] VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS = new String[] {
@@ -97,13 +97,13 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     }
 
     private void setUpWithVoicemailPermissions() {
-        mActor.addPermissions(VOICEMAIL_OWN_PERMISSION);
-        mActor.addPermissions(VOICEMAIL_ALL_PERMISSION);
+        mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
+        mActor.addPermissions(READ_WRITE_ALL_PERMISSION);
     }
 
     private void setUpWithNoVoicemailPermissions() {
-        mActor.removePermissions(VOICEMAIL_OWN_PERMISSION);
-        mActor.removePermissions(VOICEMAIL_ALL_PERMISSION);
+        mActor.removePermissions(ADD_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(READ_WRITE_ALL_PERMISSION);
     }
 
     public void testInsert_VoicemailCallRecord() {
