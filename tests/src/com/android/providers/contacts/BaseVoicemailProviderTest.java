@@ -32,10 +32,10 @@ import java.util.List;
  * Base class for all tests that require interacting with the voicemail content provider.
  */
 public class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
-    private static final String ALL_PERMISSION =
+    private static final String READ_WRITE_ALL_PERMISSION =
             "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
-    private static final String OWN_PERMISSION =
-            "com.android.voicemail.permission.READ_WRITE_OWN_VOICEMAIL";
+    private static final String ADD_VOICEMAIL_PERMISSION =
+            "com.android.voicemail.permission.ADD_VOICEMAIL";
 
     protected boolean mUseSourceUri = false;
     private File mTestDirectory;
@@ -65,20 +65,20 @@ public class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
 
     protected void setUpForOwnPermission() {
         // Give away full permission, in case it was granted previously.
-        mActor.removePermissions(ALL_PERMISSION);
-        mActor.addPermissions(OWN_PERMISSION);
+        mActor.removePermissions(READ_WRITE_ALL_PERMISSION);
+        mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
         mUseSourceUri = true;
     }
 
     protected void setUpForFullPermission() {
-        mActor.addPermissions(OWN_PERMISSION);
-        mActor.addPermissions(ALL_PERMISSION);
+        mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
+        mActor.addPermissions(READ_WRITE_ALL_PERMISSION);
         mUseSourceUri = false;
     }
 
     protected void setUpForNoPermission() {
-        mActor.removePermissions(OWN_PERMISSION);
-        mActor.removePermissions(ALL_PERMISSION);
+        mActor.removePermissions(ADD_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(READ_WRITE_ALL_PERMISSION);
         mUseSourceUri = true;
     }
 
