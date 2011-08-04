@@ -1945,6 +1945,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 getExpectedProfileDataValues());
     }
 
+    public void testUpdateProfileRawContact() {
+        createBasicProfileContact(new ContentValues());
+        ContentValues updatedValues = new ContentValues();
+        updatedValues.put(RawContacts.SEND_TO_VOICEMAIL, 0);
+        updatedValues.put(RawContacts.CUSTOM_RINGTONE, "rachmaninoff3");
+        updatedValues.put(RawContacts.STARRED, 1);
+        mResolver.update(Profile.CONTENT_RAW_CONTACTS_URI, updatedValues, null, null);
+
+        assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, updatedValues);
+    }
+
     public void testInsertProfileWithDataSetTriggersAccountCreation() {
         // Check that we have no profile raw contacts.
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, new ContentValues[]{});

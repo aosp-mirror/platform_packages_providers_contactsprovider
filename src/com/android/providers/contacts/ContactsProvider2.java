@@ -3511,6 +3511,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case PROFILE_RAW_CONTACTS: {
+                // Restrict update to the user's profile.
+                StringBuilder profileSelection = new StringBuilder();
+                profileSelection.append(RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1");
+                if (!TextUtils.isEmpty(selection)) {
+                    profileSelection.append(" AND (").append(selection).append(")");
+                }
+                count = updateRawContacts(values, profileSelection.toString(), selectionArgs,
+                        callerIsSyncAdapter);
+                break;
+            }
+
             case GROUPS: {
                 count = updateGroups(uri, values, appendAccountToSelection(uri, selection),
                         selectionArgs, callerIsSyncAdapter);
