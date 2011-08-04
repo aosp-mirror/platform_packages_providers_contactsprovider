@@ -297,7 +297,7 @@ public class VoicemailContentProvider extends ContentProvider
 
     /**
      * Checks that either the caller has READ_WRITE_ALL_VOICEMAIL permission, or has the
-     * READ_WRITE_OWN_VOICEMAIL permission and is using a URI that matches
+     * ADD_VOICEMAIL permission and is using a URI that matches
      * /voicemail/?source_package=[source-package] where [source-package] is the same as the calling
      * package.
      *
