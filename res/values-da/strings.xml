@@ -16,6 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="7965035505237135241">"Android-kerneprogrammer"</string>
     <string name="app_label" msgid="3389954322874982620">"Lagring af kontakter"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakter"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Opgradering af kontaktpersoner kræver mere hukommelse"</string>

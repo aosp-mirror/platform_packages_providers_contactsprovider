@@ -16,6 +16,9 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
            xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Label for this app's shared user ID (and thus for all other
+         apps sharing the uid). -->
+    <string name="sharedUserLabel">Android Core Apps</string>
 
     <!-- This is the label for the application that stores contacts data -->
     <string name="app_label">Contacts Storage</string>
