@@ -16,10 +16,13 @@
 
 package com.android.providers.contacts;
 
+import com.android.common.io.MoreCloseables;
+
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
@@ -27,6 +30,7 @@ import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
@@ -223,6 +227,107 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         return uri.buildUpon()
             .appendQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, mActor.packageName)
             .build();
+    }
+
+    public void testUriPermissions() {
+        setUpForFullPermission();
+        final Uri uri1 = insertVoicemail();
+        final Uri uri2 = insertVoicemail();
+        // Give away all permissions before querying. Access to both uris should be denied.
+        setUpForNoPermission();
+        checkHasNoAccessToUri(uri1);
+        checkHasNoAccessToUri(uri2);
+
+        // Just grant permission to uri1. uri1 should pass but uri2 should still fail.
+        mActor.addUriPermissions(uri1);
+        checkHasReadOnlyAccessToUri(uri1);
+        checkHasNoAccessToUri(uri2);
+
+        // Cleanup.
+        mActor.removeUriPermissions(uri1);
+    }
+
+    private void checkHasNoAccessToUri(final Uri uri) {
+        checkHasNoReadAccessToUri(uri);
+        checkHasNoWriteAccessToUri(uri);
+    }
+
+    private void checkHasReadOnlyAccessToUri(final Uri uri) {
+        checkHasReadAccessToUri(uri);
+        checkHasNoWriteAccessToUri(uri);
+    }
+
+    private void checkHasReadAccessToUri(final Uri uri) {
+        Cursor cursor = null;
+        try {
+            cursor = mResolver.query(uri, null, null ,null, null);
+            assertEquals(1, cursor.getCount());
+            try {
+                ParcelFileDescriptor fd = mResolver.openFileDescriptor(uri, "r");
+                assertNotNull(fd);
+                fd.close();
+            } catch (FileNotFoundException e) {
+                fail(e.getMessage());
+            } catch (IOException e) {
+                fail(e.getMessage());
+            }
+        } finally {
+            MoreCloseables.closeQuietly(cursor);
+        }
+    }
+
+    private void checkHasNoReadAccessToUri(final Uri uri) {
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.query(uri, null, null ,null, null);
+            }
+        });
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mResolver.openFileDescriptor(uri, "r");
+                } catch (FileNotFoundException e) {
+                    fail(e.getMessage());
+                }
+            }
+        });
+    }
+
+    private void checkHasNoWriteAccessToUri(final Uri uri) {
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.update(uri, getTestVoicemailValues(), null, null);
+            }
+        });
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.delete(uri, null, null);
+            }
+        });
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mResolver.openFileDescriptor(uri, "w");
+                } catch (FileNotFoundException e) {
+                    fail(e.getMessage());
+                }
+            }
+        });
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mResolver.openFileDescriptor(uri, "rw");
+                } catch (FileNotFoundException e) {
+                    fail(e.getMessage());
+                }
+            }
+        });
     }
 
     // Test to ensure that all operations fail when no voicemail permission is granted.

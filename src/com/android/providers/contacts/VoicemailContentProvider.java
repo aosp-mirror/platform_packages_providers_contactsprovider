@@ -26,6 +26,8 @@ import com.android.providers.contacts.util.TypedUriMatcherImpl;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
@@ -91,7 +93,7 @@ public class VoicemailContentProvider extends ContentProvider
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
+        UriData uriData = checkPermissionsAndCreateUriDataForReadOperation(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause());
         return getTableDelegate(uriData).query(uriData, projection, selectionBuilder.build(),
@@ -117,7 +119,12 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
+        UriData uriData = null;
+        if (mode.equals("r")) {
+            uriData = checkPermissionsAndCreateUriDataForReadOperation(uri);
+        } else {
+            uriData = checkPermissionsAndCreateUriData(uri);
+        }
         // openFileHelper() relies on "_data" column to be populated with the file path.
         return getTableDelegate(uriData).openFile(uriData, mode);
     }
@@ -255,6 +262,20 @@ public class VoicemailContentProvider extends ContentProvider
     public ParcelFileDescriptor openDataFile(UriData uriData, String mode)
             throws FileNotFoundException {
         return openFileHelper(uriData.getUri(), mode);
+    }
+
+    /**
+     * Performs necessary voicemail permission checks common to all operations and returns
+     * the structured representation, {@link UriData}, of the supplied uri.
+     */
+    private UriData checkPermissionsAndCreateUriDataForReadOperation(Uri uri) {
+        // If the caller has been explicitly granted read permission to this URI then no need to
+        // check further.
+        if (context().checkCallingUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                == PackageManager.PERMISSION_GRANTED) {
+            return UriData.createUriData(uri);
+        }
+        return checkPermissionsAndCreateUriData(uri);
     }
 
     /**

@@ -56,8 +56,6 @@ import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
-import android.test.mock.MockResources;
-import android.util.TypedValue;
 
 import java.io.File;
 import java.io.IOException;
@@ -88,6 +86,7 @@ public class ContactsActor {
     private Account[] mAccounts = new Account[0];
 
     private Set<String> mGrantedPermissions = Sets.newHashSet();
+    private final Set<Uri> mGrantedUriPermissions = Sets.newHashSet();
 
     private CountryDetector mMockCountryDetector = new CountryDetector(null){
         @Override
@@ -145,7 +144,7 @@ public class ContactsActor {
             Class<? extends ContentProvider> providerClass, String authority) throws Exception {
         resolver = new MockContentResolver();
         context = new RestrictionMockContext(overallContext, packageName, resolver,
-                mGrantedPermissions);
+                mGrantedPermissions, mGrantedUriPermissions);
         this.packageName = packageName;
 
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
@@ -196,6 +195,14 @@ public class ContactsActor {
         mGrantedPermissions.removeAll(Arrays.asList(permissions));
     }
 
+    public void addUriPermissions(Uri... uris) {
+        mGrantedUriPermissions.addAll(Arrays.asList(uris));
+    }
+
+    public void removeUriPermissions(Uri... uris) {
+        mGrantedUriPermissions.removeAll(Arrays.asList(uris));
+    }
+
     /**
      * Mock {@link Context} that reports specific well-known values for testing
      * data protection. The creator can override the owner package name, and
@@ -213,16 +220,19 @@ public class ContactsActor {
         private final ContentResolver mResolver;
         private final Resources mRes;
         private final Set<String> mGrantedPermissions;
+        private final Set<Uri> mGrantedUriPermissions;
 
         /**
          * Create a {@link Context} under the given package name.
          */
         public RestrictionMockContext(Context overallContext, String reportedPackageName,
-                ContentResolver resolver, Set<String> grantedPermissions) {
+                ContentResolver resolver, Set<String> grantedPermissions,
+                Set<Uri> grantedUriPermissions) {
             mOverallContext = overallContext;
             mReportedPackageName = reportedPackageName;
             mResolver = resolver;
             mGrantedPermissions = grantedPermissions;
+            mGrantedUriPermissions = grantedUriPermissions;
 
             mPackageManager = new ContactsMockPackageManager();
             mPackageManager.addPackage(1000, PACKAGE_GREY);
@@ -274,6 +284,20 @@ public class ContactsActor {
         @Override
         public int checkCallingPermission(String permission) {
             if (mGrantedPermissions.contains(permission)) {
+                return PackageManager.PERMISSION_GRANTED;
+            } else {
+                return PackageManager.PERMISSION_DENIED;
+            }
+        }
+
+        @Override
+        public int checkUriPermission(Uri uri, int pid, int uid, int modeFlags) {
+            return checkCallingUriPermission(uri, modeFlags);
+        }
+
+        @Override
+        public int checkCallingUriPermission(Uri uri, int modeFlags) {
+            if (mGrantedUriPermissions.contains(uri)) {
                 return PackageManager.PERMISSION_GRANTED;
             } else {
                 return PackageManager.PERMISSION_DENIED;
