@@ -25,4 +25,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Drugo"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Dostop do glasovne pošte"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Programu omogoča shranjevanje in prenos glasovne pošte, do katere lahko dostopa ta naprava."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>

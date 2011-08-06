@@ -25,4 +25,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Overig"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Toegang tot alle voicemails"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Hiermee kan de app alle voicemails opslaan en ophalen waartoe dit apparaat toegang heeft."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>

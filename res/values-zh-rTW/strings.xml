@@ -23,8 +23,8 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"選取以完成升級。"</string>
     <string name="default_directory" msgid="93961630309570294">"聯絡人"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"其他"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"存取所有語音留言"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"允許應用程式儲存及擷取這個裝置可存取的所有語音留言。"</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
     <skip />
 </resources>

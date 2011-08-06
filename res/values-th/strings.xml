@@ -25,4 +25,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"อื่นๆ"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"เข้าถึงข้อความเสียงทั้งหมด"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"อนุญาตให้แอปพลิเคชันจัดเก็บและเรียกข้อความเสียงทั้งหมดที่อุปกรณ์นี้สามารถเข้าถึงได้"</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>
