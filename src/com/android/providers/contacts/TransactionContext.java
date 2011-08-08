@@ -31,13 +31,21 @@ import java.util.Set;
  */
 public class TransactionContext  {
 
+    private final boolean mForProfile;
     private HashMap<Long, AccountWithDataSet> mInsertedRawContacts = Maps.newHashMap();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
-    private HashMap<Long, AccountWithDataSet> mInsertedProfileRawContacts = Maps.newHashMap();
     private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexContacts = Sets.newHashSet();
     private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
+
+    public TransactionContext(boolean forProfile) {
+        mForProfile = forProfile;
+    }
+
+    public boolean isForProfile() {
+        return mForProfile;
+    }
 
     public void rawContactInserted(long rawContactId, AccountWithDataSet accountWithDataSet) {
         mInsertedRawContacts.put(rawContactId, accountWithDataSet);
@@ -45,11 +53,6 @@ public class TransactionContext  {
 
     public void rawContactUpdated(long rawContactId) {
         mUpdatedRawContacts.add(rawContactId);
-    }
-
-    public void profileRawContactInserted(long rawContactId,
-            AccountWithDataSet accountWithDataSet) {
-        mInsertedProfileRawContacts.put(rawContactId, accountWithDataSet);
     }
 
     public void markRawContactDirty(long rawContactId) {
@@ -74,10 +77,6 @@ public class TransactionContext  {
 
     public Set<Long> getUpdatedRawContactIds() {
         return mUpdatedRawContacts;
-    }
-
-    public Map<Long, AccountWithDataSet> getInsertedProfileRawContactIds() {
-        return mInsertedProfileRawContacts;
     }
 
     public Set<Long> getDirtyRawContactIds() {
@@ -107,7 +106,6 @@ public class TransactionContext  {
     public void clear() {
         mInsertedRawContacts.clear();
         mUpdatedRawContacts.clear();
-        mInsertedProfileRawContacts.clear();
         mUpdatedSyncStates.clear();
         mDirtyRawContacts.clear();
     }

@@ -393,27 +393,41 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
             int presence, String status, int chatMode) {
-        return insertStatusUpdate(protocol, customProtocol, handle, presence, status, 0, chatMode);
+        return insertStatusUpdate(protocol, customProtocol, handle, presence, status, chatMode,
+                false);
     }
 
     protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
-            int presence, String status, long timestamp, int chatMode) {
+            int presence, String status, int chatMode, boolean isUserProfile) {
+        return insertStatusUpdate(protocol, customProtocol, handle, presence, status, 0, chatMode,
+                isUserProfile);
+    }
+
+    protected Uri insertStatusUpdate(int protocol, String customProtocol, String handle,
+            int presence, String status, long timestamp, int chatMode, boolean isUserProfile) {
         ContentValues values = new ContentValues();
         values.put(StatusUpdates.PROTOCOL, protocol);
         values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
         values.put(StatusUpdates.IM_HANDLE, handle);
-        return insertStatusUpdate(values, presence, status, timestamp, chatMode);
+        return insertStatusUpdate(values, presence, status, timestamp, chatMode, isUserProfile);
     }
 
     protected Uri insertStatusUpdate(
             long dataId, int presence, String status, long timestamp, int chatMode) {
+        return insertStatusUpdate(dataId, presence, status, timestamp, chatMode, false);
+    }
+
+    protected Uri insertStatusUpdate(
+            long dataId, int presence, String status, long timestamp, int chatMode,
+            boolean isUserProfile) {
         ContentValues values = new ContentValues();
         values.put(StatusUpdates.DATA_ID, dataId);
-        return insertStatusUpdate(values, presence, status, timestamp, chatMode);
+        return insertStatusUpdate(values, presence, status, timestamp, chatMode, isUserProfile);
     }
 
     private Uri insertStatusUpdate(
-            ContentValues values, int presence, String status, long timestamp, int chatMode) {
+            ContentValues values, int presence, String status, long timestamp, int chatMode,
+            boolean isUserProfile) {
         if (presence != 0) {
             values.put(StatusUpdates.PRESENCE, presence);
             values.put(StatusUpdates.CHAT_CAPABILITY, chatMode);
@@ -425,7 +439,10 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             values.put(StatusUpdates.STATUS_TIMESTAMP, timestamp);
         }
 
-        Uri resultUri = mResolver.insert(StatusUpdates.CONTENT_URI, values);
+        Uri insertUri = isUserProfile
+                ? StatusUpdates.PROFILE_CONTENT_URI
+                : StatusUpdates.CONTENT_URI;
+        Uri resultUri = mResolver.insert(insertUri, values);
         return resultUri;
     }
 

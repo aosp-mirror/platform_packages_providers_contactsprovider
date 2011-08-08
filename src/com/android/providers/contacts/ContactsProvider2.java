@@ -73,6 +73,7 @@ import android.content.SyncAdapterType;
 import android.content.UriMatcher;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.pm.ProviderInfo;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
@@ -85,6 +86,7 @@ import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -212,7 +214,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
-    private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+    private static final ProfileAwareUriMatcher sUriMatcher =
+            new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
 
     /**
      * Used to insert a column into strequent results, which enables SQL to sort the list using
@@ -308,6 +311,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final int SYNCSTATE = 11000;
     private static final int SYNCSTATE_ID = 11001;
+    private static final int PROFILE_SYNCSTATE = 11002;
+    private static final int PROFILE_SYNCSTATE_ID = 11003;
 
     private static final int SEARCH_SUGGESTIONS = 12001;
     private static final int SEARCH_SHORTCUT = 12002;
@@ -335,6 +340,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PROFILE_RAW_CONTACTS_ID = 19006;
     private static final int PROFILE_RAW_CONTACTS_ID_DATA = 19007;
     private static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
+    private static final int PROFILE_STATUS_UPDATES = 19009;
 
     private static final int DATA_USAGE_FEEDBACK_ID = 20001;
 
@@ -347,6 +353,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private static final int DISPLAY_PHOTO = 22000;
     private static final int PHOTO_DIMENSIONS = 22001;
+
+    // Inserts into URIs in this map will direct to the profile database if the parent record's
+    // value (looked up from the ContentValues object with the key specified by the value in this
+    // map) is in the profile ID-space (see {@link ProfileDatabaseHelper#PROFILE_ID_SPACE}).
+    private static final Map<Integer, String> INSERT_URI_ID_VALUE_MAP = Maps.newHashMap();
+    static {
+        INSERT_URI_ID_VALUE_MAP.put(DATA, Data.RAW_CONTACT_ID);
+        INSERT_URI_ID_VALUE_MAP.put(RAW_CONTACTS_DATA, Data.RAW_CONTACT_ID);
+        INSERT_URI_ID_VALUE_MAP.put(STATUS_UPDATES, StatusUpdates.DATA_ID);
+        INSERT_URI_ID_VALUE_MAP.put(STREAM_ITEMS, StreamItems.RAW_CONTACT_ID);
+        INSERT_URI_ID_VALUE_MAP.put(RAW_CONTACTS_ID_STREAM_ITEMS, StreamItems.RAW_CONTACT_ID);
+        INSERT_URI_ID_VALUE_MAP.put(STREAM_ITEMS_PHOTOS, StreamItemPhotos.STREAM_ITEM_ID);
+        INSERT_URI_ID_VALUE_MAP.put(STREAM_ITEMS_ID_PHOTOS, StreamItemPhotos.STREAM_ITEM_ID);
+    }
 
     private static final String SELECTION_FAVORITES_GROUPS_BY_RAW_CONTACT_ID =
             RawContactsColumns.CONCRETE_ID + "=? AND "
@@ -1130,6 +1150,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH, SYNCSTATE);
         matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH + "/#",
                 SYNCSTATE_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "profile/" + SyncStateContentProviderHelper.PATH,
+                PROFILE_SYNCSTATE);
+        matcher.addURI(ContactsContract.AUTHORITY,
+                "profile/" + SyncStateContentProviderHelper.PATH + "/#",
+                PROFILE_SYNCSTATE_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
@@ -1177,6 +1202,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 PROFILE_RAW_CONTACTS_ID_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#/entity",
                 PROFILE_RAW_CONTACTS_ID_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, "profile/status_updates",
+                PROFILE_STATUS_UPDATES);
 
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items", STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items/photo", STREAM_ITEMS_PHOTOS);
@@ -1186,7 +1213,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 STREAM_ITEMS_ID_PHOTOS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items_limit", STREAM_ITEMS_LIMIT);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "display_photo/*", DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "display_photo/#", DISPLAY_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "photo_dimensions", PHOTO_DIMENSIONS);
 
         HashMap<String, Integer> tmpTypeMap = new HashMap<String, Integer>();
@@ -1228,54 +1255,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
 
     /**
-     * Cached information about the contact ID and raw contact IDs that make up the user's
-     * profile entry.
-     */
-    private static class ProfileIdCache {
-        boolean inited;
-        long profileContactId;
-        Set<Long> profileRawContactIds = Sets.newHashSet();
-        Set<Long> profileDataIds = Sets.newHashSet();
-
-        /**
-         * Initializes the cache of profile contact and raw contact IDs.  Does nothing if
-         * the cache is already initialized (unless forceRefresh is set to true).
-         * @param db The contacts database.
-         * @param forceRefresh Whether to force re-initialization of the cache.
-         */
-        private void init(SQLiteDatabase db, boolean forceRefresh) {
-            if (!inited || forceRefresh) {
-                profileContactId = 0;
-                profileRawContactIds.clear();
-                profileDataIds.clear();
-                Cursor c = db.rawQuery("SELECT " +
-                        RawContactsColumns.CONCRETE_CONTACT_ID + "," +
-                        RawContactsColumns.CONCRETE_ID + "," +
-                        DataColumns.CONCRETE_ID +
-                        " FROM " + Tables.RAW_CONTACTS + " JOIN " + Tables.ACCOUNTS + " ON " +
-                        RawContactsColumns.CONCRETE_ID + "=" +
-                        AccountsColumns.PROFILE_RAW_CONTACT_ID +
-                        " JOIN " + Tables.DATA + " ON " +
-                        RawContactsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_RAW_CONTACT_ID,
-                        null);
-                try {
-                    while (c.moveToNext()) {
-                        if (profileContactId == 0) {
-                            profileContactId = c.getLong(0);
-                        }
-                        profileRawContactIds.add(c.getLong(1));
-                        profileDataIds.add(c.getLong(2));
-                    }
-                } finally {
-                    c.close();
-                }
-            }
-        }
-    }
-
-    private ProfileIdCache mProfileIdCache;
-
-    /**
      * Maximum dimension (height or width) of display photos.  Larger images will be scaled
      * to fit.
      */
@@ -1286,10 +1265,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private int mMaxThumbnailPhotoDim;
 
-    private HashMap<String, DataRowHandler> mDataRowHandlers;
-    private ContactsDatabaseHelper mDbHelper;
-
-    private PhotoStore mPhotoStore;
+    /**
+     * Sub-provider for handling profile requests against the profile database.
+     */
+    private ProfileProvider mProfileProvider;
 
     private NameSplitter mNameSplitter;
     private NameLookupBuilder mNameLookupBuilder;
@@ -1297,7 +1276,61 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private PostalSplitter mPostalSplitter;
 
     private ContactDirectoryManager mContactDirectoryManager;
+
+    /**
+     * The active (thread-local) database.  This will be switched between a contacts-specific
+     * database and a profile-specific database, depending on what the current operation is
+     * targeted to.
+     */
+    private final ThreadLocal<SQLiteDatabase> mActiveDb = new ThreadLocal<SQLiteDatabase>();
+
+    // This variable keeps track of whether the current operation is intended for the profile DB.
+    private final ThreadLocal<Boolean> mInProfileMode = new ThreadLocal<Boolean>();
+
+    // Whether we're currently in the process of applying a batch of operations.
+    private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<Boolean>();
+
+    // Separate data row handler instances for contact data and profile data.
+    private HashMap<String, DataRowHandler> mDataRowHandlers;
+    private HashMap<String, DataRowHandler> mProfileDataRowHandlers;
+
+    // Depending on whether the action being performed is for the profile, we will use one of two
+    // database helper instances.
+    private final ThreadLocal<ContactsDatabaseHelper> mDbHelper =
+            new ThreadLocal<ContactsDatabaseHelper>();
+    private ContactsDatabaseHelper mContactsHelper;
+    private ProfileDatabaseHelper mProfileHelper;
+
+    // Depending on whether the action being performed is for the profile or not, we will use one of
+    // two aggregator instances.
+    private final ThreadLocal<ContactAggregator> mAggregator = new ThreadLocal<ContactAggregator>();
     private ContactAggregator mContactAggregator;
+    private ContactAggregator mProfileAggregator;
+
+    // Depending on whether the action being performed is for the profile or not, we will use one of
+    // two photo store instances (with their files stored in separate subdirectories).
+    private final ThreadLocal<PhotoStore> mPhotoStore = new ThreadLocal<PhotoStore>();
+    private PhotoStore mContactsPhotoStore;
+    private PhotoStore mProfilePhotoStore;
+
+    // The active transaction context will switch depending on the operation being performed.
+    // Both transaction contexts will be cleared out when a batch transaction is started, and
+    // each will be processed separately when a batch transaction completes.
+    private TransactionContext mContactTransactionContext = new TransactionContext(false);
+    private TransactionContext mProfileTransactionContext = new TransactionContext(true);
+    private final ThreadLocal<TransactionContext> mTransactionContext =
+            new ThreadLocal<TransactionContext>();
+
+    // This database reference will only be referenced when a batch operation is in progress
+    // that includes profile DB operations.  It is used to create and handle a separate transaction
+    // around that batch.  Outside of such a batch operation, this will be null.
+    private final ThreadLocal<SQLiteDatabase> mProfileDbForBatch =
+            new ThreadLocal<SQLiteDatabase>();
+
+    // This flag is set during a batch operation that involves the profile DB to indicate that
+    // errors occurred during processing of one of the profile operations.
+    private final ThreadLocal<Boolean> mProfileErrorsInBatch = new ThreadLocal<Boolean>();
+
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
     private CommonNicknameCache mCommonNicknameCache;
@@ -1313,8 +1346,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private volatile CountDownLatch mWriteAccessLatch;
     private boolean mAccountUpdateListenerRegistered;
     private boolean mOkToOpenAccess = true;
-
-    private TransactionContext mTransactionContext = new TransactionContext();
 
     private boolean mVisibleTouched = false;
 
@@ -1356,8 +1387,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMaxThumbnailPhotoDim = resources.getInteger(
                 R.integer.config_max_thumbnail_photo_dim);
 
-        mProfileIdCache = new ProfileIdCache();
-        mDbHelper = (ContactsDatabaseHelper)getDatabaseHelper();
+        mContactsHelper = (ContactsDatabaseHelper) getDatabaseHelper();
+        mDbHelper.set(mContactsHelper);
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
 
@@ -1374,6 +1405,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 performBackgroundTask(msg.what, msg.obj);
             }
         };
+
+        // Set up the sub-provider for handling profiles.
+        mProfileProvider = getProfileProvider();
+        ProviderInfo profileInfo = new ProviderInfo();
+        profileInfo.readPermission = "android.permission.READ_PROFILE";
+        profileInfo.writePermission = "android.permission.WRITE_PROFILE";
+        mProfileProvider.attachInfo(getContext(), profileInfo);
+        mProfileHelper = (ProfileDatabaseHelper) mProfileProvider.getDatabaseHelper();
 
         scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
         scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
@@ -1393,44 +1432,64 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private void initForDefaultLocale() {
         Context context = getContext();
-        mLegacyApiSupport = new LegacyApiSupport(context, mDbHelper, this, mGlobalSearchSupport);
+        mLegacyApiSupport = new LegacyApiSupport(context, mContactsHelper, this,
+                mGlobalSearchSupport);
         mCurrentLocale = getLocale();
-        mNameSplitter = mDbHelper.createNameSplitter();
+        mNameSplitter = mContactsHelper.createNameSplitter();
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
-        mCommonNicknameCache = new CommonNicknameCache(mDbHelper.getReadableDatabase());
+        mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
         ContactLocaleUtils.getIntance().setLocale(mCurrentLocale);
-        mContactAggregator = new ContactAggregator(this, mDbHelper,
+        mContactAggregator = new ContactAggregator(this, mContactsHelper,
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+        mProfileAggregator = new ProfileAggregator(this, mProfileHelper,
+                createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+        mProfileAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
         mSearchIndexManager = new SearchIndexManager(this);
-        mPhotoStore = new PhotoStore(getContext().getFilesDir(), mDbHelper);
+
+        mContactsPhotoStore = new PhotoStore(getContext().getFilesDir(), mContactsHelper);
+        mProfilePhotoStore = new PhotoStore(new File(getContext().getFilesDir(), "profile"),
+                mProfileHelper);
 
         mDataRowHandlers = new HashMap<String, DataRowHandler>();
+        initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
+                mContactsPhotoStore);
+        mProfileDataRowHandlers = new HashMap<String, DataRowHandler>();
+        initDataRowHandlers(mProfileDataRowHandlers, mProfileHelper, mProfileAggregator,
+                mProfilePhotoStore);
 
-        mDataRowHandlers.put(Email.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForEmail(context, mDbHelper, mContactAggregator));
-        mDataRowHandlers.put(Im.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForIm(context, mDbHelper, mContactAggregator));
-        mDataRowHandlers.put(Organization.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForOrganization(context, mDbHelper, mContactAggregator));
-        mDataRowHandlers.put(Phone.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForPhoneNumber(context, mDbHelper, mContactAggregator));
-        mDataRowHandlers.put(Nickname.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForNickname(context, mDbHelper, mContactAggregator));
-        mDataRowHandlers.put(StructuredName.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForStructuredName(context, mDbHelper, mContactAggregator,
+        // Set initial thread-local state variables for the Contacts DB.
+        switchToContactMode();
+    }
+
+    private void initDataRowHandlers(Map<String, DataRowHandler> handlerMap,
+            ContactsDatabaseHelper dbHelper, ContactAggregator contactAggregator,
+            PhotoStore photoStore) {
+        Context context = getContext();
+        handlerMap.put(Email.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForEmail(context, dbHelper, contactAggregator));
+        handlerMap.put(Im.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForIm(context, dbHelper, contactAggregator));
+        handlerMap.put(Organization.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForOrganization(context, dbHelper, contactAggregator));
+        handlerMap.put(Phone.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForPhoneNumber(context, dbHelper, contactAggregator));
+        handlerMap.put(Nickname.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForNickname(context, dbHelper, contactAggregator));
+        handlerMap.put(StructuredName.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForStructuredName(context, dbHelper, contactAggregator,
                         mNameSplitter, mNameLookupBuilder));
-        mDataRowHandlers.put(StructuredPostal.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForStructuredPostal(context, mDbHelper, mContactAggregator,
+        handlerMap.put(StructuredPostal.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForStructuredPostal(context, dbHelper, contactAggregator,
                         mPostalSplitter));
-        mDataRowHandlers.put(GroupMembership.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForGroupMembership(context, mDbHelper, mContactAggregator,
+        handlerMap.put(GroupMembership.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForGroupMembership(context, dbHelper, contactAggregator,
                         mGroupIdCache));
-        mDataRowHandlers.put(Photo.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForPhoto(context, mDbHelper, mContactAggregator, mPhotoStore));
-        mDataRowHandlers.put(Note.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForNote(context, mDbHelper, mContactAggregator));
+        handlerMap.put(Photo.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForPhoto(context, dbHelper, contactAggregator, photoStore));
+        handlerMap.put(Note.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForNote(context, dbHelper, contactAggregator));
     }
 
     /**
@@ -1479,8 +1538,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     mAccountUpdateListenerRegistered = true;
                 }
 
+                // Update the accounts for both the contacts and profile DBs.
                 Account[] accounts = AccountManager.get(context).getAccounts();
+                switchToContactMode();
                 boolean accountsChanged = updateAccountsInBackground(accounts);
+                switchToProfileMode();
+                accountsChanged |= updateAccountsInBackground(accounts);
+
                 updateContactsAccountCount(accounts);
                 updateDirectoriesInBackground(accountsChanged);
                 break;
@@ -1525,6 +1589,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long now = System.currentTimeMillis();
                 if (now - mLastPhotoCleanup > PHOTO_CLEANUP_RATE_LIMIT) {
                     mLastPhotoCleanup = now;
+
+                    // Clean up photo stores for both contacts and profiles.
+                    switchToContactMode();
+                    cleanupPhotoStore();
+                    switchToProfileMode();
                     cleanupPhotoStore();
                     break;
                 }
@@ -1564,7 +1633,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         int providerStatus = mProviderStatus;
         setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
-        mDbHelper.setLocale(this, currentLocale);
+        mContactsHelper.setLocale(this, currentLocale);
+        mProfileHelper.setLocale(this, currentLocale);
         prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
         setProviderStatus(providerStatus);
     }
@@ -1577,13 +1647,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Locking the database will prevent inserts/updates/deletes from
         // running at the same time, but queries may still be running
         // on other threads. Those queries may return inconsistent results.
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        SQLiteDatabase db = mContactsHelper.getWritableDatabase();
+        SQLiteDatabase profileDb = mProfileHelper.getWritableDatabase();
         db.beginTransaction();
+        profileDb.beginTransaction();
         try {
             initForDefaultLocale();
             db.setTransactionSuccessful();
+            profileDb.setTransactionSuccessful();
         } finally {
             db.endTransaction();
+            profileDb.endTransaction();
         }
 
         updateLocaleInBackground();
@@ -1604,38 +1678,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         // No accounts/no contacts status is true if there are no account and
-        // there are
-        // no contacts or one profile contact
+        // there are no contacts or one profile contact
         if (mContactsAccountCount == 0) {
-            long contactsNum = DatabaseUtils.queryNumEntries(mDbHelper.getReadableDatabase(),
+            long contactsNum = DatabaseUtils.queryNumEntries(mContactsHelper.getReadableDatabase(),
                     Tables.CONTACTS, null);
-            if (contactsNum == 0) {
-                setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
-            } else if (contactsNum == 1) {
-                // if we have one contact, need to make sure it is the local
-                // profile
-                // so need to get the raw_contact id from the account table and
-                // then
-                // make sure the raw_contacts exists and it is not deleted
-                long rawId = DatabaseUtils.longForQuery(
-                            mDbHelper.getReadableDatabase(),
-                            "SELECT " + AccountsColumns.PROFILE_RAW_CONTACT_ID +
-                                    " FROM " + Tables.ACCOUNTS
-                            , null);
-                if (rawId == 0) {
-                    setProviderStatus(ProviderStatus.STATUS_NORMAL);
-                    return;
-                }
-                boolean deleted = DatabaseUtils.longForQuery(
-                        mDbHelper.getReadableDatabase(),
-                        "SELECT " + RawContacts.DELETED +
-                                " FROM " + Tables.RAW_CONTACTS +
-                                " WHERE " + RawContacts._ID + "=" + String.valueOf(rawId),
-                                null) == 1;
-                if (deleted) {
-                    setProviderStatus(ProviderStatus.STATUS_NORMAL);
-                    return;
-                }
+            long profileNum = DatabaseUtils.queryNumEntries(mProfileHelper.getReadableDatabase(),
+                    Tables.CONTACTS, null);
+
+            // TODO: Different status if there is a profile but no contacts?
+            if (contactsNum == 0 && profileNum <= 1) {
                 setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
             } else {
                 setProviderStatus(ProviderStatus.STATUS_NORMAL);
@@ -1647,7 +1698,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /* Visible for testing */
     protected void cleanupPhotoStore() {
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
 
         // Assemble the set of photo store file IDs that are in use, and send those to the photo
         // store.  Any photos that aren't in that set will be deleted, and any photos that no
@@ -1692,7 +1743,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         // Run the photo store cleanup.
-        Set<Long> missingPhotoIds = mPhotoStore.cleanup(usedPhotoFileIds);
+        Set<Long> missingPhotoIds = mPhotoStore.get().cleanup(usedPhotoFileIds);
 
         // If any of the keys we're using no longer exist, clean them up.
         if (!missingPhotoIds.isEmpty()) {
@@ -1734,9 +1785,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return ContactsDatabaseHelper.getInstance(context);
     }
 
+    public ProfileProvider getProfileProvider() {
+        return new ProfileProvider(this);
+    }
+
     @VisibleForTesting
     /* package */ PhotoStore getPhotoStore() {
-        return mPhotoStore;
+        return mContactsPhotoStore;
     }
 
     /* package */ int getMaxDisplayPhotoDim() {
@@ -1765,8 +1820,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return Locale.getDefault();
     }
 
+    private boolean applyingBatch() {
+        Boolean applyingBatch = mApplyingBatch.get();
+        return applyingBatch != null && applyingBatch;
+    }
+
+    private boolean inProfileMode() {
+        Boolean profileMode = mInProfileMode.get();
+        return profileMode != null && profileMode;
+    }
+
     protected boolean isLegacyContactImportNeeded() {
-        int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_CONTACTS_IMPORTED, "0"));
+        int version = Integer.parseInt(
+                mContactsHelper.getProperty(PROPERTY_CONTACTS_IMPORTED, "0"));
         return version < PROPERTY_CONTACTS_IMPORT_VERSION;
     }
 
@@ -1782,7 +1848,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         setProviderStatus(ProviderStatus.STATUS_UPGRADING);
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        mDbHelper.setLocale(this, mCurrentLocale);
+        mContactsHelper.setLocale(this, mCurrentLocale);
         prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
 
         LegacyContactImporter importer = getLegacyContactImporter();
@@ -1802,7 +1868,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         nm.cancel(LEGACY_IMPORT_FAILED_NOTIFICATION);
 
         // Store a property in the database indicating that the conversion process succeeded
-        mDbHelper.setProperty(PROPERTY_CONTACTS_IMPORTED,
+        mContactsHelper.setProperty(PROPERTY_CONTACTS_IMPORTED,
                 String.valueOf(PROPERTY_CONTACTS_IMPORT_VERSION));
         setProviderStatus(ProviderStatus.STATUS_NORMAL);
         Log.v(TAG, "Completed import of legacy contacts");
@@ -1857,8 +1923,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * Wipes all data from the contacts database.
      */
     /* package */ void wipeData() {
-        mDbHelper.wipeData();
-        mPhotoStore.clear();
+        mContactsHelper.wipeData();
+        mProfileHelper.wipeData();
+        mContactsPhotoStore.clear();
+        mProfilePhotoStore.clear();
         mProviderStatus = ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS;
     }
 
@@ -1884,10 +1952,96 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
+    /**
+     * Determines whether the given URI should be directed to the profile
+     * database rather than the contacts database.  This is true under either
+     * of three conditions:
+     * 1. The URI itself is specifically for the profile.
+     * 2. The URI contains ID references that are in the profile ID-space.
+     * 3. The URI contains lookup key references that match the special profile lookup key.
+     * @param uri The URI to examine.
+     * @return Whether to direct the DB operation to the profile database.
+     */
+    private boolean mapsToProfileDb(Uri uri) {
+        return sUriMatcher.mapsToProfile(uri);
+    }
+
+    /**
+     * Determines whether the given URI with the given values being inserted
+     * should be directed to the profile database rather than the contacts
+     * database.  This is true if the URI already maps to the profile DB from
+     * a call to {@link #mapsToProfileDb} or if the URI matches a URI that
+     * specifies parent IDs via the ContentValues, and the given ContentValues
+     * contains an ID in the profile ID-space.
+     * @param uri The URI to examine.
+     * @param values The values being inserted.
+     * @return Whether to direct the DB insert to the profile database.
+     */
+    private boolean mapsToProfileDbWithInsertedValues(Uri uri, ContentValues values) {
+        if (mapsToProfileDb(uri)) {
+            return true;
+        }
+        int match = sUriMatcher.match(uri);
+        if (INSERT_URI_ID_VALUE_MAP.containsKey(match)) {
+            String idField = INSERT_URI_ID_VALUE_MAP.get(match);
+            if (values.containsKey(idField)) {
+                long id = values.getAsLong(idField);
+                if (ContactsContract.isProfileId(id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Switches the provider's thread-local context variables to prepare for performing
+     * a profile operation.
+     */
+    private void switchToProfileMode() {
+        mDbHelper.set(mProfileHelper);
+        mTransactionContext.set(mProfileTransactionContext);
+        mAggregator.set(mProfileAggregator);
+        mPhotoStore.set(mProfilePhotoStore);
+        mInProfileMode.set(true);
+
+        // If we're in batch mode and don't yet have a database set up for our transaction,
+        // get one and start a transaction now.
+        if (applyingBatch() && mProfileDbForBatch.get() == null) {
+            SQLiteDatabase profileDb = mProfileHelper.getWritableDatabase();
+            profileDb.beginTransactionWithListener(this);
+            mProfileDbForBatch.set(profileDb);
+        }
+    }
+
+    /**
+     * Switches the provider's thread-local context variables to prepare for performing
+     * a contacts operation.
+     */
+    private void switchToContactMode() {
+        mDbHelper.set(mContactsHelper);
+        mTransactionContext.set(mContactTransactionContext);
+        mAggregator.set(mContactAggregator);
+        mPhotoStore.set(mContactsPhotoStore);
+        mInProfileMode.set(false);
+
+        // If not in batch mode, clear out the active database - it will be set to the default
+        // instance from SQLiteContentProvider if necessary.
+        if (!applyingBatch()) {
+            mActiveDb.set(null);
+        }
+    }
+
     @Override
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
-        return super.insert(uri, values);
+        if (mapsToProfileDbWithInsertedValues(uri, values)) {
+            switchToProfileMode();
+            return mProfileProvider.insert(uri, values);
+        } else {
+            switchToContactMode();
+            return super.insert(uri, values);
+        }
     }
 
     @Override
@@ -1908,20 +2062,56 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
         }
         waitForAccess(mWriteAccessLatch);
-        return super.update(uri, values, selection, selectionArgs);
+        if (mapsToProfileDb(uri)) {
+            switchToProfileMode();
+            return mProfileProvider.update(uri, values, selection, selectionArgs);
+        } else {
+            switchToContactMode();
+            return super.update(uri, values, selection, selectionArgs);
+        }
     }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
-        return super.delete(uri, selection, selectionArgs);
+        if (mapsToProfileDb(uri)) {
+            switchToProfileMode();
+            return mProfileProvider.delete(uri, selection, selectionArgs);
+        } else {
+            switchToContactMode();
+            return super.delete(uri, selection, selectionArgs);
+        }
+    }
+
+    /**
+     * Replaces the current (thread-local) database to use for the operation with the given one.
+     * @param db The database to use.
+     */
+    /* package */ void substituteDb(SQLiteDatabase db) {
+        mActiveDb.set(db);
     }
 
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
         waitForAccess(mWriteAccessLatch);
-        return super.applyBatch(operations);
+        ContentProviderResult[] results = null;
+        try {
+            results = super.applyBatch(operations);
+        } finally {
+            if (mProfileDbForBatch.get() != null) {
+                // A profile operation was involved, so clean up its transaction.
+                boolean profileErrors = mProfileErrorsInBatch.get() != null
+                        && mProfileErrorsInBatch.get();
+                if (!profileErrors) {
+                    mProfileDbForBatch.get().setTransactionSuccessful();
+                }
+                mProfileDbForBatch.get().endTransaction();
+                mProfileDbForBatch.set(null);
+                mProfileErrorsInBatch.set(false);
+            }
+        }
+        return results;
     }
 
     @Override
@@ -1936,8 +2126,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "onBeginTransaction");
         }
         super.onBeginTransaction();
-        mContactAggregator.clearPendingAggregations();
-        mTransactionContext.clear();
+        if (inProfileMode()) {
+            mProfileAggregator.clearPendingAggregations();
+            mProfileTransactionContext.clear();
+        } else {
+            mContactAggregator.clearPendingAggregations();
+            mContactTransactionContext.clear();
+        }
     }
 
 
@@ -1949,10 +2144,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         super.beforeTransactionCommit();
         flushTransactionalChanges();
-        mContactAggregator.aggregateInTransaction(mTransactionContext, mDb);
+        mAggregator.get().aggregateInTransaction(mTransactionContext.get(), mActiveDb.get());
         if (mVisibleTouched) {
             mVisibleTouched = false;
-            mDbHelper.updateAllVisible();
+            mDbHelper.get().updateAllVisible();
         }
 
         updateSearchIndexInTransaction();
@@ -1964,11 +2159,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void updateSearchIndexInTransaction() {
-        Set<Long> staleContacts = mTransactionContext.getStaleSearchIndexContactIds();
-        Set<Long> staleRawContacts = mTransactionContext.getStaleSearchIndexRawContactIds();
+        Set<Long> staleContacts = mTransactionContext.get().getStaleSearchIndexContactIds();
+        Set<Long> staleRawContacts = mTransactionContext.get().getStaleSearchIndexRawContactIds();
         if (!staleContacts.isEmpty() || !staleRawContacts.isEmpty()) {
             mSearchIndexManager.updateIndexForRawContacts(staleContacts, staleRawContacts);
-            mTransactionContext.clearSearchIndexUpdates();
+            mTransactionContext.get().clearSearchIndexUpdates();
         }
     }
 
@@ -1977,64 +2172,40 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "flushTransactionChanges");
         }
 
-        // Determine whether we need to refresh the profile ID cache.
-        boolean profileCacheRefreshNeeded = false;
-
-        for (long rawContactId : mTransactionContext.getInsertedRawContactIds()) {
-            mDbHelper.updateRawContactDisplayName(mDb, rawContactId);
-            mContactAggregator.onRawContactInsert(mTransactionContext, mDb, rawContactId);
+        for (long rawContactId : mTransactionContext.get().getInsertedRawContactIds()) {
+            mDbHelper.get().updateRawContactDisplayName(mActiveDb.get(), rawContactId);
+            mAggregator.get().onRawContactInsert(mTransactionContext.get(), mActiveDb.get(),
+                    rawContactId);
         }
 
-        Map<Long, AccountWithDataSet> insertedProfileRawContactAccountMap =
-                mTransactionContext.getInsertedProfileRawContactIds();
-        if (!insertedProfileRawContactAccountMap.isEmpty()) {
-            for (long profileRawContactId : insertedProfileRawContactAccountMap.keySet()) {
-                mDbHelper.updateRawContactDisplayName(mDb, profileRawContactId);
-                mContactAggregator.onProfileRawContactInsert(mTransactionContext, mDb,
-                        profileRawContactId,
-                        insertedProfileRawContactAccountMap.get(profileRawContactId));
-            }
-            profileCacheRefreshNeeded = true;
-        }
-
-        Set<Long> dirtyRawContacts = mTransactionContext.getDirtyRawContactIds();
+        Set<Long> dirtyRawContacts = mTransactionContext.get().getDirtyRawContactIds();
         if (!dirtyRawContacts.isEmpty()) {
             mSb.setLength(0);
             mSb.append(UPDATE_RAW_CONTACT_SET_DIRTY_SQL);
             appendIds(mSb, dirtyRawContacts);
             mSb.append(")");
-            mDb.execSQL(mSb.toString());
-
-            profileCacheRefreshNeeded = profileCacheRefreshNeeded ||
-                    !Collections.disjoint(mProfileIdCache.profileRawContactIds, dirtyRawContacts);
+            mActiveDb.get().execSQL(mSb.toString());
         }
 
-        Set<Long> updatedRawContacts = mTransactionContext.getUpdatedRawContactIds();
+        Set<Long> updatedRawContacts = mTransactionContext.get().getUpdatedRawContactIds();
         if (!updatedRawContacts.isEmpty()) {
             mSb.setLength(0);
             mSb.append(UPDATE_RAW_CONTACT_SET_VERSION_SQL);
             appendIds(mSb, updatedRawContacts);
             mSb.append(")");
-            mDb.execSQL(mSb.toString());
-
-            profileCacheRefreshNeeded = profileCacheRefreshNeeded ||
-                    !Collections.disjoint(mProfileIdCache.profileRawContactIds, updatedRawContacts);
+            mActiveDb.get().execSQL(mSb.toString());
         }
 
-        for (Map.Entry<Long, Object> entry : mTransactionContext.getUpdatedSyncStates()) {
+        // Update sync states.
+        for (Map.Entry<Long, Object> entry : mTransactionContext.get().getUpdatedSyncStates()) {
             long id = entry.getKey();
-            if (mDbHelper.getSyncState().update(mDb, id, entry.getValue()) <= 0) {
+            if (mDbHelper.get().getSyncState().update(mActiveDb.get(), id, entry.getValue()) <= 0) {
                 throw new IllegalStateException(
                         "unable to update sync state, does it still exist?");
             }
         }
 
-        if (profileCacheRefreshNeeded) {
-            // Force the profile ID cache to refresh.
-            mProfileIdCache.init(mDb, true);
-        }
-
-        mTransactionContext.clear();
+        mTransactionContext.get().clear();
     }
 
     /**
@@ -2047,66 +2218,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         sb.setLength(sb.length() - 1); // Yank the last comma
-    }
-
-    /**
-     * Checks whether the given contact ID represents the user's personal profile - if it is, calls
-     * a permission check (for writing the profile if forWrite is true, for reading the profile
-     * otherwise).  If the contact ID is not the user's profile, no check is executed.
-     * @param db The database.
-     * @param contactId The contact ID to be checked.
-     * @param forWrite Whether the caller is attempting to do a write (vs. read) operation.
-     */
-    private void enforceProfilePermissionForContact(SQLiteDatabase db, long contactId,
-            boolean forWrite) {
-        mProfileIdCache.init(db, false);
-        if (mProfileIdCache.profileContactId == contactId) {
-            enforceProfilePermission(forWrite);
-        }
-    }
-
-    /**
-     * Checks whether the given raw contact ID is a member of the user's personal profile - if it
-     * is, calls a permission check (for writing the profile if forWrite is true, for reading the
-     * profile otherwise).  If the raw contact ID is not in the user's profile, no check is
-     * executed.
-     * @param db The database.
-     * @param rawContactId The raw contact ID to be checked.
-     * @param forWrite Whether the caller is attempting to do a write (vs. read) operation.
-     */
-    private void enforceProfilePermissionForRawContact(SQLiteDatabase db, long rawContactId,
-            boolean forWrite) {
-        mProfileIdCache.init(db, false);
-        if (mProfileIdCache.profileRawContactIds.contains(rawContactId)) {
-            enforceProfilePermission(forWrite);
-        }
-    }
-
-    /**
-     * Checks whether the given data ID is a member of the user's personal profile - if it is,
-     * calls a permission check (for writing the profile if forWrite is true, for reading the
-     * profile otherwise).  If the data ID is not in the user's profile, no check is executed.
-     * @param db The database.
-     * @param dataId The data ID to be checked.
-     * @param forWrite Whether the caller is attempting to do a write (vs. read) operation.
-     */
-    private void enforceProfilePermissionForData(SQLiteDatabase db, long dataId, boolean forWrite) {
-        mProfileIdCache.init(db, false);
-        if (mProfileIdCache.profileDataIds.contains(dataId)) {
-            enforceProfilePermission(forWrite);
-        }
-    }
-
-    /**
-     * Performs a permission check for WRITE_PROFILE or READ_PROFILE (depending on the parameter).
-     * If the permission check fails, this will throw a SecurityException.
-     * @param forWrite Whether the caller is attempting to do a write (vs. read) operation.
-     */
-    private void enforceProfilePermission(boolean forWrite) {
-        String profilePermission = forWrite
-                ? "android.permission.WRITE_PROFILE"
-                : "android.permission.READ_PROFILE";
-        getContext().enforceCallingOrSelfPermission(profilePermission, null);
     }
 
     @Override
@@ -2128,11 +2239,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public DataRowHandler getDataRowHandler(final String mimeType) {
+        if (inProfileMode()) {
+            return getDataRowHandlerForProfile(mimeType);
+        }
         DataRowHandler handler = mDataRowHandlers.get(mimeType);
         if (handler == null) {
             handler = new DataRowHandlerForCustomMimetype(
-                    getContext(), mDbHelper, mContactAggregator, mimeType);
+                    getContext(), mContactsHelper, mContactAggregator, mimeType);
             mDataRowHandlers.put(mimeType, handler);
+        }
+        return handler;
+    }
+
+    public DataRowHandler getDataRowHandlerForProfile(final String mimeType) {
+        DataRowHandler handler = mProfileDataRowHandlers.get(mimeType);
+        if (handler == null) {
+            handler = new DataRowHandlerForCustomMimetype(
+                    getContext(), mProfileHelper, mProfileAggregator, mimeType);
+            mProfileDataRowHandlers.put(mimeType, handler);
         }
         return handler;
     }
@@ -2143,6 +2267,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "insertInTransaction: " + uri + " " + values);
         }
 
+        // Default active DB to the contacts DB if none has been set.
+        if (mActiveDb.get() == null) {
+            mActiveDb.set(mDb);
+        }
+
         final boolean callerIsSyncAdapter =
                 readBooleanQueryParameter(uri, ContactsContract.CALLER_IS_SYNCADAPTER, false);
 
@@ -2151,7 +2280,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         switch (match) {
             case SYNCSTATE:
-                id = mDbHelper.getSyncState().insert(mDb, values);
+            case PROFILE_SYNCSTATE:
+                id = mDbHelper.get().getSyncState().insert(mActiveDb.get(), values);
                 break;
 
             case CONTACTS: {
@@ -2165,7 +2295,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case RAW_CONTACTS: {
-                id = insertRawContact(uri, values, callerIsSyncAdapter, false);
+                id = insertRawContact(uri, values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2185,8 +2315,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case PROFILE_RAW_CONTACTS: {
-                enforceProfilePermission(true);
-                id = insertRawContact(uri, values, callerIsSyncAdapter, true);
+                id = insertRawContact(uri, values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2209,7 +2338,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case STATUS_UPDATES: {
+            case STATUS_UPDATES:
+            case PROFILE_STATUS_UPDATES: {
                 id = insertStatusUpdate(values);
                 break;
             }
@@ -2272,7 +2402,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         if (partialUri || partialValues) {
             // Throw when either account is incomplete
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+            throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
@@ -2286,7 +2416,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             final boolean accountMatch = TextUtils.equals(accountName, valueAccountName)
                     && TextUtils.equals(accountType, valueAccountType);
             if (!accountMatch) {
-                throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                         "When both specified, ACCOUNT_NAME and ACCOUNT_TYPE must match", uri));
             }
         } else if (validUri) {
@@ -2347,11 +2477,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * @param uri the values for the new row
      * @param values the account this contact should be associated with. may be null.
      * @param callerIsSyncAdapter
-     * @param forProfile Whether this raw contact is being inserted into the user's profile.
      * @return the row ID of the newly created row
      */
-    private long insertRawContact(Uri uri, ContentValues values, boolean callerIsSyncAdapter,
-            boolean forProfile) {
+    private long insertRawContact(Uri uri, ContentValues values, boolean callerIsSyncAdapter) {
         mValues.clear();
         mValues.putAll(values);
         mValues.putNull(RawContacts.CONTACT_ID);
@@ -2363,25 +2491,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
-        long rawContactId = mDb.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, mValues);
+        long rawContactId = mActiveDb.get().insert(Tables.RAW_CONTACTS,
+                RawContacts.CONTACT_ID, mValues);
         int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
-        if (forProfile) {
-            // Profile raw contacts should never be aggregated by the aggregator; they are always
-            // aggregated under a single profile contact.
-            aggregationMode = RawContacts.AGGREGATION_MODE_DISABLED;
-        } else if (mValues.containsKey(RawContacts.AGGREGATION_MODE)) {
+        if (mValues.containsKey(RawContacts.AGGREGATION_MODE)) {
             aggregationMode = mValues.getAsInteger(RawContacts.AGGREGATION_MODE);
         }
-        mContactAggregator.markNewForAggregation(rawContactId, aggregationMode);
+        mAggregator.get().markNewForAggregation(rawContactId, aggregationMode);
 
-        if (forProfile) {
-            // Trigger creation of the user profile Contact (or association with the existing one)
-            // at the end of the transaction.
-            mTransactionContext.profileRawContactInserted(rawContactId, accountWithDataSet);
-        } else {
-            // Trigger creation of a Contact based on this RawContact at the end of transaction
-            mTransactionContext.rawContactInserted(rawContactId, accountWithDataSet);
-        }
+        // Trigger creation of a Contact based on this RawContact at the end of transaction
+        mTransactionContext.get().rawContactInserted(rawContactId, accountWithDataSet);
 
         if (!callerIsSyncAdapter) {
             addAutoAddMembership(rawContactId);
@@ -2404,8 +2523,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private Long findGroupByRawContactId(String selection, long rawContactId) {
-        Cursor c = mDb.query(Tables.GROUPS + "," + Tables.RAW_CONTACTS, PROJECTION_GROUP_ID,
-                selection,
+        Cursor c = mActiveDb.get().query(Tables.GROUPS + "," + Tables.RAW_CONTACTS,
+                PROJECTION_GROUP_ID, selection,
                 new String[]{Long.toString(rawContactId)},
                 null /* groupBy */, null /* having */, null /* orderBy */);
         try {
@@ -2435,16 +2554,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         groupMembershipValues.put(GroupMembership.GROUP_ROW_ID, groupId);
         groupMembershipValues.put(GroupMembership.RAW_CONTACT_ID, rawContactId);
         groupMembershipValues.put(DataColumns.MIMETYPE_ID,
-                mDbHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
-        mDb.insert(Tables.DATA, null, groupMembershipValues);
+                mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
+        mActiveDb.get().insert(Tables.DATA, null, groupMembershipValues);
     }
 
     private void deleteDataGroupMembership(long rawContactId, long groupId) {
         final String[] selectionArgs = {
-                Long.toString(mDbHelper.getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE)),
+                Long.toString(mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE)),
                 Long.toString(groupId),
                 Long.toString(rawContactId)};
-        mDb.delete(Tables.DATA, SELECTION_GROUPMEMBERSHIP_DATA, selectionArgs);
+        mActiveDb.get().delete(Tables.DATA, SELECTION_GROUPMEMBERSHIP_DATA, selectionArgs);
     }
 
     /**
@@ -2460,14 +2579,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
 
-        // If the data being inserted belongs to the user's profile entry, check for the
-        // WRITE_PROFILE permission before proceeding.
-        enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
         // Replace package with internal mapping
         final String packageName = mValues.getAsString(Data.RES_PACKAGE);
         if (packageName != null) {
-            mValues.put(DataColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
+            mValues.put(DataColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
         }
         mValues.remove(Data.RES_PACKAGE);
 
@@ -2477,15 +2592,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             throw new IllegalArgumentException(Data.MIMETYPE + " is required");
         }
 
-        mValues.put(DataColumns.MIMETYPE_ID, mDbHelper.getMimeTypeId(mimeType));
+        mValues.put(DataColumns.MIMETYPE_ID, mDbHelper.get().getMimeTypeId(mimeType));
         mValues.remove(Data.MIMETYPE);
 
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
-        id = rowHandler.insert(mDb, mTransactionContext, rawContactId, mValues);
+        id = rowHandler.insert(mActiveDb.get(), mTransactionContext.get(), rawContactId, mValues);
         if (!callerIsSyncAdapter) {
-            mTransactionContext.markRawContactDirty(rawContactId);
+            mTransactionContext.get().markRawContactDirty(rawContactId);
         }
-        mTransactionContext.rawContactUpdated(rawContactId);
+        mTransactionContext.get().rawContactUpdated(rawContactId);
         return id;
     }
 
@@ -2507,10 +2622,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         long rawContactId = mValues.getAsLong(StreamItems.RAW_CONTACT_ID);
 
-        // If the data being inserted belongs to the user's profile entry, check for the
-        // WRITE_PROFILE permission before proceeding.
-        enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
         // Ensure that the raw contact exists and belongs to the caller's account.
         Account account = resolveAccount(uri, mValues);
         enforceModifyingAccount(account, rawContactId);
@@ -2520,7 +2631,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mValues.remove(RawContacts.ACCOUNT_TYPE);
 
         // Insert the new stream item.
-        id = mDb.insert(Tables.STREAM_ITEMS, null, mValues);
+        id = mActiveDb.get().insert(Tables.STREAM_ITEMS, null, mValues);
         if (id == -1) {
             // Insertion failed.
             return 0;
@@ -2552,10 +2663,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (streamItemId != 0) {
             long rawContactId = lookupRawContactIdForStreamId(streamItemId);
 
-            // If the data being inserted belongs to the user's profile entry, check for the
-            // WRITE_PROFILE permission before proceeding.
-            enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
             // Ensure that the raw contact exists and belongs to the caller's account.
             Account account = resolveAccount(uri, mValues);
             enforceModifyingAccount(account, rawContactId);
@@ -2568,7 +2675,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // Process the photo and store it.
             if (processStreamItemPhoto(mValues, false)) {
                 // Insert the stream item photo.
-                id = mDb.insert(Tables.STREAM_ITEM_PHOTOS, null, mValues);
+                id = mActiveDb.get().insert(Tables.STREAM_ITEM_PHOTOS, null, mValues);
             }
         }
         return id;
@@ -2596,7 +2703,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Process the photo and store it.
         try {
-            long photoFileId = mPhotoStore.insert(new PhotoProcessor(photoBytes,
+            long photoFileId = mPhotoStore.get().insert(new PhotoProcessor(photoBytes,
                     mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim, true), true);
             if (photoFileId != 0) {
                 values.put(StreamItemPhotos.PHOTO_FILE_ID, photoFileId);
@@ -2620,7 +2727,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private long lookupRawContactIdForStreamId(long streamItemId) {
         long rawContactId = -1;
-        Cursor c = mDb.query(Tables.STREAM_ITEMS, new String[]{StreamItems.RAW_CONTACT_ID},
+        Cursor c = mActiveDb.get().query(Tables.STREAM_ITEMS,
+                new String[]{StreamItems.RAW_CONTACT_ID},
                 StreamItems._ID + "=?", new String[]{String.valueOf(streamItemId)},
                 null, null, null);
         try {
@@ -2651,13 +2759,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL";
         Cursor c;
         if (account != null) {
-            c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContactsColumns.CONCRETE_ID},
-                    accountSelection,
+            c = mActiveDb.get().query(Tables.RAW_CONTACTS,
+                    new String[]{RawContactsColumns.CONCRETE_ID}, accountSelection,
                     new String[]{String.valueOf(rawContactId), mAccount.name, mAccount.type},
                     null, null, null);
         } else {
-            c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContactsColumns.CONCRETE_ID},
-                    noAccountSelection, new String[]{String.valueOf(rawContactId)},
+            c = mActiveDb.get().query(Tables.RAW_CONTACTS,
+                    new String[]{RawContactsColumns.CONCRETE_ID}, noAccountSelection,
+                    new String[]{String.valueOf(rawContactId)},
                     null, null, null);
         }
         try {
@@ -2684,7 +2793,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         List<Long> streamItemIds = Lists.newArrayList();
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         setTablesAndProjectionMapForStreamItems(qb);
-        Cursor c = qb.query(mDb,
+        Cursor c = qb.query(mActiveDb.get(),
                 new String[]{StreamItems._ID, StreamItems.RAW_CONTACT_ID},
                 selection, selectionArgs, null, null, null);
         try {
@@ -2714,7 +2823,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         List<Long> streamItemPhotoIds = Lists.newArrayList();
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         setTablesAndProjectionMapForStreamItemPhotos(qb);
-        Cursor c = qb.query(mDb, new String[]{StreamItemPhotos._ID, StreamItems.RAW_CONTACT_ID},
+        Cursor c = qb.query(mActiveDb.get(),
+                new String[]{StreamItemPhotos._ID, StreamItems.RAW_CONTACT_ID},
                 selection, selectionArgs, null, null, null);
         try {
             while (c.moveToNext()) {
@@ -2742,7 +2852,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private long cleanUpOldStreamItems(long rawContactId, long insertedStreamItemId) {
         long postCleanupInsertedStreamId = insertedStreamItemId;
-        Cursor c = mDb.query(Tables.STREAM_ITEMS, new String[]{StreamItems._ID},
+        Cursor c = mActiveDb.get().query(Tables.STREAM_ITEMS, new String[]{StreamItems._ID},
                 StreamItems.RAW_CONTACT_ID + "=?", new String[]{String.valueOf(rawContactId)},
                 null, null, StreamItems.TIMESTAMP + " DESC, " + StreamItems._ID + " DESC");
         try {
@@ -2768,10 +2878,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return postCleanupInsertedStreamId;
     }
 
-    public void updateRawContactDisplayName(SQLiteDatabase db, long rawContactId) {
-        mDbHelper.updateRawContactDisplayName(db, rawContactId);
-    }
-
     /**
      * Delete data row by row so that fixing of primaries etc work correctly.
      */
@@ -2785,15 +2891,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         try {
             while(c.moveToNext()) {
                 long rawContactId = c.getLong(DataRowHandler.DataDeleteQuery.RAW_CONTACT_ID);
-
-                // Check for write profile permission if the data belongs to the profile.
-                enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
                 String mimeType = c.getString(DataRowHandler.DataDeleteQuery.MIMETYPE);
                 DataRowHandler rowHandler = getDataRowHandler(mimeType);
-                count += rowHandler.delete(mDb, mTransactionContext, c);
+                count += rowHandler.delete(mActiveDb.get(), mTransactionContext.get(), c);
                 if (!callerIsSyncAdapter) {
-                    mTransactionContext.markRawContactDirty(rawContactId);
+                    mTransactionContext.get().markRawContactDirty(rawContactId);
                 }
             }
         } finally {
@@ -2832,13 +2934,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 throw new IllegalArgumentException("Data type mismatch: expected "
                         + Lists.newArrayList(allowedMimeTypes));
             }
-
-            // Check for write profile permission if the data belongs to the profile.
-            long rawContactId = c.getLong(DataRowHandler.DataDeleteQuery.RAW_CONTACT_ID);
-            enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
             DataRowHandler rowHandler = getDataRowHandler(mimeType);
-            return rowHandler.delete(mDb, mTransactionContext, c);
+            return rowHandler.delete(mActiveDb.get(), mTransactionContext.get(), c);
         } finally {
             c.close();
         }
@@ -2856,7 +2953,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Replace package with internal mapping
         final String packageName = mValues.getAsString(Groups.RES_PACKAGE);
         if (packageName != null) {
-            mValues.put(GroupsColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
+            mValues.put(GroupsColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
         }
         mValues.remove(Groups.RES_PACKAGE);
 
@@ -2868,7 +2965,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             mValues.put(Groups.DIRTY, 1);
         }
 
-        long result = mDb.insert(Tables.GROUPS, Groups.TITLE, mValues);
+        long result = mActiveDb.get().insert(Tables.GROUPS, Groups.TITLE, mValues);
 
         if (!callerIsSyncAdapter && isFavoritesGroup) {
             // add all starred raw contacts to this group
@@ -2897,7 +2994,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         accountWithDataSet.getDataSet()
                 };
             }
-            Cursor c = mDb.query(Tables.RAW_CONTACTS,
+            Cursor c = mActiveDb.get().query(Tables.RAW_CONTACTS,
                     new String[]{RawContacts._ID, RawContacts.STARRED},
                     selection, selectionArgs, null, null, null);
             try {
@@ -2905,7 +3002,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     if (c.getLong(1) != 0) {
                         final long rawContactId = c.getLong(0);
                         insertDataGroupMembership(rawContactId, result);
-                        mTransactionContext.markRawContactDirty(rawContactId);
+                        mTransactionContext.get().markRawContactDirty(rawContactId);
                     }
                 }
             } finally {
@@ -2921,7 +3018,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private long insertSettings(Uri uri, ContentValues values) {
-        final long id = mDb.insert(Tables.SETTINGS, null, values);
+        final long id = mActiveDb.get().insert(Tables.SETTINGS, null, values);
 
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mVisibleTouched = true;
@@ -2968,9 +3065,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             // TODO: generalize to allow other providers to match against email
             boolean matchEmail = Im.PROTOCOL_GOOGLE_TALK == protocol;
 
-            String mimeTypeIdIm = String.valueOf(mDbHelper.getMimeTypeIdForIm());
+            String mimeTypeIdIm = String.valueOf(mDbHelper.get().getMimeTypeIdForIm());
             if (matchEmail) {
-                String mimeTypeIdEmail = String.valueOf(mDbHelper.getMimeTypeIdForEmail());
+                String mimeTypeIdEmail = String.valueOf(mDbHelper.get().getMimeTypeIdForEmail());
 
                 // The following hack forces SQLite to use the (mimetype_id,data1) index, otherwise
                 // the "OR" conjunction confuses it and it switches to a full scan of
@@ -3013,7 +3110,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         Cursor cursor = null;
         try {
-            cursor = mDb.query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
+            cursor = mActiveDb.get().query(DataContactsQuery.TABLE, DataContactsQuery.PROJECTION,
                     mSb.toString(), mSelectionArgs.toArray(EMPTY_STRING_ARRAY), null, null,
                     Clauses.CONTACT_VISIBLE + " DESC, " + Data.RAW_CONTACT_ID);
             if (cursor.moveToFirst()) {
@@ -3055,7 +3152,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     values.getAsString(StatusUpdates.CHAT_CAPABILITY));
 
             // Insert the presence update
-            mDb.replace(Tables.PRESENCE, null, mValues);
+            mActiveDb.get().replace(Tables.PRESENCE, null, mValues);
         }
 
 
@@ -3085,14 +3182,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String iconResource = getResourceName(resources, "drawable", iconResourceId);
 
             if (TextUtils.isEmpty(status)) {
-                mDbHelper.deleteStatusUpdate(dataId);
+                mDbHelper.get().deleteStatusUpdate(dataId);
             } else {
                 Long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
                 if (timestamp != null) {
-                    mDbHelper.replaceStatusUpdate(dataId, timestamp, status, resPackage,
+                    mDbHelper.get().replaceStatusUpdate(dataId, timestamp, status, resPackage,
                             iconResourceId, labelResourceId);
                 } else {
-                    mDbHelper.insertStatusUpdate(dataId, status, resPackage, iconResourceId,
+                    mDbHelper.get().insertStatusUpdate(dataId, status, resPackage, iconResourceId,
                             labelResourceId);
                 }
 
@@ -3144,7 +3241,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         if (contactId != -1) {
-            mContactAggregator.updateLastStatusUpdateId(contactId);
+            mAggregator.get().updateLastStatusUpdateId(contactId);
         }
 
         return dataId;
@@ -3183,19 +3280,37 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "deleteInTransaction: " + uri);
         }
+
+        // Default active DB to the contacts DB if none has been set.
+        if (mActiveDb.get() == null) {
+            mActiveDb.set(mDb);
+        }
+
         flushTransactionalChanges();
         final boolean callerIsSyncAdapter =
                 readBooleanQueryParameter(uri, ContactsContract.CALLER_IS_SYNCADAPTER, false);
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
-                return mDbHelper.getSyncState().delete(mDb, selection, selectionArgs);
+            case PROFILE_SYNCSTATE:
+                return mDbHelper.get().getSyncState().delete(mActiveDb.get(), selection,
+                        selectionArgs);
 
-            case SYNCSTATE_ID:
+            case SYNCSTATE_ID: {
                 String selectionWithId =
                         (SyncStateContract.Columns._ID + "=" + ContentUris.parseId(uri) + " ")
                         + (selection == null ? "" : " AND (" + selection + ")");
-                return mDbHelper.getSyncState().delete(mDb, selectionWithId, selectionArgs);
+                return mDbHelper.get().getSyncState().delete(mActiveDb.get(), selectionWithId,
+                        selectionArgs);
+            }
+
+            case PROFILE_SYNCSTATE_ID: {
+                String selectionWithId =
+                        (SyncStateContract.Columns._ID + "=" + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND (" + selection + ")");
+                return mProfileHelper.getSyncState().delete(mActiveDb.get(), selectionWithId,
+                        selectionArgs);
+            }
 
             case CONTACTS: {
                 // TODO
@@ -3211,11 +3326,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
                 final String lookupKey = pathSegments.get(2);
-                final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
+                final long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                 return deleteContact(contactId, callerIsSyncAdapter);
             }
 
@@ -3236,8 +3351,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 args[0] = String.valueOf(contactId);
                 args[1] = Uri.encode(lookupKey);
                 lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
-                final SQLiteDatabase db = mDbHelper.getReadableDatabase();
-                Cursor c = query(db, lookupQb, null, selection, args, null, null, null);
+                Cursor c = query(mActiveDb.get(), lookupQb, null, selection, args, null, null,
+                        null);
                 try {
                     if (c.getCount() == 1) {
                         // contact was unmodified so go ahead and delete it
@@ -3254,7 +3369,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS: {
                 int numDeletes = 0;
-                Cursor c = mDb.query(Tables.RAW_CONTACTS,
+                Cursor c = mActiveDb.get().query(Tables.RAW_CONTACTS,
                         new String[]{RawContacts._ID, RawContacts.CONTACT_ID},
                         appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
@@ -3272,7 +3387,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS_ID: {
                 final long rawContactId = ContentUris.parseId(uri);
-                return deleteRawContact(rawContactId, mDbHelper.getContactId(rawContactId),
+                return deleteRawContact(rawContactId, mDbHelper.get().getContactId(rawContactId),
                         callerIsSyncAdapter);
             }
 
@@ -3299,7 +3414,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case GROUPS: {
                 int numDeletes = 0;
-                Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups._ID},
+                Cursor c = mActiveDb.get().query(Tables.GROUPS, new String[]{Groups._ID},
                         appendAccountToSelection(uri, selection), selectionArgs, null, null, null);
                 try {
                     while (c.moveToNext()) {
@@ -3319,7 +3434,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return deleteSettings(uri, appendAccountToSelection(uri, selection), selectionArgs);
             }
 
-            case STATUS_UPDATES: {
+            case STATUS_UPDATES:
+            case PROFILE_STATUS_UPDATES: {
                 return deleteStatusUpdates(selection, selectionArgs);
             }
 
@@ -3359,20 +3475,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     public int deleteGroup(Uri uri, long groupId, boolean callerIsSyncAdapter) {
         mGroupIdCache.clear();
-        final long groupMembershipMimetypeId = mDbHelper
+        final long groupMembershipMimetypeId = mDbHelper.get()
                 .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        mDb.delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
+        mActiveDb.get().delete(Tables.DATA, DataColumns.MIMETYPE_ID + "="
                 + groupMembershipMimetypeId + " AND " + GroupMembership.GROUP_ROW_ID + "="
                 + groupId, null);
 
         try {
             if (callerIsSyncAdapter) {
-                return mDb.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
+                return mActiveDb.get().delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
             } else {
                 mValues.clear();
                 mValues.put(Groups.DELETED, 1);
                 mValues.put(Groups.DIRTY, 1);
-                return mDb.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
+                return mActiveDb.get().update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId,
+                        null);
             }
         } finally {
             mVisibleTouched = true;
@@ -3380,15 +3497,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private int deleteSettings(Uri uri, String selection, String[] selectionArgs) {
-        final int count = mDb.delete(Tables.SETTINGS, selection, selectionArgs);
+        final int count = mActiveDb.get().delete(Tables.SETTINGS, selection, selectionArgs);
         mVisibleTouched = true;
         return count;
     }
 
     private int deleteContact(long contactId, boolean callerIsSyncAdapter) {
-        enforceProfilePermissionForContact(mDb, contactId, true);
         mSelectionArgs1[0] = Long.toString(contactId);
-        Cursor c = mDb.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
+        Cursor c = mActiveDb.get().query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1,
                 null, null, null);
         try {
@@ -3402,21 +3518,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         mProviderStatusUpdateNeeded = true;
 
-        return mDb.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
+        return mActiveDb.get().delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
     }
 
     public int deleteRawContact(long rawContactId, long contactId, boolean callerIsSyncAdapter) {
-        enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-        mContactAggregator.invalidateAggregationExceptionCache();
+        mAggregator.get().invalidateAggregationExceptionCache();
         mProviderStatusUpdateNeeded = true;
 
         if (callerIsSyncAdapter) {
-            mDb.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
-            int count = mDb.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
-            mContactAggregator.updateDisplayNameForContact(mDb, contactId);
+            mActiveDb.get().delete(Tables.PRESENCE,
+                    PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
+            int count = mActiveDb.get().delete(Tables.RAW_CONTACTS,
+                    RawContacts._ID + "=" + rawContactId, null);
+            mAggregator.get().updateDisplayNameForContact(mActiveDb.get(), contactId);
             return count;
         } else {
-            mDbHelper.removeContactIfSingleton(rawContactId);
+            mDbHelper.get().removeContactIfSingleton(rawContactId);
             return markRawContactAsDeleted(rawContactId, callerIsSyncAdapter);
         }
     }
@@ -3427,9 +3544,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
       if (VERBOSE_LOGGING) {
           Log.v(TAG, "deleting data from status_updates for " + selection);
       }
-      mDb.delete(Tables.STATUS_UPDATES, getWhereClauseForStatusUpdatesTable(selection),
+      mActiveDb.get().delete(Tables.STATUS_UPDATES, getWhereClauseForStatusUpdatesTable(selection),
           selectionArgs);
-      return mDb.delete(Tables.PRESENCE, selection, selectionArgs);
+      return mActiveDb.get().delete(Tables.PRESENCE, selection, selectionArgs);
     }
 
     private int deleteStreamItems(Uri uri, ContentValues values, String selection,
@@ -3452,7 +3569,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private int deleteStreamItem(long streamItemId) {
         // Note that this does not enforce the modifying account.
         deleteStreamItemPhotos(streamItemId);
-        return mDb.delete(Tables.STREAM_ITEMS, StreamItems._ID + "=?",
+        return mActiveDb.get().delete(Tables.STREAM_ITEMS, StreamItems._ID + "=?",
                 new String[]{String.valueOf(streamItemId)});
     }
 
@@ -3464,12 +3581,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         enforceModifyingAccountForStreamItemPhotos(account, selection, selectionArgs);
 
         // If no security exception has been thrown, we're fine to delete.
-        return mDb.delete(Tables.STREAM_ITEM_PHOTOS, selection, selectionArgs);
+        return mActiveDb.get().delete(Tables.STREAM_ITEM_PHOTOS, selection, selectionArgs);
     }
 
     private int deleteStreamItemPhotos(long streamItemId) {
         // Note that this does not enforce the modifying account.
-        return mDb.delete(Tables.STREAM_ITEM_PHOTOS, StreamItemPhotos.STREAM_ITEM_ID + "=?",
+        return mActiveDb.get().delete(Tables.STREAM_ITEM_PHOTOS,
+                StreamItemPhotos.STREAM_ITEM_ID + "=?",
                 new String[]{String.valueOf(streamItemId)});
     }
 
@@ -3492,13 +3610,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             Log.v(TAG, "updateInTransaction: " + uri);
         }
 
+        // Default active DB to the contacts DB if none has been set.
+        if (mActiveDb.get() == null) {
+            mActiveDb.set(mDb);
+        }
+
         int count = 0;
 
         final int match = sUriMatcher.match(uri);
         if (match == SYNCSTATE_ID && selection == null) {
             long rowId = ContentUris.parseId(uri);
             Object data = values.get(ContactsContract.SyncState.DATA);
-            mTransactionContext.syncStateUpdated(rowId, data);
+            mTransactionContext.get().syncStateUpdated(rowId, data);
             return 1;
         }
         flushTransactionalChanges();
@@ -3506,7 +3629,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 readBooleanQueryParameter(uri, ContactsContract.CALLER_IS_SYNCADAPTER, false);
         switch(match) {
             case SYNCSTATE:
-                return mDbHelper.getSyncState().update(mDb, values,
+            case PROFILE_SYNCSTATE:
+                return mDbHelper.get().getSyncState().update(mActiveDb.get(), values,
                         appendAccountToSelection(uri, selection), selectionArgs);
 
             case SYNCSTATE_ID: {
@@ -3514,7 +3638,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String selectionWithId =
                         (SyncStateContract.Columns._ID + "=" + ContentUris.parseId(uri) + " ")
                         + (selection == null ? "" : " AND (" + selection + ")");
-                return mDbHelper.getSyncState().update(mDb, values,
+                return mDbHelper.get().getSyncState().update(mActiveDb.get(), values,
+                        selectionWithId, selectionArgs);
+            }
+
+            case PROFILE_SYNCSTATE_ID: {
+                selection = appendAccountToSelection(uri, selection);
+                String selectionWithId =
+                        (SyncStateContract.Columns._ID + "=" + ContentUris.parseId(uri) + " ")
+                        + (selection == null ? "" : " AND (" + selection + ")");
+                return mProfileHelper.getSyncState().update(mActiveDb.get(), values,
                         selectionWithId, selectionArgs);
             }
 
@@ -3529,14 +3662,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case PROFILE: {
-                // Restrict update to the user's profile.
-                StringBuilder profileSelection = new StringBuilder();
-                profileSelection.append(Contacts.IS_USER_PROFILE + "=1");
-                if (!TextUtils.isEmpty(selection)) {
-                    profileSelection.append(" AND (").append(selection).append(")");
-                }
-                count = updateContactOptions(values, profileSelection.toString(), selectionArgs,
-                        callerIsSyncAdapter);
+                count = updateContactOptions(values, selection, selectionArgs, callerIsSyncAdapter);
                 break;
             }
 
@@ -3545,11 +3671,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
                 final String lookupKey = pathSegments.get(2);
-                final long contactId = lookupContactIdByLookupKey(mDb, lookupKey);
+                final long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                 count = updateContactOptions(contactId, values, callerIsSyncAdapter);
                 break;
             }
@@ -3584,7 +3710,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case RAW_CONTACTS: {
+            case RAW_CONTACTS:
+            case PROFILE_RAW_CONTACTS: {
                 selection = appendAccountToSelection(uri, selection);
                 count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter);
                 break;
@@ -3602,18 +3729,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1,
                             callerIsSyncAdapter);
                 }
-                break;
-            }
-
-            case PROFILE_RAW_CONTACTS: {
-                // Restrict update to the user's profile.
-                StringBuilder profileSelection = new StringBuilder();
-                profileSelection.append(RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1");
-                if (!TextUtils.isEmpty(selection)) {
-                    profileSelection.append(" AND (").append(selection).append(")");
-                }
-                count = updateRawContacts(values, profileSelection.toString(), selectionArgs,
-                        callerIsSyncAdapter);
                 break;
             }
 
@@ -3640,7 +3755,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                count = updateAggregationException(mDb, values);
+                count = updateAggregationException(mActiveDb.get(), values);
                 break;
             }
 
@@ -3651,7 +3766,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case STATUS_UPDATES: {
+            case STATUS_UPDATES:
+            case PROFILE_STATUS_UPDATES: {
                 count = updateStatusUpdate(uri, values, selection, selectionArgs);
                 break;
             }
@@ -3720,7 +3836,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int updateCount = 0;
         ContentValues settableValues = getSettableColumnsForStatusUpdatesTable(values);
         if (settableValues.size() > 0) {
-          updateCount = mDb.update(Tables.STATUS_UPDATES,
+          updateCount = mActiveDb.get().update(Tables.STATUS_UPDATES,
                     settableValues,
                     getWhereClauseForStatusUpdatesTable(selection),
                     selectionArgs);
@@ -3729,7 +3845,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // now update the Presence table
         settableValues = getSettableColumnsForPresenceTable(values);
         if (settableValues.size() > 0) {
-          updateCount = mDb.update(Tables.PRESENCE, settableValues,
+          updateCount = mActiveDb.get().update(Tables.PRESENCE, settableValues,
                     selection, selectionArgs);
         }
         // TODO updateCount is not entirely a valid count of updated rows because 2 tables could
@@ -3751,7 +3867,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         values.remove(RawContacts.ACCOUNT_TYPE);
 
         // If there's been no exception, the update should be fine.
-        return mDb.update(Tables.STREAM_ITEMS, values, selection, selectionArgs);
+        return mActiveDb.get().update(Tables.STREAM_ITEMS, values, selection, selectionArgs);
     }
 
     private int updateStreamItemPhotos(Uri uri, ContentValues values, String selection,
@@ -3771,7 +3887,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Process the photo (since we're updating, it's valid for the photo to not be present).
         if (processStreamItemPhoto(values, true)) {
             // If there's been no exception, the update should be fine.
-            return mDb.update(Tables.STREAM_ITEM_PHOTOS, values, selection, selectionArgs);
+            return mActiveDb.get().update(Tables.STREAM_ITEM_PHOTOS, values, selection,
+                    selectionArgs);
         }
         return 0;
     }
@@ -3826,7 +3943,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             updatedValues = values;
         }
 
-        int count = mDb.update(Tables.GROUPS, updatedValues, selectionWithId, selectionArgs);
+        int count = mActiveDb.get().update(Tables.GROUPS, updatedValues, selectionWithId,
+                selectionArgs);
         if (updatedValues.containsKey(Groups.GROUP_VISIBLE)) {
             mVisibleTouched = true;
         }
@@ -3836,7 +3954,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // to key off account with data set).
         if (updatedValues.containsKey(Groups.SHOULD_SYNC)
                 && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
-            Cursor c = mDb.query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
+            Cursor c = mActiveDb.get().query(Tables.GROUPS, new String[]{Groups.ACCOUNT_NAME,
                     Groups.ACCOUNT_TYPE}, selectionWithId, selectionArgs, null,
                     null, null);
             String accountName;
@@ -3861,7 +3979,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private int updateSettings(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
-        final int count = mDb.update(Tables.SETTINGS, values, selection, selectionArgs);
+        final int count = mActiveDb.get().update(Tables.SETTINGS, values, selection, selectionArgs);
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mVisibleTouched = true;
         }
@@ -3881,7 +3999,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         int count = 0;
-        Cursor cursor = mDb.query(Views.RAW_CONTACTS,
+        Cursor cursor = mActiveDb.get().query(Views.RAW_CONTACTS,
                 new String[] { RawContacts._ID }, selection,
                 selectionArgs, null, null, null);
         try {
@@ -3899,10 +4017,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private int updateRawContact(long rawContactId, ContentValues values,
             boolean callerIsSyncAdapter) {
-
-        // Enforce profile permissions if the raw contact is in the user's profile.
-        enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
         final String selection = RawContacts._ID + " = ?";
         mSelectionArgs1[0] = Long.toString(rawContactId);
         final boolean requestUndoDelete = (values.containsKey(RawContacts.DELETED)
@@ -3912,8 +4026,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String accountName = null;
         String dataSet = null;
         if (requestUndoDelete) {
-            Cursor cursor = mDb.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS, selection,
-                    mSelectionArgs1, null, null, null);
+            Cursor cursor = mActiveDb.get().query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
+                    selection, mSelectionArgs1, null, null, null);
             try {
                 if (cursor.moveToFirst()) {
                     previousDeleted = cursor.getInt(RawContactsQuery.DELETED);
@@ -3928,7 +4042,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     ContactsContract.RawContacts.AGGREGATION_MODE_DEFAULT);
         }
 
-        int count = mDb.update(Tables.RAW_CONTACTS, values, selection, mSelectionArgs1);
+        int count = mActiveDb.get().update(Tables.RAW_CONTACTS, values, selection, mSelectionArgs1);
         if (count != 0) {
             if (values.containsKey(RawContacts.AGGREGATION_MODE)) {
                 int aggregationMode = values.getAsInteger(RawContacts.AGGREGATION_MODE);
@@ -3936,7 +4050,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // As per ContactsContract documentation, changing aggregation mode
                 // to DEFAULT should not trigger aggregation
                 if (aggregationMode != RawContacts.AGGREGATION_MODE_DEFAULT) {
-                    mContactAggregator.markForAggregation(rawContactId, aggregationMode, false);
+                    mAggregator.get().markForAggregation(rawContactId, aggregationMode, false);
                 }
             }
             if (values.containsKey(RawContacts.STARRED)) {
@@ -3944,14 +4058,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     updateFavoritesMembership(rawContactId,
                             values.getAsLong(RawContacts.STARRED) != 0);
                 }
-                mContactAggregator.updateStarred(rawContactId);
+                mAggregator.get().updateStarred(rawContactId);
             } else {
                 // if this raw contact is being associated with an account, then update the
                 // favorites group membership based on whether or not this contact is starred.
                 // If it is starred, add a group membership, if one doesn't already exist
                 // otherwise delete any matching group memberships.
                 if (!callerIsSyncAdapter && values.containsKey(RawContacts.ACCOUNT_NAME)) {
-                    boolean starred = 0 != DatabaseUtils.longForQuery(mDb,
+                    boolean starred = 0 != DatabaseUtils.longForQuery(mActiveDb.get(),
                             SELECTION_STARRED_FROM_RAW_CONTACTS,
                             new String[]{Long.toString(rawContactId)});
                     updateFavoritesMembership(rawContactId, starred);
@@ -3965,19 +4079,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             if (values.containsKey(RawContacts.SOURCE_ID)) {
-                mContactAggregator.updateLookupKeyForRawContact(mDb, rawContactId);
+                mAggregator.get().updateLookupKeyForRawContact(mActiveDb.get(), rawContactId);
             }
             if (values.containsKey(RawContacts.NAME_VERIFIED)) {
 
                 // If setting NAME_VERIFIED for this raw contact, reset it for all
                 // other raw contacts in the same aggregate
                 if (values.getAsInteger(RawContacts.NAME_VERIFIED) != 0) {
-                    mDbHelper.resetNameVerifiedForOtherRawContacts(rawContactId);
+                    mDbHelper.get().resetNameVerifiedForOtherRawContacts(rawContactId);
                 }
-                mContactAggregator.updateDisplayNameForRawContact(mDb, rawContactId);
+                mAggregator.get().updateDisplayNameForRawContact(mActiveDb.get(), rawContactId);
             }
             if (requestUndoDelete && previousDeleted == 1) {
-                mTransactionContext.rawContactInserted(rawContactId,
+                mTransactionContext.get().rawContactInserted(rawContactId,
                         new AccountWithDataSet(accountName, accountType, dataSet));
             }
         }
@@ -3995,7 +4109,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String packageName = values.getAsString(Data.RES_PACKAGE);
         if (packageName != null) {
             mValues.remove(Data.RES_PACKAGE);
-            mValues.put(DataColumns.PACKAGE_ID, mDbHelper.getPackageId(packageName));
+            mValues.put(DataColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
         }
 
         if (!callerIsSyncAdapter) {
@@ -4007,19 +4121,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about updating data we don't have permission to read.
-        // This query will be allowed to return profiles, and we'll do the permission check
-        // within the loop.
-        Cursor c = queryLocal(uri.buildUpon()
-                .appendQueryParameter(ContactsContract.ALLOW_PROFILE, "1").build(),
+        Cursor c = queryLocal(uri,
                 DataRowHandler.DataUpdateQuery.COLUMNS,
-                selection, selectionArgs, null, -1 /* directory ID */,
-                true /* suppress profile check */);
+                selection, selectionArgs, null, -1 /* directory ID */);
         try {
             while(c.moveToNext()) {
-                // Check profile permission for the raw contact that owns each data record.
-                long rawContactId = c.getLong(DataRowHandler.DataUpdateQuery.RAW_CONTACT_ID);
-                enforceProfilePermissionForRawContact(mDb, rawContactId, true);
-
                 count += updateData(mValues, c, callerIsSyncAdapter);
             }
         } finally {
@@ -4037,7 +4143,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final String mimeType = c.getString(DataRowHandler.DataUpdateQuery.MIMETYPE);
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
         boolean updated =
-                rowHandler.update(mDb, mTransactionContext, values, c, callerIsSyncAdapter);
+                rowHandler.update(mActiveDb.get(), mTransactionContext.get(), values, c,
+                        callerIsSyncAdapter);
         if (Photo.CONTENT_ITEM_TYPE.equals(mimeType)) {
             scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
         }
@@ -4047,18 +4154,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private int updateContactOptions(ContentValues values, String selection,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
         int count = 0;
-        Cursor cursor = mDb.query(Views.CONTACTS,
-                new String[] { Contacts._ID, Contacts.IS_USER_PROFILE }, selection,
-                selectionArgs, null, null, null);
+        Cursor cursor = mActiveDb.get().query(Views.CONTACTS,
+                new String[] { Contacts._ID }, selection, selectionArgs, null, null, null);
         try {
             while (cursor.moveToNext()) {
                 long contactId = cursor.getLong(0);
-
-                // Check for profile write permission before updating a user's profile contact.
-                boolean isProfile = cursor.getInt(1) == 1;
-                if (isProfile) {
-                    enforceProfilePermission(true);
-                }
 
                 updateContactOptions(contactId, values, callerIsSyncAdapter);
                 count++;
@@ -4072,9 +4172,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private int updateContactOptions(long contactId, ContentValues values,
             boolean callerIsSyncAdapter) {
-
-        // Check write permission if the contact is the user's profile.
-        enforceProfilePermissionForContact(mDb, contactId, true);
 
         mValues.clear();
         ContactsDatabaseHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
@@ -4099,11 +4196,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         mSelectionArgs1[0] = String.valueOf(contactId);
-        mDb.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?"
+        mActiveDb.get().update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?"
                 + " AND " + RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0", mSelectionArgs1);
 
         if (mValues.containsKey(RawContacts.STARRED) && !callerIsSyncAdapter) {
-            Cursor cursor = mDb.query(Views.RAW_CONTACTS,
+            Cursor cursor = mActiveDb.get().query(Views.RAW_CONTACTS,
                     new String[] { RawContacts._ID }, RawContacts.CONTACT_ID + "=?",
                     mSelectionArgs1, null, null, null);
             try {
@@ -4131,12 +4228,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
 
-        int rslt = mDb.update(Tables.CONTACTS, mValues, Contacts._ID + "=?", mSelectionArgs1);
+        int rslt = mActiveDb.get().update(Tables.CONTACTS, mValues, Contacts._ID + "=?",
+                mSelectionArgs1);
 
         if (values.containsKey(Contacts.LAST_TIME_CONTACTED) &&
                 !values.containsKey(Contacts.TIMES_CONTACTED)) {
-            mDb.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
-            mDb.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
+            mActiveDb.get().execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
+            mActiveDb.get().execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
         }
         return rslt;
     }
@@ -4171,14 +4269,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     exceptionValues);
         }
 
-        mContactAggregator.invalidateAggregationExceptionCache();
-        mContactAggregator.markForAggregation(rawContactId1,
+        mAggregator.get().invalidateAggregationExceptionCache();
+        mAggregator.get().markForAggregation(rawContactId1,
                 RawContacts.AGGREGATION_MODE_DEFAULT, true);
-        mContactAggregator.markForAggregation(rawContactId2,
+        mAggregator.get().markForAggregation(rawContactId2,
                 RawContacts.AGGREGATION_MODE_DEFAULT, true);
 
-        mContactAggregator.aggregateContact(mTransactionContext, db, rawContactId1);
-        mContactAggregator.aggregateContact(mTransactionContext, db, rawContactId2);
+        mAggregator.get().aggregateContact(mTransactionContext.get(), db, rawContactId1);
+        mAggregator.get().aggregateContact(mTransactionContext.get(), db, rawContactId2);
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
@@ -4192,8 +4290,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     protected boolean updateAccountsInBackground(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
-        mDb = mDbHelper.getWritableDatabase();
-        mDb.beginTransaction();
+        SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        mActiveDb.set(db);
+        db.beginTransaction();
         try {
             Set<AccountWithDataSet> existingAccountsWithDataSets =
                     findValidAccountsWithDataSets(Tables.ACCOUNTS);
@@ -4206,7 +4305,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     accountsChanged = true;
 
                     // Add an account entry with an empty data set to match the account.
-                    mDb.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
+                    db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
                             + ", " + RawContacts.ACCOUNT_TYPE + ", " + RawContacts.DATA_SET
                             + ") VALUES (?, ?, ?)",
                             new String[] {
@@ -4250,12 +4349,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     String rawContactsDataSetClause = " AND " + RawContacts.DATA_SET
                             + (accountWithDataSet.getDataSet() == null ? " IS NULL" : " = ?");
 
-                    mDb.execSQL(
+                    db.execSQL(
                             "DELETE FROM " + Tables.GROUPS +
                             " WHERE " + Groups.ACCOUNT_NAME + " = ?" +
                                     " AND " + Groups.ACCOUNT_TYPE + " = ?" +
                                     groupsDataSetClause, accountWithDataSetParams);
-                    mDb.execSQL(
+                    db.execSQL(
                             "DELETE FROM " + Tables.PRESENCE +
                             " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
                                     "SELECT " + RawContacts._ID +
@@ -4263,21 +4362,21 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                     " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
                                     " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
                                     rawContactsDataSetClause + ")", accountWithDataSetParams);
-                    mDb.execSQL(
+                    db.execSQL(
                             "DELETE FROM " + Tables.RAW_CONTACTS +
                             " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
                             " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
                             rawContactsDataSetClause, accountWithDataSetParams);
-                    mDb.execSQL(
+                    db.execSQL(
                             "DELETE FROM " + Tables.SETTINGS +
                             " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
                             " AND " + Settings.ACCOUNT_TYPE + " = ?", accountParams);
-                    mDb.execSQL(
+                    db.execSQL(
                             "DELETE FROM " + Tables.ACCOUNTS +
                             " WHERE " + RawContacts.ACCOUNT_NAME + "=?" +
                             " AND " + RawContacts.ACCOUNT_TYPE + "=?" +
                             rawContactsDataSetClause, accountWithDataSetParams);
-                    mDb.execSQL(
+                    db.execSQL(
                             "DELETE FROM " + Tables.DIRECTORIES +
                             " WHERE " + Directory.ACCOUNT_NAME + "=?" +
                             " AND " + Directory.ACCOUNT_TYPE + "=?", accountParams);
@@ -4288,7 +4387,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 // we have just deleted and see if they are still referencing the deleted
                 // names or photos.  If so, fix up those contacts.
                 HashSet<Long> orphanContactIds = Sets.newHashSet();
-                Cursor cursor = mDb.rawQuery("SELECT " + Contacts._ID +
+                Cursor cursor = db.rawQuery("SELECT " + Contacts._ID +
                         " FROM " + Tables.CONTACTS +
                         " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
                                 Contacts.NAME_RAW_CONTACT_ID + " NOT IN " +
@@ -4307,9 +4406,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 for (Long contactId : orphanContactIds) {
-                    mContactAggregator.updateAggregateData(mTransactionContext, contactId);
+                    mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
                 }
-                mDbHelper.updateAllVisible();
+                mDbHelper.get().updateAllVisible();
                 updateSearchIndexInTransaction();
             }
 
@@ -4326,7 +4425,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 accountsChanged = true;
 
                 // Add an account entry to match the raw contact.
-                mDb.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
+                db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " (" + RawContacts.ACCOUNT_NAME
                         + ", " + RawContacts.ACCOUNT_TYPE + ", " + RawContacts.DATA_SET
                         + ") VALUES (?, ?, ?)",
                         new String[] {
@@ -4338,11 +4437,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             if (accountsChanged) {
                 // TODO: Should sync state take data set into consideration?
-                mDbHelper.getSyncState().onAccountsChanged(mDb, accounts);
+                mDbHelper.get().getSyncState().onAccountsChanged(db, accounts);
             }
-            mDb.setTransactionSuccessful();
+            db.setTransactionSuccessful();
         } finally {
-            mDb.endTransaction();
+            db.endTransaction();
         }
         mAccountWritability.clear();
 
@@ -4383,7 +4482,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private Set<AccountWithDataSet> findValidAccountsWithDataSets(String table) {
         Set<AccountWithDataSet> accountsWithDataSets = new HashSet<AccountWithDataSet>();
-        Cursor c = mDb.rawQuery(
+        Cursor c = mActiveDb.get().rawQuery(
                 "SELECT DISTINCT " + RawContacts.ACCOUNT_NAME + "," + RawContacts.ACCOUNT_TYPE +
                 "," + RawContacts.DATA_SET +
                 " FROM " + table, null);
@@ -4406,18 +4505,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         waitForAccess(mReadAccessLatch);
 
+        // Query the profile DB if appropriate.
+        if (mapsToProfileDb(uri)) {
+            switchToProfileMode();
+            return mProfileProvider.query(uri, projection, selection, selectionArgs, sortOrder);
+        }
+
+        // Otherwise proceed with a normal query against the contacts DB.
+        switchToContactMode();
+        mActiveDb.set(mContactsHelper.getReadableDatabase());
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
             return wrapCursor(uri,
-                    queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1, false));
+                    queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1));
         } else if (directory.equals("0")) {
             return wrapCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                            Directory.DEFAULT, false));
+                            Directory.DEFAULT));
         } else if (directory.equals("1")) {
             return wrapCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                            Directory.LOCAL_INVISIBLE, false));
+                            Directory.LOCAL_INVISIBLE));
         }
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -4547,7 +4655,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         synchronized (mDirectoryCache) {
             if (!mDirectoryCacheValid) {
                 mDirectoryCache.clear();
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
+                SQLiteDatabase db = mDbHelper.get().getReadableDatabase();
                 Cursor cursor = db.query(Tables.DIRECTORIES,
                         DirectoryQuery.COLUMNS,
                         null, null, null, null, null);
@@ -4576,40 +4684,36 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-    private Cursor queryLocal(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, long directoryId,
-            final boolean suppressProfileCheck) {
+    protected Cursor queryLocal(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, long directoryId) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: " + uri);
         }
 
-        final SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        // Default active DB to the contacts DB if none has been set.
+        if (mActiveDb.get() == null) {
+            mActiveDb.set(mDb);
+        }
 
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
         String limit = getLimit(uri);
 
-        // Column name for appendProfileRestriction().  We append the profile check to the original
-        // selection if it's not null.
-        String profileRestrictionColumnName = null;
-
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
-                return mDbHelper.getSyncState().query(db, projection, selection,  selectionArgs,
-                        sortOrder);
+            case PROFILE_SYNCSTATE:
+                return mDbHelper.get().getSyncState().query(mActiveDb.get(), projection, selection,
+                        selectionArgs, sortOrder);
 
             case CONTACTS: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
                 appendLocalDirectorySelectionIfNeeded(qb, directoryId);
-                profileRestrictionColumnName = Contacts.IS_USER_PROFILE;
-                sortOrder = prependProfileSortIfNeeded(uri, sortOrder, suppressProfileCheck);
                 break;
             }
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                enforceProfilePermissionForContact(db, contactId, false);
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
                 qb.appendWhere(Contacts._ID + "=?");
@@ -4621,18 +4725,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
 
                 String lookupKey = pathSegments.get(2);
                 if (segmentCount == 4) {
                     long contactId = Long.parseLong(pathSegments.get(3));
-                    enforceProfilePermissionForContact(db, contactId, false);
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
 
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Contacts._ID, contactId, Contacts.LOOKUP_KEY, lookupKey);
                     if (c != null) {
@@ -4642,7 +4745,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
                 selectionArgs = insertSelectionArg(selectionArgs,
-                        String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
+                        String.valueOf(lookupContactIdByLookupKey(mActiveDb.get(), lookupKey)));
                 qb.appendWhere(Contacts._ID + "=?");
                 break;
             }
@@ -4652,17 +4755,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 4) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
                 String lookupKey = pathSegments.get(2);
                 if (segmentCount == 5) {
                     long contactId = Long.parseLong(pathSegments.get(3));
-                    enforceProfilePermissionForContact(db, contactId, false);
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForData(lookupQb, uri, projection, false);
                     lookupQb.appendWhere(" AND ");
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Data.CONTACT_ID, contactId, Data.LOOKUP_KEY, lookupKey);
                     if (c != null) {
@@ -4673,8 +4775,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                long contactId = lookupContactIdByLookupKey(db, lookupKey);
-                enforceProfilePermissionForContact(db, contactId, false);
+                long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                 selectionArgs = insertSelectionArg(selectionArgs,
                         String.valueOf(contactId));
                 qb.appendWhere(" AND " + Data.CONTACT_ID + "=?");
@@ -4683,7 +4784,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_ID_STREAM_ITEMS: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-                enforceProfilePermissionForContact(db, contactId, false);
                 setTablesAndProjectionMapForStreamItems(qb);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
                 qb.appendWhere(StreamItems.CONTACT_ID + "=?");
@@ -4695,16 +4795,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 4) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
                 String lookupKey = pathSegments.get(2);
                 if (segmentCount == 5) {
                     long contactId = Long.parseLong(pathSegments.get(3));
-                    enforceProfilePermissionForContact(db, contactId, false);
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForStreamItems(lookupQb);
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             StreamItems.CONTACT_ID, contactId,
                             StreamItems.CONTACT_LOOKUP_KEY, lookupKey);
@@ -4714,8 +4813,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
 
                 setTablesAndProjectionMapForStreamItems(qb);
-                long contactId = lookupContactIdByLookupKey(db, lookupKey);
-                enforceProfilePermissionForContact(db, contactId, false);
+                long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
                 qb.appendWhere(RawContacts.CONTACT_ID + "=?");
                 break;
@@ -4723,8 +4821,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_AS_VCARD: {
                 final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
-                long contactId = lookupContactIdByLookupKey(db, lookupKey);
-                enforceProfilePermissionForContact(db, contactId, false);
+                long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                 qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sContactsVCardProjectionMap);
                 selectionArgs = insertSelectionArg(selectionArgs,
@@ -4736,7 +4833,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_AS_MULTI_VCARD: {
                 SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
                 String currentDateString = dateFormat.format(new Date()).toString();
-                return db.rawQuery(
+                return mActiveDb.get().rawQuery(
                     "SELECT" +
                     " 'vcards_' || ? || '.vcf' AS " + OpenableColumns.DISPLAY_NAME + "," +
                     " NULL AS " + OpenableColumns.SIZE,
@@ -4750,8 +4847,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
                 setTablesAndProjectionMapForContactsWithSnippet(
                         qb, uri, projection, filterParam, directoryId);
-                profileRestrictionColumnName = Contacts.IS_USER_PROFILE;
-                sortOrder = prependProfileSortIfNeeded(uri, sortOrder, suppressProfileCheck);
                 break;
             }
 
@@ -4783,10 +4878,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.setProjectionMap(phoneOnly ?
                         sStrequentPhoneOnlyStarredProjectionMap
                         : sStrequentStarredProjectionMap);
-                qb.appendWhere(DbQueryUtils.concatenateClauses(
-                        selection, Contacts.IS_USER_PROFILE + "=0"));
                 if (phoneOnly) {
-                    qb.appendWhere(" AND " + Contacts.HAS_PHONE_NUMBER + "=1");
+                    qb.appendWhere(DbQueryUtils.concatenateClauses(
+                            selection, Contacts.HAS_PHONE_NUMBER + "=1"));
                 }
                 qb.setStrict(true);
                 final String starredQuery = qb.buildQuery(subProjection,
@@ -4834,8 +4928,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     qb.setProjectionMap(sStrequentFrequentProjectionMap);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
-                            "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)",
-                            Contacts.IS_USER_PROFILE + "=0"));
+                            "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)"));
                     frequentQuery = qb.buildQuery(subProjection,
                             null, Contacts._ID, null, null, null);
                 }
@@ -4861,7 +4954,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     System.arraycopy(selectionArgs, 0, doubledSelectionArgs, length, length);
                 }
 
-                Cursor cursor = db.rawQuery(unionQuery, doubledSelectionArgs);
+                Cursor cursor = mActiveDb.get().rawQuery(unionQuery, doubledSelectionArgs);
                 if (cursor != null) {
                     cursor.setNotificationUri(getContext().getContentResolver(),
                             ContactsContract.AUTHORITY_URI);
@@ -4872,7 +4965,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case CONTACTS_FREQUENT: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection, true);
                 qb.setProjectionMap(sStrequentFrequentProjectionMap);
-                qb.appendWhere(Contacts.IS_USER_PROFILE + "=0");
                 groupBy = Contacts._ID;
                 if (!TextUtils.isEmpty(sortOrder)) {
                     sortOrder = FREQUENT_ORDER_BY + ", " + sortOrder;
@@ -4892,40 +4984,30 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case PROFILE: {
-                enforceProfilePermission(false);
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                qb.appendWhere(Contacts.IS_USER_PROFILE + "=1");
                 break;
             }
 
             case PROFILE_ENTITIES: {
-                enforceProfilePermission(false);
                 setTablesAndProjectionMapForEntities(qb, uri, projection);
-                qb.appendWhere(" AND " + Contacts.IS_USER_PROFILE + "=1");
                 break;
             }
 
             case PROFILE_DATA: {
-                enforceProfilePermission(false);
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1");
                 break;
             }
 
             case PROFILE_DATA_ID: {
-                enforceProfilePermission(false);
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(" AND " + Data._ID + "=? AND "
-                        + RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1");
+                qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
 
             case PROFILE_AS_VCARD: {
-                enforceProfilePermission(false);
                 qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sContactsVCardProjectionMap);
-                qb.appendWhere(Contacts.IS_USER_PROFILE + "=1");
                 break;
             }
 
@@ -4939,7 +5021,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_ID_PHOTO: {
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-                enforceProfilePermissionForContact(db, contactId, false);
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
                 qb.appendWhere(" AND " + RawContacts.CONTACT_ID + "=?");
@@ -4960,7 +5041,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 4) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
                 String lookupKey = pathSegments.get(2);
@@ -4970,7 +5051,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     setTablesAndProjectionMapForEntities(lookupQb, uri, projection);
                     lookupQb.appendWhere(" AND ");
 
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Contacts.Entity.CONTACT_ID, contactId,
                             Contacts.Entity.LOOKUP_KEY, lookupKey);
@@ -4981,7 +5062,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 setTablesAndProjectionMapForEntities(qb, uri, projection);
                 selectionArgs = insertSelectionArg(selectionArgs,
-                        String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
+                        String.valueOf(lookupContactIdByLookupKey(mActiveDb.get(), lookupKey)));
                 qb.appendWhere(" AND " + Contacts.Entity.CONTACT_ID + "=?");
                 break;
             }
@@ -5053,7 +5134,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case PHONES_FILTER: {
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
-                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 Integer typeInt = sDataUsageTypeMap.get(typeParam);
                 if (typeInt == null) {
                     typeInt = DataUsageStatColumns.USAGE_TYPE_INT_CALL;
@@ -5137,7 +5217,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
                 if (uri.getPathSegments().size() > 2) {
                     String email = uri.getLastPathSegment();
-                    String address = mDbHelper.extractAddressFromEmailAddress(email);
+                    String address = mDbHelper.get().extractAddressFromEmailAddress(email);
                     selectionArgs = insertSelectionArg(selectionArgs, address);
                     qb.appendWhere(" AND UPPER(" + Email.DATA + ")=UPPER(?)");
                 }
@@ -5146,7 +5226,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case EMAILS_FILTER: {
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
-                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 Integer typeInt = sDataUsageTypeMap.get(typeParam);
                 if (typeInt == null) {
                     typeInt = DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT;
@@ -5171,7 +5250,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             "SELECT " + Data._ID +
                             " FROM " + Tables.DATA +
                             " WHERE " + DataColumns.MIMETYPE_ID + "=");
-                    sb.append(mDbHelper.getMimeTypeIdForEmail());
+                    sb.append(mDbHelper.get().getMimeTypeIdForEmail());
                     sb.append(" AND " + Data.DATA1 + " LIKE ");
                     DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
                     if (!filterParam.contains("@")) {
@@ -5179,7 +5258,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 " UNION SELECT " + Data._ID +
                                 " FROM " + Tables.DATA +
                                 " WHERE +" + DataColumns.MIMETYPE_ID + "=");
-                        sb.append(mDbHelper.getMimeTypeIdForEmail());
+                        sb.append(mDbHelper.get().getMimeTypeIdForEmail());
                         sb.append(" AND " + Data.RAW_CONTACT_ID + " IN " +
                                 "(SELECT " + RawContactsColumns.CONCRETE_ID +
                                 " FROM " + Tables.SEARCH_INDEX +
@@ -5223,13 +5302,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case RAW_CONTACTS: {
                 setTablesAndProjectionMapForRawContacts(qb, uri);
-                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 break;
             }
 
             case RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
-                enforceProfilePermissionForRawContact(db, rawContactId, false);
                 setTablesAndProjectionMapForRawContacts(qb, uri);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(" AND " + RawContacts._ID + "=?");
@@ -5241,13 +5318,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
-                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 break;
             }
 
             case RAW_CONTACTS_ID_STREAM_ITEMS: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-                enforceProfilePermissionForRawContact(db, rawContactId, false);
                 setTablesAndProjectionMapForStreamItems(qb);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(StreamItems.RAW_CONTACT_ID + "=?");
@@ -5255,51 +5330,41 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case PROFILE_RAW_CONTACTS: {
-                enforceProfilePermission(false);
                 setTablesAndProjectionMapForRawContacts(qb, uri);
-                qb.appendWhere(" AND " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1");
                 break;
             }
 
             case PROFILE_RAW_CONTACTS_ID: {
-                enforceProfilePermission(false);
                 long rawContactId = ContentUris.parseId(uri);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 setTablesAndProjectionMapForRawContacts(qb, uri);
-                qb.appendWhere(" AND " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1 AND "
-                        + RawContacts._ID + "=?");
+                qb.appendWhere(" AND " + RawContacts._ID + "=?");
                 break;
             }
 
             case PROFILE_RAW_CONTACTS_ID_DATA: {
-                enforceProfilePermission(false);
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(2));
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1 AND "
-                        + Data.RAW_CONTACT_ID + "=?");
+                qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
                 break;
             }
 
             case PROFILE_RAW_CONTACTS_ID_ENTITIES: {
-                enforceProfilePermission(false);
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(2));
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 setTablesAndProjectionMapForRawEntities(qb, uri);
-                qb.appendWhere(" AND " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + "=1 AND "
-                        + RawContacts._ID + "=?");
+                qb.appendWhere(" AND " + RawContacts._ID + "=?");
                 break;
             }
 
             case DATA: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 break;
             }
 
             case DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
-                enforceProfilePermissionForData(db, dataId, false);
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 qb.appendWhere(" AND " + Data._ID + "=?");
@@ -5316,11 +5381,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 String number = uri.getPathSegments().size() > 1 ? uri.getLastPathSegment() : "";
                 String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
-                        mDbHelper.getCurrentCountryIso());
+                        mDbHelper.get().getCurrentCountryIso());
                 String normalizedNumber =
                         PhoneNumberUtils.normalizeNumber(number);
-                profileRestrictionColumnName = Contacts.IS_USER_PROFILE;
-                mDbHelper.buildPhoneLookupAndContactQuery(qb, normalizedNumber, numberE164);
+                mDbHelper.get().buildPhoneLookupAndContactQuery(qb, normalizedNumber, numberE164);
                 qb.setProjectionMap(sPhoneLookupProjectionMap);
                 // Phone lookup cannot be combined with a selection
                 selection = null;
@@ -5393,7 +5457,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
 
-                return mContactAggregator.queryAggregationSuggestions(qb, projection, contactId,
+                return mAggregator.get().queryAggregationSuggestions(qb, projection, contactId,
                         maxSuggestions, filter, parameters);
             }
 
@@ -5404,21 +5468,23 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 // When requesting specific columns, this query requires
                 // late-binding of the GroupMembership MIME-type.
-                final String groupMembershipMimetypeId = Long.toString(mDbHelper
+                final String groupMembershipMimetypeId = Long.toString(mDbHelper.get()
                         .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
                 if (projection != null && projection.length != 0 &&
-                        mDbHelper.isInProjection(projection, Settings.UNGROUPED_COUNT)) {
+                        mDbHelper.get().isInProjection(projection, Settings.UNGROUPED_COUNT)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
                 if (projection != null && projection.length != 0 &&
-                        mDbHelper.isInProjection(projection, Settings.UNGROUPED_WITH_PHONES)) {
+                        mDbHelper.get().isInProjection(
+                                projection, Settings.UNGROUPED_WITH_PHONES)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
 
                 break;
             }
 
-            case STATUS_UPDATES: {
+            case STATUS_UPDATES:
+            case PROFILE_STATUS_UPDATES: {
                 setTableAndProjectionMapForStatusUpdates(qb, projection);
                 break;
             }
@@ -5432,7 +5498,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case SEARCH_SUGGESTIONS: {
                 return mGlobalSearchSupport.handleSearchSuggestionsQuery(
-                        db, uri, projection, limit);
+                        mActiveDb.get(), uri, projection, limit);
             }
 
             case SEARCH_SHORTCUT: {
@@ -5440,7 +5506,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 String filter = getQueryParameter(
                         uri, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
                 return mGlobalSearchSupport.handleSearchShortcutRefresh(
-                        db, projection, lookupKey, filter);
+                        mActiveDb.get(), projection, lookupKey, filter);
             }
 
             case LIVE_FOLDERS_CONTACTS:
@@ -5510,17 +5576,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         qb.setStrict(true);
 
-        if (profileRestrictionColumnName != null) {
-            // This check is very slow and most of the rows will pass though this check, so
-            // it should be put after user's selection, so SQLite won't do this check first.
-            selection = appendProfileRestriction(uri, profileRestrictionColumnName,
-                    suppressProfileCheck, selection);
-        }
-
         Cursor cursor =
-                query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy, limit);
+                query(mActiveDb.get(), qb, projection, selection, selectionArgs, sortOrder, groupBy,
+                        limit);
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
-            cursor = bundleLetterCountExtras(cursor, db, qb, selection, selectionArgs, sortOrder);
+            cursor = bundleLetterCountExtras(cursor, mActiveDb.get(), qb, selection,
+                    selectionArgs, sortOrder);
         }
         return cursor;
     }
@@ -5599,10 +5660,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         public static final int COLUMN_TITLE = 1;
         public static final int COLUMN_COUNT = 2;
 
-        // The first letter of the sort key column is what is used for the index headings, except
-        // in the case of the user's profile, in which case it is empty.
-        public static final String SECTION_HEADING_TEMPLATE =
-                "(CASE WHEN %1$s=1 THEN '' ELSE SUBSTR(%2$s,1,1) END)";
+        // The first letter of the sort key column is what is used for the index headings.
+        public static final String SECTION_HEADING = "SUBSTR(%1$s,1,1)";
 
         public static final String ORDER_BY = LETTER + " COLLATE " + PHONEBOOK_COLLATOR_NAME;
     }
@@ -5620,25 +5679,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // the sort column itself.
         String sortOrderSuffix = "";
         if (sortOrder != null) {
-
-            // If the sort order contains one of the "is_profile" columns, we need to strip it out
-            // first.
-            if (sortOrder.contains(Contacts.IS_USER_PROFILE)
-                    || sortOrder.contains(RawContacts.RAW_CONTACT_IS_USER_PROFILE)) {
-                String[] splitOrderClauses = sortOrder.split(",");
-                StringBuilder rejoinedClause = new StringBuilder();
-                for (String orderClause : splitOrderClauses) {
-                    if (!orderClause.contains(Contacts.IS_USER_PROFILE)
-                            && !orderClause.contains(RawContacts.RAW_CONTACT_IS_USER_PROFILE)) {
-                        if (rejoinedClause.length() > 0) {
-                            rejoinedClause.append(", ");
-                        }
-                        rejoinedClause.append(orderClause.trim());
-                    }
-                }
-                sortOrder = rejoinedClause.toString();
-            }
-
             int spaceIndex = sortOrder.indexOf(' ');
             if (spaceIndex != -1) {
                 sortKey = sortOrder.substring(0, spaceIndex);
@@ -5652,13 +5692,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         String locale = getLocale().toString();
         HashMap<String, String> projectionMap = Maps.newHashMap();
-
-        // The user profile column varies depending on the view.
-        String profileColumn = qb.getTables().contains(Views.CONTACTS)
-                ? Contacts.IS_USER_PROFILE
-                : RawContacts.RAW_CONTACT_IS_USER_PROFILE;
-        String sectionHeading = String.format(
-                AddressBookIndexQuery.SECTION_HEADING_TEMPLATE, profileColumn, sortKey);
+        String sectionHeading = String.format(AddressBookIndexQuery.SECTION_HEADING, sortKey);
         projectionMap.put(AddressBookIndexQuery.LETTER,
                 sectionHeading + " AS " + AddressBookIndexQuery.LETTER);
 
@@ -5730,6 +5764,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         ArrayList<LookupKeySegment> segments = key.parse(lookupKey);
 
         long contactId = -1;
+        if (lookupKeyContainsType(segments, ContactLookupKey.LOOKUP_TYPE_PROFILE)) {
+            // We should already be in a profile database context, so just look up a single contact.
+           contactId = lookupSingleContactId(db);
+        }
+
         if (lookupKeyContainsType(segments, ContactLookupKey.LOOKUP_TYPE_SOURCE_ID)) {
             contactId = lookupContactIdBySourceIds(db, segments);
             if (contactId != -1) {
@@ -5752,6 +5791,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return contactId;
+    }
+
+    private long lookupSingleContactId(SQLiteDatabase db) {
+        Cursor c = db.query(Tables.CONTACTS, new String[] {Contacts._ID},
+                null, null, null, null, null, "1");
+        try {
+            if (c.moveToFirst()) {
+                return c.getLong(0);
+            } else {
+                return -1;
+            }
+        } finally {
+            c.close();
+        }
     }
 
     private interface LookupBySourceIdQuery {
@@ -5940,7 +5993,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
-        mContactAggregator.updateLookupKeyForRawContact(db, rawContactId);
+        mAggregator.get().updateLookupKeyForRawContact(db, rawContactId);
     }
 
     /**
@@ -6038,7 +6091,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private void appendSearchIndexJoin(
             StringBuilder sb, Uri uri, String[] projection, String filter) {
 
-        if (mDbHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET)) {
+        if (mDbHelper.get().isInProjection(projection, SearchSnippetColumns.SNIPPET)) {
             String[] args = null;
             String snippetArgs =
                     getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
@@ -6076,14 +6129,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         boolean singleTokenSearch = filter.split(QUERY_TOKENIZER_REGEX).length == 1;
 
         if (filter.indexOf('@') != -1) {
-            emailAddress = mDbHelper.extractAddressFromEmailAddress(filter);
+            emailAddress = mDbHelper.get().extractAddressFromEmailAddress(filter);
             isEmailAddress = !TextUtils.isEmpty(emailAddress);
         } else {
             isPhoneNumber = isPhoneNumber(filter);
             if (isPhoneNumber) {
                 phoneNumber = PhoneNumberUtils.normalizeNumber(filter);
                 numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
-                        mDbHelper.getCountryIso());
+                        mDbHelper.get().getCountryIso());
             }
         }
 
@@ -6242,7 +6295,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         qb.setTables(sb.toString());
 
         boolean useDistinct = distinct
-                || !mDbHelper.isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
+                || !mDbHelper.get().isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
         qb.setDistinct(useDistinct);
         qb.setProjectionMap(useDistinct ? sDistinctDataProjectionMap : sDataProjectionMap);
         appendAccountFromParameter(qb, uri, true);
@@ -6297,7 +6350,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendContactStatusUpdateJoin(StringBuilder sb, String[] projection,
             String lastStatusUpdateIdColumn) {
-        if (mDbHelper.isInProjection(projection,
+        if (mDbHelper.get().isInProjection(projection,
                 Contacts.CONTACT_STATUS,
                 Contacts.CONTACT_STATUS_RES_PACKAGE,
                 Contacts.CONTACT_STATUS_ICON,
@@ -6312,7 +6365,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendDataStatusUpdateJoin(StringBuilder sb, String[] projection,
             String dataIdColumn) {
-        if (mDbHelper.isInProjection(projection,
+        if (mDbHelper.get().isInProjection(projection,
                 StatusUpdates.STATUS,
                 StatusUpdates.STATUS_RES_PACKAGE,
                 StatusUpdates.STATUS_ICON,
@@ -6332,7 +6385,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendContactPresenceJoin(StringBuilder sb, String[] projection,
             String contactIdColumn) {
-        if (mDbHelper.isInProjection(projection,
+        if (mDbHelper.get().isInProjection(projection,
                 Contacts.CONTACT_PRESENCE, Contacts.CONTACT_CHAT_CAPABILITY)) {
             sb.append(" LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
                     " ON (" + contactIdColumn + " = "
@@ -6342,7 +6395,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private void appendDataPresenceJoin(StringBuilder sb, String[] projection,
             String dataIdColumn) {
-        if (mDbHelper.isInProjection(projection, Data.PRESENCE, Data.CHAT_CAPABILITY)) {
+        if (mDbHelper.get().isInProjection(projection, Data.PRESENCE, Data.CHAT_CAPABILITY)) {
             sb.append(" LEFT OUTER JOIN " + Tables.PRESENCE +
                     " ON (" + StatusUpdates.DATA_ID + "=" + dataIdColumn + ")");
         }
@@ -6359,48 +6412,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return false;
     }
 
-    private String appendProfileRestriction(Uri uri, String profileColumn,
-            boolean suppressProfileCheck, String originalSelection) {
-        if (shouldIncludeProfile(uri, suppressProfileCheck)) {
-            return originalSelection;
-        } else {
-            final String SELECTION = "(" + profileColumn + " IS NULL OR " + profileColumn + "=0)";
-            if (TextUtils.isEmpty(originalSelection)) {
-                return SELECTION;
-            } else {
-                StringBuilder sb = new StringBuilder();
-                sb.append("(");
-                sb.append(originalSelection);
-                sb.append(") AND ");
-                sb.append(SELECTION);
-                return sb.toString();
-            }
-        }
-    }
-
-    private String prependProfileSortIfNeeded(Uri uri, String sortOrder,
-            boolean suppressProfileCheck) {
-        if (shouldIncludeProfile(uri, suppressProfileCheck)) {
-            if (TextUtils.isEmpty(sortOrder)) {
-                return Contacts.IS_USER_PROFILE + " DESC";
-            } else {
-                return Contacts.IS_USER_PROFILE + " DESC, " + sortOrder;
-            }
-        }
-        return sortOrder;
-    }
-
-    private boolean shouldIncludeProfile(Uri uri, boolean suppressProfileCheck) {
-        // The user's profile may be returned alongside other contacts if it was requested and
-        // the calling application has permission to read profile data.
-        boolean profileRequested = readBooleanQueryParameter(uri, ContactsContract.ALLOW_PROFILE,
-                false);
-        if (profileRequested && !suppressProfileCheck) {
-            enforceProfilePermission(false);
-        }
-        return profileRequested;
-    }
-
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri,
             boolean includeDataSet) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
@@ -6410,7 +6421,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
         if (partialUri) {
             // Throw when either account is incomplete
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+            throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
@@ -6444,7 +6455,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
         if (partialUri) {
             // Throw when either account is incomplete
-            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+            throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
@@ -6498,20 +6509,38 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
-
         if (mode.equals("r")) {
             waitForAccess(mReadAccessLatch);
         } else {
             waitForAccess(mWriteAccessLatch);
         }
+        if (mapsToProfileDb(uri)) {
+            switchToProfileMode();
+            return mProfileProvider.openAssetFile(uri, mode);
+        } else {
+            switchToContactMode();
+            if (mode.equals("r")) {
+                mDb = mDbHelper.get().getReadableDatabase();
+            } else {
+                mDb = mDbHelper.get().getWritableDatabase();
+            }
+            return openAssetFileLocal(uri, mode);
+        }
+    }
+
+    public AssetFileDescriptor openAssetFileLocal(Uri uri, String mode)
+            throws FileNotFoundException {
+
+        // Default active DB to the contacts DB if none has been set.
+        if (mActiveDb.get() == null) {
+            mActiveDb.set(mDb);
+        }
 
         int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS_ID_PHOTO: {
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-                enforceProfilePermissionForRawContact(db, rawContactId, false);
-                return openPhotoAssetFile(db, uri, mode,
+                return openPhotoAssetFile(mActiveDb.get(), uri, mode,
                         Data._ID + "=" + Contacts.PHOTO_ID + " AND " +
                                 RawContacts.CONTACT_ID + "=?",
                         new String[]{String.valueOf(rawContactId)});
@@ -6522,10 +6551,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     throw new IllegalArgumentException(
                             "Display photos retrieved by contact ID can only be read.");
                 }
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 long contactId = Long.parseLong(uri.getPathSegments().get(1));
-                enforceProfilePermissionForContact(db, contactId, false);
-                Cursor c = db.query(Tables.CONTACTS,
+                Cursor c = mActiveDb.get().query(Tables.CONTACTS,
                         new String[]{Contacts.PHOTO_FILE_ID},
                         Contacts._ID + "=?", new String[]{String.valueOf(contactId)},
                         null, null, null);
@@ -6547,18 +6574,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 4) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 String lookupKey = pathSegments.get(2);
                 String[] projection = new String[]{Contacts.PHOTO_FILE_ID};
                 if (segmentCount == 5) {
                     long contactId = Long.parseLong(pathSegments.get(3));
-                    enforceProfilePermissionForContact(db, contactId, false);
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, null, null, null, null, null,
                             Contacts._ID, contactId, Contacts.LOOKUP_KEY, lookupKey);
                     if (c != null) {
@@ -6574,9 +6599,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
                 SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                long contactId = lookupContactIdByLookupKey(db, lookupKey);
-                enforceProfilePermissionForContact(db, contactId, false);
-                Cursor c = qb.query(db, projection, Contacts._ID + "=?",
+                long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
+                Cursor c = qb.query(mActiveDb.get(), projection, Contacts._ID + "=?",
                         new String[]{String.valueOf(contactId)}, null, null, null);
                 try {
                     c.moveToFirst();
@@ -6590,14 +6614,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACTS_ID_DISPLAY_PHOTO: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 boolean writeable = !mode.equals("r");
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
-                enforceProfilePermissionForRawContact(db, rawContactId, writeable);
 
                 // Find the primary photo data record for this raw contact.
                 SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
                 String[] projection = new String[]{Data._ID, Photo.PHOTO_FILE_ID};
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                Cursor c = qb.query(db, projection,
+                Cursor c = qb.query(mActiveDb.get(), projection,
                         Data.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
                         new String[]{String.valueOf(rawContactId), Photo.CONTENT_ITEM_TYPE},
                         null, null, Data.IS_PRIMARY + " DESC");
@@ -6633,10 +6655,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case DATA_ID: {
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 long dataId = Long.parseLong(uri.getPathSegments().get(1));
-                enforceProfilePermissionForData(db, dataId, false);
-                return openPhotoAssetFile(db, uri, mode,
+                return openPhotoAssetFile(mActiveDb.get(), uri, mode,
                         Data._ID + "=? AND " + Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'",
                         new String[]{String.valueOf(dataId)});
             }
@@ -6660,7 +6680,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_AS_MULTI_VCARD: {
-                SQLiteDatabase db = mDbHelper.getReadableDatabase();
                 final String lookupKeys = uri.getPathSegments().get(2);
                 final String[] loopupKeyList = lookupKeys.split(":");
                 final StringBuilder inBuilder = new StringBuilder();
@@ -6675,13 +6694,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     } else {
                         inBuilder.append(",");
                     }
-                    long contactId = lookupContactIdByLookupKey(db, lookupKey);
-                    enforceProfilePermissionForContact(db, contactId, false);
+                    // TODO: Figure out what to do if the profile contact is in the list.
+                    long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                     inBuilder.append(contactId);
-                    if (mProfileIdCache.profileContactId == contactId) {
-                        queryUri = queryUri.buildUpon().appendQueryParameter(
-                                ContactsContract.ALLOW_PROFILE, "true").build();
-                    }
                     index++;
                 }
                 inBuilder.append(')');
@@ -6696,8 +6711,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             default:
-                throw new FileNotFoundException(mDbHelper.exceptionMessage("File does not exist",
-                        uri));
+                throw new FileNotFoundException(mDbHelper.get().exceptionMessage(
+                        "File does not exist", uri));
         }
     }
 
@@ -6705,7 +6720,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             String selection, String[] selectionArgs)
             throws FileNotFoundException {
         if (!"r".equals(mode)) {
-            throw new FileNotFoundException(mDbHelper.exceptionMessage("Mode " + mode
+            throw new FileNotFoundException(mDbHelper.get().exceptionMessage("Mode " + mode
                     + " not supported.", uri));
         }
 
@@ -6729,7 +6744,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private AssetFileDescriptor openDisplayPhotoForRead(long photoFileId)
             throws FileNotFoundException {
-        PhotoStore.Entry entry = mPhotoStore.get(photoFileId);
+        PhotoStore.Entry entry = mPhotoStore.get().get(photoFileId);
         if (entry != null) {
             return makeAssetFileDescriptor(
                     ParcelFileDescriptor.open(new File(entry.path),
@@ -6795,7 +6810,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             mMaxThumbnailPhotoDim);
 
                     // Store the compressed photo in the photo store.
-                    long photoFileId = mPhotoStore.insert(processor);
+                    PhotoStore photoStore = ContactsContract.isProfileId(mRawContactId)
+                            ? mProfilePhotoStore
+                            : mContactsPhotoStore;
+                    long photoFileId = photoStore.insert(processor);
 
                     // Depending on whether we already had a data row to attach the photo
                     // to, do an update or insert.
@@ -6943,7 +6961,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PROFILE_DATA:
                 return Data.CONTENT_TYPE;
             case DATA_ID:
-                return mDbHelper.getDataMimeType(ContentUris.parseId(uri));
+                long id = ContentUris.parseId(uri);
+                if (ContactsContract.isProfileId(id)) {
+                    return mProfileHelper.getDataMimeType(id);
+                } else {
+                    return mContactsHelper.getDataMimeType(id);
+                }
             case PHONES:
                 return Phone.CONTENT_TYPE;
             case PHONES_ID:
@@ -7053,7 +7076,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         @Override
         protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
                 String name) {
-            mDbHelper.insertNameLookup(rawContactId, dataId, lookupType, name);
+            mDbHelper.get().insertNameLookup(rawContactId, dataId, lookupType, name);
         }
 
         @Override
@@ -7298,7 +7321,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return false;
         }
 
-        int version = Integer.parseInt(mDbHelper.getProperty(PROPERTY_AGGREGATION_ALGORITHM, "1"));
+        int version = Integer.parseInt(mContactsHelper.getProperty(
+                PROPERTY_AGGREGATION_ALGORITHM, "1"));
         return version < PROPERTY_AGGREGATION_ALGORITHM_VERSION;
     }
 
@@ -7309,10 +7333,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Log.i(TAG, "Upgrading aggregation algorithm");
         int count = 0;
         long start = SystemClock.currentThreadTimeMillis();
+        SQLiteDatabase db = null;
         try {
-            mDb = mDbHelper.getWritableDatabase();
-            mDb.beginTransaction();
-            Cursor cursor = mDb.query(true,
+            switchToContactMode();
+            db = mContactsHelper.getWritableDatabase();
+            mActiveDb.set(db);
+            db.beginTransaction();
+            Cursor cursor = db.query(true,
                     Tables.RAW_CONTACTS + " r1 JOIN " + Tables.RAW_CONTACTS + " r2",
                     new String[]{"r1." + RawContacts._ID},
                     "r1." + RawContacts._ID + "!=r2." + RawContacts._ID +
@@ -7331,13 +7358,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             } finally {
                 cursor.close();
             }
-            mContactAggregator.aggregateInTransaction(mTransactionContext, mDb);
+            mContactAggregator.aggregateInTransaction(mTransactionContext.get(), db);
             updateSearchIndexInTransaction();
-            mDb.setTransactionSuccessful();
-            mDbHelper.setProperty(PROPERTY_AGGREGATION_ALGORITHM,
+            db.setTransactionSuccessful();
+            mContactsHelper.setProperty(PROPERTY_AGGREGATION_ALGORITHM,
                     String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
         } finally {
-            mDb.endTransaction();
+            if (db != null) {
+                db.endTransaction();
+            }
             long end = SystemClock.currentThreadTimeMillis();
             Log.i(TAG, "Aggregation algorithm upgraded for " + count
                     + " contacts, in " + (end - start) + "ms");
@@ -7374,7 +7403,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final String[] questionMarks = new String[ids.length];
         Arrays.fill(questionMarks, "?");
         final String where = Data._ID + " IN (" + TextUtils.join(",", questionMarks) + ")";
-        final Cursor cursor = mDb.query(
+        final Cursor cursor = mActiveDb.get().query(
                 Views.DATA,
                 new String[] { Data.CONTACT_ID },
                 where, ids, null, null, null);
@@ -7383,9 +7412,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mSelectionArgs1[0] = cursor.getString(0);
                 ContentValues values2 = new ContentValues();
                 values2.put(Contacts.LAST_TIME_CONTACTED, currentTimeMillis);
-                mDb.update(Tables.CONTACTS, values2, Contacts._ID + "=?", mSelectionArgs1);
-                mDb.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
-                mDb.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
+                mActiveDb.get().update(Tables.CONTACTS, values2, Contacts._ID + "=?",
+                        mSelectionArgs1);
+                mActiveDb.get().execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
+                mActiveDb.get().execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
             }
         } finally {
             cursor.close();
@@ -7410,10 +7440,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final ContentValues values = new ContentValues();
         for (Long dataId : dataIds) {
             final String[] args = new String[] { dataId.toString(), String.valueOf(typeInt) };
-            mDb.beginTransaction();
+            mActiveDb.get().beginTransaction();
             try {
-                final Cursor cursor = mDb.query(Tables.DATA_USAGE_STAT, columns, where, args,
-                        null, null, null);
+                final Cursor cursor = mActiveDb.get().query(Tables.DATA_USAGE_STAT, columns, where,
+                        args, null, null, null);
                 try {
                     if (cursor.getCount() > 0) {
                         if (!cursor.moveToFirst()) {
@@ -7423,7 +7453,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             values.clear();
                             values.put(DataUsageStatColumns.TIMES_USED, cursor.getInt(1) + 1);
                             values.put(DataUsageStatColumns.LAST_TIME_USED, currentTimeMillis);
-                            mDb.update(Tables.DATA_USAGE_STAT, values,
+                            mActiveDb.get().update(Tables.DATA_USAGE_STAT, values,
                                     DataUsageStatColumns._ID + " =?",
                                     new String[] { cursor.getString(0) });
                         }
@@ -7433,14 +7463,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         values.put(DataUsageStatColumns.USAGE_TYPE_INT, typeInt);
                         values.put(DataUsageStatColumns.TIMES_USED, 1);
                         values.put(DataUsageStatColumns.LAST_TIME_USED, currentTimeMillis);
-                        mDb.insert(Tables.DATA_USAGE_STAT, null, values);
+                        mActiveDb.get().insert(Tables.DATA_USAGE_STAT, null, values);
                     }
-                    mDb.setTransactionSuccessful();
+                    mActiveDb.get().setTransactionSuccessful();
                 } finally {
                     cursor.close();
                 }
             } finally {
-                mDb.endTransaction();
+                mActiveDb.get().endTransaction();
             }
         }
 

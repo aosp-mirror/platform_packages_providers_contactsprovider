@@ -76,6 +76,10 @@ public class ContactsUpgradeReceiver extends BroadcastReceiver {
                 }
                 helper.close();
 
+                ProfileDatabaseHelper profileHelper = ProfileDatabaseHelper.getInstance(context);
+                profileHelper.getWritableDatabase();
+                helper.close();
+
                 // Log the total time taken for the receiver to perform the operation
                 EventLogTags.writeContactsUpgradeReceiver(System.currentTimeMillis() - startTime);
             }

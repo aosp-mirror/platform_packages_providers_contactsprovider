@@ -29,6 +29,10 @@ public class ContactLookupKey {
     public static final int LOOKUP_TYPE_SOURCE_ID = 0;
     public static final int LOOKUP_TYPE_DISPLAY_NAME = 1;
     public static final int LOOKUP_TYPE_RAW_CONTACT_ID = 2;
+    public static final int LOOKUP_TYPE_PROFILE = 3;
+
+    // The Profile contact will always have a lookup key of "profile".
+    public static final String PROFILE_LOOKUP_KEY = "profile";
 
     public static class LookupKeySegment implements Comparable<LookupKeySegment> {
         public int accountHashCode;
@@ -104,6 +108,16 @@ public class ContactLookupKey {
 
     public ArrayList<LookupKeySegment> parse(String lookupKey) {
         ArrayList<LookupKeySegment> list = new ArrayList<LookupKeySegment>();
+
+        // If the lookup key is for the profile, just return a segment list indicating that.  The
+        // caller should already be in a context in which the only contact in the database is the
+        // user's profile.
+        if (PROFILE_LOOKUP_KEY.equals(lookupKey)) {
+            LookupKeySegment profileSegment = new LookupKeySegment();
+            profileSegment.lookupType = LOOKUP_TYPE_PROFILE;
+            list.add(profileSegment);
+            return list;
+        }
 
         String string = Uri.decode(lookupKey);
         int offset = 0;

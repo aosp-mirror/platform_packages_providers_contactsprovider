@@ -334,10 +334,6 @@ public class GlobalSearchSupport {
         return cursor;
     }
 
-    private ContactsDatabaseHelper getDatabaseHelper() {
-        return (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
-    }
-
     private String shortenSnippet(final String snippet) {
         if (snippet == null) {
             return null;

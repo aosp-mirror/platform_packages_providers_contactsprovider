@@ -102,10 +102,12 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 616;
+    static final int DATABASE_VERSION = 617;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
+
+
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -133,6 +135,19 @@ import java.util.Locale;
         public static final String DEFAULT_DIRECTORY = "default_directory";
         public static final String SEARCH_INDEX = "search_index";
         public static final String VOICEMAIL_STATUS = "voicemail_status";
+
+        // This list of tables contains auto-incremented sequences.
+        public static final String[] SEQUENCE_TABLES = new String[] {
+                CONTACTS,
+                RAW_CONTACTS,
+                STREAM_ITEMS,
+                STREAM_ITEM_PHOTOS,
+                PHOTO_FILES,
+                DATA,
+                GROUPS,
+                CALLS,
+                DIRECTORIES
+        };
 
         /**
          * For {@link ContactsContract.DataUsageFeedback}. The table structure itself
@@ -683,7 +698,7 @@ import java.util.Locale;
         this(context, null, false);
     }
 
-    private ContactsDatabaseHelper(
+    protected ContactsDatabaseHelper(
             Context context, String databaseName, boolean optimizationEnabled) {
         super(context, databaseName, null, DATABASE_VERSION);
         mDatabaseOptimizationEnabled = optimizationEnabled;
@@ -1219,18 +1234,12 @@ import java.util.Locale;
         db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
                 AccountsColumns.ACCOUNT_NAME + " TEXT, " +
                 AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
-                AccountsColumns.DATA_SET + " TEXT, " +
-                AccountsColumns.PROFILE_RAW_CONTACT_ID + " INTEGER" +
-        ");");
-
-        db.execSQL("CREATE INDEX accounts_profile_raw_contact_id_index ON " +
-                Tables.ACCOUNTS + " (" +
-                AccountsColumns.PROFILE_RAW_CONTACT_ID +
+                AccountsColumns.DATA_SET + " TEXT" +
         ");");
 
         // Allow contacts without any account to be created for now.  Achieve that
         // by inserting a fake account with both type and name as NULL.
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
 
         createDirectoriesTable(db);
         createSearchIndexTable(db);
@@ -1257,6 +1266,9 @@ import java.util.Locale;
 
         loadNicknameLookupTable(db);
 
+        // Set sequence starts.
+        initializeAutoIncrementSequences(db);
+
         // Add the legacy API support views, etc
         LegacyApiSupport.createDatabase(db);
 
@@ -1274,6 +1286,10 @@ import java.util.Locale;
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
+    }
+
+    protected void initializeAutoIncrementSequences(SQLiteDatabase db) {
+        // Default implementation does nothing.
     }
 
     private void createDirectoriesTable(SQLiteDatabase db) {
@@ -1309,7 +1325,7 @@ import java.util.Locale;
                 + ")");
     }
 
-    private static void createContactsTriggers(SQLiteDatabase db) {
+    private void createContactsTriggers(SQLiteDatabase db) {
 
         /*
          * Automatically delete Data rows when a raw contact is deleted.
@@ -1450,7 +1466,7 @@ import java.util.Locale;
                 + " END");
     }
 
-    private static void createContactsIndexes(SQLiteDatabase db) {
+    private void createContactsIndexes(SQLiteDatabase db) {
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.NORMALIZED_NAME + "," +
@@ -1470,7 +1486,7 @@ import java.util.Locale;
         ");");
     }
 
-    private static void createContactsViews(SQLiteDatabase db) {
+    private void createContactsViews(SQLiteDatabase db) {
         db.execSQL("DROP VIEW IF EXISTS " + Views.CONTACTS + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS + ";");
@@ -1575,10 +1591,7 @@ import java.util.Locale;
                         Contacts.PHOTO_URI) + ", "
                 + buildThumbnailPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
-                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
-                    " WHERE " + DataColumns.CONCRETE_RAW_CONTACT_ID +
-                    "=" + AccountsColumns.PROFILE_RAW_CONTACT_ID + ") AS " +
-                    RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
+                + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.DATA
                 + " JOIN " + Tables.MIMETYPES + " ON ("
@@ -1618,10 +1631,7 @@ import java.util.Locale;
                 + RawContacts.PHONETIC_NAME_STYLE  + ", "
                 + RawContacts.SORT_KEY_PRIMARY  + ", "
                 + RawContacts.SORT_KEY_ALTERNATIVE + ", "
-                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
-                    " WHERE " + AccountsColumns.PROFILE_RAW_CONTACT_ID +
-                    "=" + RawContactsColumns.CONCRETE_ID + ") AS " +
-                    RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
+                + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + rawContactOptionColumns + ", "
                 + syncColumns
                 + " FROM " + Tables.RAW_CONTACTS;
@@ -1648,12 +1658,7 @@ import java.util.Locale;
                 + buildDisplayPhotoUriAlias(ContactsColumns.CONCRETE_ID, Contacts.PHOTO_URI) + ", "
                 + buildThumbnailPhotoUriAlias(ContactsColumns.CONCRETE_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
-                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
-                    " JOIN " + Tables.RAW_CONTACTS + " ON " + RawContactsColumns.CONCRETE_ID + "=" +
-                    AccountsColumns.PROFILE_RAW_CONTACT_ID +
-                    " WHERE " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                    "=" + ContactsColumns.CONCRETE_ID + ") AS " +
-                    Contacts.IS_USER_PROFILE
+                + dbForProfile() + " AS " + Contacts.IS_USER_PROFILE
                 + " FROM " + Tables.CONTACTS
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
                 +   Contacts.NAME_RAW_CONTACT_ID + "=name_raw_contact." + RawContacts._ID + ")";
@@ -1672,10 +1677,7 @@ import java.util.Locale;
                 + RawContactsColumns.CONCRETE_ID + " AS " + RawContacts._ID + ", "
                 + DataColumns.CONCRETE_ID + " AS " + RawContacts.Entity.DATA_ID + ","
                 + RawContactsColumns.CONCRETE_STARRED + " AS " + RawContacts.STARRED + ","
-                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
-                    " WHERE " + RawContactsColumns.CONCRETE_ID +
-                    "=" + AccountsColumns.PROFILE_RAW_CONTACT_ID + ") AS " +
-                    RawContacts.RAW_CONTACT_IS_USER_PROFILE + ","
+                + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.RAW_CONTACTS
                 + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
@@ -1703,12 +1705,7 @@ import java.util.Locale;
                         Contacts.PHOTO_URI) + ", "
                 + buildThumbnailPhotoUriAlias(RawContactsColumns.CONCRETE_CONTACT_ID,
                         Contacts.PHOTO_THUMBNAIL_URI) + ", "
-                + "EXISTS (SELECT 1 FROM " + Tables.ACCOUNTS +
-                    " JOIN " + Tables.RAW_CONTACTS + " ON " + RawContactsColumns.CONCRETE_ID + "=" +
-                    AccountsColumns.PROFILE_RAW_CONTACT_ID +
-                    " WHERE " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                    "=" + ContactsColumns.CONCRETE_ID + ") AS " +
-                    Contacts.IS_USER_PROFILE + ", "
+                + dbForProfile() + " AS " + Contacts.IS_USER_PROFILE + ", "
                 + Data.SYNC1 + ", "
                 + Data.SYNC2 + ", "
                 + Data.SYNC3 + ", "
@@ -1808,7 +1805,16 @@ import java.util.Locale;
                 + " AS " + alias;
     }
 
-    private static void createGroupsView(SQLiteDatabase db) {
+    /**
+     * Returns the value to be returned when querying the column indicating that the contact
+     * or raw contact belongs to the user's personal profile.  Overridden in the profile
+     * DB helper subclass.
+     */
+    protected int dbForProfile() {
+        return 0;
+    }
+
+    private void createGroupsView(SQLiteDatabase db) {
         db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS + ";");
         String groupsColumns =
                 Groups.ACCOUNT_NAME + ","
@@ -2228,6 +2234,15 @@ import java.util.Locale;
             // this updates the "view_stream_items" view
             upgradeViewsAndTriggers = true;
             oldVersion = 616;
+        }
+
+        if (oldVersion < 617) {
+            // This version upgrade obsoleted the profile_raw_contact_id field of the Accounts
+            // table, but we aren't removing the column because it is very little data (and not
+            // referenced anymore).  We do need to upgrade the views to handle the simplified
+            // per-database "is profile" columns.
+            upgradeViewsAndTriggers = true;
+            oldVersion = 617;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3277,12 +3292,9 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion600(SQLiteDatabase db) {
-        // Add a column to the Accounts table to track which raw contact ID (if any) represents that
-        // account's contribution to the user's profile Contact.
-        db.execSQL("ALTER TABLE accounts" +
-                " ADD profile_raw_contact_id INTEGER");
-        db.execSQL("CREATE INDEX accounts_profile_raw_contact_id_index ON accounts" +
-                " (profile_raw_contact_id);");
+        // This change used to add the profile raw contact ID to the Accounts table.  That
+        // column is no longer needed (as of version 614) since the profile records are stored in
+        // a separate copy of the database for security reasons.  So this change is now a no-op.
     }
 
     private void upgradeToVersion601(SQLiteDatabase db) {
@@ -3559,7 +3571,7 @@ import java.util.Locale;
         SQLiteDatabase db = getWritableDatabase();
 
         db.execSQL("DELETE FROM " + Tables.ACCOUNTS + ";");
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL, NULL)");
+        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
 
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");

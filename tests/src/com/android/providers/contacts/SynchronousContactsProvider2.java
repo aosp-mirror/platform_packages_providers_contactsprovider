@@ -44,8 +44,14 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return mDbHelper;
     }
 
+    @Override
+    public ProfileProvider getProfileProvider() {
+        return new SynchronousProfileProvider(this);
+    }
+
     public static void resetOpenHelper() {
         mDbHelper = null;
+        SynchronousProfileProvider.resetOpenHelper();
     }
 
     public void setDataWipeEnabled(boolean flag) {

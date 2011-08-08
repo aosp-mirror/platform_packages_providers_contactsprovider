@@ -703,7 +703,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId1 = createRawContactWithName(account1);
         insertImHandle(rawContactId1, Im.PROTOCOL_GOOGLE_TALK, null, "gtalk");
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", StatusUpdates.IDLE, "Busy", 90,
-                StatusUpdates.CAPABILITY_HAS_CAMERA);
+                StatusUpdates.CAPABILITY_HAS_CAMERA, false);
 
         long rawContactId2 = createRawContact(account2);
         setAggregationException(
@@ -725,7 +725,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId1 = createRawContactWithName(account1);
         insertImHandle(rawContactId1, Im.PROTOCOL_GOOGLE_TALK, null, "gtalk");
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", StatusUpdates.IDLE, "Busy", 90,
-                StatusUpdates.CAPABILITY_HAS_CAMERA);
+                StatusUpdates.CAPABILITY_HAS_CAMERA, false);
 
         long rawContactId2 = createRawContact(account2);
         setAggregationException(
@@ -1877,7 +1877,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(ContentUris.withAppendedId(Data.CONTENT_URI, dataId), values);
     }
 
-    public void testQueryContactIncludeProfile() {
+    public void testQueryContactThenProfile() {
         ContentValues profileValues = new ContentValues();
         long profileRawContactId = createBasicProfileContact(profileValues);
         long profileContactId = queryContactId(profileRawContactId);
@@ -1886,12 +1886,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long nonProfileRawContactId = createBasicNonProfileContact(nonProfileValues);
         long nonProfileContactId = queryContactId(nonProfileRawContactId);
 
-        Uri contactWithProfilesUri = Contacts.CONTENT_URI.buildUpon()
-                .appendQueryParameter(ContactsContract.ALLOW_PROFILE, "1").build();
-        assertStoredValuesOrderly(contactWithProfilesUri,
-                new ContentValues[]{profileValues, nonProfileValues});
-        assertSelection(contactWithProfilesUri, profileValues, Contacts._ID, profileContactId);
+        assertStoredValues(Contacts.CONTENT_URI, nonProfileValues);
         assertSelection(Contacts.CONTENT_URI, nonProfileValues, Contacts._ID, nonProfileContactId);
+
+        assertStoredValues(Profile.CONTENT_URI, profileValues);
     }
 
     public void testQueryContactExcludeProfile() {
@@ -3115,11 +3113,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long contactId = queryContactId(rawContactId);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Offline", 80,
-                StatusUpdates.CAPABILITY_HAS_CAMERA);
+                StatusUpdates.CAPABILITY_HAS_CAMERA, false);
         insertStatusUpdate(Im.PROTOCOL_AIM, null, "aim", 0, "Available", 100,
-                StatusUpdates.CAPABILITY_HAS_CAMERA);
+                StatusUpdates.CAPABILITY_HAS_CAMERA, false);
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "gtalk", 0, "Busy", 90,
-                StatusUpdates.CAPABILITY_HAS_CAMERA);
+                StatusUpdates.CAPABILITY_HAS_CAMERA, false);
 
         // Should return the latest status
         ContentValues values = new ContentValues();
@@ -5877,7 +5875,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
 
         insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, email, presenceStatus, "hacking",
-                chatMode);
+                chatMode, isUserProfile);
 
         if (groupId != 0) {
             insertGroupMembership(rawContactId, groupId);
