@@ -26,4 +26,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Iba pa"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"I-access ang lahat ng voicemail"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Binibigyang-daan ang application upang maimbak at mabawi ang lahat ng voicemail na ma-a-access ng device na ito."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>

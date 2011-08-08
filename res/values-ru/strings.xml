@@ -24,8 +24,8 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Нажмите, чтобы завершить обновление."</string>
     <string name="default_directory" msgid="93961630309570294">"Контакты"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Другое"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Доступ к голосовым сообщениям"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Разрешить приложению сохранять и извлекать все голосовые сообщения, к которым есть доступ на этом устройстве."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
     <skip />
 </resources>

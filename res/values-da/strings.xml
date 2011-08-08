@@ -26,4 +26,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Andre"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Adgang til alle telefonsvarerbeskeder"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Tillader programmet at gemme og hente alle telefonsvarerbeskeder, som denne enhed kan få adgang til."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>

@@ -24,8 +24,8 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Výběrem této možnosti dokončíte upgrade."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakty"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Jiné"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Přístup ke všem hlasovým zprávám"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Umožňuje aplikaci ukládat a načítat všechny hlasové zprávy, ke kterým má toto zařízení přístup."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
     <skip />
 </resources>

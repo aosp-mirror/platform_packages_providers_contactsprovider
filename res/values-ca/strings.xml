@@ -24,8 +24,8 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Seleccioneu-ho per completar l\'actualització."</string>
     <string name="default_directory" msgid="93961630309570294">"Contactes"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altres"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Accés a tots els missatges de veu"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Permet que l\'aplicació emmagatzemi i recuperi tots els missatges de veu als quals pot accedir aquest dispositiu."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
     <skip />
 </resources>

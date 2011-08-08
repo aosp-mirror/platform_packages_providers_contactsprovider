@@ -26,4 +26,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"기타"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"모든 음성사서함에 액세스"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"애플리케이션이 이 기기가 액세스할 수 있는 모든 음성사서함을 저장하고 검색할 수 있습니다."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>

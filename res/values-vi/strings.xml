@@ -26,4 +26,6 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Khác"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Truy cập tất cả các thư thoại"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Cho phép ứng dụng lưu trữ và truy xuất tất cả thư thoại mà thiết bị này có thể truy cập."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
+    <skip />
 </resources>

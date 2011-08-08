@@ -24,8 +24,8 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Selecciona esta opción para completar la actualización."</string>
     <string name="default_directory" msgid="93961630309570294">"Contactos"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Otro"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Acceder a todos los mensajes de voz"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Permite que la aplicación almacene y recupere todos los mensajes de voz a los que puede acceder este dispositivo."</string>
+    <!-- no translation found for voicemail_from_column (435732568832121444) -->
     <skip />
 </resources>
