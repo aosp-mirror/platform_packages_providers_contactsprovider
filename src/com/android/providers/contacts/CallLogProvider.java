@@ -22,6 +22,7 @@ import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClau
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
+import com.google.common.annotations.VisibleForTesting;
 
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -76,13 +77,14 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_TYPE, Calls.CACHED_NUMBER_TYPE);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_LABEL, Calls.CACHED_NUMBER_LABEL);
         sCallsProjectionMap.put(Calls.COUNTRY_ISO, Calls.COUNTRY_ISO);
+        sCallsProjectionMap.put(Calls.GEOCODED_LOCATION, Calls.GEOCODED_LOCATION);
     }
 
     private ContactsDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
     private boolean mUseStrictPhoneNumberComparation;
-    private CountryMonitor mCountryMonitor;
     private VoicemailPermissions mVoicemailPermissions;
+    private CallLogInsertionHelper mCallLogInsertionHelper;
 
     @Override
     public boolean onCreate() {
@@ -91,12 +93,17 @@ public class CallLogProvider extends ContentProvider {
         mUseStrictPhoneNumberComparation =
             context.getResources().getBoolean(
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
-        mCountryMonitor = new CountryMonitor(context);
         mVoicemailPermissions = new VoicemailPermissions(context);
+        mCallLogInsertionHelper = createCallLogInsertionHelper(context);
         return true;
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
+    protected CallLogInsertionHelper createCallLogInsertionHelper(final Context context) {
+        return new DefaultCallLogInsertionHelper(context);
+    }
+
+    @VisibleForTesting
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
     }
@@ -168,11 +175,7 @@ public class CallLogProvider extends ContentProvider {
             checkIsAllowVoicemailRequest(uri);
             mVoicemailPermissions.checkCallerHasFullAccess();
         }
-
-        // Inserted the current country code, so we know the country
-        // the number belongs to.
-        values.put(Calls.COUNTRY_ISO, getCurrentCountryIso());
-
+        mCallLogInsertionHelper.addComputedValues(values);
         if (mCallsInserter == null) {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
@@ -243,10 +246,6 @@ public class CallLogProvider extends ContentProvider {
     protected void notifyChange() {
         getContext().getContentResolver().notifyChange(CallLog.CONTENT_URI, null,
                 false /* wake up sync adapters */);
-    }
-
-    protected String getCurrentCountryIso() {
-        return mCountryMonitor.getCountryIso();
     }
 
     // Work around to let the test code override the context. getContext() is final so cannot be

@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 611;
+    static final int DATABASE_VERSION = 612;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1154,6 +1154,7 @@ import java.util.Locale;
                 Calls.COUNTRY_ISO + " TEXT," +
                 Calls.VOICEMAIL_URI + " TEXT," +
                 Calls.IS_READ + " INTEGER," +
+                Calls.GEOCODED_LOCATION + " TEXT," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
                 Voicemails.MIME_TYPE + " TEXT," +
@@ -2109,6 +2110,12 @@ import java.util.Locale;
             upgradeViewsAndTriggers = true;
             upgradeToVersion611(db);
             oldVersion = 611;
+        }
+
+        if (oldVersion < 612) {
+            upgradeViewsAndTriggers = true;
+            upgradeToVersion612(db);
+            oldVersion = 612;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3278,6 +3285,11 @@ import java.util.Locale;
 
         db.execSQL("CREATE INDEX groups_source_id_data_set_index ON groups " +
                 "(sourceid, account_type, account_name, data_set);");
+    }
+
+    private void upgradeToVersion612(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD geocoded_location TEXT DEFAULT NULL;");
+        // Old calls will not have a geocoded location; new calls will get it when inserted.
     }
 
     public String extractHandleFromEmailAddress(String email) {

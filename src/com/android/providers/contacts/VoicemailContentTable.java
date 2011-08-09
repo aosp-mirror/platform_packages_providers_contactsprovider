@@ -58,9 +58,11 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     private final SQLiteOpenHelper mDbHelper;
     private final Context mContext;
     private final VoicemailTable.DelegateHelper mDelegateHelper;
+    private final CallLogInsertionHelper mCallLogInsertionHelper;
 
     public VoicemailContentTable(String tableName, Context context, SQLiteOpenHelper dbHelper,
-            VoicemailTable.DelegateHelper contentProviderHelper) {
+            VoicemailTable.DelegateHelper contentProviderHelper,
+            CallLogInsertionHelper callLogInsertionHelper) {
         mTableName = tableName;
         mContext = context;
         mDbHelper = dbHelper;
@@ -80,6 +82,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
                 .add(OpenableColumns.DISPLAY_NAME, createDisplayName(context))
                 .add(OpenableColumns.SIZE, "NULL")
                 .build();
+        mCallLogInsertionHelper = callLogInsertionHelper;
     }
 
     /**
@@ -96,6 +99,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     @Override
     public Uri insert(UriData uriData, ContentValues values) {
         checkForSupportedColumns(mVoicemailProjectionMap, values);
+        mCallLogInsertionHelper.addComputedValues(values);
         ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
         mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);

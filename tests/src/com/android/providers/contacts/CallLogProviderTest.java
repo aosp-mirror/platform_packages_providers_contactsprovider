@@ -63,7 +63,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.SOURCE_DATA,
             Voicemails.STATE};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 12;
+    private static final int NUM_CALLLOG_FIELDS = 13;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -191,6 +191,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.CACHED_NUMBER_TYPE, Phone.TYPE_CUSTOM);
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
         values.put(Calls.COUNTRY_ISO, "us");
+        values.put(Calls.GEOCODED_LOCATION, "usa");
         assertStoredValues(uri, values);
     }
 
@@ -342,8 +343,19 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         }
 
         @Override
-        protected String getCurrentCountryIso() {
-            return "us";
+        protected CallLogInsertionHelper createCallLogInsertionHelper(Context context) {
+            return new CallLogInsertionHelper() {
+                @Override
+                public String getGeocodedLocationFor(String number, String countryIso) {
+                    return "usa";
+                }
+
+                @Override
+                public void addComputedValues(ContentValues values) {
+                    values.put(Calls.COUNTRY_ISO, "us");
+                    values.put(Calls.GEOCODED_LOCATION, "usa");
+                }
+            };
         }
 
         @Override

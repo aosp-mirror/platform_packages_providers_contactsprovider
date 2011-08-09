@@ -17,10 +17,12 @@
 package com.android.providers.contacts;
 
 import android.content.ContentProvider;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 
 import java.io.File;
@@ -179,6 +181,22 @@ public class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
         @Override
         protected String getCallingPackage() {
             return getContext().getPackageName();
+        }
+
+        @Override
+        CallLogInsertionHelper createCallLogInsertionHelper(Context context) {
+            return new CallLogInsertionHelper() {
+                @Override
+                public String getGeocodedLocationFor(String number, String countryIso) {
+                    return "usa";
+                }
+
+                @Override
+                public void addComputedValues(ContentValues values) {
+                    values.put(Calls.COUNTRY_ISO, "us");
+                    values.put(Calls.GEOCODED_LOCATION, "usa");
+                }
+            };
         }
     }
 }
