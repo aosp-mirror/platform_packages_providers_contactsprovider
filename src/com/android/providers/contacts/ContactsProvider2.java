@@ -4957,6 +4957,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case PHONES_FILTER: {
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
+                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 Integer typeInt = sDataUsageTypeMap.get(typeParam);
                 if (typeInt == null) {
                     typeInt = DataUsageStatColumns.USAGE_TYPE_INT_CALL;
@@ -5047,6 +5048,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case EMAILS_FILTER: {
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
+                profileRestrictionColumnName = RawContacts.RAW_CONTACT_IS_USER_PROFILE;
                 Integer typeInt = sDataUsageTypeMap.get(typeParam);
                 if (typeInt == null) {
                     typeInt = DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT;
