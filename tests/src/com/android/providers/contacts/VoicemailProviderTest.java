@@ -77,10 +77,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     }
 
     public void testInsert() throws Exception {
-        ContentValues values = getTestVoicemailValues();
-        Uri uri = mResolver.insert(voicemailUri(), values);
-        assertStoredValues(uri, values);
-        assertSelection(uri, values, Voicemails._ID, ContentUris.parseId(uri));
+        Uri uri = mResolver.insert(voicemailUri(), getTestVoicemailValues());
+        // We create on purpose a new set of ContentValues here, because the code above modifies
+        // the copy it gets.
+        assertStoredValues(uri, getTestVoicemailValues());
+        assertSelection(uri, getTestVoicemailValues(), Voicemails._ID, ContentUris.parseId(uri));
         assertEquals(1, countFilesInTestDirectory());
     }
 

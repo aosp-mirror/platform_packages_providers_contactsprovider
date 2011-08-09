@@ -22,6 +22,7 @@ import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
+import com.google.common.annotations.VisibleForTesting;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -58,17 +59,24 @@ public class VoicemailContentProvider extends ContentProvider
         Context context = context();
         mVoicemailPermissions = new VoicemailPermissions(context);
         mVoicemailContentTable = new VoicemailContentTable(Tables.CALLS, context,
-                getDatabaseHelper(context), this);
+                getDatabaseHelper(context), this, createCallLogInsertionHelper(context));
         mVoicemailStatusTable = new VoicemailStatusTable(Tables.VOICEMAIL_STATUS, context,
                 getDatabaseHelper(context), this);
         return true;
     }
 
-    /*package for testing*/ ContactsDatabaseHelper getDatabaseHelper(Context context) {
+    @VisibleForTesting
+    /*package*/ CallLogInsertionHelper createCallLogInsertionHelper(Context context) {
+        return new DefaultCallLogInsertionHelper(context);
+    }
+
+    @VisibleForTesting
+    /*package*/ ContactsDatabaseHelper getDatabaseHelper(Context context) {
         return ContactsDatabaseHelper.getInstance(context);
     }
 
-    /*package for testing*/ Context context() {
+    @VisibleForTesting
+    /*package*/ Context context() {
         return getContext();
     }
 
