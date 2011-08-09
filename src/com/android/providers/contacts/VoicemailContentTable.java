@@ -51,7 +51,6 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     /** The private directory in which to store the data associated with the voicemail. */
     private static final String DATA_DIRECTORY = "voicemail-data";
 
-    private static final String[] MIME_TYPE_ONLY_PROJECTION = new String[] { Voicemails.MIME_TYPE };
     private static final String[] FILENAME_ONLY_PROJECTION = new String[] { Voicemails._DATA };
 
     private final String mTableName;
@@ -255,6 +254,6 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     }
 
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
-        return new DbModifierWithVmNotification(mTableName, db, mContext);
+        return new DbModifierWithNotification(mTableName, db, mContext);
     }
 }

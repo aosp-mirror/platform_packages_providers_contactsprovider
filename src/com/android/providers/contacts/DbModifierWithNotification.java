@@ -37,6 +37,7 @@ import android.database.DatabaseUtils.InsertHelper;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Binder;
+import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
@@ -51,8 +52,10 @@ import java.util.Set;
 /**
  * An implementation of {@link DatabaseModifier} for voicemail related tables which additionally
  * generates necessary notifications after the modification operation is performed.
+ * The class generates notifications for both voicemail as well as call log URI depending on which
+ * of then got affected by the change.
  */
-public class DbModifierWithVmNotification implements DatabaseModifier {
+public class DbModifierWithNotification implements DatabaseModifier {
     private static final String TAG = "DbModifierWithVmNotification";
 
     private static final String[] PROJECTION = new String[] {
@@ -67,19 +70,19 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
     private final InsertHelper mInsertHelper;
     private final Context mContext;
     private final Uri mBaseUri;
-    private final boolean mIsVoicemailContentTable;
+    private final boolean mIsCallsTable;
     private final VoicemailPermissions mVoicemailPermissions;
 
-    public DbModifierWithVmNotification(String tableName, SQLiteDatabase db, Context context) {
+    public DbModifierWithNotification(String tableName, SQLiteDatabase db, Context context) {
         this(tableName, db, null, context);
     }
 
-    public DbModifierWithVmNotification(String tableName, InsertHelper insertHelper,
+    public DbModifierWithNotification(String tableName, InsertHelper insertHelper,
             Context context) {
         this(tableName, null, insertHelper, context);
     }
 
-    private DbModifierWithVmNotification(String tableName, SQLiteDatabase db,
+    private DbModifierWithNotification(String tableName, SQLiteDatabase db,
             InsertHelper insertHelper, Context context) {
         mTableName = tableName;
         mDb = db;
@@ -87,7 +90,7 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         mContext = context;
         mBaseUri = mTableName.equals(Tables.VOICEMAIL_STATUS) ?
                 Status.CONTENT_URI : Voicemails.CONTENT_URI;
-        mIsVoicemailContentTable = !mTableName.equals(Tables.VOICEMAIL_STATUS);
+        mIsCallsTable = mTableName.equals(Tables.CALLS);
         mVoicemailPermissions = new VoicemailPermissions(mContext);
     }
 
@@ -96,7 +99,11 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         Set<String> packagesModified = getModifiedPackages(values);
         long rowId = mDb.insert(table, nullColumnHack, values);
         if (rowId > 0 && packagesModified.size() != 0) {
-            notifyOnInsert(ContentUris.withAppendedId(mBaseUri, rowId), packagesModified);
+            notifyVoicemailChangeOnInsert(ContentUris.withAppendedId(mBaseUri, rowId),
+                    packagesModified);
+        }
+        if (rowId > 0 && mIsCallsTable) {
+            notifyCallLogChange();
         }
         return rowId;
     }
@@ -106,17 +113,26 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         Set<String> packagesModified = getModifiedPackages(values);
         long rowId = mInsertHelper.insert(values);
         if (rowId > 0 && packagesModified.size() != 0) {
-            notifyOnInsert(ContentUris.withAppendedId(mBaseUri, rowId), packagesModified);
+            notifyVoicemailChangeOnInsert(
+                    ContentUris.withAppendedId(mBaseUri, rowId), packagesModified);
+        }
+        if (rowId > 0 && mIsCallsTable) {
+            notifyCallLogChange();
         }
         return rowId;
     }
 
-    private void notifyOnInsert(Uri notificationUri, Set<String> packagesModified) {
-        if (mIsVoicemailContentTable) {
-            notifyChange(notificationUri, packagesModified, VoicemailContract.ACTION_NEW_VOICEMAIL,
-                    Intent.ACTION_PROVIDER_CHANGED);
+    private void notifyCallLogChange() {
+        mContext.getContentResolver().notifyChange(Calls.CONTENT_URI, null, false);
+    }
+
+    private void notifyVoicemailChangeOnInsert(Uri notificationUri, Set<String> packagesModified) {
+        if (mIsCallsTable) {
+            notifyVoicemailChange(notificationUri, packagesModified,
+                    VoicemailContract.ACTION_NEW_VOICEMAIL, Intent.ACTION_PROVIDER_CHANGED);
         } else {
-            notifyChange(notificationUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+            notifyVoicemailChange(notificationUri, packagesModified,
+                    Intent.ACTION_PROVIDER_CHANGED);
         }
     }
 
@@ -126,7 +142,10 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         packagesModified.addAll(getModifiedPackages(values));
         int count = mDb.update(table, values, whereClause, whereArgs);
         if (count > 0 && packagesModified.size() != 0) {
-            notifyChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+            notifyVoicemailChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+        }
+        if (count > 0 && mIsCallsTable) {
+            notifyCallLogChange();
         }
         return count;
     }
@@ -136,7 +155,10 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
         int count = mDb.delete(table, whereClause, whereArgs);
         if (count > 0 && packagesModified.size() != 0) {
-            notifyChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+            notifyVoicemailChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+        }
+        if (count > 0 && mIsCallsTable) {
+            notifyCallLogChange();
         }
         return count;
     }
@@ -173,7 +195,7 @@ public class DbModifierWithVmNotification implements DatabaseModifier {
         return impactedPackages;
     }
 
-    private void notifyChange(Uri notificationUri, Set<String> modifiedPackages,
+    private void notifyVoicemailChange(Uri notificationUri, Set<String> modifiedPackages,
             String... intentActions) {
         // Notify the observers.
         // Must be done only once, even if there are multiple broadcast intents.

@@ -182,7 +182,6 @@ public class CallLogProvider extends ContentProvider {
         }
         long rowId = getDatabaseModifier(mCallsInserter).insert(values);
         if (rowId > 0) {
-            notifyChange();
             return ContentUris.withAppendedId(uri, rowId);
         }
         return null;
@@ -214,12 +213,8 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        int count = getDatabaseModifier(db).update(Tables.CALLS, values,
-                selectionBuilder.build(), selectionArgs);
-        if (count > 0) {
-            notifyChange();
-        }
-        return count;
+        return getDatabaseModifier(db).update(Tables.CALLS, values, selectionBuilder.build(),
+                selectionArgs);
     }
 
     @Override
@@ -231,21 +226,11 @@ public class CallLogProvider extends ContentProvider {
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                int count = getDatabaseModifier(db).delete(Tables.CALLS,
+                return getDatabaseModifier(db).delete(Tables.CALLS,
                         selectionBuilder.build(), selectionArgs);
-                if (count > 0) {
-                    notifyChange();
-                }
-                return count;
-
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }
-    }
-
-    protected void notifyChange() {
-        getContext().getContentResolver().notifyChange(CallLog.CONTENT_URI, null,
-                false /* wake up sync adapters */);
     }
 
     // Work around to let the test code override the context. getContext() is final so cannot be
@@ -254,12 +239,20 @@ public class CallLogProvider extends ContentProvider {
         return getContext();
     }
 
+    /**
+     * Returns a {@link DatabaseModifier} that takes care of sending necessary notifications
+     * after the operation is performed.
+     */
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
-        return new DbModifierWithVmNotification(Tables.CALLS, db, context());
+        return new DbModifierWithNotification(Tables.CALLS, db, context());
     }
 
+    /**
+     * Same as {@link #getDatabaseModifier(SQLiteDatabase)} but used for insert helper operations
+     * only.
+     */
     private DatabaseModifier getDatabaseModifier(DatabaseUtils.InsertHelper insertHelper) {
-        return new DbModifierWithVmNotification(Tables.CALLS, insertHelper, context());
+        return new DbModifierWithNotification(Tables.CALLS, insertHelper, context());
     }
 
     private boolean hasVoicemailValue(ContentValues values) {

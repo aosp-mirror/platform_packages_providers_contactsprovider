@@ -121,6 +121,6 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
     }
 
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
-        return new DbModifierWithVmNotification(mTableName, db, mContext);
+        return new DbModifierWithNotification(mTableName, db, mContext);
     }
 }
