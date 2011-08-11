@@ -238,14 +238,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     @Override
     public ParcelFileDescriptor openFile(UriData uriData, String mode)
             throws FileNotFoundException {
-        ParcelFileDescriptor fileDescriptor = mDelegateHelper.openDataFile(uriData, mode);
-        // If the open succeeded, then update the has_content bit in the table.
-        if (mode.contains("w")) {
-            ContentValues contentValues = new ContentValues();
-            contentValues.put(Voicemails.HAS_CONTENT, 1);
-            update(uriData, contentValues, null, null);
-        }
-        return fileDescriptor;
+        return mDelegateHelper.openDataFile(uriData, mode);
     }
 
     /** Creates a clause to restrict the selection to only voicemail call type.*/
