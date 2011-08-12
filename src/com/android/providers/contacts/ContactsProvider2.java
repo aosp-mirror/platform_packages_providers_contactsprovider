@@ -5225,6 +5225,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         mDbHelper.getCurrentCountryIso());
                 String normalizedNumber =
                         PhoneNumberUtils.normalizeNumber(number);
+                profileRestrictionColumnName = Contacts.IS_USER_PROFILE;
                 mDbHelper.buildPhoneLookupAndContactQuery(qb, normalizedNumber, numberE164);
                 qb.setProjectionMap(sPhoneLookupProjectionMap);
                 // Phone lookup cannot be combined with a selection
