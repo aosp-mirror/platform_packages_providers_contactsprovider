@@ -87,12 +87,14 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.net.Uri.Builder;
+import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
+import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.StrictMode;
@@ -6661,10 +6663,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private AssetFileDescriptor openDisplayPhotoForWrite(long rawContactId, long dataId, Uri uri,
             String mode) {
         try {
-            return new AssetFileDescriptor(new MonitoredParcelFileDescriptor(rawContactId, dataId,
-                    ParcelFileDescriptor.open(File.createTempFile("img", null),
-                            ContentResolver.modeToMode(uri, mode))),
-                    0, AssetFileDescriptor.UNKNOWN_LENGTH);
+            ParcelFileDescriptor[] pipeFds = ParcelFileDescriptor.createPipe();
+            PipeMonitor pipeMonitor = new PipeMonitor(rawContactId, dataId, pipeFds[0]);
+            pipeMonitor.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Object[]) null);
+            return new AssetFileDescriptor(pipeFds[1], 0, AssetFileDescriptor.UNKNOWN_LENGTH);
         } catch (IOException ioe) {
             Log.e(TAG, "Could not create temp image file in mode " + mode);
             return null;
@@ -6672,25 +6674,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /**
-     * Parcel file descriptor wrapper that monitors when the file is closed.
-     * If the file contains a valid image, the image is either inserted into the given
-     * raw contact or updated in the given data row.
+     * Async task that monitors the given file descriptor (the read end of a pipe) for
+     * the writer finishing.  If the data from the pipe contains a valid image, the image
+     * is either inserted into the given raw contact or updated in the given data row.
      */
-    private class MonitoredParcelFileDescriptor extends ParcelFileDescriptor {
+    private class PipeMonitor extends AsyncTask<Object, Object, Object> {
+        private final ParcelFileDescriptor mDescriptor;
         private final long mRawContactId;
         private final long mDataId;
-        private MonitoredParcelFileDescriptor(long rawContactId, long dataId,
-                ParcelFileDescriptor descriptor) {
-            super(descriptor);
+        private PipeMonitor(long rawContactId, long dataId, ParcelFileDescriptor descriptor) {
             mRawContactId = rawContactId;
             mDataId = dataId;
+            mDescriptor = descriptor;
         }
 
         @Override
-        public void close() throws IOException {
+        protected Object doInBackground(Object... params) {
+            AutoCloseInputStream is = new AutoCloseInputStream(mDescriptor);
             try {
-                // Check to see whether a valid image was written out.
-                Bitmap b = BitmapFactory.decodeFileDescriptor(getFileDescriptor());
+                Bitmap b = BitmapFactory.decodeStream(is);
                 if (b != null) {
                     PhotoProcessor processor = new PhotoProcessor(b, mMaxDisplayPhotoDim,
                             mMaxThumbnailPhotoDim);
@@ -6698,8 +6700,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     // Store the compressed photo in the photo store.
                     long photoFileId = mPhotoStore.insert(processor);
 
-                    // Depending on whether we already had a data row to attach the photo to,
-                    // do an update or insert.
+                    // Depending on whether we already had a data row to attach the photo
+                    // to, do an update or insert.
                     if (mDataId != 0) {
                         // Update the data record with the new photo.
                         ContentValues updateValues = new ContentValues();
@@ -6711,8 +6713,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             updateValues.put(Photo.PHOTO_FILE_ID, photoFileId);
                         }
                         updateValues.put(Photo.PHOTO, processor.getThumbnailPhotoBytes());
-                        update(ContentUris.withAppendedId(Data.CONTENT_URI, mDataId), updateValues,
-                                null, null);
+                        update(ContentUris.withAppendedId(Data.CONTENT_URI, mDataId),
+                                updateValues, null, null);
                     } else {
                         // Insert a new primary data record with the photo.
                         ContentValues insertValues = new ContentValues();
@@ -6731,10 +6733,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                 .appendPath(RawContacts.Data.CONTENT_DIRECTORY).build(),
                                 insertValues);
                     }
+
                 }
-            } finally {
-                super.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
+            return null;
         }
     }
 

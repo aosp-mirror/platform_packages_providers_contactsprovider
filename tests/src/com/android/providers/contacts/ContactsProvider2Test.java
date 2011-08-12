@@ -34,6 +34,7 @@ import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -79,6 +80,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -4600,33 +4602,36 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
 
-    public void testWriteNewPhotoToAssetFile() throws IOException {
+    public void testWriteNewPhotoToAssetFile() throws Exception {
         long rawContactId = createRawContactWithName();
         long contactId = queryContactId(rawContactId);
 
         // Load in a huge photo.
-        byte[] originalPhoto = loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.ORIGINAL);
+        final byte[] originalPhoto = loadPhotoFromResource(
+                R.drawable.earth_huge, PhotoSize.ORIGINAL);
 
         // Write it out.
-        Uri writeablePhotoUri = RawContacts.CONTENT_URI.buildUpon()
+        final Uri writeablePhotoUri = RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.DisplayPhoto.CONTENT_DIRECTORY).build();
-        OutputStream os = mResolver.openOutputStream(writeablePhotoUri, "rw");
-        try {
-            os.write(originalPhoto);
-        } finally {
-            os.close();
-        }
+        writePhotoAsync(writeablePhotoUri, originalPhoto);
 
         // Check that the display photo and thumbnail have been set.
-        String photoUri = getStoredValue(
-                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId), Contacts.PHOTO_URI);
+        String photoUri = null;
+        for (int i = 0; i < 10 && photoUri == null; i++) {
+            // Wait a tick for the photo processing to occur.
+            Thread.sleep(100);
+            photoUri = getStoredValue(
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                Contacts.PHOTO_URI);
+        }
+
         assertFalse(TextUtils.isEmpty(photoUri));
         String thumbnailUri = getStoredValue(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                 Contacts.PHOTO_THUMBNAIL_URI);
         assertFalse(TextUtils.isEmpty(thumbnailUri));
-        assertFalse(photoUri.equals(thumbnailUri));
+        assertNotSame(photoUri, thumbnailUri);
 
         // Check the content of the display photo and thumbnail.
         assertInputStreamContent(
@@ -4637,7 +4642,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(thumbnailUri)));
     }
 
-    public void testWriteUpdatedPhotoToAssetFile() throws IOException {
+    public void testWriteUpdatedPhotoToAssetFile() throws Exception {
         long rawContactId = createRawContactWithName();
         long contactId = queryContactId(rawContactId);
 
@@ -4653,12 +4658,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri writeablePhotoUri = RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.DisplayPhoto.CONTENT_DIRECTORY).build();
-        OutputStream os = mResolver.openOutputStream(writeablePhotoUri, "rw");
-        try {
-            os.write(originalPhoto);
-        } finally {
-            os.close();
-        }
+        writePhotoAsync(writeablePhotoUri, originalPhoto);
+
+        // Allow a second for processing to occur.
+        Thread.sleep(1000);
 
         // Check that the display photo URI has been modified.
         String hugeEarthPhotoUri = getStoredValue(
@@ -4676,6 +4679,24 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.THUMBNAIL),
                 mResolver.openInputStream(Uri.parse(hugeEarthThumbnailUri)));
 
+    }
+
+    private void writePhotoAsync(final Uri uri, final byte[] photoBytes) throws Exception {
+        AsyncTask<Object, Object, Object> task = new AsyncTask<Object, Object, Object>() {
+            @Override
+            protected Object doInBackground(Object... params) {
+                OutputStream os;
+                try {
+                    os = mResolver.openOutputStream(uri, "rw");
+                    os.write(photoBytes);
+                    os.close();
+                    return null;
+                } catch (IOException ioe) {
+                    throw new RuntimeException(ioe);
+                }
+            }
+        };
+        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Object[])null).get();
     }
 
     public void testPhotoDimensionLimits() {

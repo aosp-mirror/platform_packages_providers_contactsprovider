@@ -18,6 +18,8 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
@@ -91,6 +93,7 @@ public class PhotoStore {
         mTotalSize = 0;
     }
 
+    @VisibleForTesting
     public synchronized long getTotalSize() {
         return mTotalSize;
     }
