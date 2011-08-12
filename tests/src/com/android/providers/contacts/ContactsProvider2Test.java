@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.common.contacts.DataUsageStatUpdater;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
@@ -3697,7 +3696,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues expectedValues = new ContentValues();
         expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-        expectedValues.put(StreamItems.TEXT, "hacking");
+        expectedValues.put(StreamItems.TEXT, "<p>hacking</p>\n");
+        assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(rawContactId))
+                .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
+                expectedValues);
+    }
+
+    public void testStreamItemInsertedOnStatusUpdate_HtmlQuoting() {
+
+        // This method of creating a raw contact automatically inserts a status update with
+        // the status message "hacking".
+        ContentValues values = new ContentValues();
+        long rawContactId = createRawContact(values, "18004664411",
+                "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_VOICE);
+
+        // Insert a new status update for the raw contact.
+        insertStatusUpdate(Im.PROTOCOL_GOOGLE_TALK, null, "goog411@acme.com",
+                StatusUpdates.INVISIBLE, "& <b> test &#39;", StatusUpdates.CAPABILITY_HAS_VOICE);
+
+        ContentValues expectedValues = new ContentValues();
+        expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
+        expectedValues.put(StreamItems.TEXT, "<p>&amp; &lt;b&gt; test &amp;#39;</p>\n");
         assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
@@ -3720,7 +3741,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues expectedValues = new ContentValues();
         expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-        expectedValues.put(StreamItems.TEXT, "finished hacking");
+        expectedValues.put(StreamItems.TEXT, "<p>finished hacking</p>\n");
         assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),

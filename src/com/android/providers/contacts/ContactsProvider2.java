@@ -136,6 +136,8 @@ import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
+import android.text.Html;
+import android.text.SpannableString;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -3037,7 +3039,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 if (rawContactId != -1 && !TextUtils.isEmpty(status)) {
                     ContentValues streamItemValues = new ContentValues();
                     streamItemValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-                    streamItemValues.put(StreamItems.TEXT, status);
+                    // Status updates are text only but stream items are HTML.
+                    streamItemValues.put(StreamItems.TEXT,
+                            Html.toHtml(new SpannableString(status)));
                     streamItemValues.put(StreamItems.COMMENTS, "");
                     streamItemValues.put(StreamItems.RES_PACKAGE, resPackage);
                     streamItemValues.put(StreamItems.RES_ICON, iconResource);
