@@ -1393,6 +1393,54 @@ import java.util.Locale;
                 +         Groups.VERSION + "=OLD." + Groups.VERSION + "+1"
                 + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
                 + " END");
+
+        // Update DEFAULT_FILTER table per AUTO_ADD column update.
+        // See also upgradeToVersion411().
+        long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
+        final String insertContactsWithoutAccount = (
+                " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                "     SELECT " + RawContacts.CONTACT_ID +
+                "     FROM " + Tables.RAW_CONTACTS +
+                "     WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
+                "     AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL; ");
+        final String insertContactsWithAccountNoDefaultGroup = (
+                " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                "     SELECT " + RawContacts.CONTACT_ID +
+                "         FROM " + Tables.RAW_CONTACTS +
+                "     WHERE NOT EXISTS" +
+                "         (SELECT " + Groups._ID +
+                "             FROM " + Tables.GROUPS +
+                "             WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = " +
+                        GroupsColumns.CONCRETE_ACCOUNT_NAME +
+                "             AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = " +
+                        GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                "             AND " + Groups.AUTO_ADD + " != 0" + ");");
+        final String insertContactsWithAccountDefaultGroup = (
+                " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                "     SELECT " + RawContacts.CONTACT_ID +
+                "         FROM " + Tables.RAW_CONTACTS +
+                "     JOIN " + Tables.DATA +
+                "           ON (" + RawContactsColumns.CONCRETE_ID + "=" +
+                        Data.RAW_CONTACT_ID + ")" +
+                "     WHERE " + DataColumns.MIMETYPE_ID + "=" + mimetype +
+                "     AND EXISTS" +
+                "         (SELECT " + Groups._ID +
+                "             FROM " + Tables.GROUPS +
+                "                 WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = " +
+                        GroupsColumns.CONCRETE_ACCOUNT_NAME +
+                "                 AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = " +
+                        GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                "                 AND " + Groups.AUTO_ADD + " != 0" + ");");
+
+        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.GROUPS + "_auto_add_updated1;");
+        db.execSQL("CREATE TRIGGER " + Tables.GROUPS + "_auto_add_updated1 "
+                + "   AFTER UPDATE OF " + Groups.AUTO_ADD + " ON " + Tables.GROUPS
+                + " BEGIN "
+                + "   DELETE FROM " + Tables.DEFAULT_DIRECTORY + ";"
+                    + insertContactsWithoutAccount
+                    + insertContactsWithAccountNoDefaultGroup
+                    + insertContactsWithAccountDefaultGroup
+                + " END");
     }
 
     private static void createContactsIndexes(SQLiteDatabase db) {
@@ -3070,52 +3118,54 @@ import java.util.Locale;
 
     /**
      * Adding DEFAULT_DIRECTORY table.
+     * DEFAULT_DIRECTORY should contain every contact which should be shown to users in default.
+     * - if a contact doesn't belong to any account (local contact), it should be in
+     *   default_directory
+     * - if a contact belongs to an account that doesn't have a "default" group, it should be in
+     *   default_directory
+     * - if a contact belongs to an account that has a "default" group (like Google directory,
+     *   which has "My contacts" group as default), it should be in default_directory.
+     *
+     * This logic assumes that accounts with the "default" group should have at least one
+     * group with AUTO_ADD (implying it is the default group) flag in the groups table.
      */
     private void upgradeToVersion411(SQLiteDatabase db) {
         db.execSQL("DROP TABLE IF EXISTS " + Tables.DEFAULT_DIRECTORY);
-        db.execSQL("CREATE TABLE " + Tables.DEFAULT_DIRECTORY + " (" +
-                Contacts._ID + " INTEGER PRIMARY KEY" +
-        ");");
+        db.execSQL("CREATE TABLE default_directory (_id INTEGER PRIMARY KEY);");
 
         // Process contacts without an account
-        db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
-                " SELECT " + RawContacts.CONTACT_ID +
-                " FROM " + Tables.RAW_CONTACTS +
-                " WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
-                "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL ");
+        db.execSQL("INSERT OR IGNORE INTO default_directory " +
+                " SELECT contact_id " +
+                " FROM raw_contacts " +
+                " WHERE raw_contacts.account_name IS NULL " +
+                "   AND raw_contacts.account_type IS NULL ");
 
-        // Process accounts that don't have a default group (e.g. Exchange)
-        db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
-                " SELECT " + RawContacts.CONTACT_ID +
-                " FROM " + Tables.RAW_CONTACTS +
+        // Process accounts that don't have a default group (e.g. Exchange).
+        db.execSQL("INSERT OR IGNORE INTO default_directory " +
+                " SELECT contact_id " +
+                " FROM raw_contacts " +
                 " WHERE NOT EXISTS" +
-                " (SELECT " + Groups._ID +
-                "  FROM " + Tables.GROUPS +
-                "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = "
-                        + GroupsColumns.CONCRETE_ACCOUNT_NAME +
-                "    AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
-                        + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
-                "    AND " + Groups.AUTO_ADD + " != 0" +
-                ")");
+                " (SELECT _id " +
+                "  FROM groups " +
+                "  WHERE raw_contacts.account_name = groups.account_name" +
+                "    AND raw_contacts.account_type = groups.account_type" +
+                "    AND groups.auto_add != 0)");
 
-        long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
+        final long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
 
         // Process accounts that do have a default group (e.g. Google)
-        db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
-                " SELECT " + RawContacts.CONTACT_ID +
-                " FROM " + Tables.RAW_CONTACTS +
-                " JOIN " + Tables.DATA +
-                "   ON (" + RawContactsColumns.CONCRETE_ID + "=" + Data.RAW_CONTACT_ID + ")" +
-                " WHERE " + DataColumns.MIMETYPE_ID + "=" + mimetype +
+        db.execSQL("INSERT OR IGNORE INTO default_directory " +
+                " SELECT contact_id " +
+                " FROM raw_contacts " +
+                " JOIN data " +
+                "   ON (raw_contacts._id=raw_contact_id)" +
+                " WHERE mimetype_id=" + mimetype +
                 " AND EXISTS" +
-                " (SELECT " + Groups._ID +
-                "  FROM " + Tables.GROUPS +
-                "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = "
-                        + GroupsColumns.CONCRETE_ACCOUNT_NAME +
-                "    AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
-                        + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
-                "    AND " + Groups.AUTO_ADD + " != 0" +
-                ")");
+                " (SELECT _id" +
+                "  FROM groups" +
+                "  WHERE raw_contacts.account_name = groups.account_name" +
+                "    AND raw_contacts.account_type = groups.account_type" +
+                "    AND groups.auto_add != 0)");
     }
 
     private void upgradeToVersion413(SQLiteDatabase db) {
@@ -3340,7 +3390,7 @@ import java.util.Locale;
         return tokens[0].getAddress().trim();
     }
 
-    private long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
+    private static long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
         try {
             return DatabaseUtils.longForQuery(db,
                     "SELECT " + MimetypesColumns._ID +
