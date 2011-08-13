@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="7965035505237135241">"Android-kerntoepassingen"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Kernapps van Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Opslag contacten"</string>
     <string name="provider_label" msgid="6012150850819899907">"Contacten"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Voor het bijwerken van contacten is meer geheugen nodig"</string>
@@ -26,6 +26,5 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Overig"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Toegang tot alle voicemails"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Hiermee kan de app alle voicemails opslaan en ophalen waartoe dit apparaat toegang heeft."</string>
-    <!-- no translation found for voicemail_from_column (435732568832121444) -->
-    <skip />
+    <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail van "</string>
 </resources>

@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="7965035505237135241">"Βασικές εφαρμογές Android"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Βασικές εφαρμογές Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Χώρος αποθήκευσης επαφών"</string>
     <string name="provider_label" msgid="6012150850819899907">"Επαφές"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Η αναβάθμιση των επαφών απαιτεί περισσότερη μνήμη"</string>
@@ -26,6 +26,5 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Άλλο"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Πρόσβαση σε όλα τα μηνύματα αυτόματου τηλεφωνητή"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Επιτρέπει στην εφαρμογή την αποθήκευση και την ανάκτηση όλων των μηνυμάτων αυτόματου τηλεφωνητή, στα οποία έχει πρόσβαση αυτή η συσκευή."</string>
-    <!-- no translation found for voicemail_from_column (435732568832121444) -->
-    <skip />
+    <string name="voicemail_from_column" msgid="435732568832121444">"Μήνυμα αυτόματου τηλεφωνητή από "</string>
 </resources>

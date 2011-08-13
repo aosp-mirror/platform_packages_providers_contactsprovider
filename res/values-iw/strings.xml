@@ -16,7 +16,8 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="7965035505237135241">"Android Core Apps"</string>
+    <!-- no translation found for sharedUserLabel (8024311725474286801) -->
+    <skip />
     <string name="app_label" msgid="3389954322874982620">"אחסון אנשי קשר"</string>
     <string name="provider_label" msgid="6012150850819899907">"אנשי קשר"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"שדרוג איש הקשר דורש זיכרון נוסף"</string>
@@ -26,6 +27,5 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"אחר"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"גישה לכל הודעות הדואר הקולי"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"מאפשר ליישום לאחסן ולאחזר את כל הודעות הדואר הקולי שמכשיר זה יכול לגשת אליהן."</string>
-    <!-- no translation found for voicemail_from_column (435732568832121444) -->
-    <skip />
+    <string name="voicemail_from_column" msgid="435732568832121444">"הודעה קולית מאת "</string>
 </resources>

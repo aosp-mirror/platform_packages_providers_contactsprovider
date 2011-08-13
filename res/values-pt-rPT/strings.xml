@@ -16,6 +16,8 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- no translation found for sharedUserLabel (8024311725474286801) -->
+    <skip />
     <string name="app_label" msgid="3389954322874982620">"Armazenamento de contactos"</string>
     <string name="provider_label" msgid="6012150850819899907">"Contactos"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"A actualização de contactos necessita de mais memória"</string>
@@ -25,6 +27,5 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Outro"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Acesso a todas as mensagens de correio de voz"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Permite à aplicação guardar e recuperar todas as mensagens de correio de voz a que este aparelho pode aceder."</string>
-    <!-- no translation found for voicemail_from_column (435732568832121444) -->
-    <skip />
+    <string name="voicemail_from_column" msgid="435732568832121444">"Correio de voz de "</string>
 </resources>
