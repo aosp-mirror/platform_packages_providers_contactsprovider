@@ -71,8 +71,11 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
 import android.database.CrossProcessCursor;
 import android.database.Cursor;
 import android.database.CursorWindow;
@@ -839,8 +842,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             .add(Groups.SYSTEM_ID)
             .add(Groups.DELETED)
             .add(Groups.NOTES)
-            .add(Groups.ACTION)
-            .add(Groups.ACTION_URI)
             .add(Groups.SHOULD_SYNC)
             .add(Groups.FAVORITES)
             .add(Groups.AUTO_ADD)
@@ -957,30 +958,39 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final ProjectionMap sStreamItemsProjectionMap = ProjectionMap.builder()
             .add(StreamItems._ID, StreamItemsColumns.CONCRETE_ID)
             .add(RawContacts.CONTACT_ID)
+            .add(StreamItems.ACCOUNT_NAME, RawContactsColumns.CONCRETE_ACCOUNT_NAME)
+            .add(StreamItems.ACCOUNT_TYPE, RawContactsColumns.CONCRETE_ACCOUNT_TYPE)
+            .add(StreamItems.DATA_SET, RawContactsColumns.CONCRETE_DATA_SET)
             .add(StreamItems.RAW_CONTACT_ID)
+            .add(StreamItems.RAW_CONTACT_SOURCE_ID, RawContactsColumns.CONCRETE_SOURCE_ID)
             .add(StreamItems.RES_PACKAGE)
             .add(StreamItems.RES_ICON)
             .add(StreamItems.RES_LABEL)
             .add(StreamItems.TEXT)
             .add(StreamItems.TIMESTAMP)
             .add(StreamItems.COMMENTS)
-            .add(StreamItems.ACTION)
-            .add(StreamItems.ACTION_URI)
+            .add(StreamItems.SYNC1)
+            .add(StreamItems.SYNC2)
+            .add(StreamItems.SYNC3)
+            .add(StreamItems.SYNC4)
             .build();
 
     private static final ProjectionMap sStreamItemPhotosProjectionMap = ProjectionMap.builder()
             .add(StreamItemPhotos._ID, StreamItemPhotosColumns.CONCRETE_ID)
             .add(StreamItems.RAW_CONTACT_ID)
+            .add(StreamItems.RAW_CONTACT_SOURCE_ID, RawContactsColumns.CONCRETE_SOURCE_ID)
             .add(StreamItemPhotos.STREAM_ITEM_ID)
             .add(StreamItemPhotos.SORT_INDEX)
             .add(StreamItemPhotos.PHOTO_FILE_ID)
             .add(StreamItemPhotos.PHOTO_URI,
                     "'" + DisplayPhoto.CONTENT_URI + "'||'/'||" + StreamItemPhotos.PHOTO_FILE_ID)
-            .add(StreamItemPhotos.ACTION, StreamItemPhotosColumns.CONCRETE_ACTION)
-            .add(StreamItemPhotos.ACTION_URI, StreamItemPhotosColumns.CONCRETE_ACTION_URI)
             .add(PhotoFiles.HEIGHT)
             .add(PhotoFiles.WIDTH)
             .add(PhotoFiles.FILESIZE)
+            .add(StreamItemPhotos.SYNC1)
+            .add(StreamItemPhotos.SYNC2)
+            .add(StreamItemPhotos.SYNC3)
+            .add(StreamItemPhotos.SYNC4)
             .build();
 
     /** Contains Live Folders columns */
@@ -3011,16 +3021,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (values.containsKey(StatusUpdates.STATUS)) {
             String status = values.getAsString(StatusUpdates.STATUS);
             String resPackage = values.getAsString(StatusUpdates.STATUS_RES_PACKAGE);
-            Integer labelResource = values.getAsInteger(StatusUpdates.STATUS_LABEL);
-
-            if (TextUtils.isEmpty(resPackage)
-                    && (labelResource == null || labelResource == 0)
-                    && protocol != null) {
-                labelResource = Im.getProtocolLabelResource(protocol);
+            Resources resources = getContext().getResources();
+            if (!TextUtils.isEmpty(resPackage)) {
+                PackageManager pm = getContext().getPackageManager();
+                try {
+                    resources = pm.getResourcesForApplication(resPackage);
+                } catch (NameNotFoundException e) {
+                    Log.w(TAG, "Contact status update resource package not found: "
+                            + resPackage);
+                }
             }
+            Integer labelResourceId = values.getAsInteger(StatusUpdates.STATUS_LABEL);
 
-            Long iconResource = values.getAsLong(StatusUpdates.STATUS_ICON);
+            if ((labelResourceId == null || labelResourceId == 0) && protocol != null) {
+                labelResourceId = Im.getProtocolLabelResource(protocol);
+            }
+            String labelResource = getResourceName(resources, "string", labelResourceId);
+
+            Integer iconResourceId = values.getAsInteger(StatusUpdates.STATUS_ICON);
             // TODO compute the default icon based on the protocol
+
+            String iconResource = getResourceName(resources, "drawable", iconResourceId);
 
             if (TextUtils.isEmpty(status)) {
                 mDbHelper.deleteStatusUpdate(dataId);
@@ -3028,10 +3049,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 Long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
                 if (timestamp != null) {
                     mDbHelper.replaceStatusUpdate(dataId, timestamp, status, resPackage,
-                            iconResource, labelResource);
+                            iconResourceId, labelResourceId);
                 } else {
-                    mDbHelper.insertStatusUpdate(dataId, status, resPackage, iconResource,
-                            labelResource);
+                    mDbHelper.insertStatusUpdate(dataId, status, resPackage, iconResourceId,
+                            labelResourceId);
                 }
 
                 // For forward compatibility with the new stream item API, insert this status update
@@ -3078,7 +3099,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     } finally {
                         c.close();
                     }
-
                 }
             }
         }
@@ -3088,6 +3108,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return dataId;
+    }
+
+    private String getResourceName(Resources resources, String expectedType, Integer resourceId) {
+        try {
+            if (resourceId == null || resourceId == 0) return null;
+
+            // Resource has an invalid type (e.g. a string as icon)? ignore
+            final String resourceEntryName = resources.getResourceEntryName(resourceId);
+            final String resourceTypeName = resources.getResourceTypeName(resourceId);
+            if (!expectedType.equals(resourceTypeName)) {
+                Log.w(TAG, "Resource " + resourceId + " (" + resourceEntryName + ") is of type " +
+                        resourceTypeName + " but " + expectedType + " is required.");
+                return null;
+            }
+
+            return resourceEntryName;
+        } catch (NotFoundException e) {
+            return null;
+        }
     }
 
     @Override
@@ -6184,7 +6223,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 + PhotoFilesColumns.CONCRETE_ID
                 + ") JOIN " + Tables.STREAM_ITEMS + " ON ("
                 + StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "="
-                + StreamItemsColumns.CONCRETE_ID + ")");
+                + StreamItemsColumns.CONCRETE_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
+                + StreamItemsColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                + ")");
         qb.setProjectionMap(sStreamItemPhotosProjectionMap);
     }
 

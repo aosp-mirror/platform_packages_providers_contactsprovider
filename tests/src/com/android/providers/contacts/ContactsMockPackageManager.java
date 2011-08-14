@@ -22,7 +22,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Binder;
 import android.test.mock.MockPackageManager;
-import android.test.mock.MockResources;
 
 import java.util.HashMap;
 import java.util.List;
@@ -92,11 +91,6 @@ public class ContactsMockPackageManager extends MockPackageManager {
 
     @Override
     public Resources getResourcesForApplication(String appPackageName) {
-        return new MockResources() {
-            @Override
-            public String getResourceName(int resid) throws NotFoundException {
-                return String.valueOf(resid);
-            }
-        };
+        return new ContactsMockResources();
     }
 }

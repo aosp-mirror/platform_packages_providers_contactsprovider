@@ -16,7 +16,8 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Maps;
+import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
+
 import com.google.android.collect.Sets;
 
 import android.accounts.Account;
@@ -26,7 +27,6 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
-import android.content.res.Resources;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
@@ -49,14 +49,10 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
-import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -64,8 +60,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.

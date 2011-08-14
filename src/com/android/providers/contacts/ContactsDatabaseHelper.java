@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 612;
+    static final int DATABASE_VERSION = 613;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -402,8 +402,6 @@ import java.util.Locale;
         public static final String CONCRETE_DATA_SET = Tables.GROUPS + "." + Groups.DATA_SET;
         public static final String CONCRETE_ACCOUNT_TYPE_AND_DATA_SET = Tables.GROUPS + "." +
                 Groups.ACCOUNT_TYPE_AND_DATA_SET;
-        public static final String CONCRETE_ACTION = Tables.GROUPS + "." + Groups.ACTION;
-        public static final String CONCRETE_ACTION_URI = Tables.GROUPS + "." + Groups.ACTION_URI;
     }
 
     public interface ActivitiesColumns {
@@ -514,27 +512,33 @@ import java.util.Locale;
     }
 
     public interface StreamItemsColumns {
-        String CONCRETE_ID = Tables.STREAM_ITEMS + "." + BaseColumns._ID;
-        String CONCRETE_RAW_CONTACT_ID = Tables.STREAM_ITEMS + "." + StreamItems.RAW_CONTACT_ID;
-        String CONCRETE_PACKAGE = Tables.STREAM_ITEMS + "." + StreamItems.RES_PACKAGE;
-        String CONCRETE_ICON = Tables.STREAM_ITEMS + "." + StreamItems.RES_ICON;
-        String CONCRETE_LABEL = Tables.STREAM_ITEMS + "." + StreamItems.RES_LABEL;
-        String CONCRETE_TEXT = Tables.STREAM_ITEMS + "." + StreamItems.TEXT;
-        String CONCRETE_TIMESTAMP = Tables.STREAM_ITEMS + "." + StreamItems.TIMESTAMP;
-        String CONCRETE_COMMENTS = Tables.STREAM_ITEMS + "." + StreamItems.COMMENTS;
-        String CONCRETE_ACTION = Tables.STREAM_ITEMS + "." + StreamItems.ACTION;
-        String CONCRETE_ACTION_URI = Tables.STREAM_ITEMS + "." + StreamItems.ACTION_URI;
+        final String CONCRETE_ID = Tables.STREAM_ITEMS + "." + BaseColumns._ID;
+        final String CONCRETE_RAW_CONTACT_ID =
+                Tables.STREAM_ITEMS + "." + StreamItems.RAW_CONTACT_ID;
+        final String CONCRETE_PACKAGE = Tables.STREAM_ITEMS + "." + StreamItems.RES_PACKAGE;
+        final String CONCRETE_ICON = Tables.STREAM_ITEMS + "." + StreamItems.RES_ICON;
+        final String CONCRETE_LABEL = Tables.STREAM_ITEMS + "." + StreamItems.RES_LABEL;
+        final String CONCRETE_TEXT = Tables.STREAM_ITEMS + "." + StreamItems.TEXT;
+        final String CONCRETE_TIMESTAMP = Tables.STREAM_ITEMS + "." + StreamItems.TIMESTAMP;
+        final String CONCRETE_COMMENTS = Tables.STREAM_ITEMS + "." + StreamItems.COMMENTS;
+        final String CONCRETE_SYNC1 = Tables.STREAM_ITEMS + "." + StreamItems.SYNC1;
+        final String CONCRETE_SYNC2 = Tables.STREAM_ITEMS + "." + StreamItems.SYNC2;
+        final String CONCRETE_SYNC3 = Tables.STREAM_ITEMS + "." + StreamItems.SYNC3;
+        final String CONCRETE_SYNC4 = Tables.STREAM_ITEMS + "." + StreamItems.SYNC4;
     }
 
     public interface StreamItemPhotosColumns {
-        String CONCRETE_ID = Tables.STREAM_ITEM_PHOTOS + "." + BaseColumns._ID;
-        String CONCRETE_STREAM_ITEM_ID = Tables.STREAM_ITEM_PHOTOS + "."
+        final String CONCRETE_ID = Tables.STREAM_ITEM_PHOTOS + "." + BaseColumns._ID;
+        final String CONCRETE_STREAM_ITEM_ID = Tables.STREAM_ITEM_PHOTOS + "."
                 + StreamItemPhotos.STREAM_ITEM_ID;
-        String CONCRETE_SORT_INDEX = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SORT_INDEX;
-        String CONCRETE_PHOTO_FILE_ID = Tables.STREAM_ITEM_PHOTOS + "."
+        final String CONCRETE_SORT_INDEX =
+                Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SORT_INDEX;
+        final String CONCRETE_PHOTO_FILE_ID = Tables.STREAM_ITEM_PHOTOS + "."
                 + StreamItemPhotos.PHOTO_FILE_ID;
-        String CONCRETE_ACTION = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION;
-        String CONCRETE_ACTION_URI = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.ACTION_URI;
+        final String CONCRETE_SYNC1 = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SYNC1;
+        final String CONCRETE_SYNC2 = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SYNC2;
+        final String CONCRETE_SYNC3 = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SYNC3;
+        final String CONCRETE_SYNC4 = Tables.STREAM_ITEM_PHOTOS + "." + StreamItemPhotos.SYNC4;
     }
 
     public interface PhotoFilesColumns {
@@ -916,13 +920,15 @@ import java.util.Locale;
                 StreamItems._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 StreamItems.RAW_CONTACT_ID + " INTEGER NOT NULL, " +
                 StreamItems.RES_PACKAGE + " TEXT, " +
-                StreamItems.RES_ICON + " INTEGER, " +
-                StreamItems.RES_LABEL + " INTEGER, " +
-                StreamItems.TEXT + " TEXT NOT NULL, " +
+                StreamItems.RES_ICON + " TEXT, " +
+                StreamItems.RES_LABEL + " TEXT, " +
+                StreamItems.TEXT + " TEXT, " +
                 StreamItems.TIMESTAMP + " INTEGER NOT NULL, " +
-                StreamItems.COMMENTS + " TEXT NOT NULL, " +
-                StreamItems.ACTION + " TEXT, " +
-                StreamItems.ACTION_URI + " TEXT, " +
+                StreamItems.COMMENTS + " TEXT, " +
+                StreamItems.SYNC1 + " TEXT, " +
+                StreamItems.SYNC2 + " TEXT, " +
+                StreamItems.SYNC3 + " TEXT, " +
+                StreamItems.SYNC4 + " TEXT, " +
                 "FOREIGN KEY(" + StreamItems.RAW_CONTACT_ID + ") REFERENCES " +
                         Tables.RAW_CONTACTS + "(" + RawContacts._ID + "));");
 
@@ -931,8 +937,10 @@ import java.util.Locale;
                 StreamItemPhotos.STREAM_ITEM_ID + " INTEGER NOT NULL, " +
                 StreamItemPhotos.SORT_INDEX + " INTEGER, " +
                 StreamItemPhotos.PHOTO_FILE_ID + " INTEGER NOT NULL, " +
-                StreamItemPhotos.ACTION + " TEXT, " +
-                StreamItemPhotos.ACTION_URI + " TEXT, " +
+                StreamItemPhotos.SYNC1 + " TEXT, " +
+                StreamItemPhotos.SYNC2 + " TEXT, " +
+                StreamItemPhotos.SYNC3 + " TEXT, " +
+                StreamItemPhotos.SYNC4 + " TEXT, " +
                 "FOREIGN KEY(" + StreamItemPhotos.STREAM_ITEM_ID + ") REFERENCES " +
                         Tables.STREAM_ITEMS + "(" + StreamItems._ID + "));");
 
@@ -1073,8 +1081,6 @@ import java.util.Locale;
                 Groups.TITLE + " TEXT," +
                 Groups.TITLE_RES + " INTEGER," +
                 Groups.NOTES + " TEXT," +
-                Groups.ACTION + " TEXT," +
-                Groups.ACTION_URI + " TEXT," +
                 Groups.SYSTEM_ID + " TEXT," +
                 Groups.DELETED + " INTEGER NOT NULL DEFAULT 0," +
                 Groups.GROUP_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
@@ -1731,8 +1737,6 @@ import java.util.Locale;
                 + Groups.TITLE + ","
                 + Groups.TITLE_RES + ","
                 + Groups.NOTES + ","
-                + Groups.ACTION + ", "
-                + Groups.ACTION_URI + ", "
                 + Groups.SYSTEM_ID + ","
                 + Groups.DELETED + ","
                 + Groups.GROUP_VISIBLE + ","
@@ -2116,6 +2120,11 @@ import java.util.Locale;
             upgradeViewsAndTriggers = true;
             upgradeToVersion612(db);
             oldVersion = 612;
+        }
+
+        if (oldVersion < 613) {
+            upgradeToVersion613(db);
+            oldVersion = 613;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3224,8 +3233,10 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion607(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE groups ADD COLUMN action TEXT");
-        db.execSQL("ALTER TABLE groups ADD COLUMN action_uri TEXT");
+        // We added "action" and "action_uri" to groups here, but realized this was not a smart
+        // move. This upgrade step has been removed (all dogfood phones that executed this step
+        // will have those columns, but that shouldn't hurt. Unfortunately, SQLite makes it hard
+        // to remove columns)
     }
 
     private void upgradeToVersion608(SQLiteDatabase db) {
@@ -3239,36 +3250,9 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion609(SQLiteDatabase db) {
-        // The stream item and stream item photos APIs were not in-use by anyone in the time
-        // between their initial creation (in v605) and this update.  So we're just dropping
-        // and re-creating them to get appropriate columns.  The delta is as follows:
-        // - In stream_items, package_id was replaced by res_package.
-        // - In stream_item_photos, picture was replaced by photo_file_id.
-
-        db.execSQL("DROP TABLE IF EXISTS stream_items");
-        db.execSQL("DROP TABLE IF EXISTS stream_item_photos");
-
-        db.execSQL("CREATE TABLE stream_items(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "raw_contact_id INTEGER NOT NULL, " +
-                "res_package TEXT, " +
-                "icon INTEGER, " +
-                "label INTEGER, " +
-                "text TEXT NOT NULL, " +
-                "timestamp INTEGER NOT NULL, " +
-                "comments TEXT NOT NULL, " +
-                "action TEXT, " +
-                "action_uri TEXT, " +
-                "FOREIGN KEY(raw_contact_id) REFERENCES raw_contacts(_id));");
-
-        db.execSQL("CREATE TABLE stream_item_photos(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "stream_item_id INTEGER NOT NULL, " +
-                "sort_index INTEGER, " +
-                "photo_file_id INTEGER NOT NULL, " +
-                "action TEXT, " +
-                "action_uri TEXT, " +
-                "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
+        // This version used to create the stream item and stream item photos tables, but a newer
+        // version of those tables is created in version 613 below.  So omitting the creation in
+        // this upgrade step to avoid a create->drop->create.
     }
 
     private void upgradeToVersion610(SQLiteDatabase db) {
@@ -3290,6 +3274,47 @@ import java.util.Locale;
     private void upgradeToVersion612(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD geocoded_location TEXT DEFAULT NULL;");
         // Old calls will not have a geocoded location; new calls will get it when inserted.
+    }
+
+    private void upgradeToVersion613(SQLiteDatabase db) {
+        // The stream item and stream item photos APIs were not in-use by anyone in the time
+        // between their initial creation (in v609) and this update.  So we're just dropping
+        // and re-creating them to get appropriate columns.  The delta is as follows:
+        // - In stream_items, package_id was replaced by res_package.
+        // - In stream_item_photos, picture was replaced by photo_file_id.
+        // - Instead of resource ids for icon and label, we use resource name strings now
+        // - Added sync columns
+        // - Removed action and action_uri
+        // - Text and comments are now nullable
+
+        db.execSQL("DROP TABLE IF EXISTS stream_items");
+        db.execSQL("DROP TABLE IF EXISTS stream_item_photos");
+
+        db.execSQL("CREATE TABLE stream_items(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "raw_contact_id INTEGER NOT NULL, " +
+                "res_package TEXT, " +
+                "icon TEXT, " +
+                "label TEXT, " +
+                "text TEXT, " +
+                "timestamp INTEGER NOT NULL, " +
+                "comments TEXT, " +
+                "stream_item_sync1 TEXT, " +
+                "stream_item_sync2 TEXT, " +
+                "stream_item_sync3 TEXT, " +
+                "stream_item_sync4 TEXT, " +
+                "FOREIGN KEY(raw_contact_id) REFERENCES raw_contacts(_id));");
+
+        db.execSQL("CREATE TABLE stream_item_photos(" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "stream_item_id INTEGER NOT NULL, " +
+                "sort_index INTEGER, " +
+                "photo_file_id INTEGER NOT NULL, " +
+                "stream_item_photo_sync1 TEXT, " +
+                "stream_item_photo_sync2 TEXT, " +
+                "stream_item_photo_sync3 TEXT, " +
+                "stream_item_photo_sync4 TEXT, " +
+                "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
     }
 
     public String extractHandleFromEmailAddress(String email) {
@@ -4064,7 +4089,7 @@ import java.util.Locale;
     }
 
     public void replaceStatusUpdate(Long dataId, long timestamp, String status, String resPackage,
-            Long iconResource, Integer labelResource) {
+            Integer iconResource, Integer labelResource) {
         if (mStatusUpdateReplace == null) {
             mStatusUpdateReplace = getWritableDatabase().compileStatement(
                     "INSERT OR REPLACE INTO " + Tables.STATUS_UPDATES + "("
@@ -4085,8 +4110,8 @@ import java.util.Locale;
         mStatusUpdateReplace.execute();
     }
 
-    public void insertStatusUpdate(Long dataId, String status, String resPackage, Long iconResource,
-            Integer labelResource) {
+    public void insertStatusUpdate(Long dataId, String status, String resPackage,
+            Integer iconResource, Integer labelResource) {
         if (mStatusUpdateInsert == null) {
             mStatusUpdateInsert = getWritableDatabase().compileStatement(
                     "INSERT INTO " + Tables.STATUS_UPDATES + "("
