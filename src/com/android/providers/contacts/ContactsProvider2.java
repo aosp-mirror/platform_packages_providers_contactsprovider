@@ -1595,10 +1595,43 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return;
         }
 
-        if (mContactsAccountCount == 0
-                && DatabaseUtils.queryNumEntries(mDbHelper.getReadableDatabase(),
-                        Tables.CONTACTS, null) == 0) {
-            setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        // No accounts/no contacts status is true if there are no account and
+        // there are
+        // no contacts or one profile contact
+        if (mContactsAccountCount == 0) {
+            long contactsNum = DatabaseUtils.queryNumEntries(mDbHelper.getReadableDatabase(),
+                    Tables.CONTACTS, null);
+            if (contactsNum == 0) {
+                setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+            } else if (contactsNum == 1) {
+                // if we have one contact, need to make sure it is the local
+                // profile
+                // so need to get the raw_contact id from the account table and
+                // then
+                // make sure the raw_contacts exists and it is not deleted
+                long rawId = DatabaseUtils.longForQuery(
+                            mDbHelper.getReadableDatabase(),
+                            "SELECT " + AccountsColumns.PROFILE_RAW_CONTACT_ID +
+                                    " FROM " + Tables.ACCOUNTS
+                            , null);
+                if (rawId == 0) {
+                    setProviderStatus(ProviderStatus.STATUS_NORMAL);
+                    return;
+                }
+                boolean deleted = DatabaseUtils.longForQuery(
+                        mDbHelper.getReadableDatabase(),
+                        "SELECT " + RawContacts.DELETED +
+                                " FROM " + Tables.RAW_CONTACTS +
+                                " WHERE " + RawContacts._ID + "=" + String.valueOf(rawId),
+                                null) == 1;
+                if (deleted) {
+                    setProviderStatus(ProviderStatus.STATUS_NORMAL);
+                    return;
+                }
+                setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+            } else {
+                setProviderStatus(ProviderStatus.STATUS_NORMAL);
+            }
         } else {
             setProviderStatus(ProviderStatus.STATUS_NORMAL);
         }
