@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="7965035505237135241">"Programu Msingi za Android"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Programu Msingi za Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Hifadhi ya Anwani"</string>
     <string name="provider_label" msgid="6012150850819899907">"Anwani"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kupandisha gredi kwa anwani kunahitaji kumbukumbu zaidi"</string>
@@ -28,6 +28,5 @@
     <skip />
     <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
     <skip />
-    <!-- no translation found for voicemail_from_column (435732568832121444) -->
-    <skip />
+    <string name="voicemail_from_column" msgid="435732568832121444">"Barua ya sauti kutoka "</string>
 </resources>

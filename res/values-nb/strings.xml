@@ -16,7 +16,8 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="7965035505237135241">"Kjerneprogrammer for Android"</string>
+    <!-- no translation found for sharedUserLabel (8024311725474286801) -->
+    <skip />
     <string name="app_label" msgid="3389954322874982620">"Kontaktlager"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakter"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Det er ikke nok minne for å oppgradere kontaktene"</string>
@@ -25,7 +26,6 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakter"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Andre"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Tilgang til alle talemeldinger"</string>
-    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Lar applikasjonen lagre og hente alle talepostmeldinger som denne enheten har tilgang til."</string>
-    <!-- no translation found for voicemail_from_column (435732568832121444) -->
-    <skip />
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Gjør at applikasjonen kan lagre og hente alle talepostmeldinger som denne enheten har tilgang til."</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Talemelding fra "</string>
 </resources>
