@@ -898,6 +898,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         long rawContactId2 = createRawContactWithName("Chilled", "Guacamole", ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "1-800-466-5432");
+        insertPhoneNumber(rawContactId2, "0@example.com", false, Phone.TYPE_PAGER);
+        insertPhoneNumber(rawContactId2, "1@example.com", false, Phone.TYPE_PAGER);
 
         Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
         ContentValues values = new ContentValues();
@@ -919,6 +921,30 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri filterUri5 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "*");
         assertEquals(0, getCount(filterUri5, null, null));
+
+        ContentValues values1 = new ContentValues();
+        values1.put(Contacts.DISPLAY_NAME, "Chilled Guacamole");
+        values1.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values1.put(Phone.NUMBER, "1-800-466-5432");
+        values1.put(Phone.TYPE, Phone.TYPE_HOME);
+        values1.putNull(Phone.LABEL);
+
+        ContentValues values2 = new ContentValues();
+        values2.put(Contacts.DISPLAY_NAME, "Chilled Guacamole");
+        values2.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values2.put(Phone.NUMBER, "0@example.com");
+        values2.put(Phone.TYPE, Phone.TYPE_PAGER);
+        values2.putNull(Phone.LABEL);
+
+        ContentValues values3 = new ContentValues();
+        values3.put(Contacts.DISPLAY_NAME, "Chilled Guacamole");
+        values3.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values3.put(Phone.NUMBER, "1@example.com");
+        values3.put(Phone.TYPE, Phone.TYPE_PAGER);
+        values3.putNull(Phone.LABEL);
+
+        Uri filterUri6 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "Chilled");
+        assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
     }
 
     public void testPhoneLookup() {

@@ -5086,7 +5086,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     sb.append(")");
                     qb.appendWhere(sb);
                 }
-                groupBy = PhoneColumns.NORMALIZED_NUMBER + "," + RawContacts.CONTACT_ID;
+                groupBy = "(CASE WHEN " + PhoneColumns.NORMALIZED_NUMBER
+                        + " IS NOT NULL THEN " + PhoneColumns.NORMALIZED_NUMBER
+                        + " ELSE " + Phone.NUMBER + " END), " + RawContacts.CONTACT_ID;
                 if (sortOrder == null) {
                     final String accountPromotionSortOrder = getAccountPromotionSortOrder(uri);
                     if (!TextUtils.isEmpty(accountPromotionSortOrder)) {

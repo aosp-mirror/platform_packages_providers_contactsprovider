@@ -281,11 +281,16 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     }
 
     protected Uri insertPhoneNumber(long rawContactId, String phoneNumber, boolean primary) {
+        return insertPhoneNumber(rawContactId, phoneNumber, primary, Phone.TYPE_HOME);
+    }
+
+    protected Uri insertPhoneNumber(long rawContactId, String phoneNumber, boolean primary,
+            int type) {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
         values.put(Phone.NUMBER, phoneNumber);
-        values.put(Phone.TYPE, Phone.TYPE_HOME);
+        values.put(Phone.TYPE, type);
         if (primary) {
             values.put(Data.IS_PRIMARY, 1);
         }
