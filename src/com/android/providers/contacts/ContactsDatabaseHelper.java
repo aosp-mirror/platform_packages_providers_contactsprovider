@@ -1396,7 +1396,6 @@ import java.util.Locale;
 
         // Update DEFAULT_FILTER table per AUTO_ADD column update.
         // See also upgradeToVersion411().
-        long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
         final String insertContactsWithoutAccount = (
                 " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
                 "     SELECT " + RawContacts.CONTACT_ID +
@@ -1422,7 +1421,10 @@ import java.util.Locale;
                 "     JOIN " + Tables.DATA +
                 "           ON (" + RawContactsColumns.CONCRETE_ID + "=" +
                         Data.RAW_CONTACT_ID + ")" +
-                "     WHERE " + DataColumns.MIMETYPE_ID + "=" + mimetype +
+                "     WHERE " + DataColumns.MIMETYPE_ID + "=" +
+                    "(SELECT " + MimetypesColumns._ID + " FROM " + Tables.MIMETYPES +
+                        " WHERE " + MimetypesColumns.MIMETYPE +
+                            "='" + GroupMembership.CONTENT_ITEM_TYPE + "')" +
                 "     AND EXISTS" +
                 "         (SELECT " + Groups._ID +
                 "             FROM " + Tables.GROUPS +
