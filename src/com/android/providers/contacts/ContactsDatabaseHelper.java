@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 614;
+    static final int DATABASE_VERSION = 615;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1162,6 +1162,10 @@ import java.util.Locale;
                 Calls.VOICEMAIL_URI + " TEXT," +
                 Calls.IS_READ + " INTEGER," +
                 Calls.GEOCODED_LOCATION + " TEXT," +
+                Calls.CACHED_LOOKUP_URI + " TEXT," +
+                Calls.CACHED_MATCHED_NUMBER + " TEXT," +
+                Calls.CACHED_NORMALIZED_NUMBER + " TEXT," +
+                Calls.CACHED_PHOTO_ID + " INTEGER NOT NULL DEFAULT 0," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
                 Voicemails.MIME_TYPE + " TEXT," +
@@ -2211,6 +2215,11 @@ import java.util.Locale;
             // this creates the view "view_stream_items"
             upgradeViewsAndTriggers = true;
             oldVersion = 614;
+        }
+
+        if (oldVersion < 615) {
+            upgradeToVersion615(db);
+            oldVersion = 615;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3403,6 +3412,15 @@ import java.util.Locale;
                 "stream_item_photo_sync3 TEXT, " +
                 "stream_item_photo_sync4 TEXT, " +
                 "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
+    }
+
+    private void upgradeToVersion615(SQLiteDatabase db) {
+        // Old calls will not have up to date values for these columns, they will be filled in
+        // as needed.
+        db.execSQL("ALTER TABLE calls ADD lookup_uri TEXT DEFAULT NULL;");
+        db.execSQL("ALTER TABLE calls ADD matched_number TEXT DEFAULT NULL;");
+        db.execSQL("ALTER TABLE calls ADD normalized_number TEXT DEFAULT NULL;");
+        db.execSQL("ALTER TABLE calls ADD photo_id INTEGER NOT NULL DEFAULT 0;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

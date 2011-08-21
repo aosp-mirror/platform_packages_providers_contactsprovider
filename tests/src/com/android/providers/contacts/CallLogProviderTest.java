@@ -63,7 +63,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.SOURCE_DATA,
             Voicemails.STATE};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 13;
+    private static final int NUM_CALLLOG_FIELDS = 17;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
