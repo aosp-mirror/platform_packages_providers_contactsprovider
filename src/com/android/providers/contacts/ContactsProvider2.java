@@ -3096,8 +3096,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     ContentValues streamItemValues = new ContentValues();
                     streamItemValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
                     // Status updates are text only but stream items are HTML.
-                    streamItemValues.put(StreamItems.TEXT,
-                            Html.toHtml(new SpannableString(status)));
+                    streamItemValues.put(StreamItems.TEXT, statusUpdateToHtml(status));
                     streamItemValues.put(StreamItems.COMMENTS, "");
                     streamItemValues.put(StreamItems.RES_PACKAGE, resPackage);
                     streamItemValues.put(StreamItems.RES_ICON, iconResource);
@@ -3141,6 +3140,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         return dataId;
+    }
+
+    /** Converts a status update to HTML. */
+    private String statusUpdateToHtml(String status) {
+        String html = Html.toHtml(new SpannableString(status));
+        if (html.endsWith("\n")) {
+            html = html.substring(0, html.length() - 2);
+        }
+        return html;
     }
 
     private String getResourceName(Resources resources, String expectedType, Integer resourceId) {
