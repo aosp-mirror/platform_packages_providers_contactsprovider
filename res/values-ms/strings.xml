@@ -16,8 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <!-- no translation found for sharedUserLabel (8024311725474286801) -->
-    <skip />
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Apl Teras Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Storan Kenalan"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kenalan"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kemas kini kenalan memerlukan lagi memori"</string>
