@@ -32,12 +32,15 @@ import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
 
+import com.android.i18n.phonenumbers.PhoneNumberUtil;
+import com.android.i18n.phonenumbers.NumberParseException;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 /**
  * Support for global search integration for Contacts.
@@ -176,10 +179,12 @@ public class GlobalSearchSupport {
     }
 
     private final ContactsProvider2 mContactsProvider;
+    private final PhoneNumberUtil mPhoneNumberUtil;
 
     @SuppressWarnings("all")
     public GlobalSearchSupport(ContactsProvider2 contactsProvider) {
         mContactsProvider = contactsProvider;
+        mPhoneNumberUtil = PhoneNumberUtil.getInstance();
 
         // To ensure the data column position. This is dead code if properly configured.
         if (Organization.COMPANY != Data.DATA1 || Phone.NUMBER != Data.DATA1
@@ -201,13 +206,16 @@ public class GlobalSearchSupport {
             selection = null;
         }
 
-        if (!TextUtils.isEmpty(searchClause) && TextUtils.isDigitsOnly(searchClause)
-                && mContactsProvider.isPhone()) {
+        if (mContactsProvider.isPhone() && isPhoneNumber(searchClause)) {
             return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
         } else {
             return buildCursorForSearchSuggestionsBasedOnFilter(
                     db, projection, selection, searchClause, limit);
         }
+    }
+
+    private boolean isPhoneNumber(String query) {
+        return mPhoneNumberUtil.isPossibleNumber(query, Locale.getDefault().getCountry());
     }
 
     /**
