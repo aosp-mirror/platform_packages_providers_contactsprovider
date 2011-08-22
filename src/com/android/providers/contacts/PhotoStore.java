@@ -81,7 +81,7 @@ public class PhotoStore {
     /**
      * Clears the photo storage. Deletes all files from disk.
      */
-    public synchronized void clear() {
+    public void clear() {
         File[] files = mStorePath.listFiles();
         if (files != null) {
             for (File file : files) {
@@ -94,14 +94,14 @@ public class PhotoStore {
     }
 
     @VisibleForTesting
-    public synchronized long getTotalSize() {
+    public long getTotalSize() {
         return mTotalSize;
     }
 
     /**
      * Returns the entry with the specified key if it exists, null otherwise.
      */
-    public synchronized Entry get(long key) {
+    public Entry get(long key) {
         return mEntries.get(key);
     }
 
@@ -109,7 +109,7 @@ public class PhotoStore {
      * Initializes the PhotoStore by scanning for all files currently in the
      * specified root directory.
      */
-    public synchronized void initialize() {
+    public final void initialize() {
         File[] files = mStorePath.listFiles();
         if (files == null) {
             return;
@@ -139,7 +139,7 @@ public class PhotoStore {
      * @param keysInUse The set of all keys that are in use in the photo store.
      * @return The set of the keys in use that refer to non-existent entries.
      */
-    public synchronized Set<Long> cleanup(Set<Long> keysInUse) {
+    public Set<Long> cleanup(Set<Long> keysInUse) {
         Set<Long> keysToRemove = new HashSet<Long>();
         keysToRemove.addAll(mEntries.keySet());
         keysToRemove.removeAll(keysInUse);
@@ -163,7 +163,7 @@ public class PhotoStore {
      * @return The photo file ID associated with the file, or 0 if the file could not be created or
      *     is thumbnail-sized or smaller.
      */
-    public synchronized long insert(PhotoProcessor photoProcessor) {
+    public long insert(PhotoProcessor photoProcessor) {
         return insert(photoProcessor, false);
     }
 
@@ -177,7 +177,7 @@ public class PhotoStore {
      * @return The photo file ID associated with the file, or 0 if the file could not be created or
      *     is thumbnail-sized or smaller and allowSmallImageStorage is false.
      */
-    public synchronized long insert(PhotoProcessor photoProcessor, boolean allowSmallImageStorage) {
+    public long insert(PhotoProcessor photoProcessor, boolean allowSmallImageStorage) {
         Bitmap displayPhoto = photoProcessor.getDisplayPhoto();
         int width = displayPhoto.getWidth();
         int height = displayPhoto.getHeight();
@@ -231,7 +231,7 @@ public class PhotoStore {
     /**
      * Removes the specified photo file from the store if it exists.
      */
-    public synchronized void remove(long id) {
+    public void remove(long id) {
         cleanupFile(getFileForPhotoFileId(id));
         removeEntry(id);
     }
