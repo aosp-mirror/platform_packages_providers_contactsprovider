@@ -6967,6 +6967,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return Directory.CONTENT_TYPE;
             case DIRECTORIES_ID:
                 return Directory.CONTENT_ITEM_TYPE;
+            case STREAM_ITEMS:
+                return StreamItems.CONTENT_TYPE;
+            case STREAM_ITEMS_ID:
+                return StreamItems.CONTENT_ITEM_TYPE;
+            case STREAM_ITEMS_ID_PHOTOS:
+                return StreamItems.StreamItemPhotos.CONTENT_TYPE;
+            case STREAM_ITEMS_ID_PHOTOS_ID:
+                return StreamItems.StreamItemPhotos.CONTENT_ITEM_TYPE;
+            case STREAM_ITEMS_PHOTOS:
+                throw new UnsupportedOperationException("Not supported for write-only URI " + uri);
             default:
                 return mLegacyApiSupport.getType(uri);
         }
