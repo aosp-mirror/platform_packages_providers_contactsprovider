@@ -6784,6 +6784,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             try {
                 Bitmap b = BitmapFactory.decodeStream(is);
                 if (b != null) {
+                    waitForAccess(mWriteAccessLatch);
                     PhotoProcessor processor = new PhotoProcessor(b, mMaxDisplayPhotoDim,
                             mMaxThumbnailPhotoDim);
 
