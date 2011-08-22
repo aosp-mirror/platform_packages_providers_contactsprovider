@@ -26,5 +26,5 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Jiné"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Přístup ke všem hlasovým zprávám"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Umožňuje aplikaci ukládat a načítat všechny hlasové zprávy, ke kterým má toto zařízení přístup."</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"Hlasová zpráva z čísla "</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Hlasová zpráva od uživatele "</string>
 </resources>

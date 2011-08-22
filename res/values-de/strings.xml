@@ -16,8 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <!-- no translation found for sharedUserLabel (8024311725474286801) -->
-    <skip />
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core Apps"</string>
     <string name="app_label" msgid="3389954322874982620">"Kontakte-Speicher"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakte"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kontaktupgrade erfordert mehr Speicher"</string>
@@ -26,6 +25,6 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Sonstige"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Zugriff auf alle Mailbox-Nachrichten"</string>
-    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Ermöglicht der App das Speichern und Abrufen aller Mailbox-Nachrichten, auf die dieses Gerät zugreifen kann"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Ermöglicht der Anwendung das Speichern und Abrufen aller Mailbox-Nachrichten, auf die dieses Gerät zugreifen kann"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mailbox-Nachricht von "</string>
 </resources>

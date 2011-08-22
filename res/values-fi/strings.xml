@@ -16,8 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <!-- no translation found for sharedUserLabel (8024311725474286801) -->
-    <skip />
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Androidin ydinsovellukset"</string>
     <string name="app_label" msgid="3389954322874982620">"Yhteystietojen tallennus"</string>
     <string name="provider_label" msgid="6012150850819899907">"Yhteystiedot"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Yhteystietojen päivittämiseen tarvitaan lisää muistia"</string>
@@ -25,7 +24,7 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Suorita päivitys loppuun valitsemalla."</string>
     <string name="default_directory" msgid="93961630309570294">"Yhteystiedot"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Muu"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Käytä kaikkia vastaajaviestejä"</string>
-    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Antaa sovelluksen tallentaa ja hakea kaikki ääniviestit, jotka ovat laitteen käytettävissä"</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"Vastaajaviesti numerosta "</string>
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Kaikkien vastaajaviestien käyttäminen"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Antaa sovelluksen tallentaa ja hakea kaikki vastaajaviestit, jotka ovat laitteen käytettävissä."</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Vastaajaviesti henkilöltä "</string>
 </resources>
