@@ -26,6 +26,9 @@
     <!-- What to show in messaging that refers to this provider, e.g. AccountSyncSettings -->
     <string name="provider_label">Contacts</string>
 
+    <!-- [CHAR LIMIT=NONE] Boot message while upgrading contacts. -->
+    <string name="upgrade_msg">Upgrading Contacts database.</string>
+
     <!-- Ticker for the notification shown when updating contacts fails because of memory shortage -->
     <string name="upgrade_out_of_memory_notification_ticker">Contact upgrade needs more memory</string>
 
