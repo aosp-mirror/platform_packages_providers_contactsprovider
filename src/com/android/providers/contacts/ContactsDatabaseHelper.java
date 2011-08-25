@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 613;
+    static final int DATABASE_VERSION = 614;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -227,6 +227,7 @@ import java.util.Locale;
         public static final String RAW_ENTITIES = "view_raw_entities";
         public static final String GROUPS = "view_groups";
         public static final String DATA_USAGE_STAT = "view_data_usage_stat";
+        public static final String STREAM_ITEMS = "view_stream_items";
     }
 
     public interface Clauses {
@@ -1472,6 +1473,7 @@ import java.util.Locale;
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.STREAM_ITEMS + ";");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -1747,6 +1749,34 @@ import java.util.Locale;
                 +   MimetypesColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_MIMETYPE_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT + " AS " + dataUsageStatSelect);
+
+        String streamItemSelect = "SELECT " +
+                StreamItemsColumns.CONCRETE_ID + ", " +
+                ContactsColumns.CONCRETE_ID + " AS " + StreamItems.CONTACT_ID + ", " +
+                RawContactsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                RawContactsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
+                RawContactsColumns.CONCRETE_DATA_SET + ", " +
+                StreamItemsColumns.CONCRETE_RAW_CONTACT_ID +
+                        " as " + StreamItems.RAW_CONTACT_ID + ", " +
+                RawContactsColumns.CONCRETE_SOURCE_ID +
+                        " as " + StreamItems.RAW_CONTACT_SOURCE_ID + ", " +
+                StreamItemsColumns.CONCRETE_PACKAGE + ", " +
+                StreamItemsColumns.CONCRETE_ICON + ", " +
+                StreamItemsColumns.CONCRETE_LABEL + ", " +
+                StreamItemsColumns.CONCRETE_TEXT + ", " +
+                StreamItemsColumns.CONCRETE_TIMESTAMP + ", " +
+                StreamItemsColumns.CONCRETE_COMMENTS + ", " +
+                StreamItemsColumns.CONCRETE_SYNC1 + ", " +
+                StreamItemsColumns.CONCRETE_SYNC2 + ", " +
+                StreamItemsColumns.CONCRETE_SYNC3 + ", " +
+                StreamItemsColumns.CONCRETE_SYNC4 +
+                " FROM " + Tables.STREAM_ITEMS
+                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
+                + StreamItemsColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
+                + ") JOIN " + Tables.CONTACTS + " ON ("
+                + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")";
+
+        db.execSQL("CREATE VIEW " + Views.STREAM_ITEMS + " AS " + streamItemSelect);
     }
 
     private static String buildDisplayPhotoUriAlias(String contactIdColumn, String alias) {
@@ -2175,6 +2205,12 @@ import java.util.Locale;
         if (oldVersion < 613) {
             upgradeToVersion613(db);
             oldVersion = 613;
+        }
+
+        if (oldVersion < 614) {
+            // this creates the view "view_stream_items"
+            upgradeViewsAndTriggers = true;
+            oldVersion = 614;
         }
 
         if (upgradeViewsAndTriggers) {

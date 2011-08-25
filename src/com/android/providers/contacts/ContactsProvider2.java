@@ -956,13 +956,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /** Contains StreamItems columns */
     private static final ProjectionMap sStreamItemsProjectionMap = ProjectionMap.builder()
-            .add(StreamItems._ID, StreamItemsColumns.CONCRETE_ID)
-            .add(RawContacts.CONTACT_ID)
-            .add(StreamItems.ACCOUNT_NAME, RawContactsColumns.CONCRETE_ACCOUNT_NAME)
-            .add(StreamItems.ACCOUNT_TYPE, RawContactsColumns.CONCRETE_ACCOUNT_TYPE)
-            .add(StreamItems.DATA_SET, RawContactsColumns.CONCRETE_DATA_SET)
+            .add(StreamItems._ID)
+            .add(StreamItems.CONTACT_ID)
+            .add(StreamItems.ACCOUNT_NAME)
+            .add(StreamItems.ACCOUNT_TYPE)
+            .add(StreamItems.DATA_SET)
             .add(StreamItems.RAW_CONTACT_ID)
-            .add(StreamItems.RAW_CONTACT_SOURCE_ID, RawContactsColumns.CONCRETE_SOURCE_ID)
+            .add(StreamItems.RAW_CONTACT_SOURCE_ID)
             .add(StreamItems.RES_PACKAGE)
             .add(StreamItems.RES_ICON)
             .add(StreamItems.RES_LABEL)
@@ -3323,7 +3323,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case STREAM_ITEMS_ID: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 return deleteStreamItems(uri, new ContentValues(),
-                        StreamItemsColumns.CONCRETE_ID + "=?",
+                        StreamItems._ID + "=?",
                         new String[]{uri.getLastPathSegment()});
             }
 
@@ -3654,7 +3654,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case STREAM_ITEMS_ID: {
-                count = updateStreamItems(uri, values, StreamItemsColumns.CONCRETE_ID + "=?",
+                count = updateStreamItems(uri, values, StreamItems._ID + "=?",
                         new String[]{uri.getLastPathSegment()});
                 break;
             }
@@ -4985,7 +4985,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case STREAM_ITEMS_ID: {
                 setTablesAndProjectionMapForStreamItems(qb);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(StreamItemsColumns.CONCRETE_ID + "=?");
+                qb.appendWhere(StreamItems._ID + "=?");
                 break;
             }
 
@@ -6251,11 +6251,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void setTablesAndProjectionMapForStreamItems(SQLiteQueryBuilder qb) {
-        qb.setTables(Tables.STREAM_ITEMS
-                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
-                + StreamItemsColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
-                + ") JOIN " + Tables.CONTACTS + " ON ("
-                + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")");
+        qb.setTables(Views.STREAM_ITEMS);
         qb.setProjectionMap(sStreamItemsProjectionMap);
     }
 
