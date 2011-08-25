@@ -2232,6 +2232,7 @@ import java.util.Locale;
         }
 
         if (upgradeSearchIndex) {
+            createSearchIndexTable(db);
             setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
         }
 
