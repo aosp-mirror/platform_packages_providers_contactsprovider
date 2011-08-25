@@ -891,6 +891,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelection(Phone.CONTENT_URI, values, Data._ID, phoneId);
     }
 
+    public void testPhonesWithMergedContacts() {
+        long rawContactId1 = createRawContact();
+        insertPhoneNumber(rawContactId1, "123456789", true);
+
+        long rawContactId2 = createRawContact();
+        insertPhoneNumber(rawContactId2, "123456789", true);
+
+        ContentValues values1 = new ContentValues();
+        values1.put(Contacts.DISPLAY_NAME, "123456789");
+        values1.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values1.put(Phone.NUMBER, "123456789");
+
+        // Two results should come, since they are separate entries anyway.
+        assertStoredValues(Phone.CONTENT_URI, new ContentValues[] {values1, values1});
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        assertAggregated(rawContactId1, rawContactId2, "123456789");
+
+        // Just one result should come, since
+        // - those two numbers have the same phone number
+        // - those two contacts are aggregated
+        assertStoredValues(Phone.CONTENT_URI, values1);
+    }
+
     public void testPhonesFilterQuery() {
         long rawContactId1 = createRawContactWithName("Hot", "Tamale", ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "1-800-466-4411");
