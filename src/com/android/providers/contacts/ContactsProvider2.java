@@ -5030,6 +5030,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PHONES: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
                 break;
             }
 
