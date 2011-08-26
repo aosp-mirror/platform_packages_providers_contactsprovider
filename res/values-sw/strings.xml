@@ -19,6 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Programu Msingi za Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Hifadhi ya Anwani"</string>
     <string name="provider_label" msgid="6012150850819899907">"Anwani"</string>
+    <string name="upgrade_msg" msgid="6174884195179549239">"Inapandisha daraja la hifadhidata ya Anwani."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kupandisha gredi kwa anwani kunahitaji kumbukumbu zaidi"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Upandishaji gredi wa hifadhi ya anwani"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Chagua ili kukamilisha kupandisha daraja."</string>

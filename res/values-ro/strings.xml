@@ -19,6 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core Apps"</string>
     <string name="app_label" msgid="3389954322874982620">"Stocarea datelor din Agendă"</string>
     <string name="provider_label" msgid="6012150850819899907">"Agendă"</string>
+    <string name="upgrade_msg" msgid="6174884195179549239">"Se actualizează baza de date a Agendei."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Actualizarea datelor despre persoanele din agendă necesită mai multă memorie"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Se trece la o versiune superioară a memoriei pentru persoanele din agendă"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Selectaţi pentru a finaliza trecerea la o versiune superioară."</string>

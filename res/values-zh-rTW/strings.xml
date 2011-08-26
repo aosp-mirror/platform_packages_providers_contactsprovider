@@ -19,6 +19,8 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android 核心應用程式"</string>
     <string name="app_label" msgid="3389954322874982620">"聯絡人儲存空間"</string>
     <string name="provider_label" msgid="6012150850819899907">"聯絡人"</string>
+    <!-- no translation found for upgrade_msg (6174884195179549239) -->
+    <skip />
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"需要更多記憶體才能將聯絡人升級"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"升級聯絡人儲存空間"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"選取以完成升級。"</string>
@@ -26,5 +28,5 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"其他"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"存取所有語音留言"</string>
     <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"允許應用程式儲存和擷取這個裝置可存取的所有語音留言。"</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"語音留言來自 "</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"語音郵件寄件者： "</string>
 </resources>

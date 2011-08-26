@@ -19,6 +19,8 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Основни приложения на Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Хранилище на контакти"</string>
     <string name="provider_label" msgid="6012150850819899907">"Контакти"</string>
+    <!-- no translation found for upgrade_msg (6174884195179549239) -->
+    <skip />
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Надстройването на контакта се нуждае от още памет"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Надстройка на хранилището за контакти"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Изберете за завършване на надстройването."</string>

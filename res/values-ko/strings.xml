@@ -19,6 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core 앱"</string>
     <string name="app_label" msgid="3389954322874982620">"주소록 저장소"</string>
     <string name="provider_label" msgid="6012150850819899907">"주소록"</string>
+    <string name="upgrade_msg" msgid="6174884195179549239">"주소록 데이터베이스 업그레이드 중"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"연락처를 업그레이드하려면 메모리가 더 필요합니다."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"연락처 저장소 업그레이드"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"업그레이드를 완료하려면 선택하세요."</string>
