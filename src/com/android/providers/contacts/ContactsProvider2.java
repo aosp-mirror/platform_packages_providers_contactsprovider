@@ -3146,7 +3146,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private String statusUpdateToHtml(String status) {
         String html = Html.toHtml(new SpannableString(status));
         if (html.endsWith("\n")) {
-            html = html.substring(0, html.length() - 2);
+            html = html.substring(0, html.length() - 1);
         }
         return html;
     }
