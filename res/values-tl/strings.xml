@@ -19,6 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Core Apps ng Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Imbakan ng Mga Contact"</string>
     <string name="provider_label" msgid="6012150850819899907">"Mga Contact"</string>
+    <string name="upgrade_msg" msgid="6174884195179549239">"Ina-upgrade ang database ng Mga Contact."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Nangangailangan ang pag-upgrade sa contact nang higit pang memory"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Pag-upgrade ng imbakan ng contact"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Piliing kumpletuhin ang pag-upgrade."</string>

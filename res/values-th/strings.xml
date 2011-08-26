@@ -19,6 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"แอปพลิเคชันหลักของ Android"</string>
     <string name="app_label" msgid="3389954322874982620">"ที่จัดเก็บรายชื่อ"</string>
     <string name="provider_label" msgid="6012150850819899907">"สมุดโทรศัพท์"</string>
+    <string name="upgrade_msg" msgid="6174884195179549239">"กำลังอัปเกรดฐานข้อมูลรายชื่อติดต่อ"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"ต้องใช้หน่วยความจำเพิ่มเพื่ออัปเกรดสมุดโทรศัพท์"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"กำลังอัปเกรดที่เก็บรายชื่อในสมุดโทรศัพท์"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"เลือกเพื่อทำการอัปเกรดให้สมบูรณ์"</string>

@@ -19,6 +19,8 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Çekirdek Uygulamaları"</string>
     <string name="app_label" msgid="3389954322874982620">"Kişi Deposu"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kişiler"</string>
+    <!-- no translation found for upgrade_msg (6174884195179549239) -->
+    <skip />
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kişiyi yeni sürüme geçirmek için daha fazla bellek gerekiyor"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Kişi deposu yükseltiliyor"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Yeni sürüme geçmeyi tamamlamak için seçin."</string>

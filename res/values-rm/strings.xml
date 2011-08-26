@@ -20,6 +20,8 @@
     <skip />
     <string name="app_label" msgid="3389954322874982620">"Glista da contacts"</string>
     <string name="provider_label" msgid="6012150850819899907">"Contacts"</string>
+    <!-- no translation found for upgrade_msg (6174884195179549239) -->
+    <skip />
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Ina actualisaziun da contacts basegna dapli memoria"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Actualisar la memoria da contacts"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Tscherner per cumplettar l\'actualisaziun"</string>
