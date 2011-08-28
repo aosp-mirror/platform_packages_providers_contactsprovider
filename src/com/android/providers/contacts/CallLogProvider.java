@@ -111,7 +111,7 @@ public class CallLogProvider extends ContentProvider {
 
     @VisibleForTesting
     protected CallLogInsertionHelper createCallLogInsertionHelper(final Context context) {
-        return new DefaultCallLogInsertionHelper(context);
+        return DefaultCallLogInsertionHelper.getInstance(context);
     }
 
     @VisibleForTesting
