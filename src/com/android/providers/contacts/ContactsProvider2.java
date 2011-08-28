@@ -141,8 +141,6 @@ import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
-import android.text.Html;
-import android.text.SpannableString;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -3144,11 +3142,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     /** Converts a status update to HTML. */
     private String statusUpdateToHtml(String status) {
-        String html = Html.toHtml(new SpannableString(status));
-        if (html.endsWith("\n")) {
-            html = html.substring(0, html.length() - 1);
-        }
-        return html;
+        return TextUtils.htmlEncode(status);
     }
 
     private String getResourceName(Resources resources, String expectedType, Integer resourceId) {

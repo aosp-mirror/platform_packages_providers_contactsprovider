@@ -3745,7 +3745,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues expectedValues = new ContentValues();
         expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-        expectedValues.put(StreamItems.TEXT, "<p>hacking</p>");
+        expectedValues.put(StreamItems.TEXT, "hacking");
         assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
@@ -3767,7 +3767,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues expectedValues = new ContentValues();
         expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-        expectedValues.put(StreamItems.TEXT, "<p>&amp; &lt;b&gt; test &amp;#39;</p>");
+        expectedValues.put(StreamItems.TEXT, "&amp; &lt;b&gt; test &amp;#39;");
         assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
@@ -3790,7 +3790,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContentValues expectedValues = new ContentValues();
         expectedValues.put(StreamItems.RAW_CONTACT_ID, rawContactId);
-        expectedValues.put(StreamItems.TEXT, "<p>finished hacking</p>");
+        expectedValues.put(StreamItems.TEXT, "finished hacking");
         assertStoredValues(RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
