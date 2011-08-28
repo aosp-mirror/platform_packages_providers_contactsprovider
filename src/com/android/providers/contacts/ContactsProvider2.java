@@ -1329,12 +1329,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     @Override
     public boolean onCreate() {
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
+            Log.d(Constants.PERFORMANCE_TAG, "ContactsProvider2.onCreate start");
+        }
         super.onCreate();
         try {
             return initialize();
         } catch (RuntimeException e) {
             Log.e(TAG, "Cannot start provider", e);
             return false;
+        } finally {
+            if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
+                Log.d(Constants.PERFORMANCE_TAG, "ContactsProvider2.onCreate finish");
+            }
         }
     }
 

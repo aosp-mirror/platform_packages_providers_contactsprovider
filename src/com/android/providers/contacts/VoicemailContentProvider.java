@@ -36,6 +36,7 @@ import android.os.ParcelFileDescriptor;
 import android.provider.BaseColumns;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
+import android.util.Log;
 
 import java.io.FileNotFoundException;
 import java.util.List;
@@ -56,12 +57,18 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public boolean onCreate() {
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
+            Log.d(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate start");
+        }
         Context context = context();
         mVoicemailPermissions = new VoicemailPermissions(context);
         mVoicemailContentTable = new VoicemailContentTable(Tables.CALLS, context,
                 getDatabaseHelper(context), this, createCallLogInsertionHelper(context));
         mVoicemailStatusTable = new VoicemailStatusTable(Tables.VOICEMAIL_STATUS, context,
                 getDatabaseHelper(context), this);
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
+            Log.d(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate finish");
+        }
         return true;
     }
 

@@ -36,6 +36,7 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
+import android.util.Log;
 
 import java.util.HashMap;
 
@@ -92,6 +93,9 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
+            Log.d(Constants.PERFORMANCE_TAG, "CallLogProvider.onCreate start");
+        }
         final Context context = getContext();
         mDbHelper = getDatabaseHelper(context);
         mUseStrictPhoneNumberComparation =
@@ -99,6 +103,9 @@ public class CallLogProvider extends ContentProvider {
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
         mVoicemailPermissions = new VoicemailPermissions(context);
         mCallLogInsertionHelper = createCallLogInsertionHelper(context);
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
+            Log.d(Constants.PERFORMANCE_TAG, "CallLogProvider.onCreate finish");
+        }
         return true;
     }
 
