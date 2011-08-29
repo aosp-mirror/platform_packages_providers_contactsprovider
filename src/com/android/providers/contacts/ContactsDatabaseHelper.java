@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 615;
+    static final int DATABASE_VERSION = 616;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1757,6 +1757,8 @@ import java.util.Locale;
         String streamItemSelect = "SELECT " +
                 StreamItemsColumns.CONCRETE_ID + ", " +
                 ContactsColumns.CONCRETE_ID + " AS " + StreamItems.CONTACT_ID + ", " +
+                ContactsColumns.CONCRETE_LOOKUP_KEY +
+                        " AS " + StreamItems.CONTACT_LOOKUP_KEY + ", " +
                 RawContactsColumns.CONCRETE_ACCOUNT_NAME + ", " +
                 RawContactsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 RawContactsColumns.CONCRETE_DATA_SET + ", " +
@@ -2220,6 +2222,12 @@ import java.util.Locale;
         if (oldVersion < 615) {
             upgradeToVersion615(db);
             oldVersion = 615;
+        }
+
+        if (oldVersion < 616) {
+            // this updates the "view_stream_items" view
+            upgradeViewsAndTriggers = true;
+            oldVersion = 616;
         }
 
         if (upgradeViewsAndTriggers) {

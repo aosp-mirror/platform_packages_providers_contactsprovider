@@ -958,6 +958,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final ProjectionMap sStreamItemsProjectionMap = ProjectionMap.builder()
             .add(StreamItems._ID)
             .add(StreamItems.CONTACT_ID)
+            .add(StreamItems.CONTACT_LOOKUP_KEY)
             .add(StreamItems.ACCOUNT_NAME)
             .add(StreamItems.ACCOUNT_TYPE)
             .add(StreamItems.DATA_SET)
@@ -4685,7 +4686,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 enforceProfilePermissionForContact(db, contactId, false);
                 setTablesAndProjectionMapForStreamItems(qb);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
-                qb.appendWhere(RawContactsColumns.CONCRETE_CONTACT_ID + "=?");
+                qb.appendWhere(StreamItems.CONTACT_ID + "=?");
                 break;
             }
 
@@ -4705,7 +4706,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     setTablesAndProjectionMapForStreamItems(lookupQb);
                     Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
-                            RawContacts.CONTACT_ID, contactId, Contacts.LOOKUP_KEY, lookupKey);
+                            StreamItems.CONTACT_ID, contactId,
+                            StreamItems.CONTACT_LOOKUP_KEY, lookupKey);
                     if (c != null) {
                         return c;
                     }
