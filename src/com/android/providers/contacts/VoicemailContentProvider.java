@@ -74,7 +74,7 @@ public class VoicemailContentProvider extends ContentProvider
 
     @VisibleForTesting
     /*package*/ CallLogInsertionHelper createCallLogInsertionHelper(Context context) {
-        return new DefaultCallLogInsertionHelper(context);
+        return DefaultCallLogInsertionHelper.getInstance(context);
     }
 
     @VisibleForTesting

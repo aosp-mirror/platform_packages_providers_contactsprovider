@@ -24,6 +24,7 @@ import com.android.i18n.phonenumbers.geocoding.PhoneNumberOfflineGeocoder;
 import android.content.ContentValues;
 import android.content.Context;
 import android.provider.CallLog.Calls;
+import android.util.Log;
 
 import java.util.Locale;
 
@@ -35,15 +36,22 @@ import java.util.Locale;
  * It uses {@link PhoneNumberOfflineGeocoder} to compute the geocoded location of a phone number.
  */
 /*package*/ class DefaultCallLogInsertionHelper implements CallLogInsertionHelper {
+    private static DefaultCallLogInsertionHelper sInstance;
+
     private final CountryMonitor mCountryMonitor;
-    private final PhoneNumberUtil mPhoneNumberUtil;
-    private final PhoneNumberOfflineGeocoder mPhoneNumberOfflineGeocoder;
+    private PhoneNumberUtil mPhoneNumberUtil;
+    private PhoneNumberOfflineGeocoder mPhoneNumberOfflineGeocoder;
     private final Locale mLocale;
 
-    public DefaultCallLogInsertionHelper(Context context) {
+    public static synchronized DefaultCallLogInsertionHelper getInstance(Context context) {
+        if (sInstance == null) {
+            sInstance = new DefaultCallLogInsertionHelper(context);
+        }
+        return sInstance;
+    }
+
+    private DefaultCallLogInsertionHelper(Context context) {
         mCountryMonitor = new CountryMonitor(context);
-        mPhoneNumberUtil = PhoneNumberUtil.getInstance();
-        mPhoneNumberOfflineGeocoder = PhoneNumberOfflineGeocoder.getInstance();
         mLocale = context.getResources().getConfiguration().locale;
     }
 
@@ -61,19 +69,33 @@ import java.util.Locale;
         return mCountryMonitor.getCountryIso();
     }
 
+    private synchronized PhoneNumberUtil getPhoneNumberUtil() {
+        if (mPhoneNumberUtil == null) {
+            mPhoneNumberUtil = PhoneNumberUtil.getInstance();
+        }
+        return mPhoneNumberUtil;
+    }
+
     private PhoneNumber parsePhoneNumber(String number, String countryIso) {
         try {
-            return mPhoneNumberUtil.parse(number, countryIso);
+            return getPhoneNumberUtil().parse(number, countryIso);
         } catch (NumberParseException e) {
             return null;
         }
+    }
+
+    private synchronized PhoneNumberOfflineGeocoder getPhoneNumberOfflineGeocoder() {
+        if (mPhoneNumberOfflineGeocoder == null) {
+            mPhoneNumberOfflineGeocoder = PhoneNumberOfflineGeocoder.getInstance();
+        }
+        return mPhoneNumberOfflineGeocoder;
     }
 
     @Override
     public String getGeocodedLocationFor(String number, String countryIso) {
         PhoneNumber structuredPhoneNumber = parsePhoneNumber(number, countryIso);
         if (structuredPhoneNumber != null) {
-            return mPhoneNumberOfflineGeocoder.getDescriptionForNumber(
+            return getPhoneNumberOfflineGeocoder().getDescriptionForNumber(
                     structuredPhoneNumber, mLocale);
         } else {
             return null;
