@@ -573,7 +573,6 @@ import java.util.Locale;
         String ACCOUNT_NAME = RawContacts.ACCOUNT_NAME;
         String ACCOUNT_TYPE = RawContacts.ACCOUNT_TYPE;
         String DATA_SET = RawContacts.DATA_SET;
-        String PROFILE_RAW_CONTACT_ID = "profile_raw_contact_id";
     }
 
     public static final class DirectoryColumns {
