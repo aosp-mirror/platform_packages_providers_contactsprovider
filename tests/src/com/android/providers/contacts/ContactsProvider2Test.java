@@ -996,9 +996,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(lookupUri1, values);
 
         // In the context that 8004664411 is a valid number, "4664411" as a
-        // call id should not match to "8004664411"
+        // call id should  match to both "8004664411" and "+18004664411".
         Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "4664411");
-        assertEquals(0, getCount(lookupUri2, null, null));
+        assertEquals(2, getCount(lookupUri2, null, null));
     }
 
     public void testPhoneLookupUseCases() {
@@ -5958,4 +5958,3 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 }
-
