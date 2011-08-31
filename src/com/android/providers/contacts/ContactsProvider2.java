@@ -2117,7 +2117,57 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
         waitForAccess(mWriteAccessLatch);
-        return super.bulkInsert(uri, values);
+
+        // Note: This duplicates much of the logic in the superclass, but handles toggling
+        // into profile mode if necessary.
+        int numValues = values.length;
+        boolean notifyChange = false;
+        SQLiteDatabase contactsDb = null;
+        SQLiteDatabase profileDb = null;
+        try {
+            for (int i = 0; i < numValues; i++) {
+                Uri result;
+                if (mapsToProfileDbWithInsertedValues(uri, values[i])) {
+                    switchToProfileMode();
+                    if (profileDb == null) {
+                        profileDb = mProfileHelper.getWritableDatabase();
+                        profileDb.beginTransactionWithListener(this);
+                    }
+                    result = mProfileProvider.insertInTransaction(uri, values[i]);
+                } else {
+                    switchToContactMode();
+                    if (contactsDb == null) {
+                        contactsDb = mContactsHelper.getWritableDatabase();
+                        contactsDb.beginTransactionWithListener(this);
+                    }
+                    result = insertInTransaction(uri, values[i]);
+                }
+                if (result != null) {
+                    notifyChange = true;
+                }
+                boolean savedNotifyChange = notifyChange;
+                mActiveDb.get().yieldIfContendedSafely();
+                notifyChange = savedNotifyChange;
+            }
+            if (contactsDb != null) {
+                contactsDb.setTransactionSuccessful();
+            }
+            if (profileDb != null) {
+                profileDb.setTransactionSuccessful();
+            }
+        } finally {
+            if (contactsDb != null) {
+                contactsDb.endTransaction();
+            }
+            if (profileDb != null) {
+                profileDb.endTransaction();
+            }
+        }
+
+        if (notifyChange) {
+            notifyChange();
+        }
+        return numValues;
     }
 
     @Override
