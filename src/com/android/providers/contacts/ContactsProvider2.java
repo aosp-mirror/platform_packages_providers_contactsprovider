@@ -77,6 +77,7 @@ import android.content.pm.ProviderInfo;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
+import android.database.AbstractCursor;
 import android.database.CrossProcessCursor;
 import android.database.Cursor;
 import android.database.CursorWindow;
@@ -402,39 +403,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final String SELECTION_STARRED_FROM_RAW_CONTACTS =
             "SELECT " + RawContacts.STARRED
                     + " FROM " + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=?";
-
-    public class AddressBookCursor extends CursorWrapper implements CrossProcessCursor {
-        private final CrossProcessCursor mCursor;
-        private final Bundle mBundle;
-
-        public AddressBookCursor(CrossProcessCursor cursor, String[] titles, int[] counts) {
-            super(cursor);
-            mCursor = cursor;
-            mBundle = new Bundle();
-            mBundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
-            mBundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
-        }
-
-        @Override
-        public Bundle getExtras() {
-            return mBundle;
-        }
-
-        @Override
-        public void fillWindow(int pos, CursorWindow window) {
-            mCursor.fillWindow(pos, window);
-        }
-
-        @Override
-        public CursorWindow getWindow() {
-            return mCursor.getWindow();
-        }
-
-        @Override
-        public boolean onMove(int oldPosition, int newPosition) {
-            return mCursor.onMove(oldPosition, newPosition);
-        }
-    }
 
     private interface DataContactsQuery {
         public static final String TABLE = "data "
@@ -5722,6 +5690,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      */
     private Cursor bundleLetterCountExtras(Cursor cursor, final SQLiteDatabase db,
             SQLiteQueryBuilder qb, String selection, String[] selectionArgs, String sortOrder) {
+        if (!(cursor instanceof AbstractCursor)) {
+            Log.w(TAG, "Unable to bundle extras.  Cursor is not AbstractCursor.");
+            return cursor;
+        }
         String sortKey;
 
         // The sort order suffix could be something like "DESC".
@@ -5797,7 +5769,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 counts = newCounts;
             }
 
-            return new AddressBookCursor((CrossProcessCursor) cursor, titles, counts);
+            final Bundle bundle = new Bundle();
+            bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
+            bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
+
+            ((AbstractCursor) cursor).setExtras(bundle);
+            return cursor;
         } finally {
             indexCursor.close();
         }
