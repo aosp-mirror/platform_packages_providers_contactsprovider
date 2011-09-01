@@ -79,8 +79,19 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
             values.remove(SKIP_PROCESSING_KEY);
         } else {
             // Pre-process the photo if one exists.
-            if (hasNonNullPhoto(values) && !processPhoto(values)) {
-                return false;
+            if (values.containsKey(Photo.PHOTO)) {
+                boolean photoExists = hasNonNullPhoto(values);
+                if (photoExists) {
+                    if (!processPhoto(values)) {
+                        // A photo was passed in, but we couldn't process it.  Update failed.
+                        return false;
+                    }
+                } else {
+                    // The photo key was passed in, but it was either null or an empty byte[].
+                    // We should set the photo and photo file ID fields to null for the update.
+                    values.putNull(Photo.PHOTO);
+                    values.putNull(Photo.PHOTO_FILE_ID);
+                }
             }
         }
 
@@ -94,7 +105,8 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
     }
 
     private boolean hasNonNullPhoto(ContentValues values) {
-        return values.getAsByteArray(Photo.PHOTO) != null;
+        byte[] photoBytes = values.getAsByteArray(Photo.PHOTO);
+        return photoBytes != null && photoBytes.length > 0;
     }
 
     @Override
