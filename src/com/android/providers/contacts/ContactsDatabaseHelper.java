@@ -637,12 +637,8 @@ import java.util.Locale;
     private long mMimeTypeIdPhone;
 
     /** Compiled statements for querying and inserting mappings */
-    private SQLiteStatement mMimetypeQuery;
-    private SQLiteStatement mPackageQuery;
     private SQLiteStatement mContactIdQuery;
     private SQLiteStatement mAggregationModeQuery;
-    private SQLiteStatement mMimetypeInsert;
-    private SQLiteStatement mPackageInsert;
     private SQLiteStatement mDataMimetypeQuery;
     private SQLiteStatement mActivitiesMimetypeQuery;
 
@@ -724,8 +720,6 @@ import java.util.Locale;
         mSetSuperPrimaryStatement = null;
         mNameLookupInsert = null;
         mNameLookupDelete = null;
-        mPackageQuery = null;
-        mPackageInsert = null;
         mDataMimetypeQuery = null;
         mActivitiesMimetypeQuery = null;
         mContactIdQuery = null;
@@ -739,23 +733,16 @@ import java.util.Locale;
         mMimetypeCache.clear();
         mPackageCache.clear();
 
-        mMimetypeQuery = db.compileStatement(
-                "SELECT " + MimetypesColumns._ID +
-                " FROM " + Tables.MIMETYPES +
-                " WHERE " + MimetypesColumns.MIMETYPE + "=?");
-
-        mMimetypeInsert = db.compileStatement(
-                "INSERT INTO " + Tables.MIMETYPES + "("
-                        + MimetypesColumns.MIMETYPE +
-                ") VALUES (?)");
-
-        mMimeTypeIdEmail = getMimeTypeId(Email.CONTENT_ITEM_TYPE);
-        mMimeTypeIdIm = getMimeTypeId(Im.CONTENT_ITEM_TYPE);
-        mMimeTypeIdSip = getMimeTypeId(SipAddress.CONTENT_ITEM_TYPE);
-        mMimeTypeIdStructuredName = getMimeTypeId(StructuredName.CONTENT_ITEM_TYPE);
-        mMimeTypeIdOrganization = getMimeTypeId(Organization.CONTENT_ITEM_TYPE);
-        mMimeTypeIdNickname = getMimeTypeId(Nickname.CONTENT_ITEM_TYPE);
-        mMimeTypeIdPhone = getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+        // TODO: This could be optimized into one query instead of 7
+        //        Also: We shouldn't have those fields in the first place. This should just be
+        //        in the cache
+        mMimeTypeIdEmail = lookupMimeTypeId(Email.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdIm = lookupMimeTypeId(Im.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdSip = lookupMimeTypeId(SipAddress.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdStructuredName = lookupMimeTypeId(StructuredName.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdOrganization = lookupMimeTypeId(Organization.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdNickname = lookupMimeTypeId(Nickname.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdPhone = lookupMimeTypeId(Phone.CONTENT_ITEM_TYPE, db);
     }
 
     @Override
@@ -3615,8 +3602,7 @@ import java.util.Locale;
 
     /**
      * Perform an internal string-to-integer lookup using the compiled
-     * {@link SQLiteStatement} provided, using the in-memory cache to speed up
-     * lookups. If a mapping isn't found in cache or database, it will be
+     * {@link SQLiteStatement} provided. If a mapping isn't found in database, it will be
      * created. All new, uncached answers are added to the cache automatically.
      *
      * @param query Compiled statement used to query for the mapping.
@@ -3626,33 +3612,26 @@ import java.util.Locale;
      * @param cache In-memory cache of previous answers.
      * @return An unique integer mapping for the given value.
      */
-    private long getCachedId(SQLiteStatement query, SQLiteStatement insert,
+    private long lookupAndCacheId(SQLiteStatement query, SQLiteStatement insert,
             String value, HashMap<String, Long> cache) {
-        // Try an in-memory cache lookup
-        if (cache.containsKey(value)) {
-            return cache.get(value);
+        long id = -1;
+        try {
+            // Try searching database for mapping
+            DatabaseUtils.bindObjectToProgram(query, 1, value);
+            id = query.simpleQueryForLong();
+        } catch (SQLiteDoneException e) {
+            // Nothing found, so try inserting new mapping
+            DatabaseUtils.bindObjectToProgram(insert, 1, value);
+            id = insert.executeInsert();
         }
-
-        synchronized (query) {
-            long id = -1;
-            try {
-                // Try searching database for mapping
-                DatabaseUtils.bindObjectToProgram(query, 1, value);
-                id = query.simpleQueryForLong();
-            } catch (SQLiteDoneException e) {
-                // Nothing found, so try inserting new mapping
-                DatabaseUtils.bindObjectToProgram(insert, 1, value);
-                id = insert.executeInsert();
-            }
-            if (id != -1) {
-                // Cache and return the new answer
-                cache.put(value, id);
-                return id;
-            } else {
-                // Otherwise throw if no mapping found or created
-                throw new IllegalStateException("Couldn't find or create internal "
-                        + "lookup table entry for value " + value);
-            }
+        if (id != -1) {
+            // Cache and return the new answer
+            cache.put(value, id);
+            return id;
+        } else {
+            // Otherwise throw if no mapping found or created
+            throw new IllegalStateException("Couldn't find or create internal "
+                    + "lookup table entry for value " + value);
         }
     }
 
@@ -3661,20 +3640,24 @@ import java.util.Locale;
      * lookups and possible allocation of new IDs as needed.
      */
     public long getPackageId(String packageName) {
-        if (mPackageQuery == null) {
-            mPackageQuery = getWritableDatabase().compileStatement(
-                    "SELECT " + PackagesColumns._ID +
-                    " FROM " + Tables.PACKAGES +
-                    " WHERE " + PackagesColumns.PACKAGE + "=?");
+        // Try an in-memory cache lookup
+        if (mPackageCache.containsKey(packageName)) return mPackageCache.get(packageName);
 
+        final SQLiteStatement packageQuery = getWritableDatabase().compileStatement(
+                "SELECT " + PackagesColumns._ID +
+                " FROM " + Tables.PACKAGES +
+                " WHERE " + PackagesColumns.PACKAGE + "=?");
+
+        final SQLiteStatement packageInsert = getWritableDatabase().compileStatement(
+                "INSERT INTO " + Tables.PACKAGES + "("
+                        + PackagesColumns.PACKAGE +
+                ") VALUES (?)");
+        try {
+            return lookupAndCacheId(packageQuery, packageInsert, packageName, mPackageCache);
+        } finally {
+            packageQuery.close();
+            packageInsert.close();
         }
-        if (mPackageInsert == null) {
-            mPackageInsert = getWritableDatabase().compileStatement(
-                    "INSERT INTO " + Tables.PACKAGES + "("
-                            + PackagesColumns.PACKAGE +
-                    ") VALUES (?)");
-        }
-        return getCachedId(mPackageQuery, mPackageInsert, packageName, mPackageCache);
     }
 
     /**
@@ -3682,7 +3665,29 @@ import java.util.Locale;
      * lookups and possible allocation of new IDs as needed.
      */
     public long getMimeTypeId(String mimetype) {
-        return getCachedId(mMimetypeQuery, mMimetypeInsert, mimetype, mMimetypeCache);
+        // Try an in-memory cache lookup
+        if (mMimetypeCache.containsKey(mimetype)) return mMimetypeCache.get(mimetype);
+
+        return lookupMimeTypeId(mimetype, getWritableDatabase());
+    }
+
+    private long lookupMimeTypeId(String mimetype, SQLiteDatabase db) {
+        final SQLiteStatement mimetypeQuery = db.compileStatement(
+                "SELECT " + MimetypesColumns._ID +
+                " FROM " + Tables.MIMETYPES +
+                " WHERE " + MimetypesColumns.MIMETYPE + "=?");
+
+        final SQLiteStatement mimetypeInsert = db.compileStatement(
+                "INSERT INTO " + Tables.MIMETYPES + "("
+                        + MimetypesColumns.MIMETYPE +
+                ") VALUES (?)");
+
+        try {
+            return lookupAndCacheId(mimetypeQuery, mimetypeInsert, mimetype, mMimetypeCache);
+        } finally {
+            mimetypeQuery.close();
+            mimetypeInsert.close();
+        }
     }
 
     public long getMimeTypeIdForStructuredName() {
