@@ -4773,6 +4773,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         String groupBy = null;
         String limit = getLimit(uri);
 
+        // The expression used in bundleLetterCountExtras() to get count.
+        String addressBookIndexerCountExpression = null;
+
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case SYNCSTATE:
@@ -5194,7 +5197,18 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PHONES: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+
+                // Dedupe phone numbers per contact.
                 groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
+
+                // In this case, because we dedupe phone numbers, the address book indexer needs
+                // to take it into account too.  (Otherwise headers will appear in wrong positions.)
+                // So use count(distinct pair(CONTACT_ID, PHONE NUMBER)) instead of count(*).
+                // But because there's no such thing as pair() on sqlite, we use
+                // CONTACT_ID || ',' || PHONE NUMBER instead.
+                // This only slows down the query by 14% with 10,000 contacts.
+                addressBookIndexerCountExpression = "DISTINCT "
+                        + RawContacts.CONTACT_ID + "||','||" + Data.DATA1;
                 break;
             }
 
@@ -5655,7 +5669,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         limit);
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
             cursor = bundleLetterCountExtras(cursor, mActiveDb.get(), qb, selection,
-                    selectionArgs, sortOrder);
+                    selectionArgs, sortOrder, addressBookIndexerCountExpression);
         }
         return cursor;
     }
@@ -5745,7 +5759,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * to the returned cursor as a bundle of extras.
      */
     private Cursor bundleLetterCountExtras(Cursor cursor, final SQLiteDatabase db,
-            SQLiteQueryBuilder qb, String selection, String[] selectionArgs, String sortOrder) {
+            SQLiteQueryBuilder qb, String selection, String[] selectionArgs, String sortOrder,
+            String countExpression) {
         if (!(cursor instanceof AbstractCursor)) {
             Log.w(TAG, "Unable to bundle extras.  Cursor is not AbstractCursor.");
             return cursor;
@@ -5774,6 +5789,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         projectionMap.put(AddressBookIndexQuery.LETTER,
                 sectionHeading + " AS " + AddressBookIndexQuery.LETTER);
 
+        // If "what to count" is not specified, we just count all records.
+        if (TextUtils.isEmpty(countExpression)) {
+            countExpression = "*";
+        }
+
         /**
          * Use the GET_PHONEBOOK_INDEX function, which is an android extension for SQLite3,
          * to map the first letter of the sort key to a character that is traditionally
@@ -5785,7 +5805,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 "GET_PHONEBOOK_INDEX(" + sectionHeading + ",'" + locale + "')"
                         + " AS " + AddressBookIndexQuery.TITLE);
         projectionMap.put(AddressBookIndexQuery.COUNT,
-                "COUNT(" + Contacts._ID + ") AS " + AddressBookIndexQuery.COUNT);
+                "COUNT(" + countExpression + ") AS " + AddressBookIndexQuery.COUNT);
         qb.setProjectionMap(projectionMap);
 
         Cursor indexCursor = qb.query(db, AddressBookIndexQuery.COLUMNS, selection, selectionArgs,
