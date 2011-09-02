@@ -19,8 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core Apps"</string>
     <string name="app_label" msgid="3389954322874982620">"אחסון אנשי קשר"</string>
     <string name="provider_label" msgid="6012150850819899907">"אנשי קשר"</string>
-    <!-- no translation found for upgrade_msg (6174884195179549239) -->
-    <skip />
+    <string name="upgrade_msg" msgid="6174884195179549239">"משדרג את מסד הנתונים של אנשי הקשר."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"שדרוג אנשי קשר דורש זיכרון נוסף"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"משדרג אחסון של אנשי קשר"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"בחר כדי להשלים את השדרוג."</string>

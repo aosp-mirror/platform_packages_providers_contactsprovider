@@ -19,8 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Matične aplikacije za Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Prostor za pohranu kontakata"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakti"</string>
-    <!-- no translation found for upgrade_msg (6174884195179549239) -->
-    <skip />
+    <string name="upgrade_msg" msgid="6174884195179549239">"Nadogradnja baze podataka kontakata."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Za nadogradnju kontakta potrebno je više memorije"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Nadogradnja pohrane kontakata"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Odaberite da biste dovršili nadogradnju."</string>
