@@ -2004,8 +2004,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
-            switchToProfileMode();
-            return mProfileProvider.insert(uri, values);
+            if (applyingBatch()) {
+                switchToProfileMode();
+                return mProfileProvider.insert(uri, values);
+            } else {
+                // Start a contacts DB transaction to maintain provider synchronization.
+                SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
+                contactsDb.beginTransactionWithListener(this);
+                Uri result = null;
+                try {
+                    // Now switch to profile mode and proceed with the insert using its provider.
+                    switchToProfileMode();
+                    result = mProfileProvider.insert(uri, values);
+
+                    contactsDb.setTransactionSuccessful();
+                } finally {
+                    // Finish the contacts transaction, allowing other provider operations to
+                    // proceed.
+                    contactsDb.endTransaction();
+                }
+                return result;
+            }
         } else {
             switchToContactMode();
             return super.insert(uri, values);
@@ -2031,8 +2050,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         waitForAccess(mWriteAccessLatch);
         if (mapsToProfileDb(uri)) {
-            switchToProfileMode();
-            return mProfileProvider.update(uri, values, selection, selectionArgs);
+            if (applyingBatch()) {
+                switchToProfileMode();
+                return mProfileProvider.update(uri, values, selection, selectionArgs);
+            } else {
+                // Start a contacts DB transaction to maintain provider synchronization.
+                SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
+                contactsDb.beginTransactionWithListener(this);
+                int result = 0;
+                try {
+                    // Now switch to profile mode and proceed with the update using its provider.
+                    switchToProfileMode();
+                    result = mProfileProvider.update(uri, values, selection, selectionArgs);
+
+                    contactsDb.setTransactionSuccessful();
+                } finally {
+                    // Finish the contacts transaction, allowing other provider operations to
+                    // proceed.
+                    contactsDb.endTransaction();
+                }
+                return result;
+            }
         } else {
             switchToContactMode();
             return super.update(uri, values, selection, selectionArgs);
@@ -2043,8 +2081,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
         if (mapsToProfileDb(uri)) {
-            switchToProfileMode();
-            return mProfileProvider.delete(uri, selection, selectionArgs);
+            if (applyingBatch()) {
+                switchToProfileMode();
+                return mProfileProvider.delete(uri, selection, selectionArgs);
+            } else {
+                // Start a contacts DB transaction to maintain provider synchronization.
+                SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
+                contactsDb.beginTransactionWithListener(this);
+                int result = 0;
+                try {
+                    // Now switch to profile mode and proceed with the delete using its provider.
+                    switchToProfileMode();
+                    result = mProfileProvider.delete(uri, selection, selectionArgs);
+
+                    contactsDb.setTransactionSuccessful();
+                } finally {
+                    // Finish the contacts transaction, allowing other provider operations to
+                    // proceed.
+                    contactsDb.endTransaction();
+                }
+                return result;
+            }
         } else {
             switchToContactMode();
             return super.delete(uri, selection, selectionArgs);
@@ -2090,13 +2147,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // into profile mode if necessary.
         int numValues = values.length;
         boolean notifyChange = false;
-        SQLiteDatabase contactsDb = null;
         SQLiteDatabase profileDb = null;
+
+        // Always get a contacts DB and start a transaction on it, to maintain provider
+        // synchronization.
+        SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
+        contactsDb.beginTransactionWithListener(this);
         try {
             for (int i = 0; i < numValues; i++) {
                 Uri result;
                 if (mapsToProfileDbWithInsertedValues(uri, values[i])) {
                     switchToProfileMode();
+
+                    // Initialize the profile DB and start a profile transaction if we haven't
+                    // already done so.
                     if (profileDb == null) {
                         profileDb = mProfileHelper.getWritableDatabase();
                         profileDb.beginTransactionWithListener(this);
@@ -2104,10 +2168,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     result = mProfileProvider.insertInTransaction(uri, values[i]);
                 } else {
                     switchToContactMode();
-                    if (contactsDb == null) {
-                        contactsDb = mContactsHelper.getWritableDatabase();
-                        contactsDb.beginTransactionWithListener(this);
-                    }
                     result = insertInTransaction(uri, values[i]);
                 }
                 if (result != null) {
@@ -2117,16 +2177,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mActiveDb.get().yieldIfContendedSafely();
                 notifyChange = savedNotifyChange;
             }
-            if (contactsDb != null) {
-                contactsDb.setTransactionSuccessful();
-            }
+            contactsDb.setTransactionSuccessful();
             if (profileDb != null) {
                 profileDb.setTransactionSuccessful();
             }
         } finally {
-            if (contactsDb != null) {
-                contactsDb.endTransaction();
-            }
+            contactsDb.endTransaction();
             if (profileDb != null) {
                 profileDb.endTransaction();
             }
