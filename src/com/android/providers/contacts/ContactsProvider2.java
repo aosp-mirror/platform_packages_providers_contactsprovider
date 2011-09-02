@@ -132,6 +132,7 @@ import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhotoFiles;
+import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
@@ -2394,7 +2395,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case DATA: {
+            case DATA:
+            case PROFILE_DATA: {
                 id = insertData(values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
@@ -2960,7 +2962,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about deleting data we don't have permission to read.
-        Cursor c = query(Data.CONTENT_URI, DataRowHandler.DataDeleteQuery.COLUMNS,
+        Uri dataUri = inProfileMode()
+                ? Uri.withAppendedPath(Profile.CONTENT_URI, RawContacts.Data.CONTENT_DIRECTORY)
+                : Data.CONTENT_URI;
+        Cursor c = query(dataUri, DataRowHandler.DataDeleteQuery.COLUMNS,
                 selection, selectionArgs, null);
         try {
             while(c.moveToNext()) {
@@ -3465,7 +3470,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         callerIsSyncAdapter);
             }
 
-            case DATA: {
+            case DATA:
+            case PROFILE_DATA: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 return deleteData(appendAccountToSelection(uri, selection), selectionArgs,
                         callerIsSyncAdapter);
@@ -3764,7 +3770,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case DATA: {
+            case DATA:
+            case PROFILE_DATA: {
                 count = updateData(uri, values, appendAccountToSelection(uri, selection),
                         selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
