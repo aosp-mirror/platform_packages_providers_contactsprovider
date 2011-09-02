@@ -2151,8 +2151,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Always get a contacts DB and start a transaction on it, to maintain provider
         // synchronization.
-        SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
-        contactsDb.beginTransactionWithListener(this);
+        mDb = mContactsHelper.getWritableDatabase();
+        mDb.beginTransactionWithListener(this);
         try {
             for (int i = 0; i < numValues; i++) {
                 Uri result;
@@ -2177,12 +2177,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 mActiveDb.get().yieldIfContendedSafely();
                 notifyChange = savedNotifyChange;
             }
-            contactsDb.setTransactionSuccessful();
+            mDb.setTransactionSuccessful();
             if (profileDb != null) {
                 profileDb.setTransactionSuccessful();
             }
         } finally {
-            contactsDb.endTransaction();
+            mDb.endTransaction();
             if (profileDb != null) {
                 profileDb.endTransaction();
             }
