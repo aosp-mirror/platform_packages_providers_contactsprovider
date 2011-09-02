@@ -297,7 +297,7 @@ public class GlobalSearchSupport {
         if (haveFilter) {
             mContactsProvider.appendSearchIndexJoin(sb, filter, true,
                     String.valueOf(SNIPPET_START_MATCH), String.valueOf(SNIPPET_END_MATCH),
-                    SNIPPET_ELLIPSIS, SNIPPET_MAX_TOKENS);
+                    SNIPPET_ELLIPSIS, SNIPPET_MAX_TOKENS, false);
         }
         if (selection != null) {
             sb.append(" WHERE ").append(selection);
@@ -306,13 +306,7 @@ public class GlobalSearchSupport {
         if (limit != null) {
             sb.append(" LIMIT " + limit);
         }
-        Cursor c = new SnippetizingCursorWrapper(
-                db.rawQuery(sb.toString(), null),
-                haveFilter ? filter : "",
-                String.valueOf(SNIPPET_START_MATCH),
-                String.valueOf(SNIPPET_END_MATCH),
-                SNIPPET_ELLIPSIS,
-                SNIPPET_MAX_TOKENS);
+        Cursor c = db.rawQuery(sb.toString(), null);
         SearchSuggestion suggestion = new SearchSuggestion();
         suggestion.filter = filter;
         try {
