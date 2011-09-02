@@ -64,7 +64,7 @@ public class ContactLookupKey {
         return (accountTypeWithDataSet.hashCode() ^ accountName.hashCode()) & 0xFFF;
     }
 
-    public static void appendToLookupKey(StringBuilder lookupKey, String accountTypeWidhtDataSet,
+    public static void appendToLookupKey(StringBuilder lookupKey, String accountTypeWithDataSet,
             String accountName, long rawContactId, String sourceId,
             String displayName) {
         if (displayName == null) {
@@ -75,7 +75,7 @@ public class ContactLookupKey {
             lookupKey.append(".");
         }
 
-        lookupKey.append(getAccountHashCode(accountTypeWidhtDataSet, accountName));
+        lookupKey.append(getAccountHashCode(accountTypeWithDataSet, accountName));
         if (sourceId == null) {
             lookupKey.append('r').append(rawContactId).append('-').append(
                     NameNormalizer.normalize(displayName));
