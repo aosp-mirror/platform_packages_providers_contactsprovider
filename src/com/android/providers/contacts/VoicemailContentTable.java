@@ -98,10 +98,12 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     @Override
     public Uri insert(UriData uriData, ContentValues values) {
         checkForSupportedColumns(mVoicemailProjectionMap, values);
-        mCallLogInsertionHelper.addComputedValues(values);
         ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
         mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);
+
+        // Add the computed fields to the copied values.
+        mCallLogInsertionHelper.addComputedValues(copiedValues);
 
         // "_data" column is used by base ContentProvider's openFileHelper() to determine filename
         // when Input/Output stream is requested to be opened.

@@ -186,12 +186,17 @@ public class CallLogProvider extends ContentProvider {
             checkIsAllowVoicemailRequest(uri);
             mVoicemailPermissions.checkCallerHasFullAccess();
         }
-        mCallLogInsertionHelper.addComputedValues(values);
         if (mCallsInserter == null) {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             mCallsInserter = new DatabaseUtils.InsertHelper(db, Tables.CALLS);
         }
-        long rowId = getDatabaseModifier(mCallsInserter).insert(values);
+
+        ContentValues copiedValues = new ContentValues(values);
+
+        // Add the computed fields to the copied values.
+        mCallLogInsertionHelper.addComputedValues(copiedValues);
+
+        long rowId = getDatabaseModifier(mCallsInserter).insert(copiedValues);
         if (rowId > 0) {
             return ContentUris.withAppendedId(uri, rowId);
         }
