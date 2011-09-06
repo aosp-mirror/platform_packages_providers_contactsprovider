@@ -3533,7 +3533,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case STREAM_ITEMS_ID_PHOTOS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteStreamItemPhotos(uri, new ContentValues(), selection, selectionArgs);
+                String streamItemId = uri.getPathSegments().get(1);
+                String selectionWithId =
+                        (StreamItemPhotos.STREAM_ITEM_ID + "=" + streamItemId + " ")
+                                + (selection == null ? "" : " AND (" + selection + ")");
+                return deleteStreamItemPhotos(uri, new ContentValues(),
+                        selectionWithId, selectionArgs);
             }
 
             case STREAM_ITEMS_ID_PHOTOS_ID: {
