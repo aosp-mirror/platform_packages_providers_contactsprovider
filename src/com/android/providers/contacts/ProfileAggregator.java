@@ -49,9 +49,12 @@ public class ProfileAggregator extends ContactAggregator {
     }
 
     @Override
-    protected String buildLookupKey(String accountTypeWithDataSet, String accountName,
-            long rawContactId, String sourceId, String displayName) {
-        return ContactLookupKey.PROFILE_LOOKUP_KEY;
+    protected void appendLookupKey(StringBuilder sb, String accountTypeWithDataSet,
+            String accountName, long rawContactId, String sourceId, String displayName) {
+
+        // The profile's lookup key should always be "profile".
+        sb.setLength(0);
+        sb.append(ContactLookupKey.PROFILE_LOOKUP_KEY);
     }
 
     @Override
