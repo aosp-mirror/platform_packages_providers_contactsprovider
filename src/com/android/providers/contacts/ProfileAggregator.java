@@ -49,6 +49,12 @@ public class ProfileAggregator extends ContactAggregator {
     }
 
     @Override
+    protected String buildLookupKey(String accountTypeWithDataSet, String accountName,
+            long rawContactId, String sourceId, String displayName) {
+        return ContactLookupKey.PROFILE_LOOKUP_KEY;
+    }
+
+    @Override
     public long onRawContactInsert(TransactionContext txContext, SQLiteDatabase db,
             long rawContactId) {
         // Profile aggregation on raw contact insert is simple - find the single contact in the

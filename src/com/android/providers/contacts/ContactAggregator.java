@@ -1630,10 +1630,10 @@ public class ContactAggregator {
         int contactTimesContacted = 0;
         int contactStarred = 0;
         int hasPhoneNumber = 0;
+        String lookupKey = null;
 
         mDisplayNameCandidate.clear();
 
-        mSb.setLength(0);       // Lookup key
         Cursor c = db.rawQuery(sql, sqlArgs);
         try {
             while (c.moveToNext()) {
@@ -1685,7 +1685,7 @@ public class ContactAggregator {
                         contactStarred = 1;
                     }
 
-                    ContactLookupKey.appendToLookupKey(mSb,
+                    lookupKey = buildLookupKey(
                             accountWithDataSet,
                             c.getString(RawContactsQuery.ACCOUNT_NAME),
                             rawContactId,
@@ -1752,7 +1752,18 @@ public class ContactAggregator {
         statement.bindLong(ContactReplaceSqlStatement.HAS_PHONE_NUMBER,
                 hasPhoneNumber);
         statement.bindString(ContactReplaceSqlStatement.LOOKUP_KEY,
-                Uri.encode(mSb.toString()));
+                Uri.encode(lookupKey));
+    }
+
+    /**
+     * Builds a lookup key using the given data.
+     */
+    protected String buildLookupKey(String accountTypeWithDataSet, String accountName,
+            long rawContactId, String sourceId, String displayName) {
+        StringBuilder sb = new StringBuilder();
+        ContactLookupKey.appendToLookupKey(sb, accountTypeWithDataSet, accountName, rawContactId,
+                sourceId, displayName);
+        return sb.toString();
     }
 
     /**
