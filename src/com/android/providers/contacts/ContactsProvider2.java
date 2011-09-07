@@ -4491,6 +4491,27 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                                     " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
                                     rawContactsDataSetClause + ")", accountWithDataSetParams);
                     db.execSQL(
+                            "DELETE FROM " + Tables.STREAM_ITEM_PHOTOS +
+                            " WHERE " + StreamItemPhotos.STREAM_ITEM_ID + " IN (" +
+                                    "SELECT " + StreamItems._ID +
+                                    " FROM " + Tables.STREAM_ITEMS +
+                                    " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
+                                            "SELECT " + RawContacts._ID +
+                                            " FROM " + Tables.RAW_CONTACTS +
+                                            " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
+                                            " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
+                                            rawContactsDataSetClause + "))",
+                            accountWithDataSetParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.STREAM_ITEMS +
+                            " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
+                                    "SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
+                                    " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
+                                    rawContactsDataSetClause + ")",
+                            accountWithDataSetParams);
+                    db.execSQL(
                             "DELETE FROM " + Tables.RAW_CONTACTS +
                             " WHERE " + RawContacts.ACCOUNT_NAME + " = ?" +
                             " AND " + RawContacts.ACCOUNT_TYPE + " = ?" +
@@ -5475,8 +5496,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 long streamItemId = Long.parseLong(uri.getPathSegments().get(3));
                 setTablesAndProjectionMapForStreamItems(qb);
-                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(streamItemId));
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(StreamItems.RAW_CONTACT_ID + "=? AND " +
                         StreamItems._ID + "=?");
                 break;
