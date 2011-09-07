@@ -26,7 +26,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
  */
 public class ProfileAggregator extends ContactAggregator {
 
-    private SQLiteStatement mProfileContactIdLookup;
+    private long mContactId;
 
     public ProfileAggregator(ContactsProvider2 contactsProvider,
             ContactsDatabaseHelper contactsDatabaseHelper,
@@ -34,13 +34,6 @@ public class ProfileAggregator extends ContactAggregator {
             CommonNicknameCache commonNicknameCache) {
         super(contactsProvider, contactsDatabaseHelper, photoPriorityResolver, nameSplitter,
                 commonNicknameCache);
-
-        SQLiteDatabase db = contactsDatabaseHelper.getReadableDatabase();
-        mProfileContactIdLookup = db.compileStatement(
-                "SELECT " + Contacts._ID +
-                " FROM " + Tables.CONTACTS +
-                " ORDER BY " + Contacts._ID +
-                " LIMIT 1");
     }
 
     @Override
@@ -60,17 +53,36 @@ public class ProfileAggregator extends ContactAggregator {
     @Override
     public long onRawContactInsert(TransactionContext txContext, SQLiteDatabase db,
             long rawContactId) {
-        // Profile aggregation on raw contact insert is simple - find the single contact in the
-        // database and attach to that.
-        long contactId = -1;
-        try {
-            contactId = mProfileContactIdLookup.simpleQueryForLong();
-            updateAggregateData(txContext, contactId);
-        } catch (SQLiteDoneException e) {
-            // No valid contact ID found, so create one.
-            contactId = insertContact(db, rawContactId);
+        aggregateContact(txContext, db, rawContactId);
+        return mContactId;
+    }
+
+    @Override
+    public void aggregateInTransaction(TransactionContext txContext, SQLiteDatabase db) {
+        // Do nothing.  The contact should already be aggregated.
+    }
+
+    @Override
+    public void aggregateContact(TransactionContext txContext, SQLiteDatabase db,
+            long rawContactId) {
+        // Profile aggregation is simple - find the single contact in the database and attach to
+        // that.
+        if (mContactId == 0) {
+            SQLiteStatement profileContactIdLookup = db.compileStatement(
+                    "SELECT " + Contacts._ID +
+                            " FROM " + Tables.CONTACTS +
+                            " ORDER BY " + Contacts._ID +
+                            " LIMIT 1");
+            try {
+                mContactId = profileContactIdLookup.simpleQueryForLong();
+                updateAggregateData(txContext, mContactId);
+            } catch (SQLiteDoneException e) {
+                // No valid contact ID found, so create one.
+                mContactId = insertContact(db, rawContactId);
+            } finally {
+                profileContactIdLookup.close();
+            }
         }
-        setContactId(rawContactId, contactId);
-        return contactId;
+        setContactId(rawContactId, mContactId);
     }
 }
