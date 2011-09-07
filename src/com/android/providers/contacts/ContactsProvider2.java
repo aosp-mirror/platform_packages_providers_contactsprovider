@@ -1690,23 +1690,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
 
         // Also query for all social stream item photos.
-        c = db.query(Tables.STREAM_ITEM_PHOTOS,
+        c = db.query(Tables.STREAM_ITEM_PHOTOS + " JOIN " + Tables.STREAM_ITEMS
+                + " ON " + StreamItemPhotos.STREAM_ITEM_ID + "=" + StreamItemsColumns.CONCRETE_ID
+                + " JOIN " + Tables.RAW_CONTACTS
+                + " ON " + StreamItems.RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID,
                 new String[]{
-                        StreamItemPhotos._ID,
-                        StreamItemPhotos.STREAM_ITEM_ID,
-                        StreamItemPhotos.PHOTO_FILE_ID
+                        StreamItemPhotosColumns.CONCRETE_ID,
+                        StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID,
+                        StreamItemPhotos.PHOTO_FILE_ID,
+                        RawContacts.ACCOUNT_TYPE,
+                        RawContacts.ACCOUNT_NAME
                 },
                 null, null, null, null, null);
         Map<Long, Long> photoFileIdToStreamItemPhotoId = Maps.newHashMap();
         Map<Long, Long> streamItemPhotoIdToStreamItemId = Maps.newHashMap();
+        Map<Long, Account> streamItemPhotoIdToAccount = Maps.newHashMap();
         try {
             while (c.moveToNext()) {
                 long streamItemPhotoId = c.getLong(0);
                 long streamItemId = c.getLong(1);
                 long photoFileId = c.getLong(2);
+                String accountType = c.getString(3);
+                String accountName = c.getString(4);
                 usedPhotoFileIds.add(photoFileId);
                 photoFileIdToStreamItemPhotoId.put(photoFileId, streamItemPhotoId);
                 streamItemPhotoIdToStreamItemId.put(streamItemPhotoId, streamItemId);
+                Account account = new Account(accountName, accountType);
+                streamItemPhotoIdToAccount.put(photoFileId, account);
             }
         } finally {
             c.close();
@@ -1732,11 +1742,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     // item photo.
                     long streamItemPhotoId = photoFileIdToStreamItemPhotoId.get(missingPhotoId);
                     long streamItemId = streamItemPhotoIdToStreamItemId.get(streamItemPhotoId);
+                    Account account = streamItemPhotoIdToAccount.get(missingPhotoId);
                     ops.add(ContentProviderOperation.newDelete(
                             StreamItems.CONTENT_URI.buildUpon()
                                     .appendPath(String.valueOf(streamItemId))
                                     .appendPath(StreamItems.StreamItemPhotos.CONTENT_DIRECTORY)
                                     .appendPath(String.valueOf(streamItemPhotoId))
+                                    .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+                                    .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
                                     .build()).build());
                 }
             }
