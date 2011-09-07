@@ -282,6 +282,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int RAW_CONTACT_ENTITY_ID = 2005;
     private static final int RAW_CONTACTS_ID_DISPLAY_PHOTO = 2006;
     private static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2007;
+    private static final int RAW_CONTACTS_ID_STREAM_ITEMS_ID = 2008;
 
     private static final int DATA = 3000;
     private static final int DATA_ID = 3001;
@@ -1092,6 +1093,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ENTITY_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items",
                 RAW_CONTACTS_ID_STREAM_ITEMS);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items/#",
+                RAW_CONTACTS_ID_STREAM_ITEMS_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contact_entities", RAW_CONTACT_ENTITIES);
 
@@ -3531,6 +3534,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         new String[]{uri.getLastPathSegment()});
             }
 
+            case RAW_CONTACTS_ID_STREAM_ITEMS_ID: {
+                mSyncToNetwork |= !callerIsSyncAdapter;
+                String rawContactId = uri.getPathSegments().get(1);
+                String streamItemId = uri.getLastPathSegment();
+                return deleteStreamItems(uri, new ContentValues(),
+                        StreamItems.RAW_CONTACT_ID + "=? AND " + StreamItems._ID + "=?",
+                        new String[]{rawContactId, streamItemId});
+
+            }
+
             case STREAM_ITEMS_ID_PHOTOS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 String streamItemId = uri.getPathSegments().get(1);
@@ -3609,6 +3622,19 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public int deleteRawContact(long rawContactId, long contactId, boolean callerIsSyncAdapter) {
         mAggregator.get().invalidateAggregationExceptionCache();
         mProviderStatusUpdateNeeded = true;
+
+        // Find and delete stream items associated with the raw contact.
+        Cursor c = mActiveDb.get().query(Tables.STREAM_ITEMS,
+                new String[]{StreamItems._ID},
+                StreamItems.RAW_CONTACT_ID + "=?", new String[]{String.valueOf(rawContactId)},
+                null, null, null);
+        try {
+            while (c.moveToNext()) {
+                deleteStreamItem(c.getLong(0));
+            }
+        } finally {
+            c.close();
+        }
 
         if (callerIsSyncAdapter) {
             mActiveDb.get().delete(Tables.PRESENCE,
@@ -3866,6 +3892,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case STREAM_ITEMS_ID: {
                 count = updateStreamItems(uri, values, StreamItems._ID + "=?",
                         new String[]{uri.getLastPathSegment()});
+                break;
+            }
+
+            case RAW_CONTACTS_ID_STREAM_ITEMS_ID: {
+                String rawContactId = uri.getPathSegments().get(1);
+                String streamItemId = uri.getLastPathSegment();
+                count = updateStreamItems(uri, values,
+                        StreamItems.RAW_CONTACT_ID + "=? AND " + StreamItems._ID + "=?",
+                        new String[]{rawContactId, streamItemId});
                 break;
             }
 
@@ -5426,6 +5461,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForStreamItems(qb);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(StreamItems.RAW_CONTACT_ID + "=?");
+                break;
+            }
+
+            case RAW_CONTACTS_ID_STREAM_ITEMS_ID: {
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                long streamItemId = Long.parseLong(uri.getPathSegments().get(3));
+                setTablesAndProjectionMapForStreamItems(qb);
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
+                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(streamItemId));
+                qb.appendWhere(StreamItems.RAW_CONTACT_ID + "=? AND " +
+                        StreamItems._ID + "=?");
                 break;
             }
 

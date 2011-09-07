@@ -3722,6 +3722,22 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testDeleteStreamItemsWhenRawContactDeleted() {
+        long rawContactId = createRawContact(mAccount);
+        Uri streamItemUri = insertStreamItem(rawContactId,
+                buildGenericStreamItemValues(), mAccount);
+        Uri streamItemPhotoUri = insertStreamItemPhoto(ContentUris.parseId(streamItemUri),
+                        buildGenericStreamItemPhotoValues(0), mAccount);
+        mResolver.delete(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                null, null);
+
+        ContentValues[] emptyValues = new ContentValues[0];
+
+        // The stream item and its photo should be gone.
+        assertStoredValues(streamItemUri, emptyValues);
+        assertStoredValues(streamItemPhotoUri, emptyValues);
+    }
+
     public void testQueryStreamItemLimit() {
         ContentValues values = new ContentValues();
         values.put(StreamItems.MAX_ITEMS, 5);
