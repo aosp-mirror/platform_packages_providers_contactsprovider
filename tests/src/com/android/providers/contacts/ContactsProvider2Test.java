@@ -4790,6 +4790,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testPhotoStoreCleanup() throws IOException {
         SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        PhotoStore photoStore = provider.getPhotoStore();
 
         // Trigger an initial cleanup so another one won't happen while we're running this test.
         provider.cleanupPhotoStore();
@@ -4833,8 +4834,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(DataRowHandlerForPhoto.SKIP_PROCESSING_KEY, true);
         mResolver.insert(Data.CONTENT_URI, values);
 
+        // Insert a fourth raw contact with a stream item that has a photo, then remove that photo
+        // from the photo store.
+        Account socialAccount = new Account("social", "social");
+        long rawContactId4 = createRawContactWithName(socialAccount);
+        Uri streamItemUri =
+                insertStreamItem(rawContactId4, buildGenericStreamItemValues(), socialAccount);
+        long streamItemId = ContentUris.parseId(streamItemUri);
+        Uri streamItemPhotoUri = insertStreamItemPhoto(
+                streamItemId, buildGenericStreamItemPhotoValues(0), socialAccount);
+        long streamItemPhotoFileId = getStoredLongValue(streamItemPhotoUri,
+                StreamItemPhotos.PHOTO_FILE_ID);
+        photoStore.remove(streamItemPhotoFileId);
+
         // Also insert a bogus photo that nobody is using.
-        PhotoStore photoStore = provider.getPhotoStore();
         long bogusPhotoId = photoStore.insert(new PhotoProcessor(loadPhotoFromResource(
                 R.drawable.earth_huge, PhotoSize.ORIGINAL), 256, 96));
 
@@ -4861,6 +4874,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // 4. The bogus photo that nobody was using should be cleared from the photo store.
         assertNull(photoStore.get(bogusPhotoId));
+
+        // 5. The bogus stream item photo should be cleared from the stream item.
+        assertStoredValues(Uri.withAppendedPath(
+                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
+                new ContentValues[0]);
     }
 
     public void testOverwritePhotoWithThumbnail() throws IOException {
