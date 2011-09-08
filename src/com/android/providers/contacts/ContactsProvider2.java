@@ -342,6 +342,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PROFILE_RAW_CONTACTS_ID_DATA = 19007;
     private static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
     private static final int PROFILE_STATUS_UPDATES = 19009;
+    private static final int PROFILE_RAW_CONTACT_ENTITIES = 19010;
 
     private static final int DATA_USAGE_FEEDBACK_ID = 20001;
 
@@ -1174,6 +1175,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 PROFILE_RAW_CONTACTS_ID_ENTITIES);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/status_updates",
                 PROFILE_STATUS_UPDATES);
+        matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contact_entities",
+                PROFILE_RAW_CONTACT_ENTITIES);
 
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items", STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items/photo", STREAM_ITEMS_PHOTOS);
@@ -5707,7 +5710,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 break;
 
-            case RAW_CONTACT_ENTITIES: {
+            case RAW_CONTACT_ENTITIES:
+            case PROFILE_RAW_CONTACT_ENTITIES: {
                 setTablesAndProjectionMapForRawEntities(qb, uri);
                 break;
             }
