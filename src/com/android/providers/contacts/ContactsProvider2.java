@@ -4668,14 +4668,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mActiveDb.set(mContactsHelper.getReadableDatabase());
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
-            return wrapCursor(uri,
+            return addSnippetExtrasToCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1));
         } else if (directory.equals("0")) {
-            return wrapCursor(uri,
+            return addSnippetExtrasToCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
                             Directory.DEFAULT));
         } else if (directory.equals("1")) {
-            return wrapCursor(uri,
+            return addSnippetExtrasToCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
                             Directory.LOCAL_INVISIBLE));
         }
@@ -4717,21 +4717,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         CrossProcessCursor crossProcessCursor = getCrossProcessCursor(cursor);
         if (crossProcessCursor != null) {
-            return wrapCursor(uri, cursor);
+            return addSnippetExtrasToCursor(uri, cursor);
         } else {
-            return matrixCursorFromCursor(wrapCursor(uri, cursor));
+            return matrixCursorFromCursor(addSnippetExtrasToCursor(uri, cursor));
         }
     }
 
-    private Cursor wrapCursor(Uri uri, Cursor cursor) {
+    private Cursor addSnippetExtrasToCursor(Uri uri, Cursor cursor) {
 
         // If the cursor doesn't contain a snippet column, don't bother wrapping it.
         if (cursor.getColumnIndex(SearchSnippetColumns.SNIPPET) < 0) {
-            if (VERBOSE_LOGGING) {
-                return new InstrumentedCursorWrapper(cursor, uri, TAG);
-            } else {
-                return cursor;
-            }
+            return cursor;
         }
 
         // Parse out snippet arguments for use when snippets are retrieved from the cursor.
@@ -4752,13 +4748,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
                 : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
 
-        if (VERBOSE_LOGGING) {
-            return new InstrumentedCursorWrapper(new SnippetizingCursorWrapper(
-                    cursor, query, startMatch, endMatch, ellipsis, maxTokens), uri, TAG);
-        } else {
-            return new SnippetizingCursorWrapper(cursor, query, startMatch, endMatch, ellipsis,
-                    maxTokens);
+        // Snippet data is needed for the snippeting on the client side, so store it in the cursor
+        if (cursor instanceof AbstractCursor && deferredSnippetingRequested(uri)){
+            Bundle oldExtras = cursor.getExtras();
+            Bundle extras = new Bundle();
+            if (oldExtras != null) {
+                extras.putAll(oldExtras);
+            }
+            extras.putString(ContactsContract.DEFERRED_SNIPPETING_QUERY, query);
+
+            ((AbstractCursor) cursor).setExtras(extras);
         }
+        return cursor;
+    }
+
+    private Cursor addDeferredSnippetingExtra(Cursor cursor) {
+        if (cursor instanceof AbstractCursor){
+            Bundle oldExtras = cursor.getExtras();
+            Bundle extras = new Bundle();
+            if (oldExtras != null) {
+                extras.putAll(oldExtras);
+            }
+            extras.putBoolean(ContactsContract.DEFERRED_SNIPPETING, true);
+            ((AbstractCursor) cursor).setExtras(extras);
+        }
+        return cursor;
     }
 
     private CrossProcessCursor getCrossProcessCursor(Cursor cursor) {
@@ -4850,6 +4864,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
         String limit = getLimit(uri);
+        boolean snippetDeferred = false;
 
         // The expression used in bundleLetterCountExtras() to get count.
         String addressBookIndexerCountExpression = null;
@@ -4997,11 +5012,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case CONTACTS_FILTER: {
                 String filterParam = "";
+                boolean deferredSnipRequested = deferredSnippetingRequested(uri);
                 if (uri.getPathSegments().size() > 2) {
                     filterParam = uri.getLastPathSegment();
                 }
                 setTablesAndProjectionMapForContactsWithSnippet(
-                        qb, uri, projection, filterParam, directoryId);
+                        qb, uri, projection, filterParam, directoryId,
+                        deferredSnipRequested);
+                snippetDeferred = isSingleWordQuery(filterParam) &&
+                        deferredSnipRequested && snippetNeeded(projection);
                 break;
             }
 
@@ -5761,6 +5780,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             cursor = bundleLetterCountExtras(cursor, mActiveDb.get(), qb, selection,
                     selectionArgs, sortOrder, addressBookIndexerCountExpression);
         }
+        if (snippetDeferred) {
+            cursor = addDeferredSnippetingExtra(cursor);
+        }
         return cursor;
     }
 
@@ -6261,7 +6283,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
      * contact and joins that with other contacts tables.
      */
     private void setTablesAndProjectionMapForContactsWithSnippet(SQLiteQueryBuilder qb, Uri uri,
-            String[] projection, String filter, long directoryId) {
+            String[] projection, String filter, long directoryId, boolean deferredSnippeting) {
 
         StringBuilder sb = new StringBuilder();
         sb.append(Views.CONTACTS);
@@ -6273,7 +6295,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         if (TextUtils.isEmpty(filter) || (directoryId != -1 && directoryId != Directory.DEFAULT)) {
             sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + " WHERE 0)");
         } else {
-            appendSearchIndexJoin(sb, uri, projection, filter);
+            appendSearchIndexJoin(sb, uri, projection, filter, deferredSnippeting);
         }
         appendContactPresenceJoin(sb, projection, Contacts._ID);
         appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
@@ -6282,9 +6304,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private void appendSearchIndexJoin(
-            StringBuilder sb, Uri uri, String[] projection, String filter) {
+            StringBuilder sb, Uri uri, String[] projection, String filter,
+            boolean  deferredSnippeting) {
 
-        if (mDbHelper.get().isInProjection(projection, SearchSnippetColumns.SNIPPET)) {
+        if (snippetNeeded(projection)) {
             String[] args = null;
             String snippetArgs =
                     getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
@@ -6302,15 +6325,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
 
             appendSearchIndexJoin(
-                    sb, filter, true, startMatch, endMatch, ellipsis, maxTokens);
+                    sb, filter, true, startMatch, endMatch, ellipsis, maxTokens,
+                    deferredSnippeting);
         } else {
-            appendSearchIndexJoin(sb, filter, false, null, null, null, 0);
+            appendSearchIndexJoin(sb, filter, false, null, null, null, 0, false);
         }
     }
 
     public void appendSearchIndexJoin(StringBuilder sb, String filter,
             boolean snippetNeeded, String startMatch, String endMatch, String ellipsis,
-            int maxTokens) {
+            int maxTokens, boolean deferredSnippeting) {
         boolean isEmailAddress = false;
         String emailAddress = null;
         boolean isPhoneNumber = false;
@@ -6319,7 +6343,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // If the query consists of a single word, we can do snippetizing after-the-fact for a
         // performance boost.
-        boolean singleTokenSearch = filter.split(QUERY_TOKENIZER_REGEX).length == 1;
+        boolean singleTokenSearch = isSingleWordQuery(filter);
 
         if (filter.indexOf('@') != -1) {
             emailAddress = mDbHelper.get().extractAddressFromEmailAddress(filter);
@@ -6348,8 +6372,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
 
-                // Optimization for single-token search.
-                if (singleTokenSearch) {
+                // Optimization for single-token search (do only if requested).
+                if (singleTokenSearch && deferredSnippeting) {
                     sb.append(SearchIndexColumns.CONTENT);
                 } else {
                     appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
@@ -6377,8 +6401,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 DatabaseUtils.appendEscapedSQLString(sb, endMatch);
                 sb.append(",");
 
-                // Optimization for single-token search.
-                if (singleTokenSearch) {
+                // Optimization for single-token search (do only if requested).
+                if (singleTokenSearch && deferredSnippeting) {
                     sb.append(SearchIndexColumns.CONTENT);
                 } else {
                     appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
@@ -6387,8 +6411,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             } else {
                 final String normalizedFilter = NameNormalizer.normalize(filter);
                 if (!TextUtils.isEmpty(normalizedFilter)) {
-                    // Optimization for single-token search.
-                    if (singleTokenSearch) {
+                    // Optimization for single-token search (do only if requested)..
+                    if (singleTokenSearch && deferredSnippeting) {
                         sb.append(SearchIndexColumns.CONTENT);
                     } else {
                         sb.append("(CASE WHEN EXISTS (SELECT 1 FROM ");
@@ -7697,5 +7721,31 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         } else {
             return null;
         }
+    }
+
+    /**
+     * Checks the URI for a deferred snippeting request
+     * @return a boolean indicating if a deferred snippeting request is in the RI
+     */
+    private boolean deferredSnippetingRequested(Uri uri) {
+        String deferredSnippeting =
+            getQueryParameter(uri, SearchSnippetColumns.DEFERRED_SNIPPETING_KEY);
+        return !TextUtils.isEmpty(deferredSnippeting) &&  deferredSnippeting.equals("1");
+    }
+
+    /**
+     * Checks if query is a single word or not.
+     * @return a boolean indicating if the query is one word or not
+     */
+    private boolean isSingleWordQuery(String query) {
+        return query.split(QUERY_TOKENIZER_REGEX).length == 1;
+    }
+
+    /**
+     * Checks the projection for a SNIPPET column indicating that a snippet is needed
+     * @return a boolean indicating if a snippet is needed or not.
+     */
+    private boolean snippetNeeded(String [] projection) {
+        return mDbHelper.get().isInProjection(projection, SearchSnippetColumns.SNIPPET);
     }
 }
