@@ -226,9 +226,18 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     }
 
     protected void createSettings(Account account, String shouldSync, String ungroupedVisible) {
+        createSettings(new AccountWithDataSet(account.name, account.type, null),
+                shouldSync, ungroupedVisible);
+    }
+
+    protected void createSettings(AccountWithDataSet account, String shouldSync,
+            String ungroupedVisible) {
         ContentValues values = new ContentValues();
-        values.put(Settings.ACCOUNT_NAME, account.name);
-        values.put(Settings.ACCOUNT_TYPE, account.type);
+        values.put(Settings.ACCOUNT_NAME, account.getAccountName());
+        values.put(Settings.ACCOUNT_TYPE, account.getAccountType());
+        if (account.getDataSet() != null) {
+            values.put(Settings.DATA_SET, account.getDataSet());
+        }
         values.put(Settings.SHOULD_SYNC, shouldSync);
         values.put(Settings.UNGROUPED_VISIBLE, ungroupedVisible);
         mResolver.insert(Settings.CONTENT_URI, values);

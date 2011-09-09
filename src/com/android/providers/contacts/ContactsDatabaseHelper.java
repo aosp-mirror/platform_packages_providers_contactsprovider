@@ -102,7 +102,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 617;
+    static final int DATABASE_VERSION = 618;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -169,7 +169,9 @@ import java.util.Locale;
         public static final String RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS = "raw_contacts "
                 + "LEFT OUTER JOIN settings ON ("
                     + "raw_contacts.account_name = settings.account_name AND "
-                    + "raw_contacts.account_type = settings.account_type) "
+                    + "raw_contacts.account_type = settings.account_type AND "
+                    + "((raw_contacts.data_set IS NULL AND settings.data_set IS NULL) "
+                    + "OR (raw_contacts.data_set = settings.data_set))) "
                 + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
                     + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
@@ -486,6 +488,8 @@ import java.util.Locale;
                 + Settings.ACCOUNT_NAME;
         public static final String CONCRETE_ACCOUNT_TYPE = Tables.SETTINGS + "."
                 + Settings.ACCOUNT_TYPE;
+        public static final String CONCRETE_DATA_SET = Tables.SETTINGS + "."
+                + Settings.DATA_SET;
     }
 
     public interface PresenceColumns {
@@ -1133,10 +1137,9 @@ import java.util.Locale;
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.SETTINGS + " (" +
                 Settings.ACCOUNT_NAME + " STRING NOT NULL," +
                 Settings.ACCOUNT_TYPE + " STRING NOT NULL," +
+                Settings.DATA_SET + " STRING," +
                 Settings.UNGROUPED_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
-                Settings.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1, " +
-                "PRIMARY KEY (" + Settings.ACCOUNT_NAME + ", " +
-                    Settings.ACCOUNT_TYPE + ") ON CONFLICT REPLACE" +
+                Settings.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1" +
         ");");
 
         db.execSQL("CREATE TABLE " + Tables.VISIBLE_CONTACTS + " (" +
@@ -2229,6 +2232,11 @@ import java.util.Locale;
             // per-database "is profile" columns.
             upgradeViewsAndTriggers = true;
             oldVersion = 617;
+        }
+
+        if (oldVersion < 618) {
+            upgradeToVersion618(db);
+            oldVersion = 618;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3428,6 +3436,33 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE calls ADD matched_number TEXT DEFAULT NULL;");
         db.execSQL("ALTER TABLE calls ADD normalized_number TEXT DEFAULT NULL;");
         db.execSQL("ALTER TABLE calls ADD photo_id INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    private void upgradeToVersion618(SQLiteDatabase db) {
+        // The Settings table needs a data_set column which technically should be part of the
+        // primary key but can't be because it may be null.  Since SQLite doesn't support nuking
+        // the primary key, we'll drop the old table, re-create it, and copy the settings back in.
+        db.execSQL("CREATE TEMPORARY TABLE settings_backup(" +
+                "account_name STRING NOT NULL," +
+                "account_type STRING NOT NULL," +
+                "ungrouped_visible INTEGER NOT NULL DEFAULT 0," +
+                "should_sync INTEGER NOT NULL DEFAULT 1" +
+        ");");
+        db.execSQL("INSERT INTO settings_backup " +
+                "SELECT account_name, account_type, ungrouped_visible, should_sync" +
+                " FROM settings");
+        db.execSQL("DROP TABLE settings");
+        db.execSQL("CREATE TABLE settings (" +
+                "account_name STRING NOT NULL," +
+                "account_type STRING NOT NULL," +
+                "data_set STRING," +
+                "ungrouped_visible INTEGER NOT NULL DEFAULT 0," +
+                "should_sync INTEGER NOT NULL DEFAULT 1" +
+        ");");
+        db.execSQL("INSERT INTO settings " +
+                "SELECT account_name, account_type, NULL, ungrouped_visible, should_sync " +
+                "FROM settings_backup");
+        db.execSQL("DROP TABLE settings_backup");
     }
 
     public String extractHandleFromEmailAddress(String email) {
