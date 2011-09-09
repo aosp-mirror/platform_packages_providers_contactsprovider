@@ -2146,8 +2146,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         waitForAccess(mWriteAccessLatch);
         ContentProviderResult[] results = null;
         try {
+            mApplyingBatch.set(true);
             results = super.applyBatch(operations);
         } finally {
+            mApplyingBatch.set(false);
             if (mProfileDbForBatch.get() != null) {
                 // A profile operation was involved, so clean up its transaction.
                 boolean profileErrors = mProfileErrorsInBatch.get() != null
@@ -2392,14 +2394,17 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         "The profile contact is created automatically");
             }
 
-            case RAW_CONTACTS: {
+            case RAW_CONTACTS:
+            case PROFILE_RAW_CONTACTS: {
                 id = insertRawContact(uri, values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
-            case RAW_CONTACTS_DATA: {
-                values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(1));
+            case RAW_CONTACTS_DATA:
+            case PROFILE_RAW_CONTACTS_ID_DATA: {
+                int segment = match == RAW_CONTACTS_DATA ? 1 : 2;
+                values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(segment));
                 id = insertData(values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
@@ -2408,12 +2413,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case RAW_CONTACTS_ID_STREAM_ITEMS: {
                 values.put(StreamItems.RAW_CONTACT_ID, uri.getPathSegments().get(1));
                 id = insertStreamItem(uri, values);
-                mSyncToNetwork |= !callerIsSyncAdapter;
-                break;
-            }
-
-            case PROFILE_RAW_CONTACTS: {
-                id = insertRawContact(uri, values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3492,7 +3491,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
             }
 
-            case RAW_CONTACTS: {
+            case RAW_CONTACTS:
+            case PROFILE_RAW_CONTACTS: {
                 int numDeletes = 0;
                 Cursor c = mActiveDb.get().query(Tables.RAW_CONTACTS,
                         new String[]{RawContacts._ID, RawContacts.CONTACT_ID},
@@ -3510,7 +3510,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 return numDeletes;
             }
 
-            case RAW_CONTACTS_ID: {
+            case RAW_CONTACTS_ID:
+            case PROFILE_RAW_CONTACTS_ID: {
                 final long rawContactId = ContentUris.parseId(uri);
                 return deleteRawContact(rawContactId, mDbHelper.get().getContactId(rawContactId),
                         callerIsSyncAdapter);
@@ -3526,7 +3527,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case DATA_ID:
             case PHONES_ID:
             case EMAILS_ID:
-            case POSTALS_ID: {
+            case POSTALS_ID:
+            case PROFILE_DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 mSelectionArgs1[0] = String.valueOf(dataId);
@@ -3679,7 +3681,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             c.close();
         }
 
-        if (callerIsSyncAdapter) {
+        if (callerIsSyncAdapter || rawContactIsLocal(rawContactId)) {
             mActiveDb.get().delete(Tables.PRESENCE,
                     PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             int count = mActiveDb.get().delete(Tables.RAW_CONTACTS,
@@ -3689,6 +3691,25 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         } else {
             mDbHelper.get().removeContactIfSingleton(rawContactId);
             return markRawContactAsDeleted(rawContactId, callerIsSyncAdapter);
+        }
+    }
+
+    /**
+     * Returns whether the given raw contact ID is local (i.e. has no account associated with it).
+     */
+    private boolean rawContactIsLocal(long rawContactId) {
+        Cursor c = mActiveDb.get().query(Tables.RAW_CONTACTS,
+                new String[] {
+                        RawContacts.ACCOUNT_NAME,
+                        RawContacts.ACCOUNT_TYPE,
+                        RawContacts.DATA_SET
+                },
+                RawContacts._ID + "=?",
+                new String[] {String.valueOf(rawContactId)}, null, null, null);
+        try {
+            return c.moveToFirst() && c.isNull(0) && c.isNull(1) && c.isNull(2);
+        } finally {
+            c.close();
         }
     }
 
@@ -3805,18 +3826,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         selectionWithId, selectionArgs);
             }
 
-            case CONTACTS: {
+            case CONTACTS:
+            case PROFILE: {
                 count = updateContactOptions(values, selection, selectionArgs, callerIsSyncAdapter);
                 break;
             }
 
             case CONTACTS_ID: {
                 count = updateContactOptions(ContentUris.parseId(uri), values, callerIsSyncAdapter);
-                break;
-            }
-
-            case PROFILE: {
-                count = updateContactOptions(values, selection, selectionArgs, callerIsSyncAdapter);
                 break;
             }
 
@@ -3834,8 +3851,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case RAW_CONTACTS_DATA: {
-                final String rawContactId = uri.getPathSegments().get(1);
+            case RAW_CONTACTS_DATA:
+            case PROFILE_RAW_CONTACTS_ID_DATA: {
+                int segment = match == RAW_CONTACTS_DATA ? 1 : 2;
+                final String rawContactId = uri.getPathSegments().get(segment);
                 String selectionWithId = (Data.RAW_CONTACT_ID + "=" + rawContactId + " ")
                     + (selection == null ? "" : " AND " + selection);
 
@@ -5203,18 +5222,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case PROFILE_DATA: {
-                setTablesAndProjectionMapForData(qb, uri, projection, false);
-                break;
-            }
-
-            case PROFILE_DATA_ID: {
-                setTablesAndProjectionMapForData(qb, uri, projection, false);
-                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(" AND " + Data._ID + "=?");
-                break;
-            }
-
             case PROFILE_AS_VCARD: {
                 qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sContactsVCardProjectionMap);
@@ -5521,12 +5528,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case RAW_CONTACTS: {
+            case RAW_CONTACTS:
+            case PROFILE_RAW_CONTACTS: {
                 setTablesAndProjectionMapForRawContacts(qb, uri);
                 break;
             }
 
-            case RAW_CONTACTS_ID: {
+            case RAW_CONTACTS_ID:
+            case PROFILE_RAW_CONTACTS_ID: {
                 long rawContactId = ContentUris.parseId(uri);
                 setTablesAndProjectionMapForRawContacts(qb, uri);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
@@ -5534,8 +5543,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case RAW_CONTACTS_DATA: {
-                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+            case RAW_CONTACTS_DATA:
+            case PROFILE_RAW_CONTACTS_ID_DATA: {
+                int segment = match == RAW_CONTACTS_DATA ? 1 : 2;
+                long rawContactId = Long.parseLong(uri.getPathSegments().get(segment));
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                 qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
@@ -5561,27 +5572,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case PROFILE_RAW_CONTACTS: {
-                setTablesAndProjectionMapForRawContacts(qb, uri);
-                break;
-            }
-
-            case PROFILE_RAW_CONTACTS_ID: {
-                long rawContactId = ContentUris.parseId(uri);
-                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
-                setTablesAndProjectionMapForRawContacts(qb, uri);
-                qb.appendWhere(" AND " + RawContacts._ID + "=?");
-                break;
-            }
-
-            case PROFILE_RAW_CONTACTS_ID_DATA: {
-                long rawContactId = Long.parseLong(uri.getPathSegments().get(2));
-                selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
-                setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.RAW_CONTACT_ID + "=?");
-                break;
-            }
-
             case PROFILE_RAW_CONTACTS_ID_ENTITIES: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(2));
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
@@ -5590,13 +5580,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
-            case DATA: {
+            case DATA:
+            case PROFILE_DATA: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 break;
             }
 
-            case DATA_ID: {
-                long dataId = ContentUris.parseId(uri);
+            case DATA_ID:
+            case PROFILE_DATA_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
                 qb.appendWhere(" AND " + Data._ID + "=?");
