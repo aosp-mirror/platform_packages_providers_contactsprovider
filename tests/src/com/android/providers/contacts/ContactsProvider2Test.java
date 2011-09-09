@@ -32,6 +32,7 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteConstraintException;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
@@ -573,6 +574,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertProjection(Settings.CONTENT_URI, new String[]{
                 Settings.ACCOUNT_NAME,
                 Settings.ACCOUNT_TYPE,
+                Settings.DATA_SET,
                 Settings.UNGROUPED_VISIBLE,
                 Settings.SHOULD_SYNC,
                 Settings.ANY_UNSYNCED,
@@ -2240,16 +2242,48 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testSettingsQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
+        AccountWithDataSet account3 = new AccountWithDataSet("e", "f", "plus");
         createSettings(account1, "0", "0");
         createSettings(account2, "1", "1");
+        createSettings(account3, "1", "0");
         Uri uri1 = maybeAddAccountQueryParameters(Settings.CONTENT_URI, account1);
         Uri uri2 = maybeAddAccountQueryParameters(Settings.CONTENT_URI, account2);
+        Uri uri3 = Settings.CONTENT_URI.buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account3.getAccountName())
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account3.getAccountType())
+                .appendQueryParameter(RawContacts.DATA_SET, account3.getDataSet())
+                .build();
         assertEquals(1, getCount(uri1, null, null));
         assertEquals(1, getCount(uri2, null, null));
+        assertEquals(1, getCount(uri3, null, null));
         assertStoredValue(uri1, Settings.SHOULD_SYNC, "0") ;
-        assertStoredValue(uri1, Settings.UNGROUPED_VISIBLE, "0") ;
+        assertStoredValue(uri1, Settings.UNGROUPED_VISIBLE, "0");
         assertStoredValue(uri2, Settings.SHOULD_SYNC, "1") ;
-        assertStoredValue(uri2, Settings.UNGROUPED_VISIBLE, "1") ;
+        assertStoredValue(uri2, Settings.UNGROUPED_VISIBLE, "1");
+        assertStoredValue(uri3, Settings.SHOULD_SYNC, "1");
+        assertStoredValue(uri3, Settings.UNGROUPED_VISIBLE, "0");
+    }
+
+    public void testSettingsInsertionPreventsDuplicates() {
+        Account account1 = new Account("a", "b");
+        AccountWithDataSet account2 = new AccountWithDataSet("c", "d", "plus");
+        createSettings(account1, "0", "0");
+        createSettings(account2, "1", "1");
+
+        // Now try creating the settings rows again.
+        try {
+            createSettings(account1, "1", "0");
+            fail("Provider should have prevented inserting duplicate settings without data set.");
+        } catch (SQLiteConstraintException expected) {
+            // Expected.
+        }
+
+        try {
+            createSettings(account2, "0", "1");
+            fail("Provider should have prevented inserting duplicate settings with data set.");
+        } catch (SQLiteConstraintException expected) {
+            // Expected.
+        }
     }
 
     public void testDisplayNameParsingWhenPartsUnspecified() {

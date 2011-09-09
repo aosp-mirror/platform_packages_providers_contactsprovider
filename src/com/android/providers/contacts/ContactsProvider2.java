@@ -85,6 +85,7 @@ import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
+import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -887,6 +888,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final ProjectionMap sSettingsProjectionMap = ProjectionMap.builder()
             .add(Settings.ACCOUNT_NAME)
             .add(Settings.ACCOUNT_TYPE)
+            .add(Settings.DATA_SET)
             .add(Settings.UNGROUPED_VISIBLE)
             .add(Settings.SHOULD_SYNC)
             .add(Settings.ANY_UNSYNCED,
@@ -900,7 +902,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             + " WHERE " + GroupsColumns.CONCRETE_ACCOUNT_NAME + "="
                                     + SettingsColumns.CONCRETE_ACCOUNT_NAME
                                 + " AND " + GroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
-                                    + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "))=0"
+                                    + SettingsColumns.CONCRETE_ACCOUNT_TYPE
+                                + " AND ((" + GroupsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                                    + SettingsColumns.CONCRETE_DATA_SET + " IS NULL) OR ("
+                                    + GroupsColumns.CONCRETE_DATA_SET + "="
+                                    + SettingsColumns.CONCRETE_DATA_SET + "))))=0"
                     + " THEN 1"
                     + " ELSE 0"
                     + " END)")
@@ -3114,6 +3120,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     private long insertSettings(Uri uri, ContentValues values) {
+        // Before inserting, ensure that no settings record already exists for the
+        // values being inserted (this used to be enforced by a primary key, but that no
+        // longer works with the nullable data_set field added).
+        String accountName = values.getAsString(Settings.ACCOUNT_NAME);
+        String accountType = values.getAsString(Settings.ACCOUNT_TYPE);
+        String dataSet = values.getAsString(Settings.DATA_SET);
+        Uri.Builder settingsUri = Settings.CONTENT_URI.buildUpon();
+        if (accountName != null) {
+            settingsUri.appendQueryParameter(Settings.ACCOUNT_NAME, accountName);
+        }
+        if (accountType != null) {
+            settingsUri.appendQueryParameter(Settings.ACCOUNT_TYPE, accountType);
+        }
+        if (dataSet != null) {
+            settingsUri.appendQueryParameter(Settings.DATA_SET, dataSet);
+        }
+        Cursor c = queryLocal(settingsUri.build(), null, null, null, null, 0);
+        try {
+            if (c.getCount() > 0) {
+                throw new SQLiteConstraintException("Can't insert a settings record with the same "
+                        + "account name/type/data set");
+            }
+        } finally {
+            c.close();
+        }
+
+        // If we didn't find a duplicate, we're fine to insert.
         final long id = mActiveDb.get().insert(Tables.SETTINGS, null, values);
 
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
@@ -4479,6 +4512,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                             + (accountWithDataSet.getDataSet() == null ? " IS NULL" : " = ?");
                     String rawContactsDataSetClause = " AND " + RawContacts.DATA_SET
                             + (accountWithDataSet.getDataSet() == null ? " IS NULL" : " = ?");
+                    String settingsDataSetClause = " AND " + Settings.DATA_SET
+                            + (accountWithDataSet.getDataSet() == null ? " IS NULL" : " = ?");
 
                     db.execSQL(
                             "DELETE FROM " + Tables.GROUPS +
@@ -4522,7 +4557,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     db.execSQL(
                             "DELETE FROM " + Tables.SETTINGS +
                             " WHERE " + Settings.ACCOUNT_NAME + " = ?" +
-                            " AND " + Settings.ACCOUNT_TYPE + " = ?", accountParams);
+                            " AND " + Settings.ACCOUNT_TYPE + " = ?" +
+                            settingsDataSetClause, accountWithDataSetParams);
                     db.execSQL(
                             "DELETE FROM " + Tables.ACCOUNTS +
                             " WHERE " + RawContacts.ACCOUNT_NAME + "=?" +
@@ -5591,7 +5627,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case GROUPS: {
                 qb.setTables(Views.GROUPS);
                 qb.setProjectionMap(sGroupsProjectionMap);
-                appendAccountFromParameter(qb, uri, true);
+                appendAccountFromParameter(qb, uri);
                 break;
             }
 
@@ -5611,7 +5647,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.setProjectionMap(returnGroupCountPerAccount ?
                         sGroupsSummaryProjectionMapWithGroupCountPerAccount
                         : sGroupsSummaryProjectionMap);
-                appendAccountFromParameter(qb, uri, true);
+                appendAccountFromParameter(qb, uri);
                 groupBy = GroupsColumns.CONCRETE_ID;
                 break;
             }
@@ -5660,7 +5696,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case SETTINGS: {
                 qb.setTables(Tables.SETTINGS);
                 qb.setProjectionMap(sSettingsProjectionMap);
-                appendAccountFromParameter(qb, uri, false);
+                appendAccountFromParameter(qb, uri);
 
                 // When requesting specific columns, this query requires
                 // late-binding of the GroupMembership MIME-type.
@@ -6476,13 +6512,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         sb.append(Views.RAW_CONTACTS);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sRawContactsProjectionMap);
-        appendAccountFromParameter(qb, uri, true);
+        appendAccountFromParameter(qb, uri);
     }
 
     private void setTablesAndProjectionMapForRawEntities(SQLiteQueryBuilder qb, Uri uri) {
         qb.setTables(Views.RAW_ENTITIES);
         qb.setProjectionMap(sRawEntityProjectionMap);
-        appendAccountFromParameter(qb, uri, true);
+        appendAccountFromParameter(qb, uri);
     }
 
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
@@ -6515,7 +6551,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 || !mDbHelper.get().isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
         qb.setDistinct(useDistinct);
         qb.setProjectionMap(useDistinct ? sDistinctDataProjectionMap : sDataProjectionMap);
-        appendAccountFromParameter(qb, uri, true);
+        appendAccountFromParameter(qb, uri);
     }
 
     private void setTableAndProjectionMapForStatusUpdates(SQLiteQueryBuilder qb,
@@ -6562,7 +6598,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sEntityProjectionMap);
-        appendAccountFromParameter(qb, uri, true);
+        appendAccountFromParameter(qb, uri);
     }
 
     private void appendContactStatusUpdateJoin(StringBuilder sb, String[] projection,
@@ -6629,8 +6665,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         return false;
     }
 
-    private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri,
-            boolean includeDataSet) {
+    private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
         final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
         final String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
@@ -6650,13 +6685,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
                     + DatabaseUtils.sqlEscapeString(accountType);
-            if (includeDataSet) {
-                if (dataSet == null) {
-                    toAppend += " AND " + RawContacts.DATA_SET + " IS NULL";
-                } else {
-                    toAppend += " AND " + RawContacts.DATA_SET + "=" +
-                            DatabaseUtils.sqlEscapeString(dataSet);
-                }
+            if (dataSet == null) {
+                toAppend += " AND " + RawContacts.DATA_SET + " IS NULL";
+            } else {
+                toAppend += " AND " + RawContacts.DATA_SET + "=" +
+                        DatabaseUtils.sqlEscapeString(dataSet);
             }
             qb.appendWhere(toAppend);
         } else {
@@ -6684,7 +6717,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + DatabaseUtils.sqlEscapeString(accountName) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
                     + DatabaseUtils.sqlEscapeString(accountType));
-            if (!TextUtils.isEmpty(dataSet)) {
+            if (dataSet == null) {
+                selectionSb.append(" AND " + RawContacts.DATA_SET + " IS NULL");
+            } else {
                 selectionSb.append(" AND " + RawContacts.DATA_SET + "=")
                         .append(DatabaseUtils.sqlEscapeString(dataSet));
             }

@@ -1264,13 +1264,16 @@ public class LegacyApiSupport {
             String selection;
             String[] selectionArgs;
             if (accountName != null && accountType != null) {
+
                 selectionArgs = new String[]{accountName, accountType};
                 selection = Settings.ACCOUNT_NAME + "=?"
-                        + " AND " + Settings.ACCOUNT_TYPE + "=?";
+                        + " AND " + Settings.ACCOUNT_TYPE + "=?"
+                        + " AND " + Settings.DATA_SET + " IS NULL";
             } else {
                 selectionArgs = null;
                 selection = Settings.ACCOUNT_NAME + " IS NULL"
-                        + " AND " + Settings.ACCOUNT_TYPE + " IS NULL";
+                        + " AND " + Settings.ACCOUNT_TYPE + " IS NULL"
+                        + " AND " + Settings.DATA_SET + " IS NULL";
             }
             int count = mContactsProvider.updateInTransaction(Settings.CONTENT_URI, mValues,
                     selection, selectionArgs);
@@ -1310,6 +1313,7 @@ public class LegacyApiSupport {
                               + android.provider.Contacts.Settings._SYNC_ACCOUNT +
                       " AND " + ContactsContract.Settings.ACCOUNT_TYPE + "="
                               + android.provider.Contacts.Settings._SYNC_ACCOUNT_TYPE +
+                      " AND " + ContactsContract.Settings.DATA_SET + " IS NULL" +
                       " AND " + android.provider.Contacts.Settings.KEY + "='"
                               + android.provider.Contacts.Settings.SYNC_EVERYTHING + "'" +
             ")" +
