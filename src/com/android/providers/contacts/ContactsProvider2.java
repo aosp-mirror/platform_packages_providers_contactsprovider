@@ -4695,7 +4695,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 " FROM " + table, null);
         try {
             while (c.moveToNext()) {
-                if (!c.isNull(0) || !c.isNull(1)) {
+                if (!c.isNull(0) && !c.isNull(1)) {
                     accountsWithDataSets.add(
                             new AccountWithDataSet(c.getString(0), c.getString(1), c.getString(2)));
                 }
