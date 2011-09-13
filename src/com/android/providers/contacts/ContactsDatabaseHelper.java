@@ -53,6 +53,7 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
@@ -102,7 +103,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 618;
+    static final int DATABASE_VERSION = 619;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -634,11 +635,12 @@ import java.util.Locale;
 
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
+    private long mMimeTypeIdNickname;
+    private long mMimeTypeIdOrganization;
+    private long mMimeTypeIdPhone;
     private long mMimeTypeIdSip;
     private long mMimeTypeIdStructuredName;
-    private long mMimeTypeIdOrganization;
-    private long mMimeTypeIdNickname;
-    private long mMimeTypeIdPhone;
+    private long mMimeTypeIdStructuredPostal;
 
     /** Compiled statements for querying and inserting mappings */
     private SQLiteStatement mContactIdQuery;
@@ -742,11 +744,12 @@ import java.util.Locale;
         //        in the cache
         mMimeTypeIdEmail = lookupMimeTypeId(Email.CONTENT_ITEM_TYPE, db);
         mMimeTypeIdIm = lookupMimeTypeId(Im.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdNickname = lookupMimeTypeId(Nickname.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdOrganization = lookupMimeTypeId(Organization.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdPhone = lookupMimeTypeId(Phone.CONTENT_ITEM_TYPE, db);
         mMimeTypeIdSip = lookupMimeTypeId(SipAddress.CONTENT_ITEM_TYPE, db);
         mMimeTypeIdStructuredName = lookupMimeTypeId(StructuredName.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdOrganization = lookupMimeTypeId(Organization.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdNickname = lookupMimeTypeId(Nickname.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdPhone = lookupMimeTypeId(Phone.CONTENT_ITEM_TYPE, db);
+        mMimeTypeIdStructuredPostal = lookupMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE, db);
     }
 
     @Override
@@ -1488,7 +1491,9 @@ import java.util.Locale;
                 Data.IS_PRIMARY + ", "
                 + Data.IS_SUPER_PRIMARY + ", "
                 + Data.DATA_VERSION + ", "
+                + DataColumns.CONCRETE_PACKAGE_ID + ","
                 + PackagesColumns.PACKAGE + " AS " + Data.RES_PACKAGE + ","
+                + DataColumns.CONCRETE_MIMETYPE_ID + ","
                 + MimetypesColumns.MIMETYPE + " AS " + Data.MIMETYPE + ", "
                 + Data.IS_READ_ONLY + ", "
                 + Data.DATA1 + ", "
@@ -2237,6 +2242,11 @@ import java.util.Locale;
         if (oldVersion < 618) {
             upgradeToVersion618(db);
             oldVersion = 618;
+        }
+
+        if (oldVersion < 619) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 619;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3729,6 +3739,10 @@ import java.util.Locale;
         return mMimeTypeIdStructuredName;
     }
 
+    public long getMimeTypeIdForStructuredPostal() {
+        return mMimeTypeIdStructuredPostal;
+    }
+
     public long getMimeTypeIdForOrganization() {
         return mMimeTypeIdOrganization;
     }
@@ -3739,6 +3753,10 @@ import java.util.Locale;
 
     public long getMimeTypeIdForEmail() {
         return mMimeTypeIdEmail;
+    }
+
+    public long getMimeTypeIdForPhone() {
+        return mMimeTypeIdPhone;
     }
 
     public long getMimeTypeIdForSip() {

@@ -454,8 +454,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     + " WHERE " + RawContactsColumns.CONCRETE_ID + " IN "
                             + "(SELECT " + DataColumns.CONCRETE_RAW_CONTACT_ID
                             + " FROM " + Tables.DATA_JOIN_MIMETYPES
-                            + " WHERE " + Data.MIMETYPE + "='" + GroupMembership.CONTENT_ITEM_TYPE
-                                    + "' AND " + GroupMembership.GROUP_ROW_ID + "="
+                            + " WHERE " + DataColumns.MIMETYPE_ID + "=?"
+                                    + " AND " + GroupMembership.GROUP_ROW_ID + "="
                                     + "(SELECT " + Tables.GROUPS + "." + Groups._ID
                                     + " FROM " + Tables.GROUPS
                                     + " WHERE " + Groups.TITLE + "=?)))";
@@ -1682,8 +1682,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         // Assemble the set of photo store file IDs that are in use, and send those to the photo
         // store.  Any photos that aren't in that set will be deleted, and any photos that no
         // longer exist in the photo store will be returned for us to clear out in the DB.
+        long photoMimeTypeId = mDbHelper.get().getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
         Cursor c = db.query(Views.DATA, new String[]{Data._ID, Photo.PHOTO_FILE_ID},
-                Data.MIMETYPE + "=" + Photo.MIMETYPE + " AND "
+                DataColumns.MIMETYPE_ID + "=" + photoMimeTypeId + " AND "
                         + Photo.PHOTO_FILE_ID + " IS NOT NULL", null, null, null, null);
         Set<Long> usedPhotoFileIds = Sets.newHashSet();
         Map<Long, Long> photoFileIdToDataId = Maps.newHashMap();
@@ -5207,7 +5208,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
+                    String groupMimeTypeId = String.valueOf(
+                            mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
                     selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                    selectionArgs = insertSelectionArg(selectionArgs, groupMimeTypeId);
                 }
                 break;
             }
@@ -5336,7 +5340,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case PHONES: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + "=" +
+                        mDbHelper.get().getMimeTypeIdForPhone());
 
                 // Dedupe phone numbers per contact.
                 groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
@@ -5355,7 +5360,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PHONES_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForPhone());
                 qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
@@ -5367,7 +5373,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     typeInt = DataUsageStatColumns.USAGE_TYPE_INT_CALL;
                 }
                 setTablesAndProjectionMapForData(qb, uri, projection, true, typeInt);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Phone.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForPhone());
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
@@ -5428,21 +5435,24 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case EMAILS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForEmail());
                 break;
             }
 
             case EMAILS_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'"
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForEmail()
                         + " AND " + Data._ID + "=?");
                 break;
             }
 
             case EMAILS_LOOKUP: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '" + Email.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForEmail());
                 if (uri.getPathSegments().size() > 2) {
                     String email = uri.getLastPathSegment();
                     String address = mDbHelper.get().extractAddressFromEmailAddress(email);
@@ -5514,16 +5524,16 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case POSTALS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
-                        + StructuredPostal.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForStructuredPostal());
                 break;
             }
 
             case POSTALS_ID: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(" AND " + Data.MIMETYPE + " = '"
-                        + StructuredPostal.CONTENT_ITEM_TYPE + "'");
+                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mDbHelper.get().getMimeTypeIdForStructuredPostal());
                 qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
@@ -5753,7 +5763,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sLiveFoldersProjectionMap);
                 qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
+                String groupMimeTypeId = String.valueOf(
+                        mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
+                selectionArgs = insertSelectionArg(selectionArgs, groupMimeTypeId);
                 break;
 
             case RAW_CONTACT_ENTITIES:
@@ -6862,9 +6875,10 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
                 String[] projection = new String[]{Data._ID, Photo.PHOTO_FILE_ID};
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
+                long photoMimetypeId = mDbHelper.get().getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
                 Cursor c = qb.query(mActiveDb.get(), projection,
-                        Data.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
-                        new String[]{String.valueOf(rawContactId), Photo.CONTENT_ITEM_TYPE},
+                        Data.RAW_CONTACT_ID + "=? AND " + DataColumns.MIMETYPE_ID + "=?",
+                        new String[]{String.valueOf(rawContactId), String.valueOf(photoMimetypeId)},
                         null, null, Data.IS_PRIMARY + " DESC");
                 long dataId = 0;
                 long photoFileId = 0;
@@ -6899,8 +6913,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
             case DATA_ID: {
                 long dataId = Long.parseLong(uri.getPathSegments().get(1));
+                long photoMimetypeId = mDbHelper.get().getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
                 return openPhotoAssetFile(mActiveDb.get(), uri, mode,
-                        Data._ID + "=? AND " + Data.MIMETYPE + "='" + Photo.CONTENT_ITEM_TYPE + "'",
+                        Data._ID + "=? AND " + DataColumns.MIMETYPE_ID + "=" + photoMimetypeId,
                         new String[]{String.valueOf(dataId)});
             }
 
