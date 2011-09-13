@@ -136,6 +136,7 @@ import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
@@ -7192,9 +7193,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         final VCardComposer composer =
                 new VCardComposer(context, vcardconfig, false);
         Writer writer = null;
+        final Uri rawContactsUri;
+        if (mapsToProfileDb(uri)) {
+            rawContactsUri = RawContactsEntity.PROFILE_CONTENT_URI;
+        } else {
+            rawContactsUri = RawContactsEntity.CONTENT_URI;
+        }
         try {
             writer = new BufferedWriter(new OutputStreamWriter(stream));
-            if (!composer.init(uri, selection, selectionArgs, null)) {
+            if (!composer.init(uri, selection, selectionArgs, null, rawContactsUri)) {
                 Log.w(TAG, "Failed to init VCardComposer");
                 return;
             }
