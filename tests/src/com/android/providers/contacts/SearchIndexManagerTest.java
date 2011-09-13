@@ -253,7 +253,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertNote(rawContactId, "Please note: three notes or more make up a chord.");
 
         assertStoredValue(
-                buildSearchUri("thr", "[,],-,2"), SearchSnippetColumns.SNIPPET, "-note: [three]-");
+                buildSearchUri("thr", "[,],-,2", false), SearchSnippetColumns.SNIPPET,
+                "-note: [three]-");
     }
 
     public void testEmptyFilter() {
@@ -274,11 +275,11 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "john@doe.com");
         insertNote(rawContactId, "a hundred dollar note for doe@john.com and bob parr");
 
-        assertStoredValue(buildSearchUri("john@d"), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("john@d", true), SearchSnippetColumns.SNIPPET,
                 "[john@doe.com]");
-        assertStoredValue(buildSearchUri("doe@j"), SearchSnippetColumns.SNIPPET,
-                "a hundred dollar note for [doe@john.com] and bob parr");
-        assertStoredValue(buildSearchUri("bob@p"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("doe@j", true), SearchSnippetColumns.SNIPPET,
+                "...note for [doe@john.com] and bob...");
+        assertStoredValue(buildSearchUri("bob@p", true), SearchSnippetColumns.SNIPPET, null);
     }
 
     public void testSearchByPhoneNumber() {
@@ -297,13 +298,20 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
     }
 
     private Uri buildSearchUri(String filter) {
-        return buildSearchUri(filter, null);
+        return buildSearchUri(filter, false);
     }
 
-    private Uri buildSearchUri(String filter, String args) {
+    private Uri buildSearchUri(String filter, boolean deferredSnippeting) {
+        return buildSearchUri(filter, null, deferredSnippeting);
+    }
+
+    private Uri buildSearchUri(String filter, String args, boolean deferredSnippeting) {
         Builder builder = Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(filter);
         if (args != null) {
             builder.appendQueryParameter(SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY, args);
+        }
+        if (deferredSnippeting) {
+            builder.appendQueryParameter(SearchSnippetColumns.DEFERRED_SNIPPETING_KEY, "1");
         }
         return builder.build();
     }

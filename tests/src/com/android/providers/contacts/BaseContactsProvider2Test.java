@@ -27,8 +27,10 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
+import android.database.AbstractCursor;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -46,6 +48,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
@@ -843,10 +846,32 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertEquals("Record count", 1, c.getCount());
 
             if (c.moveToFirst()) {
-                value = c.getString(c.getColumnIndex(column));
+                value = getCursorStringValue(c, column);
             }
         } finally {
             c.close();
+        }
+        return value;
+    }
+
+    /**
+     * Retrieves the string value in the given column, handling deferred snippeting if the requested
+     * column is the snippet and the cursor specifies it.
+     */
+    protected String getCursorStringValue(Cursor c, String column) {
+        String value = c.getString(c.getColumnIndex(column));
+        if (SearchSnippetColumns.SNIPPET.equals(column)) {
+            Bundle extras = c.getExtras();
+            if (extras.containsKey(ContactsContract.DEFERRED_SNIPPETING)) {
+                String displayName = "No display name";
+                int displayNameColumnIndex = c.getColumnIndex(Contacts.DISPLAY_NAME);
+                if (displayNameColumnIndex != -1) {
+                    displayName = c.getString(displayNameColumnIndex);
+                }
+                String query = extras.getString(ContactsContract.DEFERRED_SNIPPETING_QUERY);
+                value = ContactsContract.snippetize(value, displayName, query,
+                        '[', ']', "...", 5);
+            }
         }
         return value;
     }
@@ -1030,7 +1055,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
                 value = Hex.encodeHex(cursor.getBlob(index), false);
             } else {
                 expectedValue = expectedValues.getAsString(column);
-                value = cursor.getString(index);
+                value = getCursorStringValue(cursor, column);
             }
             if (expectedValue != null && !expectedValue.equals(value) || value != null
                     && !value.equals(expectedValue)) {

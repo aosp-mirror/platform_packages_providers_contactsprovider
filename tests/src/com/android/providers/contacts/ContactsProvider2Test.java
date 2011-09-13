@@ -2648,7 +2648,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // And another data element
         insertEmail(rawContactId, "emca@corp.com", true, Email.TYPE_CUSTOM, "Custom");
 
-        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("acme"));
+        Uri filterUri = buildFilterUri("acme", true);
 
         values.clear();
         values.put(Contacts._ID, contactId);
@@ -2664,7 +2664,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, "John", "Doe");
         Uri dataUri = insertEmail(rawContactId, "acme@corp.com", true, Email.TYPE_CUSTOM, "Custom");
 
-        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("acme"));
+        Uri filterUri = buildFilterUri("acme", true);
 
         values.clear();
         values.put(Contacts._ID, contactId);
@@ -2700,6 +2700,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Uri.encode("860-555")), values);
     }
 
+    private Uri buildFilterUri(String query, boolean deferredSnippeting) {
+        Uri.Builder builder = Contacts.CONTENT_FILTER_URI.buildUpon()
+                .appendPath(Uri.encode(query));
+        if (deferredSnippeting) {
+            builder.appendQueryParameter(ContactsContract.DEFERRED_SNIPPETING, "1");
+        }
+        return builder.build();
+    }
+
     public void testSearchSnippetNickname() throws Exception {
         long rawContactId = createRawContactWithName();
         long contactId = queryContactId(rawContactId);
@@ -2707,7 +2716,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Uri dataUri = insertNickname(rawContactId, "Incredible");
 
-        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("inc"));
+        Uri filterUri = buildFilterUri("inc", true);
 
         values.clear();
         values.put(Contacts._ID, contactId);
@@ -2726,10 +2735,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         emptySnippet.put(Contacts._ID, contactId);
         emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
 
-        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("cave")),
-                emptySnippet);
-        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("john")),
-                emptySnippet);
+        assertStoredValues(buildFilterUri("cave", true), emptySnippet);
+        assertStoredValues(buildFilterUri("john", true), emptySnippet);
     }
 
     public void testSearchSnippetEmptyForNicknameInDisplayName() throws Exception {
@@ -2743,8 +2750,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         emptySnippet.put(Contacts._ID, contactId);
         emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
 
-        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("cave")),
-                emptySnippet);
+        assertStoredValues(buildFilterUri("cave", true), emptySnippet);
     }
 
     public void testSearchSnippetEmptyForCompanyInDisplayName() throws Exception {
@@ -2762,8 +2768,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         emptySnippet.put(Contacts._ID, contactId);
         emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
 
-        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
-                Uri.encode("aperture")), emptySnippet);
+        assertStoredValues(buildFilterUri("aperture", true), emptySnippet);
     }
 
     public void testSearchSnippetEmptyForPhoneInDisplayName() throws Exception {
@@ -2777,8 +2782,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         emptySnippet.put(Contacts._ID, contactId);
         emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
 
-        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("860")),
-                emptySnippet);
+        assertStoredValues(buildFilterUri("860", true), emptySnippet);
     }
 
     public void testSearchSnippetEmptyForEmailInDisplayName() throws Exception {
@@ -2792,8 +2796,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         emptySnippet.put(Contacts._ID, contactId);
         emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
 
-        assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode("cave")),
-                emptySnippet);
+        assertStoredValues(buildFilterUri("cave", true), emptySnippet);
     }
 
     public void testDisplayNameUpdateFromStructuredNameUpdate() {
