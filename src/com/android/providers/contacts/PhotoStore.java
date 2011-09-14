@@ -88,6 +88,9 @@ public class PhotoStore {
                 cleanupFile(file);
             }
         }
+        if (mDb == null) {
+            mDb = mDatabaseHelper.getWritableDatabase();
+        }
         mDb.delete(Tables.PHOTO_FILES, null, null);
         mEntries.clear();
         mTotalSize = 0;

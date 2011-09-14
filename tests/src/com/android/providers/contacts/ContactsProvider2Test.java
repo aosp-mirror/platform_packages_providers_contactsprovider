@@ -4519,6 +4519,31 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHOTO_URI, photoUri);
     }
 
+    public void testGetPhotoViaLookupUri() throws IOException {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        Uri lookupUri = Contacts.getLookupUri(mResolver, contactUri);
+        String lookupKey = lookupUri.getPathSegments().get(2);
+        insertPhoto(rawContactId, R.drawable.earth_small);
+        byte[] thumbnail = loadPhotoFromResource(R.drawable.earth_small, PhotoSize.THUMBNAIL);
+
+        // Two forms of lookup key URIs should be valid - one with the contact ID, one without.
+        Uri photoLookupUriWithId = Uri.withAppendedPath(lookupUri, "photo");
+        Uri photoLookupUriWithoutId = Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                .appendPath(lookupKey).appendPath("photo").build();
+
+        // Try retrieving as a data record.
+        ContentValues values = new ContentValues();
+        values.put(Photo.PHOTO, thumbnail);
+        assertStoredValues(photoLookupUriWithId, values);
+        assertStoredValues(photoLookupUriWithoutId, values);
+
+        // Try opening as an input stream.
+        assertInputStreamContent(thumbnail, mResolver.openInputStream(photoLookupUriWithId));
+        assertInputStreamContent(thumbnail, mResolver.openInputStream(photoLookupUriWithoutId));
+    }
+
     public void testInputStreamForPhoto() throws Exception {
         long rawContactId = createRawContact();
         long contactId = queryContactId(rawContactId);

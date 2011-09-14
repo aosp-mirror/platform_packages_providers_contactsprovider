@@ -260,20 +260,22 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int CONTACTS_STREQUENT_FILTER = 1007;
     private static final int CONTACTS_GROUP = 1008;
     private static final int CONTACTS_ID_PHOTO = 1009;
-    private static final int CONTACTS_ID_DISPLAY_PHOTO = 1010;
-    private static final int CONTACTS_LOOKUP_DISPLAY_PHOTO = 1011;
-    private static final int CONTACTS_LOOKUP_ID_DISPLAY_PHOTO = 1012;
-    private static final int CONTACTS_AS_VCARD = 1013;
-    private static final int CONTACTS_AS_MULTI_VCARD = 1014;
-    private static final int CONTACTS_LOOKUP_DATA = 1015;
-    private static final int CONTACTS_LOOKUP_ID_DATA = 1016;
-    private static final int CONTACTS_ID_ENTITIES = 1017;
-    private static final int CONTACTS_LOOKUP_ENTITIES = 1018;
-    private static final int CONTACTS_LOOKUP_ID_ENTITIES = 1019;
-    private static final int CONTACTS_ID_STREAM_ITEMS = 1020;
-    private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1021;
-    private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1022;
-    private static final int CONTACTS_FREQUENT = 1023;
+    private static final int CONTACTS_LOOKUP_PHOTO = 1010;
+    private static final int CONTACTS_LOOKUP_ID_PHOTO = 1011;
+    private static final int CONTACTS_ID_DISPLAY_PHOTO = 1012;
+    private static final int CONTACTS_LOOKUP_DISPLAY_PHOTO = 1013;
+    private static final int CONTACTS_LOOKUP_ID_DISPLAY_PHOTO = 1014;
+    private static final int CONTACTS_AS_VCARD = 1015;
+    private static final int CONTACTS_AS_MULTI_VCARD = 1016;
+    private static final int CONTACTS_LOOKUP_DATA = 1017;
+    private static final int CONTACTS_LOOKUP_ID_DATA = 1018;
+    private static final int CONTACTS_ID_ENTITIES = 1019;
+    private static final int CONTACTS_LOOKUP_ENTITIES = 1020;
+    private static final int CONTACTS_LOOKUP_ID_ENTITIES = 1021;
+    private static final int CONTACTS_ID_STREAM_ITEMS = 1022;
+    private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1023;
+    private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1024;
+    private static final int CONTACTS_FREQUENT = 1025;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -1066,9 +1068,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/data", CONTACTS_LOOKUP_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/photo",
+                CONTACTS_LOOKUP_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/data",
                 CONTACTS_LOOKUP_ID_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/photo",
+                CONTACTS_LOOKUP_ID_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/display_photo",
                 CONTACTS_LOOKUP_DISPLAY_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/display_photo",
@@ -4977,7 +4983,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             }
 
             case CONTACTS_LOOKUP_DATA:
-            case CONTACTS_LOOKUP_ID_DATA: {
+            case CONTACTS_LOOKUP_ID_DATA:
+            case CONTACTS_LOOKUP_PHOTO:
+            case CONTACTS_LOOKUP_ID_PHOTO: {
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
                 if (segmentCount < 4) {
@@ -4989,6 +4997,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForData(lookupQb, uri, projection, false);
+                    if (match == CONTACTS_LOOKUP_PHOTO || match == CONTACTS_LOOKUP_ID_PHOTO) {
+                        qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
+                    }
                     lookupQb.appendWhere(" AND ");
                     Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
@@ -5004,6 +5015,9 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 long contactId = lookupContactIdByLookupKey(mActiveDb.get(), lookupKey);
                 selectionArgs = insertSelectionArg(selectionArgs,
                         String.valueOf(contactId));
+                if (match == CONTACTS_LOOKUP_PHOTO || match == CONTACTS_LOOKUP_ID_PHOTO) {
+                    qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
+                }
                 qb.appendWhere(" AND " + Data.CONTACT_ID + "=?");
                 break;
             }
@@ -6795,11 +6809,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS_ID_PHOTO: {
-                long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
+                long contactId = Long.parseLong(uri.getPathSegments().get(1));
                 return openPhotoAssetFile(mActiveDb.get(), uri, mode,
                         Data._ID + "=" + Contacts.PHOTO_ID + " AND " +
                                 RawContacts.CONTACT_ID + "=?",
-                        new String[]{String.valueOf(rawContactId)});
+                        new String[]{String.valueOf(contactId)});
             }
 
             case CONTACTS_ID_DISPLAY_PHOTO: {
@@ -6821,11 +6835,13 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 }
             }
 
+            case CONTACTS_LOOKUP_PHOTO:
+            case CONTACTS_LOOKUP_ID_PHOTO:
             case CONTACTS_LOOKUP_DISPLAY_PHOTO:
             case CONTACTS_LOOKUP_ID_DISPLAY_PHOTO: {
                 if (!mode.equals("r")) {
                     throw new IllegalArgumentException(
-                            "Display photos retrieved by contact lookup key can only be read.");
+                            "Photos retrieved by contact lookup key can only be read.");
                 }
                 List<String> pathSegments = uri.getPathSegments();
                 int segmentCount = pathSegments.size();
@@ -6833,8 +6849,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
                             "Missing a lookup key", uri));
                 }
+
+                boolean forDisplayPhoto = (match == CONTACTS_LOOKUP_ID_DISPLAY_PHOTO
+                        || match == CONTACTS_LOOKUP_DISPLAY_PHOTO);
                 String lookupKey = pathSegments.get(2);
-                String[] projection = new String[]{Contacts.PHOTO_FILE_ID};
+                String[] projection = new String[]{Contacts.PHOTO_ID, Contacts.PHOTO_FILE_ID};
                 if (segmentCount == 5) {
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
@@ -6845,8 +6864,15 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     if (c != null) {
                         try {
                             c.moveToFirst();
-                            long photoFileId = c.getLong(c.getColumnIndex(Contacts.PHOTO_FILE_ID));
-                            return openDisplayPhotoForRead(photoFileId);
+                            if (forDisplayPhoto) {
+                                long photoFileId =
+                                        c.getLong(c.getColumnIndex(Contacts.PHOTO_FILE_ID));
+                                return openDisplayPhotoForRead(photoFileId);
+                            } else {
+                                long photoId = c.getLong(c.getColumnIndex(Contacts.PHOTO_ID));
+                                return openPhotoAssetFile(mActiveDb.get(), uri, mode,
+                                        Data._ID + "=?", new String[]{String.valueOf(photoId)});
+                            }
                         } finally {
                             c.close();
                         }
@@ -6860,8 +6886,14 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         new String[]{String.valueOf(contactId)}, null, null, null);
                 try {
                     c.moveToFirst();
-                    long photoFileId = c.getLong(c.getColumnIndex(Contacts.PHOTO_FILE_ID));
-                    return openDisplayPhotoForRead(photoFileId);
+                    if (forDisplayPhoto) {
+                        long photoFileId = c.getLong(c.getColumnIndex(Contacts.PHOTO_FILE_ID));
+                        return openDisplayPhotoForRead(photoFileId);
+                    } else {
+                        long photoId = c.getLong(c.getColumnIndex(Contacts.PHOTO_ID));
+                        return openPhotoAssetFile(mActiveDb.get(), uri, mode,
+                                Data._ID + "=?", new String[]{String.valueOf(photoId)});
+                    }
                 } finally {
                     c.close();
                 }
@@ -7203,6 +7235,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             case PROFILE_AS_VCARD:
                 return Contacts.CONTENT_VCARD_TYPE;
             case CONTACTS_ID_PHOTO:
+            case CONTACTS_LOOKUP_PHOTO:
+            case CONTACTS_LOOKUP_ID_PHOTO:
             case CONTACTS_ID_DISPLAY_PHOTO:
             case CONTACTS_LOOKUP_DISPLAY_PHOTO:
             case CONTACTS_LOOKUP_ID_DISPLAY_PHOTO:
