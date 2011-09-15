@@ -3687,7 +3687,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                     PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             int count = mActiveDb.get().delete(Tables.RAW_CONTACTS,
                     RawContacts._ID + "=" + rawContactId, null);
-            mAggregator.get().updateDisplayNameForContact(mActiveDb.get(), contactId);
+            mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
             return count;
         } else {
             mDbHelper.get().removeContactIfSingleton(rawContactId);
