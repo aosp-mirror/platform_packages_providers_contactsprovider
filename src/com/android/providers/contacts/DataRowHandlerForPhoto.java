@@ -57,8 +57,8 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
         if (values.containsKey(SKIP_PROCESSING_KEY)) {
             values.remove(SKIP_PROCESSING_KEY);
         } else {
-            // Pre-process the photo.
-            if (hasNonNullPhoto(values) && !processPhoto(values)) {
+            // Pre-process the photo if one exists.
+            if (!preProcessPhoto(values)) {
                 return 0;
             }
         }
@@ -79,19 +79,8 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
             values.remove(SKIP_PROCESSING_KEY);
         } else {
             // Pre-process the photo if one exists.
-            if (values.containsKey(Photo.PHOTO)) {
-                boolean photoExists = hasNonNullPhoto(values);
-                if (photoExists) {
-                    if (!processPhoto(values)) {
-                        // A photo was passed in, but we couldn't process it.  Update failed.
-                        return false;
-                    }
-                } else {
-                    // The photo key was passed in, but it was either null or an empty byte[].
-                    // We should set the photo and photo file ID fields to null for the update.
-                    values.putNull(Photo.PHOTO);
-                    values.putNull(Photo.PHOTO_FILE_ID);
-                }
+            if (!preProcessPhoto(values)) {
+                return false;
             }
         }
 
@@ -101,6 +90,31 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
         }
 
         mContactAggregator.updatePhotoId(db, rawContactId);
+        return true;
+    }
+
+    /**
+     * Pre-processes the given content values for update or insert.  If the photo column contains
+     * null or an empty byte array, both that column and the photo file ID will be nulled out.
+     * If a photo was specified but could not be processed, this will return false.
+     * @param values The content values passed in.
+     * @return Whether processing was successful - on failure, the operation should abort.
+     */
+    private boolean preProcessPhoto(ContentValues values) {
+        if (values.containsKey(Photo.PHOTO)) {
+            boolean photoExists = hasNonNullPhoto(values);
+            if (photoExists) {
+                if (!processPhoto(values)) {
+                    // A photo was passed in, but we couldn't process it.  Update failed.
+                    return false;
+                }
+            } else {
+                // The photo key was passed in, but it was either null or an empty byte[].
+                // We should set the photo and photo file ID fields to null for the update.
+                values.putNull(Photo.PHOTO);
+                values.putNull(Photo.PHOTO_FILE_ID);
+            }
+        }
         return true;
     }
 
