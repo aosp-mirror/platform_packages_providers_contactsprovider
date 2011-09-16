@@ -203,18 +203,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
 
     /**
-     * Maximum number of operations allowed in a batch between yield points.  Copied from
-     * {@link SQLiteContentProvider} since we re-implement its applyBatch method.
-     */
-    private static final int MAX_OPERATIONS_PER_YIELD_POINT = 500;
-
-    /**
-     * Duration (in ms) to wait after yielding during long batch operations.  Copied from
-     * {@link SQLiteContentProvider}.
-     */
-    private static final int SLEEP_AFTER_YIELD_DELAY = 4000;
-
-    /**
      * Property key for the legacy contact import version. The need for a version
      * as opposed to a boolean flag is that if we discover bugs in the contact import process,
      * we can trigger re-import by incrementing the import version.
@@ -2157,75 +2145,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
         waitForAccess(mWriteAccessLatch);
-
-        // Note: This duplicates much of the logic in the superclass, but handles the logistics of
-        // having a profile transaction in progress (and yielding that transaction if necessary).
-
-        int ypCount = 0;
-        int opCount = 0;
-        boolean notifyChange = false;
-
-        // Always get a contacts DB and start a transaction on it, to maintain provider
-        // synchronization.
-        mDb = mContactsHelper.getWritableDatabase();
-        mDb.beginTransactionWithListener(this);
+        ContentProviderResult[] results = null;
         try {
             mApplyingBatch.set(true);
-            final int numOperations = operations.size();
-            final ContentProviderResult[] results = new ContentProviderResult[numOperations];
-            for (int i = 0; i < numOperations; i++) {
-                if (++opCount >= MAX_OPERATIONS_PER_YIELD_POINT) {
-                    throw new OperationApplicationException(
-                            "Too many content provider operations between yield points. "
-                                    + "The maximum number of operations per yield point is "
-                                    + MAX_OPERATIONS_PER_YIELD_POINT, ypCount);
-                }
-                final ContentProviderOperation operation = operations.get(i);
-                if (i > 0 && operation.isYieldAllowed()) {
-                    opCount = 0;
-
-                    // If there's a profile transaction in progress, and we're yielding, we need to
-                    // end it.  Unlike the Contacts DB yield (which re-starts a transaction at its
-                    // conclusion), we can just go back into a state in which we have no active
-                    // profile transaction, and let it be re-created as needed.  We can't hold onto
-                    // the transaction without risking a deadlock.
-                    if (mProfileDbForBatch.get() != null) {
-                        mProfileDbForBatch.get().setTransactionSuccessful();
-                        mProfileDbForBatch.get().endTransaction();
-                        mProfileDbForBatch.set(null);
-                    }
-
-                    // Now proceed with the Contacts DB yield.
-                    if (mDb.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY)) {
-                        mDb = mContactsHelper.getWritableDatabase();
-                        ypCount++;
-                    }
-                }
-
-                results[i] = operation.apply(this, results, i);
-                if (operation.isWriteOperation()
-                        && (results[i].uri != null || results[i].count > 0)) {
-                    notifyChange = true;
-                }
-            }
-            mDb.setTransactionSuccessful();
-            if (mProfileDbForBatch.get() != null) {
-                mProfileDbForBatch.get().setTransactionSuccessful();
-            }
-            return results;
+            results = super.applyBatch(operations);
         } finally {
             mApplyingBatch.set(false);
-            mDb.endTransaction();
             if (mProfileDbForBatch.get() != null) {
                 // A profile operation was involved, so clean up its transaction.
+                mProfileDbForBatch.get().setTransactionSuccessful();
                 mProfileDbForBatch.get().endTransaction();
                 mProfileDbForBatch.set(null);
             }
-
-            if (notifyChange) {
-                notifyChange();
-            }
         }
+        return results;
     }
 
     @Override
