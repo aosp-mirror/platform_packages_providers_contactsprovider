@@ -25,9 +25,7 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Khetha ukuqedela ukuthuthukisa"</string>
     <string name="default_directory" msgid="93961630309570294">"Othintana nabo"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Okunye"</string>
-    <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
-    <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
-    <skip />
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Finyelela kuwo wonke amavoyisimeyili"</string>
+    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Ivumela uhlelo olusebenzayo lulonde futhi lulande wonke ama-imeyli ezwi ledivayisi engakwazi ukuwafinyelela."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Imeyili yezwi kusuka "</string>
 </resources>
