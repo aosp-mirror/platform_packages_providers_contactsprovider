@@ -3146,8 +3146,20 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         Cursor c = queryLocal(settingsUri.build(), null, null, null, null, 0);
         try {
             if (c.getCount() > 0) {
-                throw new SQLiteConstraintException("Can't insert a settings record with the same "
-                        + "account name/type/data set");
+                // If a record was found, replace it with the new values.
+                String selection = null;
+                String[] selectionArgs = null;
+                if (accountName != null && accountType != null) {
+                    selection = Settings.ACCOUNT_NAME + "=? AND " + Settings.ACCOUNT_TYPE + "=?";
+                    if (dataSet == null) {
+                        selection += " AND " + Settings.DATA_SET + " IS NULL";
+                        selectionArgs = new String[] {accountName, accountType};
+                    } else {
+                        selection += " AND " + Settings.DATA_SET + "=?";
+                        selectionArgs = new String[] {accountName, accountType, dataSet};
+                    }
+                }
+                return updateSettings(uri, values, selection, selectionArgs);
             }
         } finally {
             c.close();
