@@ -34,7 +34,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.RawContacts;
 import android.test.mock.MockContentProvider;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 /**
  * Unit tests for {@link ContactDirectoryManager}. Run the test like this:
@@ -43,7 +43,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  *       -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@MediumTest
 public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
     private ContactsMockPackageManager mPackageManager;
