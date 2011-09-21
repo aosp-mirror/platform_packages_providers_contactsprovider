@@ -16,11 +16,9 @@
 
 package com.android.providers.contacts;
 
-import com.android.common.content.SQLiteContentProvider;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
-import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
@@ -88,7 +86,6 @@ import android.database.MatrixCursor.RowBuilder;
 import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -175,7 +172,8 @@ import java.util.concurrent.CountDownLatch;
  * Contacts content provider. The contract between this provider and applications
  * is defined in {@link ContactsContract}.
  */
-public class ContactsProvider2 extends SQLiteContentProvider implements OnAccountsUpdateListener {
+public class ContactsProvider2 extends AbstractContactsProvider
+        implements OnAccountsUpdateListener {
 
     private static final String TAG = "ContactsProvider";
 
@@ -1267,6 +1265,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
     private ContactDirectoryManager mContactDirectoryManager;
 
+    // The database tag to use for representing the contacts DB in contacts transactions.
+    /* package */ static final String CONTACTS_DB_TAG = "contacts";
+
+    // The database tag to use for representing the profile DB in contacts transactions.
+    /* package */ static final String PROFILE_DB_TAG = "profile";
+
     /**
      * The active (thread-local) database.  This will be switched between a contacts-specific
      * database and a profile-specific database, depending on what the current operation is
@@ -1373,8 +1377,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         mMaxThumbnailPhotoDim = resources.getInteger(
                 R.integer.config_max_thumbnail_photo_dim);
 
-        mContactsHelper = (ContactsDatabaseHelper) getDatabaseHelper();
+        mContactsHelper = getDatabaseHelper(getContext());
         mDbHelper.set(mContactsHelper);
+
+        // Set up the DB helper for keeping transactions serialized.
+        setDbHelperToSerializeOn(mContactsHelper, CONTACTS_DB_TAG);
+
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
 
@@ -1398,7 +1406,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         profileInfo.readPermission = "android.permission.READ_PROFILE";
         profileInfo.writePermission = "android.permission.WRITE_PROFILE";
         mProfileProvider.attachInfo(getContext(), profileInfo);
-        mProfileHelper = (ProfileDatabaseHelper) mProfileProvider.getDatabaseHelper();
+        mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
 
         scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
         scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
@@ -1780,7 +1788,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     /* Visible for testing */
-    @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
     }
@@ -2033,27 +2040,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
-            if (applyingBatch()) {
-                switchToProfileMode();
-                return mProfileProvider.insert(uri, values);
-            } else {
-                // Start a contacts DB transaction to maintain provider synchronization.
-                SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
-                contactsDb.beginTransactionWithListener(this);
-                Uri result = null;
-                try {
-                    // Now switch to profile mode and proceed with the insert using its provider.
-                    switchToProfileMode();
-                    result = mProfileProvider.insert(uri, values);
-
-                    contactsDb.setTransactionSuccessful();
-                } finally {
-                    // Finish the contacts transaction, allowing other provider operations to
-                    // proceed.
-                    contactsDb.endTransaction();
-                }
-                return result;
-            }
+            switchToProfileMode();
+            return mProfileProvider.insert(uri, values);
         } else {
             switchToContactMode();
             return super.insert(uri, values);
@@ -2079,27 +2067,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
         waitForAccess(mWriteAccessLatch);
         if (mapsToProfileDb(uri)) {
-            if (applyingBatch()) {
-                switchToProfileMode();
-                return mProfileProvider.update(uri, values, selection, selectionArgs);
-            } else {
-                // Start a contacts DB transaction to maintain provider synchronization.
-                SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
-                contactsDb.beginTransactionWithListener(this);
-                int result = 0;
-                try {
-                    // Now switch to profile mode and proceed with the update using its provider.
-                    switchToProfileMode();
-                    result = mProfileProvider.update(uri, values, selection, selectionArgs);
-
-                    contactsDb.setTransactionSuccessful();
-                } finally {
-                    // Finish the contacts transaction, allowing other provider operations to
-                    // proceed.
-                    contactsDb.endTransaction();
-                }
-                return result;
-            }
+            switchToProfileMode();
+            return mProfileProvider.update(uri, values, selection, selectionArgs);
         } else {
             switchToContactMode();
             return super.update(uri, values, selection, selectionArgs);
@@ -2110,27 +2079,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
         if (mapsToProfileDb(uri)) {
-            if (applyingBatch()) {
-                switchToProfileMode();
-                return mProfileProvider.delete(uri, selection, selectionArgs);
-            } else {
-                // Start a contacts DB transaction to maintain provider synchronization.
-                SQLiteDatabase contactsDb = mContactsHelper.getWritableDatabase();
-                contactsDb.beginTransactionWithListener(this);
-                int result = 0;
-                try {
-                    // Now switch to profile mode and proceed with the delete using its provider.
-                    switchToProfileMode();
-                    result = mProfileProvider.delete(uri, selection, selectionArgs);
-
-                    contactsDb.setTransactionSuccessful();
-                } finally {
-                    // Finish the contacts transaction, allowing other provider operations to
-                    // proceed.
-                    contactsDb.endTransaction();
-                }
-                return result;
-            }
+            switchToProfileMode();
+            return mProfileProvider.delete(uri, selection, selectionArgs);
         } else {
             switchToContactMode();
             return super.delete(uri, selection, selectionArgs);
@@ -2146,86 +2096,41 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     }
 
     @Override
+    protected boolean yield(ContactsTransaction transaction) {
+        // If there's a profile transaction in progress, and we're yielding, we need to
+        // end it.  Unlike the Contacts DB yield (which re-starts a transaction at its
+        // conclusion), we can just go back into a state in which we have no active
+        // profile transaction, and let it be re-created as needed.  We can't hold onto
+        // the transaction without risking a deadlock.
+        SQLiteDatabase profileDb = transaction.removeDbForTag(PROFILE_DB_TAG);
+        if (profileDb != null) {
+            profileDb.setTransactionSuccessful();
+            profileDb.endTransaction();
+        }
+
+        // Now proceed with the Contacts DB yield.
+        SQLiteDatabase contactsDb = transaction.getDbForTag(CONTACTS_DB_TAG);
+        return contactsDb != null && contactsDb.yieldIfContendedSafely(SLEEP_AFTER_YIELD_DELAY);
+    }
+
+    @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
         waitForAccess(mWriteAccessLatch);
-        ContentProviderResult[] results = null;
-        try {
-            mApplyingBatch.set(true);
-            results = super.applyBatch(operations);
-        } finally {
-            mApplyingBatch.set(false);
-            if (mProfileDbForBatch.get() != null) {
-                // A profile operation was involved, so clean up its transaction.
-                mProfileDbForBatch.get().setTransactionSuccessful();
-                mProfileDbForBatch.get().endTransaction();
-                mProfileDbForBatch.set(null);
-            }
-        }
-        return results;
+        return super.applyBatch(operations);
     }
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
         waitForAccess(mWriteAccessLatch);
-
-        // Note: This duplicates much of the logic in the superclass, but handles toggling
-        // into profile mode if necessary.
-        int numValues = values.length;
-        boolean notifyChange = false;
-        SQLiteDatabase profileDb = null;
-
-        // Always get a contacts DB and start a transaction on it, to maintain provider
-        // synchronization.
-        mDb = mContactsHelper.getWritableDatabase();
-        mDb.beginTransactionWithListener(this);
-        try {
-            for (int i = 0; i < numValues; i++) {
-                Uri result;
-                if (mapsToProfileDbWithInsertedValues(uri, values[i])) {
-                    switchToProfileMode();
-
-                    // Initialize the profile DB and start a profile transaction if we haven't
-                    // already done so.
-                    if (profileDb == null) {
-                        profileDb = mProfileHelper.getWritableDatabase();
-                        profileDb.beginTransactionWithListener(this);
-                    }
-                    result = mProfileProvider.insertInTransaction(uri, values[i]);
-                } else {
-                    switchToContactMode();
-                    result = insertInTransaction(uri, values[i]);
-                }
-                if (result != null) {
-                    notifyChange = true;
-                }
-                boolean savedNotifyChange = notifyChange;
-                mActiveDb.get().yieldIfContendedSafely();
-                notifyChange = savedNotifyChange;
-            }
-            mDb.setTransactionSuccessful();
-            if (profileDb != null) {
-                profileDb.setTransactionSuccessful();
-            }
-        } finally {
-            mDb.endTransaction();
-            if (profileDb != null) {
-                profileDb.endTransaction();
-            }
-        }
-
-        if (notifyChange) {
-            notifyChange();
-        }
-        return numValues;
+        return super.bulkInsert(uri, values);
     }
 
     @Override
-    protected void onBeginTransaction() {
+    public void onBegin() {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "onBeginTransaction");
         }
-        super.onBeginTransaction();
         if (inProfileMode()) {
             mProfileAggregator.clearPendingAggregations();
             mProfileTransactionContext.clear();
@@ -2235,14 +2140,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         }
     }
 
-
     @Override
-    protected void beforeTransactionCommit() {
-
+    public void onCommit() {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "beforeTransactionCommit");
         }
-        super.beforeTransactionCommit();
         flushTransactionalChanges();
         mAggregator.get().aggregateInTransaction(mTransactionContext.get(), mActiveDb.get());
         if (mVisibleTouched) {
@@ -2256,6 +2158,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             updateProviderStatus();
             mProviderStatusUpdateNeeded = false;
         }
+    }
+
+    @Override
+    public void onRollback() {
+        // Not used.
     }
 
     private void updateSearchIndexInTransaction() {
@@ -2369,7 +2276,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Default active DB to the contacts DB if none has been set.
         if (mActiveDb.get() == null) {
-            mActiveDb.set(mDb);
+            mActiveDb.set(mContactsHelper.getWritableDatabase());
         }
 
         final boolean callerIsSyncAdapter =
@@ -3407,7 +3314,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Default active DB to the contacts DB if none has been set.
         if (mActiveDb.get() == null) {
-            mActiveDb.set(mDb);
+            mActiveDb.set(mContactsHelper.getWritableDatabase());
         }
 
         flushTransactionalChanges();
@@ -3787,7 +3694,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Default active DB to the contacts DB if none has been set.
         if (mActiveDb.get() == null) {
-            mActiveDb.set(mDb);
+            mActiveDb.set(mContactsHelper.getWritableDatabase());
         }
 
         int count = 0;
@@ -4913,7 +4820,7 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Default active DB to the contacts DB if none has been set.
         if (mActiveDb.get() == null) {
-            mActiveDb.set(mDb);
+            mActiveDb.set(mContactsHelper.getReadableDatabase());
         }
 
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
@@ -6788,11 +6695,6 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
             return mProfileProvider.openAssetFile(uri, mode);
         } else {
             switchToContactMode();
-            if (mode.equals("r")) {
-                mDb = mDbHelper.get().getReadableDatabase();
-            } else {
-                mDb = mDbHelper.get().getWritableDatabase();
-            }
             return openAssetFileLocal(uri, mode);
         }
     }
@@ -6802,7 +6704,11 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
 
         // Default active DB to the contacts DB if none has been set.
         if (mActiveDb.get() == null) {
-            mActiveDb.set(mDb);
+            if (mode.equals("r")) {
+                mActiveDb.set(mContactsHelper.getReadableDatabase());
+            } else {
+                mActiveDb.set(mContactsHelper.getWritableDatabase());
+            }
         }
 
         int match = sUriMatcher.match(uri);

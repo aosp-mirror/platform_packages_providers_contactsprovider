@@ -59,8 +59,8 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
-    protected void onBeginTransaction() {
-        super.onBeginTransaction();
+    public void onBegin() {
+        super.onBegin();
         mNetworkNotified = false;
     }
 
@@ -160,7 +160,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     public void prepareForFullAggregation(int maxContact) {
-        SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
+        SQLiteDatabase db = getDatabaseHelper(getContext()).getWritableDatabase();
         db.execSQL("UPDATE raw_contacts SET aggregation_mode=0,aggregation_needed=1;");
         long rowId =
             db.compileStatement("SELECT _id FROM raw_contacts LIMIT 1 OFFSET " + maxContact)
@@ -169,19 +169,19 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     public long getRawContactCount() {
-        SQLiteDatabase db = getDatabaseHelper().getReadableDatabase();
+        SQLiteDatabase db = getDatabaseHelper(getContext()).getReadableDatabase();
         return db.compileStatement("SELECT COUNT(*) FROM raw_contacts").simpleQueryForLong();
     }
 
     public long getContactCount() {
-        SQLiteDatabase db = getDatabaseHelper().getReadableDatabase();
+        SQLiteDatabase db = getDatabaseHelper(getContext()).getReadableDatabase();
         return db.compileStatement("SELECT COUNT(*) FROM contacts").simpleQueryForLong();
     }
 
     @Override
     public void wipeData() {
         super.wipeData();
-        SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
+        SQLiteDatabase db = getDatabaseHelper(getContext()).getWritableDatabase();
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('raw_contacts', 42)");
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('contacts', 2009)");
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('data', 777)");
