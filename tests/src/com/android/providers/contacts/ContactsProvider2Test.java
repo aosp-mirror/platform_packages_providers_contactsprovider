@@ -2021,6 +2021,22 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, values);
     }
 
+    public void testLoadProfilePhoto() throws IOException {
+        long rawContactId = createBasicProfileContact(new ContentValues());
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.THUMBNAIL),
+                Contacts.openContactPhotoInputStream(mResolver, Profile.CONTENT_URI, false));
+    }
+
+    public void testLoadProfileDisplayPhoto() throws IOException {
+        long rawContactId = createBasicProfileContact(new ContentValues());
+        insertPhoto(rawContactId, R.drawable.earth_normal);
+        assertInputStreamContent(
+                loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
+                Contacts.openContactPhotoInputStream(mResolver, Profile.CONTENT_URI, true));
+    }
+
     public void testPhonesWithStatusUpdate() {
 
         ContentValues values = new ContentValues();

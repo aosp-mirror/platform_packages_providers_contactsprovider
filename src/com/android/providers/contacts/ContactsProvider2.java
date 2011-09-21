@@ -347,6 +347,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
     private static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
     private static final int PROFILE_STATUS_UPDATES = 19009;
     private static final int PROFILE_RAW_CONTACT_ENTITIES = 19010;
+    private static final int PROFILE_PHOTO = 19011;
+    private static final int PROFILE_DISPLAY_PHOTO = 19012;
 
     private static final int DATA_USAGE_FEEDBACK_ID = 20001;
 
@@ -1178,6 +1180,8 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
         matcher.addURI(ContactsContract.AUTHORITY, "profile/entities", PROFILE_ENTITIES);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/data", PROFILE_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/data/#", PROFILE_DATA_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "profile/photo", PROFILE_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "profile/display_photo", PROFILE_DISPLAY_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/as_vcard", PROFILE_AS_VCARD);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts", PROFILE_RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#",
@@ -5607,6 +5611,12 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                 break;
             }
 
+            case PROFILE_PHOTO: {
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
+                qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
+                break;
+            }
+
             case PHONE_LOOKUP: {
 
                 if (TextUtils.isEmpty(sortOrder)) {
@@ -6816,9 +6826,33 @@ public class ContactsProvider2 extends SQLiteContentProvider implements OnAccoun
                         Contacts._ID + "=?", new String[]{String.valueOf(contactId)},
                         null, null, null);
                 try {
-                    c.moveToFirst();
-                    long photoFileId = c.getLong(0);
-                    return openDisplayPhotoForRead(photoFileId);
+                    if (c.moveToFirst()) {
+                        long photoFileId = c.getLong(0);
+                        return openDisplayPhotoForRead(photoFileId);
+                    } else {
+                        // No contact for this ID.
+                        throw new FileNotFoundException(uri.toString());
+                    }
+                } finally {
+                    c.close();
+                }
+            }
+
+            case PROFILE_DISPLAY_PHOTO: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException(
+                            "Display photos retrieved by contact ID can only be read.");
+                }
+                Cursor c = mActiveDb.get().query(Tables.CONTACTS,
+                        new String[]{Contacts.PHOTO_FILE_ID}, null, null, null, null, null);
+                try {
+                    if (c.moveToFirst()) {
+                        long photoFileId = c.getLong(0);
+                        return openDisplayPhotoForRead(photoFileId);
+                    } else {
+                        // No profile record.
+                        throw new FileNotFoundException(uri.toString());
+                    }
                 } finally {
                     c.close();
                 }
