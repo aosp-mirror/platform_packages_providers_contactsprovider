@@ -26,11 +26,7 @@ import java.util.Locale;
  */
 public class SynchronousProfileProvider extends ProfileProvider {
 
-    public static final String READ_ONLY_ACCOUNT_TYPE = "ro";
-
     private static ProfileDatabaseHelper mDbHelper;
-
-    private Account mAccount;
 
     public SynchronousProfileProvider(ContactsProvider2 delegate) {
         super(delegate);
@@ -49,48 +45,7 @@ public class SynchronousProfileProvider extends ProfileProvider {
     }
 
     @Override
-    protected void onBeginTransaction() {
-        super.onBeginTransaction();
-    }
-
-    @Override
-    protected void scheduleBackgroundTask(int task) {
-        performBackgroundTask(task, null);
-    }
-
-    @Override
-    protected void scheduleBackgroundTask(int task, Object arg) {
-        performBackgroundTask(task, arg);
-    }
-
-    @Override
-    protected void updateLocaleInBackground() {
-    }
-
-    @Override
-    protected void updateDirectoriesInBackground(boolean rescan) {
-    }
-
-    @Override
-    protected Account getDefaultAccount() {
-        if (mAccount == null) {
-            mAccount = new Account("androidtest@gmail.com", "com.google");
-        }
-        return mAccount;
-    }
-
-    @Override
-    protected boolean isContactsAccount(Account account) {
-        return true;
-    }
-
-    @Override
     protected Locale getLocale() {
         return Locale.US;
-    }
-
-    @Override
-    protected boolean isWritableAccountWithDataSet(String accountType) {
-        return !READ_ONLY_ACCOUNT_TYPE.equals(accountType);
     }
 }

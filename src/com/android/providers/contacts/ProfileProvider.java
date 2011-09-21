@@ -15,13 +15,11 @@
  */
 package com.android.providers.contacts;
 
-import com.android.common.content.SQLiteContentProvider;
-
-import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 
 import java.io.FileNotFoundException;
@@ -31,7 +29,7 @@ import java.util.Locale;
  * Simple content provider to handle directing profile-specific calls against a separate
  * database from the rest of contacts.
  */
-public class ProfileProvider extends SQLiteContentProvider {
+public class ProfileProvider extends AbstractContactsProvider {
 
     private static final String READ_PERMISSION = "android.permission.READ_PROFILE";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_PROFILE";
@@ -52,7 +50,6 @@ public class ProfileProvider extends SQLiteContentProvider {
         mDelegate.getContext().enforceCallingOrSelfPermission(WRITE_PERMISSION, null);
     }
 
-    @Override
     protected ProfileDatabaseHelper getDatabaseHelper(Context context) {
         return ProfileDatabaseHelper.getInstance(context);
     }
@@ -61,17 +58,14 @@ public class ProfileProvider extends SQLiteContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
         enforceReadPermission();
-        if (mDb == null) {
-            mDb = getDatabaseHelper().getReadableDatabase();
-        }
-        mDelegate.substituteDb(mDb);
+        mDelegate.substituteDb(getDatabaseHelper().getReadableDatabase());
         return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1);
     }
 
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
         enforceWritePermission();
-        mDelegate.substituteDb(mDb);
+        useProfileDbForTransaction();
         return mDelegate.insertInTransaction(uri, values);
     }
 
@@ -79,14 +73,14 @@ public class ProfileProvider extends SQLiteContentProvider {
     protected int updateInTransaction(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
         enforceWritePermission();
-        mDelegate.substituteDb(mDb);
+        useProfileDbForTransaction();
         return mDelegate.updateInTransaction(uri, values, selection, selectionArgs);
     }
 
     @Override
     protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
         enforceWritePermission();
-        mDelegate.substituteDb(mDb);
+        useProfileDbForTransaction();
         return mDelegate.deleteInTransaction(uri, selection, selectionArgs);
     }
 
@@ -102,6 +96,13 @@ public class ProfileProvider extends SQLiteContentProvider {
         return mDelegate.openAssetFileLocal(uri, mode);
     }
 
+    private void useProfileDbForTransaction() {
+        ContactsTransaction transaction = getCurrentTransaction();
+        SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
+        transaction.startTransactionForDb(db, ContactsProvider2.PROFILE_DB_TAG, this);
+        mDelegate.substituteDb(db);
+    }
+
     @Override
     protected void notifyChange() {
         mDelegate.notifyChange();
@@ -111,48 +112,26 @@ public class ProfileProvider extends SQLiteContentProvider {
         mDelegate.notifyChange(syncToNetwork);
     }
 
-    protected void scheduleBackgroundTask(int task) {
-        mDelegate.scheduleBackgroundTask(task);
-    }
-
-    protected void scheduleBackgroundTask(int task, Object arg) {
-        mDelegate.scheduleBackgroundTask(task, arg);
-    }
-
-    protected void performBackgroundTask(int task, Object arg) {
-        mDelegate.performBackgroundTask(task, arg);
-    }
-
-    protected void updateLocaleInBackground() {
-        mDelegate.updateLocaleInBackground();
-    }
-
-    protected void updateDirectoriesInBackground(boolean rescan) {
-        mDelegate.updateDirectoriesInBackground(rescan);
-    }
-
-    protected Account getDefaultAccount() {
-        return mDelegate.getDefaultAccount();
-    }
-
-    protected boolean isContactsAccount(Account account) {
-        return mDelegate.isContactsAccount(account);
-    }
-
     protected Locale getLocale() {
         return mDelegate.getLocale();
     }
 
-    protected boolean isWritableAccountWithDataSet(String accountTypeAndDataSet) {
-        return mDelegate.isWritableAccountWithDataSet(accountTypeAndDataSet);
+    public void onBegin() {
+        mDelegate.onBegin();
     }
 
-    protected void onBeginTransaction() {
-        mDelegate.onBeginTransaction();
+    public void onCommit() {
+        mDelegate.onCommit();
     }
 
-    protected void beforeTransactionCommit() {
-        mDelegate.beforeTransactionCommit();
+    @Override
+    public void onRollback() {
+        mDelegate.onRollback();
+    }
+
+    @Override
+    protected boolean yield(ContactsTransaction transaction) {
+        return mDelegate.yield(transaction);
     }
 
     @Override
