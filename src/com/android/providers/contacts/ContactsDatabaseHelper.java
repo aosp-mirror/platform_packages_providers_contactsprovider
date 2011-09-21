@@ -103,7 +103,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 620;
+    static final int DATABASE_VERSION = 621;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2253,6 +2253,11 @@ import java.util.Locale;
         if (oldVersion < 620) {
             upgradeViewsAndTriggers = true;
             oldVersion = 620;
+        }
+
+        if (oldVersion < 621) {
+            upgradeSearchIndex = true;
+            oldVersion = 621;
         }
 
         if (upgradeViewsAndTriggers) {
