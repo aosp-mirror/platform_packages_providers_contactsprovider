@@ -2286,20 +2286,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         createSettings(account1, "0", "0");
         createSettings(account2, "1", "1");
 
-        // Now try creating the settings rows again.
-        try {
-            createSettings(account1, "1", "0");
-            fail("Provider should have prevented inserting duplicate settings without data set.");
-        } catch (SQLiteConstraintException expected) {
-            // Expected.
-        }
+        // Now try creating the settings rows again.  It should update the existing settings rows.
+        createSettings(account1, "1", "0");
+        assertStoredValue(Settings.CONTENT_URI,
+                Settings.ACCOUNT_NAME + "=? AND " + Settings.ACCOUNT_TYPE + "=?",
+                new String[] {"a", "b"}, Settings.SHOULD_SYNC, "1");
 
-        try {
-            createSettings(account2, "0", "1");
-            fail("Provider should have prevented inserting duplicate settings with data set.");
-        } catch (SQLiteConstraintException expected) {
-            // Expected.
-        }
+        createSettings(account2, "0", "1");
+        assertStoredValue(Settings.CONTENT_URI,
+                Settings.ACCOUNT_NAME + "=? AND " + Settings.ACCOUNT_TYPE + "=? AND " +
+                Settings.DATA_SET + "=?",
+                new String[] {"c", "d", "plus"}, Settings.SHOULD_SYNC, "0");
     }
 
     public void testDisplayNameParsingWhenPartsUnspecified() {
