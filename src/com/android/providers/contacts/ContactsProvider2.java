@@ -1274,11 +1274,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private final ThreadLocal<SQLiteDatabase> mActiveDb = new ThreadLocal<SQLiteDatabase>();
 
+    /**
+     * The thread-local holder of the active transaction.  Shared between this and the profile
+     * provider, to keep transactions on both databases synchronized.
+     */
+    private final ThreadLocal<ContactsTransaction> mTransactionHolder =
+            new ThreadLocal<ContactsTransaction>();
+
     // This variable keeps track of whether the current operation is intended for the profile DB.
     private final ThreadLocal<Boolean> mInProfileMode = new ThreadLocal<Boolean>();
-
-    // Whether we're currently in the process of applying a batch of operations.
-    private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<Boolean>();
 
     // Separate data row handler instances for contact data and profile data.
     private HashMap<String, DataRowHandler> mDataRowHandlers;
@@ -1310,16 +1314,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private TransactionContext mProfileTransactionContext = new TransactionContext(true);
     private final ThreadLocal<TransactionContext> mTransactionContext =
             new ThreadLocal<TransactionContext>();
-
-    // This database reference will only be referenced when a batch operation is in progress
-    // that includes profile DB operations.  It is used to create and handle a separate transaction
-    // around that batch.  Outside of such a batch operation, this will be null.
-    private final ThreadLocal<SQLiteDatabase> mProfileDbForBatch =
-            new ThreadLocal<SQLiteDatabase>();
-
-    // This flag is set during a batch operation that involves the profile DB to indicate that
-    // errors occurred during processing of one of the profile operations.
-    private final ThreadLocal<Boolean> mProfileErrorsInBatch = new ThreadLocal<Boolean>();
 
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
@@ -1787,9 +1781,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    /* Visible for testing */
+    @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
+    }
+
+    @Override
+    protected ThreadLocal<ContactsTransaction> getTransactionHolder() {
+        return mTransactionHolder;
     }
 
     public ProfileProvider getProfileProvider() {
@@ -1825,11 +1824,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /* Visible for testing */
     protected Locale getLocale() {
         return Locale.getDefault();
-    }
-
-    private boolean applyingBatch() {
-        Boolean applyingBatch = mApplyingBatch.get();
-        return applyingBatch != null && applyingBatch;
     }
 
     private boolean inProfileMode() {
@@ -2005,38 +1999,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Switches the provider's thread-local context variables to prepare for performing
      * a profile operation.
      */
-    private void switchToProfileMode() {
+    protected void switchToProfileMode() {
         mDbHelper.set(mProfileHelper);
         mTransactionContext.set(mProfileTransactionContext);
         mAggregator.set(mProfileAggregator);
         mPhotoStore.set(mProfilePhotoStore);
         mInProfileMode.set(true);
-
-        // If we're in batch mode and don't yet have a database set up for our transaction,
-        // get one and start a transaction now.
-        if (applyingBatch() && mProfileDbForBatch.get() == null) {
-            SQLiteDatabase profileDb = mProfileHelper.getWritableDatabase();
-            profileDb.beginTransactionWithListener(this);
-            mProfileDbForBatch.set(profileDb);
-        }
     }
 
     /**
      * Switches the provider's thread-local context variables to prepare for performing
      * a contacts operation.
      */
-    private void switchToContactMode() {
+    protected void switchToContactMode() {
         mDbHelper.set(mContactsHelper);
         mTransactionContext.set(mContactTransactionContext);
         mAggregator.set(mContactAggregator);
         mPhotoStore.set(mContactsPhotoStore);
         mInProfileMode.set(false);
 
-        // If not in batch mode, clear out the active database - it will be set to the default
-        // instance from SQLiteContentProvider if necessary.
-        if (!applyingBatch()) {
-            mActiveDb.set(null);
-        }
+        // Clear out the active database; modification operations will set this to the contacts DB.
+        mActiveDb.set(null);
     }
 
     @Override
@@ -3608,7 +3591,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             int count = mActiveDb.get().delete(Tables.RAW_CONTACTS,
                     RawContacts._ID + "=" + rawContactId, null);
-            mAggregator.get().updateDisplayNameForContact(mActiveDb.get(), contactId);
+            mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
             return count;
         } else {
             mDbHelper.get().removeContactIfSingleton(rawContactId);
