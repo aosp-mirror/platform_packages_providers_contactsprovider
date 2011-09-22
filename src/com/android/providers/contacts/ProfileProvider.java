@@ -50,8 +50,14 @@ public class ProfileProvider extends AbstractContactsProvider {
         mDelegate.getContext().enforceCallingOrSelfPermission(WRITE_PERMISSION, null);
     }
 
+    @Override
     protected ProfileDatabaseHelper getDatabaseHelper(Context context) {
         return ProfileDatabaseHelper.getInstance(context);
+    }
+
+    @Override
+    protected ThreadLocal<ContactsTransaction> getTransactionHolder() {
+        return mDelegate.getTransactionHolder();
     }
 
     @Override
@@ -117,15 +123,18 @@ public class ProfileProvider extends AbstractContactsProvider {
     }
 
     public void onBegin() {
+        mDelegate.switchToProfileMode();
         mDelegate.onBegin();
     }
 
     public void onCommit() {
+        mDelegate.switchToProfileMode();
         mDelegate.onCommit();
     }
 
     @Override
     public void onRollback() {
+        mDelegate.switchToProfileMode();
         mDelegate.onRollback();
     }
 
