@@ -66,22 +66,21 @@ public class ProfileAggregator extends ContactAggregator {
     public void aggregateContact(TransactionContext txContext, SQLiteDatabase db,
             long rawContactId) {
         // Profile aggregation is simple - find the single contact in the database and attach to
-        // that.
-        if (mContactId == 0) {
-            SQLiteStatement profileContactIdLookup = db.compileStatement(
-                    "SELECT " + Contacts._ID +
-                            " FROM " + Tables.CONTACTS +
-                            " ORDER BY " + Contacts._ID +
-                            " LIMIT 1");
-            try {
-                mContactId = profileContactIdLookup.simpleQueryForLong();
-                updateAggregateData(txContext, mContactId);
-            } catch (SQLiteDoneException e) {
-                // No valid contact ID found, so create one.
-                mContactId = insertContact(db, rawContactId);
-            } finally {
-                profileContactIdLookup.close();
-            }
+        // that.  We look it up each time in case the profile was deleted by a previous operation
+        // and needs re-creation.
+        SQLiteStatement profileContactIdLookup = db.compileStatement(
+                "SELECT " + Contacts._ID +
+                        " FROM " + Tables.CONTACTS +
+                        " ORDER BY " + Contacts._ID +
+                        " LIMIT 1");
+        try {
+            mContactId = profileContactIdLookup.simpleQueryForLong();
+            updateAggregateData(txContext, mContactId);
+        } catch (SQLiteDoneException e) {
+            // No valid contact ID found, so create one.
+            mContactId = insertContact(db, rawContactId);
+        } finally {
+            profileContactIdLookup.close();
         }
         setContactId(rawContactId, mContactId);
     }

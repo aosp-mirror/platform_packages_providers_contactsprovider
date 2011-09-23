@@ -50,7 +50,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
     /**
      * The contacts transaction that is active in this thread.
      */
-    private ThreadLocal<ContactsTransaction> mTransaction = new ThreadLocal<ContactsTransaction>();
+    private ThreadLocal<ContactsTransaction> mTransactionHolder;
 
     /**
      * The DB helper to use for this content provider.
@@ -74,10 +74,9 @@ public abstract class AbstractContactsProvider extends ContentProvider
     public boolean onCreate() {
         Context context = getContext();
         mDbHelper = getDatabaseHelper(context);
+        mTransactionHolder = getTransactionHolder();
         return true;
     }
-
-    protected abstract SQLiteOpenHelper getDatabaseHelper(Context context);
 
     public SQLiteOpenHelper getDatabaseHelper() {
         return mDbHelper;
@@ -94,7 +93,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
     }
 
     public ContactsTransaction getCurrentTransaction() {
-        return mTransaction.get();
+        return mTransactionHolder.get();
     }
 
     @Override
@@ -198,14 +197,14 @@ public abstract class AbstractContactsProvider extends ContentProvider
      * @param callerIsBatch Whether the caller is operating in batch mode.
      */
     private ContactsTransaction startTransaction(boolean callerIsBatch) {
-        ContactsTransaction transaction = mTransaction.get();
+        ContactsTransaction transaction = mTransactionHolder.get();
         if (transaction == null) {
             transaction = new ContactsTransaction(callerIsBatch);
             if (mSerializeOnDbHelper != null) {
                 transaction.startTransactionForDb(mSerializeOnDbHelper.getWritableDatabase(),
                         mSerializeDbTag, this);
             }
-            mTransaction.set(transaction);
+            mTransactionHolder.set(transaction);
         }
         return transaction;
     }
@@ -216,15 +215,27 @@ public abstract class AbstractContactsProvider extends ContentProvider
      * @param callerIsBatch Whether the caller is operating in batch mode.
      */
     private void endTransaction(boolean callerIsBatch) {
-        ContactsTransaction transaction = mTransaction.get();
+        ContactsTransaction transaction = mTransactionHolder.get();
         if (transaction != null && (!transaction.isBatch() || callerIsBatch)) {
             if (transaction.isDirty()) {
                 notifyChange();
             }
             transaction.finish(callerIsBatch);
-            mTransaction.set(null);
+            mTransactionHolder.set(null);
         }
     }
+
+    /**
+     * Gets the database helper for this contacts provider.  This is called once, during onCreate().
+     */
+    protected abstract SQLiteOpenHelper getDatabaseHelper(Context context);
+
+    /**
+     * Gets the thread-local transaction holder to use for keeping track of the transaction.  This
+     * is called once, in onCreate().  If multiple classes are inheriting from this class that need
+     * to be kept in sync on the same transaction, they must all return the same thread-local.
+     */
+    protected abstract ThreadLocal<ContactsTransaction> getTransactionHolder();
 
     protected abstract Uri insertInTransaction(Uri uri, ContentValues values);
 
