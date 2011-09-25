@@ -103,7 +103,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 619;
+    static final int DATABASE_VERSION = 621;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1541,7 +1541,8 @@ import java.util.Locale;
                 + Contacts.LOOKUP_KEY + ", "
                 + Contacts.PHOTO_ID + ", "
                 + Contacts.PHOTO_FILE_ID + ", "
-                + Clauses.CONTACT_VISIBLE + " AS " + Contacts.IN_VISIBLE_GROUP + ", "
+                + "CAST(" + Clauses.CONTACT_VISIBLE + " AS INTEGER) AS "
+                        + Contacts.IN_VISIBLE_GROUP + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID;
 
         String contactOptionColumns =
@@ -2247,6 +2248,16 @@ import java.util.Locale;
         if (oldVersion < 619) {
             upgradeViewsAndTriggers = true;
             oldVersion = 619;
+        }
+
+        if (oldVersion < 620) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 620;
+        }
+
+        if (oldVersion < 621) {
+            upgradeSearchIndex = true;
+            oldVersion = 621;
         }
 
         if (upgradeViewsAndTriggers) {

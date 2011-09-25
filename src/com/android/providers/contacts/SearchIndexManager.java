@@ -226,8 +226,7 @@ public class SearchIndexManager {
         int count = 0;
         try {
             mDbHelper.createSearchIndexTable(db);
-            count = buildIndex(db, RawContacts.CONTACT_ID + " IN "
-                    + "(SELECT " + Contacts._ID + " FROM " + Tables.DEFAULT_DIRECTORY + ")", false);
+            count = buildIndex(db, null, false);
         } finally {
             mContactsProvider.setProviderStatus(ProviderStatus.STATUS_NORMAL);
 
@@ -261,8 +260,7 @@ public class SearchIndexManager {
             mSb.append(')');
         }
 
-        mSb.append(") AND " + RawContacts.CONTACT_ID + " IN "
-                    + "(SELECT " + Contacts._ID + " FROM " + Tables.DEFAULT_DIRECTORY + ")");
+        mSb.append(")");
         buildIndex(mDbHelper.getWritableDatabase(), mSb.toString(), true);
     }
 
