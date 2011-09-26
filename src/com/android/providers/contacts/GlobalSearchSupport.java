@@ -16,11 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsDatabaseHelper.Views;
-
 import android.app.SearchManager;
 import android.content.res.Resources;
 import android.database.Cursor;
@@ -36,6 +31,11 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 
 import java.util.ArrayList;
 
@@ -232,28 +232,44 @@ public class GlobalSearchSupport {
                 db, projection, ContactsColumns.CONCRETE_ID + "=" + contactId, filter, null);
     }
 
+    private boolean isVoiceCapable() {
+        // this copied from com.android.phone.PhoneApp.onCreate():
+
+        // "voice capable" flag.
+        // This flag currently comes from a resource (which is
+        // overrideable on a per-product basis):
+        return mContactsProvider.getContext().getResources()
+                .getBoolean(com.android.internal.R.bool.config_voice_capable);
+        // ...but this might eventually become a PackageManager "system
+        // feature" instead, in which case we'd do something like:
+        // return
+        //   getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_VOICE_CALLS);
+    }
+
     private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
         MatrixCursor cursor = new MatrixCursor(SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS);
         Resources r = mContactsProvider.getContext().getResources();
         String s;
         int i;
 
-        ArrayList<Object> dialNumber = new ArrayList<Object>();
-        dialNumber.add(0);  // _id
-        s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
-        i = s.indexOf('\n');
-        if (i < 0) {
-            dialNumber.add(s);
-            dialNumber.add("");
-        } else {
-            dialNumber.add(s.substring(0, i));
-            dialNumber.add(s.substring(i + 1));
+        if (isVoiceCapable()) {
+            ArrayList<Object> dialNumber = new ArrayList<Object>();
+            dialNumber.add(0);  // _id
+            s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
+            i = s.indexOf('\n');
+            if (i < 0) {
+                dialNumber.add(s);
+                dialNumber.add("");
+            } else {
+                dialNumber.add(s.substring(0, i));
+                dialNumber.add(s.substring(i + 1));
+            }
+            dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
+            dialNumber.add("tel:" + searchClause);
+            dialNumber.add(ContactsContract.Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
+            dialNumber.add(null);
+            cursor.addRow(dialNumber);
         }
-        dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
-        dialNumber.add("tel:" + searchClause);
-        dialNumber.add(ContactsContract.Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-        dialNumber.add(null);
-        cursor.addRow(dialNumber);
 
         ArrayList<Object> createContact = new ArrayList<Object>();
         createContact.add(1);  // _id
