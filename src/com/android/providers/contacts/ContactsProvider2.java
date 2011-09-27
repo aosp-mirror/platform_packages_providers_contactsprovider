@@ -1396,6 +1396,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // Set up the sub-provider for handling profiles.
         mProfileProvider = getProfileProvider();
+        mProfileProvider.setDbHelperToSerializeOn(mContactsHelper, CONTACTS_DB_TAG);
         ProviderInfo profileInfo = new ProviderInfo();
         profileInfo.readPermission = "android.permission.READ_PROFILE";
         profileInfo.writePermission = "android.permission.WRITE_PROFILE";
