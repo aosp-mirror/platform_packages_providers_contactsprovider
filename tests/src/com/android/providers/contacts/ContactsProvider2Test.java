@@ -1664,48 +1664,42 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    private void expectSecurityException(String failureMessage, Uri uri, String[] projection,
+            String selection, String[] selectionArgs, String sortOrder) {
+        Cursor c = null;
+        try {
+            c = mResolver.query(uri, projection, selection, selectionArgs, sortOrder);
+            fail(failureMessage);
+        } catch (SecurityException expected) {
+            // The security exception is expected to occur because we're missing a permission.
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
     public void testQueryProfileRequiresReadPermission() {
         mActor.removePermissions("android.permission.READ_PROFILE");
 
         createBasicProfileContact(new ContentValues());
 
-        // Queries for the profile should fail.
-        Cursor c = null;
-
         // Case 1: Retrieving profile contact.
-        try {
-            c = mResolver.query(Profile.CONTENT_URI, null, null, null, Contacts._ID);
-            fail("Querying for the profile without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the profile without READ_PROFILE access should fail.",
+                Profile.CONTENT_URI, null, null, null, Contacts._ID);
 
         // Case 2: Retrieving profile data.
-        try {
-            c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
-                    null, null, null, Contacts._ID);
-            fail("Querying for the profile data without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the profile data without READ_PROFILE access should fail.",
+                Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                null, null, null, Contacts._ID);
 
         // Case 3: Retrieving profile entities.
-        try {
-            c = mResolver.query(Profile.CONTENT_URI.buildUpon()
-                    .appendPath("entities").build(), null, null, null, Contacts._ID);
-            fail("Querying for the profile entities without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the profile entities without READ_PROFILE access should fail.",
+                Profile.CONTENT_URI.buildUpon()
+                        .appendPath("entities").build(), null, null, null, Contacts._ID);
     }
 
     public void testQueryProfileByContactIdRequiresReadPermission() {
@@ -1715,17 +1709,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mActor.removePermissions("android.permission.READ_PROFILE");
 
         // A query for the profile contact by ID should fail.
-        Cursor c = null;
-        try {
-            c = mResolver.query(ContentUris.withAppendedId(Contacts.CONTENT_URI, profileContactId),
-                    null, null, null, Contacts._ID);
-            fail("Querying for the profile by contact ID without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the profile by contact ID without READ_PROFILE access should fail.",
+                ContentUris.withAppendedId(Contacts.CONTENT_URI, profileContactId),
+                null, null, null, Contacts._ID);
     }
 
     public void testQueryProfileByRawContactIdRequiresReadPermission() {
@@ -1733,17 +1720,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Remove profile read permission and attempt to retrieve the raw contact.
         mActor.removePermissions("android.permission.READ_PROFILE");
-        Cursor c = null;
-        try {
-            c = mResolver.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI,
-                    profileRawContactId), null, null, null, RawContacts._ID);
-            fail("Querying for the raw contact profile without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the raw contact profile without READ_PROFILE access should fail.",
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI,
+                        profileRawContactId), null, null, null, RawContacts._ID);
     }
 
     public void testQueryProfileRawContactRequiresReadPermission() {
@@ -1751,44 +1731,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Remove profile read permission and attempt to retrieve the profile's raw contact data.
         mActor.removePermissions("android.permission.READ_PROFILE");
-        Cursor c = null;
 
         // Case 1: Retrieve the overall raw contact set for the profile.
-        try {
-            c = mResolver.query(Profile.CONTENT_RAW_CONTACTS_URI, null, null, null, null);
-            fail("Querying for the raw contact profile without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the raw contact profile without READ_PROFILE access should fail.",
+                Profile.CONTENT_RAW_CONTACTS_URI, null, null, null, null);
 
         // Case 2: Retrieve the raw contact profile data for the inserted raw contact ID.
-        try {
-            c = mResolver.query(ContentUris.withAppendedId(
-                    Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
-                    .appendPath("data").build(), null, null, null, null);
-            fail("Querying for the raw profile data without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the raw profile data without READ_PROFILE access should fail.",
+                ContentUris.withAppendedId(
+                        Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
+                        .appendPath("data").build(), null, null, null, null);
 
         // Case 3: Retrieve the raw contact profile entity for the inserted raw contact ID.
-        try {
-            c = mResolver.query(ContentUris.withAppendedId(
-                    Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
-                    .appendPath("entity").build(), null, null, null, null);
-            fail("Querying for the raw profile entities without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the raw profile entities without READ_PROFILE access should fail.",
+                ContentUris.withAppendedId(
+                        Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
+                        .appendPath("entity").build(), null, null, null, null);
     }
 
     public void testQueryProfileDataByDataIdRequiresReadPermission() {
@@ -1802,16 +1763,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Remove profile read permission and attempt to retrieve the data
         mActor.removePermissions("android.permission.READ_PROFILE");
-        try {
-            c = mResolver.query(ContentUris.withAppendedId(Data.CONTENT_URI, profileDataId),
-                    null, null, null, null);
-            fail("Querying for the data in the profile without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the data in the profile without READ_PROFILE access should fail.",
+                ContentUris.withAppendedId(Data.CONTENT_URI, profileDataId),
+                null, null, null, null);
     }
 
     public void testQueryProfileDataRequiresReadPermission() {
@@ -1819,17 +1774,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Remove profile read permission and attempt to retrieve all profile data.
         mActor.removePermissions("android.permission.READ_PROFILE");
-        Cursor c = null;
-        try {
-            c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
-                    null, null, null, null);
-            fail("Querying for the data in the profile without READ_PROFILE access should fail.");
-        } catch (SecurityException expected) {
-        } finally {
-            if (c != null) {
-                c.close();
-            }
-        }
+        expectSecurityException(
+                "Querying for the data in the profile without READ_PROFILE access should fail.",
+                Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
+                null, null, null, null);
     }
 
     public void testInsertProfileRequiresWritePermission() {
@@ -3859,6 +3807,166 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.StreamItems.CONTENT_DIRECTORY).build(),
                 expectedValues);
+    }
+
+    public void testStreamItemReadRequiresReadSocialStreamPermission() {
+        long rawContactId = createRawContact();
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), null));
+        mActor.removePermissions("android.permission.READ_SOCIAL_STREAM");
+
+        // Try selecting the stream item in various ways.
+        expectSecurityException(
+                "Querying stream items by contact ID requires social stream read permission",
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
+                        Contacts.StreamItems.CONTENT_DIRECTORY), null, null, null, null);
+
+        expectSecurityException(
+                "Querying stream items by lookup key requires social stream read permission",
+                Contacts.CONTENT_LOOKUP_URI.buildUpon().appendPath(lookupKey)
+                        .appendPath(Contacts.StreamItems.CONTENT_DIRECTORY).build(),
+                null, null, null, null);
+
+        expectSecurityException(
+                "Querying stream items by lookup key and ID requires social stream read permission",
+                Uri.withAppendedPath(Contacts.getLookupUri(contactId, lookupKey),
+                        Contacts.StreamItems.CONTENT_DIRECTORY),
+                null, null, null, null);
+
+        expectSecurityException(
+                "Querying stream items by raw contact ID requires social stream read permission",
+                Uri.withAppendedPath(
+                        ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                        RawContacts.StreamItems.CONTENT_DIRECTORY), null, null, null, null);
+
+        expectSecurityException(
+                "Querying stream items by raw contact ID and stream item ID requires social " +
+                        "stream read permission",
+                ContentUris.withAppendedId(
+                        Uri.withAppendedPath(
+                                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                                RawContacts.StreamItems.CONTENT_DIRECTORY),
+                        streamItemId), null, null, null, null);
+
+        expectSecurityException(
+                "Querying all stream items requires social stream read permission",
+                StreamItems.CONTENT_URI, null, null, null, null);
+
+        expectSecurityException(
+                "Querying stream item by ID requires social stream read permission",
+                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                null, null, null, null);
+    }
+
+    public void testStreamItemPhotoReadRequiresReadSocialStreamPermission() {
+        long rawContactId = createRawContact();
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), null));
+        long streamItemPhotoId = ContentUris.parseId(
+                insertStreamItemPhoto(streamItemId, buildGenericStreamItemPhotoValues(0), null));
+        mActor.removePermissions("android.permission.READ_SOCIAL_STREAM");
+
+        // Try selecting the stream item photo in various ways.
+        expectSecurityException(
+                "Querying all stream item photos requires social stream read permission",
+                StreamItems.CONTENT_URI.buildUpon()
+                        .appendPath(StreamItems.StreamItemPhotos.CONTENT_DIRECTORY).build(),
+                null, null, null, null);
+
+        expectSecurityException(
+                "Querying all stream item photos requires social stream read permission",
+                StreamItems.CONTENT_URI.buildUpon()
+                        .appendPath(String.valueOf(streamItemId))
+                        .appendPath(StreamItems.StreamItemPhotos.CONTENT_DIRECTORY)
+                        .appendPath(String.valueOf(streamItemPhotoId)).build(),
+                null, null, null, null);
+    }
+
+    public void testStreamItemModificationRequiresWriteSocialStreamPermission() {
+        long rawContactId = createRawContact();
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), null));
+        mActor.removePermissions("android.permission.WRITE_SOCIAL_STREAM");
+
+        try {
+            insertStreamItem(rawContactId, buildGenericStreamItemValues(), null);
+            fail("Should not be able to insert to stream without write social stream permission");
+        } catch (SecurityException expected) {
+        }
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put(StreamItems.TEXT, "Goodbye world");
+            mResolver.update(ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                    values, null, null);
+            fail("Should not be able to update stream without write social stream permission");
+        } catch (SecurityException expected) {
+        }
+
+        try {
+            mResolver.delete(ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
+                    null, null);
+            fail("Should not be able to delete from stream without write social stream permission");
+        } catch (SecurityException expected) {
+        }
+    }
+
+    public void testStreamItemPhotoModificationRequiresWriteSocialStreamPermission() {
+        long rawContactId = createRawContact();
+        long streamItemId = ContentUris.parseId(
+                insertStreamItem(rawContactId, buildGenericStreamItemValues(), null));
+        long streamItemPhotoId = ContentUris.parseId(
+                insertStreamItemPhoto(streamItemId, buildGenericStreamItemPhotoValues(0), null));
+        mActor.removePermissions("android.permission.WRITE_SOCIAL_STREAM");
+
+        Uri photoUri = StreamItems.CONTENT_URI.buildUpon()
+                .appendPath(String.valueOf(streamItemId))
+                .appendPath(StreamItems.StreamItemPhotos.CONTENT_DIRECTORY)
+                .appendPath(String.valueOf(streamItemPhotoId)).build();
+
+        try {
+            insertStreamItemPhoto(streamItemId, buildGenericStreamItemPhotoValues(1), null);
+            fail("Should not be able to insert photos without write social stream permission");
+        } catch (SecurityException expected) {
+        }
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(R.drawable.galaxy,
+                    PhotoSize.ORIGINAL));
+            mResolver.update(photoUri, values, null, null);
+            fail("Should not be able to update photos without write social stream permission");
+        } catch (SecurityException expected) {
+        }
+
+        try {
+            mResolver.delete(photoUri, null, null);
+            fail("Should not be able to delete photos without write social stream permission");
+        } catch (SecurityException expected) {
+        }
+    }
+
+    public void testStatusUpdateDoesNotRequireReadOrWriteSocialStreamPermission() {
+        int protocol1 = Im.PROTOCOL_GOOGLE_TALK;
+        String handle1 = "test@gmail.com";
+        long rawContactId = createRawContact();
+        insertImHandle(rawContactId, protocol1, null, handle1);
+        mActor.removePermissions("android.permission.READ_SOCIAL_STREAM");
+        mActor.removePermissions("android.permission.WRITE_SOCIAL_STREAM");
+
+        insertStatusUpdate(protocol1, null, handle1, StatusUpdates.AVAILABLE, "Green",
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+
+        mActor.addPermissions("android.permission.READ_SOCIAL_STREAM");
+
+        ContentValues expectedValues = new ContentValues();
+        expectedValues.put(StreamItems.TEXT, "Green");
+        assertStoredValues(Uri.withAppendedPath(
+                        ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                        RawContacts.StreamItems.CONTENT_DIRECTORY), expectedValues);
     }
 
     private ContentValues buildGenericStreamItemValues() {
