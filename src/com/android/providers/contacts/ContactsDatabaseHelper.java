@@ -103,12 +103,10 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 621;
+    static final int DATABASE_VERSION = 622;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
-
-
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1173,6 +1171,7 @@ import java.util.Locale;
                 Calls.CACHED_MATCHED_NUMBER + " TEXT," +
                 Calls.CACHED_NORMALIZED_NUMBER + " TEXT," +
                 Calls.CACHED_PHOTO_ID + " INTEGER NOT NULL DEFAULT 0," +
+                Calls.CACHED_FORMATTED_NUMBER + " TEXT," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
                 Voicemails.MIME_TYPE + " TEXT," +
@@ -2258,6 +2257,11 @@ import java.util.Locale;
         if (oldVersion < 621) {
             upgradeSearchIndex = true;
             oldVersion = 621;
+        }
+
+        if (oldVersion < 622) {
+            upgradeToVersion622(db);
+            oldVersion = 622;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3484,6 +3488,10 @@ import java.util.Locale;
                 "SELECT account_name, account_type, NULL, ungrouped_visible, should_sync " +
                 "FROM settings_backup");
         db.execSQL("DROP TABLE settings_backup");
+    }
+
+    private void upgradeToVersion622(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD formatted_number TEXT DEFAULT NULL;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
