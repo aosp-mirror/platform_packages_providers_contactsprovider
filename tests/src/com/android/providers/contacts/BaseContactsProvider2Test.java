@@ -104,6 +104,8 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         mActor.addPermissions(
                 "android.permission.READ_CONTACTS",
                 "android.permission.WRITE_CONTACTS",
+                "android.permission.READ_SOCIAL_STREAM",
+                "android.permission.WRITE_SOCIAL_STREAM",
                 "android.permission.READ_PROFILE",
                 "android.permission.WRITE_PROFILE");
     }
