@@ -372,6 +372,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
         INSERT_URI_ID_VALUE_MAP.put(STREAM_ITEMS_ID_PHOTOS, StreamItemPhotos.STREAM_ITEM_ID);
     }
 
+    // Any interactions that involve these URIs will also require the calling package to have either
+    // android.permission.READ_SOCIAL_STREAM permission or android.permission.WRITE_SOCIAL_STREAM
+    // permission, depending on the type of operation being performed.
+    private static final List<Integer> SOCIAL_STREAM_URIS = Lists.newArrayList(
+            CONTACTS_ID_STREAM_ITEMS,
+            CONTACTS_LOOKUP_STREAM_ITEMS,
+            CONTACTS_LOOKUP_ID_STREAM_ITEMS,
+            RAW_CONTACTS_ID_STREAM_ITEMS,
+            RAW_CONTACTS_ID_STREAM_ITEMS_ID,
+            STREAM_ITEMS,
+            STREAM_ITEMS_PHOTOS,
+            STREAM_ITEMS_ID,
+            STREAM_ITEMS_ID_PHOTOS,
+            STREAM_ITEMS_ID_PHOTOS_ID
+    );
+
     private static final String SELECTION_FAVORITES_GROUPS_BY_RAW_CONTACT_ID =
             RawContactsColumns.CONCRETE_ID + "=? AND "
                     + GroupsColumns.CONCRETE_ACCOUNT_NAME
@@ -2026,6 +2042,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
+
+        // Enforce stream items access check if applicable.
+        enforceSocialStreamWritePermission(uri);
+
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
             switchToProfileMode();
             return mProfileProvider.insert(uri, values);
@@ -2053,6 +2073,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
         waitForAccess(mWriteAccessLatch);
+
+        // Enforce stream items access check if applicable.
+        enforceSocialStreamWritePermission(uri);
+
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
             return mProfileProvider.update(uri, values, selection, selectionArgs);
@@ -2065,6 +2089,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
+
+        // Enforce stream items access check if applicable.
+        enforceSocialStreamWritePermission(uri);
+
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
             return mProfileProvider.delete(uri, selection, selectionArgs);
@@ -2734,6 +2762,30 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
+     * If the given URI is reading stream items or stream photos, this will run a permission check
+     * for the android.permission.READ_SOCIAL_STREAM permission - otherwise it will do nothing.
+     * @param uri The URI to check.
+     */
+    private void enforceSocialStreamReadPermission(Uri uri) {
+        if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))) {
+            getContext().enforceCallingOrSelfPermission(
+                    "android.permission.READ_SOCIAL_STREAM", null);
+        }
+    }
+
+    /**
+     * If the given URI is modifying stream items or stream photos, this will run a permission check
+     * for the android.permission.WRITE_SOCIAL_STREAM permission - otherwise it will do nothing.
+     * @param uri The URI to check.
+     */
+    private void enforceSocialStreamWritePermission(Uri uri) {
+        if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))) {
+            getContext().enforceCallingOrSelfPermission(
+                    "android.permission.WRITE_SOCIAL_STREAM", null);
+        }
+    }
+
+    /**
      * Checks whether the given raw contact ID is owned by the given account.
      * If the resolved account is null, this will return true iff the raw contact
      * is also associated with the "null" account.
@@ -3256,16 +3308,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                     // Check for an existing stream item from this source, and insert or update.
                     Uri streamUri = StreamItems.CONTENT_URI;
-                    Cursor c = query(streamUri, new String[]{StreamItems._ID},
+                    Cursor c = queryLocal(streamUri, new String[]{StreamItems._ID},
                             StreamItems.RAW_CONTACT_ID + "=?",
-                            new String[]{String.valueOf(rawContactId)}, null);
+                            new String[]{String.valueOf(rawContactId)},
+                            null, -1 /* directory ID */);
                     try {
                         if (c.getCount() > 0) {
                             c.moveToFirst();
-                            update(ContentUris.withAppendedId(streamUri, c.getLong(0)),
+                            updateInTransaction(ContentUris.withAppendedId(streamUri, c.getLong(0)),
                                     streamItemValues, null, null);
                         } else {
-                            insert(streamUri, streamItemValues);
+                            insertInTransaction(streamUri, streamItemValues);
                         }
                     } finally {
                         c.close();
@@ -4617,6 +4670,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             String sortOrder) {
 
         waitForAccess(mReadAccessLatch);
+
+        // Enforce stream items access check if applicable.
+        enforceSocialStreamReadPermission(uri);
 
         // Query the profile DB if appropriate.
         if (mapsToProfileDb(uri)) {
