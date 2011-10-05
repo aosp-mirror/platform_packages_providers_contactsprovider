@@ -48,6 +48,11 @@ public abstract class AbstractContactsProvider extends ContentProvider
     private static final int MAX_OPERATIONS_PER_YIELD_POINT = 500;
 
     /**
+     * Number of inserts performed in bulk to allow before yielding the transaction.
+     */
+    private static final int BULK_INSERTS_PER_YIELD_POINT = 50;
+
+    /**
      * The contacts transaction that is active in this thread.
      */
     private ThreadLocal<ContactsTransaction> mTransactionHolder;
@@ -145,10 +150,14 @@ public abstract class AbstractContactsProvider extends ContentProvider
     public int bulkInsert(Uri uri, ContentValues[] values) {
         ContactsTransaction transaction = startTransaction(true);
         int numValues = values.length;
+        int opCount = 0;
         try {
             for (int i = 0; i < numValues; i++) {
                 insert(uri, values[i]);
-                yield(transaction);
+                if (++opCount >= BULK_INSERTS_PER_YIELD_POINT) {
+                    opCount = 0;
+                    yield(transaction);
+                }
             }
             transaction.markSuccessful(true);
         } finally {
