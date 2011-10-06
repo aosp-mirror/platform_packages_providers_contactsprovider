@@ -1708,6 +1708,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /* Visible for testing */
     protected void cleanupPhotoStore() {
         SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        mActiveDb.set(db);
 
         // Assemble the set of photo store file IDs that are in use, and send those to the photo
         // store.  Any photos that aren't in that set will be deleted, and any photos that no
@@ -1765,39 +1766,33 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Run the photo store cleanup.
         Set<Long> missingPhotoIds = mPhotoStore.get().cleanup(usedPhotoFileIds);
 
-        // If any of the keys we're using no longer exist, clean them up.
+        // If any of the keys we're using no longer exist, clean them up.  We need to do these
+        // using internal APIs or direct DB access to avoid permission errors.
         if (!missingPhotoIds.isEmpty()) {
-            ArrayList<ContentProviderOperation> ops = Lists.newArrayList();
-            for (long missingPhotoId : missingPhotoIds) {
-                if (photoFileIdToDataId.containsKey(missingPhotoId)) {
-                    long dataId = photoFileIdToDataId.get(missingPhotoId);
-                    ContentValues updateValues = new ContentValues();
-                    updateValues.putNull(Photo.PHOTO_FILE_ID);
-                    ops.add(ContentProviderOperation.newUpdate(
-                            ContentUris.withAppendedId(Data.CONTENT_URI, dataId))
-                            .withValues(updateValues).build());
-                }
-                if (photoFileIdToStreamItemPhotoId.containsKey(missingPhotoId)) {
-                    // For missing photos that were in stream item photos, just delete the stream
-                    // item photo.
-                    long streamItemPhotoId = photoFileIdToStreamItemPhotoId.get(missingPhotoId);
-                    long streamItemId = streamItemPhotoIdToStreamItemId.get(streamItemPhotoId);
-                    Account account = streamItemPhotoIdToAccount.get(missingPhotoId);
-                    ops.add(ContentProviderOperation.newDelete(
-                            StreamItems.CONTENT_URI.buildUpon()
-                                    .appendPath(String.valueOf(streamItemId))
-                                    .appendPath(StreamItems.StreamItemPhotos.CONTENT_DIRECTORY)
-                                    .appendPath(String.valueOf(streamItemPhotoId))
-                                    .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
-                                    .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
-                                    .build()).build());
-                }
-            }
             try {
-                applyBatch(ops);
-            } catch (OperationApplicationException oae) {
-                // Not a fatal problem (and we'll try again on the next cleanup).
-                Log.e(TAG, "Failed to clean up outdated photo references", oae);
+                db.beginTransactionWithListener(this);
+                for (long missingPhotoId : missingPhotoIds) {
+                    if (photoFileIdToDataId.containsKey(missingPhotoId)) {
+                        long dataId = photoFileIdToDataId.get(missingPhotoId);
+                        ContentValues updateValues = new ContentValues();
+                        updateValues.putNull(Photo.PHOTO_FILE_ID);
+                        updateData(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
+                                updateValues, null, null, false);
+                    }
+                    if (photoFileIdToStreamItemPhotoId.containsKey(missingPhotoId)) {
+                        // For missing photos that were in stream item photos, just delete the
+                        // stream item photo.
+                        long streamItemPhotoId = photoFileIdToStreamItemPhotoId.get(missingPhotoId);
+                        db.delete(Tables.STREAM_ITEM_PHOTOS, StreamItemPhotos._ID + "=?",
+                                new String[]{String.valueOf(streamItemPhotoId)});
+                    }
+                }
+                db.setTransactionSuccessful();
+            } catch (Exception e) {
+                // Cleanup failure is not a fatal problem.  We'll try again later.
+                Log.e(TAG, "Failed to clean up outdated photo references", e);
+            } finally {
+                db.endTransaction();
             }
         }
     }
@@ -1819,6 +1814,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     /* package */ PhotoStore getPhotoStore() {
         return mContactsPhotoStore;
+    }
+
+    @VisibleForTesting
+    /* package */ PhotoStore getProfilePhotoStore() {
+        return mProfilePhotoStore;
     }
 
     /* package */ int getMaxDisplayPhotoDim() {
@@ -7024,10 +7024,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throws FileNotFoundException {
         PhotoStore.Entry entry = mPhotoStore.get().get(photoFileId);
         if (entry != null) {
-            return makeAssetFileDescriptor(
-                    ParcelFileDescriptor.open(new File(entry.path),
-                            ParcelFileDescriptor.MODE_READ_ONLY),
-                    entry.size);
+            try {
+                return makeAssetFileDescriptor(
+                        ParcelFileDescriptor.open(new File(entry.path),
+                                ParcelFileDescriptor.MODE_READ_ONLY),
+                        entry.size);
+            } catch (FileNotFoundException fnfe) {
+                scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
+                throw fnfe;
+            }
         } else {
             scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
             throw new FileNotFoundException("No photo file found for ID " + photoFileId);
