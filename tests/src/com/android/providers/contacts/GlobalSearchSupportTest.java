@@ -122,31 +122,31 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
 
         Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("12345").build();
+                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath("12345678").build();
 
         Cursor c = mResolver.query(searchUri, null, null, null, null);
         assertEquals(2, c.getCount());
         c.moveToFirst();
 
         values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Dial number");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345");
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345678");
         values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
                 String.valueOf(com.android.internal.R.drawable.call_contact));
         values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
                 Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345678");
         values.putNull(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID);
         assertCursorValues(c, values);
 
         c.moveToNext();
         values.clear();
         values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Create contact");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345");
+        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using 12345678");
         values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
                 String.valueOf(com.android.internal.R.drawable.create_contact));
         values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
                 Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345");
+        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:12345678");
         values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
                 SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
         assertCursorValues(c, values);
