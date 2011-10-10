@@ -36,6 +36,7 @@ public class ProfileAwareUriMatcher extends UriMatcher {
 
     private static final String PROFILE_SEGMENT = "profile";
     private static final String LOOKUP_SEGMENT = "lookup";
+    private static final String VCARD_SEGMENT = "as_vcard";
     private static final String ID_SEGMENT = "#";
     private static final String WILDCARD_SEGMENT = "*";
 
@@ -68,13 +69,18 @@ public class ProfileAwareUriMatcher extends UriMatcher {
         if (path != null) {
             String[] tokens = PATH_SPLIT_PATTERN.split(path);
             if (tokens != null) {
+
+                // Keep track of whether we've passed a "lookup" token in the path; wildcards after
+                // that token will be interpreted as lookup keys.  For our purposes, vcard paths
+                // also count as lookup tokens, since the vcard is specified by lookup key.
                 boolean afterLookup = false;
                 for (int i = 0; i < tokens.length; i++) {
                     String token = tokens[i];
                     if (token.equals(PROFILE_SEGMENT)) {
                         PROFILE_URIS.add(code);
                         return;
-                    } else if (token.equals(LOOKUP_SEGMENT)) {
+                    } else if (token.equals(LOOKUP_SEGMENT)
+                            || token.equals(VCARD_SEGMENT)) {
                         afterLookup = true;
                         continue;
                     } else if (token.equals(ID_SEGMENT)) {

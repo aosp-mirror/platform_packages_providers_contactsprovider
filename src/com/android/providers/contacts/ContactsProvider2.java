@@ -108,6 +108,7 @@ import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.Authorization;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -165,6 +166,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
@@ -199,6 +201,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /** Rate limit (in ms) for photo cleanup.  Do it at most once per day. */
     private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
+
+    /**
+     * Default expiration duration for pre-authorized URIs.  May be overridden from a secure
+     * setting.
+     */
+    private static final int DEFAULT_PREAUTHORIZED_URI_EXPIRATION = 5 * 60 * 1000;
+
+    /**
+     * Random URI parameter that will be appended to preauthorized URIs for uniqueness.
+     */
+    private static final String PREAUTHORIZED_URI_TOKEN = "perm_token";
 
     /**
      * Property key for the legacy contact import version. The need for a version
@@ -1335,6 +1348,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private final ThreadLocal<TransactionContext> mTransactionContext =
             new ThreadLocal<TransactionContext>();
 
+    // Duration in milliseconds that pre-authorized URIs will remain valid.
+    private long mPreAuthorizedUriDuration;
+
+    // Map of single-use pre-authorized URIs to expiration times.
+    private Map<Uri, Long> mPreAuthorizedUris = Maps.newHashMap();
+
+    // Random number generator seeded with the current time.
+    private Random mRandom = new Random(System.currentTimeMillis());
+
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
     private CommonNicknameCache mCommonNicknameCache;
@@ -1422,6 +1444,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         profileInfo.writePermission = "android.permission.WRITE_PROFILE";
         mProfileProvider.attachInfo(getContext(), profileInfo);
         mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
+
+        // Initialize the pre-authorized URI duration.
+        mPreAuthorizedUriDuration = android.provider.Settings.Secure.getLong(
+                getContext().getContentResolver(),
+                android.provider.Settings.Secure.CONTACTS_PREAUTH_URI_EXPIRATION,
+                DEFAULT_PREAUTHORIZED_URI_EXPIRATION);
 
         scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
         scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
@@ -2115,6 +2143,75 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     @Override
+    public Bundle call(String method, String arg, Bundle extras) {
+        waitForAccess(mReadAccessLatch);
+        if (method.equals(Authorization.AUTHORIZATION_METHOD)) {
+            Uri uri = (Uri) extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
+
+            // Check permissions on the caller.  The URI can only be pre-authorized if the caller
+            // already has the necessary permissions.
+            enforceSocialStreamReadPermission(uri);
+            if (mapsToProfileDb(uri)) {
+                mProfileProvider.enforceReadPermission(uri);
+            }
+
+            // If there hasn't been a security violation yet, we're clear to pre-authorize the URI.
+            Uri authUri = preAuthorizeUri(uri);
+            Bundle response = new Bundle();
+            response.putParcelable(Authorization.KEY_AUTHORIZED_URI, authUri);
+            return response;
+        }
+        return null;
+    }
+
+    /**
+     * Pre-authorizes the given URI, adding an expiring permission token to it and placing that
+     * in our map of pre-authorized URIs.
+     * @param uri The URI to pre-authorize.
+     * @return A pre-authorized URI that will not require special permissions to use.
+     */
+    private Uri preAuthorizeUri(Uri uri) {
+        String token = String.valueOf(mRandom.nextLong());
+        Uri authUri = uri.buildUpon()
+                .appendQueryParameter(PREAUTHORIZED_URI_TOKEN, token)
+                .build();
+        long expiration = SystemClock.elapsedRealtime() + mPreAuthorizedUriDuration;
+        mPreAuthorizedUris.put(authUri, expiration);
+
+        return authUri;
+    }
+
+    /**
+     * Checks whether the given URI has an unexpired permission token that would grant access to
+     * query the content.  If it does, the regular permission check should be skipped.
+     * @param uri The URI being accessed.
+     * @return Whether the URI is a pre-authorized URI that is still valid.
+     */
+    public boolean isValidPreAuthorizedUri(Uri uri) {
+        // Only proceed if the URI has a permission token parameter.
+        if (uri.getQueryParameter(PREAUTHORIZED_URI_TOKEN) != null) {
+            // First expire any pre-authorization URIs that are no longer valid.
+            long now = SystemClock.elapsedRealtime();
+            Set<Uri> expiredUris = Sets.newHashSet();
+            for (Uri preAuthUri : mPreAuthorizedUris.keySet()) {
+                if (mPreAuthorizedUris.get(preAuthUri) < now) {
+                    expiredUris.add(preAuthUri);
+                }
+            }
+            for (Uri expiredUri : expiredUris) {
+                mPreAuthorizedUris.remove(expiredUri);
+            }
+
+            // Now check to see if the pre-authorized URI map contains the URI.
+            if (mPreAuthorizedUris.containsKey(uri)) {
+                // Unexpired token - skip the permission check.
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     protected boolean yield(ContactsTransaction transaction) {
         // If there's a profile transaction in progress, and we're yielding, we need to
         // end it.  Unlike the Contacts DB yield (which re-starts a transaction at its
@@ -2771,7 +2868,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @param uri The URI to check.
      */
     private void enforceSocialStreamReadPermission(Uri uri) {
-        if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))) {
+        if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))
+                && !isValidPreAuthorizedUri(uri)) {
             getContext().enforceCallingOrSelfPermission(
                     "android.permission.READ_SOCIAL_STREAM", null);
         }
@@ -7187,7 +7285,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Writer writer = null;
         final Uri rawContactsUri;
         if (mapsToProfileDb(uri)) {
-            rawContactsUri = RawContactsEntity.PROFILE_CONTENT_URI;
+            // Pre-authorize the URI, since the caller would have already gone through the
+            // permission check to get here, but the pre-authorization at the top level wouldn't
+            // carry over to the raw contact.
+            rawContactsUri = preAuthorizeUri(RawContactsEntity.PROFILE_CONTENT_URI);
         } else {
             rawContactsUri = RawContactsEntity.CONTENT_URI;
         }
