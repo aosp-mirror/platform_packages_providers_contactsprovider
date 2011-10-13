@@ -5050,6 +5050,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         deferredSnipRequested);
                 snippetDeferred = isSingleWordQuery(filterParam) &&
                         deferredSnipRequested && snippetNeeded(projection);
+                // Omit results in "Other Contacts".
+                qb.appendWhere(Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY);
                 break;
             }
 
