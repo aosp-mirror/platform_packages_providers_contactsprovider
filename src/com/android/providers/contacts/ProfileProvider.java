@@ -42,11 +42,21 @@ public class ProfileProvider extends AbstractContactsProvider {
         mDelegate = delegate;
     }
 
-    private void enforceReadPermission() {
-        mDelegate.getContext().enforceCallingOrSelfPermission(READ_PERMISSION, null);
+    /**
+     * Performs a permission check on the read profile permission.  Checks the delegate contacts
+     * provider to see whether this is an authorized one-time-use URI.
+     * @param uri The URI being accessed.
+     */
+    public void enforceReadPermission(Uri uri) {
+        if (!mDelegate.isValidPreAuthorizedUri(uri)) {
+            mDelegate.getContext().enforceCallingOrSelfPermission(READ_PERMISSION, null);
+        }
     }
 
-    private void enforceWritePermission() {
+    /**
+     * Performs a permission check on the write profile permission.
+     */
+    public void enforceWritePermission() {
         mDelegate.getContext().enforceCallingOrSelfPermission(WRITE_PERMISSION, null);
     }
 
@@ -63,7 +73,7 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
-        enforceReadPermission();
+        enforceReadPermission(uri);
         mDelegate.substituteDb(getDatabaseHelper().getReadableDatabase());
         return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1);
     }
@@ -96,7 +106,7 @@ public class ProfileProvider extends AbstractContactsProvider {
             enforceWritePermission();
             mDelegate.substituteDb(getDatabaseHelper().getWritableDatabase());
         } else {
-            enforceReadPermission();
+            enforceReadPermission(uri);
             mDelegate.substituteDb(getDatabaseHelper().getReadableDatabase());
         }
         return mDelegate.openAssetFileLocal(uri, mode);
