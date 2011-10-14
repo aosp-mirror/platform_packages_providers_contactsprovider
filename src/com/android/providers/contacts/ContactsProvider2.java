@@ -83,7 +83,6 @@ import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
-import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -156,6 +155,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -166,7 +166,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
@@ -1354,8 +1353,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // Map of single-use pre-authorized URIs to expiration times.
     private Map<Uri, Long> mPreAuthorizedUris = Maps.newHashMap();
 
-    // Random number generator seeded with the current time.
-    private Random mRandom = new Random(System.currentTimeMillis());
+    // Random number generator.
+    private SecureRandom mRandom = new SecureRandom();
 
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
