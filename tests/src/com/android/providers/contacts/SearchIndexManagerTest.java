@@ -26,6 +26,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.test.suitebuilder.annotation.MediumTest;
+import android.test.suitebuilder.annotation.Suppress;
 
 import java.text.Collator;
 import java.util.Arrays;
@@ -87,7 +88,6 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         }
 
         long rawContactId = createRawContact();
-        long contactId = queryContactId(rawContactId);
         ContentValues values = new ContentValues();
         values.put(StructuredName.DISPLAY_NAME, "\u695A\u8FAD");    // CHUCI
         insertStructuredName(rawContactId, values);
@@ -263,10 +263,109 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
     }
 
     public void testSearchByName() {
-        createRawContactWithName("John", "Doe");
+        createRawContactWithName("John Jay", "Doe");
 
         // We are supposed to find the contact, but return a null snippet
         assertStoredValue(buildSearchUri("john"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("jay"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("doe"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testSearchByPrefixName() {
+        createRawContactWithName("John Jay", "Doe");
+
+        // prefix searches
+        assertStoredValue(buildSearchUri("jo ja"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("J D"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Doe, John"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testGermanUmlautFullameCapitalizationSearch() {
+        createRawContactWithName("Matthäus BJÖRN Bünyamin", "Reißer");
+
+        // make sure we can find those, independent of the capitalization
+        assertStoredValue(buildSearchUri("matthäus"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Matthäus"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("MATTHÄUS"), SearchSnippetColumns.SNIPPET, null);
+
+        assertStoredValue(buildSearchUri("björn"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Björn"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("BJÖRN"), SearchSnippetColumns.SNIPPET, null);
+
+        assertStoredValue(buildSearchUri("bünyamin"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Bünyamin"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("BUNYAMIN"), SearchSnippetColumns.SNIPPET, null);
+
+        // There is no capital version of ß. It is capitalized as double-S instead
+        assertStoredValue(buildSearchUri("Reißer"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Reisser"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("REISSER"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testHangulNameLeadConsonantAsYouTypeSearch() {
+        createRawContactWithDisplayName("홍길동");
+        // the korean name uses three compound characters. this test makes sure
+        // that the name can be found by typing in only the lead consonant
+        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㄱ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㄱㄷ"), SearchSnippetColumns.SNIPPET, null);
+
+        // same again, this time only for the first name
+        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㄷ"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    public void testHangulNameFullAsYouTypeSearch() {
+        createRawContactWithDisplayName("홍길동");
+
+        // the korean name uses three compound characters. this test makes sure
+        // that the name can be found by typing in the full nine letters. the search string
+        // shows the name is being built "as you type"
+        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("호"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍ㄱ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍기"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길ㄷ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길도"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길동"), SearchSnippetColumns.SNIPPET, null);
+
+        // same again, this time only for the first name
+        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("기"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길ㄷ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길도"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길동"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+
+    /** Decomposed Hangul is not yet supported. This text is how we would test it */
+    @Suppress
+    public void testHangulNameDecomposedSearch() {
+        createRawContactWithDisplayName("홍길동");
+
+        // the korean name uses three compound characters. this test makes sure
+        // that the name can be found by typing each syllable as a single character.
+        // This can be achieved using the Korean IM by pressing ㅎ, space, backspace, ㅗ and so on
+        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷㅗ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
+
+        // same again, this time only for the first name
+        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
     }
 
     public void testSearchByEmailAddress() {
@@ -295,6 +394,10 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
                 "[(800)GOOG-123]");
         assertStoredValue(buildSearchUri("650-2"), SearchSnippetColumns.SNIPPET,
                 "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
+
+        // for numbers outside of the real phone field, any order (and prefixing) is allowed
+        assertStoredValue(buildSearchUri("25 650"), SearchSnippetColumns.SNIPPET,
+                "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
     }
 
     private Uri buildSearchUri(String filter) {
@@ -316,6 +419,14 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         return builder.build();
     }
 
+    private void createRawContactWithDisplayName(String name) {
+        long rawContactId = createRawContact();
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, name);
+        insertStructuredName(rawContactId, values);
+    }
+
+    // TODO: expectedName must be tested. Many tests in here are quite useless at the moment
     private void assertSearchIndex(
             long contactId, String expectedContent, String expectedName, String expectedTokens) {
         ContactsDatabaseHelper dbHelper = (ContactsDatabaseHelper) getContactsProvider()

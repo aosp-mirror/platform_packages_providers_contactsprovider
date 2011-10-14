@@ -103,7 +103,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 622;
+    static final int DATABASE_VERSION = 623;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2262,6 +2262,12 @@ import java.util.Locale;
         if (oldVersion < 622) {
             upgradeToVersion622(db);
             oldVersion = 622;
+        }
+
+        if (oldVersion < 623) {
+            // change FTS to normalize names using collation key
+            upgradeSearchIndex = true;
+            oldVersion = 623;
         }
 
         if (upgradeViewsAndTriggers) {
