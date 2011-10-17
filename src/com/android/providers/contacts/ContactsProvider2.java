@@ -139,7 +139,6 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
@@ -331,11 +330,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int SEARCH_SUGGESTIONS = 12001;
     private static final int SEARCH_SHORTCUT = 12002;
-
-    private static final int LIVE_FOLDERS_CONTACTS = 14000;
-    private static final int LIVE_FOLDERS_CONTACTS_WITH_PHONES = 14001;
-    private static final int LIVE_FOLDERS_CONTACTS_FAVORITES = 14002;
-    private static final int LIVE_FOLDERS_CONTACTS_GROUP_NAME = 14003;
 
     private static final int RAW_CONTACT_ENTITIES = 15001;
 
@@ -1020,15 +1014,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(StreamItemPhotos.SYNC4)
             .build();
 
-    /** Contains Live Folders columns */
-    private static final ProjectionMap sLiveFoldersProjectionMap = ProjectionMap.builder()
-            .add(LiveFolders._ID, Contacts._ID)
-            .add(LiveFolders.NAME, Contacts.DISPLAY_NAME)
-            // TODO: Put contact photo back when we have a way to display a default icon
-            // for contacts without a photo
-            // .add(LiveFolders.ICON_BITMAP, Photos.DATA)
-            .build();
-
     /** Contains {@link Directory} columns */
     private static final ProjectionMap sDirectoryProjectionMap = ProjectionMap.builder()
             .add(Directory._ID)
@@ -1185,15 +1170,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 SEARCH_SUGGESTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
                 SEARCH_SHORTCUT);
-
-        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts",
-                LIVE_FOLDERS_CONTACTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts/*",
-                LIVE_FOLDERS_CONTACTS_GROUP_NAME);
-        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/contacts_with_phones",
-                LIVE_FOLDERS_CONTACTS_WITH_PHONES);
-        matcher.addURI(ContactsContract.AUTHORITY, "live_folders/favorites",
-                LIVE_FOLDERS_CONTACTS_FAVORITES);
 
         matcher.addURI(ContactsContract.AUTHORITY, "provider_status", PROVIDER_STATUS);
 
@@ -5819,33 +5795,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return mGlobalSearchSupport.handleSearchShortcutRefresh(
                         mActiveDb.get(), projection, lookupKey, filter);
             }
-
-            case LIVE_FOLDERS_CONTACTS:
-                qb.setTables(Views.CONTACTS);
-                qb.setProjectionMap(sLiveFoldersProjectionMap);
-                break;
-
-            case LIVE_FOLDERS_CONTACTS_WITH_PHONES:
-                qb.setTables(Views.CONTACTS);
-                qb.setProjectionMap(sLiveFoldersProjectionMap);
-                qb.appendWhere(Contacts.HAS_PHONE_NUMBER + "=1");
-                break;
-
-            case LIVE_FOLDERS_CONTACTS_FAVORITES:
-                qb.setTables(Views.CONTACTS);
-                qb.setProjectionMap(sLiveFoldersProjectionMap);
-                qb.appendWhere(Contacts.STARRED + "=1");
-                break;
-
-            case LIVE_FOLDERS_CONTACTS_GROUP_NAME:
-                qb.setTables(Views.CONTACTS);
-                qb.setProjectionMap(sLiveFoldersProjectionMap);
-                qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
-                String groupMimeTypeId = String.valueOf(
-                        mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
-                selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                selectionArgs = insertSelectionArg(selectionArgs, groupMimeTypeId);
-                break;
 
             case RAW_CONTACT_ENTITIES:
             case PROFILE_RAW_CONTACT_ENTITIES: {
