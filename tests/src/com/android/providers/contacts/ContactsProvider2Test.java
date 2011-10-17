@@ -32,7 +32,6 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteConstraintException;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
@@ -65,7 +64,6 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.LiveFolders;
 import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
@@ -598,15 +596,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 StatusUpdates.STATUS_RES_PACKAGE,
                 StatusUpdates.STATUS_ICON,
                 StatusUpdates.STATUS_LABEL,
-        });
-    }
-
-    public void testLiveFoldersProjection() {
-        assertProjection(
-            Uri.withAppendedPath(ContactsContract.AUTHORITY_URI, "live_folders/contacts"),
-            new String[]{
-                LiveFolders._ID,
-                LiveFolders.NAME,
         });
     }
 
@@ -5378,55 +5367,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testNewPrimaryInUpdateWithSuperPrimary() {
         testChangingPrimary(true, true);
-    }
-
-    public void testLiveFolders() {
-        long rawContactId1 = createRawContactWithName("James", "Sullivan");
-        insertPhoneNumber(rawContactId1, "5234567890");
-        long contactId1 = queryContactId(rawContactId1);
-
-        long rawContactId2 = createRawContactWithName("Mike", "Wazowski");
-        long contactId2 = queryContactId(rawContactId2);
-        storeValue(Contacts.CONTENT_URI, contactId2, Contacts.STARRED, "1");
-
-        long rawContactId3 = createRawContactWithName("Randall", "Boggs");
-        long contactId3 = queryContactId(rawContactId3);
-        long groupId = createGroup(NO_ACCOUNT, "src1", "VIP");
-        insertGroupMembership(rawContactId3, groupId);
-
-        assertLiveFolderContents(
-                Uri.withAppendedPath(ContactsContract.AUTHORITY_URI,
-                        "live_folders/contacts"),
-                contactId1, "James Sullivan",
-                contactId2, "Mike Wazowski",
-                contactId3, "Randall Boggs");
-
-        assertLiveFolderContents(
-                Uri.withAppendedPath(ContactsContract.AUTHORITY_URI,
-                        "live_folders/contacts_with_phones"),
-                contactId1, "James Sullivan");
-
-        assertLiveFolderContents(
-                Uri.withAppendedPath(ContactsContract.AUTHORITY_URI,
-                        "live_folders/favorites"),
-                contactId2, "Mike Wazowski");
-
-        assertLiveFolderContents(
-                Uri.withAppendedPath(Uri.withAppendedPath(ContactsContract.AUTHORITY_URI,
-                        "live_folders/contacts"), Uri.encode("VIP")),
-                contactId3, "Randall Boggs");
-    }
-
-    private void assertLiveFolderContents(Uri uri, Object... expected) {
-        Cursor c = mResolver.query(uri, new String[]{LiveFolders._ID, LiveFolders.NAME},
-                null, null, LiveFolders._ID);
-        assertEquals(expected.length/2, c.getCount());
-        for (int i = 0; i < expected.length/2; i++) {
-            assertTrue(c.moveToNext());
-            assertEquals(((Long)expected[i * 2]).longValue(), c.getLong(0));
-            assertEquals(expected[i * 2 + 1], c.getString(1));
-        }
-        c.close();
     }
 
     public void testContactCounts() {

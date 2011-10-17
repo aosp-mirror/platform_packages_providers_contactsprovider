@@ -27,7 +27,6 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
-import android.database.AbstractCursor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
