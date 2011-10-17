@@ -42,6 +42,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemPhotosCol
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -5454,17 +5455,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                     boolean hasCondition = false;
                     boolean orNeeded = false;
-                    String normalizedName = NameNormalizer.normalize(filterParam);
-                    if (normalizedName.length() > 0) {
+                    final String ftsMatchQuery = SearchIndexManager.getFtsMatchQuery(
+                            filterParam, FtsQueryBuilder.UNSCOPED_NORMALIZING);
+                    if (ftsMatchQuery.length() > 0) {
                         sb.append(Data.RAW_CONTACT_ID + " IN " +
                                 "(SELECT " + RawContactsColumns.CONCRETE_ID +
                                 " FROM " + Tables.SEARCH_INDEX +
                                 " JOIN " + Tables.RAW_CONTACTS +
                                 " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
                                         + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
-                                " WHERE " + SearchIndexColumns.NAME + " MATCH ");
-                        DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filterParam) + "*");
-                        sb.append(")");
+                                " WHERE " + SearchIndexColumns.NAME + " MATCH '");
+                        sb.append(ftsMatchQuery);
+                        sb.append("')");
                         orNeeded = true;
                         hasCondition = true;
                     }
@@ -5575,9 +5577,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 " JOIN " + Tables.RAW_CONTACTS +
                                 " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
                                         + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
-                                " WHERE " + SearchIndexColumns.NAME + " MATCH ");
-                        DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filterParam) + "*");
-                        sb.append(")");
+                                " WHERE " + SearchIndexColumns.NAME + " MATCH '");
+                        final String ftsMatchQuery = SearchIndexManager.getFtsMatchQuery(
+                                filterParam, FtsQueryBuilder.UNSCOPED_NORMALIZING);
+                        sb.append(ftsMatchQuery);
+                        sb.append("')");
                     }
                     sb.append(")");
                     qb.appendWhere(sb);
@@ -6475,7 +6479,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
 
-        sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS snippet_contact_id");
+        final String SNIPPET_CONTACT_ID = "snippet_contact_id";
+        sb.append(" JOIN (SELECT " + SearchIndexColumns.CONTACT_ID + " AS " + SNIPPET_CONTACT_ID);
         if (snippetNeeded) {
             sb.append(", ");
             if (isEmailAddress) {
@@ -6556,22 +6561,45 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         sb.append(" FROM " + Tables.SEARCH_INDEX);
         sb.append(" WHERE ");
-        sb.append(Tables.SEARCH_INDEX + " MATCH ");
+        sb.append(Tables.SEARCH_INDEX + " MATCH '");
         if (isEmailAddress) {
-            DatabaseUtils.appendEscapedSQLString(sb, "\"" + sanitizeMatch(filter) + "*\"");
+            // we know that the emailAddress contains a @. This phrase search should be
+            // scoped against "content:" only, but unfortunately SQLite doesn't support
+            // phrases and scoped columns at once. This is fine in this case however, because:
+            //  - We can't erronously match against name, as name is all-hex (so the @ can't match)
+            //  - We can't match against tokens, because phone-numbers can't contain @
+            final String sanitizedEmailAddress =
+                    emailAddress == null ? "" : sanitizeMatch(emailAddress);
+            sb.append("\"");
+            sb.append(sanitizedEmailAddress);
+            sb.append("*\"");
         } else if (isPhoneNumber) {
-            DatabaseUtils.appendEscapedSQLString(sb,
-                    "\"" + sanitizeMatch(filter) + "*\" OR \"" + phoneNumber + "*\""
-                            + (numberE164 != null ? " OR \"" + numberE164 + "\"" : ""));
+            // normalized version of the phone number (phoneNumber can only have + and digits)
+            final String phoneNumberCriteria = " OR tokens:" + phoneNumber + "*";
+
+            // international version of this number (numberE164 can only have + and digits)
+            final String numberE164Criteria =
+                    (numberE164 != null && !TextUtils.equals(numberE164, phoneNumber))
+                    ? " OR tokens:" + numberE164 + "*"
+                    : "";
+
+            // combine all criteria
+            final String commonCriteria =
+                    phoneNumberCriteria + numberE164Criteria;
+
+            // search in content
+            sb.append(SearchIndexManager.getFtsMatchQuery(filter,
+                    FtsQueryBuilder.getDigitsQueryBuilder(commonCriteria)));
         } else {
-            DatabaseUtils.appendEscapedSQLString(sb, sanitizeMatch(filter) + "*");
+            // general case: not a phone number, not an email-address
+            sb.append(SearchIndexManager.getFtsMatchQuery(filter,
+                    FtsQueryBuilder.SCOPED_NAME_NORMALIZING));
         }
-        sb.append(") ON (" + Contacts._ID + "=snippet_contact_id)");
+        sb.append("') ON (" + Contacts._ID + "=" + SNIPPET_CONTACT_ID + ")");
     }
 
-    private String sanitizeMatch(String filter) {
-        // TODO more robust preprocessing of match expressions
-        return filter.replace('-', ' ').replace('\"', ' ');
+    private static String sanitizeMatch(String filter) {
+        return filter.replace("'", "").replace("*", "").replace("-", "").replace("\"", "");
     }
 
     private void appendSnippetFunction(

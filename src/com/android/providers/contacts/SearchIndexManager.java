@@ -28,10 +28,8 @@ import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.ProviderStatus;
-import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -187,7 +185,7 @@ public class SearchIndexManager {
             if (mSbName.length() != 0) {
                 mSbName.append(' ');
             }
-            mSbName.append(name);
+            mSbName.append(NameNormalizer.normalize(name));
         }
     }
 
@@ -341,5 +339,123 @@ public class SearchIndexManager {
 
     private void setSearchIndexVersion(int version) {
         mDbHelper.setProperty(PROPERTY_SEARCH_INDEX_VERSION, String.valueOf(version));
+    }
+
+    /**
+     * Tokenizes the query and normalizes/hex encodes each token. The tokenizer uses the same
+     * rules as SQLite's "simple" tokenizer. Each token is added to the retokenizer and then
+     * returned as a String.
+     * @see FtsQueryBuilder#UNSCOPED_NORMALIZING
+     * @see FtsQueryBuilder#SCOPED_NAME_NORMALIZING
+     */
+    public static String getFtsMatchQuery(String query, FtsQueryBuilder ftsQueryBuilder) {
+        // SQLite's "simple" tokenizer uses the following rules to detect characters:
+        //  - Unicode codepoints >= 128: Everything
+        //  - Unicode codepoints < 128: Alphanumeric and "_"
+        // Everything else is a separator of tokens
+        int tokenStart = -1;
+        final StringBuilder result = new StringBuilder();
+        for (int i = 0; i <= query.length(); i++) {
+            final boolean isChar;
+            if (i == query.length()) {
+                isChar = false;
+            } else {
+                final char ch = query.charAt(i);
+                if (ch >= 128) {
+                    isChar = true;
+                } else {
+                    isChar = Character.isLetterOrDigit(ch) || ch == '_';
+                }
+            }
+            if (isChar) {
+                if (tokenStart == -1) {
+                    tokenStart = i;
+                }
+            } else {
+                if (tokenStart != -1) {
+                    final String token = query.substring(tokenStart, i);
+                    ftsQueryBuilder.addToken(result, token);
+                    tokenStart = -1;
+                }
+            }
+        }
+        return result.toString();
+    }
+
+    public static abstract class FtsQueryBuilder {
+        public abstract void addToken(StringBuilder builder, String token);
+
+        /** Normalizes and space-concatenates each token. Example: "a1b2c1* a2b3c2*" */
+        public static final FtsQueryBuilder UNSCOPED_NORMALIZING = new UnscopedNormalizingBuilder();
+
+        /**
+         * Scopes each token to a column and normalizes the name.
+         * Example: "content:foo* name:a1b2c1* tokens:foo* content:bar* name:a2b3c2* tokens:bar*"
+         */
+        public static final FtsQueryBuilder SCOPED_NAME_NORMALIZING =
+                new ScopedNameNormalizingBuilder();
+
+        /**
+         * Scopes each token to a the content column and also for name with normalization.
+         * Also adds a user-defined expression to each token. This allows common criteria to be
+         * concatenated to each token.
+         * Example (commonCriteria=" OR tokens:123*"):
+         * "content:650* OR name:1A1B1C* OR tokens:123* content:2A2B2C* OR name:foo* OR tokens:123*"
+         */
+        public static FtsQueryBuilder getDigitsQueryBuilder(final String commonCriteria) {
+            return new FtsQueryBuilder() {
+                @Override
+                public void addToken(StringBuilder builder, String token) {
+                    if (builder.length() != 0) builder.append(' ');
+
+                    builder.append("content:");
+                    builder.append(token);
+                    builder.append("* ");
+
+                    final String normalizedToken = NameNormalizer.normalize(token);
+                    if (!TextUtils.isEmpty(normalizedToken)) {
+                        builder.append(" OR name:");
+                        builder.append(normalizedToken);
+                        builder.append('*');
+                    }
+
+                    builder.append(commonCriteria);
+                }
+            };
+        }
+    }
+
+    private static class UnscopedNormalizingBuilder extends FtsQueryBuilder {
+        @Override
+        public void addToken(StringBuilder builder, String token) {
+            if (builder.length() != 0) builder.append(' ');
+
+            // the token could be empty (if the search query was "_"). we should still emit it
+            // here, as we otherwise risk to end up with an empty MATCH-expression MATCH ""
+            builder.append(NameNormalizer.normalize(token));
+            builder.append('*');
+        }
+    }
+
+    private static class ScopedNameNormalizingBuilder extends FtsQueryBuilder {
+        @Override
+        public void addToken(StringBuilder builder, String token) {
+            if (builder.length() != 0) builder.append(' ');
+
+            builder.append("content:");
+            builder.append(token);
+            builder.append('*');
+
+            final String normalizedToken = NameNormalizer.normalize(token);
+            if (!TextUtils.isEmpty(normalizedToken)) {
+                builder.append(" OR name:");
+                builder.append(normalizedToken);
+                builder.append('*');
+            }
+
+            builder.append(" OR tokens:");
+            builder.append(token);
+            builder.append("*");
+        }
     }
 }

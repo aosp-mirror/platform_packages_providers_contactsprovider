@@ -845,7 +845,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         String value = null;
         Cursor c = mResolver.query(uri, new String[] { column }, selection, selectionArgs, null);
         try {
-            assertEquals("Record count", 1, c.getCount());
+            assertEquals("Record count for " + uri, 1, c.getCount());
 
             if (c.moveToFirst()) {
                 value = getCursorStringValue(c, column);
