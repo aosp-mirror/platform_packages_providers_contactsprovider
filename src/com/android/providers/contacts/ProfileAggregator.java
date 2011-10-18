@@ -37,7 +37,7 @@ public class ProfileAggregator extends ContactAggregator {
     }
 
     @Override
-    public String computeLookupKeyForContact(SQLiteDatabase db, long contactId) {
+    protected String computeLookupKeyForContact(SQLiteDatabase db, long contactId) {
         return ContactLookupKey.PROFILE_LOOKUP_KEY;
     }
 
