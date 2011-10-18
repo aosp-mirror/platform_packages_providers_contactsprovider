@@ -225,6 +225,7 @@ public class ContactMatcher {
         /**
          * Descending order of match score.
          */
+        @Override
         public int compareTo(MatchScore another) {
             return another.getScore() - getScore();
         }
