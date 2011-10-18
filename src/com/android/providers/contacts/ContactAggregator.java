@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
-import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -30,11 +29,9 @@ import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumn
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 
-import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
@@ -60,7 +57,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-
 
 /**
  * ContactAggregator deals with aggregating contact information coming from different sources.
@@ -136,7 +132,6 @@ public class ContactAggregator {
     private SQLiteStatement mMarkForAggregation;
     private SQLiteStatement mPhotoIdUpdate;
     private SQLiteStatement mDisplayNameUpdate;
-    private SQLiteStatement mHasPhoneNumberUpdate;
     private SQLiteStatement mLookupKeyUpdate;
     private SQLiteStatement mStarredUpdate;
     private SQLiteStatement mContactIdAndMarkAggregatedUpdate;
@@ -159,7 +154,6 @@ public class ContactAggregator {
     private StringBuilder mSb = new StringBuilder();
     private MatchCandidateList mCandidates = new MatchCandidateList();
     private ContactMatcher mMatcher = new ContactMatcher();
-    private ContentValues mValues = new ContentValues();
     private DisplayNameCandidate mDisplayNameCandidate = new DisplayNameCandidate();
 
     /**
@@ -319,16 +313,6 @@ public class ContactAggregator {
                 " SET " + Contacts.LOOKUP_KEY + "=? " +
                 " WHERE " + Contacts._ID + "=?");
 
-        mHasPhoneNumberUpdate = db.compileStatement(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.HAS_PHONE_NUMBER + "="
-                        + "(SELECT (CASE WHEN COUNT(*)=0 THEN 0 ELSE 1 END)"
-                        + " FROM " + Tables.DATA_JOIN_RAW_CONTACTS
-                        + " WHERE " + DataColumns.MIMETYPE_ID + "=?"
-                                + " AND " + Phone.NUMBER + " NOT NULL"
-                                + " AND " + RawContacts.CONTACT_ID + "=?)" +
-                " WHERE " + Contacts._ID + "=?");
-
         mStarredUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
                 + Contacts.STARRED + "=(SELECT (CASE WHEN COUNT(" + RawContacts.STARRED
                 + ")=0 THEN 0 ELSE 1 END) FROM " + Tables.RAW_CONTACTS + " WHERE "
@@ -451,7 +435,7 @@ public class ContactAggregator {
 
         for (int i = 0; i < count; i++) {
             aggregateContact(txContext, db, rawContactIds[i], accountTypes[i], accountNames[i],
-                    dataSets[i], contactIds[i], mCandidates, mMatcher, mValues);
+                    dataSets[i], contactIds[i], mCandidates, mMatcher);
         }
 
         long elapsedTime = System.currentTimeMillis() - start;
@@ -463,6 +447,7 @@ public class ContactAggregator {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public void triggerAggregation(TransactionContext txContext, long rawContactId) {
         if (!mEnabled) {
             return;
@@ -503,18 +488,22 @@ public class ContactAggregator {
     }
 
     public void markForAggregation(long rawContactId, int aggregationMode, boolean force) {
+        final int effectiveAggregationMode;
         if (!force && mRawContactsMarkedForAggregation.containsKey(rawContactId)) {
             // As per ContactsContract documentation, default aggregation mode
             // does not override a previously set mode
             if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {
-                aggregationMode = mRawContactsMarkedForAggregation.get(rawContactId);
+                effectiveAggregationMode = mRawContactsMarkedForAggregation.get(rawContactId);
+            } else {
+                effectiveAggregationMode = aggregationMode;
             }
         } else {
             mMarkForAggregation.bindLong(1, rawContactId);
             mMarkForAggregation.execute();
+            effectiveAggregationMode = aggregationMode;
         }
 
-        mRawContactsMarkedForAggregation.put(rawContactId, aggregationMode);
+        mRawContactsMarkedForAggregation.put(rawContactId, effectiveAggregationMode);
     }
 
     private static class RawContactIdAndAggregationModeQuery {
@@ -592,7 +581,6 @@ public class ContactAggregator {
 
         MatchCandidateList candidates = new MatchCandidateList();
         ContactMatcher matcher = new ContactMatcher();
-        ContentValues values = new ContentValues();
 
         long contactId = 0;
         String accountName = null;
@@ -614,7 +602,7 @@ public class ContactAggregator {
         }
 
         aggregateContact(txContext, db, rawContactId, accountType, accountName, dataSet, contactId,
-                candidates, matcher, values);
+                candidates, matcher);
     }
 
     public void updateAggregateData(TransactionContext txContext, long contactId) {
@@ -653,8 +641,7 @@ public class ContactAggregator {
      */
     private synchronized void aggregateContact(TransactionContext txContext, SQLiteDatabase db,
             long rawContactId, String accountType, String accountName, String dataSet,
-            long currentContactId, MatchCandidateList candidates, ContactMatcher matcher,
-            ContentValues values) {
+            long currentContactId, MatchCandidateList candidates, ContactMatcher matcher) {
 
         int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
 
@@ -1091,7 +1078,7 @@ public class ContactAggregator {
             MatchCandidateList candidates, ContactMatcher matcher) {
 
         // Find good matches based on name alone
-        long bestMatch = updateMatchScoresBasedOnDataMatches(db, rawContactId, candidates, matcher);
+        long bestMatch = updateMatchScoresBasedOnDataMatches(db, rawContactId, matcher);
         if (bestMatch == ContactMatcher.MULTIPLE_MATCHES) {
             // We found multiple matches on the name - do not aggregate because of the ambiguity
             return -1;
@@ -1181,7 +1168,7 @@ public class ContactAggregator {
      * Computes scores for contacts that have matching data rows.
      */
     private long updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long rawContactId,
-            MatchCandidateList candidates, ContactMatcher matcher) {
+            ContactMatcher matcher) {
 
         updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
         long bestMatch = matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_PRIMARY, false);
@@ -1267,7 +1254,7 @@ public class ContactAggregator {
 
     private final class NameLookupSelectionBuilder extends NameLookupBuilder {
 
-        private final MatchCandidateList mCandidates;
+        private final MatchCandidateList mNameLookupCandidates;
 
         private StringBuilder mSelection = new StringBuilder(
                 NameLookupColumns.NORMALIZED_NAME + " IN(");
@@ -1275,7 +1262,7 @@ public class ContactAggregator {
 
         public NameLookupSelectionBuilder(NameSplitter splitter, MatchCandidateList candidates) {
             super(splitter);
-            this.mCandidates = candidates;
+            this.mNameLookupCandidates = candidates;
         }
 
         @Override
@@ -1286,13 +1273,13 @@ public class ContactAggregator {
         @Override
         protected void insertNameLookup(
                 long rawContactId, long dataId, int lookupType, String string) {
-            mCandidates.add(string, lookupType);
+            mNameLookupCandidates.add(string, lookupType);
             DatabaseUtils.appendEscapedSQLString(mSelection, string);
             mSelection.append(',');
         }
 
         public boolean isEmpty() {
-            return mCandidates.isEmpty();
+            return mNameLookupCandidates.isEmpty();
         }
 
         public String getSelection() {
@@ -1302,9 +1289,9 @@ public class ContactAggregator {
         }
 
         public int getLookupType(String name) {
-            for (int i = 0; i < mCandidates.mCount; i++) {
-                if (mCandidates.mList.get(i).mName.equals(name)) {
-                    return mCandidates.mList.get(i).mLookupType;
+            for (int i = 0; i < mNameLookupCandidates.mCount; i++) {
+                if (mNameLookupCandidates.mList.get(i).mName.equals(name)) {
+                    return mNameLookupCandidates.mList.get(i).mLookupType;
                 }
             }
             throw new IllegalStateException();
@@ -1888,16 +1875,14 @@ public class ContactAggregator {
 
     private interface PhotoFileQuery {
         final String[] COLUMNS = new String[] {
-                PhotoFiles._ID,
                 PhotoFiles.HEIGHT,
                 PhotoFiles.WIDTH,
                 PhotoFiles.FILESIZE
         };
 
-        int _ID = 0;
-        int HEIGHT = 1;
-        int WIDTH = 2;
-        int FILESIZE = 3;
+        int HEIGHT = 0;
+        int WIDTH = 1;
+        int FILESIZE = 2;
     }
 
     private class PhotoEntry implements Comparable<PhotoEntry> {
@@ -1955,8 +1940,6 @@ public class ContactAggregator {
             RawContactsColumns.DISPLAY_NAME_SOURCE,
             RawContacts.NAME_VERIFIED,
             RawContacts.SOURCE_ID,
-            RawContacts.ACCOUNT_TYPE,
-            RawContacts.DATA_SET,
             RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
         };
 
@@ -1965,9 +1948,7 @@ public class ContactAggregator {
         int DISPLAY_NAME_SOURCE = 2;
         int NAME_VERIFIED = 3;
         int SOURCE_ID = 4;
-        int ACCOUNT_TYPE = 5;
-        int DATA_SET = 6;
-        int ACCOUNT_TYPE_AND_DATA_SET = 7;
+        int ACCOUNT_TYPE_AND_DATA_SET = 5;
     }
 
     public void updateDisplayNameForRawContact(SQLiteDatabase db, long rawContactId) {
@@ -2030,10 +2011,23 @@ public class ContactAggregator {
             return;
         }
 
-        mHasPhoneNumberUpdate.bindLong(1, mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE));
-        mHasPhoneNumberUpdate.bindLong(2, contactId);
-        mHasPhoneNumberUpdate.bindLong(3, contactId);
-        mHasPhoneNumberUpdate.execute();
+        final SQLiteStatement hasPhoneNumberUpdate = db.compileStatement(
+                "UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.HAS_PHONE_NUMBER + "="
+                        + "(SELECT (CASE WHEN COUNT(*)=0 THEN 0 ELSE 1 END)"
+                        + " FROM " + Tables.DATA_JOIN_RAW_CONTACTS
+                        + " WHERE " + DataColumns.MIMETYPE_ID + "=?"
+                                + " AND " + Phone.NUMBER + " NOT NULL"
+                                + " AND " + RawContacts.CONTACT_ID + "=?)" +
+                " WHERE " + Contacts._ID + "=?");
+        try {
+            hasPhoneNumberUpdate.bindLong(1, mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE));
+            hasPhoneNumberUpdate.bindLong(2, contactId);
+            hasPhoneNumberUpdate.bindLong(3, contactId);
+            hasPhoneNumberUpdate.execute();
+        } finally {
+            hasPhoneNumberUpdate.close();
+        }
     }
 
     private interface LookupKeyQuery {
@@ -2061,8 +2055,7 @@ public class ContactAggregator {
         updateLookupKeyForContact(db, contactId);
     }
 
-    public void updateLookupKeyForContact(SQLiteDatabase db, long contactId) {
-        mSelectionArgs1[0] = String.valueOf(contactId);
+    private void updateLookupKeyForContact(SQLiteDatabase db, long contactId) {
         String lookupKey = computeLookupKeyForContact(db, contactId);
 
         if (lookupKey == null) {
@@ -2075,8 +2068,9 @@ public class ContactAggregator {
         mLookupKeyUpdate.execute();
     }
 
-    public String computeLookupKeyForContact(SQLiteDatabase db, long contactId) {
+    protected String computeLookupKeyForContact(SQLiteDatabase db, long contactId) {
         StringBuilder sb = new StringBuilder();
+        mSelectionArgs1[0] = String.valueOf(contactId);
         final Cursor c = db.query(Views.RAW_CONTACTS, LookupKeyQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, RawContacts._ID);
         try {
@@ -2177,16 +2171,19 @@ public class ContactAggregator {
         }
 
         // Limit the number of returned suggestions
+        final List<MatchScore> limitedMatches;
         if (bestMatches.size() > maxSuggestions) {
-            bestMatches = bestMatches.subList(0, maxSuggestions);
+            limitedMatches = bestMatches.subList(0, maxSuggestions);
+        } else {
+            limitedMatches = bestMatches;
         }
 
         // Build an in-clause with the remaining contact IDs
         sb.setLength(0);
         sb.append(Contacts._ID);
         sb.append(" IN (");
-        for (int i = 0; i < bestMatches.size(); i++) {
-            MatchScore matchScore = bestMatches.get(i);
+        for (int i = 0; i < limitedMatches.size(); i++) {
+            MatchScore matchScore = limitedMatches.get(i);
             if (i != 0) {
                 sb.append(",");
             }
@@ -2198,17 +2195,17 @@ public class ContactAggregator {
         cursor = qb.query(db, projection, sb.toString(), null, null, null, Contacts._ID);
 
         // Build a sorted list of discovered IDs
-        ArrayList<Long> sortedContactIds = new ArrayList<Long>(bestMatches.size());
-        for (MatchScore matchScore : bestMatches) {
+        ArrayList<Long> sortedContactIds = new ArrayList<Long>(limitedMatches.size());
+        for (MatchScore matchScore : limitedMatches) {
             sortedContactIds.add(matchScore.getContactId());
         }
 
         Collections.sort(sortedContactIds);
 
         // Map cursor indexes according to the descending order of match scores
-        int[] positionMap = new int[bestMatches.size()];
+        int[] positionMap = new int[limitedMatches.size()];
         for (int i = 0; i < positionMap.length; i++) {
-            long id = bestMatches.get(i).getContactId();
+            long id = limitedMatches.get(i).getContactId();
             positionMap[i] = sortedContactIds.indexOf(id);
         }
 
