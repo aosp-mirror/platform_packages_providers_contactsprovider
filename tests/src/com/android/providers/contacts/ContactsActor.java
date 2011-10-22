@@ -147,6 +147,14 @@ public class ContactsActor {
                 mGrantedPermissions, mGrantedUriPermissions);
         this.packageName = packageName;
 
+        // Let the Secure class initialize the settings provider, which is done when we first
+        // tries to get any setting.  Because our mock context/content resolver doesn't have the
+        // settings provider, we need to do this with an actual context, before other classes
+        // try to do this with a mock context.
+        // (Otherwise ContactsProvider2.initialzie() will crash trying to get a setting with
+        // a mock context.)
+        android.provider.Settings.Secure.getString(overallContext.getContentResolver(), "dummy");
+
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 overallContext, FILENAME_PREFIX);
         mProviderContext = new IsolatedContext(resolver, targetContextWrapper){
