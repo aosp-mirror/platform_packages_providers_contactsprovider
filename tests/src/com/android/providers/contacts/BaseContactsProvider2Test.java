@@ -41,6 +41,7 @@ import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
@@ -328,6 +329,23 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         values.put(Email.DATA, email);
         values.put(Email.TYPE, type);
         values.put(Email.LABEL, label);
+        if (primary) {
+            values.put(Data.IS_PRIMARY, 1);
+        }
+
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertSipAddress(long rawContactId, String sipAddress) {
+        return insertSipAddress(rawContactId, sipAddress, false);
+    }
+
+    protected Uri insertSipAddress(long rawContactId, String sipAddress, boolean primary) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, SipAddress.CONTENT_ITEM_TYPE);
+        values.put(SipAddress.SIP_ADDRESS, sipAddress);
         if (primary) {
             values.put(Data.IS_PRIMARY, 1);
         }

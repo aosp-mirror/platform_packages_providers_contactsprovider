@@ -36,12 +36,14 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.Callable;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.ContactCounts;
@@ -917,15 +919,33 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testPhonesFilterQuery() {
-        long rawContactId1 = createRawContactWithName("Hot", "Tamale", ACCOUNT_1);
+        testPhonesFilterQueryInter(Phone.CONTENT_FILTER_URI);
+    }
+
+    /**
+     * A convenient method for {@link #testPhonesFilterQuery()} and
+     * {@link #testCallablesFilterQuery()}.
+     *
+     * This confirms if both URIs return identical results for phone-only contacts and
+     * appropriately different results for contacts with sip addresses.
+     *
+     * @param baseFilterUri Either {@link Phone#CONTENT_FILTER_URI} or
+     * {@link Callable#CONTENT_FILTER_URI}.
+     */
+    private void testPhonesFilterQueryInter(Uri baseFilterUri) {
+        assertTrue("Unsupported Uri (" + baseFilterUri + ")",
+                Phone.CONTENT_FILTER_URI.equals(baseFilterUri)
+                        || Callable.CONTENT_FILTER_URI.equals(baseFilterUri));
+
+        final long rawContactId1 = createRawContactWithName("Hot", "Tamale", ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "1-800-466-4411");
 
-        long rawContactId2 = createRawContactWithName("Chilled", "Guacamole", ACCOUNT_2);
+        final long rawContactId2 = createRawContactWithName("Chilled", "Guacamole", ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "1-800-466-5432");
         insertPhoneNumber(rawContactId2, "0@example.com", false, Phone.TYPE_PAGER);
         insertPhoneNumber(rawContactId2, "1@example.com", false, Phone.TYPE_PAGER);
 
-        Uri filterUri1 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "tamale");
+        final Uri filterUri1 = Uri.withAppendedPath(baseFilterUri, "tamale");
         ContentValues values = new ContentValues();
         values.put(Contacts.DISPLAY_NAME, "Hot Tamale");
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
@@ -934,16 +954,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(Phone.LABEL);
         assertStoredValuesWithProjection(filterUri1, values);
 
-        Uri filterUri2 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1-800-GOOG-411");
+        final Uri filterUri2 = Uri.withAppendedPath(baseFilterUri, "1-800-GOOG-411");
         assertStoredValues(filterUri2, values);
 
-        Uri filterUri3 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "18004664");
+        final Uri filterUri3 = Uri.withAppendedPath(baseFilterUri, "18004664");
         assertStoredValues(filterUri3, values);
 
-        Uri filterUri4 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "encilada");
+        final Uri filterUri4 = Uri.withAppendedPath(baseFilterUri, "encilada");
         assertEquals(0, getCount(filterUri4, null, null));
 
-        Uri filterUri5 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "*");
+        final Uri filterUri5 = Uri.withAppendedPath(baseFilterUri, "*");
         assertEquals(0, getCount(filterUri5, null, null));
 
         ContentValues values1 = new ContentValues();
@@ -967,7 +987,42 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values3.put(Phone.TYPE, Phone.TYPE_PAGER);
         values3.putNull(Phone.LABEL);
 
-        Uri filterUri6 = Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "Chilled");
+        final Uri filterUri6 = Uri.withAppendedPath(baseFilterUri, "Chilled");
+        assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
+
+        // Insert a SIP address. From here, Phone URI and Callable URI may return different results
+        // than each other.
+        insertSipAddress(rawContactId1, "sip_hot_tamale@example.com");
+        insertSipAddress(rawContactId1, "sip:sip_hot@example.com");
+
+        final Uri filterUri7 = Uri.withAppendedPath(baseFilterUri, "sip_hot");
+        final Uri filterUri8 = Uri.withAppendedPath(baseFilterUri, "sip_hot_tamale");
+        if (Callable.CONTENT_FILTER_URI.equals(baseFilterUri)) {
+            ContentValues values4 = new ContentValues();
+            values4.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+            values4.put(Data.MIMETYPE, SipAddress.CONTENT_ITEM_TYPE);
+            values4.put(SipAddress.SIP_ADDRESS, "sip_hot_tamale@example.com");
+
+            ContentValues values5 = new ContentValues();
+            values5.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+            values5.put(Data.MIMETYPE, SipAddress.CONTENT_ITEM_TYPE);
+            values5.put(SipAddress.SIP_ADDRESS, "sip:sip_hot@example.com");
+            assertStoredValues(filterUri1, new ContentValues[] {values, values4, values5});
+
+            assertStoredValues(filterUri7, new ContentValues[] {values4, values5});
+            assertStoredValues(filterUri8, values4);
+        } else {
+            // Sip address should not affect Phone URI.
+            assertStoredValuesWithProjection(filterUri1, values);
+            assertEquals(0, getCount(filterUri7, null, null));
+        }
+
+        // Sanity test. Run tests for "Chilled Guacamole" again and see nothing changes
+        // after the Sip address being inserted.
+        assertStoredValues(filterUri2, values);
+        assertStoredValues(filterUri3, values);
+        assertEquals(0, getCount(filterUri4, null, null));
+        assertEquals(0, getCount(filterUri5, null, null));
         assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
     }
 
@@ -1098,6 +1153,43 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(phoneUri, values, null, null);
         assertStoredValue(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
         assertNetworkNotified(true);
+    }
+
+    /** Tests if {@link Callable#CONTENT_URI} returns both phones and sip addresses. */
+    public void testCallablesQuery() {
+        long rawContactId1 = createRawContactWithName("Meghan", "Knox");
+        long phoneId1 = ContentUris.parseId(insertPhoneNumber(rawContactId1, "18004664411"));
+        long contactId1 = queryContactId(rawContactId1);
+
+        long rawContactId2 = createRawContactWithName("John", "Doe");
+        long sipAddressId2 = ContentUris.parseId(
+                insertSipAddress(rawContactId2, "sip@example.com"));
+        long contactId2 = queryContactId(rawContactId2);
+
+        ContentValues values1 = new ContentValues();
+        values1.put(Data._ID, phoneId1);
+        values1.put(Data.RAW_CONTACT_ID, rawContactId1);
+        values1.put(RawContacts.CONTACT_ID, contactId1);
+        values1.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values1.put(Phone.NUMBER, "18004664411");
+        values1.put(Phone.TYPE, Phone.TYPE_HOME);
+        values1.putNull(Phone.LABEL);
+        values1.put(Contacts.DISPLAY_NAME, "Meghan Knox");
+
+        ContentValues values2 = new ContentValues();
+        values2.put(Data._ID, sipAddressId2);
+        values2.put(Data.RAW_CONTACT_ID, rawContactId2);
+        values2.put(RawContacts.CONTACT_ID, contactId2);
+        values2.put(Data.MIMETYPE, SipAddress.CONTENT_ITEM_TYPE);
+        values2.put(SipAddress.SIP_ADDRESS, "sip@example.com");
+        values2.put(Contacts.DISPLAY_NAME, "John Doe");
+
+        assertEquals(2, getCount(Callable.CONTENT_URI, null, null));
+        assertStoredValues(Callable.CONTENT_URI, new ContentValues[] { values1, values2 });
+    }
+
+    public void testCallablesFilterQuery() {
+        testPhonesFilterQueryInter(Callable.CONTENT_FILTER_URI);
     }
 
     public void testEmailsQuery() {

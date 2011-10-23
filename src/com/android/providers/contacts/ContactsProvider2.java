@@ -300,6 +300,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int EMAILS_FILTER = 3008;
     private static final int POSTALS = 3009;
     private static final int POSTALS_ID = 3010;
+    private static final int CALLABLES = 3011;
+    private static final int CALLABLES_ID = 3012;
+    private static final int CALLABLES_FILTER = 3013;
 
     private static final int PHONE_LOOKUP = 4000;
 
@@ -1156,6 +1159,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
         /** "*" is in CSV form with data ids ("123,456,789") */
         matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback/*", DATA_USAGE_FEEDBACK_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/", CALLABLES);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/#", CALLABLES_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter", CALLABLES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter/*", CALLABLES_FILTER);
 
         matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
         matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
@@ -3580,6 +3587,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case DATA_ID:
             case PHONES_ID:
             case EMAILS_ID:
+            case CALLABLES_ID:
             case POSTALS_ID:
             case PROFILE_DATA_ID: {
                 long dataId = ContentUris.parseId(uri);
@@ -3929,6 +3937,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case DATA_ID:
             case PHONES_ID:
             case EMAILS_ID:
+            case CALLABLES_ID:
             case POSTALS_ID: {
                 count = updateData(uri, values, selection, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
@@ -5433,10 +5442,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return cursor;
             }
 
-            case PHONES: {
+            case PHONES:
+            case CALLABLES: {
+                final String mimeTypeIsPhoneExpression =
+                        DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForPhone();
+                final String mimeTypeIsSipExpression =
+                        DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForSip();
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
-                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + "=" +
-                        mDbHelper.get().getMimeTypeIdForPhone());
+                if (match == CALLABLES) {
+                    qb.appendWhere(" AND ((" + mimeTypeIsPhoneExpression +
+                            ") OR (" + mimeTypeIsSipExpression + "))");
+                } else {
+                    qb.appendWhere(" AND " + mimeTypeIsPhoneExpression);
+                }
 
                 final boolean removeDuplicates = readBooleanQueryParameter(
                         uri, ContactsContract.REMOVE_DUPLICATE_ENTRIES, false);
@@ -5456,31 +5474,50 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
-            case PHONES_ID: {
+            case PHONES_ID:
+            case CALLABLES_ID: {
+                final String mimeTypeIsPhoneExpression =
+                        DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForPhone();
+                final String mimeTypeIsSipExpression =
+                        DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForSip();
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, uri.getLastPathSegment());
-                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
-                        + mDbHelper.get().getMimeTypeIdForPhone());
+                if (match == CALLABLES_ID) {
+                    qb.appendWhere(" AND ((" + mimeTypeIsPhoneExpression +
+                            ") OR (" + mimeTypeIsSipExpression + "))");
+                } else {
+                    qb.appendWhere(" AND " + mimeTypeIsPhoneExpression);
+                }
                 qb.appendWhere(" AND " + Data._ID + "=?");
                 break;
             }
 
-            case PHONES_FILTER: {
+            case PHONES_FILTER:
+            case CALLABLES_FILTER: {
+                final String mimeTypeIsPhoneExpression =
+                        DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForPhone();
+                final String mimeTypeIsSipExpression =
+                        DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForSip();
+
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
                 Integer typeInt = sDataUsageTypeMap.get(typeParam);
                 if (typeInt == null) {
                     typeInt = DataUsageStatColumns.USAGE_TYPE_INT_CALL;
                 }
                 setTablesAndProjectionMapForData(qb, uri, projection, true, typeInt);
-                qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
-                        + mDbHelper.get().getMimeTypeIdForPhone());
+                if (match == CALLABLES_FILTER) {
+                    qb.appendWhere(" AND ((" + mimeTypeIsPhoneExpression +
+                            ") OR (" + mimeTypeIsSipExpression + "))");
+                } else {
+                    qb.appendWhere(" AND " + mimeTypeIsPhoneExpression);
+                }
+
                 if (uri.getPathSegments().size() > 2) {
                     String filterParam = uri.getLastPathSegment();
                     StringBuilder sb = new StringBuilder();
                     sb.append(" AND (");
 
                     boolean hasCondition = false;
-                    boolean orNeeded = false;
                     final String ftsMatchQuery = SearchIndexManager.getFtsMatchQuery(
                             filterParam, FtsQueryBuilder.UNSCOPED_NORMALIZING);
                     if (ftsMatchQuery.length() > 0) {
@@ -5493,13 +5530,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 " WHERE " + SearchIndexColumns.NAME + " MATCH '");
                         sb.append(ftsMatchQuery);
                         sb.append("')");
-                        orNeeded = true;
                         hasCondition = true;
                     }
 
                     String number = PhoneNumberUtils.normalizeNumber(filterParam);
                     if (!TextUtils.isEmpty(number)) {
-                        if (orNeeded) {
+                        if (hasCondition) {
                             sb.append(" OR ");
                         }
                         sb.append(Data._ID +
@@ -5511,6 +5547,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         hasCondition = true;
                     }
 
+                    if (!TextUtils.isEmpty(filterParam) && match == CALLABLES_FILTER) {
+                        // If the request is via Callable uri, Sip addresses matching the filter
+                        // parameter should be returned.
+                        if (hasCondition) {
+                            sb.append(" OR ");
+                        }
+                        sb.append("(");
+                        sb.append(mimeTypeIsSipExpression);
+                        sb.append(" AND ((" + Data.DATA1 + " LIKE ");
+                        DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
+                        sb.append(") OR (" + Data.DATA1 + " LIKE ");
+                        // Users may want SIP URIs starting from "sip:"
+                        DatabaseUtils.appendEscapedSQLString(sb, "sip:"+ filterParam + '%');
+                        sb.append(")))");
+                        hasCondition = true;
+                    }
+
                     if (!hasCondition) {
                         // If it is neither a phone number nor a name, the query should return
                         // an empty cursor.  Let's ensure that.
@@ -5519,9 +5572,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     sb.append(")");
                     qb.appendWhere(sb);
                 }
-                groupBy = "(CASE WHEN " + PhoneColumns.NORMALIZED_NUMBER
+                if (match == CALLABLES_FILTER) {
+                    // If the row is for a phone number that has a normalized form, we should use
+                    // the normalized one as PHONES_FILTER does, while we shouldn't do that
+                    // if the row is for a sip address.
+                    String isPhoneAndHasNormalized = "("
+                        + mimeTypeIsPhoneExpression + " AND "
+                        + PhoneColumns.NORMALIZED_NUMBER + " IS NOT NULL)";
+                    groupBy = "(CASE WHEN " + isPhoneAndHasNormalized
+                        + " THEN " + PhoneColumns.NORMALIZED_NUMBER
+                        + " ELSE " + Data.DATA1 + " END), " + RawContacts.CONTACT_ID;
+                } else {
+                    groupBy = "(CASE WHEN " + PhoneColumns.NORMALIZED_NUMBER
                         + " IS NOT NULL THEN " + PhoneColumns.NORMALIZED_NUMBER
                         + " ELSE " + Phone.NUMBER + " END), " + RawContacts.CONTACT_ID;
+                }
                 if (sortOrder == null) {
                     final String accountPromotionSortOrder = getAccountPromotionSortOrder(uri);
                     if (!TextUtils.isEmpty(accountPromotionSortOrder)) {
