@@ -4513,6 +4513,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         mActiveDb.set(db);
         db.beginTransaction();
+
+        // WARNING: This method can be run in either contacts mode or profile mode.  It is
+        // absolutely imperative that no calls be made inside the following try block that can
+        // interact with the contacts DB.  Otherwise it is quite possible for a deadlock to occur.
         try {
             Set<AccountWithDataSet> existingAccountsWithDataSets =
                     findValidAccountsWithDataSets(Tables.ACCOUNTS);
@@ -4653,7 +4657,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
                 }
                 mDbHelper.get().updateAllVisible();
-                updateSearchIndexInTransaction();
+
+                // Don't bother updating the search index if we're in profile mode - there is no
+                // search index for the profile DB, and updating it for the contacts DB in this case
+                // makes no sense and risks a deadlock.
+                if (!inProfileMode()) {
+                    updateSearchIndexInTransaction();
+                }
             }
 
             // Now that we've done the account-based additions and subtractions from the Accounts
