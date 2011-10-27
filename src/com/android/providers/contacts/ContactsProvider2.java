@@ -27,6 +27,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdat
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
@@ -868,13 +869,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Groups.SYNC4)
             .build();
 
-    /** Contains {@link Groups} columns along with summary details */
+    /**
+     * Contains {@link Groups} columns along with summary details.
+     *
+     * Note {@link Groups#SUMMARY_COUNT} doesn't exist in groups/view_groups.
+     * When we detect this column being requested, we join {@link Joins#GROUP_MEMBER_COUNT} to
+     * generate it.
+     */
     private static final ProjectionMap sGroupsSummaryProjectionMap = ProjectionMap.builder()
             .addAll(sGroupsProjectionMap)
-            .add(Groups.SUMMARY_COUNT,
-                    "(SELECT COUNT(" + ContactsColumns.CONCRETE_ID + ") FROM "
-                        + Tables.CONTACTS_JOIN_RAW_CONTACTS_DATA_FILTERED_BY_GROUPMEMBERSHIP
-                        + ")")
+            .add(Groups.SUMMARY_COUNT, "ifnull(group_member_count, 0)")
             .add(Groups.SUMMARY_WITH_PHONES,
                     "(SELECT COUNT(" + ContactsColumns.CONCRETE_ID + ") FROM "
                         + Tables.CONTACTS_JOIN_RAW_CONTACTS_DATA_FILTERED_BY_GROUPMEMBERSHIP
@@ -4955,6 +4959,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private boolean hasColumn(String[] projection, String column) {
+        if (projection == null) {
+            return true; // Null projection means "all columns".
+        }
+
+        for (int i = 0; i < projection.length; i++) {
+            if (column.equalsIgnoreCase(projection[i])) return true;
+        }
+        return false;
+    }
+
     protected Cursor queryLocal(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, long directoryId) {
         if (VERBOSE_LOGGING) {
@@ -5712,7 +5727,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final boolean returnGroupCountPerAccount =
                         readBooleanQueryParameter(uri, Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT,
                                 false);
-                qb.setTables(Views.GROUPS + " AS " + Tables.GROUPS);
+                String tables = Views.GROUPS + " AS " + Tables.GROUPS;
+                if (hasColumn(projection, Groups.SUMMARY_COUNT)) {
+                    tables = tables + Joins.GROUP_MEMBER_COUNT;
+                }
+                qb.setTables(tables);
                 qb.setProjectionMap(returnGroupCountPerAccount ?
                         sGroupsSummaryProjectionMapWithGroupCountPerAccount
                         : sGroupsSummaryProjectionMap);
