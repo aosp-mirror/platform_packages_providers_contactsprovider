@@ -235,6 +235,26 @@ import java.util.Locale;
                 + "view_raw_contacts._id)";
     }
 
+    public interface Joins {
+        /**
+         * Join string intended to be used with the GROUPS table/view.  The main table must be named
+         * as "groups".
+         *
+         * Adds the "group_member_count column" to the query, which will be null if a group has
+         * no members.  Use ifnull(group_member_count, 0) if 0 is needed instead.
+         */
+        public static final String GROUP_MEMBER_COUNT =
+                " LEFT OUTER JOIN (SELECT "
+                        + "data.data1 AS member_count_group_id, "
+                        + "COUNT(data.raw_contact_id) AS group_member_count "
+                    + "FROM data "
+                    + "WHERE "
+                        + "data.mimetype_id = (SELECT _id FROM mimetypes WHERE "
+                            + "mimetypes.mimetype = '" + GroupMembership.CONTENT_ITEM_TYPE + "')"
+                    + "GROUP BY member_count_group_id) AS member_count_table" // End of inner query
+                + " ON (groups._id = member_count_table.member_count_group_id)";
+    }
+
     public interface Views {
         public static final String DATA = "view_data";
         public static final String RAW_CONTACTS = "view_raw_contacts";
