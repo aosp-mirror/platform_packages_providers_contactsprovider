@@ -19,6 +19,8 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.google.android.collect.Lists;
+import com.google.android.collect.Sets;
+import com.google.common.annotations.VisibleForTesting;
 
 import android.content.ContentValues;
 import android.content.Context;
@@ -40,6 +42,7 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Manages the contents of the {@link Directory} table.
@@ -48,6 +51,7 @@ import java.util.List;
 public class ContactDirectoryManager {
 
     private static final String TAG = "ContactDirectoryManager";
+    private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
     public static final String PROPERTY_DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
     public static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
@@ -63,6 +67,15 @@ public class ContactDirectoryManager {
         int exportSupport = Directory.EXPORT_SUPPORT_NONE;
         int shortcutSupport = Directory.SHORTCUT_SUPPORT_NONE;
         int photoSupport = Directory.PHOTO_SUPPORT_NONE;
+        @Override
+        public String toString() {
+            return "DirectoryInfo:"
+                    + "id=" + id
+                    + " packageName=" + accountType
+                    + " authority=" + authority
+                    + " accountName=***"
+                    + " accountType=" + accountType;
+        }
     }
 
     private final static class DirectoryQuery {
@@ -86,11 +99,13 @@ public class ContactDirectoryManager {
     }
 
     private final ContactsProvider2 mContactsProvider;
-    private Context mContext;
+    private final Context mContext;
+    private final PackageManager mPackageManager;
 
     public ContactDirectoryManager(ContactsProvider2 contactsProvider) {
-        this.mContactsProvider = contactsProvider;
-        this.mContext = contactsProvider.getContext();
+        mContactsProvider = contactsProvider;
+        mContext = contactsProvider.getContext();
+        mPackageManager = mContext.getPackageManager();
     }
 
     public ContactsDatabaseHelper getDbHelper() {
@@ -102,8 +117,7 @@ public class ContactDirectoryManager {
      * directory providers.
      */
     public void scanPackagesByUid(int callingUid) {
-        final PackageManager pm = mContext.getPackageManager();
-        final String[] callerPackages = pm.getPackagesForUid(callingUid);
+        final String[] callerPackages = mPackageManager.getPackagesForUid(callingUid);
         if (callerPackages != null) {
             for (int i = 0; i < callerPackages.length; i++) {
                 onPackageChanged(callerPackages[i]);
@@ -118,7 +132,6 @@ public class ContactDirectoryManager {
      * @return true if all resource IDs were found valid
      */
     private boolean areTypeResourceIdsValid() {
-        final PackageManager pm = mContext.getPackageManager();
         SQLiteDatabase db = getDbHelper().getReadableDatabase();
 
         Cursor cursor = db.query(Tables.DIRECTORIES,
@@ -130,7 +143,7 @@ public class ContactDirectoryManager {
                 if (resourceId != 0) {
                     String packageName = cursor.getString(1);
                     String storedResourceName = cursor.getString(2);
-                    String resourceName = getResourceNameById(pm, packageName, resourceId);
+                    String resourceName = getResourceNameById(packageName, resourceId);
                     if (!TextUtils.equals(storedResourceName, resourceName)) {
                         return false;
                     }
@@ -147,9 +160,9 @@ public class ContactDirectoryManager {
      * Given a resource ID, returns the corresponding resource name or null if the package name /
      * resource ID combination is invalid.
      */
-    private String getResourceNameById(PackageManager pm, String packageName, int resourceId) {
+    private String getResourceNameById(String packageName, int resourceId) {
         try {
-            Resources resources = pm.getResourcesForApplication(packageName);
+            Resources resources = mPackageManager.getResourcesForApplication(packageName);
             return resources.getResourceName(resourceId);
         } catch (NameNotFoundException e) {
             return null;
@@ -185,56 +198,97 @@ public class ContactDirectoryManager {
         mContactsProvider.notifyChange(false);
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
+    static boolean isDirectoryProvider(ProviderInfo provider) {
+        Bundle metaData = provider.metaData;
+        if (metaData == null) return false;
+
+        Object trueFalse = metaData.get(CONTACT_DIRECTORY_META_DATA);
+        return trueFalse != null && Boolean.TRUE.equals(trueFalse);
+    }
+
+    /**
+     * @return List of packages that contain a directory provider.
+     */
+    @VisibleForTesting
+    static Set<String> getDirectoryProviderPackages(PackageManager pm) {
+        final Set<String> ret = Sets.newHashSet();
+
+        // Note to 3rd party developers:
+        // queryContentProviders() is a public API but this method doesn't officially support
+        // the GET_META_DATA flag.  Don't use it in your app.
+        final List<ProviderInfo> providers = pm.queryContentProviders(null, 0,
+                PackageManager.GET_META_DATA);
+        if (providers == null) {
+            return ret;
+        }
+        for (ProviderInfo provider : providers) {
+            if (isDirectoryProvider(provider)) {
+                ret.add(provider.packageName);
+            }
+        }
+        if (DEBUG) {
+            Log.d(TAG, "Found " + ret.size() + " directory provider packages");
+        }
+
+        return ret;
+    }
+
+    @VisibleForTesting
     int scanAllPackages() {
         SQLiteDatabase db = getDbHelper().getWritableDatabase();
         insertDefaultDirectory(db);
         insertLocalInvisibleDirectory(db);
 
         int count = 0;
-        PackageManager pm = mContext.getPackageManager();
-        List<PackageInfo> packages = pm.getInstalledPackages(
-                PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
-        if (packages != null) {
-            // Prepare query strings for removing stale rows which don't correspond to existing
-            // directories.
-            StringBuilder deleteWhereBuilder = new StringBuilder();
-            ArrayList<String> deleteWhereArgs = new ArrayList<String>();
-            deleteWhereBuilder.append("NOT (" + Directory._ID + "=? OR " + Directory._ID + "=?");
-            deleteWhereArgs.add(String.valueOf(Directory.DEFAULT));
-            deleteWhereArgs.add(String.valueOf(Directory.LOCAL_INVISIBLE));
-            final String wherePart = "(" + Directory.PACKAGE_NAME + "=? AND "
-                    + Directory.DIRECTORY_AUTHORITY + "=? AND "
-                    + Directory.ACCOUNT_NAME + "=? AND "
-                    + Directory.ACCOUNT_TYPE + "=?)";
 
-            for (PackageInfo packageInfo : packages) {
-                // Check all packages except the one containing ContactsProvider itself
-                if (!packageInfo.packageName.equals(mContext.getPackageName())) {
-                    List<DirectoryInfo> directories =
-                            updateDirectoriesForPackage(packageInfo, true);
-                    if (directories != null && !directories.isEmpty()) {
-                        count += directories.size();
+        // Prepare query strings for removing stale rows which don't correspond to existing
+        // directories.
+        StringBuilder deleteWhereBuilder = new StringBuilder();
+        ArrayList<String> deleteWhereArgs = new ArrayList<String>();
+        deleteWhereBuilder.append("NOT (" + Directory._ID + "=? OR " + Directory._ID + "=?");
+        deleteWhereArgs.add(String.valueOf(Directory.DEFAULT));
+        deleteWhereArgs.add(String.valueOf(Directory.LOCAL_INVISIBLE));
+        final String wherePart = "(" + Directory.PACKAGE_NAME + "=? AND "
+                + Directory.DIRECTORY_AUTHORITY + "=? AND "
+                + Directory.ACCOUNT_NAME + "=? AND "
+                + Directory.ACCOUNT_TYPE + "=?)";
 
-                        // We shouldn't delete rows for existing directories.
-                        for (DirectoryInfo info : directories) {
-                            deleteWhereBuilder.append(" OR ");
-                            deleteWhereBuilder.append(wherePart);
-                            deleteWhereArgs.add(info.packageName);
-                            deleteWhereArgs.add(info.authority);
-                            deleteWhereArgs.add(info.accountName);
-                            deleteWhereArgs.add(info.accountType);
-                        }
-                    }
-                }
+        for (String packageName : getDirectoryProviderPackages(mPackageManager)) {
+            if (DEBUG) Log.d(TAG, "package=" + packageName);
+
+            final PackageInfo packageInfo;
+            try {
+                packageInfo = mPackageManager.getPackageInfo(packageName,
+                        PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
+                if (packageInfo == null) continue;  // Just in case...
+            } catch (NameNotFoundException nnfe) {
+                continue; // Application just removed?
             }
 
-            deleteWhereBuilder.append(")");  // Close "NOT ("
-            int deletedRows = db.delete(Tables.DIRECTORIES, deleteWhereBuilder.toString(),
-                    deleteWhereArgs.toArray(new String[0]));
-            Log.i(TAG, "deleted " + deletedRows
-                    + " stale rows which don't have any relevant directory");
+            List<DirectoryInfo> directories = updateDirectoriesForPackage(packageInfo, true);
+            if (directories != null && !directories.isEmpty()) {
+                count += directories.size();
+
+                // We shouldn't delete rows for existing directories.
+                for (DirectoryInfo info : directories) {
+                    if (DEBUG) Log.d(TAG, "  directory=" + info);
+                    deleteWhereBuilder.append(" OR ");
+                    deleteWhereBuilder.append(wherePart);
+                    deleteWhereArgs.add(info.packageName);
+                    deleteWhereArgs.add(info.authority);
+                    deleteWhereArgs.add(info.accountName);
+                    deleteWhereArgs.add(info.accountType);
+                }
+            }
         }
+
+        deleteWhereBuilder.append(")");  // Close "NOT ("
+
+        int deletedRows = db.delete(Tables.DIRECTORIES, deleteWhereBuilder.toString(),
+                deleteWhereArgs.toArray(new String[0]));
+        Log.i(TAG, "deleted " + deletedRows
+                + " stale rows which don't have any relevant directory");
         return count;
     }
 
@@ -272,11 +326,10 @@ public class ContactDirectoryManager {
      * an installed package.
      */
     public void onPackageChanged(String packageName) {
-        PackageManager pm = mContext.getPackageManager();
         PackageInfo packageInfo = null;
 
         try {
-            packageInfo = pm.getPackageInfo(packageName,
+            packageInfo = mPackageManager.getPackageInfo(packageName,
                     PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
         } catch (NameNotFoundException e) {
             // The package got removed
@@ -286,6 +339,7 @@ public class ContactDirectoryManager {
 
         updateDirectoriesForPackage(packageInfo, false);
     }
+
 
     /**
      * Scans the specified package for content directories and updates the {@link Directory}
@@ -298,12 +352,8 @@ public class ContactDirectoryManager {
         ProviderInfo[] providers = packageInfo.providers;
         if (providers != null) {
             for (ProviderInfo provider : providers) {
-                Bundle metaData = provider.metaData;
-                if (metaData != null) {
-                    Object trueFalse = metaData.get(CONTACT_DIRECTORY_META_DATA);
-                    if (trueFalse != null && Boolean.TRUE.equals(trueFalse)) {
-                        queryDirectoriesForAuthority(directories, provider);
-                    }
+                if (isDirectoryProvider(provider)) {
+                    queryDirectoriesForAuthority(directories, provider);
                 }
             }
         }
@@ -418,8 +468,6 @@ public class ContactDirectoryManager {
      * from directory providers.
      */
     private void updateDirectories(SQLiteDatabase db, ArrayList<DirectoryInfo> directoryInfo) {
-        PackageManager pm = mContext.getPackageManager();
-
         // Insert or replace existing directories.
         // This happens so infrequently that we can use a less-then-optimal one-a-time approach
         for (DirectoryInfo info : directoryInfo) {
@@ -435,8 +483,7 @@ public class ContactDirectoryManager {
             values.put(Directory.PHOTO_SUPPORT, info.photoSupport);
 
             if (info.typeResourceId != 0) {
-                String resourceName = getResourceNameById(
-                        pm, info.packageName, info.typeResourceId);
+                String resourceName = getResourceNameById(info.packageName, info.typeResourceId);
                 values.put(DirectoryColumns.TYPE_RESOURCE_NAME, resourceName);
             }
 

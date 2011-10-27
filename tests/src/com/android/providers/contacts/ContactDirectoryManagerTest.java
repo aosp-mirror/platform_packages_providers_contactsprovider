@@ -23,6 +23,8 @@ import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ProviderInfo;
 import android.database.Cursor;
 import android.database.MatrixCursor;
@@ -35,16 +37,18 @@ import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.RawContacts;
 import android.test.mock.MockContentProvider;
 import android.test.suitebuilder.annotation.MediumTest;
+import android.util.Log;
 
 /**
  * Unit tests for {@link ContactDirectoryManager}. Run the test like this:
- * <code>
- *   adb shell am instrument -e class com.android.providers.contacts.ContactDirectoryManagerTest
- *       -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
- * </code>
+ *
+    adb shell am instrument -e class com.android.providers.contacts.ContactDirectoryManagerTest \
+        -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ *
  */
 @MediumTest
 public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
+    private static final String TAG = "ContactDirectoryManagerTest";
 
     private ContactsMockPackageManager mPackageManager;
 
@@ -115,11 +119,35 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 .getContext().getPackageManager();
     }
 
+    public void testIsDirectoryProvider() {
+        ProviderInfo provider = new ProviderInfo();
+
+        // No metadata
+        assertFalse(ContactDirectoryManager.isDirectoryProvider(provider));
+
+        // No CONTACT_DIRECTORY_META_DATA
+        provider.metaData = new Bundle();
+        assertFalse(ContactDirectoryManager.isDirectoryProvider(provider));
+
+        // CONTACT_DIRECTORY_META_DATA is a string
+        provider.metaData.putString("android.content.ContactDirectory", "");
+        assertFalse(ContactDirectoryManager.isDirectoryProvider(provider));
+
+        // CONTACT_DIRECTORY_META_DATA is false
+        provider.metaData.putBoolean("android.content.ContactDirectory", false);
+        assertFalse(ContactDirectoryManager.isDirectoryProvider(provider));
+
+        // CONTACT_DIRECTORY_META_DATA is true
+        provider.metaData.putBoolean("android.content.ContactDirectory", true);
+        assertTrue(ContactDirectoryManager.isDirectoryProvider(provider));
+    }
+
     public void testScanAllProviders() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
                         createProviderPackage("test.package1", "authority1"),
-                        createProviderPackage("test.package2", "authority2")));
+                        createProviderPackage("test.package2", "authority2"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -165,7 +193,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
     public void testPackageInstalled() throws Exception {
         mPackageManager.setInstalledPackages(
-                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -217,7 +246,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
                         createProviderPackage("test.package1", "authority1"),
-                        createProviderPackage("test.package2", "authority2")));
+                        createProviderPackage("test.package2", "authority2"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -262,7 +292,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
                         createProviderPackage("test.package1", "authority1"),
-                        createProviderPackage("test.package2", "authority2")));
+                        createProviderPackage("test.package2", "authority2"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -319,7 +350,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
                         createProviderPackage("test.package1", "authority1"),
-                        createProviderPackage("test.package2", "authority2")));
+                        createProviderPackage("test.package2", "authority2"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -381,7 +413,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
                         createProviderPackage("test.package1", "authority1"),
-                        createProviderPackage("test.package2", "authority2")));
+                        createProviderPackage("test.package2", "authority2"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -419,7 +452,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
     public void testNotifyDirectoryChange() throws Exception {
         mPackageManager.setInstalledPackages(
-                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -452,7 +486,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
     public void testForwardingToDirectoryProvider() throws Exception {
         mPackageManager.setInstalledPackages(
-                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -491,7 +526,8 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
     public void testProjectionPopulated() throws Exception {
         mPackageManager.setInstalledPackages(
-                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
+                        createPackage("test.packageX", "authorityX", false)));
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -522,14 +558,41 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         });
     }
 
+    /**
+     * Test {@link ContactDirectoryManager#getDirectoryProviderPackages} with the actual
+     * package manager, and see if it returns the google sync package.
+     */
+    public void testGetDirectoryProviderPackages() {
+        final PackageManager pm = getContext().getPackageManager();
+        final String googleSync = "com.google.android.syncadapters.contacts";
+
+        // Skip if the package is not installed.
+        try {
+            pm.getPackageInfo(googleSync, 0);
+        } catch (NameNotFoundException e) {
+            Log.w(TAG, googleSync + " not installed.  Skipping...");
+            return;
+        }
+
+        // If installed, getDirectoryProviderPackages() should return it.
+        assertTrue(ContactDirectoryManager.getDirectoryProviderPackages(pm).contains(googleSync));
+    }
+
     protected PackageInfo createProviderPackage(String packageName, String authority) {
+        return createPackage(packageName, authority, true);
+    }
+
+    protected PackageInfo createPackage(String packageName, String authority,
+            boolean isDirectoryProvider) {
         PackageInfo providerPackage = new PackageInfo();
         providerPackage.packageName = packageName;
         ProviderInfo providerInfo = new ProviderInfo();
         providerInfo.packageName = providerPackage.packageName;
         providerInfo.authority = authority;
-        providerInfo.metaData = new Bundle();
-        providerInfo.metaData.putBoolean("android.content.ContactDirectory", true);
+        if (isDirectoryProvider) {
+            providerInfo.metaData = new Bundle();
+            providerInfo.metaData.putBoolean("android.content.ContactDirectory", true);
+        }
         providerPackage.providers = new ProviderInfo[] { providerInfo };
         return providerPackage;
     }
