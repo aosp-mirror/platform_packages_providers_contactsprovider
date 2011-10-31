@@ -15,10 +15,13 @@
  */
 package com.android.providers.contacts;
 
+import com.google.android.collect.Lists;
+
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 import android.content.res.Resources;
 import android.os.Binder;
 import android.test.mock.MockPackageManager;
@@ -92,5 +95,18 @@ public class ContactsMockPackageManager extends MockPackageManager {
     @Override
     public Resources getResourcesForApplication(String appPackageName) {
         return new ContactsMockResources();
+    }
+
+    @Override
+    public List<ProviderInfo> queryContentProviders(String processName, int uid, int flags) {
+        final List<ProviderInfo> ret = Lists.newArrayList();
+        if (mPackages == null) return ret;
+        for (PackageInfo packageInfo : mPackages) {
+            if (packageInfo.providers == null) continue;
+            for (ProviderInfo providerInfo : packageInfo.providers) {
+                ret.add(providerInfo);
+            }
+        }
+        return ret;
     }
 }

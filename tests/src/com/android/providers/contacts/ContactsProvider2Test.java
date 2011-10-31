@@ -84,8 +84,8 @@ import java.util.Locale;
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -e class com.android.providers.contacts.ContactsProvider2Test -w \
- *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+   adb shell am instrument -e class com.android.providers.contacts.ContactsProvider2Test -w \
+           com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
 @LargeTest
@@ -2190,6 +2190,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         v4.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
                 v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT));
         assertStoredValues(uri, new ContentValues[] { v1, v2, v3, v4 });
+
+        // We change the tables dynamically according to the requested projection.
+        // Make sure the SUMMARY_COUNT column exists
+        v1.clear();
+        v1.put(Groups.SUMMARY_COUNT, 2);
+        v2.clear();
+        v2.put(Groups.SUMMARY_COUNT, 1);
+        v3.clear();
+        v3.put(Groups.SUMMARY_COUNT, 0);
+        v4.clear();
+        v4.put(Groups.SUMMARY_COUNT, 0);
+        assertStoredValuesWithProjection(uri, new ContentValues[] { v1, v2, v3, v4 });
     }
 
     public void testSettingsQuery() {
