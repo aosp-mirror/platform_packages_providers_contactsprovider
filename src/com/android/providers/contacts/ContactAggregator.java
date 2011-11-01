@@ -37,6 +37,7 @@ import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.Contacts;
@@ -146,6 +147,7 @@ public class ContactAggregator {
     private String[] mSelectionArgs2 = new String[2];
     private String[] mSelectionArgs3 = new String[3];
     private String[] mSelectionArgs4 = new String[4];
+    private long mMimeTypeIdIdentity;
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdPhoto;
     private long mMimeTypeIdPhone;
@@ -344,6 +346,7 @@ public class ContactAggregator {
         mContactInsert = db.compileStatement(ContactReplaceSqlStatement.INSERT_SQL);
 
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
+        mMimeTypeIdIdentity = mDbHelper.getMimeTypeId(Identity.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhoto = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
@@ -883,6 +886,7 @@ public class ContactAggregator {
                     long rawContactId = cursor.getLong(RawContactIdQuery.RAW_CONTACT_ID);
                     mMatcher.clear();
 
+                    updateMatchScoresBasedOnIdentityMatch(db, rawContactId, mMatcher);
                     updateMatchScoresBasedOnNameMatches(db, rawContactId, mMatcher);
                     List<MatchScore> bestMatches =
                             mMatcher.pickBestMatches(ContactMatcher.SCORE_THRESHOLD_PRIMARY);
@@ -1170,6 +1174,7 @@ public class ContactAggregator {
     private long updateMatchScoresBasedOnDataMatches(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
 
+        updateMatchScoresBasedOnIdentityMatch(db, rawContactId, matcher);
         updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
         long bestMatch = matcher.pickBestMatch(ContactMatcher.SCORE_THRESHOLD_PRIMARY, false);
         if (bestMatch != -1) {
@@ -1180,6 +1185,51 @@ public class ContactAggregator {
         updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
 
         return -1;
+    }
+
+    private interface IdentityLookupMatchQuery {
+        final String TABLE = Tables.DATA + " dataA"
+                + " JOIN " + Tables.DATA + " dataB" +
+                " ON (dataA." + Identity.NAMESPACE + "=dataB." + Identity.NAMESPACE +
+                " AND dataA." + Identity.IDENTITY + "=dataB." + Identity.IDENTITY + ")"
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (dataB." + Data.RAW_CONTACT_ID + " = "
+                + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        final String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
+                + " AND dataA." + DataColumns.MIMETYPE_ID + "=?"
+                + " AND dataA." + Identity.NAMESPACE + " NOT NULL"
+                + " AND dataA." + Identity.IDENTITY + " NOT NULL"
+                + " AND dataB." + DataColumns.MIMETYPE_ID + "=?"
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
+
+        final String[] COLUMNS = new String[] {
+            RawContacts.CONTACT_ID
+        };
+
+        int CONTACT_ID = 0;
+    }
+
+    /**
+     * Finds contacts with exact identity matches to the the specified raw contact.
+     */
+    private void updateMatchScoresBasedOnIdentityMatch(SQLiteDatabase db, long rawContactId,
+            ContactMatcher matcher) {
+        mSelectionArgs3[0] = String.valueOf(rawContactId);
+        mSelectionArgs3[1] = mSelectionArgs3[2] = String.valueOf(mMimeTypeIdIdentity);
+        Cursor c = db.query(IdentityLookupMatchQuery.TABLE, IdentityLookupMatchQuery.COLUMNS,
+                IdentityLookupMatchQuery.SELECTION,
+                mSelectionArgs3, RawContacts.CONTACT_ID, null, null);
+        try {
+            while (c.moveToNext()) {
+                final long contactId = c.getLong(IdentityLookupMatchQuery.CONTACT_ID);
+                matcher.matchIdentity(contactId);
+            }
+        } finally {
+            c.close();
+        }
+
     }
 
     private interface NameLookupMatchQuery {
@@ -2252,6 +2302,7 @@ public class ContactAggregator {
     private void updateMatchScoresForSuggestionsBasedOnDataMatches(SQLiteDatabase db,
             long rawContactId, MatchCandidateList candidates, ContactMatcher matcher) {
 
+        updateMatchScoresBasedOnIdentityMatch(db, rawContactId, matcher);
         updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
         updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
         updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
