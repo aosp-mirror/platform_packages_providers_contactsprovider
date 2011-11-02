@@ -5149,8 +5149,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         deferredSnipRequested);
                 snippetDeferred = isSingleWordQuery(filterParam) &&
                         deferredSnipRequested && snippetNeeded(projection);
-                // Omit results in "Other Contacts".
-                qb.appendWhere(Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY);
                 break;
             }
 
@@ -6573,7 +6571,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sb.append(SearchIndexManager.getFtsMatchQuery(filter,
                     FtsQueryBuilder.SCOPED_NAME_NORMALIZING));
         }
-        sb.append("') ON (" + Contacts._ID + "=" + SNIPPET_CONTACT_ID + ")");
+        // Omit results in "Other Contacts".
+        sb.append("' AND " + SNIPPET_CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY + ")");
+        sb.append(" ON (" + Contacts._ID + "=" + SNIPPET_CONTACT_ID + ")");
     }
 
     private static String sanitizeMatch(String filter) {
