@@ -4043,6 +4043,23 @@ import java.util.Locale;
         qb.appendWhere(sb.toString());
     }
 
+    /**
+     * Adds query for selecting the contact with the given {@code sipAddress} to the given
+     * {@link StringBuilder}.
+     *
+     * @return the query arguments to be passed in with the query
+     */
+    public String[] buildSipContactQuery(StringBuilder sb, String sipAddress) {
+        sb.append("upper(");
+        sb.append(Data.DATA1);
+        sb.append(")=upper(?) AND ");
+        sb.append(DataColumns.MIMETYPE_ID);
+        sb.append("=");
+        sb.append(Long.toString(getMimeTypeIdForSip()));
+        // Return the arguments to be passed to the query.
+        return new String[]{ sipAddress };
+    }
+
     public String buildPhoneLookupAsNestedQuery(String number) {
         StringBuilder sb = new StringBuilder();
         final String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
