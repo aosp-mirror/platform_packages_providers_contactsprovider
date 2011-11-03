@@ -54,6 +54,13 @@ public class ContactsTransaction {
     private boolean mIsDirty;
 
     /**
+     * Whether a yield operation failed with an exception.  If this occurred, we may not have a
+     * lock on one of the databases that we started the transaction with (the yield code cleans
+     * that up itself), so we should do an extra check before ending transactions.
+     */
+    private boolean mYieldFailed;
+
+    /**
      * Creates a new transaction object, optionally marked as a batch transaction.
      * @param batch Whether the transaction is in batch mode.
      */
@@ -74,6 +81,10 @@ public class ContactsTransaction {
 
     public void markDirty() {
         mIsDirty = true;
+    }
+
+    public void markYieldFailed() {
+        mYieldFailed = true;
     }
 
     /**
@@ -143,14 +154,21 @@ public class ContactsTransaction {
     }
 
     /**
-     * Completes the transaction, marking the transactions for all databases as successful (or not),
-     * and ending them.
+     * Completes the transaction, ending the DB transactions for all associated databases.
      * @param callerIsBatch Whether this is being performed in the context of a batch operation.
      *     If it is not, and the transaction is marked as batch, this call is a no-op.
      */
     public void finish(boolean callerIsBatch) {
         if (!mBatch || callerIsBatch) {
             for (SQLiteDatabase db : mDatabasesForTransaction) {
+                // If an exception was thrown while yielding, it's possible that we no longer have
+                // a lock on this database, so we need to check before attempting to end its
+                // transaction.  Otherwise, we should always expect to be in a transaction (and will
+                // throw an exception if this is not the case).
+                if (mYieldFailed && !db.isDbLockedByCurrentThread()) {
+                    // We no longer hold the lock, so don't do anything with this database.
+                    continue;
+                }
                 db.endTransaction();
             }
             mDatabasesForTransaction.clear();
