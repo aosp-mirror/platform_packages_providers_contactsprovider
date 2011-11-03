@@ -156,7 +156,12 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 insert(uri, values[i]);
                 if (++opCount >= BULK_INSERTS_PER_YIELD_POINT) {
                     opCount = 0;
-                    yield(transaction);
+                    try {
+                        yield(transaction);
+                    } catch (RuntimeException re) {
+                        transaction.markYieldFailed();
+                        throw re;
+                    }
                 }
             }
             transaction.markSuccessful(true);
@@ -185,8 +190,13 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 final ContentProviderOperation operation = operations.get(i);
                 if (i > 0 && operation.isYieldAllowed()) {
                     opCount = 0;
-                    if (yield(transaction)) {
-                        ypCount++;
+                    try {
+                        if (yield(transaction)) {
+                            ypCount++;
+                        }
+                    } catch (RuntimeException re) {
+                        transaction.markYieldFailed();
+                        throw re;
                     }
                 }
 
@@ -226,11 +236,15 @@ public abstract class AbstractContactsProvider extends ContentProvider
     private void endTransaction(boolean callerIsBatch) {
         ContactsTransaction transaction = mTransactionHolder.get();
         if (transaction != null && (!transaction.isBatch() || callerIsBatch)) {
-            if (transaction.isDirty()) {
-                notifyChange();
+            try {
+                if (transaction.isDirty()) {
+                    notifyChange();
+                }
+                transaction.finish(callerIsBatch);
+            } finally {
+                // No matter what, make sure we clear out the thread-local transaction reference.
+                mTransactionHolder.set(null);
             }
-            transaction.finish(callerIsBatch);
-            mTransactionHolder.set(null);
         }
     }
 
