@@ -796,6 +796,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .addAll(sDataPresenceColumns)
             .build();
 
+    /** Contains columns in PhoneLookup which are not contained in the data view. */
+    private static final ProjectionMap sSipLookupColumns = ProjectionMap.builder()
+            .add(PhoneLookup.NUMBER, SipAddress.SIP_ADDRESS)
+            .add(PhoneLookup.TYPE, "0")
+            .add(PhoneLookup.LABEL, "NULL")
+            .add(PhoneLookup.NORMALIZED_NUMBER, "NULL")
+            .build();
+
     /** Contains columns from the data view */
     private static final ProjectionMap sDataProjectionMap = ProjectionMap.builder()
             .add(Data._ID)
@@ -810,6 +818,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .addAll(sContactPresenceColumns)
             .build();
 
+    /** Contains columns from the data view used for SIP address lookup. */
+    private static final ProjectionMap sDataSipLookupProjectionMap = ProjectionMap.builder()
+            .addAll(sDataProjectionMap)
+            .addAll(sSipLookupColumns)
+            .build();
+
     /** Contains columns from the data view */
     private static final ProjectionMap sDistinctDataProjectionMap = ProjectionMap.builder()
             .add(Data._ID, "MIN(" + Data._ID + ")")
@@ -819,6 +833,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .addAll(sDataPresenceColumns)
             .addAll(sContactsColumns)
             .addAll(sContactPresenceColumns)
+            .build();
+
+    /** Contains columns from the data view used for SIP address lookup. */
+    private static final ProjectionMap sDistinctDataSipLookupProjectionMap = ProjectionMap.builder()
+            .addAll(sDistinctDataProjectionMap)
+            .addAll(sSipLookupColumns)
             .build();
 
     /** Contains the data and contacts columns, for joined tables */
@@ -5686,23 +5706,39 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PHONE_LOOKUP: {
-
-                if (TextUtils.isEmpty(sortOrder)) {
-                    // Default the sort order to something reasonable so we get consistent
-                    // results when callers don't request an ordering
-                    sortOrder = " length(lookup.normalized_number) DESC";
-                }
-
-                String number = uri.getPathSegments().size() > 1 ? uri.getLastPathSegment() : "";
-                String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
-                        mDbHelper.get().getCurrentCountryIso());
-                String normalizedNumber =
-                        PhoneNumberUtils.normalizeNumber(number);
-                mDbHelper.get().buildPhoneLookupAndContactQuery(qb, normalizedNumber, numberE164);
-                qb.setProjectionMap(sPhoneLookupProjectionMap);
                 // Phone lookup cannot be combined with a selection
                 selection = null;
                 selectionArgs = null;
+                if (uri.getBooleanQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false)) {
+                    if (TextUtils.isEmpty(sortOrder)) {
+                        // Default the sort order to something reasonable so we get consistent
+                        // results when callers don't request an ordering
+                        sortOrder = Contacts.DISPLAY_NAME + " ASC";
+                    }
+
+                    String sipAddress = uri.getPathSegments().size() > 1
+                            ? Uri.decode(uri.getLastPathSegment()) : "";
+                    setTablesAndProjectionMapForData(qb, uri, null, false, true);
+                    StringBuilder sb = new StringBuilder();
+                    selectionArgs = mDbHelper.get().buildSipContactQuery(sb, sipAddress);
+                    selection = sb.toString();
+                } else {
+                    if (TextUtils.isEmpty(sortOrder)) {
+                        // Default the sort order to something reasonable so we get consistent
+                        // results when callers don't request an ordering
+                        sortOrder = " length(lookup.normalized_number) DESC";
+                    }
+
+                    String number = uri.getPathSegments().size() > 1
+                            ? uri.getLastPathSegment() : "";
+                    String numberE164 = PhoneNumberUtils.formatNumberToE164(number,
+                            mDbHelper.get().getCurrentCountryIso());
+                    String normalizedNumber =
+                            PhoneNumberUtils.normalizeNumber(number);
+                    mDbHelper.get().buildPhoneLookupAndContactQuery(
+                            qb, normalizedNumber, numberE164);
+                    qb.setProjectionMap(sPhoneLookupProjectionMap);
+                }
                 break;
             }
 
@@ -6611,7 +6647,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean distinct) {
-        setTablesAndProjectionMapForData(qb, uri, projection, distinct, null);
+        setTablesAndProjectionMapForData(qb, uri, projection, distinct, false, null);
+    }
+
+    private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection, boolean distinct, boolean addSipLookupColumns) {
+        setTablesAndProjectionMapForData(qb, uri, projection, distinct, addSipLookupColumns, null);
     }
 
     /**
@@ -6620,6 +6661,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean distinct, Integer usageType) {
+        setTablesAndProjectionMapForData(qb, uri, projection, distinct, false, usageType);
+    }
+
+    private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
+            String[] projection, boolean distinct, boolean addSipLookupColumns, Integer usageType) {
         StringBuilder sb = new StringBuilder();
         sb.append(Views.DATA);
         sb.append(" data");
@@ -6638,7 +6684,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
         boolean useDistinct = distinct
                 || !mDbHelper.get().isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
         qb.setDistinct(useDistinct);
-        qb.setProjectionMap(useDistinct ? sDistinctDataProjectionMap : sDataProjectionMap);
+
+        final ProjectionMap projectionMap;
+        if (addSipLookupColumns) {
+            projectionMap = useDistinct
+                    ? sDistinctDataSipLookupProjectionMap : sDataSipLookupProjectionMap;
+        } else {
+            projectionMap = useDistinct ? sDistinctDataProjectionMap : sDataProjectionMap;
+        }
+
+        qb.setProjectionMap(projectionMap);
         appendAccountFromParameter(qb, uri);
     }
 
