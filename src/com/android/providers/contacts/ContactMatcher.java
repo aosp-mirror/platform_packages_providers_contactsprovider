@@ -261,6 +261,13 @@ public class ContactMatcher {
     }
 
     /**
+     * Marks the contact as a full match, because we found an Identity match
+     */
+    public void matchIdentity(long contactId) {
+        updatePrimaryScore(contactId, MAX_SCORE);
+    }
+
+    /**
      * Checks if there is a match and updates the overall score for the
      * specified contact for a discovered match. The new score is determined
      * by the prior score, by the type of name we were looking for, the type
