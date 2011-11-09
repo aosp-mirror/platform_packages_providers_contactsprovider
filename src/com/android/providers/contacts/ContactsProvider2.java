@@ -5552,6 +5552,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     selectionArgs = insertSelectionArg(selectionArgs, address);
                     qb.appendWhere(" AND UPPER(" + Email.DATA + ")=UPPER(?)");
                 }
+                // unless told otherwise, we'll return visible before invisible contacts
+                if (sortOrder == null) {
+                    sortOrder = "(" + RawContacts.CONTACT_ID + " IN " +
+                            Tables.DEFAULT_DIRECTORY + ") DESC";
+                }
                 break;
             }
 
