@@ -27,16 +27,16 @@
     <string name="provider_label">Contacts</string>
 
     <!-- [CHAR LIMIT=NONE] Boot message while upgrading contacts. -->
-    <string name="upgrade_msg">Upgrading Contacts database.</string>
+    <string name="upgrade_msg">Upgrading contacts database.</string>
 
     <!-- Ticker for the notification shown when updating contacts fails because of memory shortage -->
-    <string name="upgrade_out_of_memory_notification_ticker">Contact upgrade needs more memory</string>
+    <string name="upgrade_out_of_memory_notification_ticker">Contacts upgrade needs more memory.</string>
 
     <!-- Title for the notification shown when updating contacts fails because of memory shortage -->
-    <string name="upgrade_out_of_memory_notification_title">Upgrading contact storage</string>
+    <string name="upgrade_out_of_memory_notification_title">Upgrading storage for contacts</string>
 
     <!-- Text for the notification shown when updating contacts fails because of memory shortage -->
-    <string name="upgrade_out_of_memory_notification_text">Select to complete the upgrade.</string>
+    <string name="upgrade_out_of_memory_notification_text">Touch to complete the upgrade.</string>
 
     <!-- The name of the default contact directory -->
     <string name="default_directory">Contacts</string>
@@ -49,7 +49,7 @@
     <string name="read_write_all_voicemail_label">Access all voicemails</string>
     <!-- Description of an application permission, listed so the user can choose whether
          they want to allow the application to do this. [CHAR LIMIT=NONE] -->
-    <string name="read_write_all_voicemail_description">Allows the application to store and retrieve
+    <string name="read_write_all_voicemail_description">Allows the app to store and retrieve
         all voicemails that this device can access.</string>
 
     <!-- The prefix string before the number used for the display name for the voicemail table.
