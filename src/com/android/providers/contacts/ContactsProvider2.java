@@ -5435,17 +5435,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + "=" +
                         mDbHelper.get().getMimeTypeIdForPhone());
 
-                // Dedupe phone numbers per contact.
-                groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
+                final boolean removeDuplicates = readBooleanQueryParameter(
+                        uri, ContactsContract.REMOVE_DUPLICATE_ENTRIES, false);
+                if (removeDuplicates) {
+                    groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
 
-                // In this case, because we dedupe phone numbers, the address book indexer needs
-                // to take it into account too.  (Otherwise headers will appear in wrong positions.)
-                // So use count(distinct pair(CONTACT_ID, PHONE NUMBER)) instead of count(*).
-                // But because there's no such thing as pair() on sqlite, we use
-                // CONTACT_ID || ',' || PHONE NUMBER instead.
-                // This only slows down the query by 14% with 10,000 contacts.
-                addressBookIndexerCountExpression = "DISTINCT "
-                        + RawContacts.CONTACT_ID + "||','||" + Data.DATA1;
+                    // In this case, because we dedupe phone numbers, the address book indexer needs
+                    // to take it into account too.  (Otherwise headers will appear in wrong
+                    // positions.)
+                    // So use count(distinct pair(CONTACT_ID, PHONE NUMBER)) instead of count(*).
+                    // But because there's no such thing as pair() on sqlite, we use
+                    // CONTACT_ID || ',' || PHONE NUMBER instead.
+                    // This only slows down the query by 14% with 10,000 contacts.
+                    addressBookIndexerCountExpression = "DISTINCT "
+                            + RawContacts.CONTACT_ID + "||','||" + Data.DATA1;
+                }
                 break;
             }
 
@@ -5530,6 +5534,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
                         + mDbHelper.get().getMimeTypeIdForEmail());
+
+                final boolean removeDuplicates = readBooleanQueryParameter(
+                        uri, ContactsContract.REMOVE_DUPLICATE_ENTRIES, false);
+                if (removeDuplicates) {
+                    groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
+
+                    // See PHONES for more detail.
+                    addressBookIndexerCountExpression = "DISTINCT "
+                            + RawContacts.CONTACT_ID + "||','||" + Data.DATA1;
+                }
                 break;
             }
 
@@ -5626,6 +5640,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
                         + mDbHelper.get().getMimeTypeIdForStructuredPostal());
+
+                final boolean removeDuplicates = readBooleanQueryParameter(
+                        uri, ContactsContract.REMOVE_DUPLICATE_ENTRIES, false);
+                if (removeDuplicates) {
+                    groupBy = RawContacts.CONTACT_ID + ", " + Data.DATA1;
+
+                    // See PHONES for more detail.
+                    addressBookIndexerCountExpression = "DISTINCT "
+                            + RawContacts.CONTACT_ID + "||','||" + Data.DATA1;
+                }
                 break;
             }
 
