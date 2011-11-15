@@ -897,15 +897,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Two results should come, since they are separate entries anyway.
         assertStoredValues(Phone.CONTENT_URI, new ContentValues[] {values1, values1});
 
+        // Even with remove_duplicate_entries flag, we should return two results here, because
+        // they have different raw_contact_id-s.
+        final Uri dedupeUri = Phone.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.REMOVE_DUPLICATE_ENTRIES, "true")
+                .build();
+        assertStoredValues(dedupeUri, new ContentValues[] {values1, values1});
+
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
 
         assertAggregated(rawContactId1, rawContactId2, "123456789");
 
-        // Just one result should come, since
-        // - those two numbers have the same phone number
-        // - those two contacts are aggregated
-        assertStoredValues(Phone.CONTENT_URI, values1);
+        // Contact merge won't affect the default result of Phone Uri.
+        assertStoredValues(Phone.CONTENT_URI, new ContentValues[] {values1, values1});
+
+        // We should detect duplicates when requested.
+        assertStoredValues(dedupeUri, values1);
     }
 
     public void testPhonesFilterQuery() {
@@ -1101,13 +1109,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.STARRED, 1);
 
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
-        long rawContactId = ContentUris.parseId(rawContactUri);
+        final long rawContactId = ContentUris.parseId(rawContactUri);
 
         insertStructuredName(rawContactId, "Meghan", "Knox");
-        Uri uri = insertEmail(rawContactId, "meghan@acme.com");
-        long emailId = ContentUris.parseId(uri);
+        final Uri emailUri = insertEmail(rawContactId, "meghan@acme.com");
+        final long emailId = ContentUris.parseId(emailUri);
 
-        long contactId = queryContactId(rawContactId);
+        final long contactId = queryContactId(rawContactId);
         values.clear();
         values.put(Data._ID, emailId);
         values.put(Data.RAW_CONTACT_ID, rawContactId);
@@ -1123,8 +1131,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.TIMES_CONTACTED, 54321);
         values.put(Contacts.STARRED, 1);
 
+        assertStoredValues(Email.CONTENT_URI, values);
         assertStoredValues(ContentUris.withAppendedId(Email.CONTENT_URI, emailId), values);
         assertSelection(Email.CONTENT_URI, values, Data._ID, emailId);
+
+        // Check if the provider detects duplicated email addresses.
+        final Uri emailUri2 = insertEmail(rawContactId, "meghan@acme.com");
+        final long emailId2 = ContentUris.parseId(emailUri2);
+        final ContentValues values2 = new ContentValues(values);
+        values2.put(Data._ID, emailId2);
+
+        final Uri dedupeUri = Email.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.REMOVE_DUPLICATE_ENTRIES, "true")
+                .build();
+
+        // URI with ID should return a correct result.
+        assertStoredValues(ContentUris.withAppendedId(Email.CONTENT_URI, emailId), values);
+        assertStoredValues(ContentUris.withAppendedId(dedupeUri, emailId), values);
+        assertStoredValues(ContentUris.withAppendedId(Email.CONTENT_URI, emailId2), values2);
+        assertStoredValues(ContentUris.withAppendedId(dedupeUri, emailId2), values2);
+
+        assertStoredValues(Email.CONTENT_URI, new ContentValues[] {values, values2});
+
+        // If requested to remove duplicates, the query should return just one result,
+        // whose _ID won't be deterministic.
+        values.remove(Data._ID);
+        assertStoredValues(dedupeUri, values);
     }
 
     public void testEmailsLookupQuery() {
@@ -1362,9 +1394,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testPostalsQuery() {
         long rawContactId = createRawContactWithName("Alice", "Nextore");
         Uri dataUri = insertPostalAddress(rawContactId, "1600 Amphiteatre Ave, Mountain View");
-        long dataId = ContentUris.parseId(dataUri);
+        final long dataId = ContentUris.parseId(dataUri);
 
-        long contactId = queryContactId(rawContactId);
+        final long contactId = queryContactId(rawContactId);
         ContentValues values = new ContentValues();
         values.put(Data._ID, dataId);
         values.put(Data.RAW_CONTACT_ID, rawContactId);
@@ -1373,9 +1405,35 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(StructuredPostal.FORMATTED_ADDRESS, "1600 Amphiteatre Ave, Mountain View");
         values.put(Contacts.DISPLAY_NAME, "Alice Nextore");
 
+        assertStoredValues(StructuredPostal.CONTENT_URI, values);
         assertStoredValues(ContentUris.withAppendedId(StructuredPostal.CONTENT_URI, dataId),
                 values);
         assertSelection(StructuredPostal.CONTENT_URI, values, Data._ID, dataId);
+
+        // Check if the provider detects duplicated addresses.
+        Uri dataUri2 = insertPostalAddress(rawContactId, "1600 Amphiteatre Ave, Mountain View");
+        final long dataId2 = ContentUris.parseId(dataUri2);
+        final ContentValues values2 = new ContentValues(values);
+        values2.put(Data._ID, dataId2);
+
+        final Uri dedupeUri = StructuredPostal.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.REMOVE_DUPLICATE_ENTRIES, "true")
+                .build();
+
+        // URI with ID should return a correct result.
+        assertStoredValues(ContentUris.withAppendedId(StructuredPostal.CONTENT_URI, dataId),
+                values);
+        assertStoredValues(ContentUris.withAppendedId(dedupeUri, dataId), values);
+        assertStoredValues(ContentUris.withAppendedId(StructuredPostal.CONTENT_URI, dataId2),
+                values2);
+        assertStoredValues(ContentUris.withAppendedId(dedupeUri, dataId2), values2);
+
+        assertStoredValues(StructuredPostal.CONTENT_URI, new ContentValues[] {values, values2});
+
+        // If requested to remove duplicates, the query should return just one result,
+        // whose _ID won't be deterministic.
+        values.remove(Data._ID);
+        assertStoredValues(dedupeUri, values);
     }
 
     public void testQueryContactData() {
