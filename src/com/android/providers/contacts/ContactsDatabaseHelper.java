@@ -103,7 +103,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 623;
+    static final int DATABASE_VERSION = 624;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1270,6 +1270,7 @@ import java.util.Locale;
                 DataUsageStatColumns.USAGE_TYPE_INT +
         ");");
 
+        // When adding new tables, be sure to also add size-estimates in updateSqliteStats
         createContactsViews(db);
         createGroupsView(db);
         createContactsTriggers(db);
@@ -2288,6 +2289,12 @@ import java.util.Locale;
             // change FTS to normalize names using collation key
             upgradeSearchIndex = true;
             oldVersion = 623;
+        }
+
+        if (oldVersion < 624) {
+            // Upgraded the sqlite index stats
+            upgradeViewsAndTriggers = true;
+            oldVersion = 624;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3578,26 +3585,40 @@ import java.util.Locale;
     private void updateSqliteStats(SQLiteDatabase db) {
 
         // Specific stats strings are based on an actual large database after running ANALYZE
+        // Important here are relative sizes. Raw-Contacts is slightly bigger than Contacts
+        // Warning: Missing tables in here will make SQLite assume to contain 1000000 rows,
+        // which can lead to catastrophic query plans for small tables
         try {
+            db.execSQL("DELETE FROM sqlite_stat1");
             updateIndexStats(db, Tables.CONTACTS,
-                    "contacts_has_phone_index", "10000 500");
+                    "contacts_has_phone_index", "9000 500");
+            updateIndexStats(db, Tables.CONTACTS,
+                    "contacts_name_raw_contact_id_index", "9000 1");
 
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contacts_source_id_index", "10000 1 1 1");
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contacts_contact_id_index", "10000 2");
+            updateIndexStats(db, Tables.RAW_CONTACTS,
+                    "raw_contact_sort_key2_index", "10000 2");
+            updateIndexStats(db, Tables.RAW_CONTACTS,
+                    "raw_contact_sort_key1_index", "10000 2");
+            updateIndexStats(db, Tables.RAW_CONTACTS,
+                    "raw_contacts_source_id_data_set_index", "10000 1 1 1 1");
 
             updateIndexStats(db, Tables.NAME_LOOKUP,
-                    "name_lookup_raw_contact_id_index", "10000 3");
+                    "name_lookup_raw_contact_id_index", "35000 4");
             updateIndexStats(db, Tables.NAME_LOOKUP,
-                    "name_lookup_index", "10000 3 2 2 1");
+                    "name_lookup_index", "35000 2 2 2 1");
             updateIndexStats(db, Tables.NAME_LOOKUP,
-                    "sqlite_autoindex_name_lookup_1", "10000 3 2 1");
+                    "sqlite_autoindex_name_lookup_1", "35000 3 2 1");
 
             updateIndexStats(db, Tables.PHONE_LOOKUP,
-                    "phone_lookup_index", "10000 2 2 1");
+                    "phone_lookup_index", "3500 3 2 1");
             updateIndexStats(db, Tables.PHONE_LOOKUP,
-                    "phone_lookup_min_match_index", "10000 2 2 1");
+                    "phone_lookup_min_match_index", "3500 3 2 2");
+            updateIndexStats(db, Tables.PHONE_LOOKUP,
+                    "phone_lookup_data_id_min_match_index", "3500 2 2");
 
             updateIndexStats(db, Tables.DATA,
                     "data_mimetype_data1_index", "60000 5000 2");
@@ -3605,10 +3626,79 @@ import java.util.Locale;
                     "data_raw_contact_id", "60000 10");
 
             updateIndexStats(db, Tables.GROUPS,
-                    "groups_source_id_index", "50 1 1 1");
+                    "groups_source_id_index", "50 2 2 1");
+            updateIndexStats(db, Tables.GROUPS,
+                    "groups_source_id_data_set_index", "50 2 2 1 1");
 
             updateIndexStats(db, Tables.NICKNAME_LOOKUP,
-                    "sqlite_autoindex_name_lookup_1", "500 2 1");
+                    "nickname_lookup_index", "500 2 1");
+
+            updateIndexStats(db, Tables.CALLS,
+                    null, "250");
+
+            updateIndexStats(db, Tables.STATUS_UPDATES,
+                    null, "100");
+
+            updateIndexStats(db, Tables.STREAM_ITEMS,
+                    null, "500");
+            updateIndexStats(db, Tables.STREAM_ITEM_PHOTOS,
+                    null, "50");
+
+            updateIndexStats(db, Tables.ACTIVITIES,
+                    null, "5");
+
+            updateIndexStats(db, Tables.VOICEMAIL_STATUS,
+                    null, "5");
+
+            updateIndexStats(db, Tables.ACCOUNTS,
+                    null, "3");
+
+            updateIndexStats(db, Tables.VISIBLE_CONTACTS,
+                    null, "2000");
+
+            updateIndexStats(db, Tables.PHOTO_FILES,
+                    null, "50");
+
+            updateIndexStats(db, Tables.DEFAULT_DIRECTORY,
+                    null, "1500");
+
+            updateIndexStats(db, Tables.MIMETYPES,
+                    "mime_type", "18 1");
+
+            updateIndexStats(db, Tables.DATA_USAGE_STAT,
+                    "data_usage_stat_index", "20 2 1");
+
+            // Tiny tables
+            updateIndexStats(db, Tables.AGGREGATION_EXCEPTIONS,
+                    null, "10");
+            updateIndexStats(db, Tables.SETTINGS,
+                    null, "10");
+            updateIndexStats(db, Tables.PACKAGES,
+                    null, "0");
+            updateIndexStats(db, Tables.DIRECTORIES,
+                    null, "3");
+            updateIndexStats(db, LegacyApiSupport.LegacyTables.SETTINGS,
+                    null, "0");
+            updateIndexStats(db, "android_metadata",
+                    null, "1");
+            updateIndexStats(db, "_sync_state",
+                    "sqlite_autoindex__sync_state_1", "2 1 1");
+            updateIndexStats(db, "_sync_state_metadata",
+                    null, "1");
+            updateIndexStats(db, "properties",
+                    "sqlite_autoindex_properties_1", "4 1");
+
+            // Search index
+            updateIndexStats(db, "search_index_docsize",
+                    null, "9000");
+            updateIndexStats(db, "search_index_content",
+                    null, "9000");
+            updateIndexStats(db, "search_index_stat",
+                    null, "1");
+            updateIndexStats(db, "search_index_segments",
+                    null, "450");
+            updateIndexStats(db, "search_index_segdir",
+                    "sqlite_autoindex_search_index_segdir_1", "9 5 1");
 
         } catch (SQLException e) {
             Log.e(TAG, "Could not update index stats", e);
@@ -3624,9 +3714,15 @@ import java.util.Locale;
      */
     private void updateIndexStats(SQLiteDatabase db, String table, String index,
             String stats) {
-        db.execSQL("DELETE FROM sqlite_stat1 WHERE tbl='" + table + "' AND idx='" + index + "';");
-        db.execSQL("INSERT INTO sqlite_stat1 (tbl,idx,stat)"
-                + " VALUES ('" + table + "','" + index + "','" + stats + "');");
+        if (index == null) {
+            db.execSQL("DELETE FROM sqlite_stat1 WHERE tbl=? AND idx IS NULL",
+                    new String[] { table });
+        } else {
+            db.execSQL("DELETE FROM sqlite_stat1 WHERE tbl=? AND idx=?",
+                    new String[] { table, index });
+        }
+        db.execSQL("INSERT INTO sqlite_stat1 (tbl,idx,stat) VALUES (?,?,?)",
+                new String[] { table, index, stats });
     }
 
     @Override
