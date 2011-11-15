@@ -19,13 +19,12 @@ package com.android.providers.contacts.util;
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 
+import com.android.providers.contacts.EvenMoreAsserts;
+import com.android.providers.contacts.ProjectionMap;
+
 import android.content.ContentValues;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
-
-import com.android.providers.contacts.EvenMoreAsserts;
-import com.android.providers.contacts.ProjectionMap;
-import com.android.providers.contacts.util.DbQueryUtils;
 
 /**
  * Unit tests for the {@link DbQueryUtils} class.
@@ -38,10 +37,11 @@ import com.android.providers.contacts.util.DbQueryUtils;
 public class DBQueryUtilsTest extends AndroidTestCase {
     public void testGetEqualityClause() {
         assertEquals("(foo = 'bar')", DbQueryUtils.getEqualityClause("foo", "bar"));
+        assertEquals("(foo = 2)", DbQueryUtils.getEqualityClause("foo", 2));
     }
 
     public void testGetInEqualityClause() {
-        assertEquals("(foo != 'bar')", DbQueryUtils.getInequalityClause("foo", "bar"));
+        assertEquals("(foo != 2)", DbQueryUtils.getInequalityClause("foo", 2));
     }
 
     public void testConcatenateClauses() {

@@ -49,8 +49,6 @@ import java.util.List;
  */
 public class VoicemailContentProvider extends ContentProvider
         implements VoicemailTable.DelegateHelper {
-    private static final String TAG = "VoicemailContentProvider";
-
     private VoicemailPermissions mVoicemailPermissions;
     private VoicemailTable.Delegate mVoicemailContentTable;
     private VoicemailTable.Delegate mVoicemailStatusTable;

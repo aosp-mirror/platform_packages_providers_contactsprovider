@@ -245,7 +245,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
 
     /** Creates a clause to restrict the selection to only voicemail call type.*/
     private String getCallTypeClause() {
-        return getEqualityClause(Calls.TYPE, String.valueOf(Calls.VOICEMAIL_TYPE));
+        return getEqualityClause(Calls.TYPE, Calls.VOICEMAIL_TYPE);
     }
 
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {

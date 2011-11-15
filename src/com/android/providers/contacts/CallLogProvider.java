@@ -46,7 +46,7 @@ import java.util.HashMap;
 public class CallLogProvider extends ContentProvider {
     /** Selection clause to use to exclude voicemail records.  */
     private static final String EXCLUDE_VOICEMAIL_SELECTION = getInequalityClause(
-            Calls.TYPE, Integer.toString(Calls.VOICEMAIL_TYPE));
+            Calls.TYPE, Calls.VOICEMAIL_TYPE);
 
     private static final int CALLS = 1;
 
@@ -320,10 +320,9 @@ public class CallLogProvider extends ContentProvider {
     * matches CALLS_ID. For other uri types the behaviour is undefined.
     * @throws IllegalArgumentException if the id included in the Uri is not a valid long value.
     */
-    private String parseCallIdFromUri(Uri uri) {
+    private long parseCallIdFromUri(Uri uri) {
         try {
-            Long id = Long.valueOf(uri.getPathSegments().get(1));
-            return id.toString();
+            return Long.parseLong(uri.getPathSegments().get(1));
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid call id in uri: " + uri, e);
         }
