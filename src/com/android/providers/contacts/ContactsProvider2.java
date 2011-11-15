@@ -28,7 +28,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
-import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
@@ -235,13 +234,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * the total times contacted. See also {@link #sStrequentFrequentProjectionMap}.
      */
     private static final String TIMES_USED_SORT_COLUMN = "times_used_sort";
-
-    private static final String STREQUENT_ORDER_BY = Contacts.STARRED + " DESC, "
-            + TIMES_USED_SORT_COLUMN + " DESC, "
-            + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
-    private static final String STREQUENT_LIMIT =
-            "(SELECT COUNT(1) FROM " + Tables.CONTACTS + " WHERE "
-            + Contacts.STARRED + "=1) + 25";
 
     private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.TIMES_USED + " DESC,"
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
@@ -5205,15 +5197,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             selection, Contacts.HAS_PHONE_NUMBER + "=1"));
                 }
                 qb.setStrict(true);
-                final String starredQuery = qb.buildQuery(subProjection,
-                        Contacts.STARRED + "=1", Contacts._ID, null, null, null);
+                final String starredInnerQuery = qb.buildQuery(subProjection,
+                        Contacts.STARRED + "=1", Contacts._ID, null,
+                        Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC", null);
 
                 // Reset the builder.
                 qb = new SQLiteQueryBuilder();
                 qb.setStrict(true);
 
-                // Build the second query for frequent part.
-                final String frequentQuery;
+                // Build the second query for frequent part. These JOINS can be very slow
+                // if assembled in the wrong order. Be sure to test changes against huge databases.
+                final String frequentInnerQuery;
                 if (phoneOnly) {
                     final StringBuilder tableBuilder = new StringBuilder();
                     // In phone only mode, we need to look at view_data instead of
@@ -5238,27 +5232,36 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                     qb.setTables(tableBuilder.toString());
                     qb.setProjectionMap(sStrequentPhoneOnlyFrequentProjectionMap);
+                    final long phoneMimeTypeId =
+                            mDbHelper.get().getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+                    final long sipMimeTypeId =
+                            mDbHelper.get().getMimeTypeId(SipAddress.CONTENT_ITEM_TYPE);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
                             Contacts.STARRED + "=0 OR " + Contacts.STARRED + " IS NULL",
-                            MimetypesColumns.MIMETYPE + " IN ("
-                            + "'" + Phone.CONTENT_ITEM_TYPE + "', "
-                            + "'" + SipAddress.CONTENT_ITEM_TYPE + "')"));
-                    frequentQuery = qb.buildQuery(subProjection, null, null, null, null, null);
+                            DataColumns.MIMETYPE_ID + " IN (" +
+                            phoneMimeTypeId + ", " + sipMimeTypeId + ")"));
+                    frequentInnerQuery =
+                            qb.buildQuery(subProjection, null, null, null,
+                            TIMES_USED_SORT_COLUMN + " DESC", "25");
                 } else {
                     setTablesAndProjectionMapForContacts(qb, uri, projection, true);
                     qb.setProjectionMap(sStrequentFrequentProjectionMap);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
                             "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)"));
-                    frequentQuery = qb.buildQuery(subProjection,
-                            null, Contacts._ID, null, null, null);
+                    frequentInnerQuery = qb.buildQuery(subProjection,
+                            null, Contacts._ID, null, null, "25");
                 }
+
+                // We need to wrap the inner queries in an extra select, because they contain
+                // their own SORT and LIMIT
+                final String frequentQuery = "SELECT * FROM (" + frequentInnerQuery + ")";
+                final String starredQuery = "SELECT * FROM (" + starredInnerQuery + ")";
 
                 // Put them together
                 final String unionQuery =
-                        qb.buildUnionQuery(new String[] {starredQuery, frequentQuery},
-                                STREQUENT_ORDER_BY, STREQUENT_LIMIT);
+                        qb.buildUnionQuery(new String[] {starredQuery, frequentQuery}, null, null);
 
                 // Here, we need to use selection / selectionArgs (supplied from users) "twice",
                 // as we want them both for starred items and for frequently contacted items.
@@ -6422,13 +6425,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
             String[] projection, boolean includeDataUsageStat) {
         StringBuilder sb = new StringBuilder();
+        if (includeDataUsageStat) {
+            sb.append(Views.DATA_USAGE_STAT + " AS " + Tables.DATA_USAGE_STAT);
+            sb.append(" INNER JOIN ");
+        }
+
         sb.append(Views.CONTACTS);
 
         // Just for frequently contacted contacts in Strequent Uri handling.
         if (includeDataUsageStat) {
-            sb.append(" INNER JOIN " +
-                    Views.DATA_USAGE_STAT + " AS " + Tables.DATA_USAGE_STAT +
-                    " ON (" +
+            sb.append(" ON (" +
                     DbQueryUtils.concatenateClauses(
                             DataUsageStatColumns.CONCRETE_TIMES_USED + " > 0",
                             RawContacts.CONTACT_ID + "=" + Views.CONTACTS + "." + Contacts._ID) +
