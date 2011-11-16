@@ -58,6 +58,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * ContactAggregator deals with aggregating contact information coming from different sources.
@@ -351,11 +352,11 @@ public class ContactAggregator {
         mMimeTypeIdPhone = mDbHelper.getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
 
         // Query used to retrieve data from raw contacts to populate the corresponding aggregate
-        mRawContactsQueryByRawContactId = String.format(
+        mRawContactsQueryByRawContactId = String.format(Locale.US,
                 RawContactsQuery.SQL_FORMAT_BY_RAW_CONTACT_ID,
                 mMimeTypeIdPhoto, mMimeTypeIdPhone);
 
-        mRawContactsQueryByContactId = String.format(
+        mRawContactsQueryByContactId = String.format(Locale.US,
                 RawContactsQuery.SQL_FORMAT_BY_CONTACT_ID,
                 mMimeTypeIdPhoto, mMimeTypeIdPhone);
     }
