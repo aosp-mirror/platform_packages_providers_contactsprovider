@@ -6063,7 +6063,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         String locale = getLocale().toString();
         HashMap<String, String> projectionMap = Maps.newHashMap();
-        String sectionHeading = String.format(AddressBookIndexQuery.SECTION_HEADING, sortKey);
+        String sectionHeading = String.format(Locale.US, AddressBookIndexQuery.SECTION_HEADING,
+                sortKey);
         projectionMap.put(AddressBookIndexQuery.LETTER,
                 sectionHeading + " AS " + AddressBookIndexQuery.LETTER);
 
