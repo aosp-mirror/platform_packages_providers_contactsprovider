@@ -35,6 +35,7 @@ import android.util.Log;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Maintains a search index for comprehensive contact search.
@@ -177,11 +178,26 @@ public class SearchIndexManager {
             mSbTokens.append(token);
         }
 
+        private static final Pattern PATTERN_HYPHEN = Pattern.compile("\\-");
+
         public void appendName(String name) {
             if (TextUtils.isEmpty(name)) {
                 return;
             }
+            if (name.indexOf('-') < 0) {
+                // Common case -- no hyphens in it.
+                appendNameInternal(name);
+            } else {
+                // In order to make hyphenated names searchable, let's split names with '-'.
+                for (String namePart : PATTERN_HYPHEN.split(name)) {
+                    if (!TextUtils.isEmpty(namePart)) {
+                        appendNameInternal(namePart);
+                    }
+                }
+            }
+        }
 
+        private void appendNameInternal(String name) {
             if (mSbName.length() != 0) {
                 mSbName.append(' ');
             }

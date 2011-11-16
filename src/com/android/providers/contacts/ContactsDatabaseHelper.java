@@ -103,7 +103,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 624;
+    static final int DATABASE_VERSION = 625;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2295,6 +2295,12 @@ import java.util.Locale;
             // Upgraded the sqlite index stats
             upgradeViewsAndTriggers = true;
             oldVersion = 624;
+        }
+
+        if (oldVersion < 625) {
+            // Fix for search for hyphenated names
+            upgradeSearchIndex = true;
+            oldVersion = 625;
         }
 
         if (upgradeViewsAndTriggers) {

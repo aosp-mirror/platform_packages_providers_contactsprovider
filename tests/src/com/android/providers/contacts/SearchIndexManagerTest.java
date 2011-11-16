@@ -368,6 +368,44 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
     }
 
+    public void testNameWithHyphen() {
+        createRawContactWithName("First", "Last-name");
+
+        assertStoredValue(buildSearchUri("First"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-n"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-name"), SearchSnippetColumns.SNIPPET, null);
+
+        // With the current implementation this even works, but this may stop working when we
+        // fix the "O'Neill" case below.
+        assertStoredValue(buildSearchUri("name"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    /** Same as {@link #testNameWithHyphen} except the name has double hyphens. */
+    public void testNameWithDoubleHyphens() {
+        createRawContactWithName("First", "Last--name");
+
+        assertStoredValue(buildSearchUri("First"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-n"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-name"), SearchSnippetColumns.SNIPPET, null);
+    }
+
+    /**
+     * Probably both "oneill" and "o'neill" should match "o'neill", but at this point only "oneill"
+     * works.
+     */
+    @Suppress
+    public void testNameWithPunctuations() {
+        createRawContactWithName("First", "O'Neill");
+
+        assertStoredValue(buildSearchUri("first"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("oneill"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("o'neill"), SearchSnippetColumns.SNIPPET, null);
+    }
+
     public void testSearchByEmailAddress() {
         long rawContactId = createRawContact();
         insertPhoneNumber(rawContactId, "1234567890");
