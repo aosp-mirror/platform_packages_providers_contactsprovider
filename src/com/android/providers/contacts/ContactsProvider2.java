@@ -4980,17 +4980,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private boolean hasColumn(String[] projection, String column) {
-        if (projection == null) {
-            return true; // Null projection means "all columns".
-        }
-
-        for (int i = 0; i < projection.length; i++) {
-            if (column.equalsIgnoreCase(projection[i])) return true;
-        }
-        return false;
-    }
-
     protected Cursor queryLocal(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, long directoryId) {
         if (VERBOSE_LOGGING) {
@@ -5859,7 +5848,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         readBooleanQueryParameter(uri, Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT,
                                 false);
                 String tables = Views.GROUPS + " AS " + Tables.GROUPS;
-                if (hasColumn(projection, Groups.SUMMARY_COUNT)) {
+                if (ContactsDatabaseHelper.isInProjection(projection, Groups.SUMMARY_COUNT)) {
                     tables = tables + Joins.GROUP_MEMBER_COUNT;
                 }
                 qb.setTables(tables);
@@ -8084,6 +8073,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return a boolean indicating if a snippet is needed or not.
      */
     private boolean snippetNeeded(String [] projection) {
-        return mDbHelper.get().isInProjection(projection, SearchSnippetColumns.SNIPPET);
+        return ContactsDatabaseHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
     }
 }

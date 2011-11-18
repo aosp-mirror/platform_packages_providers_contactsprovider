@@ -4359,21 +4359,31 @@ import java.util.Locale;
     }
 
     /**
+     * Test if the given column appears in the given projection.
+     */
+    public static boolean isInProjection(String[] projection, String column) {
+        if (projection == null) {
+            return true; // Null means "all columns".  We can't really tell if it's in there...
+        }
+        for (String test : projection) {
+            if (column.equals(test)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Test if any of the columns appear in the given projection.
      */
-    public boolean isInProjection(String[] projection, String... columns) {
+    public static boolean isInProjection(String[] projection, String... columns) {
         if (projection == null) {
             return true;
         }
 
         // Optimized for a single-column test
         if (columns.length == 1) {
-            String column = columns[0];
-            for (String test : projection) {
-                if (column.equals(test)) {
-                    return true;
-                }
-            }
+            return isInProjection(projection, columns[0]);
         } else {
             for (String test : projection) {
                 for (String column : columns) {
