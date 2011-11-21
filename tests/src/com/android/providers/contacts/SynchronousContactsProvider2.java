@@ -35,6 +35,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private Account mAccount;
     private boolean mNetworkNotified;
     private boolean mIsPhone = true;
+    private boolean mIsVoiceCapable = true;
 
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
@@ -80,6 +81,15 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     @Override
     public boolean isPhone() {
         return mIsPhone;
+    }
+
+    public void setIsVoiceCapable(boolean flag) {
+        mIsVoiceCapable = flag;
+    }
+
+    @Override
+    public boolean isVoiceCapable() {
+        return mIsVoiceCapable;
     }
 
     @Override

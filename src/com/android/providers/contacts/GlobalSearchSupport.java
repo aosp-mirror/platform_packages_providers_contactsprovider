@@ -17,10 +17,13 @@
 package com.android.providers.contacts;
 
 import android.app.SearchManager;
+import android.content.Context;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.location.Country;
+import android.location.CountryDetector;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -30,40 +33,30 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.StatusUpdates;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 
 import com.android.i18n.phonenumbers.PhoneNumberUtil;
-import com.android.i18n.phonenumbers.NumberParseException;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 /**
  * Support for global search integration for Contacts.
  */
 public class GlobalSearchSupport {
 
-    private static final String[] SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS = {
-            "_id",
-            SearchManager.SUGGEST_COLUMN_TEXT_1,
-            SearchManager.SUGGEST_COLUMN_TEXT_2,
-            SearchManager.SUGGEST_COLUMN_ICON_1,
-            SearchManager.SUGGEST_COLUMN_INTENT_DATA,
-            SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-            SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-    };
-
-    private static final String[] SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS = {
+    private static final String[] SEARCH_SUGGESTIONS_COLUMNS = {
             "_id",
             SearchManager.SUGGEST_COLUMN_TEXT_1,
             SearchManager.SUGGEST_COLUMN_TEXT_2,
             SearchManager.SUGGEST_COLUMN_ICON_1,
             SearchManager.SUGGEST_COLUMN_ICON_2,
             SearchManager.SUGGEST_COLUMN_INTENT_DATA,
+            SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
             SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
             SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA,
             SearchManager.SUGGEST_COLUMN_LAST_ACCESS_HINT,
@@ -113,15 +106,19 @@ public class GlobalSearchSupport {
         String text2;
         String icon1;
         String icon2;
+        String intentData;
+        String intentAction;
         String filter;
         String lastAccessTime;
 
         @SuppressWarnings({"unchecked"})
         public ArrayList asList(String[] projection) {
-            if (photoUri != null) {
-                icon1 = photoUri.toString();
-            } else {
-                icon1 = String.valueOf(com.android.internal.R.drawable.ic_contact_picture);
+            if (icon1 == null) {
+                if (photoUri != null) {
+                    icon1 = photoUri.toString();
+                } else {
+                    icon1 = String.valueOf(com.android.internal.R.drawable.ic_contact_picture);
+                }
             }
 
             if (presence != -1) {
@@ -130,15 +127,16 @@ public class GlobalSearchSupport {
 
             ArrayList<Object> list = new ArrayList<Object>();
             if (projection == null) {
-                list.add(contactId);
-                list.add(text1);
-                list.add(text2);
-                list.add(icon1);
-                list.add(icon2);
-                list.add(buildUri());
-                list.add(lookupKey);
-                list.add(filter);
-                list.add(lastAccessTime);
+                list.add(contactId); // _id
+                list.add(text1); // text1
+                list.add(text2); // text2
+                list.add(icon1); // icon1
+                list.add(icon2); // icon2
+                list.add(intentData == null ? buildUri() : intentData); // intent data
+                list.add(intentAction); // intentAction
+                list.add(lookupKey); // shortcut id
+                list.add(filter); // extra data
+                list.add(lastAccessTime); // last access hint
             } else {
                 for (int i = 0; i < projection.length; i++) {
                     addColumnValue(list, projection[i]);
@@ -159,7 +157,7 @@ public class GlobalSearchSupport {
             } else if (SearchManager.SUGGEST_COLUMN_ICON_2.equals(column)) {
                 list.add(icon2);
             } else if (SearchManager.SUGGEST_COLUMN_INTENT_DATA.equals(column)) {
-                list.add(buildUri());
+                list.add(intentData == null ? buildUri() : intentData);
             } else if (SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID.equals(column)) {
                 list.add(lookupKey);
             } else if (SearchManager.SUGGEST_COLUMN_SHORTCUT_ID.equals(column)) {
@@ -179,12 +177,24 @@ public class GlobalSearchSupport {
     }
 
     private final ContactsProvider2 mContactsProvider;
-    private final PhoneNumberUtil mPhoneNumberUtil;
+    private PhoneNumberUtil mPhoneNumberUtil;
+    private CountryDetector mCountryDetector;
+    private String mSimCountryIso;
 
     @SuppressWarnings("all")
     public GlobalSearchSupport(ContactsProvider2 contactsProvider) {
         mContactsProvider = contactsProvider;
+
         mPhoneNumberUtil = PhoneNumberUtil.getInstance();
+        mCountryDetector = (CountryDetector)
+                mContactsProvider.getContext().getSystemService(Context.COUNTRY_DETECTOR);
+        TelephonyManager telman = (TelephonyManager)
+                mContactsProvider.getContext().getSystemService(Context.TELEPHONY_SERVICE);
+        // assuming here that the SIM never changes while the phone is booted. ok?
+        mSimCountryIso = telman == null ? null : telman.getSimCountryIso();
+        if (mSimCountryIso != null) {
+            mSimCountryIso = mSimCountryIso.toUpperCase();
+        }
 
         // To ensure the data column position. This is dead code if properly configured.
         if (Organization.COMPANY != Data.DATA1 || Phone.NUMBER != Data.DATA1
@@ -194,9 +204,39 @@ public class GlobalSearchSupport {
         }
     }
 
+    private boolean isPossibleByPhoneNumberUtil(String query) {
+        String currentCountry = null;
+        Country current = mCountryDetector.detectCountry();
+        if (current != null) {
+            currentCountry = current.getCountryIso().toUpperCase();
+        }
+        if (currentCountry != null && mPhoneNumberUtil.isPossibleNumber(query, currentCountry)) {
+            return true;
+        }
+        if (mSimCountryIso != null && !TextUtils.equals(currentCountry, mSimCountryIso)) {
+            // use the SIM country if it's different, so we can add contacts for home numbers
+            // while roaming
+            return mPhoneNumberUtil.isPossibleNumber(query, mSimCountryIso);
+        }
+        return false;
+    }
+
+    private boolean isPhoneNumber(String query) {
+        if (TextUtils.isEmpty(query)) {
+            return false;
+        }
+        if (ContactsProvider2.countPhoneNumberDigits(query) > 2) {
+            // 3 or more digits matching the basic pattern
+            return true;
+        }
+        // more advanced check, for 1800-FLOWERS style numbers and the like
+        return isPossibleByPhoneNumberUtil(query);
+    }
+
     public Cursor handleSearchSuggestionsQuery(
             SQLiteDatabase db, Uri uri, String[] projection, String limit) {
         final String searchClause;
+
         final String selection;
         if (uri.getPathSegments().size() <= 1) {
             searchClause = null;
@@ -206,16 +246,13 @@ public class GlobalSearchSupport {
             selection = null;
         }
 
-        if (mContactsProvider.isPhone() && isPhoneNumber(searchClause)) {
-            return buildCursorForSearchSuggestionsBasedOnPhoneNumber(searchClause);
-        } else {
-            return buildCursorForSearchSuggestionsBasedOnFilter(
-                    db, projection, selection, searchClause, limit);
+        MatrixCursor cursor = new MatrixCursor(
+                projection == null ? SEARCH_SUGGESTIONS_COLUMNS : projection);
+        addSearchSuggestionsBasedOnFilter(cursor, db, projection, selection, searchClause, limit);
+        if (isPhoneNumber(searchClause)) {
+            addSearchSuggestionsBasedOnPhoneNumber(cursor, searchClause, projection);
         }
-    }
-
-    private boolean isPhoneNumber(String query) {
-        return mPhoneNumberUtil.isPossibleNumber(query, Locale.getDefault().getCountry());
+        return cursor;
     }
 
     /**
@@ -236,73 +273,61 @@ public class GlobalSearchSupport {
         } catch (IllegalArgumentException e) {
             contactId = -1L;
         }
-        return buildCursorForSearchSuggestionsBasedOnFilter(
+        MatrixCursor cursor = new MatrixCursor(
+                projection == null ? SEARCH_SUGGESTIONS_COLUMNS : projection);
+        return addSearchSuggestionsBasedOnFilter(cursor,
                 db, projection, ContactsColumns.CONCRETE_ID + "=" + contactId, filter, null);
     }
 
-    private boolean isVoiceCapable() {
-        // this copied from com.android.phone.PhoneApp.onCreate():
-
-        // "voice capable" flag.
-        // This flag currently comes from a resource (which is
-        // overrideable on a per-product basis):
-        return mContactsProvider.getContext().getResources()
-                .getBoolean(com.android.internal.R.bool.config_voice_capable);
-        // ...but this might eventually become a PackageManager "system
-        // feature" instead, in which case we'd do something like:
-        // return
-        //   getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_VOICE_CALLS);
-    }
-
-    private Cursor buildCursorForSearchSuggestionsBasedOnPhoneNumber(String searchClause) {
-        MatrixCursor cursor = new MatrixCursor(SEARCH_SUGGESTIONS_BASED_ON_PHONE_NUMBER_COLUMNS);
+    private Cursor addSearchSuggestionsBasedOnPhoneNumber(MatrixCursor cursor,
+            String searchClause, String[] projection) {
         Resources r = mContactsProvider.getContext().getResources();
         String s;
         int i;
 
-        if (isVoiceCapable()) {
-            ArrayList<Object> dialNumber = new ArrayList<Object>();
-            dialNumber.add(0);  // _id
+        if (mContactsProvider.isPhone() && mContactsProvider.isVoiceCapable()) {
+            SearchSuggestion dialNumber = new SearchSuggestion();
+            dialNumber.contactId = -1;
             s = r.getString(com.android.internal.R.string.dial_number_using, searchClause);
             i = s.indexOf('\n');
             if (i < 0) {
-                dialNumber.add(s);
-                dialNumber.add("");
+                dialNumber.text1 = s;
+                dialNumber.text2 = "";
             } else {
-                dialNumber.add(s.substring(0, i));
-                dialNumber.add(s.substring(i + 1));
+                dialNumber.text1 = s.substring(0, i);
+                dialNumber.text2 = s.substring(i + 1);
             }
-            dialNumber.add(String.valueOf(com.android.internal.R.drawable.call_contact));
-            dialNumber.add("tel:" + searchClause);
-            dialNumber.add(ContactsContract.Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-            dialNumber.add(null);
-            cursor.addRow(dialNumber);
+            dialNumber.icon1 = String.valueOf(com.android.internal.R.drawable.call_contact);
+            dialNumber.intentData = "tel:" + searchClause;
+            dialNumber.intentAction =
+                    ContactsContract.Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED;
+            dialNumber.lookupKey = SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT; // shortcut id
+            cursor.addRow(dialNumber.asList(projection));
         }
 
-        ArrayList<Object> createContact = new ArrayList<Object>();
-        createContact.add(1);  // _id
+        SearchSuggestion createContact = new SearchSuggestion();
+        createContact.contactId = -2;
         s = r.getString(com.android.internal.R.string.create_contact_using, searchClause);
         i = s.indexOf('\n');
         if (i < 0) {
-            createContact.add(s);
-            createContact.add("");
+            createContact.text1 = s;
+            createContact.text2 = "";
         } else {
-            createContact.add(s.substring(0, i));
-            createContact.add(s.substring(i + 1));
+            createContact.text1 = s.substring(0, i);
+            createContact.text2 = s.substring(i + 1);
         }
-        createContact.add(String.valueOf(com.android.internal.R.drawable.create_contact));
-        createContact.add("tel:" + searchClause);
-        createContact.add(ContactsContract.Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
-        createContact.add(SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
-        cursor.addRow(createContact);
+        createContact.icon1 = String.valueOf(com.android.internal.R.drawable.create_contact);
+        createContact.intentData = "tel:" + searchClause;
+        createContact.intentAction =
+                ContactsContract.Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED;
+        createContact.lookupKey = SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT; // shortcut id
+        cursor.addRow(createContact.asList(projection));
 
         return cursor;
     }
 
-    private Cursor buildCursorForSearchSuggestionsBasedOnFilter(SQLiteDatabase db,
+    private Cursor addSearchSuggestionsBasedOnFilter(MatrixCursor cursor, SQLiteDatabase db,
             String[] projection, String selection, String filter, String limit) {
-        MatrixCursor cursor = new MatrixCursor(
-                projection != null ? projection : SEARCH_SUGGESTIONS_BASED_ON_NAME_COLUMNS);
         StringBuilder sb = new StringBuilder();
         final boolean haveFilter = !TextUtils.isEmpty(filter);
         sb.append("SELECT "

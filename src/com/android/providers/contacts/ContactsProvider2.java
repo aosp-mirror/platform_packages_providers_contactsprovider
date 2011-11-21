@@ -7475,19 +7475,35 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     " IN(" + CONTACT_LOOKUP_NAME_TYPES + "))");
     }
 
-    public boolean isPhoneNumber(String filter) {
-        boolean atLeastOneDigit = false;
-        int len = filter.length();
+    public boolean isPhoneNumber(String query) {
+        if (TextUtils.isEmpty(query)) {
+            return false;
+        }
+        // assume a phone number if it has at least 1 digit
+        return countPhoneNumberDigits(query) > 0;
+    }
+
+    /**
+     * Returns the number of digitis in a phone number ignoring special characters such as '-'.
+     * If the string is not a valid phone number, 0 is returned.
+     */
+    public static int countPhoneNumberDigits(String query) {
+        int numDigits = 0;
+        int len = query.length();
         for (int i = 0; i < len; i++) {
-            char c = filter.charAt(i);
-            if (c >= '0' && c <= '9') {
-                atLeastOneDigit = true;
-            } else if (c != '*' && c != '#' && c != '+' && c != 'N' && c != '.' && c != ';'
-                    && c != '-' && c != '(' && c != ')' && c != ' ') {
-                return false;
+            char c = query.charAt(i);
+            if (Character.isDigit(c)) {
+                numDigits ++;
+            } else if (c == '*' || c == '#' || c == 'N' || c == '.' || c == ';'
+                    || c == '-' || c == '(' || c == ')' || c == ' ') {
+                // carry on
+            } else if (c == '+' && numDigits == 0) {
+                // plus before any digits is ok
+            } else {
+                return 0; // not a phone number
             }
         }
-        return atLeastOneDigit;
+        return numDigits;
     }
 
     /**
@@ -7757,6 +7773,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mIsPhoneInitialized = true;
         }
         return mIsPhone;
+    }
+
+    boolean isVoiceCapable() {
+        // this copied from com.android.phone.PhoneApp.onCreate():
+
+        // "voice capable" flag.
+        // This flag currently comes from a resource (which is
+        // overrideable on a per-product basis):
+        return getContext().getResources()
+                .getBoolean(com.android.internal.R.bool.config_voice_capable);
+        // ...but this might eventually become a PackageManager "system
+        // feature" instead, in which case we'd do something like:
+        // return
+        //   getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_VOICE_CALLS);
     }
 
     private boolean handleDataUsageFeedback(Uri uri) {
