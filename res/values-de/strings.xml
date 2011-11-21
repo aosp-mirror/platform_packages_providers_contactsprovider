@@ -19,7 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core Apps"</string>
     <string name="app_label" msgid="3389954322874982620">"Kontakte-Speicher"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakte"</string>
-    <string name="upgrade_msg" msgid="6174884195179549239">"Kontakte-Datenbank wird aktualisiert."</string>
+    <string name="upgrade_msg" msgid="6174884195179549239">"Kontaktdatenbank wird aktualisiert..."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kontaktupgrade erfordert mehr Speicher"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Kontaktspeicher wird aktualisiert"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Zum Abschluss des Upgrades auswählen"</string>
