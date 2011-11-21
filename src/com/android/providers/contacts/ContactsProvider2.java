@@ -283,8 +283,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
-    private static final int RAW_CONTACTS_DATA = 2004;
-    private static final int RAW_CONTACT_ENTITY_ID = 2005;
+    private static final int RAW_CONTACTS_ID_DATA = 2004;
+    private static final int RAW_CONTACT_ID_ENTITY = 2005;
     private static final int RAW_CONTACTS_ID_DISPLAY_PHOTO = 2006;
     private static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2007;
     private static final int RAW_CONTACTS_ID_STREAM_ITEMS_ID = 2008;
@@ -360,7 +360,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int STREAM_ITEMS_ID_PHOTOS_ID = 21004;
     private static final int STREAM_ITEMS_LIMIT = 21005;
 
-    private static final int DISPLAY_PHOTO = 22000;
+    private static final int DISPLAY_PHOTO_ID = 22000;
     private static final int PHOTO_DIMENSIONS = 22001;
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
@@ -369,7 +369,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final Map<Integer, String> INSERT_URI_ID_VALUE_MAP = Maps.newHashMap();
     static {
         INSERT_URI_ID_VALUE_MAP.put(DATA, Data.RAW_CONTACT_ID);
-        INSERT_URI_ID_VALUE_MAP.put(RAW_CONTACTS_DATA, Data.RAW_CONTACT_ID);
+        INSERT_URI_ID_VALUE_MAP.put(RAW_CONTACTS_ID_DATA, Data.RAW_CONTACT_ID);
         INSERT_URI_ID_VALUE_MAP.put(STATUS_UPDATES, StatusUpdates.DATA_ID);
         INSERT_URI_ID_VALUE_MAP.put(STREAM_ITEMS, StreamItems.RAW_CONTACT_ID);
         INSERT_URI_ID_VALUE_MAP.put(RAW_CONTACTS_ID_STREAM_ITEMS, StreamItems.RAW_CONTACT_ID);
@@ -1066,13 +1066,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String DEFAULT_SNIPPET_ARG_ELLIPSIS = "...";
     private static final int DEFAULT_SNIPPET_ARG_MAX_TOKENS = -10;
 
-    private boolean sIsPhoneInitialized;
-    private boolean sIsPhone;
+    private boolean mIsPhoneInitialized;
+    private boolean mIsPhone;
 
-    private StringBuilder mSb = new StringBuilder();
-    private String[] mSelectionArgs1 = new String[1];
-    private String[] mSelectionArgs2 = new String[2];
-    private ArrayList<String> mSelectionArgs = Lists.newArrayList();
+    private final StringBuilder mSb = new StringBuilder();
+    private final String[] mSelectionArgs1 = new String[1];
+    private final String[] mSelectionArgs2 = new String[2];
+    private final ArrayList<String> mSelectionArgs = Lists.newArrayList();
 
     private Account mAccount;
 
@@ -1132,10 +1132,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_ID_DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/display_photo",
                 RAW_CONTACTS_ID_DISPLAY_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ENTITY_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ID_ENTITY);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items",
                 RAW_CONTACTS_ID_STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items/#",
@@ -1229,7 +1229,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 STREAM_ITEMS_ID_PHOTOS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "stream_items_limit", STREAM_ITEMS_LIMIT);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "display_photo/#", DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, "display_photo/#", DISPLAY_PHOTO_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "photo_dimensions", PHOTO_DIMENSIONS);
 
         HashMap<String, Integer> tmpTypeMap = new HashMap<String, Integer>();
@@ -1342,8 +1342,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // The active transaction context will switch depending on the operation being performed.
     // Both transaction contexts will be cleared out when a batch transaction is started, and
     // each will be processed separately when a batch transaction completes.
-    private TransactionContext mContactTransactionContext = new TransactionContext(false);
-    private TransactionContext mProfileTransactionContext = new TransactionContext(true);
+    private final TransactionContext mContactTransactionContext = new TransactionContext(false);
+    private final TransactionContext mProfileTransactionContext = new TransactionContext(true);
     private final ThreadLocal<TransactionContext> mTransactionContext =
             new ThreadLocal<TransactionContext>();
 
@@ -1351,18 +1351,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private long mPreAuthorizedUriDuration;
 
     // Map of single-use pre-authorized URIs to expiration times.
-    private Map<Uri, Long> mPreAuthorizedUris = Maps.newHashMap();
+    private final Map<Uri, Long> mPreAuthorizedUris = Maps.newHashMap();
 
     // Random number generator.
-    private SecureRandom mRandom = new SecureRandom();
+    private final SecureRandom mRandom = new SecureRandom();
 
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
     private CommonNicknameCache mCommonNicknameCache;
     private SearchIndexManager mSearchIndexManager;
 
-    private ContentValues mValues = new ContentValues();
-    private HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
+    private final ContentValues mValues = new ContentValues();
+    private final HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
 
     private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
@@ -1528,10 +1528,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 new DataRowHandlerForNote(context, dbHelper, contactAggregator));
     }
 
-    /**
-     * Visible for testing.
-     */
-    /* package */ PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
+    @VisibleForTesting
+    PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
         return new PhotoPriorityResolver(context);
     }
 
@@ -1732,7 +1730,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
     protected void cleanupPhotoStore() {
         SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         mActiveDb.set(db);
@@ -1864,12 +1862,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return mNameLookupBuilder;
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
     public ContactDirectoryManager getContactDirectoryManagerForTest() {
         return mContactDirectoryManager;
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
     protected Locale getLocale() {
         return Locale.getDefault();
     }
@@ -1950,8 +1948,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mOkToOpenAccess = false;
     }
 
-    /* Visible for testing */
-    /* package */ boolean importLegacyContacts(LegacyContactImporter importer) {
+    @VisibleForTesting
+    boolean importLegacyContacts(LegacyContactImporter importer) {
         boolean aggregatorEnabled = mContactAggregator.isEnabled();
         mContactAggregator.setEnabled(false);
         try {
@@ -2423,9 +2421,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
-            case RAW_CONTACTS_DATA:
+            case RAW_CONTACTS_ID_DATA:
             case PROFILE_RAW_CONTACTS_ID_DATA: {
-                int segment = match == RAW_CONTACTS_DATA ? 1 : 2;
+                int segment = match == RAW_CONTACTS_ID_DATA ? 1 : 2;
                 values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(segment));
                 id = insertData(values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
@@ -3912,9 +3910,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
-            case RAW_CONTACTS_DATA:
+            case RAW_CONTACTS_ID_DATA:
             case PROFILE_RAW_CONTACTS_ID_DATA: {
-                int segment = match == RAW_CONTACTS_DATA ? 1 : 2;
+                int segment = match == RAW_CONTACTS_ID_DATA ? 1 : 2;
                 final String rawContactId = uri.getPathSegments().get(segment);
                 String selectionWithId = (Data.RAW_CONTACT_ID + "=" + rawContactId + " ")
                     + (selection == null ? "" : " AND " + selection);
@@ -4532,7 +4530,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
     }
 
-    protected boolean updateAccountsInBackground(Account[] accounts) {
+    private boolean updateAccountsInBackground(Account[] accounts) {
         // TODO : Check the unit test.
         boolean accountsChanged = false;
         SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -5734,9 +5732,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
-            case RAW_CONTACTS_DATA:
+            case RAW_CONTACTS_ID_DATA:
             case PROFILE_RAW_CONTACTS_ID_DATA: {
-                int segment = match == RAW_CONTACTS_DATA ? 1 : 2;
+                int segment = match == RAW_CONTACTS_ID_DATA ? 1 : 2;
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(segment));
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
@@ -5955,7 +5953,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
-            case RAW_CONTACT_ENTITY_ID: {
+            case RAW_CONTACT_ID_ENTITY: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
                 setTablesAndProjectionMapForRawEntities(qb, uri);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
@@ -7172,7 +7170,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             }
 
-            case DISPLAY_PHOTO: {
+            case DISPLAY_PHOTO_ID: {
                 long photoFileId = ContentUris.parseId(uri);
                 if (!mode.equals("r")) {
                     throw new IllegalArgumentException(
@@ -7493,7 +7491,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case CONTACTS_LOOKUP_DISPLAY_PHOTO:
             case CONTACTS_LOOKUP_ID_DISPLAY_PHOTO:
             case RAW_CONTACTS_ID_DISPLAY_PHOTO:
-            case DISPLAY_PHOTO:
+            case DISPLAY_PHOTO_ID:
                 return "image/jpeg";
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS:
@@ -7917,13 +7915,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
     boolean isPhone() {
-        if (!sIsPhoneInitialized) {
-            sIsPhone = new TelephonyManager(getContext()).isVoiceCapable();
-            sIsPhoneInitialized = true;
+        if (!mIsPhoneInitialized) {
+            mIsPhone = new TelephonyManager(getContext()).isVoiceCapable();
+            mIsPhoneInitialized = true;
         }
-        return sIsPhone;
+        return mIsPhone;
     }
 
     private boolean handleDataUsageFeedback(Uri uri) {
