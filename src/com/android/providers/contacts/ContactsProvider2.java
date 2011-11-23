@@ -890,6 +890,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Note {@link Groups#SUMMARY_COUNT} doesn't exist in groups/view_groups.
      * When we detect this column being requested, we join {@link Joins#GROUP_MEMBER_COUNT} to
      * generate it.
+     *
+     * TODO Support SUMMARY_GROUP_COUNT_PER_ACCOUNT too.  See also queryLocal().
      */
     private static final ProjectionMap sGroupsSummaryProjectionMap = ProjectionMap.builder()
             .addAll(sGroupsProjectionMap)
@@ -898,27 +900,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "(SELECT COUNT(" + ContactsColumns.CONCRETE_ID + ") FROM "
                         + Tables.CONTACTS_JOIN_RAW_CONTACTS_DATA_FILTERED_BY_GROUPMEMBERSHIP
                         + " WHERE " + Contacts.HAS_PHONE_NUMBER + ")")
-            .build();
-
-    // This is only exposed as hidden API for the contacts app, so we can be very specific in
-    // the filtering
-    private static final ProjectionMap sGroupsSummaryProjectionMapWithGroupCountPerAccount =
-            ProjectionMap.builder()
-            .addAll(sGroupsSummaryProjectionMap)
-            .add(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
-                    "(SELECT COUNT(*) FROM " + Views.GROUPS + " WHERE "
-                        + "(" + Groups.ACCOUNT_NAME + "="
-                            + GroupsColumns.CONCRETE_ACCOUNT_NAME
-                            + " AND "
-                            + Groups.ACCOUNT_TYPE + "=" + GroupsColumns.CONCRETE_ACCOUNT_TYPE
-                            + " AND "
-                            + Groups.DELETED + "=0 AND "
-                            + Groups.FAVORITES + "=0 AND "
-                            + Groups.AUTO_ADD + "=0"
-                        + ")"
-                        + " GROUP BY "
-                            + Groups.ACCOUNT_NAME + ", " + Groups.ACCOUNT_TYPE
-                   + ")")
+            .add(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, "0") // Always returns 0 for now.
             .build();
 
     /** Contains the agg_exceptions columns */
@@ -5842,17 +5824,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case GROUPS_SUMMARY: {
-                final boolean returnGroupCountPerAccount =
-                        readBooleanQueryParameter(uri, Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT,
-                                false);
                 String tables = Views.GROUPS + " AS " + Tables.GROUPS;
                 if (ContactsDatabaseHelper.isInProjection(projection, Groups.SUMMARY_COUNT)) {
                     tables = tables + Joins.GROUP_MEMBER_COUNT;
                 }
+                if (ContactsDatabaseHelper.isInProjection(projection,
+                        Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT)) {
+                    // TODO Add join for this column too (and update the projection map)
+                    // TODO Also remove Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT when it works.
+                    Log.w(TAG, Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT + " is not supported yet");
+                }
                 qb.setTables(tables);
-                qb.setProjectionMap(returnGroupCountPerAccount ?
-                        sGroupsSummaryProjectionMapWithGroupCountPerAccount
-                        : sGroupsSummaryProjectionMap);
+                qb.setProjectionMap(sGroupsSummaryProjectionMap);
                 appendAccountFromParameter(qb, uri);
                 groupBy = GroupsColumns.CONCRETE_ID;
                 break;

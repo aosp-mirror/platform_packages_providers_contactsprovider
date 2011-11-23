@@ -558,6 +558,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Groups.SYNC4,
                 Groups.SUMMARY_COUNT,
                 Groups.SUMMARY_WITH_PHONES,
+                Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
         });
     }
 
@@ -2316,19 +2317,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertStoredValues(Groups.CONTENT_SUMMARY_URI, new ContentValues[] { v1, v2, v3 });
 
-        final Uri uri = Groups.CONTENT_SUMMARY_URI.buildUpon()
-                .appendQueryParameter(Groups.PARAM_RETURN_GROUP_COUNT_PER_ACCOUNT, "true")
-                .build();
-        v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 1);
-        v2.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 2);
-        v3.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 2);
+        final Uri uri = Groups.CONTENT_SUMMARY_URI;
+
+        // TODO Once SUMMARY_GROUP_COUNT_PER_ACCOUNT is supported remove all the if(false).
+        if (false) {
+            v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 1);
+            v2.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 2);
+            v3.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 2);
+        } else {
+            v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 0);
+            v2.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 0);
+            v3.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 0);
+        }
         assertStoredValues(uri, new ContentValues[] { v1, v2, v3 });
 
         // Introduce another group in account1, testing SUMMARY_GROUP_COUNT_PER_ACCOUNT correctly
         // reflects the change.
         final long groupId4 = createGroup(account1, "sourceId4", "title4");
-        v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
-                v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT) + 1);
+        if (false) {
+            v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
+                    v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT) + 1);
+        } else {
+            v1.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 0);
+        }
         ContentValues v4 = new ContentValues();
         v4.put(Groups._ID, groupId4);
         v4.put(Groups.TITLE, "title4");
@@ -2337,8 +2348,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         v4.put(Groups.ACCOUNT_TYPE, account1.type);
         v4.put(Groups.SUMMARY_COUNT, 0);
         v4.put(Groups.SUMMARY_WITH_PHONES, 0);
-        v4.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
-                v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT));
+        if (false) {
+            v4.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT,
+                    v1.getAsInteger(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT));
+        } else {
+            v4.put(Groups.SUMMARY_GROUP_COUNT_PER_ACCOUNT, 0);
+        }
         assertStoredValues(uri, new ContentValues[] { v1, v2, v3, v4 });
 
         // We change the tables dynamically according to the requested projection.
