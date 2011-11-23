@@ -44,6 +44,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.util.DbQueryUtils;
+import com.android.providers.contacts.util.NeededForTesting;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
 import com.google.android.collect.Lists;
@@ -182,7 +183,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int BACKGROUND_TASK_INITIALIZE = 0;
     private static final int BACKGROUND_TASK_OPEN_WRITE_ACCESS = 1;
-    private static final int BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS = 2;
     private static final int BACKGROUND_TASK_UPDATE_ACCOUNTS = 3;
     private static final int BACKGROUND_TASK_UPDATE_LOCALE = 4;
     private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 5;
@@ -212,13 +212,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private static final String PREAUTHORIZED_URI_TOKEN = "perm_token";
 
-    /**
-     * Property key for the legacy contact import version. The need for a version
-     * as opposed to a boolean flag is that if we discover bugs in the contact import process,
-     * we can trigger re-import by incrementing the import version.
-     */
-    private static final String PROPERTY_CONTACTS_IMPORTED = "contacts_imported_v1";
-    private static final int PROPERTY_CONTACTS_IMPORT_VERSION = 1;
     private static final String PREF_LOCALE = "locale";
 
     private static final String PROPERTY_AGGREGATION_ALGORITHM = "aggregation_v2";
@@ -1443,7 +1436,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 DEFAULT_PREAUTHORIZED_URI_EXPIRATION);
 
         scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
-        scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
         scheduleBackgroundTask(BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM);
@@ -1546,13 +1538,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (mOkToOpenAccess) {
                     mWriteAccessLatch.countDown();
                     mWriteAccessLatch = null;
-                }
-                break;
-            }
-
-            case BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS: {
-                if (isLegacyContactImportNeeded()) {
-                    importLegacyContactsInBackground();
                 }
                 break;
             }
@@ -1860,99 +1845,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return profileMode != null && profileMode;
     }
 
-    protected boolean isLegacyContactImportNeeded() {
-        int version = Integer.parseInt(
-                mContactsHelper.getProperty(PROPERTY_CONTACTS_IMPORTED, "0"));
-        return version < PROPERTY_CONTACTS_IMPORT_VERSION;
-    }
-
-    protected LegacyContactImporter getLegacyContactImporter() {
-        return new LegacyContactImporter(getContext(), this);
-    }
-
-    /**
-     * Imports legacy contacts as a background task.
-     */
-    private void importLegacyContactsInBackground() {
-        Log.v(TAG, "Importing legacy contacts");
-        setProviderStatus(ProviderStatus.STATUS_UPGRADING);
-
-        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        mContactsHelper.setLocale(this, mCurrentLocale);
-        prefs.edit().putString(PREF_LOCALE, mCurrentLocale.toString()).commit();
-
-        LegacyContactImporter importer = getLegacyContactImporter();
-        if (importLegacyContacts(importer)) {
-            onLegacyContactImportSuccess();
-        } else {
-            onLegacyContactImportFailure();
-        }
-    }
-
-    /**
-     * Unlocks the provider and declares that the import process is complete.
-     */
-    private void onLegacyContactImportSuccess() {
-        NotificationManager nm =
-            (NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        nm.cancel(LEGACY_IMPORT_FAILED_NOTIFICATION);
-
-        // Store a property in the database indicating that the conversion process succeeded
-        mContactsHelper.setProperty(PROPERTY_CONTACTS_IMPORTED,
-                String.valueOf(PROPERTY_CONTACTS_IMPORT_VERSION));
-        setProviderStatus(ProviderStatus.STATUS_NORMAL);
-        Log.v(TAG, "Completed import of legacy contacts");
-    }
-
-    /**
-     * Announces the provider status and keeps the provider locked.
-     */
-    private void onLegacyContactImportFailure() {
-        Context context = getContext();
-        NotificationManager nm =
-            (NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
-
-        // Show a notification
-        Notification n = new Notification(android.R.drawable.stat_notify_error,
-                context.getString(R.string.upgrade_out_of_memory_notification_ticker),
-                System.currentTimeMillis());
-        n.setLatestEventInfo(context,
-                context.getString(R.string.upgrade_out_of_memory_notification_title),
-                context.getString(R.string.upgrade_out_of_memory_notification_text),
-                PendingIntent.getActivity(context, 0, new Intent(Intents.UI.LIST_DEFAULT), 0));
-        n.flags |= Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
-
-        nm.notify(LEGACY_IMPORT_FAILED_NOTIFICATION, n);
-
-        setProviderStatus(ProviderStatus.STATUS_UPGRADE_OUT_OF_MEMORY);
-        Log.v(TAG, "Failed to import legacy contacts");
-
-        // Do not let any database changes until this issue is resolved.
-        mOkToOpenAccess = false;
-    }
-
-    @VisibleForTesting
-    boolean importLegacyContacts(LegacyContactImporter importer) {
-        boolean aggregatorEnabled = mContactAggregator.isEnabled();
-        mContactAggregator.setEnabled(false);
-        try {
-            if (importer.importContacts()) {
-
-                // TODO aggregate all newly added raw contacts
-                mContactAggregator.setEnabled(aggregatorEnabled);
-                return true;
-            }
-        } catch (Throwable e) {
-           Log.e(TAG, "Legacy contact import failed", e);
-        }
-        mEstimatedStorageRequirement = importer.getEstimatedStorageRequirement();
-        return false;
-    }
-
     /**
      * Wipes all data from the contacts database.
      */
-    /* package */ void wipeData() {
+    @NeededForTesting
+    void wipeData() {
         mContactsHelper.wipeData();
         mProfileHelper.wipeData();
         mContactsPhotoStore.clear();
@@ -2070,18 +1967,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         if (mWriteAccessLatch != null) {
-            // We are stuck trying to upgrade contacts db.  The only update request
-            // allowed in this case is an update of provider status, which will trigger
-            // an attempt to upgrade contacts again.
+            // Update on PROVIDER_STATUS used to be used as a trigger to re-start legacy contact
+            // import.  Now that we no longer support it, we just ignore it.
             int match = sUriMatcher.match(uri);
             if (match == PROVIDER_STATUS) {
-                Integer newStatus = values.getAsInteger(ProviderStatus.STATUS);
-                if (newStatus != null && newStatus == ProviderStatus.STATUS_UPGRADING) {
-                    scheduleBackgroundTask(BACKGROUND_TASK_IMPORT_LEGACY_CONTACTS);
-                    return 1;
-                } else {
-                    return 0;
-                }
+                return 0;
             }
         }
         waitForAccess(mWriteAccessLatch);

@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.util.NeededForTesting;
+
 import android.content.ContentValues;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
@@ -106,6 +108,7 @@ public class NameSplitter {
             this.suffix = suffix;
         }
 
+        @NeededForTesting
         public String getPrefix() {
             return prefix;
         }
@@ -122,6 +125,7 @@ public class NameSplitter {
             return familyName;
         }
 
+        @NeededForTesting
         public String getSuffix() {
             return suffix;
         }

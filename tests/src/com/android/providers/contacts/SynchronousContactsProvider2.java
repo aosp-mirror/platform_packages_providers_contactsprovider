@@ -193,11 +193,4 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
         getContactDirectoryManagerForTest().scanAllPackages();
     }
-
-    @Override
-    protected boolean isLegacyContactImportNeeded() {
-
-        // We have an explicit test for data conversion - no need to do it every time
-        return false;
-    }
 }
