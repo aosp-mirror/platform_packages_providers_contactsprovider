@@ -97,6 +97,11 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
+    protected boolean shouldThrowExceptionForInitializationError() {
+        return true;
+    }
+
+    @Override
     protected void scheduleBackgroundTask(int task) {
         performBackgroundTask(task, null);
     }

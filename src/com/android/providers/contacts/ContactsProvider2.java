@@ -1394,12 +1394,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return initialize();
         } catch (RuntimeException e) {
             Log.e(TAG, "Cannot start provider", e);
+            // In production code we don't want to throw here, so that phone will still work
+            // in low storage situations.
+            // See I5c88a3024ff1c5a06b5756b29a2d903f8f6a2531
+            if (shouldThrowExceptionForInitializationError()) {
+                throw e;
+            }
             return false;
         } finally {
             if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
                 Log.d(Constants.PERFORMANCE_TAG, "ContactsProvider2.onCreate finish");
             }
         }
+    }
+
+    protected boolean shouldThrowExceptionForInitializationError() {
+        return false;
     }
 
     private boolean initialize() {
@@ -1757,32 +1767,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // Also query for all social stream item photos.
         c = db.query(Tables.STREAM_ITEM_PHOTOS + " JOIN " + Tables.STREAM_ITEMS
-                + " ON " + StreamItemPhotos.STREAM_ITEM_ID + "=" + StreamItemsColumns.CONCRETE_ID
-                + " JOIN " + Tables.RAW_CONTACTS
-                + " ON " + StreamItems.RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID,
+                + " ON " + StreamItemPhotos.STREAM_ITEM_ID + "=" + StreamItemsColumns.CONCRETE_ID,
                 new String[]{
                         StreamItemPhotosColumns.CONCRETE_ID,
                         StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID,
-                        StreamItemPhotos.PHOTO_FILE_ID,
-                        RawContacts.ACCOUNT_TYPE,
-                        RawContacts.ACCOUNT_NAME
+                        StreamItemPhotos.PHOTO_FILE_ID
                 },
                 null, null, null, null, null);
         Map<Long, Long> photoFileIdToStreamItemPhotoId = Maps.newHashMap();
         Map<Long, Long> streamItemPhotoIdToStreamItemId = Maps.newHashMap();
-        Map<Long, Account> streamItemPhotoIdToAccount = Maps.newHashMap();
         try {
             while (c.moveToNext()) {
                 long streamItemPhotoId = c.getLong(0);
                 long streamItemId = c.getLong(1);
                 long photoFileId = c.getLong(2);
-                String accountType = c.getString(3);
-                String accountName = c.getString(4);
                 usedPhotoFileIds.add(photoFileId);
                 photoFileIdToStreamItemPhotoId.put(photoFileId, streamItemPhotoId);
                 streamItemPhotoIdToStreamItemId.put(streamItemPhotoId, streamItemId);
-                Account account = new Account(accountName, accountType);
-                streamItemPhotoIdToAccount.put(photoFileId, account);
             }
         } finally {
             c.close();
