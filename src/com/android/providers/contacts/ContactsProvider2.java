@@ -78,10 +78,7 @@ import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.database.AbstractCursor;
-import android.database.CrossProcessCursor;
 import android.database.Cursor;
-import android.database.CursorWindow;
-import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
@@ -4716,11 +4713,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
-        CrossProcessCursor crossProcessCursor = getCrossProcessCursor(cursor);
-        if (crossProcessCursor != null) {
-            return addSnippetExtrasToCursor(uri, cursor);
-        } else {
-            return matrixCursorFromCursor(addSnippetExtrasToCursor(uri, cursor));
+        // Load the cursor contents into a memory cursor (backed by a cursor window) and close the
+        // underlying cursor.
+        try {
+            MemoryCursor memCursor = new MemoryCursor(null, cursor.getColumnNames());
+            memCursor.fillFromCursor(cursor);
+            return memCursor;
+        } finally {
+            cursor.close();
         }
     }
 
@@ -4731,23 +4731,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return cursor;
         }
 
-        // Parse out snippet arguments for use when snippets are retrieved from the cursor.
-        String[] args = null;
-        String snippetArgs =
-                getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
-        if (snippetArgs != null) {
-            args = snippetArgs.split(",");
-        }
-
         String query = uri.getLastPathSegment();
-        String startMatch = args != null && args.length > 0 ? args[0]
-                : DEFAULT_SNIPPET_ARG_START_MATCH;
-        String endMatch = args != null && args.length > 1 ? args[1]
-                : DEFAULT_SNIPPET_ARG_END_MATCH;
-        String ellipsis = args != null && args.length > 2 ? args[2]
-                : DEFAULT_SNIPPET_ARG_ELLIPSIS;
-        int maxTokens = args != null && args.length > 3 ? Integer.parseInt(args[3])
-                : DEFAULT_SNIPPET_ARG_MAX_TOKENS;
 
         // Snippet data is needed for the snippeting on the client side, so store it in the cursor
         if (cursor instanceof AbstractCursor && deferredSnippetingRequested(uri)){
@@ -4774,31 +4758,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             ((AbstractCursor) cursor).setExtras(extras);
         }
         return cursor;
-    }
-
-    private CrossProcessCursor getCrossProcessCursor(Cursor cursor) {
-        Cursor c = cursor;
-        if (c instanceof CrossProcessCursor) {
-            return (CrossProcessCursor) c;
-        } else if (c instanceof CursorWindow) {
-            return getCrossProcessCursor(((CursorWrapper) c).getWrappedCursor());
-        } else {
-            return null;
-        }
-    }
-
-    public MatrixCursor matrixCursorFromCursor(Cursor cursor) {
-        MatrixCursor newCursor = new MatrixCursor(cursor.getColumnNames());
-        int numColumns = cursor.getColumnCount();
-        String data[] = new String[numColumns];
-        cursor.moveToPosition(-1);
-        while (cursor.moveToNext()) {
-            for (int i = 0; i < numColumns; i++) {
-                data[i] = cursor.getString(i);
-            }
-            newCursor.addRow(data);
-        }
-        return newCursor;
     }
 
     private static final class DirectoryQuery {
@@ -5868,6 +5827,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Cursor cursor =
                 query(mActiveDb.get(), qb, projection, selection, selectionArgs, sortOrder, groupBy,
                         limit);
+
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
             cursor = bundleLetterCountExtras(cursor, mActiveDb.get(), qb, selection,
                     selectionArgs, sortOrder, addressBookIndexerCountExpression);
@@ -5875,6 +5835,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (snippetDeferred) {
             cursor = addDeferredSnippetingExtra(cursor);
         }
+
         return cursor;
     }
 
