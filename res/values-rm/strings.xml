@@ -20,16 +20,16 @@
     <skip />
     <string name="app_label" msgid="3389954322874982620">"Glista da contacts"</string>
     <string name="provider_label" msgid="6012150850819899907">"Contacts"</string>
-    <!-- no translation found for upgrade_msg (6174884195179549239) -->
+    <!-- no translation found for upgrade_msg (8640807392794309950) -->
     <skip />
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Ina actualisaziun da contacts basegna dapli memoria"</string>
-    <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Actualisar la memoria da contacts"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Tscherner per cumplettar l\'actualisaziun"</string>
+    <!-- outdated translation 4089605622758004662 -->     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Ina actualisaziun da contacts basegna dapli memoria"</string>
+    <!-- outdated translation 7849508493764133004 -->     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Actualisar la memoria da contacts"</string>
+    <!-- outdated translation 3967762223137708403 -->     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Tscherner per cumplettar l\'actualisaziun"</string>
     <string name="default_directory" msgid="93961630309570294">"Contacts"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Auter"</string>
     <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
     <skip />
-    <!-- no translation found for read_write_all_voicemail_description (2249895806470926882) -->
+    <!-- no translation found for read_write_all_voicemail_description (8029809937805761356) -->
     <skip />
     <!-- no translation found for voicemail_from_column (435732568832121444) -->
     <skip />
