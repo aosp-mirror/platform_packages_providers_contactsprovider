@@ -20,7 +20,7 @@
     <string name="app_label" msgid="3389954322874982620">"Kontakte-berging"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakte"</string>
     <string name="upgrade_msg" msgid="6174884195179549239">"Gradeer kontaktedatabasis op."</string>
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kontakopgradering benodig meer geheue"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Kontakopgradering benodig meer berging"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Gradeer kontakberging op"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Kies om die opgradering te voltooi."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
