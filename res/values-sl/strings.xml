@@ -19,13 +19,13 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Osrednji programi sistema Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Shramba za stike"</string>
     <string name="provider_label" msgid="6012150850819899907">"Stiki"</string>
-    <string name="upgrade_msg" msgid="6174884195179549239">"Nadgradnja zbirke podatkov stikov."</string>
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="4089605622758004662">"Za nadgradnjo stika je potrebnega več pomnilnika"</string>
-    <string name="upgrade_out_of_memory_notification_title" msgid="7849508493764133004">"Nadgradnja shrambe za stike"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="3967762223137708403">"Izberite, da dokončate nadgradnjo."</string>
+    <string name="upgrade_msg" msgid="8640807392794309950">"Nadgradnja zbirke podatkov stikov."</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Za nadgradnjo stikov je potrebno več pomnilnika"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Nadgradnja shrambe za stike"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Dotaknite se, da končate nadgradnjo."</string>
     <string name="default_directory" msgid="93961630309570294">"Stiki"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Drugo"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Dostop do glasovne pošte"</string>
-    <string name="read_write_all_voicemail_description" msgid="2249895806470926882">"Programu dovoli shranjevanje in prenos sporočil glasovne pošte, do katerih lahko dostopa ta naprava."</string>
+    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Programu dovoli shranjevanje in prenos sporočil v odzivniku, do katerih lahko dostopa ta naprava."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta s številke "</string>
 </resources>
