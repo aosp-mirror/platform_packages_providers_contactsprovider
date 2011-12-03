@@ -495,22 +495,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
-     * second in_visible_group, then the rest.
-     * Within the four (starred/unstarred, in_visible_group/not-in_visible_group) groups
-     * - three buckets: very recently contacted, then fairly
-     * recently contacted, then the rest.  Within each of the bucket - descending count
-     * of times contacted (both for data row and for contact row). If all else fails, alphabetical.
+     * Within the two groups:
+     * - three buckets: very recently contacted, then fairly recently contacted, then the rest.
+     * Within each of the bucket - descending count of times contacted (both for data row and for
+     * contact row).
+     * If all else fails, in_visible_group, alphabetical.
      * (Super)primary email address is returned before other addresses for the same contact.
      */
     private static final String EMAIL_FILTER_SORT_ORDER =
         Contacts.STARRED + " DESC, "
-        + Contacts.IN_VISIBLE_GROUP + " DESC, "
         + "(CASE WHEN " + TIME_SINCE_LAST_USED + " < " + EMAIL_FILTER_CURRENT
         + " THEN 0 "
                 + " WHEN " + TIME_SINCE_LAST_USED + " < " + EMAIL_FILTER_RECENT
         + " THEN 1 "
         + " ELSE 2 END), "
         + DataUsageStatColumns.TIMES_USED + " DESC, "
+        + Contacts.IN_VISIBLE_GROUP + " DESC, "
         + Contacts.DISPLAY_NAME + ", "
         + Data.CONTACT_ID + ", "
         + Data.IS_SUPER_PRIMARY + " DESC, "
