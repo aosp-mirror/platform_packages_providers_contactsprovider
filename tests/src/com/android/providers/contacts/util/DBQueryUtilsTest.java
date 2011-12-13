@@ -19,8 +19,8 @@ package com.android.providers.contacts.util;
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 
+import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.EvenMoreAsserts;
-import com.android.providers.contacts.ProjectionMap;
 
 import android.content.ContentValues;
 import android.test.AndroidTestCase;

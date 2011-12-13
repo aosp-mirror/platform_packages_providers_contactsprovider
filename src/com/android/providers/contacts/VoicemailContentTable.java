@@ -19,6 +19,7 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
+import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import com.android.providers.contacts.util.CloseUtils;
 

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 
+import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
 import android.content.ContentUris;

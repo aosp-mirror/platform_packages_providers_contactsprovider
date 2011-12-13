@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
@@ -55,9 +56,6 @@ import com.google.common.annotations.VisibleForTesting;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -66,7 +64,6 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.IContentService;
-import android.content.Intent;
 import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
@@ -126,7 +123,6 @@ import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.Profile;
