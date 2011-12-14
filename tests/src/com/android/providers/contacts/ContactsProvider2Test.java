@@ -1038,6 +1038,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStructuredName(rawContactId, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "18004664411");
 
+        // We'll create two lookup records, 18004664411 and +18004664411, and the below lookup
+        // will match both.
+
         Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664411");
 
         values.clear();
@@ -1048,7 +1051,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(PhoneLookup.LABEL);
         values.put(PhoneLookup.CUSTOM_RINGTONE, "d");
         values.put(PhoneLookup.SEND_TO_VOICEMAIL, 1);
-        assertStoredValues(lookupUri1, values);
+        assertStoredValues(lookupUri1, null, null, new ContentValues[] {values, values});
 
         // In the context that 8004664411 is a valid number, "4664411" as a
         // call id should  match to both "8004664411" and "+18004664411".
@@ -1132,27 +1135,31 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri phoneUri = insertPhoneNumber(rawContactId, "18004664411");
 
         Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664411");
-        assertStoredValue(lookupUri1, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664422");
+        assertEquals(2, getCount(lookupUri1, null, null));
+        assertEquals(0, getCount(lookupUri2, null, null));
 
         values.clear();
         values.put(Phone.NUMBER, "18004664422");
         mResolver.update(phoneUri, values, null, null);
 
-        Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "8004664422");
-        assertStoredValue(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        assertEquals(0, getCount(lookupUri1, null, null));
+        assertEquals(2, getCount(lookupUri2, null, null));
 
         // Setting number to null will remove the phone lookup record
         values.clear();
         values.putNull(Phone.NUMBER);
         mResolver.update(phoneUri, values, null, null);
 
+        assertEquals(0, getCount(lookupUri1, null, null));
         assertEquals(0, getCount(lookupUri2, null, null));
 
         // Let's restore that phone lookup record
         values.clear();
         values.put(Phone.NUMBER, "18004664422");
         mResolver.update(phoneUri, values, null, null);
-        assertStoredValue(lookupUri2, PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        assertEquals(0, getCount(lookupUri1, null, null));
+        assertEquals(2, getCount(lookupUri2, null, null));
         assertNetworkNotified(true);
     }
 
