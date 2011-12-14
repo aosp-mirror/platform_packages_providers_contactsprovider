@@ -422,11 +422,6 @@ import java.util.Locale;
         public static final String GROUP_ROW_ID = GroupMembership.GROUP_ROW_ID;
     }
 
-    public interface PhoneColumns {
-        public static final String NORMALIZED_NUMBER = Data.DATA4;
-        public static final String CONCRETE_NORMALIZED_NUMBER = DataColumns.CONCRETE_DATA4;
-    }
-
     public interface GroupsColumns {
         public static final String PACKAGE_ID = "package_id";
 

@@ -31,7 +31,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
@@ -5393,13 +5392,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // if the row is for a sip address.
                     String isPhoneAndHasNormalized = "("
                         + mimeTypeIsPhoneExpression + " AND "
-                        + PhoneColumns.NORMALIZED_NUMBER + " IS NOT NULL)";
+                        + Phone.NORMALIZED_NUMBER + " IS NOT NULL)";
                     groupBy = "(CASE WHEN " + isPhoneAndHasNormalized
-                        + " THEN " + PhoneColumns.NORMALIZED_NUMBER
-                        + " ELSE " + Data.DATA1 + " END), " + RawContacts.CONTACT_ID;
+                        + " THEN " + Phone.NORMALIZED_NUMBER
+                        + " ELSE " + Phone.NUMBER + " END), " + RawContacts.CONTACT_ID;
                 } else {
-                    groupBy = "(CASE WHEN " + PhoneColumns.NORMALIZED_NUMBER
-                        + " IS NOT NULL THEN " + PhoneColumns.NORMALIZED_NUMBER
+                    groupBy = "(CASE WHEN " + Phone.NORMALIZED_NUMBER
+                        + " IS NOT NULL THEN " + Phone.NORMALIZED_NUMBER
                         + " ELSE " + Phone.NUMBER + " END), " + RawContacts.CONTACT_ID;
                 }
                 if (sortOrder == null) {
