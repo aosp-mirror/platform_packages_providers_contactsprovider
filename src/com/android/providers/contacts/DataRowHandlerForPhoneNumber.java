@@ -15,7 +15,6 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.PhoneColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
@@ -48,7 +47,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
             String numberE164 =
                     PhoneNumberUtils.formatNumberToE164(number, mDbHelper.getCurrentCountryIso());
             if (numberE164 != null) {
-                values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
+                values.put(Phone.NORMALIZED_NUMBER, numberE164);
             }
             dataId = super.insert(db, txContext, rawContactId, values);
 
@@ -76,7 +75,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
                         mDbHelper.getCurrentCountryIso());
             }
             if (numberE164 != null) {
-                values.put(PhoneColumns.NORMALIZED_NUMBER, numberE164);
+                values.put(Phone.NORMALIZED_NUMBER, numberE164);
             }
         }
 
