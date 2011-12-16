@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.google.android.collect.Sets;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -79,7 +80,11 @@ import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -103,7 +108,7 @@ import java.util.Locale;
      *   600-699 Ice Cream Sandwich
      * </pre>
      */
-    static final int DATABASE_VERSION = 625;
+    static final int DATABASE_VERSION = 626;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -160,27 +165,47 @@ import java.util.Locale;
         public static final String DATA_JOIN_RAW_CONTACTS = "data "
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
 
+        // NOTE: If you want to refer to account name/type/data_set, AccountsColumns.CONCRETE_XXX
+        // MUST be used, as upgraded raw_contacts may have the account info columns too.
         public static final String DATA_JOIN_MIMETYPE_RAW_CONTACTS = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
-                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)";
+                + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id)"
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                    + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")";
 
         // NOTE: This requires late binding of GroupMembership MIME-type
-        public static final String RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS = "raw_contacts "
-                + "LEFT OUTER JOIN settings ON ("
-                    + "raw_contacts.account_name = settings.account_name AND "
-                    + "raw_contacts.account_type = settings.account_type AND "
-                    + "((raw_contacts.data_set IS NULL AND settings.data_set IS NULL) "
-                    + "OR (raw_contacts.data_set = settings.data_set))) "
+        // TODO Consolidate settings and accounts
+        public static final String RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS = Tables.RAW_CONTACTS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")"
+                + "LEFT OUTER JOIN " + Tables.SETTINGS + " ON ("
+                    + AccountsColumns.CONCRETE_ACCOUNT_NAME + "="
+                        + SettingsColumns.CONCRETE_ACCOUNT_NAME + " AND "
+                    + AccountsColumns.CONCRETE_ACCOUNT_TYPE + "="
+                        + SettingsColumns.CONCRETE_ACCOUNT_TYPE + " AND "
+                    + "((" + AccountsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                            + SettingsColumns.CONCRETE_DATA_SET + " IS NULL) OR ("
+                        + AccountsColumns.CONCRETE_DATA_SET + "="
+                            + SettingsColumns.CONCRETE_DATA_SET + "))) "
                 + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
                     + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
                 + ")";
 
         // NOTE: This requires late binding of GroupMembership MIME-type
+        // TODO Add missing DATA_SET join -- or just consolidate settings and accounts
         public static final String SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS = "settings "
                 + "LEFT OUTER JOIN raw_contacts ON ("
-                    + "raw_contacts.account_name = settings.account_name AND "
-                    + "raw_contacts.account_type = settings.account_type) "
+                    + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=(SELECT "
+                        + AccountsColumns.CONCRETE_ID
+                        + " FROM " + Tables.ACCOUNTS
+                        + " WHERE "
+                            + "(" + AccountsColumns.CONCRETE_ACCOUNT_NAME
+                                + "=" + SettingsColumns.CONCRETE_ACCOUNT_NAME + ") AND "
+                            + "(" + AccountsColumns.CONCRETE_ACCOUNT_TYPE
+                                + "=" + SettingsColumns.CONCRETE_ACCOUNT_TYPE + ")))"
                 + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
                     + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
@@ -205,17 +230,18 @@ import java.util.Locale;
                             + ")"
                         + ")";
 
+        // NOTE: If you want to refer to account name/type/data_set, AccountsColumns.CONCRETE_XXX
+        // MUST be used, as upgraded raw_contacts may have the account info columns too.
         public static final String DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS = "data "
                 + "JOIN mimetypes ON (data.mimetype_id = mimetypes._id) "
                 + "JOIN raw_contacts ON (data.raw_contact_id = raw_contacts._id) "
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                    + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")"
                 + "LEFT OUTER JOIN packages ON (data.package_id = packages._id) "
                 + "LEFT OUTER JOIN groups "
                 + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
                 + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") ";
-
-        public static final String GROUPS_JOIN_PACKAGES = "groups "
-                + "LEFT OUTER JOIN packages ON (groups.package_id = packages._id)";
-
 
         public static final String ACTIVITIES = "activities";
 
@@ -233,6 +259,11 @@ import java.util.Locale;
         public static final String NAME_LOOKUP_JOIN_RAW_CONTACTS = "name_lookup "
                 + "INNER JOIN view_raw_contacts ON (name_lookup.raw_contact_id = "
                 + "view_raw_contacts._id)";
+
+        public static final String RAW_CONTACTS_JOIN_ACCOUNTS = Tables.RAW_CONTACTS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                + AccountsColumns.CONCRETE_ID + "=" + RawContactsColumns.CONCRETE_ACCOUNT_ID
+                + ")";
     }
 
     public interface Joins {
@@ -272,9 +303,16 @@ import java.util.Locale;
         final String GROUP_BY_ACCOUNT_CONTACT_ID = SettingsColumns.CONCRETE_ACCOUNT_NAME + ","
                 + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "," + RawContacts.CONTACT_ID;
 
-        final String RAW_CONTACT_IS_LOCAL = RawContactsColumns.CONCRETE_ACCOUNT_NAME
-                + " IS NULL AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL AND "
-                + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL";
+        String LOCAL_ACCOUNT_ID =
+                "(SELECT " + AccountsColumns._ID +
+                " FROM " + Tables.ACCOUNTS +
+                " WHERE " +
+                    AccountsColumns.ACCOUNT_NAME + " IS NULL AND " +
+                    AccountsColumns.ACCOUNT_TYPE + " IS NULL AND " +
+                    AccountsColumns.DATA_SET + " IS NULL)";
+
+        final String RAW_CONTACT_IS_LOCAL = RawContactsColumns.CONCRETE_ACCOUNT_ID
+                + "=" + LOCAL_ACCOUNT_ID;
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
@@ -298,12 +336,7 @@ import java.util.Locale;
                 " GROUP BY " + RawContacts.CONTACT_ID;
 
         final String GROUP_HAS_ACCOUNT_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
-                + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=? AND "
-                + Groups.DATA_SET + " IS NULL";
-
-        final String GROUP_HAS_ACCOUNT_AND_DATA_SET_AND_SOURCE_ID = Groups.SOURCE_ID + "=? AND "
-                + Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=? AND "
-                + Groups.DATA_SET + "=?";
+                + GroupsColumns.ACCOUNT_ID + "=?";
 
         public static final String CONTACT_VISIBLE =
             "EXISTS (SELECT _id FROM " + Tables.VISIBLE_CONTACTS
@@ -334,14 +367,9 @@ import java.util.Locale;
     public interface RawContactsColumns {
         public static final String CONCRETE_ID =
                 Tables.RAW_CONTACTS + "." + BaseColumns._ID;
-        public static final String CONCRETE_ACCOUNT_NAME =
-                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_NAME;
-        public static final String CONCRETE_ACCOUNT_TYPE =
-                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
-        public static final String CONCRETE_DATA_SET =
-                Tables.RAW_CONTACTS + "." + RawContacts.DATA_SET;
-        public static final String CONCRETE_ACCOUNT_TYPE_AND_DATA_SET =
-                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE_AND_DATA_SET;
+
+        public static final String ACCOUNT_ID = "account_id";
+        public static final String CONCRETE_ACCOUNT_ID = Tables.RAW_CONTACTS + "." + ACCOUNT_ID;
         public static final String CONCRETE_SOURCE_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.SOURCE_ID;
         public static final String CONCRETE_VERSION =
@@ -379,6 +407,12 @@ import java.util.Locale;
                 Tables.RAW_CONTACTS + "." + RawContacts.CONTACT_ID;
         public static final String CONCRETE_NAME_VERIFIED =
                 Tables.RAW_CONTACTS + "." + RawContacts.NAME_VERIFIED;
+    }
+
+    public interface ViewRawContactsColumns {
+        String CONCRETE_ACCOUNT_NAME = Views.RAW_CONTACTS + "." + RawContacts.ACCOUNT_NAME;
+        String CONCRETE_ACCOUNT_TYPE = Views.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE;
+        String CONCRETE_DATA_SET = Views.RAW_CONTACTS + "." + RawContacts.DATA_SET;
     }
 
     public interface DataColumns {
@@ -424,16 +458,19 @@ import java.util.Locale;
 
     public interface GroupsColumns {
         public static final String PACKAGE_ID = "package_id";
+        public static final String CONCRETE_PACKAGE_ID = Tables.GROUPS + "." + PACKAGE_ID;
 
         public static final String CONCRETE_ID = Tables.GROUPS + "." + BaseColumns._ID;
         public static final String CONCRETE_SOURCE_ID = Tables.GROUPS + "." + Groups.SOURCE_ID;
-        public static final String CONCRETE_ACCOUNT_NAME =
-                Tables.GROUPS + "." + Groups.ACCOUNT_NAME;
-        public static final String CONCRETE_ACCOUNT_TYPE =
-                Tables.GROUPS + "." + Groups.ACCOUNT_TYPE;
-        public static final String CONCRETE_DATA_SET = Tables.GROUPS + "." + Groups.DATA_SET;
-        public static final String CONCRETE_ACCOUNT_TYPE_AND_DATA_SET = Tables.GROUPS + "." +
-                Groups.ACCOUNT_TYPE_AND_DATA_SET;
+
+        public static final String ACCOUNT_ID = "account_id";
+        public static final String CONCRETE_ACCOUNT_ID = Tables.GROUPS + "." + ACCOUNT_ID;
+    }
+
+    public interface ViewGroupsColumns {
+        String CONCRETE_ACCOUNT_NAME = Views.GROUPS + "." + Groups.ACCOUNT_NAME;
+        String CONCRETE_ACCOUNT_TYPE = Views.GROUPS + "." + Groups.ACCOUNT_TYPE;
+        String CONCRETE_DATA_SET = Views.GROUPS + "." + Groups.DATA_SET;
     }
 
     public interface ActivitiesColumns {
@@ -587,10 +624,16 @@ import java.util.Locale;
         String PROPERTY_VALUE = "property_value";
     }
 
-    public interface AccountsColumns {
+    public interface AccountsColumns extends BaseColumns {
+        String CONCRETE_ID = Tables.ACCOUNTS + "." + BaseColumns._ID;
+
         String ACCOUNT_NAME = RawContacts.ACCOUNT_NAME;
         String ACCOUNT_TYPE = RawContacts.ACCOUNT_TYPE;
         String DATA_SET = RawContacts.DATA_SET;
+
+        String CONCRETE_ACCOUNT_NAME = Tables.ACCOUNTS + "." + ACCOUNT_NAME;
+        String CONCRETE_ACCOUNT_TYPE = Tables.ACCOUNTS + "." + ACCOUNT_TYPE;
+        String CONCRETE_DATA_SET = Tables.ACCOUNTS + "." + DATA_SET;
     }
 
     public static final class DirectoryColumns {
@@ -641,10 +684,19 @@ import java.util.Locale;
         public static final int USAGE_TYPE_INT_SHORT_TEXT = 2;
     }
 
+    public interface Projections {
+        String[] ID = new String[] {BaseColumns._ID};
+        String[] LITERAL_ONE = new String[] {"1"};
+    }
+
     /** In-memory cache of previously found MIME-type mappings */
+    // TODO Use ConcurrentHashMap?
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
     /** In-memory cache of previously found package name mappings */
+    // TODO Use ConcurrentHashMap?
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
+    private final Map<AccountWithDataSet, Long> mAccountCache =
+            new ConcurrentHashMap<AccountWithDataSet, Long>();
 
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
@@ -745,12 +797,13 @@ import java.util.Locale;
         mAggregationModeQuery = null;
         mContactInDefaultDirectoryQuery = null;
 
-        populateMimeTypeCache(db);
+        initializeCache(db);
     }
 
-    private void populateMimeTypeCache(SQLiteDatabase db) {
+    private void initializeCache(SQLiteDatabase db) {
         mMimetypeCache.clear();
         mPackageCache.clear();
+        mAccountCache.clear();
 
         // TODO: This could be optimized into one query instead of 7
         //        Also: We shouldn't have those fields in the first place. This should just be
@@ -859,6 +912,13 @@ import java.util.Locale;
 
         mSyncState.createDatabase(db);
 
+        db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
+                AccountsColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                AccountsColumns.ACCOUNT_NAME + " TEXT, " +
+                AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
+                AccountsColumns.DATA_SET + " TEXT" +
+        ");");
+
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -883,12 +943,16 @@ import java.util.Locale;
                 Contacts.NAME_RAW_CONTACT_ID +
         ");");
 
-        // Contacts table
+        // Raw_contacts table
         db.execSQL("CREATE TABLE " + Tables.RAW_CONTACTS + " (" +
                 RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                RawContactsColumns.ACCOUNT_ID + " INTEGER REFERENCES " +
+                    Tables.ACCOUNTS + "(" + AccountsColumns._ID + ")," +
+                // STOPSHIP Remove the account columns.
                 RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 RawContacts.DATA_SET + " STRING DEFAULT NULL, " +
+
                 RawContacts.SOURCE_ID + " TEXT," +
                 RawContacts.RAW_CONTACT_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
@@ -924,19 +988,11 @@ import java.util.Locale;
                 RawContacts.CONTACT_ID +
         ");");
 
-        db.execSQL("CREATE INDEX raw_contacts_source_id_index ON " + Tables.RAW_CONTACTS + " (" +
-                RawContacts.SOURCE_ID + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
-                RawContacts.ACCOUNT_NAME +
-        ");");
-
-        db.execSQL("CREATE INDEX raw_contacts_source_id_data_set_index ON " +
+        db.execSQL("CREATE INDEX raw_contacts_source_id_account_id_index ON " +
                 Tables.RAW_CONTACTS + " (" +
-                    RawContacts.SOURCE_ID + ", " +
-                    RawContacts.ACCOUNT_TYPE + ", " +
-                    RawContacts.ACCOUNT_NAME + ", " +
-                    RawContacts.DATA_SET +
-                ");");
+                RawContacts.SOURCE_ID + ", " +
+                RawContactsColumns.ACCOUNT_ID +
+        ");");
 
         db.execSQL("CREATE TABLE " + Tables.STREAM_ITEMS + " (" +
                 StreamItems._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -1094,9 +1150,14 @@ import java.util.Locale;
         db.execSQL("CREATE TABLE " + Tables.GROUPS + " (" +
                 Groups._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 GroupsColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
+                GroupsColumns.ACCOUNT_ID + " INTEGER REFERENCES " +
+                    Tables.ACCOUNTS + "(" + AccountsColumns._ID + ")," +
+
+                // STOPSHIP Remove the account columns.
                 Groups.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
                 Groups.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
                 Groups.DATA_SET + " STRING DEFAULT NULL, " +
+
                 Groups.SOURCE_ID + " TEXT," +
                 Groups.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
@@ -1116,17 +1177,9 @@ import java.util.Locale;
                 Groups.SYNC4 + " TEXT " +
         ");");
 
-        db.execSQL("CREATE INDEX groups_source_id_index ON " + Tables.GROUPS + " (" +
+        db.execSQL("CREATE INDEX groups_source_id_account_id_index ON " + Tables.GROUPS + " (" +
                 Groups.SOURCE_ID + ", " +
-                Groups.ACCOUNT_TYPE + ", " +
-                Groups.ACCOUNT_NAME +
-        ");");
-
-        db.execSQL("CREATE INDEX groups_source_id_data_set_index ON " + Tables.GROUPS + " (" +
-                Groups.SOURCE_ID + ", " +
-                Groups.ACCOUNT_TYPE + ", " +
-                Groups.ACCOUNT_NAME + ", " +
-                Groups.DATA_SET +
+                GroupsColumns.ACCOUNT_ID +
         ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.AGGREGATION_EXCEPTIONS + " (" +
@@ -1236,16 +1289,6 @@ import java.util.Locale;
                 PropertiesColumns.PROPERTY_KEY + " TEXT PRIMARY KEY, " +
                 PropertiesColumns.PROPERTY_VALUE + " TEXT " +
         ");");
-
-        db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
-                AccountsColumns.ACCOUNT_NAME + " TEXT, " +
-                AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
-                AccountsColumns.DATA_SET + " TEXT" +
-        ");");
-
-        // Allow contacts without any account to be created for now.  Achieve that
-        // by inserting a fake account with both type and name as NULL.
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
 
         createDirectoriesTable(db);
         createSearchIndexTable(db);
@@ -1428,8 +1471,8 @@ import java.util.Locale;
                 " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
                 "     SELECT " + RawContacts.CONTACT_ID +
                 "     FROM " + Tables.RAW_CONTACTS +
-                "     WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
-                "     AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL; ");
+                "     WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_ID +
+                            "=" + Clauses.LOCAL_ACCOUNT_ID + ";");
         final String insertContactsWithAccountNoDefaultGroup = (
                 " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
                 "     SELECT " + RawContacts.CONTACT_ID +
@@ -1437,10 +1480,8 @@ import java.util.Locale;
                 "     WHERE NOT EXISTS" +
                 "         (SELECT " + Groups._ID +
                 "             FROM " + Tables.GROUPS +
-                "             WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = " +
-                        GroupsColumns.CONCRETE_ACCOUNT_NAME +
-                "             AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = " +
-                        GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                "             WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_ID + " = " +
+                                    GroupsColumns.CONCRETE_ACCOUNT_ID +
                 "             AND " + Groups.AUTO_ADD + " != 0" + ");");
         final String insertContactsWithAccountDefaultGroup = (
                 " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
@@ -1456,10 +1497,8 @@ import java.util.Locale;
                 "     AND EXISTS" +
                 "         (SELECT " + Groups._ID +
                 "             FROM " + Tables.GROUPS +
-                "                 WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = " +
-                        GroupsColumns.CONCRETE_ACCOUNT_NAME +
-                "                 AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = " +
-                        GroupsColumns.CONCRETE_ACCOUNT_TYPE +
+                "                 WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_ID + " = " +
+                                        GroupsColumns.CONCRETE_ACCOUNT_ID +
                 "                 AND " + Groups.AUTO_ADD + " != 0" + ");");
 
         db.execSQL("DROP TRIGGER IF EXISTS " + Tables.GROUPS + "_auto_add_updated1;");
@@ -1532,14 +1571,15 @@ import java.util.Locale;
                 + Data.SYNC4;
 
         String syncColumns =
-                RawContactsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
-                + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
-                + RawContactsColumns.CONCRETE_DATA_SET + " AS " + RawContacts.DATA_SET + ","
-                + "(CASE WHEN " + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL THEN "
-                        + RawContactsColumns.CONCRETE_ACCOUNT_TYPE
-                        + " ELSE " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + "||'/'||"
-                        + RawContactsColumns.CONCRETE_DATA_SET + " END) AS "
-                        + RawContacts.ACCOUNT_TYPE_AND_DATA_SET + ","
+                RawContactsColumns.CONCRETE_ACCOUNT_ID + ","
+                + AccountsColumns.CONCRETE_ACCOUNT_NAME + " AS " + RawContacts.ACCOUNT_NAME + ","
+                + AccountsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + RawContacts.ACCOUNT_TYPE + ","
+                + AccountsColumns.CONCRETE_DATA_SET + " AS " + RawContacts.DATA_SET + ","
+                + "(CASE WHEN " + AccountsColumns.CONCRETE_DATA_SET + " IS NULL THEN "
+                            + AccountsColumns.CONCRETE_ACCOUNT_TYPE
+                        + " ELSE " + AccountsColumns.CONCRETE_ACCOUNT_TYPE + "||'/'||"
+                            + AccountsColumns.CONCRETE_DATA_SET + " END) AS "
+                                + RawContacts.ACCOUNT_TYPE_AND_DATA_SET + ","
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
                 + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS "
                         + RawContacts.NAME_VERIFIED + ","
@@ -1608,6 +1648,9 @@ import java.util.Locale;
                 +   DataColumns.CONCRETE_MIMETYPE_ID + "=" + MimetypesColumns.CONCRETE_ID + ")"
                 + " JOIN " + Tables.RAW_CONTACTS + " ON ("
                 +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")"
                 + " JOIN " + Tables.CONTACTS + " ON ("
                 +   RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")"
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
@@ -1644,7 +1687,10 @@ import java.util.Locale;
                 + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + rawContactOptionColumns + ", "
                 + syncColumns
-                + " FROM " + Tables.RAW_CONTACTS;
+                + " FROM " + Tables.RAW_CONTACTS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")";
 
         db.execSQL("CREATE VIEW " + Views.RAW_CONTACTS + " AS " + rawContactsSelect);
 
@@ -1690,6 +1736,9 @@ import java.util.Locale;
                 + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.RAW_CONTACTS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")"
                 + " LEFT OUTER JOIN " + Tables.DATA + " ON ("
                 +   DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID + ")"
                 + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
@@ -1724,6 +1773,9 @@ import java.util.Locale;
                 + DataColumns.CONCRETE_ID + " AS " + Contacts.Entity.DATA_ID + ","
                 + Tables.GROUPS + "." + Groups.SOURCE_ID + " AS " + GroupMembership.GROUP_SOURCE_ID
                 + " FROM " + Tables.RAW_CONTACTS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")"
                 + " JOIN " + Tables.CONTACTS + " ON ("
                 +   RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")"
                 + " JOIN " + Tables.RAW_CONTACTS + " AS name_raw_contact ON("
@@ -1766,9 +1818,9 @@ import java.util.Locale;
                 ContactsColumns.CONCRETE_ID + " AS " + StreamItems.CONTACT_ID + ", " +
                 ContactsColumns.CONCRETE_LOOKUP_KEY +
                         " AS " + StreamItems.CONTACT_LOOKUP_KEY + ", " +
-                RawContactsColumns.CONCRETE_ACCOUNT_NAME + ", " +
-                RawContactsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
-                RawContactsColumns.CONCRETE_DATA_SET + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_DATA_SET + ", " +
                 StreamItemsColumns.CONCRETE_RAW_CONTACT_ID +
                         " as " + StreamItems.RAW_CONTACT_ID + ", " +
                 RawContactsColumns.CONCRETE_SOURCE_ID +
@@ -1786,7 +1838,11 @@ import java.util.Locale;
                 " FROM " + Tables.STREAM_ITEMS
                 + " JOIN " + Tables.RAW_CONTACTS + " ON ("
                 + StreamItemsColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
-                + ") JOIN " + Tables.CONTACTS + " ON ("
+                    + ")"
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                    + ")"
+                + " JOIN " + Tables.CONTACTS + " ON ("
                 + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.STREAM_ITEMS + " AS " + streamItemSelect);
@@ -1826,13 +1882,17 @@ import java.util.Locale;
 
     private void createGroupsView(SQLiteDatabase db) {
         db.execSQL("DROP VIEW IF EXISTS " + Views.GROUPS + ";");
+
         String groupsColumns =
-                Groups.ACCOUNT_NAME + ","
-                + Groups.ACCOUNT_TYPE + ","
-                + Groups.DATA_SET + ","
-                + "(CASE WHEN " + Groups.DATA_SET + " IS NULL THEN " + Groups.ACCOUNT_TYPE
-                    + " ELSE " + Groups.ACCOUNT_TYPE + "||" + Groups.DATA_SET + " END) AS "
-                    + Groups.ACCOUNT_TYPE_AND_DATA_SET + ","
+                GroupsColumns.CONCRETE_ACCOUNT_ID + " AS " + GroupsColumns.ACCOUNT_ID + ","
+                + AccountsColumns.CONCRETE_ACCOUNT_NAME + " AS " + Groups.ACCOUNT_NAME + ","
+                + AccountsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + Groups.ACCOUNT_TYPE + ","
+                + AccountsColumns.CONCRETE_DATA_SET + " AS " + Groups.DATA_SET + ","
+                + "(CASE WHEN " + AccountsColumns.CONCRETE_DATA_SET
+                    + " IS NULL THEN " + AccountsColumns.CONCRETE_ACCOUNT_TYPE
+                    + " ELSE " + AccountsColumns.CONCRETE_ACCOUNT_TYPE
+                        + "||'/'||" + AccountsColumns.CONCRETE_DATA_SET + " END) AS "
+                            + Groups.ACCOUNT_TYPE_AND_DATA_SET + ","
                 + Groups.SOURCE_ID + ","
                 + Groups.VERSION + ","
                 + Groups.DIRTY + ","
@@ -1855,7 +1915,11 @@ import java.util.Locale;
         String groupsSelect = "SELECT "
                 + GroupsColumns.CONCRETE_ID + " AS " + Groups._ID + ","
                 + groupsColumns
-                + " FROM " + Tables.GROUPS_JOIN_PACKAGES;
+                + " FROM " + Tables.GROUPS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                    + GroupsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID + ")"
+                + " LEFT OUTER JOIN " + Tables.PACKAGES + " ON ("
+                    + GroupsColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.GROUPS + " AS " + groupsSelect);
     }
@@ -2296,6 +2360,12 @@ import java.util.Locale;
             // Fix for search for hyphenated names
             upgradeSearchIndex = true;
             oldVersion = 625;
+        }
+
+        if (oldVersion < 626) {
+            upgradeToVersion626(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 626;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3323,7 +3393,7 @@ import java.util.Locale;
     }
 
     private void upgradeToVersion504(SQLiteDatabase db) {
-        populateMimeTypeCache(db);
+        initializeCache(db);
 
         // Find all names with prefixes and recreate display name
         Cursor cursor = db.rawQuery(
@@ -3528,6 +3598,81 @@ import java.util.Locale;
         db.execSQL("ALTER TABLE calls ADD formatted_number TEXT DEFAULT NULL;");
     }
 
+    private void upgradeToVersion626(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS accounts");
+
+        db.execSQL("CREATE TABLE accounts (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "account_name TEXT, " +
+                "account_type TEXT, " +
+                "data_set TEXT" +
+        ");");
+
+        // Add "account_id" column to groups and raw_contacts
+        db.execSQL("ALTER TABLE raw_contacts ADD " +
+                "account_id INTEGER REFERENCES accounts(_id)");
+        db.execSQL("ALTER TABLE groups ADD " +
+                "account_id INTEGER REFERENCES accounts(_id)");
+
+        // Update indexes.
+        db.execSQL("DROP INDEX IF EXISTS raw_contacts_source_id_index");
+        db.execSQL("DROP INDEX IF EXISTS raw_contacts_source_id_data_set_index");
+        db.execSQL("DROP INDEX IF EXISTS groups_source_id_index");
+        db.execSQL("DROP INDEX IF EXISTS groups_source_id_data_set_index");
+
+        db.execSQL("CREATE INDEX raw_contacts_source_id_account_id_index ON raw_contacts ("
+                + "sourceid, account_id);");
+        db.execSQL("CREATE INDEX groups_source_id_account_id_index ON groups ("
+                + "sourceid, account_id);");
+
+        // Migrate account_name/account_type/data_set to accounts table
+
+        final Set<AccountWithDataSet> accountsWithDataSets = Sets.newHashSet();
+        upgradeToVersion626_findAccountsWithDataSets(accountsWithDataSets, db, "raw_contacts");
+        upgradeToVersion626_findAccountsWithDataSets(accountsWithDataSets, db, "groups");
+
+        for (AccountWithDataSet accountWithDataSet : accountsWithDataSets) {
+            db.execSQL("INSERT INTO accounts (account_name,account_type,data_set)VALUES(?, ?, ?)",
+                    new String[] {
+                            accountWithDataSet.getAccountName(),
+                            accountWithDataSet.getAccountType(),
+                            accountWithDataSet.getDataSet()
+                    });
+        }
+        upgradeToVersion626_fillAccountId(db, "raw_contacts");
+        upgradeToVersion626_fillAccountId(db, "groups");
+    }
+
+    private static void upgradeToVersion626_findAccountsWithDataSets(
+            Set<AccountWithDataSet> result, SQLiteDatabase db, String table) {
+        Cursor c = db.rawQuery(
+                "SELECT DISTINCT account_name, account_type, data_set FROM " + table, null);
+        try {
+            while (c.moveToNext()) {
+                result.add(AccountWithDataSet.get(c.getString(0), c.getString(1), c.getString(2)));
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    private static void upgradeToVersion626_fillAccountId(SQLiteDatabase db, String table) {
+        StringBuilder sb = new StringBuilder();
+
+        // Set account_id and null out account_name, account_type and data_set
+
+        sb.append("UPDATE " + table + " SET account_id = (SELECT _id FROM accounts WHERE ");
+
+        addJoinExpressionAllowingNull(sb, table + ".account_name", "accounts.account_name");
+        sb.append("AND");
+        addJoinExpressionAllowingNull(sb, table + ".account_type", "accounts.account_type");
+        sb.append("AND");
+        addJoinExpressionAllowingNull(sb, table + ".data_set", "accounts.data_set");
+
+        sb.append("), account_name = null, account_type = null, data_set = null");
+        db.execSQL(sb.toString());
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -3581,6 +3726,17 @@ import java.util.Locale;
     }
 
     /**
+     * Add a string like "(((column1) = (column2)) OR ((column1) IS NULL AND (column2) IS NULL))"
+     */
+    private static StringBuilder addJoinExpressionAllowingNull(StringBuilder sb,
+            String column1, String column2) {
+        sb.append("(((").append(column1).append(")=(").append(column2);
+        sb.append("))OR((");
+        sb.append(column1).append(") IS NULL AND (").append(column2).append(") IS NULL))");
+        return sb;
+    }
+
+    /**
      * Adds index stats into the SQLite database to force it to always use the lookup indexes.
      */
     private void updateSqliteStats(SQLiteDatabase db) {
@@ -3589,6 +3745,9 @@ import java.util.Locale;
         // Important here are relative sizes. Raw-Contacts is slightly bigger than Contacts
         // Warning: Missing tables in here will make SQLite assume to contain 1000000 rows,
         // which can lead to catastrophic query plans for small tables
+
+        // See the latest of version of http://www.sqlite.org/cgi/src/finfo?name=src/analyze.c
+        // for what these numbers mean.
         try {
             db.execSQL("DELETE FROM sqlite_stat1");
             updateIndexStats(db, Tables.CONTACTS,
@@ -3597,15 +3756,13 @@ import java.util.Locale;
                     "contacts_name_raw_contact_id_index", "9000 1");
 
             updateIndexStats(db, Tables.RAW_CONTACTS,
-                    "raw_contacts_source_id_index", "10000 1 1 1");
-            updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contacts_contact_id_index", "10000 2");
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contact_sort_key2_index", "10000 2");
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contact_sort_key1_index", "10000 2");
             updateIndexStats(db, Tables.RAW_CONTACTS,
-                    "raw_contacts_source_id_data_set_index", "10000 1 1 1 1");
+                    "raw_contacts_source_id_account_id_index", "10000 1 1 1 1");
 
             updateIndexStats(db, Tables.NAME_LOOKUP,
                     "name_lookup_raw_contact_id_index", "35000 4");
@@ -3627,9 +3784,7 @@ import java.util.Locale;
                     "data_raw_contact_id", "60000 10");
 
             updateIndexStats(db, Tables.GROUPS,
-                    "groups_source_id_index", "50 2 2 1");
-            updateIndexStats(db, Tables.GROUPS,
-                    "groups_source_id_data_set_index", "50 2 2 1 1");
+                    "groups_source_id_account_id_index", "50 2 2 1 1");
 
             updateIndexStats(db, Tables.NICKNAME_LOOKUP,
                     "nickname_lookup_index", "500 2 1");
@@ -3744,8 +3899,6 @@ import java.util.Locale;
         SQLiteDatabase db = getWritableDatabase();
 
         db.execSQL("DELETE FROM " + Tables.ACCOUNTS + ";");
-        db.execSQL("INSERT INTO " + Tables.ACCOUNTS + " VALUES(NULL, NULL, NULL)");
-
         db.execSQL("DELETE FROM " + Tables.CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.RAW_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.STREAM_ITEMS + ";");
@@ -3761,6 +3914,8 @@ import java.util.Locale;
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
+
+        initializeCache(db);
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
@@ -3964,6 +4119,113 @@ import java.util.Locale;
     }
 
     /**
+     * Gets all accounts in the accounts table.
+     */
+    public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
+        Set<AccountWithDataSet> accountsWithDataSets = new HashSet<AccountWithDataSet>();
+        Cursor c = getWritableDatabase().rawQuery(
+                "SELECT DISTINCT " + AccountsColumns.ACCOUNT_NAME +
+                "," + AccountsColumns.ACCOUNT_TYPE + "," + AccountsColumns.DATA_SET +
+                " FROM " + Tables.ACCOUNTS, null);
+        try {
+            while (c.moveToNext()) {
+                accountsWithDataSets.add(
+                        AccountWithDataSet.get(c.getString(0), c.getString(1), c.getString(2)));
+            }
+        } finally {
+            c.close();
+        }
+        return accountsWithDataSets;
+    }
+
+    /**
+     * @return ID of the specified account, looking up on the Account2 table.  Unlike
+     * {@link #getPackageId(String)} and {@link #getMimeTypeId(String)} it won't create a record
+     * even if it doesn't exist; just returns null instead.
+     *
+     * Intended to be used in read operations, as opposed to
+     * {@link #getOrCreateAccountIdInTransaction} and {@link #invalidateAccountCacheInTransaction},
+     * which should only be used in a transaction, so there's no need for synchronization.
+     */
+    public Long getAccountIdOrNull(AccountWithDataSet accountWithDataSet) {
+        if (accountWithDataSet == null) {
+            accountWithDataSet = AccountWithDataSet.LOCAL;
+        }
+        Long id = mAccountCache.get(accountWithDataSet);
+
+        if (id != null) return id;
+
+        final SQLiteStatement select = getWritableDatabase().compileStatement(
+              "SELECT " + AccountsColumns._ID +
+              " FROM " + Tables.ACCOUNTS +
+              " WHERE " +
+              "((?1 IS NULL AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL) OR " +
+                      "(" + AccountsColumns.ACCOUNT_NAME + "=?1)) AND " +
+              "((?2 IS NULL AND " + AccountsColumns.ACCOUNT_TYPE + " IS NULL) OR " +
+                      "(" + AccountsColumns.ACCOUNT_TYPE + "=?2)) AND " +
+              "((?3 IS NULL AND " + AccountsColumns.DATA_SET + " IS NULL) OR " +
+                      "(" + AccountsColumns.DATA_SET + "=?3))");
+        try {
+            DatabaseUtils.bindObjectToProgram(select, 1, accountWithDataSet.getAccountName());
+            DatabaseUtils.bindObjectToProgram(select, 2, accountWithDataSet.getAccountType());
+            DatabaseUtils.bindObjectToProgram(select, 3, accountWithDataSet.getDataSet());
+            try {
+                id = select.simpleQueryForLong();
+                mAccountCache.put(accountWithDataSet, id);
+                return id;
+            } catch (SQLiteDoneException notFound) {
+                return null;
+            }
+        } finally {
+            select.close();
+        }
+    }
+
+    /**
+     * @return ID of the specified account.  This method will create a record if the account doesn't
+     *     exist in the accounts table.
+     *
+     * This must be used in a transaction, so there's no need for synchronization.
+     *
+     * TODO Pre-init the cache in {@link #initializeCache} and remove the lazy-lookup?
+     */
+    public long getOrCreateAccountIdInTransaction(AccountWithDataSet accountWithDataSet) {
+        if (accountWithDataSet == null) {
+            accountWithDataSet = AccountWithDataSet.LOCAL;
+        }
+        Long id = getAccountIdOrNull(accountWithDataSet);
+        if (id != null) {
+            return id;
+        }
+        final SQLiteStatement insert = getWritableDatabase().compileStatement(
+                "INSERT INTO " + Tables.ACCOUNTS +
+                " (" + AccountsColumns.ACCOUNT_NAME + ", " +
+                AccountsColumns.ACCOUNT_TYPE + ", " +
+                AccountsColumns.DATA_SET + ") VALUES (?, ?, ?)");
+        try {
+            DatabaseUtils.bindObjectToProgram(insert, 1, accountWithDataSet.getAccountName());
+            DatabaseUtils.bindObjectToProgram(insert, 2, accountWithDataSet.getAccountType());
+            DatabaseUtils.bindObjectToProgram(insert, 3, accountWithDataSet.getDataSet());
+            id = insert.executeInsert();
+        } finally {
+            insert.close();
+        }
+
+        mAccountCache.put(accountWithDataSet, id);
+
+        return id;
+    }
+
+    /**
+     * Clear the account cache.
+     *
+     * This must be used in a transaction, so there's no need for synchronization.
+     */
+    public void invalidateAccountCacheInTransaction() {
+        mAccountCache.clear();
+    }
+
+    /**
      * Update {@link Contacts#IN_VISIBLE_GROUP} for all contacts.
      */
     public void updateAllVisible() {
@@ -4003,38 +4265,29 @@ import java.util.Locale;
                     " JOIN " + Tables.DATA +
                     "   ON (" + RawContactsColumns.CONCRETE_ID + "="
                             + Data.RAW_CONTACT_ID + ")" +
-                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                    "   AND " + DataColumns.MIMETYPE_ID + "=?" +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?1" +
+                    "   AND " + DataColumns.MIMETYPE_ID + "=?2" +
                 ") OR EXISTS (" +
                     "SELECT " + RawContacts._ID +
                     " FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?1" +
                     "   AND NOT EXISTS" +
                         " (SELECT " + Groups._ID +
                         "  FROM " + Tables.GROUPS +
-                        "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " = "
-                                + GroupsColumns.CONCRETE_ACCOUNT_NAME +
-                        "  AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " = "
-                                + GroupsColumns.CONCRETE_ACCOUNT_TYPE +
-                        "  AND (" + RawContactsColumns.CONCRETE_DATA_SET + " = "
-                                + GroupsColumns.CONCRETE_DATA_SET
-                                + " OR " + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL AND "
-                                + GroupsColumns.CONCRETE_DATA_SET + " IS NULL)" +
+                        "  WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_ID + " = "
+                                + GroupsColumns.CONCRETE_ACCOUNT_ID +
                         "  AND " + Groups.AUTO_ADD + " != 0" +
                         ")" +
                 ") OR EXISTS (" +
                     "SELECT " + RawContacts._ID +
                     " FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                    "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_NAME + " IS NULL " +
-                    "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_TYPE + " IS NULL" +
-                    "   AND " + RawContactsColumns.CONCRETE_DATA_SET + " IS NULL" +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?1" +
+                    "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" +
+                        Clauses.LOCAL_ACCOUNT_ID +
                 ")",
                 new String[] {
                     contactIdAsString,
-                    String.valueOf(mimetype),
-                    contactIdAsString,
-                    contactIdAsString
+                    String.valueOf(mimetype)
                 }) != 0;
 
         if (onlyIfChanged) {

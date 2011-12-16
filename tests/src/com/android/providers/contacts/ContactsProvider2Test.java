@@ -622,6 +622,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.put(RawContacts.ACCOUNT_NAME, "a");
         values.put(RawContacts.ACCOUNT_TYPE, "b");
+        values.put(RawContacts.DATA_SET, "ds");
         values.put(RawContacts.SOURCE_ID, "c");
         values.put(RawContacts.VERSION, 42);
         values.put(RawContacts.DIRTY, 1);
@@ -2266,6 +2267,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.put(Groups.ACCOUNT_NAME, "a");
         values.put(Groups.ACCOUNT_TYPE, "b");
+        values.put(Groups.DATA_SET, "ds");
         values.put(Groups.SOURCE_ID, "c");
         values.put(Groups.VERSION, 42);
         values.put(Groups.GROUP_VISIBLE, 1);
@@ -3578,17 +3580,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item insertion test cases.
 
-    public void testInsertStreamItemIntoOtherAccount() {
-        long rawContactId = createRawContact(mAccount);
-        ContentValues values = buildGenericStreamItemValues();
-        try {
-            insertStreamItem(rawContactId, values, mAccountTwo);
-            fail("Stream insertion was allowed in another account's raw contact.");
-        } catch (SecurityException expected) {
-            // Trying to insert stream items into account one's raw contact is forbidden.
-        }
-    }
-
     public void testInsertStreamItemInProfileRequiresWriteProfileAccess() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -3757,22 +3748,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.StreamItems.CONTENT_DIRECTORY), values);
     }
 
-    public void testUpdateStreamItemFromOtherAccount() {
-        long rawContactId = createRawContact(mAccount);
-        ContentValues values = buildGenericStreamItemValues();
-        Uri resultUri = insertStreamItem(rawContactId, values, mAccount);
-        long streamItemId = ContentUris.parseId(resultUri);
-        values.put(StreamItems._ID, streamItemId);
-        values.put(StreamItems.TEXT, "Goodbye world");
-        try {
-            mResolver.update(maybeAddAccountQueryParameters(StreamItems.CONTENT_URI, mAccountTwo),
-                    values, null, null);
-            fail("Should not be able to update stream items inserted by another account");
-        } catch (SecurityException expected) {
-            // Can't update the stream items from another account.
-        }
-    }
-
     // Stream item photo update test cases.
 
     public void testUpdateStreamItemPhotoById() throws IOException {
@@ -3828,32 +3803,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(displayPhotoUri)));
     }
 
-    public void testUpdateStreamItemPhotoFromOtherAccount() {
-        long rawContactId = createRawContact(mAccount);
-        ContentValues values = buildGenericStreamItemValues();
-        Uri resultUri = insertStreamItem(rawContactId, values, mAccount);
-        long streamItemId = ContentUris.parseId(resultUri);
-        ContentValues photoValues = buildGenericStreamItemPhotoValues(1);
-        resultUri = insertStreamItemPhoto(streamItemId, photoValues, mAccount);
-        long streamItemPhotoId = ContentUris.parseId(resultUri);
-
-        photoValues.put(StreamItemPhotos._ID, streamItemPhotoId);
-        photoValues.put(StreamItemPhotos.PHOTO, loadPhotoFromResource(
-                R.drawable.galaxy, PhotoSize.ORIGINAL));
-        Uri photoUri =
-                maybeAddAccountQueryParameters(
-                        Uri.withAppendedPath(
-                                ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
-                                StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
-                        mAccountTwo);
-        try {
-            mResolver.update(photoUri, photoValues, null, null);
-            fail("Should not be able to update stream item photos inserted by another account");
-        } catch (SecurityException expected) {
-            // Can't update a stream item photo inserted by another account.
-        }
-    }
-
     // Stream item deletion test cases.
 
     public void testDeleteStreamItemById() {
@@ -3893,21 +3842,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Uri.withAppendedPath(
                 ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
                 RawContacts.StreamItems.CONTENT_DIRECTORY), secondValues);
-    }
-
-    public void testDeleteStreamItemFromOtherAccount() {
-        long rawContactId = createRawContact(mAccount);
-        long streamItemId = ContentUris.parseId(
-                insertStreamItem(rawContactId, buildGenericStreamItemValues(), mAccount));
-        try {
-            mResolver.delete(
-                    maybeAddAccountQueryParameters(
-                            ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
-                            mAccountTwo), null, null);
-            fail("Should not be able to delete stream item inserted by another account");
-        } catch (SecurityException expected) {
-            // Can't delete a stream item from another account.
-        }
     }
 
     // Stream item photo deletion test cases.
@@ -3951,23 +3885,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(photoUri, StreamItemPhotos.SORT_INDEX + "=1", null);
 
         assertStoredValues(photoUri, firstPhotoValues);
-    }
-
-    public void testDeleteStreamItemPhotoFromOtherAccount() {
-        long rawContactId = createRawContact(mAccount);
-        long streamItemId = ContentUris.parseId(
-                insertStreamItem(rawContactId, buildGenericStreamItemValues(), mAccount));
-        insertStreamItemPhoto(streamItemId, buildGenericStreamItemPhotoValues(0), mAccount);
-        try {
-            mResolver.delete(maybeAddAccountQueryParameters(
-                    Uri.withAppendedPath(
-                            ContentUris.withAppendedId(StreamItems.CONTENT_URI, streamItemId),
-                            StreamItems.StreamItemPhotos.CONTENT_DIRECTORY),
-                    mAccountTwo), null, null);
-            fail("Should not be able to delete stream item photo inserted by another account");
-        } catch (SecurityException expected) {
-            // Can't delete a stream item photo from another account.
-        }
     }
 
     public void testDeleteStreamItemsWhenRawContactDeleted() {

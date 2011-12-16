@@ -248,7 +248,6 @@ public class GroupsTest extends BaseContactsProvider2Test {
                         + (visible ? 1 : 0), null).withExpectedCount(1).build();
     }
 
-    @LargeTest
     public void testDelayVisibleTransaction() throws RemoteException, OperationApplicationException {
         final ContentValues values = new ContentValues();
 

@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactMatcher.MatchScore;
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -372,16 +373,13 @@ public class ContactAggregator {
     private interface AggregationQuery {
         String SQL =
                 "SELECT " + RawContacts._ID + "," + RawContacts.CONTACT_ID +
-                        ", " + RawContacts.ACCOUNT_TYPE + "," + RawContacts.ACCOUNT_NAME +
-                        ", " + RawContacts.DATA_SET +
+                        ", " + RawContactsColumns.ACCOUNT_ID +
                 " FROM " + Tables.RAW_CONTACTS +
                 " WHERE " + RawContacts._ID + " IN(";
 
         int _ID = 0;
         int CONTACT_ID = 1;
-        int ACCOUNT_TYPE = 2;
-        int ACCOUNT_NAME = 3;
-        int DATA_SET = 4;
+        int ACCOUNT_ID = 2;
     }
 
     /**
@@ -418,9 +416,7 @@ public class ContactAggregator {
 
         long rawContactIds[] = new long[count];
         long contactIds[] = new long[count];
-        String accountTypes[] = new String[count];
-        String accountNames[] = new String[count];
-        String dataSets[] = new String[count];
+        long accountIds[] = new long[count];
         Cursor c = db.rawQuery(mSb.toString(), selectionArgs);
         try {
             count = c.getCount();
@@ -428,9 +424,7 @@ public class ContactAggregator {
             while (c.moveToNext()) {
                 rawContactIds[index] = c.getLong(AggregationQuery._ID);
                 contactIds[index] = c.getLong(AggregationQuery.CONTACT_ID);
-                accountTypes[index] = c.getString(AggregationQuery.ACCOUNT_TYPE);
-                accountNames[index] = c.getString(AggregationQuery.ACCOUNT_NAME);
-                dataSets[index] = c.getString(AggregationQuery.DATA_SET);
+                accountIds[index] = c.getLong(AggregationQuery.ACCOUNT_ID);
                 index++;
             }
         } finally {
@@ -438,8 +432,8 @@ public class ContactAggregator {
         }
 
         for (int i = 0; i < count; i++) {
-            aggregateContact(txContext, db, rawContactIds[i], accountTypes[i], accountNames[i],
-                    dataSets[i], contactIds[i], mCandidates, mMatcher);
+            aggregateContact(txContext, db, rawContactIds[i], accountIds[i], contactIds[i],
+                    mCandidates, mMatcher);
         }
 
         long elapsedTime = System.currentTimeMillis() - start;
@@ -565,16 +559,14 @@ public class ContactAggregator {
         public static final String TABLE = Tables.RAW_CONTACTS;
 
         public static final String[] COLUMNS = {
-                RawContacts.CONTACT_ID, RawContacts.ACCOUNT_TYPE, RawContacts.ACCOUNT_NAME,
-                RawContacts.DATA_SET
+                RawContacts.CONTACT_ID,
+                RawContactsColumns.ACCOUNT_ID
         };
 
         public static final String SELECTION = RawContacts._ID + "=?";
 
         public static final int CONTACT_ID = 0;
-        public static final int ACCOUNT_TYPE = 1;
-        public static final int ACCOUNT_NAME = 2;
-        public static final int DATA_SET = 3;
+        public static final int ACCOUNT_ID = 1;
     }
 
     public void aggregateContact(
@@ -587,9 +579,7 @@ public class ContactAggregator {
         ContactMatcher matcher = new ContactMatcher();
 
         long contactId = 0;
-        String accountName = null;
-        String accountType = null;
-        String dataSet = null;
+        long accountId = 0;
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         Cursor cursor = db.query(RawContactIdAndAccountQuery.TABLE,
                 RawContactIdAndAccountQuery.COLUMNS, RawContactIdAndAccountQuery.SELECTION,
@@ -597,15 +587,13 @@ public class ContactAggregator {
         try {
             if (cursor.moveToFirst()) {
                 contactId = cursor.getLong(RawContactIdAndAccountQuery.CONTACT_ID);
-                accountType = cursor.getString(RawContactIdAndAccountQuery.ACCOUNT_TYPE);
-                accountName = cursor.getString(RawContactIdAndAccountQuery.ACCOUNT_NAME);
-                dataSet = cursor.getString(RawContactIdAndAccountQuery.DATA_SET);
+                accountId = cursor.getLong(RawContactIdAndAccountQuery.ACCOUNT_ID);
             }
         } finally {
             cursor.close();
         }
 
-        aggregateContact(txContext, db, rawContactId, accountType, accountName, dataSet, contactId,
+        aggregateContact(txContext, db, rawContactId, accountId, contactId,
                 candidates, matcher);
     }
 
@@ -644,8 +632,8 @@ public class ContactAggregator {
      * with the highest match score.  If no such contact is found, creates a new contact.
      */
     private synchronized void aggregateContact(TransactionContext txContext, SQLiteDatabase db,
-            long rawContactId, String accountType, String accountName, String dataSet,
-            long currentContactId, MatchCandidateList candidates, ContactMatcher matcher) {
+            long rawContactId, long accountId, long currentContactId, MatchCandidateList candidates,
+            ContactMatcher matcher) {
 
         int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
 
@@ -675,8 +663,7 @@ public class ContactAggregator {
                 // the same account, not only will we not join it, but also we will split
                 // that other aggregate
                 if (contactId != -1 && contactId != currentContactId &&
-                        containsRawContactsFromAccount(db, contactId, accountType, accountName,
-                                dataSet)) {
+                        containsRawContactsFromAccount(db, contactId, accountId)) {
                     contactIdToSplit = contactId;
                     contactId = -1;
                 }
@@ -739,41 +726,13 @@ public class ContactAggregator {
      * Returns true if the aggregate contains has any raw contacts from the specified account.
      */
     private boolean containsRawContactsFromAccount(
-            SQLiteDatabase db, long contactId, String accountType, String accountName,
-            String dataSet) {
-        String query;
-        String[] args;
-        if (accountType == null) {
-            query = "SELECT count(_id) FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                    " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL " +
-                    " AND " + RawContacts.ACCOUNT_NAME + " IS NULL " +
-                    " AND " + RawContacts.DATA_SET + " IS NULL";
-            args = mSelectionArgs1;
-            args[0] = String.valueOf(contactId);
-        } else if (dataSet == null) {
-            query = "SELECT count(_id) FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                    " AND " + RawContacts.ACCOUNT_TYPE + "=?" +
-                    " AND " + RawContacts.ACCOUNT_NAME + "=?" +
-                    " AND " + RawContacts.DATA_SET + " IS NULL";
-            args = mSelectionArgs3;
-            args[0] = String.valueOf(contactId);
-            args[1] = accountType;
-            args[2] = accountName;
-        } else {
-            query = "SELECT count(_id) FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContacts.CONTACT_ID + "=?" +
-                    " AND " + RawContacts.ACCOUNT_TYPE + "=?" +
-                    " AND " + RawContacts.ACCOUNT_NAME + "=?" +
-                    " AND " + RawContacts.DATA_SET + "=?";
-            args = mSelectionArgs4;
-            args[0] = String.valueOf(contactId);
-            args[1] = accountType;
-            args[2] = accountName;
-            args[3] = dataSet;
-        }
-        Cursor cursor = db.rawQuery(query, args);
+            SQLiteDatabase db, long contactId, long accountId) {
+        final String query = "SELECT count(_id) FROM " + Tables.RAW_CONTACTS +
+                " WHERE " + RawContacts.CONTACT_ID + "=?" +
+                " AND " + RawContactsColumns.ACCOUNT_ID + "=?";
+        Cursor cursor = db.rawQuery(query, new String[] {
+                Long.toString(contactId), Long.toString(accountId)
+                });
         try {
             cursor.moveToFirst();
             return cursor.getInt(0) != 0;
@@ -1540,9 +1499,9 @@ public class ContactAggregator {
                         + RawContactsColumns.CONCRETE_ID + ","
                         + RawContactsColumns.DISPLAY_NAME + ","
                         + RawContactsColumns.DISPLAY_NAME_SOURCE + ","
-                        + RawContacts.ACCOUNT_TYPE + ","
-                        + RawContacts.ACCOUNT_NAME + ","
-                        + RawContacts.DATA_SET + ","
+                        + AccountsColumns.CONCRETE_ACCOUNT_TYPE + ","
+                        + AccountsColumns.CONCRETE_ACCOUNT_NAME + ","
+                        + AccountsColumns.CONCRETE_DATA_SET + ","
                         + RawContacts.SOURCE_ID + ","
                         + RawContacts.CUSTOM_RINGTONE + ","
                         + RawContacts.SEND_TO_VOICEMAIL + ","
@@ -1555,6 +1514,9 @@ public class ContactAggregator {
                         + Data.IS_SUPER_PRIMARY + ","
                         + Photo.PHOTO_FILE_ID +
                 " FROM " + Tables.RAW_CONTACTS +
+                " JOIN " + Tables.ACCOUNTS + " ON ("
+                    + AccountsColumns.CONCRETE_ID + "=" + RawContactsColumns.CONCRETE_ACCOUNT_ID
+                    + ")" +
                 " LEFT OUTER JOIN " + Tables.DATA +
                 " ON (" + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
                         + " AND ((" + DataColumns.MIMETYPE_ID + "=%d"
@@ -1848,7 +1810,7 @@ public class ContactAggregator {
 
     private interface PhotoIdQuery {
         final String[] COLUMNS = new String[] {
-            RawContacts.ACCOUNT_TYPE,
+            AccountsColumns.CONCRETE_ACCOUNT_TYPE,
             DataColumns.CONCRETE_ID,
             Data.IS_SUPER_PRIMARY,
             Photo.PHOTO_FILE_ID,
@@ -1873,7 +1835,11 @@ public class ContactAggregator {
 
         long photoMimeType = mDbHelper.getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
 
-        String tables = Tables.RAW_CONTACTS + " JOIN " + Tables.DATA + " ON("
+        String tables = Tables.RAW_CONTACTS
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                    + AccountsColumns.CONCRETE_ID + "=" + RawContactsColumns.CONCRETE_ACCOUNT_ID
+                    + ")"
+                + " JOIN " + Tables.DATA + " ON("
                 + DataColumns.CONCRETE_RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID
                 + " AND (" + DataColumns.MIMETYPE_ID + "=" + photoMimeType + " AND "
                         + Photo.PHOTO + " NOT NULL))";
@@ -2082,6 +2048,7 @@ public class ContactAggregator {
     }
 
     private interface LookupKeyQuery {
+        String TABLE = Views.RAW_CONTACTS;
         String[] COLUMNS = new String[] {
             RawContacts._ID,
             RawContactsColumns.DISPLAY_NAME,
@@ -2122,7 +2089,7 @@ public class ContactAggregator {
     protected String computeLookupKeyForContact(SQLiteDatabase db, long contactId) {
         StringBuilder sb = new StringBuilder();
         mSelectionArgs1[0] = String.valueOf(contactId);
-        final Cursor c = db.query(Views.RAW_CONTACTS, LookupKeyQuery.COLUMNS,
+        final Cursor c = db.query(LookupKeyQuery.TABLE, LookupKeyQuery.COLUMNS,
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, RawContacts._ID);
         try {
             while (c.moveToNext()) {

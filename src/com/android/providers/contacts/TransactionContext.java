@@ -32,7 +32,8 @@ import java.util.Set;
 public class TransactionContext  {
 
     private final boolean mForProfile;
-    private HashMap<Long, AccountWithDataSet> mInsertedRawContacts = Maps.newHashMap();
+    /** Map from raw contact id to account Id */
+    private HashMap<Long, Long> mInsertedRawContactsAccounts = Maps.newHashMap();
     private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
     private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
     private HashSet<Long> mStaleSearchIndexRawContacts = Sets.newHashSet();
@@ -47,8 +48,8 @@ public class TransactionContext  {
         return mForProfile;
     }
 
-    public void rawContactInserted(long rawContactId, AccountWithDataSet accountWithDataSet) {
-        mInsertedRawContacts.put(rawContactId, accountWithDataSet);
+    public void rawContactInserted(long rawContactId, long accountId) {
+        mInsertedRawContactsAccounts.put(rawContactId, accountId);
     }
 
     public void rawContactUpdated(long rawContactId) {
@@ -72,7 +73,7 @@ public class TransactionContext  {
     }
 
     public Set<Long> getInsertedRawContactIds() {
-        return mInsertedRawContacts.keySet();
+        return mInsertedRawContactsAccounts.keySet();
     }
 
     public Set<Long> getUpdatedRawContactIds() {
@@ -95,16 +96,16 @@ public class TransactionContext  {
         return mUpdatedSyncStates.entrySet();
     }
 
-    public AccountWithDataSet getAccountWithDataSetForRawContact(long rawContactId) {
-        return mInsertedRawContacts.get(rawContactId);
+    public Long getAccountIdOrNullForRawContact(long rawContactId) {
+        return mInsertedRawContactsAccounts.get(rawContactId);
     }
 
     public boolean isNewRawContact(long rawContactId) {
-        return mInsertedRawContacts.containsKey(rawContactId);
+        return mInsertedRawContactsAccounts.containsKey(rawContactId);
     }
 
     public void clear() {
-        mInsertedRawContacts.clear();
+        mInsertedRawContactsAccounts.clear();
         mUpdatedRawContacts.clear();
         mUpdatedSyncStates.clear();
         mDirtyRawContacts.clear();

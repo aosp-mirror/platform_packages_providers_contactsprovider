@@ -15,6 +15,7 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ExtensionsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
@@ -118,7 +119,9 @@ public class LegacyApiSupport {
     private static final int SETTINGS = 44;
 
     private static final String PEOPLE_JOINS =
-            " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
+            " JOIN " + Tables.ACCOUNTS + " ON ("
+                + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID + ")"
+            + " LEFT OUTER JOIN data name ON (raw_contacts._id = name.raw_contact_id"
             + " AND (SELECT mimetype FROM mimetypes WHERE mimetypes._id = name.mimetype_id)"
                     + "='" + StructuredName.CONTENT_ITEM_TYPE + "')"
             + " LEFT OUTER JOIN data organization ON (raw_contacts._id = organization.raw_contact_id"
@@ -508,9 +511,9 @@ public class LegacyApiSupport {
     private boolean mDefaultAccountKnown;
     private Account mAccount;
 
-    private long mMimetypeEmail;
-    private long mMimetypeIm;
-    private long mMimetypePostal;
+    private final long mMimetypeEmail;
+    private final long mMimetypeIm;
+    private final long mMimetypePostal;
 
 
     public LegacyApiSupport(Context context, ContactsDatabaseHelper contactsDatabaseHelper,
@@ -563,8 +566,8 @@ public class LegacyApiSupport {
                         + " AS " + People.PHONETIC_NAME + " , " +
                 "note." + Note.NOTE
                         + " AS " + People.NOTES + ", " +
-                RawContacts.ACCOUNT_NAME + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED
                         + " AS " + People.TIMES_CONTACTED + ", " +
                 Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
@@ -606,8 +609,8 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.Organizations.PERSON_ID + ", " +
                 Data.IS_PRIMARY
                         + " AS " + android.provider.Contacts.Organizations.ISPRIMARY + ", " +
-                RawContacts.ACCOUNT_NAME + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 Organization.COMPANY
                         + " AS " + android.provider.Contacts.Organizations.COMPANY + ", " +
                 Organization.TYPE
@@ -680,8 +683,8 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.Extensions._ID + ", " +
                 DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.Extensions.PERSON_ID + ", " +
-                RawContacts.ACCOUNT_NAME + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 ExtensionsColumns.NAME
                         + " AS " + android.provider.Contacts.Extensions.NAME + ", " +
                 ExtensionsColumns.VALUE
@@ -695,12 +698,14 @@ public class LegacyApiSupport {
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.GROUPS + ";");
         db.execSQL("CREATE VIEW " + LegacyTables.GROUPS + " AS SELECT " +
                 GroupsColumns.CONCRETE_ID + " AS " + android.provider.Contacts.Groups._ID + ", " +
-                Groups.ACCOUNT_NAME + ", " +
-                Groups.ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 Groups.TITLE + " AS " + android.provider.Contacts.Groups.NAME + ", " +
                 Groups.NOTES + " AS " + android.provider.Contacts.Groups.NOTES + " , " +
                 Groups.SYSTEM_ID + " AS " + android.provider.Contacts.Groups.SYSTEM_ID +
                 " FROM " + Tables.GROUPS +
+                " JOIN " + Tables.ACCOUNTS + " ON (" +
+                GroupsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID + ")" +
         ";");
 
         db.execSQL("DROP VIEW IF EXISTS " + LegacyTables.GROUP_MEMBERSHIP + ";");
@@ -709,10 +714,8 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.GroupMembership._ID + ", " +
                 DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.GroupMembership.PERSON_ID + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_NAME
-                        + " AS " +  RawContacts.ACCOUNT_NAME + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.ACCOUNT_TYPE
-                        + " AS " +  RawContacts.ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 GroupMembership.GROUP_ROW_ID
                         + " AS " + android.provider.Contacts.GroupMembership.GROUP_ID + ", " +
                 Groups.TITLE
@@ -724,10 +727,10 @@ public class LegacyApiSupport {
                 GroupsColumns.CONCRETE_SOURCE_ID
                         + " AS "
                         + android.provider.Contacts.GroupMembership.GROUP_SYNC_ID + ", " +
-                GroupsColumns.CONCRETE_ACCOUNT_NAME
+                AccountsColumns.CONCRETE_ACCOUNT_NAME
                         + " AS "
                         + android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT + ", " +
-                GroupsColumns.CONCRETE_ACCOUNT_TYPE
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE
                         + " AS "
                         + android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT_TYPE +
                 " FROM " + Tables.DATA_JOIN_PACKAGES_MIMETYPES_RAW_CONTACTS_GROUPS +
@@ -742,8 +745,8 @@ public class LegacyApiSupport {
                         + " AS " + android.provider.Contacts.Photos._ID + ", " +
                 DataColumns.CONCRETE_RAW_CONTACT_ID
                         + " AS " + android.provider.Contacts.Photos.PERSON_ID + ", " +
-                RawContacts.ACCOUNT_NAME + ", " +
-                RawContacts.ACCOUNT_TYPE + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
+                AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
                 Tables.DATA + "." + Photo.PHOTO
                         + " AS " + android.provider.Contacts.Photos.DATA + ", " +
                 "legacy_photo." + LegacyPhotoData.EXISTS_ON_SERVER

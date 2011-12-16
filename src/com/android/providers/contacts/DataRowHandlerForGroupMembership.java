@@ -15,10 +15,11 @@
  */
 package com.android.providers.contacts;
 
-import com.android.internal.util.Objects;
 import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Projections;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsProvider2.GroupIdCacheEntry;
 
@@ -30,7 +31,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
-import android.text.TextUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,15 +45,11 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
 
         String[] COLUMNS = new String[] {
                 RawContacts.DELETED,
-                RawContacts.ACCOUNT_TYPE,
-                RawContacts.ACCOUNT_NAME,
-                RawContacts.DATA_SET,
+                RawContactsColumns.ACCOUNT_ID,
         };
 
         int DELETED = 0;
-        int ACCOUNT_TYPE = 1;
-        int ACCOUNT_NAME = 2;
-        int DATA_SET = 3;
+        int ACCOUNT_ID = 1;
     }
 
     private static final String SELECTION_RAW_CONTACT_ID = RawContacts._ID + "=?";
@@ -170,7 +166,7 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         if (containsGroupSourceId) {
             final String sourceId = values.getAsString(GroupMembership.GROUP_SOURCE_ID);
             final long groupId = getOrMakeGroup(db, rawContactId, sourceId,
-                    txContext.getAccountWithDataSetForRawContact(rawContactId));
+                    txContext.getAccountIdOrNullForRawContact(rawContactId));
             values.remove(GroupMembership.GROUP_SOURCE_ID);
             values.put(GroupMembership.GROUP_ROW_ID, groupId);
         }
@@ -178,41 +174,37 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
 
     /**
      * Returns the group id of the group with sourceId and the same account as rawContactId.
-     * If the group doesn't already exist then it is first created,
+     * If the group doesn't already exist then it is first created.
+     *
      * @param db SQLiteDatabase to use for this operation
-     * @param rawContactId the contact this group is associated with
-     * @param sourceId the sourceIf of the group to query or create
+     * @param rawContactId the raw contact this group is associated with
+     * @param sourceId the source ID of the group to query or create
+     * @param accountIdOrNull the account ID for the raw contact.  If null it'll be queried from
+     *    the raw_contacts table.
      * @return the group id of the existing or created group
      * @throws IllegalArgumentException if the contact is not associated with an account
      * @throws IllegalStateException if a group needs to be created but the creation failed
      */
     private long getOrMakeGroup(SQLiteDatabase db, long rawContactId, String sourceId,
-            AccountWithDataSet accountWithDataSet) {
+            Long accountIdOrNull) {
 
-        if (accountWithDataSet == null) {
+        if (accountIdOrNull == null) {
             mSelectionArgs1[0] = String.valueOf(rawContactId);
             Cursor c = db.query(RawContactsQuery.TABLE, RawContactsQuery.COLUMNS,
-                    RawContacts._ID + "=?", mSelectionArgs1, null, null, null);
+                    RawContactsColumns.CONCRETE_ID + "=?", mSelectionArgs1, null, null, null);
             try {
                 if (c.moveToFirst()) {
-                    String accountName = c.getString(RawContactsQuery.ACCOUNT_NAME);
-                    String accountType = c.getString(RawContactsQuery.ACCOUNT_TYPE);
-                    String dataSet = c.getString(RawContactsQuery.DATA_SET);
-                    if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                        accountWithDataSet = new AccountWithDataSet(
-                                accountName, accountType, dataSet);
-                    }
+                    accountIdOrNull = c.getLong(RawContactsQuery.ACCOUNT_ID);
                 }
             } finally {
                 c.close();
             }
         }
 
-        if (accountWithDataSet == null) {
-            throw new IllegalArgumentException("if the groupmembership only "
-                    + "has a sourceid the the contact must be associated with "
-                    + "an account");
+        if (accountIdOrNull == null) {
+            throw new IllegalArgumentException("Raw contact not found for _ID=" + rawContactId);
         }
+        final long accountId = accountIdOrNull;
 
         ArrayList<GroupIdCacheEntry> entries = mGroupIdCache.get(sourceId);
         if (entries == null) {
@@ -223,51 +215,30 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
         int count = entries.size();
         for (int i = 0; i < count; i++) {
             GroupIdCacheEntry entry = entries.get(i);
-            if (entry.accountName.equals(accountWithDataSet.getAccountName())
-                    && entry.accountType.equals(accountWithDataSet.getAccountType())
-                    && Objects.equal(entry.dataSet, accountWithDataSet.getDataSet())) {
+            if (entry.accountId == accountId) {
                 return entry.groupId;
             }
         }
 
         GroupIdCacheEntry entry = new GroupIdCacheEntry();
-        entry.accountName = accountWithDataSet.getAccountName();
-        entry.accountType = accountWithDataSet.getAccountType();
-        entry.dataSet = accountWithDataSet.getDataSet();
+        entry.accountId = accountId;
         entry.sourceId = sourceId;
         entries.add(0, entry);
 
-        // look up the group that contains this sourceId and has the same account name, type, and
-        // data set as the contact refered to by rawContactId
-        Cursor c;
-        if (accountWithDataSet.getDataSet() == null) {
-            c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
+        // look up the group that contains this sourceId and has the same account as the contact
+        // referred to by rawContactId
+        Cursor c = db.query(Tables.GROUPS, Projections.ID,
                 Clauses.GROUP_HAS_ACCOUNT_AND_SOURCE_ID,
-                new String[]{
-                        sourceId,
-                        accountWithDataSet.getAccountName(),
-                        accountWithDataSet.getAccountType()
-                }, null, null, null);
-        } else {
-            c = db.query(Tables.GROUPS, new String[]{RawContacts._ID},
-                Clauses.GROUP_HAS_ACCOUNT_AND_DATA_SET_AND_SOURCE_ID,
-                new String[]{
-                        sourceId,
-                        accountWithDataSet.getAccountName(),
-                        accountWithDataSet.getAccountType(),
-                        accountWithDataSet.getDataSet()
-                }, null, null, null);
-        }
+                new String[]{sourceId, Long.toString(accountId)}, null, null, null);
+
         try {
             if (c.moveToFirst()) {
                 entry.groupId = c.getLong(0);
             } else {
                 ContentValues groupValues = new ContentValues();
-                groupValues.put(Groups.ACCOUNT_NAME, accountWithDataSet.getAccountName());
-                groupValues.put(Groups.ACCOUNT_TYPE, accountWithDataSet.getAccountType());
-                groupValues.put(Groups.DATA_SET, accountWithDataSet.getDataSet());
+                groupValues.put(GroupsColumns.ACCOUNT_ID, accountId);
                 groupValues.put(Groups.SOURCE_ID, sourceId);
-                long groupId = db.insert(Tables.GROUPS, Groups.ACCOUNT_NAME, groupValues);
+                long groupId = db.insert(Tables.GROUPS, null, groupValues);
                 if (groupId < 0) {
                     throw new IllegalStateException("unable to create a new group with "
                             + "this sourceid: " + groupValues);

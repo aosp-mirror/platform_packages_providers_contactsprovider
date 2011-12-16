@@ -18,10 +18,14 @@ package com.android.providers.contacts;
 
 import com.android.internal.util.Objects;
 
+import android.accounts.Account;
+
 /**
  * Account information that includes the data set, if any.
  */
 public class AccountWithDataSet {
+    public static final AccountWithDataSet LOCAL = new AccountWithDataSet(null, null, null);
+
     private final String mAccountName;
     private final String mAccountType;
     private final String mDataSet;
@@ -30,6 +34,14 @@ public class AccountWithDataSet {
         mAccountName = accountName;
         mAccountType = accountType;
         mDataSet = dataSet;
+    }
+
+    public static AccountWithDataSet get(String accountName, String accountType, String dataSet) {
+        return new AccountWithDataSet(accountName, accountType, dataSet);
+    }
+
+    public static AccountWithDataSet get(Account account, String dataSet) {
+        return new AccountWithDataSet(account.name, account.type, null);
     }
 
     public String getAccountName() {
@@ -42,6 +54,10 @@ public class AccountWithDataSet {
 
     public String getDataSet() {
         return mDataSet;
+    }
+
+    public boolean isLocalAccount() {
+        return (mAccountName == null) && (mAccountType == null);
     }
 
     @Override
@@ -67,5 +83,21 @@ public class AccountWithDataSet {
     public String toString() {
         return "AccountWithDataSet {name=" + mAccountName + ", type=" + mAccountType + ", dataSet="
                 + mDataSet + "}";
+    }
+
+    /**
+     * @return {@code true} if the owning {@link Account} is in the passed array.
+     */
+    public boolean inSystemAccounts(Account[] systemAccounts) {
+        // Note we don't want to create a new Account object from this instance, as it may contain
+        // null account name/type, which Account wouldn't accept.  So we need to compare field by
+        // field.
+        for (Account systemAccount : systemAccounts) {
+            if (Objects.equal(systemAccount.name, getAccountName())
+                    && Objects.equal(systemAccount.type, getAccountType())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
