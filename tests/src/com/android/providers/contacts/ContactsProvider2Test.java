@@ -1126,6 +1126,70 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, getCount(lookupUri2, null, null));
     }
 
+    public void testIntlPhoneLookupUseCases() {
+        // Checks the logic that relies on using the trailing 7-digits as a fallback for phone
+        // number lookups.
+        String fullNumber = "01197297427289";
+
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        long rawContactId = ContentUris.parseId(mResolver.insert(RawContacts.CONTENT_URI, values));
+        insertStructuredName(rawContactId, "Senor", "Chang");
+        insertPhoneNumber(rawContactId, fullNumber);
+
+        // Full number should definitely match.
+        assertEquals(2, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, fullNumber), null, null));
+
+        // Shorter (local) number with 0 prefix should also match.
+        assertEquals(2, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "097427289"), null, null));
+
+        // Shorter (local) number with +0 prefix should also match.
+        assertEquals(2, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "+097427289"), null, null));
+
+        // Same shorter number with dashes should match.
+        assertEquals(2, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "09-742-7289"), null, null));
+
+        // Same shorter number with spaces should match.
+        assertEquals(2, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "09 742 7289"), null, null));
+
+        // Some other number should not match.
+        assertEquals(0, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "049102395"), null, null));
+    }
+
+    public void testPhoneLookupB5252190() {
+        // Test cases from b/5252190
+        String storedNumber = "796010101";
+
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.CUSTOM_RINGTONE, "d");
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        long rawContactId = ContentUris.parseId(mResolver.insert(RawContacts.CONTENT_URI, values));
+        insertStructuredName(rawContactId, "Senor", "Chang");
+        insertPhoneNumber(rawContactId, storedNumber);
+
+        assertEquals(1, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "0796010101"), null, null));
+
+        assertEquals(1, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "+48796010101"), null, null));
+
+        assertEquals(1, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "48796010101"), null, null));
+
+        assertEquals(1, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "4-879-601-0101"), null, null));
+
+        assertEquals(1, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "4 879 601 0101"), null, null));
+    }
+
     public void testPhoneUpdate() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
