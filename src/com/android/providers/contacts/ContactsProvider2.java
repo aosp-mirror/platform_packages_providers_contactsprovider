@@ -5770,6 +5770,30 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     mDbHelper.get().buildPhoneLookupAndContactQuery(
                             qb, normalizedNumber, numberE164);
                     qb.setProjectionMap(sPhoneLookupProjectionMap);
+
+                    // Peek at the results of the first query (which attempts to use fully
+                    // normalized and internationalized numbers for comparison).  If no results
+                    // were returned, fall back to doing a match of the trailing 7 digits.
+                    qb.setStrict(true);
+                    boolean foundResult = false;
+                    Cursor cursor = query(mActiveDb.get(), qb, projection, selection, selectionArgs,
+                            sortOrder, groupBy, limit);
+                    try {
+                        if (cursor.getCount() > 0) {
+                            foundResult = true;
+                            return cursor;
+                        } else {
+                            qb = new SQLiteQueryBuilder();
+                            mDbHelper.get().buildMinimalPhoneLookupAndContactQuery(
+                                    qb, normalizedNumber);
+                            qb.setProjectionMap(sPhoneLookupProjectionMap);
+                        }
+                    } finally {
+                        if (!foundResult) {
+                            // We'll be returning a different cursor, so close this one.
+                            cursor.close();
+                        }
+                    }
                 }
                 break;
             }

@@ -4146,6 +4146,24 @@ import java.util.Locale;
     }
 
     /**
+     * As opposed to {@link #buildPhoneLookupAndContactQuery}, this phone lookup will only do
+     * a comparison based on the last seven digits of the given phone number.  This is only intended
+     * to be used as a fallback, in case the regular lookup does not return any results.
+     * @param qb The query builder.
+     * @param number The phone number to search for.
+     */
+    public void buildMinimalPhoneLookupAndContactQuery(SQLiteQueryBuilder qb, String number) {
+        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
+        StringBuilder sb = new StringBuilder();
+        appendPhoneLookupTables(sb, minMatch, true);
+        qb.setTables(sb.toString());
+
+        sb = new StringBuilder();
+        appendPhoneLookupSelection(sb, null, null);
+        qb.appendWhere(sb.toString());
+    }
+
+    /**
      * Adds query for selecting the contact with the given {@code sipAddress} to the given
      * {@link StringBuilder}.
      *

@@ -57,6 +57,7 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
@@ -1021,12 +1022,20 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     protected void assertCursorValues(Cursor cursor, ContentValues[] expectedValues) {
         StringBuilder message = new StringBuilder();
+
+        // In case if expectedValues contains multiple identical values, remember which cursor
+        // rows are "consumed" to prevent multiple ContentValues from hitting the same row.
+        final BitSet used = new BitSet(cursor.getCount());
+
         for (ContentValues v : expectedValues) {
             boolean found = false;
             cursor.moveToPosition(-1);
             while (cursor.moveToNext()) {
+                final int pos = cursor.getPosition();
+                if (used.get(pos)) continue;
                 found = equalsWithExpectedValues(cursor, v, message);
                 if (found) {
+                    used.set(pos);
                     break;
                 }
             }
