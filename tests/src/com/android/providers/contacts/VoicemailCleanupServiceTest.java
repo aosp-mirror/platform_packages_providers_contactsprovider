@@ -23,10 +23,12 @@ import android.net.Uri;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
+import android.test.suitebuilder.annotation.SmallTest;
 
 /**
  * Unit tests for {@link VoicemailCleanupService}.
  */
+@SmallTest
 public class VoicemailCleanupServiceTest extends BaseVoicemailProviderTest {
     private static final String TEST_PACKAGE_1 = "package1";
     private static final String TEST_PACKAGE_2 = "package2";

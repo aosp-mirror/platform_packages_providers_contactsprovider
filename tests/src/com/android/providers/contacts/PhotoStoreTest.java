@@ -23,7 +23,6 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.PhotoFiles;
-import android.test.mock.MockContentResolver;
 import android.test.suitebuilder.annotation.LargeTest;
 
 import java.io.File;

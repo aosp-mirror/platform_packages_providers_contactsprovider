@@ -28,6 +28,7 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
+import android.test.suitebuilder.annotation.SmallTest;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -45,6 +46,7 @@ import java.util.List;
  * </code>
  */
 // TODO: Test that calltype and voicemail_uri are auto populated by the provider.
+@SmallTest
 public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     /** Fields specific to call_log provider that should not be exposed by voicemail provider. */
     private static final String[] CALLLOG_PROVIDER_SPECIFIC_COLUMNS = {

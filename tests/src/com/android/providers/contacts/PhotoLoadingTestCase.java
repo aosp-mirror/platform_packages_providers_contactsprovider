@@ -20,6 +20,7 @@ import com.google.android.collect.Maps;
 
 import android.content.res.Resources;
 import android.test.AndroidTestCase;
+import android.test.suitebuilder.annotation.SmallTest;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,6 +30,7 @@ import java.util.Map;
 /**
  * Adds support for loading photo files easily from test resources.
  */
+@SmallTest
 public class PhotoLoadingTestCase extends AndroidTestCase {
 
     private Map<Integer, PhotoEntry> photoResourceCache = Maps.newHashMap();
