@@ -80,7 +80,6 @@ import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -689,6 +688,16 @@ import java.util.concurrent.ConcurrentHashMap;
         String[] LITERAL_ONE = new String[] {"1"};
     }
 
+    /**
+     * Property names for {@link ContactsDatabaseHelper#getProperty} and
+     * {@link ContactsDatabaseHelper#setProperty}.
+     */
+    public interface DbProperties {
+        String DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
+        String AGGREGATION_ALGORITHM = "aggregation_v2";
+        String KNOWN_ACCOUNTS = "known_accounts";
+    }
+
     /** In-memory cache of previously found MIME-type mappings */
     // TODO Use ConcurrentHashMap?
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
@@ -803,7 +812,7 @@ import java.util.concurrent.ConcurrentHashMap;
     private void initializeCache(SQLiteDatabase db) {
         mMimetypeCache.clear();
         mPackageCache.clear();
-        mAccountCache.clear();
+        refreshAccountCache(db);
 
         // TODO: This could be optimized into one query instead of 7
         //        Also: We shouldn't have those fields in the first place. This should just be
@@ -1361,7 +1370,7 @@ import java.util.concurrent.ConcurrentHashMap;
         ");");
 
         // Trigger a full scan of directories in the system
-        setProperty(db, ContactDirectoryManager.PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+        setProperty(db, DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
     }
 
     public void createSearchIndexTable(SQLiteDatabase db) {
@@ -4118,76 +4127,51 @@ import java.util.concurrent.ConcurrentHashMap;
         }
     }
 
-    /**
-     * Gets all accounts in the accounts table.
-     */
-    public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
-        Set<AccountWithDataSet> accountsWithDataSets = new HashSet<AccountWithDataSet>();
-        Cursor c = getWritableDatabase().rawQuery(
-                "SELECT DISTINCT " + AccountsColumns.ACCOUNT_NAME +
+    /** Refresh {@link #mAccountCache}. */
+    public void refreshAccountCache() {
+        refreshAccountCache(getReadableDatabase());
+    }
+
+    /** Refresh {@link #mAccountCache}. */
+    private void refreshAccountCache(SQLiteDatabase db) {
+        mAccountCache.clear();
+        Cursor c = db.rawQuery(
+                "SELECT DISTINCT " +  AccountsColumns._ID + "," + AccountsColumns.ACCOUNT_NAME +
                 "," + AccountsColumns.ACCOUNT_TYPE + "," + AccountsColumns.DATA_SET +
                 " FROM " + Tables.ACCOUNTS, null);
         try {
             while (c.moveToNext()) {
-                accountsWithDataSets.add(
-                        AccountWithDataSet.get(c.getString(0), c.getString(1), c.getString(2)));
+                mAccountCache.put(
+                        AccountWithDataSet.get(c.getString(1), c.getString(2), c.getString(3)),
+                        c.getLong(0));
             }
         } finally {
             c.close();
         }
-        return accountsWithDataSets;
     }
 
     /**
-     * @return ID of the specified account, looking up on the Account2 table.  Unlike
-     * {@link #getPackageId(String)} and {@link #getMimeTypeId(String)} it won't create a record
-     * even if it doesn't exist; just returns null instead.
-     *
-     * Intended to be used in read operations, as opposed to
-     * {@link #getOrCreateAccountIdInTransaction} and {@link #invalidateAccountCacheInTransaction},
-     * which should only be used in a transaction, so there's no need for synchronization.
+     * Gets all accounts in the accounts table.
+     */
+    public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
+        return mAccountCache.keySet();
+    }
+
+    /**
+     * @return ID of the specified account, or null if the account doesn't exist.
      */
     public Long getAccountIdOrNull(AccountWithDataSet accountWithDataSet) {
         if (accountWithDataSet == null) {
             accountWithDataSet = AccountWithDataSet.LOCAL;
         }
-        Long id = mAccountCache.get(accountWithDataSet);
-
-        if (id != null) return id;
-
-        final SQLiteStatement select = getWritableDatabase().compileStatement(
-              "SELECT " + AccountsColumns._ID +
-              " FROM " + Tables.ACCOUNTS +
-              " WHERE " +
-              "((?1 IS NULL AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL) OR " +
-                      "(" + AccountsColumns.ACCOUNT_NAME + "=?1)) AND " +
-              "((?2 IS NULL AND " + AccountsColumns.ACCOUNT_TYPE + " IS NULL) OR " +
-                      "(" + AccountsColumns.ACCOUNT_TYPE + "=?2)) AND " +
-              "((?3 IS NULL AND " + AccountsColumns.DATA_SET + " IS NULL) OR " +
-                      "(" + AccountsColumns.DATA_SET + "=?3))");
-        try {
-            DatabaseUtils.bindObjectToProgram(select, 1, accountWithDataSet.getAccountName());
-            DatabaseUtils.bindObjectToProgram(select, 2, accountWithDataSet.getAccountType());
-            DatabaseUtils.bindObjectToProgram(select, 3, accountWithDataSet.getDataSet());
-            try {
-                id = select.simpleQueryForLong();
-                mAccountCache.put(accountWithDataSet, id);
-                return id;
-            } catch (SQLiteDoneException notFound) {
-                return null;
-            }
-        } finally {
-            select.close();
-        }
+        return mAccountCache.get(accountWithDataSet);
     }
 
     /**
-     * @return ID of the specified account.  This method will create a record if the account doesn't
-     *     exist in the accounts table.
+     * @return ID of the specified account.  This method will create a record in the accounts table
+     *     if the account doesn't exist in the accounts table.
      *
      * This must be used in a transaction, so there's no need for synchronization.
-     *
-     * TODO Pre-init the cache in {@link #initializeCache} and remove the lazy-lookup?
      */
     public long getOrCreateAccountIdInTransaction(AccountWithDataSet accountWithDataSet) {
         if (accountWithDataSet == null) {
@@ -4214,15 +4198,6 @@ import java.util.concurrent.ConcurrentHashMap;
         mAccountCache.put(accountWithDataSet, id);
 
         return id;
-    }
-
-    /**
-     * Clear the account cache.
-     *
-     * This must be used in a transaction, so there's no need for synchronization.
-     */
-    public void invalidateAccountCacheInTransaction() {
-        mAccountCache.clear();
     }
 
     /**

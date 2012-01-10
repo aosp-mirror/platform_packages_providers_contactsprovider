@@ -87,13 +87,14 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         assertEquals(a1id, mDbHelper.getOrCreateAccountIdInTransaction(AccountWithDataSet.LOCAL));
         assertEquals((Long) a1id, mDbHelper.getAccountIdOrNull(AccountWithDataSet.LOCAL));
 
-        // Clear the table, but until we invalidate the cache getAccountIdOrNull() keeps returning
+        // Clear the table, but until we refresh the cache getAccountIdOrNull() keeps returning
         // cached values.
         mDbHelper.getWritableDatabase().execSQL("delete from " + Tables.ACCOUNTS);
         assertEquals((Long) a1id, mDbHelper.getAccountIdOrNull(AccountWithDataSet.LOCAL));
 
-        // invalidateAccountCacheInTransaction() clears the cache.
-        mDbHelper.invalidateAccountCacheInTransaction();
+        // refreshAccountCache() clears the cache.
+        mDbHelper.refreshAccountCache();
+
         assertNull(mDbHelper.getAccountIdOrNull(AccountWithDataSet.LOCAL));
         assertNull(mDbHelper.getAccountIdOrNull(a1));
         assertNull(mDbHelper.getAccountIdOrNull(a2));

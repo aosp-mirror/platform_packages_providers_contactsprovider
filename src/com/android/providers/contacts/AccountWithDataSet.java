@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import com.android.internal.util.Objects;
 
 import android.accounts.Account;
+import android.text.TextUtils;
 
 /**
  * Account information that includes the data set, if any.
@@ -31,9 +32,13 @@ public class AccountWithDataSet {
     private final String mDataSet;
 
     public AccountWithDataSet(String accountName, String accountType, String dataSet) {
-        mAccountName = accountName;
-        mAccountType = accountType;
-        mDataSet = dataSet;
+        mAccountName = emptyToNull(accountName);
+        mAccountType = emptyToNull(accountType);
+        mDataSet = emptyToNull(dataSet);
+    }
+
+    private static final String emptyToNull(String text) {
+        return TextUtils.isEmpty(text) ? null : text;
     }
 
     public static AccountWithDataSet get(String accountName, String accountType, String dataSet) {

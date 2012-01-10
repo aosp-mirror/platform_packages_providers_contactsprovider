@@ -19,9 +19,11 @@ package com.android.providers.contacts;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
+import com.google.android.collect.Sets;
 
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
@@ -80,6 +82,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Unit tests for {@link ContactsProvider2}.
@@ -4521,6 +4524,103 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(deleteWithCorrectAccountUri, null, null);
 
         assertStoredValue(uri, RawContacts.DELETED, "1");
+    }
+
+    /**
+     * Test for {@link ContactsProvider2#stringToAccounts} and
+     * {@link ContactsProvider2#accountsToString}.
+     */
+    public void testAccountsToString() {
+        final Set<Account> EXPECTED_0 = Sets.newHashSet();
+        final Set<Account> EXPECTED_1 = Sets.newHashSet(ACCOUNT_1);
+        final Set<Account> EXPECTED_2 = Sets.newHashSet(ACCOUNT_2);
+        final Set<Account> EXPECTED_1_2 = Sets.newHashSet(ACCOUNT_1, ACCOUNT_2);
+
+        final Set<Account> ACTUAL_0 = Sets.newHashSet();
+        final Set<Account> ACTUAL_1 = Sets.newHashSet(ACCOUNT_1);
+        final Set<Account> ACTUAL_2 = Sets.newHashSet(ACCOUNT_2);
+        final Set<Account> ACTUAL_1_2 = Sets.newHashSet(ACCOUNT_2, ACCOUNT_1);
+
+        assertTrue(EXPECTED_0.equals(accountsToStringToAccounts(ACTUAL_0)));
+        assertFalse(EXPECTED_0.equals(accountsToStringToAccounts(ACTUAL_1)));
+        assertFalse(EXPECTED_0.equals(accountsToStringToAccounts(ACTUAL_2)));
+        assertFalse(EXPECTED_0.equals(accountsToStringToAccounts(ACTUAL_1_2)));
+
+        assertFalse(EXPECTED_1.equals(accountsToStringToAccounts(ACTUAL_0)));
+        assertTrue(EXPECTED_1.equals(accountsToStringToAccounts(ACTUAL_1)));
+        assertFalse(EXPECTED_1.equals(accountsToStringToAccounts(ACTUAL_2)));
+        assertFalse(EXPECTED_1.equals(accountsToStringToAccounts(ACTUAL_1_2)));
+
+        assertFalse(EXPECTED_2.equals(accountsToStringToAccounts(ACTUAL_0)));
+        assertFalse(EXPECTED_2.equals(accountsToStringToAccounts(ACTUAL_1)));
+        assertTrue(EXPECTED_2.equals(accountsToStringToAccounts(ACTUAL_2)));
+        assertFalse(EXPECTED_2.equals(accountsToStringToAccounts(ACTUAL_1_2)));
+
+        assertFalse(EXPECTED_1_2.equals(accountsToStringToAccounts(ACTUAL_0)));
+        assertFalse(EXPECTED_1_2.equals(accountsToStringToAccounts(ACTUAL_1)));
+        assertFalse(EXPECTED_1_2.equals(accountsToStringToAccounts(ACTUAL_2)));
+        assertTrue(EXPECTED_1_2.equals(accountsToStringToAccounts(ACTUAL_1_2)));
+
+        try {
+            ContactsProvider2.stringToAccounts("x");
+            fail("Didn't throw for malformed input");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    private static final Set<Account> accountsToStringToAccounts(Set<Account> accounts) {
+        return ContactsProvider2.stringToAccounts(ContactsProvider2.accountsToString(accounts));
+    }
+
+    /**
+     * Test for {@link ContactsProvider2#haveAccountsChanged} and
+     * {@link ContactsProvider2#saveAccounts}.
+     */
+    public void testHaveAccountsChanged() {
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+
+        final Account[] ACCOUNTS_0 = new Account[] {};
+        final Account[] ACCOUNTS_1 = new Account[] {ACCOUNT_1};
+        final Account[] ACCOUNTS_2 = new Account[] {ACCOUNT_2};
+        final Account[] ACCOUNTS_1_2 = new Account[] {ACCOUNT_1, ACCOUNT_2};
+        final Account[] ACCOUNTS_2_1 = new Account[] {ACCOUNT_2, ACCOUNT_1};
+
+        // Add ACCOUNT_1
+
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_1));
+        cp.saveAccounts(ACCOUNTS_1);
+        assertFalse(cp.haveAccountsChanged(ACCOUNTS_1));
+
+        // Add ACCOUNT_2
+
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_1_2));
+        // (try with reverse order)
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_2_1));
+        cp.saveAccounts(ACCOUNTS_1_2);
+        assertFalse(cp.haveAccountsChanged(ACCOUNTS_1_2));
+        // (try with reverse order)
+        assertFalse(cp.haveAccountsChanged(ACCOUNTS_2_1));
+
+        // Remove ACCOUNT_1
+
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_2));
+        cp.saveAccounts(ACCOUNTS_2);
+        assertFalse(cp.haveAccountsChanged(ACCOUNTS_2));
+
+        // Remove ACCOUNT_2
+
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_0));
+        cp.saveAccounts(ACCOUNTS_0);
+        assertFalse(cp.haveAccountsChanged(ACCOUNTS_0));
+
+        // Test with malformed DB property.
+
+        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
+        dbHelper.setProperty(DbProperties.KNOWN_ACCOUNTS, "x");
+
+        // With malformed property the method always return true.
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_0));
+        assertTrue(cp.haveAccountsChanged(ACCOUNTS_1));
     }
 
     public void testAccountsUpdated() {

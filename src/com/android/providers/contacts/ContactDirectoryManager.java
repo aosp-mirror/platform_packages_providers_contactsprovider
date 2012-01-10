@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.google.android.collect.Lists;
@@ -53,7 +54,6 @@ public class ContactDirectoryManager {
     private static final String TAG = "ContactDirectoryManager";
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
-    public static final String PROPERTY_DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
     public static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
 
     public class DirectoryInfo {
@@ -176,21 +176,21 @@ public class ContactDirectoryManager {
      */
     public void scanAllPackages(boolean rescan) {
         if (rescan || !areTypeResourceIdsValid()) {
-            getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+            getDbHelper().setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
         }
 
         scanAllPackagesIfNeeded();
     }
 
     private void scanAllPackagesIfNeeded() {
-        String scanComplete = getDbHelper().getProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "0");
+        String scanComplete = getDbHelper().getProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
         if (!"0".equals(scanComplete)) {
             return;
         }
 
         long start = SystemClock.currentThreadTimeMillis();
         int count = scanAllPackages();
-        getDbHelper().setProperty(PROPERTY_DIRECTORY_SCAN_COMPLETE, "1");
+        getDbHelper().setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "1");
         long end = SystemClock.currentThreadTimeMillis();
         Log.i(TAG, "Discovered " + count + " contact directories in " + (end - start) + "ms");
 
