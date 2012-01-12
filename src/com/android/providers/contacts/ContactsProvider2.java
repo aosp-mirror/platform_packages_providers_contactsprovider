@@ -28,6 +28,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsStatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
@@ -209,7 +210,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String PREF_LOCALE = "locale";
 
-    private static final String PROPERTY_AGGREGATION_ALGORITHM = "aggregation_v2";
     private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 2;
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
@@ -2436,7 +2436,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } else {
                 values.put(RawContacts.DATA_SET, dataSet);
             }
-            accountWithDataSet = new AccountWithDataSet(account.name, account.type, dataSet);
+            accountWithDataSet = AccountWithDataSet.get(account.name, account.type, dataSet);
         }
         return accountWithDataSet;
     }
@@ -4362,11 +4362,75 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
     }
 
+    private static final String ACCOUNT_STRING_SEPARATOR_OUTER = "\u0001";
+    private static final String ACCOUNT_STRING_SEPARATOR_INNER = "\u0002";
+
+    /** return serialized version of {@code accounts} */
+    @VisibleForTesting
+    static String accountsToString(Set<Account> accounts) {
+        final StringBuilder sb = new StringBuilder();
+        for (Account account : accounts) {
+            if (sb.length() > 0) {
+                sb.append(ACCOUNT_STRING_SEPARATOR_OUTER);
+            }
+            sb.append(account.name);
+            sb.append(ACCOUNT_STRING_SEPARATOR_INNER);
+            sb.append(account.type);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * de-serialize string returned by {@link #accountsToString} and return it.
+     * If {@code accountsString} is malformed it'll throw {@link IllegalArgumentException}.
+     */
+    @VisibleForTesting
+    static Set<Account> stringToAccounts(String accountsString) {
+        final Set<Account> ret = Sets.newHashSet();
+        if (accountsString.length() == 0) return ret; // no accounts
+        try {
+            for (String accountString : accountsString.split(ACCOUNT_STRING_SEPARATOR_OUTER)) {
+                String[] nameAndType = accountString.split(ACCOUNT_STRING_SEPARATOR_INNER);
+                ret.add(new Account(nameAndType[0], nameAndType[1]));
+            }
+            return ret;
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException("Malformed string", ex);
+        }
+    }
+
+    /**
+     * @return {@code true} if the given {@code currentSystemAccounts} are different from the
+     *    accounts we know, which are stored in the {@link DbProperties#KNOWN_ACCOUNTS} property.
+     */
+    @VisibleForTesting
+    boolean haveAccountsChanged(Account[] currentSystemAccounts) {
+        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
+        final Set<Account> knownAccountSet;
+        try {
+            knownAccountSet = stringToAccounts(
+                    dbHelper.getProperty(DbProperties.KNOWN_ACCOUNTS, ""));
+        } catch (IllegalArgumentException e) {
+            // Failed to get the last known accounts for an unknown reason.  Let's just
+            // treat as if accounts have changed.
+            return true;
+        }
+        final Set<Account> currentAccounts = Sets.newHashSet(currentSystemAccounts);
+        return !knownAccountSet.equals(currentAccounts);
+    }
+
+    @VisibleForTesting
+    void saveAccounts(Account[] systemAccounts) {
+        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
+        dbHelper.setProperty(DbProperties.KNOWN_ACCOUNTS,
+                accountsToString(Sets.newHashSet(systemAccounts)));
+    }
+
     private boolean updateAccountsInBackground(Account[] systemAccounts) {
-
-        // TODO Really detect account changes here, by storing the last known accounts in the
-        // DB property.  If there's no accounts added or removed, just return with false here.
-
+        if (!haveAccountsChanged(systemAccounts)) {
+            return false;
+        }
+        Log.i(TAG, "Accounts changed");
         final ContactsDatabaseHelper dbHelper = mDbHelper.get();
         final SQLiteDatabase db = dbHelper.getWritableDatabase();
         mActiveDb.set(db);
@@ -4471,6 +4535,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // search index for the profile DB, and updating it for the contacts DB in this case
                 // makes no sense and risks a deadlock.
                 if (!inProfileMode()) {
+                    // TODO Fix it.  It only updates index for contacts/raw_contacts that the
+                    // current transaction context knows updated, but here in this method we don't
+                    // update that information, so effectively it's no-op.
+                    // We can probably just schedule BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
+                    // (But make sure it's not scheduled yet. We schedule this task in initialize()
+                    // too.)
                     updateSearchIndexInTransaction();
                 }
             }
@@ -4484,7 +4554,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // Third, remaining tasks that must be done in a transaction.
             // TODO: Should sync state take data set into consideration?
             dbHelper.getSyncState().onAccountsChanged(db, systemAccounts);
-            dbHelper.invalidateAccountCacheInTransaction();
+
+            saveAccounts(systemAccounts);
 
             db.setTransactionSuccessful();
         } finally {
@@ -4492,6 +4563,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         mAccountWritability.clear();
 
+        dbHelper.refreshAccountCache();
         updateContactsAccountCount(systemAccounts);
         updateProviderStatus();
         return true;
@@ -4742,7 +4814,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case CONTACTS: {
                 setTablesAndProjectionMapForContacts(qb, uri, projection);
-                appendLocalDirectorySelectionIfNeeded(qb, directoryId);
+                appendLocalDirectoryAndAccountSelectionIfNeeded(qb, directoryId, uri);
                 break;
             }
 
@@ -5589,7 +5661,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case GROUPS: {
                 qb.setTables(Views.GROUPS);
                 qb.setProjectionMap(sGroupsProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                appendAccountIdFromParameter(qb, uri);
                 break;
             }
 
@@ -5614,7 +5686,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
                 qb.setTables(tables);
                 qb.setProjectionMap(sGroupsSummaryProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                appendAccountIdFromParameter(qb, uri);
                 groupBy = GroupsColumns.CONCRETE_ID;
                 break;
             }
@@ -6487,13 +6559,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         sb.append(Views.RAW_CONTACTS);
         qb.setTables(sb.toString());
         qb.setProjectionMap(sRawContactsProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountIdFromParameter(qb, uri);
     }
 
     private void setTablesAndProjectionMapForRawEntities(SQLiteQueryBuilder qb, Uri uri) {
         qb.setTables(Views.RAW_ENTITIES);
         qb.setProjectionMap(sRawEntityProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountIdFromParameter(qb, uri);
     }
 
     private void setTablesAndProjectionMapForData(SQLiteQueryBuilder qb, Uri uri,
@@ -6545,7 +6617,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         qb.setProjectionMap(projectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountIdFromParameter(qb, uri);
     }
 
     private void setTableAndProjectionMapForStatusUpdates(SQLiteQueryBuilder qb,
@@ -6592,7 +6664,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sEntityProjectionMap);
-        appendAccountFromParameter(qb, uri);
+        appendAccountIdFromParameter(qb, uri);
     }
 
     private void appendContactStatusUpdateJoin(StringBuilder sb, String[] projection,
@@ -6648,44 +6720,77 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private boolean appendLocalDirectorySelectionIfNeeded(SQLiteQueryBuilder qb, long directoryId) {
+    private void appendLocalDirectoryAndAccountSelectionIfNeeded(SQLiteQueryBuilder qb,
+            long directoryId, Uri uri) {
+        final StringBuilder sb = new StringBuilder();
         if (directoryId == Directory.DEFAULT) {
-            qb.appendWhere(Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY);
-            return true;
+            sb.append("(" + Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY + ")");
         } else if (directoryId == Directory.LOCAL_INVISIBLE){
-            qb.appendWhere(Contacts._ID + " NOT IN " + Tables.DEFAULT_DIRECTORY);
-            return true;
+            sb.append("(" + Contacts._ID + " NOT IN " + Tables.DEFAULT_DIRECTORY + ")");
+        } else {
+            sb.append("(1)");
         }
-        return false;
+
+        final AccountWithDataSet accountWithDataSet = getAccountWithDataSetFromUri(uri);
+        // Accounts are valid by only checking one parameter, since we've
+        // already ruled out partial accounts.
+        final boolean validAccount = !TextUtils.isEmpty(accountWithDataSet.getAccountName());
+        if (validAccount) {
+            final Long accountId = mDbHelper.get().getAccountIdOrNull(accountWithDataSet);
+            if (accountId == null) {
+                // No such account.
+                sb.setLength(0);
+                sb.append("(1=2)");
+            } else {
+                sb.append(
+                        " AND (" + Contacts._ID + " IN (" +
+                        "SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContactsColumns.ACCOUNT_ID + "=" + accountId.toString() +
+                        "))");
+            }
+        }
+        qb.appendWhere(sb.toString());
     }
 
     private void appendAccountFromParameter(SQLiteQueryBuilder qb, Uri uri) {
-        final String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
-        final String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
-        final String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
-
-        final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
-        if (partialUri) {
-            // Throw when either account is incomplete
-            throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
-                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
-        }
+        final AccountWithDataSet accountWithDataSet = getAccountWithDataSetFromUri(uri);
 
         // Accounts are valid by only checking one parameter, since we've
         // already ruled out partial accounts.
-        final boolean validAccount = !TextUtils.isEmpty(accountName);
+        final boolean validAccount = !TextUtils.isEmpty(accountWithDataSet.getAccountName());
         if (validAccount) {
-            String toAppend = RawContacts.ACCOUNT_NAME + "="
-                    + DatabaseUtils.sqlEscapeString(accountName) + " AND "
+            String toAppend = "(" + RawContacts.ACCOUNT_NAME + "="
+                    + DatabaseUtils.sqlEscapeString(accountWithDataSet.getAccountName()) + " AND "
                     + RawContacts.ACCOUNT_TYPE + "="
-                    + DatabaseUtils.sqlEscapeString(accountType);
-            if (dataSet == null) {
+                    + DatabaseUtils.sqlEscapeString(accountWithDataSet.getAccountType());
+            if (accountWithDataSet.getDataSet() == null) {
                 toAppend += " AND " + RawContacts.DATA_SET + " IS NULL";
             } else {
                 toAppend += " AND " + RawContacts.DATA_SET + "=" +
-                        DatabaseUtils.sqlEscapeString(dataSet);
+                        DatabaseUtils.sqlEscapeString(accountWithDataSet.getDataSet());
             }
+            toAppend += ")";
             qb.appendWhere(toAppend);
+        } else {
+            qb.appendWhere("1");
+        }
+    }
+
+    private void appendAccountIdFromParameter(SQLiteQueryBuilder qb, Uri uri) {
+        final AccountWithDataSet accountWithDataSet = getAccountWithDataSetFromUri(uri);
+
+        // Accounts are valid by only checking one parameter, since we've
+        // already ruled out partial accounts.
+        final boolean validAccount = !TextUtils.isEmpty(accountWithDataSet.getAccountName());
+        if (validAccount) {
+            final Long accountId = mDbHelper.get().getAccountIdOrNull(accountWithDataSet);
+            if (accountId == null) {
+                // No such account.
+                qb.appendWhere("(1=2)");
+            } else {
+                qb.appendWhere(
+                        "(" + RawContactsColumns.ACCOUNT_ID + "=" + accountId.toString() + ")");
+            }
         } else {
             qb.appendWhere("1");
         }
@@ -7676,7 +7781,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         int version = Integer.parseInt(mContactsHelper.getProperty(
-                PROPERTY_AGGREGATION_ALGORITHM, "1"));
+                DbProperties.AGGREGATION_ALGORITHM, "1"));
         return version < PROPERTY_AGGREGATION_ALGORITHM_VERSION;
     }
 
@@ -7711,7 +7816,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mContactAggregator.aggregateInTransaction(mTransactionContext.get(), db);
             updateSearchIndexInTransaction();
             db.setTransactionSuccessful();
-            mContactsHelper.setProperty(PROPERTY_AGGREGATION_ALGORITHM,
+            mContactsHelper.setProperty(DbProperties.AGGREGATION_ALGORITHM,
                     String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
         } finally {
             if (db != null) {
@@ -7894,5 +7999,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private boolean snippetNeeded(String [] projection) {
         return ContactsDatabaseHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
+    }
+
+    /**
+     * @return the currently active {@link ContactsDatabaseHelper} for the current thread.
+     */
+    public ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
+        return mDbHelper.get();
     }
 }
