@@ -787,7 +787,15 @@ import java.util.concurrent.ConcurrentHashMap;
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
     }
 
-    private void refreshDatabaseCaches(SQLiteDatabase db) {
+    /**
+     * Clear all the cached database information and re-initialize it.
+     *
+     * @param db target database
+     * @param accountTableHasId {@code true} if the "accounts" table exists and has the ID column.
+     *    This is normally {@code true}, but needs to be false during database upgrade until
+     *    step 626, where the account ID was introduced.
+     */
+    private void refreshDatabaseCaches(SQLiteDatabase db, boolean accountTableHasId) {
         mStatusUpdateDelete = null;
         mStatusUpdateReplace = null;
         mStatusUpdateInsert = null;
@@ -806,13 +814,21 @@ import java.util.concurrent.ConcurrentHashMap;
         mAggregationModeQuery = null;
         mContactInDefaultDirectoryQuery = null;
 
-        initializeCache(db);
+        initializeCache(db, accountTableHasId);
     }
 
-    private void initializeCache(SQLiteDatabase db) {
+    /**
+     * (Re-)initialize the cached database information.
+     *
+     * @param db target database
+     * @param accountTableHasId See {@link #refreshDatabaseCaches}.
+     */
+    private void initializeCache(SQLiteDatabase db, boolean accountTableHasId) {
         mMimetypeCache.clear();
         mPackageCache.clear();
-        refreshAccountCache(db);
+        if (accountTableHasId) {
+            refreshAccountCache(db);
+        }
 
         // TODO: This could be optimized into one query instead of 7
         //        Also: We shouldn't have those fields in the first place. This should just be
@@ -829,7 +845,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
     @Override
     public void onOpen(SQLiteDatabase db) {
-        refreshDatabaseCaches(db);
+        refreshDatabaseCaches(db, true);
 
         mSyncState.onDatabaseOpened(db);
 
@@ -3402,7 +3418,7 @@ import java.util.concurrent.ConcurrentHashMap;
     }
 
     private void upgradeToVersion504(SQLiteDatabase db) {
-        initializeCache(db);
+        initializeCache(db, false);
 
         // Find all names with prefixes and recreate display name
         Cursor cursor = db.rawQuery(
@@ -3924,7 +3940,7 @@ import java.util.concurrent.ConcurrentHashMap;
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
 
-        initializeCache(db);
+        initializeCache(db, true);
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
