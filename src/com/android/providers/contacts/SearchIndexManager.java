@@ -17,6 +17,7 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
@@ -30,6 +31,7 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.ProviderStatus;
+import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -240,7 +242,7 @@ public class SearchIndexManager {
         int count = 0;
         try {
             mDbHelper.createSearchIndexTable(db);
-            count = buildIndex(db, null, false);
+            count = buildAndInsertIndex(db, null);
         } finally {
             mContactsProvider.setProviderStatus(ProviderStatus.STATUS_NORMAL);
 
@@ -254,7 +256,7 @@ public class SearchIndexManager {
         mSb.setLength(0);
         mSb.append("(");
         if (!contactIds.isEmpty()) {
-            mSb.append(Data.CONTACT_ID + " IN (");
+            mSb.append(RawContacts.CONTACT_ID + " IN (");
             for (Long contactId : contactIds) {
                 mSb.append(contactId).append(",");
             }
@@ -266,7 +268,7 @@ public class SearchIndexManager {
             if (!contactIds.isEmpty()) {
                 mSb.append(" OR ");
             }
-            mSb.append(Data.RAW_CONTACT_ID + " IN (");
+            mSb.append(RawContactsColumns.CONCRETE_ID + " IN (");
             for (Long rawContactId : rawContactIds) {
                 mSb.append(rawContactId).append(",");
             }
@@ -275,10 +277,25 @@ public class SearchIndexManager {
         }
 
         mSb.append(")");
-        buildIndex(mDbHelper.getWritableDatabase(), mSb.toString(), true);
+
+        // The selection to select raw_contacts.
+        final String rawContactsSelection = mSb.toString();
+
+        // Remove affected search_index rows.
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        final int deleted = db.delete(Tables.SEARCH_INDEX,
+                SearchIndexColumns.CONTACT_ID + " IN (SELECT " +
+                    RawContacts.CONTACT_ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + rawContactsSelection +
+                    ")"
+                , null);
+
+        // Then rebuild index for them.
+        buildAndInsertIndex(db, rawContactsSelection);
     }
 
-    private int buildIndex(SQLiteDatabase db, String selection, boolean replace) {
+    private int buildAndInsertIndex(SQLiteDatabase db, String selection) {
         mSb.setLength(0);
         mSb.append(Data.CONTACT_ID + ", ");
         mSb.append("(CASE WHEN " + DataColumns.MIMETYPE_ID + "=");
@@ -307,7 +324,7 @@ public class SearchIndexManager {
                 long contactId = cursor.getLong(0);
                 if (contactId != currentContactId) {
                     if (currentContactId != -1) {
-                        saveContactIndex(db, currentContactId, mIndexBuilder, replace);
+                        insertIndexRow(db, currentContactId, mIndexBuilder);
                         count++;
                     }
                     currentContactId = contactId;
@@ -321,7 +338,7 @@ public class SearchIndexManager {
                 }
             }
             if (currentContactId != -1) {
-                saveContactIndex(db, currentContactId, mIndexBuilder, replace);
+                insertIndexRow(db, currentContactId, mIndexBuilder);
                 count++;
             }
         } finally {
@@ -330,24 +347,13 @@ public class SearchIndexManager {
         return count;
     }
 
-    private void saveContactIndex(
-            SQLiteDatabase db, long contactId, IndexBuilder builder, boolean replace) {
+    private void insertIndexRow(SQLiteDatabase db, long contactId, IndexBuilder builder) {
         mValues.clear();
         mValues.put(SearchIndexColumns.CONTENT, builder.getContent());
         mValues.put(SearchIndexColumns.NAME, builder.getName());
         mValues.put(SearchIndexColumns.TOKENS, builder.getTokens());
-        if (replace) {
-            mSelectionArgs1[0] = String.valueOf(contactId);
-            int count = db.update(Tables.SEARCH_INDEX, mValues,
-                    SearchIndexColumns.CONTACT_ID + "=CAST(? AS int)", mSelectionArgs1);
-            if (count == 0) {
-                mValues.put(SearchIndexColumns.CONTACT_ID, contactId);
-                db.insert(Tables.SEARCH_INDEX, null, mValues);
-            }
-        } else {
-            mValues.put(SearchIndexColumns.CONTACT_ID, contactId);
-            db.insert(Tables.SEARCH_INDEX, null, mValues);
-        }
+        mValues.put(SearchIndexColumns.CONTACT_ID, contactId);
+        db.insert(Tables.SEARCH_INDEX, null, mValues);
     }
     private int getSearchIndexVersion() {
         return Integer.parseInt(mDbHelper.getProperty(PROPERTY_SEARCH_INDEX_VERSION, "0"));
