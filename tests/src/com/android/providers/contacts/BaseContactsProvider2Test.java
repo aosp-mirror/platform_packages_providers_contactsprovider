@@ -1073,9 +1073,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     private boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
             StringBuilder msgBuffer) {
-        Set<Map.Entry<String, Object>> entries = expectedValues.valueSet();
-        for (Map.Entry<String, Object> entry : entries) {
-            String column = entry.getKey();
+        for (String column : expectedValues.keySet()) {
             int index = cursor.getColumnIndex(column);
             if (index == -1) {
                 msgBuffer.append("No such column: ").append(column);
