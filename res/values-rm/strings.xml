@@ -22,9 +22,12 @@
     <string name="provider_label" msgid="6012150850819899907">"Contacts"</string>
     <!-- no translation found for upgrade_msg (8640807392794309950) -->
     <skip />
-    <!-- outdated translation 4089605622758004662 -->     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Ina actualisaziun da contacts basegna dapli memoria"</string>
-    <!-- outdated translation 7849508493764133004 -->     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Actualisar la memoria da contacts"</string>
-    <!-- outdated translation 3967762223137708403 -->     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Tscherner per cumplettar l\'actualisaziun"</string>
+    <!-- no translation found for upgrade_out_of_memory_notification_ticker (7638747231223520477) -->
+    <skip />
+    <!-- no translation found for upgrade_out_of_memory_notification_title (8888171924684998531) -->
+    <skip />
+    <!-- no translation found for upgrade_out_of_memory_notification_text (8438179450336437626) -->
+    <skip />
     <string name="default_directory" msgid="93961630309570294">"Contacts"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Auter"</string>
     <!-- no translation found for read_write_all_voicemail_label (4557216100818257560) -->
