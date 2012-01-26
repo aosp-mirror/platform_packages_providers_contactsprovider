@@ -438,6 +438,35 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
                 "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
     }
 
+    /**
+     * Test case for bug 5904515
+     */
+    public void testSearchByPhoneNumber_diferSnippetting() {
+        long rawContactId = createRawContact();
+        insertPhoneNumber(rawContactId, "505-123-4567");
+
+        // The bug happened with the old code only when we use \u0001 as the snippet marker.
+        // But note that the expected result has [ and ] instead of \u0001.  This is because when
+        // we differ snippetizing, the marker passe to the provider will be ignored; instead
+        // assertStoredValue internally do the client-side snippetizing, which done by
+        // getCursorStringValue(), which is hardcoded to use [ and ].
+        assertStoredValue(buildSearchUri("505", "\u0001,\u0001,\u2026,5", true),
+                SearchSnippetColumns.SNIPPET, "[505]-123-4567");
+    }
+
+    /**
+     * Equivalent to {@link #testSearchByPhoneNumber_diferSnippetting} for email addresses, although
+     * the original bug didn't happen with email addresses... (It *did* happen internally, but
+     * there's no visible breakage.)
+     */
+    public void testSearchByEmail_diferSnippetting() {
+        long rawContactId = createRawContact();
+        insertEmail(rawContactId, "john@doe.com");
+
+        assertStoredValue(buildSearchUri("john", "\u0001,\u0001,\u2026,5", true),
+                SearchSnippetColumns.SNIPPET, "[john@doe.com]");
+    }
+
     private Uri buildSearchUri(String filter) {
         return buildSearchUri(filter, false);
     }

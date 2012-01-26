@@ -4960,11 +4960,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (uri.getPathSegments().size() > 2) {
                     filterParam = uri.getLastPathSegment();
                 }
+
+                // If the query consists of a single word, we can do snippetizing after-the-fact for
+                // a performance boost.  Otherwise, we can't defer.
+                snippetDeferred = isSingleWordQuery(filterParam)
+                    && deferredSnipRequested && snippetNeeded(projection);
                 setTablesAndProjectionMapForContactsWithSnippet(
                         qb, uri, projection, filterParam, directoryId,
-                        deferredSnipRequested);
-                snippetDeferred = isSingleWordQuery(filterParam) &&
-                        deferredSnipRequested && snippetNeeded(projection);
+                        snippetDeferred);
                 break;
             }
 
@@ -6340,7 +6343,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * contact and joins that with other contacts tables.
      */
     private void setTablesAndProjectionMapForContactsWithSnippet(SQLiteQueryBuilder qb, Uri uri,
-            String[] projection, String filter, long directoryId, boolean deferredSnippeting) {
+            String[] projection, String filter, long directoryId, boolean deferSnippeting) {
 
         StringBuilder sb = new StringBuilder();
         sb.append(Views.CONTACTS);
@@ -6352,7 +6355,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (TextUtils.isEmpty(filter) || (directoryId != -1 && directoryId != Directory.DEFAULT)) {
             sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + " WHERE 0)");
         } else {
-            appendSearchIndexJoin(sb, uri, projection, filter, deferredSnippeting);
+            appendSearchIndexJoin(sb, uri, projection, filter, deferSnippeting);
         }
         appendContactPresenceJoin(sb, projection, Contacts._ID);
         appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
@@ -6362,7 +6365,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendSearchIndexJoin(
             StringBuilder sb, Uri uri, String[] projection, String filter,
-            boolean  deferredSnippeting) {
+            boolean  deferSnippeting) {
 
         if (snippetNeeded(projection)) {
             String[] args = null;
@@ -6383,7 +6386,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             appendSearchIndexJoin(
                     sb, filter, true, startMatch, endMatch, ellipsis, maxTokens,
-                    deferredSnippeting);
+                    deferSnippeting);
         } else {
             appendSearchIndexJoin(sb, filter, false, null, null, null, 0, false);
         }
@@ -6391,16 +6394,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     public void appendSearchIndexJoin(StringBuilder sb, String filter,
             boolean snippetNeeded, String startMatch, String endMatch, String ellipsis,
-            int maxTokens, boolean deferredSnippeting) {
+            int maxTokens, boolean deferSnippeting) {
         boolean isEmailAddress = false;
         String emailAddress = null;
         boolean isPhoneNumber = false;
         String phoneNumber = null;
         String numberE164 = null;
 
-        // If the query consists of a single word, we can do snippetizing after-the-fact for a
-        // performance boost.
-        boolean singleTokenSearch = isSingleWordQuery(filter);
 
         if (filter.indexOf('@') != -1) {
             emailAddress = mDbHelper.get().extractAddressFromEmailAddress(filter);
@@ -6420,18 +6420,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sb.append(", ");
             if (isEmailAddress) {
                 sb.append("ifnull(");
-                DatabaseUtils.appendEscapedSQLString(sb, startMatch);
-                sb.append("||(SELECT MIN(" + Email.ADDRESS + ")");
+                if (!deferSnippeting) {
+                    // Add the snippet marker only when we're really creating snippet.
+                    DatabaseUtils.appendEscapedSQLString(sb, startMatch);
+                    sb.append("||");
+                }
+                sb.append("(SELECT MIN(" + Email.ADDRESS + ")");
                 sb.append(" FROM " + Tables.DATA_JOIN_RAW_CONTACTS);
                 sb.append(" WHERE  " + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID);
                 sb.append("=" + RawContacts.CONTACT_ID + " AND " + Email.ADDRESS + " LIKE ");
                 DatabaseUtils.appendEscapedSQLString(sb, filter + "%");
-                sb.append(")||");
-                DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+                sb.append(")");
+                if (!deferSnippeting) {
+                    sb.append("||");
+                    DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+                }
                 sb.append(",");
 
-                // Optimization for single-token search (do only if requested).
-                if (singleTokenSearch && deferredSnippeting) {
+                if (deferSnippeting) {
                     sb.append(SearchIndexColumns.CONTENT);
                 } else {
                     appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
@@ -6439,8 +6445,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 sb.append(")");
             } else if (isPhoneNumber) {
                 sb.append("ifnull(");
-                DatabaseUtils.appendEscapedSQLString(sb, startMatch);
-                sb.append("||(SELECT MIN(" + Phone.NUMBER + ")");
+                if (!deferSnippeting) {
+                    // Add the snippet marker only when we're really creating snippet.
+                    DatabaseUtils.appendEscapedSQLString(sb, startMatch);
+                    sb.append("||");
+                }
+                sb.append("(SELECT MIN(" + Phone.NUMBER + ")");
                 sb.append(" FROM " +
                         Tables.DATA_JOIN_RAW_CONTACTS + " JOIN " + Tables.PHONE_LOOKUP);
                 sb.append(" ON " + DataColumns.CONCRETE_ID);
@@ -6455,12 +6465,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     sb.append(numberE164);
                     sb.append("%'");
                 }
-                sb.append(")||");
-                DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+                sb.append(")");
+                if (! deferSnippeting) {
+                    sb.append("||");
+                    DatabaseUtils.appendEscapedSQLString(sb, endMatch);
+                }
                 sb.append(",");
 
-                // Optimization for single-token search (do only if requested).
-                if (singleTokenSearch && deferredSnippeting) {
+                if (deferSnippeting) {
                     sb.append(SearchIndexColumns.CONTENT);
                 } else {
                     appendSnippetFunction(sb, startMatch, endMatch, ellipsis, maxTokens);
@@ -6469,8 +6481,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } else {
                 final String normalizedFilter = NameNormalizer.normalize(filter);
                 if (!TextUtils.isEmpty(normalizedFilter)) {
-                    // Optimization for single-token search (do only if requested)..
-                    if (singleTokenSearch && deferredSnippeting) {
+                    if (deferSnippeting) {
                         sb.append(SearchIndexColumns.CONTENT);
                     } else {
                         sb.append("(CASE WHEN EXISTS (SELECT 1 FROM ");
