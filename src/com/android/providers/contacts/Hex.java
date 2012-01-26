@@ -61,7 +61,7 @@ public class Hex {
         int j = 0;
         for (int i = 0; i < array.length; i++) {
             int index = array[i] & 0xFF;
-            if (index == 0 && zeroTerminated) {
+            if (zeroTerminated && index == 0 && i == array.length-1) {
                 break;
             }
 
