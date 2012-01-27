@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
 
 import android.content.ContentResolver;
@@ -5207,6 +5208,7 @@ import java.util.concurrent.ConcurrentHashMap;
         return mCountryMonitor.getCountryIso();
     }
 
+    @NeededForTesting
     /* package */ String querySearchIndexContentForTest(long contactId) {
         return DatabaseUtils.stringForQuery(getReadableDatabase(),
                 "SELECT " + SearchIndexColumns.CONTENT +
@@ -5215,6 +5217,7 @@ import java.util.concurrent.ConcurrentHashMap;
                 new String[] { String.valueOf(contactId) });
     }
 
+    @NeededForTesting
     /* package */ String querySearchIndexTokensForTest(long contactId) {
         return DatabaseUtils.stringForQuery(getReadableDatabase(),
                 "SELECT " + SearchIndexColumns.TOKENS +
