@@ -973,11 +973,6 @@ import java.util.concurrent.ConcurrentHashMap;
                 RawContacts._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 RawContactsColumns.ACCOUNT_ID + " INTEGER REFERENCES " +
                     Tables.ACCOUNTS + "(" + AccountsColumns._ID + ")," +
-                // STOPSHIP Remove the account columns.
-                RawContacts.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
-                RawContacts.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
-                RawContacts.DATA_SET + " STRING DEFAULT NULL, " +
-
                 RawContacts.SOURCE_ID + " TEXT," +
                 RawContacts.RAW_CONTACT_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
@@ -1177,12 +1172,6 @@ import java.util.concurrent.ConcurrentHashMap;
                 GroupsColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 GroupsColumns.ACCOUNT_ID + " INTEGER REFERENCES " +
                     Tables.ACCOUNTS + "(" + AccountsColumns._ID + ")," +
-
-                // STOPSHIP Remove the account columns.
-                Groups.ACCOUNT_NAME + " STRING DEFAULT NULL, " +
-                Groups.ACCOUNT_TYPE + " STRING DEFAULT NULL, " +
-                Groups.DATA_SET + " STRING DEFAULT NULL, " +
-
                 Groups.SOURCE_ID + " TEXT," +
                 Groups.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 Groups.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
