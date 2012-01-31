@@ -8032,6 +8032,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /**
      * @return the currently active {@link ContactsDatabaseHelper} for the current thread.
      */
+    @NeededForTesting
     public ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
         return mDbHelper.get();
     }
