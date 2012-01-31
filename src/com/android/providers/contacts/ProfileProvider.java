@@ -15,6 +15,7 @@
  */
 package com.android.providers.contacts;
 
+import android.content.CancelationSignal;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
@@ -73,9 +74,16 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+        return query(uri, projection, selection, selectionArgs, sortOrder, null);
+    }
+
+    @Override
+    public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
+            String sortOrder, CancelationSignal cancelationSignal) {
         enforceReadPermission(uri);
         mDelegate.substituteDb(getDatabaseHelper().getReadableDatabase());
-        return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1);
+        return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
+                cancelationSignal);
     }
 
     @Override
