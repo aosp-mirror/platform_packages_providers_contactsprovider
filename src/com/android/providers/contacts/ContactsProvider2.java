@@ -60,7 +60,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
 import android.app.SearchManager;
-import android.content.CancelationSignal;
+import android.content.CancellationSignal;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -4631,7 +4631,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
-            String sortOrder, CancelationSignal cancelationSignal) {
+            String sortOrder, CancellationSignal cancellationSignal) {
 
         waitForAccess(mReadAccessLatch);
 
@@ -4642,7 +4642,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
             return mProfileProvider.query(uri, projection, selection, selectionArgs, sortOrder,
-                    cancelationSignal);
+                    cancellationSignal);
         }
 
         // Otherwise proceed with a normal query against the contacts DB.
@@ -4652,15 +4652,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (directory == null) {
             return addSnippetExtrasToCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
-                    cancelationSignal));
+                    cancellationSignal));
         } else if (directory.equals("0")) {
             return addSnippetExtrasToCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                    Directory.DEFAULT, cancelationSignal));
+                    Directory.DEFAULT, cancellationSignal));
         } else if (directory.equals("1")) {
             return addSnippetExtrasToCursor(uri,
                     queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                    Directory.LOCAL_INVISIBLE, cancelationSignal));
+                    Directory.LOCAL_INVISIBLE, cancellationSignal));
         }
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -4797,7 +4797,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     protected Cursor queryLocal(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, long directoryId,
-            CancelationSignal cancelationSignal) {
+            CancellationSignal cancellationSignal) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query=" + uri + " selection=" + selection);
         }
@@ -4854,7 +4854,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Contacts._ID, contactId, Contacts.LOOKUP_KEY, lookupKey,
-                            cancelationSignal);
+                            cancellationSignal);
                     if (c != null) {
                         return c;
                     }
@@ -4889,7 +4889,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Data.CONTACT_ID, contactId, Data.LOOKUP_KEY, lookupKey,
-                            cancelationSignal);
+                            cancellationSignal);
                     if (c != null) {
                         return c;
                     }
@@ -4933,7 +4933,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             StreamItems.CONTACT_ID, contactId,
                             StreamItems.CONTACT_LOOKUP_KEY, lookupKey,
-                            cancelationSignal);
+                            cancellationSignal);
                     if (c != null) {
                         return c;
                     }
@@ -5191,7 +5191,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Contacts.Entity.CONTACT_ID, contactId,
                             Contacts.Entity.LOOKUP_KEY, lookupKey,
-                            cancelationSignal);
+                            cancellationSignal);
                     if (c != null) {
                         return c;
                     }
@@ -5654,7 +5654,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     qb.setStrict(true);
                     boolean foundResult = false;
                     Cursor cursor = query(mActiveDb.get(), qb, projection, selection, selectionArgs,
-                            sortOrder, groupBy, limit, cancelationSignal);
+                            sortOrder, groupBy, limit, cancellationSignal);
                     try {
                         if (cursor.getCount() > 0) {
                             foundResult = true;
@@ -5843,11 +5843,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Cursor cursor =
                 query(mActiveDb.get(), qb, projection, selection, selectionArgs, sortOrder, groupBy,
-                limit, cancelationSignal);
+                limit, cancellationSignal);
 
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
             cursor = bundleLetterCountExtras(cursor, mActiveDb.get(), qb, selection,
-                    selectionArgs, sortOrder, addressBookIndexerCountExpression, cancelationSignal);
+                    selectionArgs, sortOrder, addressBookIndexerCountExpression, cancellationSignal);
         }
         if (snippetDeferred) {
             cursor = addDeferredSnippetingExtra(cursor);
@@ -5858,13 +5858,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private Cursor query(final SQLiteDatabase db, SQLiteQueryBuilder qb, String[] projection,
             String selection, String[] selectionArgs, String sortOrder, String groupBy,
-            String limit, CancelationSignal cancelationSignal) {
+            String limit, CancellationSignal cancellationSignal) {
         if (projection != null && projection.length == 1
                 && BaseColumns._COUNT.equals(projection[0])) {
             qb.setProjectionMap(sCountProjectionMap);
         }
         final Cursor c = qb.query(db, projection, selection, selectionArgs, groupBy, null,
-                sortOrder, limit, cancelationSignal);
+                sortOrder, limit, cancellationSignal);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
@@ -5891,14 +5891,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Runs the query with the supplied contact ID and lookup ID.  If the query succeeds,
      * it returns the resulting cursor, otherwise it returns null and the calling
      * method needs to resolve the lookup key and rerun the query.
-     * @param cancelationSignal
+     * @param cancellationSignal
      */
     private Cursor queryWithContactIdAndLookupKey(SQLiteQueryBuilder lookupQb,
             SQLiteDatabase db, Uri uri,
             String[] projection, String selection, String[] selectionArgs,
             String sortOrder, String groupBy, String limit,
             String contactIdColumn, long contactId, String lookupKeyColumn, String lookupKey,
-            CancelationSignal cancelationSignal) {
+            CancellationSignal cancellationSignal) {
         String[] args;
         if (selectionArgs == null) {
             args = new String[2];
@@ -5910,7 +5910,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         args[1] = Uri.encode(lookupKey);
         lookupQb.appendWhere(contactIdColumn + "=? AND " + lookupKeyColumn + "=?");
         Cursor c = query(db, lookupQb, projection, selection, args, sortOrder,
-                groupBy, limit, cancelationSignal);
+                groupBy, limit, cancellationSignal);
         if (c.getCount() != 0) {
             return c;
         }
@@ -5944,7 +5944,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private Cursor bundleLetterCountExtras(Cursor cursor, final SQLiteDatabase db,
             SQLiteQueryBuilder qb, String selection, String[] selectionArgs, String sortOrder,
-            String countExpression, CancelationSignal cancelationSignal) {
+            String countExpression, CancellationSignal cancellationSignal) {
         if (!(cursor instanceof AbstractCursor)) {
             Log.w(TAG, "Unable to bundle extras.  Cursor is not AbstractCursor.");
             return cursor;
@@ -5996,7 +5996,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Cursor indexCursor = qb.query(db, AddressBookIndexQuery.COLUMNS, selection, selectionArgs,
                 AddressBookIndexQuery.ORDER_BY, null /* having */,
                 AddressBookIndexQuery.ORDER_BY + sortOrderSuffix,
-                null, cancelationSignal);
+                null, cancellationSignal);
 
         try {
             int groupCount = indexCursor.getCount();
