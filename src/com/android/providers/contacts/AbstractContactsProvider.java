@@ -25,6 +25,7 @@ import android.content.OperationApplicationException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteTransactionListener;
 import android.net.Uri;
+import android.util.Log;
 
 import java.util.ArrayList;
 
@@ -36,6 +37,10 @@ import java.util.ArrayList;
  */
 public abstract class AbstractContactsProvider extends ContentProvider
         implements SQLiteTransactionListener {
+
+    protected static final String TAG = "ContactsProvider";
+
+    protected static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
     /**
      * Duration in ms to sleep after successfully yielding the lock during a batch operation.
@@ -174,6 +179,9 @@ public abstract class AbstractContactsProvider extends ContentProvider
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "applyBatch: " + operations.size() + " ops");
+        }
         int ypCount = 0;
         int opCount = 0;
         ContactsTransaction transaction = startTransaction(true);
@@ -189,6 +197,9 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 }
                 final ContentProviderOperation operation = operations.get(i);
                 if (i > 0 && operation.isYieldAllowed()) {
+                    if (VERBOSE_LOGGING) {
+                        Log.v(TAG, "applyBatch: " + opCount + " ops finished; about to yield...");
+                    }
                     opCount = 0;
                     try {
                         if (yield(transaction)) {

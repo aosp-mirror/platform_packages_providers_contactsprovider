@@ -174,10 +174,6 @@ import java.util.concurrent.CountDownLatch;
 public class ContactsProvider2 extends AbstractContactsProvider
         implements OnAccountsUpdateListener {
 
-    private static final String TAG = "ContactsProvider";
-
-    private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
-
     private static final int BACKGROUND_TASK_INITIALIZE = 0;
     private static final int BACKGROUND_TASK_OPEN_WRITE_ACCESS = 1;
     private static final int BACKGROUND_TASK_UPDATE_ACCOUNTS = 3;
