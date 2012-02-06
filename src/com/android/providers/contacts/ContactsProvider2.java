@@ -3302,7 +3302,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
                 int numDeletes = 0;
-                Cursor c = mActiveDb.get().query(Tables.RAW_CONTACTS,
+                Cursor c = mActiveDb.get().query(Views.RAW_CONTACTS,
                         new String[]{RawContacts._ID, RawContacts.CONTACT_ID},
                         appendAccountIdToSelection(uri, selection), selectionArgs,
                         null, null, null);
@@ -3352,7 +3352,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case GROUPS: {
                 int numDeletes = 0;
-                Cursor c = mActiveDb.get().query(Tables.GROUPS, Projections.ID,
+                Cursor c = mActiveDb.get().query(Views.GROUPS, Projections.ID,
                         appendAccountIdToSelection(uri, selection), selectionArgs,
                         null, null, null);
                 try {

@@ -2327,6 +2327,65 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testGroupDelete_byAccountSelection() {
+        final Account account1 = new Account("accountName1", "accountType1");
+        final Account account2 = new Account("accountName2", "accountType2");
+
+        final long groupId1 = createGroup(account1, "sourceId1", "title1");
+        final long groupId2 = createGroup(account2, "sourceId2", "title2");
+        final long groupId3 = createGroup(account2, "sourceId3", "title3");
+
+        final int numDeleted = mResolver.delete(Groups.CONTENT_URI,
+                Groups.ACCOUNT_NAME + "=? AND " + Groups.ACCOUNT_TYPE + "=?",
+                new String[]{account2.name, account2.type});
+        assertEquals(2, numDeleted);
+
+        ContentValues v1 = new ContentValues();
+        v1.put(Groups._ID, groupId1);
+        v1.put(Groups.DELETED, 0);
+
+        ContentValues v2 = new ContentValues();
+        v2.put(Groups._ID, groupId2);
+        v2.put(Groups.DELETED, 1);
+
+        ContentValues v3 = new ContentValues();
+        v3.put(Groups._ID, groupId3);
+        v3.put(Groups.DELETED, 1);
+
+        assertStoredValues(Groups.CONTENT_URI, new ContentValues[] { v1, v2, v3 });
+    }
+
+    public void testGroupDelete_byAccountParam() {
+        final Account account1 = new Account("accountName1", "accountType1");
+        final Account account2 = new Account("accountName2", "accountType2");
+
+        final long groupId1 = createGroup(account1, "sourceId1", "title1");
+        final long groupId2 = createGroup(account2, "sourceId2", "title2");
+        final long groupId3 = createGroup(account2, "sourceId3", "title3");
+
+        final int numDeleted = mResolver.delete(
+                Groups.CONTENT_URI.buildUpon()
+                    .appendQueryParameter(Groups.ACCOUNT_NAME, account2.name)
+                    .appendQueryParameter(Groups.ACCOUNT_TYPE, account2.type)
+                    .build(),
+                null, null);
+        assertEquals(2, numDeleted);
+
+        ContentValues v1 = new ContentValues();
+        v1.put(Groups._ID, groupId1);
+        v1.put(Groups.DELETED, 0);
+
+        ContentValues v2 = new ContentValues();
+        v2.put(Groups._ID, groupId2);
+        v2.put(Groups.DELETED, 1);
+
+        ContentValues v3 = new ContentValues();
+        v3.put(Groups._ID, groupId3);
+        v3.put(Groups.DELETED, 1);
+
+        assertStoredValues(Groups.CONTENT_URI, new ContentValues[] { v1, v2, v3 });
+    }
+
     public void testGroupSummaryQuery() {
         final Account account1 = new Account("accountName1", "accountType1");
         final Account account2 = new Account("accountName2", "accountType2");
@@ -4492,7 +4551,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
     }
 
-    public void testRawContactDeletionWithAccounts() {
+    public void testRawContactDeletion_byAccountParam() {
         long rawContactId = createRawContact(mAccount);
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
@@ -4511,7 +4570,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, mAccountTwo.name)
                 .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccountTwo.type)
                 .build();
-        mResolver.delete(deleteWithWrongAccountUri, null, null);
+        int numDeleted = mResolver.delete(deleteWithWrongAccountUri, null, null);
+        assertEquals(0, numDeleted);
 
         assertStoredValue(uri, RawContacts.DELETED, "0");
 
@@ -4521,7 +4581,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, mAccount.name)
                 .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccount.type)
                 .build();
-        mResolver.delete(deleteWithCorrectAccountUri, null, null);
+        numDeleted = mResolver.delete(deleteWithCorrectAccountUri, null, null);
+        assertEquals(1, numDeleted);
+
+        assertStoredValue(uri, RawContacts.DELETED, "1");
+    }
+
+    public void testRawContactDeletion_byAccountSelection() {
+        long rawContactId = createRawContact(mAccount);
+        Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+
+        // Do not delete if we are deleting with wrong account.
+        int numDeleted = mResolver.delete(RawContacts.CONTENT_URI,
+                RawContacts.ACCOUNT_NAME + "=? AND " + RawContacts.ACCOUNT_TYPE + "=?",
+                new String[] {mAccountTwo.name, mAccountTwo.type});
+        assertEquals(0, numDeleted);
+
+        assertStoredValue(uri, RawContacts.DELETED, "0");
+
+        // Delete if we are deleting with correct account.
+        numDeleted = mResolver.delete(RawContacts.CONTENT_URI,
+                RawContacts.ACCOUNT_NAME + "=? AND " + RawContacts.ACCOUNT_TYPE + "=?",
+                new String[] {mAccount.name, mAccount.type});
+        assertEquals(1, numDeleted);
 
         assertStoredValue(uri, RawContacts.DELETED, "1");
     }
