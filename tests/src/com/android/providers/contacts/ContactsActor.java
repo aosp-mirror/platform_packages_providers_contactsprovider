@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.util.MockSharedPreferences;
 import com.google.android.collect.Sets;
 
 import android.accounts.Account;
@@ -30,6 +31,7 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
@@ -157,7 +159,8 @@ public class ContactsActor {
 
         RenamingDelegatingContext targetContextWrapper = new RenamingDelegatingContext(context,
                 overallContext, FILENAME_PREFIX);
-        mProviderContext = new IsolatedContext(resolver, targetContextWrapper){
+        mProviderContext = new IsolatedContext(resolver, targetContextWrapper) {
+            private final MockSharedPreferences mPrefs = new MockSharedPreferences();
 
             @Override
             public File getFilesDir() {
@@ -174,6 +177,11 @@ public class ContactsActor {
                     return mMockAccountManager;
                 }
                 return super.getSystemService(name);
+            }
+
+            @Override
+            public SharedPreferences getSharedPreferences(String name, int mode) {
+                return mPrefs;
             }
         };
 
