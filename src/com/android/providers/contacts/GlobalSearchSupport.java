@@ -174,6 +174,21 @@ public class GlobalSearchSupport {
         private String buildUri() {
             return Contacts.getLookupUri(contactId, lookupKey).toString();
         }
+
+        public void reset() {
+            contactId = 0;
+            photoUri = null;
+            lookupKey = null;
+            presence = -1;
+            text1 = null;
+            text2 = null;
+            icon1 = null;
+            icon2 = null;
+            intentData = null;
+            intentAction = null;
+            filter = null;
+            lastAccessTime = null;
+        }
     }
 
     private final ContactsProvider2 mContactsProvider;
@@ -370,6 +385,7 @@ public class GlobalSearchSupport {
                     suggestion.text2 = shortenSnippet(c.getString(6));
                 }
                 cursor.addRow(suggestion.asList(projection));
+                suggestion.reset();
             }
         } finally {
             c.close();
