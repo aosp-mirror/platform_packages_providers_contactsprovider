@@ -4879,7 +4879,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForData(lookupQb, uri, projection, false);
                     if (match == CONTACTS_LOOKUP_PHOTO || match == CONTACTS_LOOKUP_ID_PHOTO) {
-                        qb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
+                        lookupQb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
                     }
                     lookupQb.appendWhere(" AND ");
                     Cursor c = queryWithContactIdAndLookupKey(lookupQb, mActiveDb.get(), uri,
