@@ -149,7 +149,7 @@ public class NameDistance {
         }
 
         float m = matches;
-        float jaro = ((m / length1 + m / length2 + (m - (transpositions / 2)) / m)) / 3;
+        float jaro = ((m / length1 + m / length2 + (m - (transpositions / 2f)) / m)) / 3;
 
         if (jaro < WINKLER_BONUS_THRESHOLD) {
             return jaro;
