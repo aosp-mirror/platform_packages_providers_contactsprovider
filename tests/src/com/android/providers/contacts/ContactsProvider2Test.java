@@ -5746,7 +5746,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[]{Contacts.DISPLAY_NAME},
                 null, null, Contacts.SORT_KEY_PRIMARY + " COLLATE LOCALIZED");
 
-        assertFirstLetterValues(cursor, null, "B", "J", "M", "R", "T");
+        assertFirstLetterValues(cursor, "", "B", "J", "M", "R", "T");
         assertFirstLetterCounts(cursor,    1,   1,   1,   2,   2,   1);
         cursor.close();
 
@@ -5754,7 +5754,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[]{Contacts.DISPLAY_NAME},
                 null, null, Contacts.SORT_KEY_ALTERNATIVE + " COLLATE LOCALIZED DESC");
 
-        assertFirstLetterValues(cursor, "W", "S", "R", "M", "B", null);
+        assertFirstLetterValues(cursor, "W", "S", "R", "M", "B", "");
         assertFirstLetterCounts(cursor,   1,   2,   1,   1,   2,    1);
         cursor.close();
     }

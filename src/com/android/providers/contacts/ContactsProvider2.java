@@ -148,10 +148,12 @@ import android.util.Log;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.io.Writer;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
@@ -1345,6 +1347,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private long mLastPhotoCleanup = 0;
 
+    private FastScrollingIndexCache mFastScrollingIndexCache;
+    private final Object mFastScrollingIndexCacheLock = new Object();
+
+    // Stats about FastScrollingIndex.
+    private int mFastScrollingIndexCacheRequestCount;
+    private int mFastScrollingIndexCacheMissCount;
+    private long mTotalTimeFastScrollingIndexGenerate;
+
     @Override
     public boolean onCreate() {
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
@@ -1382,6 +1392,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 R.integer.config_max_display_photo_dim);
         mMaxThumbnailPhotoDim = resources.getInteger(
                 R.integer.config_max_thumbnail_photo_dim);
+
+        mFastScrollingIndexCache = new FastScrollingIndexCache(getContext());
 
         mContactsHelper = getDatabaseHelper(getContext());
         mDbHelper.set(mContactsHelper);
@@ -1633,6 +1645,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mContactsHelper.setLocale(this, currentLocale);
         mProfileHelper.setLocale(this, currentLocale);
         prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
+        invalidateFastScrollingIndexCache();
         setProviderStatus(providerStatus);
     }
 
@@ -1836,6 +1849,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     @NeededForTesting
     void wipeData() {
+        invalidateFastScrollingIndexCache();
         mContactsHelper.wipeData();
         mProfileHelper.wipeData();
         mContactsPhotoStore.clear();
@@ -2122,6 +2136,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (mVisibleTouched) {
             mVisibleTouched = false;
             mDbHelper.get().updateAllVisible();
+
+            // Need to rebuild the fast-indxer bundle.
+            invalidateFastScrollingIndexCache();
         }
 
         updateSearchIndexInTransaction();
@@ -2264,6 +2281,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
 
             case CONTACTS: {
+                invalidateFastScrollingIndexCache();
                 insertContact(values);
                 break;
             }
@@ -2275,6 +2293,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
+                invalidateFastScrollingIndexCache();
                 id = insertRawContact(uri, values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
@@ -2282,6 +2301,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS_ID_DATA:
             case PROFILE_RAW_CONTACTS_ID_DATA: {
+                invalidateFastScrollingIndexCache();
                 int segment = match == RAW_CONTACTS_ID_DATA ? 1 : 2;
                 values.put(Data.RAW_CONTACT_ID, uri.getPathSegments().get(segment));
                 id = insertData(values, callerIsSyncAdapter);
@@ -2298,6 +2318,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DATA:
             case PROFILE_DATA: {
+                invalidateFastScrollingIndexCache();
                 id = insertData(values, callerIsSyncAdapter);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
@@ -3245,16 +3266,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS: {
+                invalidateFastScrollingIndexCache();
                 // TODO
                 return 0;
             }
 
             case CONTACTS_ID: {
+                invalidateFastScrollingIndexCache();
                 long contactId = ContentUris.parseId(uri);
                 return deleteContact(contactId, callerIsSyncAdapter);
             }
 
             case CONTACTS_LOOKUP: {
+                invalidateFastScrollingIndexCache();
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
@@ -3267,6 +3291,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_LOOKUP_ID: {
+                invalidateFastScrollingIndexCache();
                 // lookup contact by id and lookup key to see if they still match the actual record
                 final List<String> pathSegments = uri.getPathSegments();
                 final String lookupKey = pathSegments.get(2);
@@ -3301,6 +3326,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
+                invalidateFastScrollingIndexCache();
                 int numDeletes = 0;
                 Cursor c = mActiveDb.get().query(Views.RAW_CONTACTS,
                         new String[]{RawContacts._ID, RawContacts.CONTACT_ID},
@@ -3321,6 +3347,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS_ID:
             case PROFILE_RAW_CONTACTS_ID: {
+                invalidateFastScrollingIndexCache();
                 final long rawContactId = ContentUris.parseId(uri);
                 return deleteRawContact(rawContactId, mDbHelper.get().getContactId(rawContactId),
                         callerIsSyncAdapter);
@@ -3328,6 +3355,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DATA:
             case PROFILE_DATA: {
+                invalidateFastScrollingIndexCache();
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 return deleteData(appendAccountToSelection(uri, selection), selectionArgs,
                         callerIsSyncAdapter);
@@ -3339,6 +3367,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case CALLABLES_ID:
             case POSTALS_ID:
             case PROFILE_DATA_ID: {
+                invalidateFastScrollingIndexCache();
                 long dataId = ContentUris.parseId(uri);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 mSelectionArgs1[0] = String.valueOf(dataId);
@@ -3627,17 +3656,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case CONTACTS:
             case PROFILE: {
+                invalidateFastScrollingIndexCache();
                 count = updateContactOptions(values, selection, selectionArgs, callerIsSyncAdapter);
                 break;
             }
 
             case CONTACTS_ID: {
+                invalidateFastScrollingIndexCache();
                 count = updateContactOptions(ContentUris.parseId(uri), values, callerIsSyncAdapter);
                 break;
             }
 
             case CONTACTS_LOOKUP:
             case CONTACTS_LOOKUP_ID: {
+                invalidateFastScrollingIndexCache();
                 final List<String> pathSegments = uri.getPathSegments();
                 final int segmentCount = pathSegments.size();
                 if (segmentCount < 3) {
@@ -3652,6 +3684,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS_ID_DATA:
             case PROFILE_RAW_CONTACTS_ID_DATA: {
+                invalidateFastScrollingIndexCache();
                 int segment = match == RAW_CONTACTS_ID_DATA ? 1 : 2;
                 final String rawContactId = uri.getPathSegments().get(segment);
                 String selectionWithId = (Data.RAW_CONTACT_ID + "=" + rawContactId + " ")
@@ -3664,6 +3697,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DATA:
             case PROFILE_DATA: {
+                invalidateFastScrollingIndexCache();
                 count = updateData(uri, values, appendAccountToSelection(uri, selection),
                         selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
@@ -3677,6 +3711,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case EMAILS_ID:
             case CALLABLES_ID:
             case POSTALS_ID: {
+                invalidateFastScrollingIndexCache();
                 count = updateData(uri, values, selection, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
@@ -3686,12 +3721,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
+                invalidateFastScrollingIndexCache();
                 selection = appendAccountIdToSelection(uri, selection);
                 count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter);
                 break;
             }
 
             case RAW_CONTACTS_ID: {
+                invalidateFastScrollingIndexCache();
                 long rawContactId = ContentUris.parseId(uri);
                 if (selection != null) {
                     selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
@@ -4428,6 +4465,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return false;
         }
         Log.i(TAG, "Accounts changed");
+
+        invalidateFastScrollingIndexCache();
+
         final ContactsDatabaseHelper dbHelper = mDbHelper.get();
         final SQLiteDatabase db = dbHelper.getWritableDatabase();
         mActiveDb.set(db);
@@ -4791,11 +4831,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    protected Cursor queryLocal(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, long directoryId,
-            CancellationSignal cancellationSignal) {
+    protected Cursor queryLocal(final Uri uri, final String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, final long directoryId,
+            final CancellationSignal cancellationSignal) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "query=" + uri + " selection=" + selection);
+            Log.v(TAG, "query=" + uri + " selection=" + selection + " order=" + sortOrder);
         }
 
         // Default active DB to the contacts DB if none has been set.
@@ -5842,8 +5882,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 limit, cancellationSignal);
 
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
-            cursor = bundleLetterCountExtras(cursor, mActiveDb.get(), qb, selection,
-                    selectionArgs, sortOrder, addressBookIndexerCountExpression, cancellationSignal);
+            bundleFastScrollingIndexExtras(cursor, uri, mActiveDb.get(), qb, selection,
+                    selectionArgs, sortOrder, addressBookIndexerCountExpression,
+                    cancellationSignal);
         }
         if (snippetDeferred) {
             cursor = addDeferredSnippetingExtra(cursor);
@@ -5915,6 +5956,55 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return null;
     }
 
+    private void invalidateFastScrollingIndexCache() {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "invalidatemFastScrollingIndexCache");
+        }
+        synchronized (mFastScrollingIndexCacheLock) {
+            mFastScrollingIndexCache.invalidate();
+        }
+    }
+
+    /**
+     * Add the "fast scrolling index" bundle, generated by {@link #getFastScrollingIndexExtras},
+     * to a cursor as extras.  It first checks {@link FastScrollingIndexCache} to see if we
+     * already have a cached result.
+     */
+    private void bundleFastScrollingIndexExtras(Cursor cursor, Uri queryUri,
+            final SQLiteDatabase db, SQLiteQueryBuilder qb, String selection,
+            String[] selectionArgs, String sortOrder, String countExpression,
+            CancellationSignal cancellationSignal) {
+        if (!(cursor instanceof AbstractCursor)) {
+            Log.w(TAG, "Unable to bundle extras.  Cursor is not AbstractCursor.");
+            return;
+        }
+        Bundle b;
+        synchronized (mFastScrollingIndexCacheLock) {
+            // First, try the cache.
+            mFastScrollingIndexCacheRequestCount++;
+            b = mFastScrollingIndexCache.get(queryUri, selection, selectionArgs, sortOrder,
+                    countExpression);
+
+            if (b == null) {
+                mFastScrollingIndexCacheMissCount++;
+                // Not in the cache.  Generate and put.
+                final long start = System.currentTimeMillis();
+
+                b = getFastScrollingIndexExtras(queryUri, db, qb, selection, selectionArgs,
+                        sortOrder, countExpression, cancellationSignal, getLocale(),
+                        mFastScrollingIndexCache);
+
+                final long end = System.currentTimeMillis();
+                final int time = (int) (end - start);
+                mTotalTimeFastScrollingIndexGenerate += time;
+                if (VERBOSE_LOGGING) {
+                    Log.v(TAG, "getLetterCountExtraBundle took " + time + "ms");
+                }
+            }
+        }
+        ((AbstractCursor) cursor).setExtras(b);
+    }
+
     private static final class AddressBookIndexQuery {
         public static final String LETTER = "letter";
         public static final String TITLE = "title";
@@ -5935,16 +6025,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Computes counts by the address book index titles and adds the resulting tally
-     * to the returned cursor as a bundle of extras.
+     * Computes counts by the address book index titles and returns it as {@link Bundle} which
+     * will be appended to a {@link Cursor} as extras.  The result will also be cached to
+     * {@link FastScrollingIndexCache}.
      */
-    private Cursor bundleLetterCountExtras(Cursor cursor, final SQLiteDatabase db,
-            SQLiteQueryBuilder qb, String selection, String[] selectionArgs, String sortOrder,
-            String countExpression, CancellationSignal cancellationSignal) {
-        if (!(cursor instanceof AbstractCursor)) {
-            Log.w(TAG, "Unable to bundle extras.  Cursor is not AbstractCursor.");
-            return cursor;
-        }
+    private static Bundle getFastScrollingIndexExtras(final Uri queryUri, final SQLiteDatabase db,
+            final SQLiteQueryBuilder qb, final String selection, final String[] selectionArgs,
+            final String sortOrder, final String originalCountExpression,
+            final CancellationSignal cancellationSignal, final Locale currentLocale,
+            final FastScrollingIndexCache cache) {
         String sortKey;
 
         // The sort order suffix could be something like "DESC".
@@ -5963,7 +6052,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sortKey = Contacts.SORT_KEY_PRIMARY;
         }
 
-        String locale = getLocale().toString();
         HashMap<String, String> projectionMap = Maps.newHashMap();
         String sectionHeading = String.format(Locale.US, AddressBookIndexQuery.SECTION_HEADING,
                 sortKey);
@@ -5971,6 +6059,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 sectionHeading + " AS " + AddressBookIndexQuery.LETTER);
 
         // If "what to count" is not specified, we just count all records.
+        String countExpression = originalCountExpression;
         if (TextUtils.isEmpty(countExpression)) {
             countExpression = "*";
         }
@@ -5983,7 +6072,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
          * than Katakana.
          */
         projectionMap.put(AddressBookIndexQuery.TITLE,
-                "GET_PHONEBOOK_INDEX(" + sectionHeading + ",'" + locale + "')"
+                "GET_PHONEBOOK_INDEX(" + sectionHeading + ",'" + currentLocale.toString() + "')"
                         + " AS " + AddressBookIndexQuery.TITLE);
         projectionMap.put(AddressBookIndexQuery.COUNT,
                 "COUNT(" + countExpression + ") AS " + AddressBookIndexQuery.COUNT);
@@ -6007,6 +6096,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             for (int i = 0; i < groupCount; i++) {
                 indexCursor.moveToNext();
                 String title = indexCursor.getString(AddressBookIndexQuery.COLUMN_TITLE);
+                if (title == null) {
+                    title = "";
+                }
                 int count = indexCursor.getInt(AddressBookIndexQuery.COLUMN_COUNT);
                 if (indexCount == 0 || !TextUtils.equals(title, currentTitle)) {
                     titles[indexCount] = currentTitle = title;
@@ -6026,13 +6118,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 System.arraycopy(counts, 0, newCounts, 0, indexCount);
                 counts = newCounts;
             }
-
-            final Bundle bundle = new Bundle();
-            bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
-            bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
-
-            ((AbstractCursor) cursor).setExtras(bundle);
-            return cursor;
+            // Note: The parameters below are used as the cache key, so we need to use the
+            // *original* values that have been passed to this method.
+            // Otherwise originalCountExpression() would generate a different key than get() does.
+            return cache.putAndGetBundle(queryUri, selection, selectionArgs, sortOrder,
+                    originalCountExpression, titles, counts);
         } finally {
             indexCursor.close();
         }
@@ -8031,5 +8121,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @NeededForTesting
     public ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
         return mDbHelper.get();
+    }
+
+    @Override
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.print("FastScrollingIndex stats:\n");
+        pw.printf("request=%d  miss=%d (%d%%)  avg time=%dms\n",
+                mFastScrollingIndexCacheRequestCount,
+                mFastScrollingIndexCacheMissCount,
+                safeDiv(mFastScrollingIndexCacheMissCount * 100,
+                        mFastScrollingIndexCacheRequestCount),
+                safeDiv(mTotalTimeFastScrollingIndexGenerate, mFastScrollingIndexCacheMissCount)
+                );
+    }
+
+    private static final long safeDiv(long dividend, long divisor) {
+        return (divisor == 0) ? 0 : dividend / divisor;
     }
 }
