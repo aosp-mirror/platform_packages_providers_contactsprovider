@@ -81,6 +81,14 @@ public class FastScrollingIndexCacheTest extends AndroidTestCase {
                         FastScrollingIndexCache.buildCacheValue(TITLES_2, COUNTS_2)));
     }
 
+    private static final Bundle putAndGetBundle(FastScrollingIndexCache cache, Uri queryUri,
+            String selection, String[] selectionArgs, String sortOrder, String countExpression,
+            String[] titles, int[] counts) {
+        Bundle bundle = FastScrollingIndexCache.buildExtraBundle(titles, counts);
+        cache.put(queryUri, selection, selectionArgs, sortOrder, countExpression, bundle);
+        return bundle;
+    }
+
     public void testPutAndGet() {
         // Initially the cache is empty
         assertNull(mCache.get(null, null, null, null, null));
@@ -90,16 +98,16 @@ public class FastScrollingIndexCacheTest extends AndroidTestCase {
 
         // Put...
         Bundle b;
-        b = mCache.putAndGetBundle(null, null, null, null, null, TITLES_0, COUNTS_0);
+        b = putAndGetBundle(mCache, null, null, null, null, null, TITLES_0, COUNTS_0);
         assertBundle(TITLES_0, COUNTS_0, b);
 
-        b = mCache.putAndGetBundle(URI_A, "*s*", PROJECTION_0, "*so*", "*ce*", TITLES_1, COUNTS_1);
+        b = putAndGetBundle(mCache, URI_A, "*s*", PROJECTION_0, "*so*", "*ce*", TITLES_1, COUNTS_1);
         assertBundle(TITLES_1, COUNTS_1, b);
 
-        b = mCache.putAndGetBundle(URI_A, "*s*", PROJECTION_1, "*so*", "*ce*", TITLES_2, COUNTS_2);
+        b = putAndGetBundle(mCache, URI_A, "*s*", PROJECTION_1, "*so*", "*ce*", TITLES_2, COUNTS_2);
         assertBundle(TITLES_2, COUNTS_2, b);
 
-        b = mCache.putAndGetBundle(URI_B, "s", PROJECTION_2, "so", "ce", TITLES_3, COUNTS_3);
+        b = putAndGetBundle(mCache, URI_B, "s", PROJECTION_2, "so", "ce", TITLES_3, COUNTS_3);
         assertBundle(TITLES_3, COUNTS_3, b);
 
         // Get...
@@ -118,16 +126,16 @@ public class FastScrollingIndexCacheTest extends AndroidTestCase {
         assertNull(mCache.get(URI_B, "s", PROJECTION_2, "so", "ce"));
 
         // Put again...
-        b = mCache.putAndGetBundle(null, null, null, null, null, TITLES_0, COUNTS_0);
+        b = putAndGetBundle(mCache, null, null, null, null, null, TITLES_0, COUNTS_0);
         assertBundle(TITLES_0, COUNTS_0, b);
 
-        b = mCache.putAndGetBundle(URI_A, "*s*", PROJECTION_0, "*so*", "*ce*", TITLES_1, COUNTS_1);
+        b = putAndGetBundle(mCache, URI_A, "*s*", PROJECTION_0, "*so*", "*ce*", TITLES_1, COUNTS_1);
         assertBundle(TITLES_1, COUNTS_1, b);
 
-        b = mCache.putAndGetBundle(URI_A, "*s*", PROJECTION_1, "*so*", "*ce*", TITLES_2, COUNTS_2);
+        b = putAndGetBundle(mCache, URI_A, "*s*", PROJECTION_1, "*so*", "*ce*", TITLES_2, COUNTS_2);
         assertBundle(TITLES_2, COUNTS_2, b);
 
-        b = mCache.putAndGetBundle(URI_B, "s", PROJECTION_2, "so", "ce", TITLES_2, COUNTS_2);
+        b = putAndGetBundle(mCache, URI_B, "s", PROJECTION_2, "so", "ce", TITLES_2, COUNTS_2);
         assertBundle(TITLES_2, COUNTS_2, b);
 
         // Now, create a new cache instance (with the same shared preferences)

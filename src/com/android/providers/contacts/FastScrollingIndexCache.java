@@ -45,7 +45,7 @@ import java.util.regex.Pattern;
  * a compact form in both the in-memory cache and the preferences.  Also the query in question
  * (the query for contact lists) has relatively low number of variations.
  *
- * This class is not thread-safe.
+ * This class is thread-safe.
  */
 public class FastScrollingIndexCache {
     private static final String TAG = "LetterCountCache";
@@ -149,7 +149,7 @@ public class FastScrollingIndexCache {
     /**
      * Creates and returns a {@link Bundle} that is appended to a {@link Cursor} as extras.
      */
-    private static final Bundle buildExtraBundle(String[] titles, int[] counts) {
+    public static final Bundle buildExtraBundle(String[] titles, int[] counts) {
         Bundle bundle = new Bundle();
         bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
         bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
@@ -188,51 +188,62 @@ public class FastScrollingIndexCache {
 
     public Bundle get(Uri queryUri, String selection, String[] selectionArgs, String sortOrder,
             String countExpression) {
-        ensureLoaded();
-        final String key = buildCacheKey(queryUri, selection, selectionArgs, sortOrder,
-                countExpression);
-        final String value = mCache.get(key);
-        if (value == null) {
-            if (Log.isLoggable(TAG, Log.VERBOSE)) {
-                Log.v(TAG, "Miss: " + key);
+        synchronized (mCache) {
+            ensureLoaded();
+            final String key = buildCacheKey(queryUri, selection, selectionArgs, sortOrder,
+                    countExpression);
+            final String value = mCache.get(key);
+            if (value == null) {
+                if (Log.isLoggable(TAG, Log.VERBOSE)) {
+                    Log.v(TAG, "Miss: " + key);
+                }
+                return null;
             }
-            return null;
-        }
 
-        final Bundle b = buildExtraBundleFromValue(value);
-        if (b == null) {
-            // Value was malformed for whatever reason.
-            mCache.remove(key);
-            save();
-        } else {
-            if (Log.isLoggable(TAG, Log.VERBOSE)) {
-                Log.v(TAG, "Hit:  " + key);
+            final Bundle b = buildExtraBundleFromValue(value);
+            if (b == null) {
+                // Value was malformed for whatever reason.
+                mCache.remove(key);
+                save();
+            } else {
+                if (Log.isLoggable(TAG, Log.VERBOSE)) {
+                    Log.v(TAG, "Hit:  " + key);
+                }
             }
+            return b;
         }
-        return b;
     }
 
-    public Bundle putAndGetBundle(Uri queryUri, String selection, String[] selectionArgs,
-            String sortOrder, String countExpression, String[] titles, int[] counts) {
-        ensureLoaded();
-        final String key = buildCacheKey(queryUri, selection, selectionArgs, sortOrder,
-                countExpression);
-        mCache.put(key, buildCacheValue(titles, counts));
-        save();
+    /**
+     * Put a {@link Bundle} into the cache.  {@link Bundle} MUST be built with
+     * {@link #buildExtraBundle(String[], int[])}.
+     */
+    public void put(Uri queryUri, String selection, String[] selectionArgs, String sortOrder,
+            String countExpression, Bundle bundle) {
+        synchronized (mCache) {
+            ensureLoaded();
+            final String key = buildCacheKey(queryUri, selection, selectionArgs, sortOrder,
+                    countExpression);
+            mCache.put(key, buildCacheValue(
+                    bundle.getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES),
+                    bundle.getIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS)));
+            save();
 
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
-            Log.v(TAG, "Put: " + key);
+            if (Log.isLoggable(TAG, Log.VERBOSE)) {
+                Log.v(TAG, "Put: " + key);
+            }
         }
-        return buildExtraBundle(titles, counts);
     }
 
     public void invalidate() {
-        mPrefs.edit().remove(PREFERENCE_KEY).apply();
-        mCache.clear();
-        mPreferenceLoaded = true;
+        synchronized (mCache) {
+            mPrefs.edit().remove(PREFERENCE_KEY).apply();
+            mCache.clear();
+            mPreferenceLoaded = true;
 
-        if (Log.isLoggable(TAG, Log.VERBOSE)) {
-            Log.v(TAG, "Invalidated");
+            if (Log.isLoggable(TAG, Log.VERBOSE)) {
+                Log.v(TAG, "Invalidated");
+            }
         }
     }
 

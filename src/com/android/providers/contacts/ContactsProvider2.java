@@ -1348,7 +1348,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private long mLastPhotoCleanup = 0;
 
     private FastScrollingIndexCache mFastScrollingIndexCache;
-    private final Object mFastScrollingIndexCacheLock = new Object();
 
     // Stats about FastScrollingIndex.
     private int mFastScrollingIndexCacheRequestCount;
@@ -5960,9 +5959,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "invalidatemFastScrollingIndexCache");
         }
-        synchronized (mFastScrollingIndexCacheLock) {
-            mFastScrollingIndexCache.invalidate();
-        }
+
+        // FastScrollingIndexCache is thread-safe, no need to synchronize here.
+        mFastScrollingIndexCache.invalidate();
     }
 
     /**
@@ -5979,7 +5978,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return;
         }
         Bundle b;
-        synchronized (mFastScrollingIndexCacheLock) {
+        // Note even though FastScrollingIndexCache is thread-safe, we really need to put the
+        // put-get pair in a single synchronized block, so that even if multiple-threads request the
+        // same index at the same time (which actually happens on the phone app) we only execute
+        // the query once.
+        //
+        // This doesn't cause deadlock, because only reader threads get here but not writer
+        // threads.  (Writer threads may call invalidateFastScrollingIndexCache(), but it doesn't
+        // synchronize on mFastScrollingIndexCache)
+        //
+        // All reader and writer threads share the single lock object internally in
+        // FastScrollingIndexCache, but the lock scope is limited within each put(), get() and
+        // invalidate() call, so it won't deadlock.
+
+        // Synchronizing on a non-static field is generally not a good idea, but nobody should
+        // modify mFastScrollingIndexCache once initialized, and it shouldn't be null at this point.
+        synchronized (mFastScrollingIndexCache) {
             // First, try the cache.
             mFastScrollingIndexCacheRequestCount++;
             b = mFastScrollingIndexCache.get(queryUri, selection, selectionArgs, sortOrder,
@@ -5991,8 +6005,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final long start = System.currentTimeMillis();
 
                 b = getFastScrollingIndexExtras(queryUri, db, qb, selection, selectionArgs,
-                        sortOrder, countExpression, cancellationSignal, getLocale(),
-                        mFastScrollingIndexCache);
+                        sortOrder, countExpression, cancellationSignal, getLocale());
 
                 final long end = System.currentTimeMillis();
                 final int time = (int) (end - start);
@@ -6000,6 +6013,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (VERBOSE_LOGGING) {
                     Log.v(TAG, "getLetterCountExtraBundle took " + time + "ms");
                 }
+                mFastScrollingIndexCache.put(queryUri, selection, selectionArgs, sortOrder,
+                        countExpression, b);
             }
         }
         ((AbstractCursor) cursor).setExtras(b);
@@ -6026,14 +6041,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /**
      * Computes counts by the address book index titles and returns it as {@link Bundle} which
-     * will be appended to a {@link Cursor} as extras.  The result will also be cached to
-     * {@link FastScrollingIndexCache}.
+     * will be appended to a {@link Cursor} as extras.
      */
     private static Bundle getFastScrollingIndexExtras(final Uri queryUri, final SQLiteDatabase db,
             final SQLiteQueryBuilder qb, final String selection, final String[] selectionArgs,
-            final String sortOrder, final String originalCountExpression,
-            final CancellationSignal cancellationSignal, final Locale currentLocale,
-            final FastScrollingIndexCache cache) {
+            final String sortOrder, String countExpression,
+            final CancellationSignal cancellationSignal, final Locale currentLocale) {
         String sortKey;
 
         // The sort order suffix could be something like "DESC".
@@ -6059,7 +6072,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 sectionHeading + " AS " + AddressBookIndexQuery.LETTER);
 
         // If "what to count" is not specified, we just count all records.
-        String countExpression = originalCountExpression;
         if (TextUtils.isEmpty(countExpression)) {
             countExpression = "*";
         }
@@ -6118,11 +6130,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 System.arraycopy(counts, 0, newCounts, 0, indexCount);
                 counts = newCounts;
             }
-            // Note: The parameters below are used as the cache key, so we need to use the
-            // *original* values that have been passed to this method.
-            // Otherwise originalCountExpression() would generate a different key than get() does.
-            return cache.putAndGetBundle(queryUri, selection, selectionArgs, sortOrder,
-                    originalCountExpression, titles, counts);
+            return FastScrollingIndexCache.buildExtraBundle(titles, counts);
         } finally {
             indexCursor.close();
         }
