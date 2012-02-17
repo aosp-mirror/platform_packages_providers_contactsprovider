@@ -4599,7 +4599,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         mAccountWritability.clear();
 
-        dbHelper.refreshAccountCache();
         updateContactsAccountCount(systemAccounts);
         updateProviderStatus();
         return true;

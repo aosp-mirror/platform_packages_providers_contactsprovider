@@ -705,8 +705,6 @@ import java.util.concurrent.ConcurrentHashMap;
     /** In-memory cache of previously found package name mappings */
     // TODO Use ConcurrentHashMap?
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
-    private final Map<AccountWithDataSet, Long> mAccountCache =
-            new ConcurrentHashMap<AccountWithDataSet, Long>();
 
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
@@ -796,7 +794,7 @@ import java.util.concurrent.ConcurrentHashMap;
      *    This is normally {@code true}, but needs to be false during database upgrade until
      *    step 626, where the account ID was introduced.
      */
-    private void refreshDatabaseCaches(SQLiteDatabase db, boolean accountTableHasId) {
+    private void refreshDatabaseCaches(SQLiteDatabase db) {
         mStatusUpdateDelete = null;
         mStatusUpdateReplace = null;
         mStatusUpdateInsert = null;
@@ -815,21 +813,17 @@ import java.util.concurrent.ConcurrentHashMap;
         mAggregationModeQuery = null;
         mContactInDefaultDirectoryQuery = null;
 
-        initializeCache(db, accountTableHasId);
+        initializeCache(db);
     }
 
     /**
      * (Re-)initialize the cached database information.
      *
      * @param db target database
-     * @param accountTableHasId See {@link #refreshDatabaseCaches}.
      */
-    private void initializeCache(SQLiteDatabase db, boolean accountTableHasId) {
+    private void initializeCache(SQLiteDatabase db) {
         mMimetypeCache.clear();
         mPackageCache.clear();
-        if (accountTableHasId) {
-            refreshAccountCache(db);
-        }
 
         // TODO: This could be optimized into one query instead of 7
         //        Also: We shouldn't have those fields in the first place. This should just be
@@ -846,7 +840,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
     @Override
     public void onOpen(SQLiteDatabase db) {
-        refreshDatabaseCaches(db, true);
+        refreshDatabaseCaches(db);
 
         mSyncState.onDatabaseOpened(db);
 
@@ -3408,7 +3402,7 @@ import java.util.concurrent.ConcurrentHashMap;
     }
 
     private void upgradeToVersion504(SQLiteDatabase db) {
-        initializeCache(db, false);
+        initializeCache(db);
 
         // Find all names with prefixes and recreate display name
         Cursor cursor = db.rawQuery(
@@ -3930,7 +3924,7 @@ import java.util.concurrent.ConcurrentHashMap;
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
 
-        initializeCache(db, true);
+        initializeCache(db);
 
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
@@ -4133,34 +4127,23 @@ import java.util.concurrent.ConcurrentHashMap;
         }
     }
 
-    /** Refresh {@link #mAccountCache}. */
-    public void refreshAccountCache() {
-        refreshAccountCache(getReadableDatabase());
-    }
-
-    /** Refresh {@link #mAccountCache}. */
-    private void refreshAccountCache(SQLiteDatabase db) {
-        mAccountCache.clear();
-        Cursor c = db.rawQuery(
+    /**
+     * Gets all accounts in the accounts table.
+     */
+    public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
+        final Set<AccountWithDataSet> result = Sets.newHashSet();
+        Cursor c = getReadableDatabase().rawQuery(
                 "SELECT DISTINCT " +  AccountsColumns._ID + "," + AccountsColumns.ACCOUNT_NAME +
                 "," + AccountsColumns.ACCOUNT_TYPE + "," + AccountsColumns.DATA_SET +
                 " FROM " + Tables.ACCOUNTS, null);
         try {
             while (c.moveToNext()) {
-                mAccountCache.put(
-                        AccountWithDataSet.get(c.getString(1), c.getString(2), c.getString(3)),
-                        c.getLong(0));
+                result.add(AccountWithDataSet.get(c.getString(1), c.getString(2), c.getString(3)));
             }
         } finally {
             c.close();
         }
-    }
-
-    /**
-     * Gets all accounts in the accounts table.
-     */
-    public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
-        return mAccountCache.keySet();
+        return result;
     }
 
     /**
@@ -4170,7 +4153,28 @@ import java.util.concurrent.ConcurrentHashMap;
         if (accountWithDataSet == null) {
             accountWithDataSet = AccountWithDataSet.LOCAL;
         }
-        return mAccountCache.get(accountWithDataSet);
+        final SQLiteStatement select = getWritableDatabase().compileStatement(
+                "SELECT " + AccountsColumns._ID +
+                " FROM " + Tables.ACCOUNTS +
+                " WHERE " +
+                "((?1 IS NULL AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL) OR " +
+                "(" + AccountsColumns.ACCOUNT_NAME + "=?1)) AND " +
+                "((?2 IS NULL AND " + AccountsColumns.ACCOUNT_TYPE + " IS NULL) OR " +
+                "(" + AccountsColumns.ACCOUNT_TYPE + "=?2)) AND " +
+                "((?3 IS NULL AND " + AccountsColumns.DATA_SET + " IS NULL) OR " +
+                "(" + AccountsColumns.DATA_SET + "=?3))");
+        try {
+            DatabaseUtils.bindObjectToProgram(select, 1, accountWithDataSet.getAccountName());
+            DatabaseUtils.bindObjectToProgram(select, 2, accountWithDataSet.getAccountType());
+            DatabaseUtils.bindObjectToProgram(select, 3, accountWithDataSet.getDataSet());
+            try {
+                return select.simpleQueryForLong();
+            } catch (SQLiteDoneException notFound) {
+                return null;
+            }
+        } finally {
+            select.close();
+        }
     }
 
     /**
@@ -4200,8 +4204,6 @@ import java.util.concurrent.ConcurrentHashMap;
         } finally {
             insert.close();
         }
-
-        mAccountCache.put(accountWithDataSet, id);
 
         return id;
     }
