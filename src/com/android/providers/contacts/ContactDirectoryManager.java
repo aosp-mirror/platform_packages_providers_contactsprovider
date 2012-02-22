@@ -48,7 +48,6 @@ import java.util.Set;
 /**
  * Manages the contents of the {@link Directory} table.
  */
-// TODO: Determine whether directories need to be aware of data sets under the account.
 public class ContactDirectoryManager {
 
     private static final String TAG = "ContactDirectoryManager";
@@ -56,7 +55,7 @@ public class ContactDirectoryManager {
 
     public static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
 
-    public class DirectoryInfo {
+    public static class DirectoryInfo {
         long id;
         String packageName;
         String authority;
@@ -257,6 +256,13 @@ public class ContactDirectoryManager {
         for (String packageName : getDirectoryProviderPackages(mPackageManager)) {
             if (DEBUG) Log.d(TAG, "package=" + packageName);
 
+            // getDirectoryProviderPackages() shouldn't return the contacts provider package
+            // because it doesn't have CONTACT_DIRECTORY_META_DATA, but just to make sure...
+            if (mContext.getPackageName().equals(packageName)) {
+                Log.w(TAG, "  skipping self");
+                continue;
+            }
+
             final PackageInfo packageInfo;
             try {
                 packageInfo = mPackageManager.getPackageInfo(packageName,
@@ -337,6 +343,10 @@ public class ContactDirectoryManager {
             packageInfo.packageName = packageName;
         }
 
+        if (mContext.getPackageName().equals(packageInfo.packageName)) {
+            if (DEBUG) Log.d(TAG, "Ignoring onPackageChanged for self");
+            return;
+        }
         updateDirectoriesForPackage(packageInfo, false);
     }
 
@@ -347,6 +357,11 @@ public class ContactDirectoryManager {
      */
     private List<DirectoryInfo> updateDirectoriesForPackage(
             PackageInfo packageInfo, boolean initialScan) {
+        if (DEBUG) {
+            Log.d(TAG, "updateDirectoriesForPackage  packageName=" + packageInfo.packageName
+                    + " initialScan=" + initialScan);
+        }
+
         ArrayList<DirectoryInfo> directories = Lists.newArrayList();
 
         ProviderInfo[] providers = packageInfo.providers;
@@ -376,7 +391,11 @@ public class ContactDirectoryManager {
                 sb.setLength(sb.length() - 1);  // Remove the extra comma
                 sb.append(")");
             }
-            db.delete(Tables.DIRECTORIES, sb.toString(), new String[] { packageInfo.packageName });
+            final int numDeleted = db.delete(Tables.DIRECTORIES, sb.toString(),
+                    new String[] { packageInfo.packageName });
+            if (DEBUG) {
+                Log.d(TAG, "  deleted " + numDeleted + " stale rows");
+            }
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();

@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
 
@@ -106,9 +107,10 @@ import java.util.concurrent.ConcurrentHashMap;
      *   500-549 Honeycomb-MR1
      *   550-599 Honeycomb-MR2
      *   600-699 Ice Cream Sandwich
+     *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 626;
+    static final int DATABASE_VERSION = 700;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1968,6 +1970,7 @@ import java.util.concurrent.ConcurrentHashMap;
         boolean upgradeNameLookup = false;
         boolean upgradeLegacyApiSupport = false;
         boolean upgradeSearchIndex = false;
+        boolean rescanDirectories = false;
 
         if (oldVersion == 99) {
             upgradeViewsAndTriggers = true;
@@ -2377,6 +2380,11 @@ import java.util.concurrent.ConcurrentHashMap;
             oldVersion = 626;
         }
 
+        if (oldVersion < 700) {
+            rescanDirectories = true;
+            oldVersion = 700;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2398,6 +2406,12 @@ import java.util.concurrent.ConcurrentHashMap;
         if (upgradeSearchIndex) {
             createSearchIndexTable(db);
             setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
+        }
+
+        if (rescanDirectories) {
+            // Force the next ContactDirectoryManager.scanAllPackages() to rescan all packages.
+            // (It's called from the BACKGROUND_TASK_UPDATE_ACCOUNTS background task.)
+            setProperty(db, DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
         }
 
         if (oldVersion != newVersion) {
