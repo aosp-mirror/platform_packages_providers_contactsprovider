@@ -4666,6 +4666,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "query uri=" + uri + " selection=" + selection + " order=" + sortOrder);
+        }
 
         waitForAccess(mReadAccessLatch);
 
@@ -4832,9 +4835,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected Cursor queryLocal(final Uri uri, final String[] projection, String selection,
             String[] selectionArgs, String sortOrder, final long directoryId,
             final CancellationSignal cancellationSignal) {
-        if (VERBOSE_LOGGING) {
-            Log.v(TAG, "query=" + uri + " selection=" + selection + " order=" + sortOrder);
-        }
 
         // Default active DB to the contacts DB if none has been set.
         if (mActiveDb.get() == null) {
@@ -7014,17 +7014,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
-        if (mode.equals("r")) {
-            waitForAccess(mReadAccessLatch);
-        } else {
-            waitForAccess(mWriteAccessLatch);
-        }
-        if (mapsToProfileDb(uri)) {
-            switchToProfileMode();
-            return mProfileProvider.openAssetFile(uri, mode);
-        } else {
-            switchToContactMode();
-            return openAssetFileLocal(uri, mode);
+        boolean success = false;
+        try {
+            if (mode.equals("r")) {
+                waitForAccess(mReadAccessLatch);
+            } else {
+                waitForAccess(mWriteAccessLatch);
+            }
+            final AssetFileDescriptor ret;
+            if (mapsToProfileDb(uri)) {
+                switchToProfileMode();
+                ret = mProfileProvider.openAssetFile(uri, mode);
+            } else {
+                switchToContactMode();
+                ret = openAssetFileLocal(uri, mode);
+            }
+            success = true;
+            return ret;
+        } finally {
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success);
+            }
         }
     }
 
