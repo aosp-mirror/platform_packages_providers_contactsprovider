@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-package com.android.providers.contacts;
+package com.android.providers.contacts.aggregation;
 
+import com.android.providers.contacts.BaseContactsProvider2Test;
+import com.android.providers.contacts.aggregation.ContactAggregator;
 import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
 

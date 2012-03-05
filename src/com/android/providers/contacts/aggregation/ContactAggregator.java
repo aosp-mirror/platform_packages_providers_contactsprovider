@@ -14,9 +14,13 @@
  * limitations under the License
  */
 
-package com.android.providers.contacts;
+package com.android.providers.contacts.aggregation;
 
+import com.android.providers.contacts.CommonNicknameCache;
+import com.android.providers.contacts.ContactLookupKey;
+import com.android.providers.contacts.ContactMatcher;
 import com.android.providers.contacts.ContactMatcher.MatchScore;
+import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
@@ -29,6 +33,13 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.ContactsProvider2;
+import com.android.providers.contacts.NameLookupBuilder;
+import com.android.providers.contacts.NameNormalizer;
+import com.android.providers.contacts.NameSplitter;
+import com.android.providers.contacts.PhotoPriorityResolver;
+import com.android.providers.contacts.ReorderingCursorWrapper;
+import com.android.providers.contacts.TransactionContext;
 
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -549,7 +560,7 @@ public class ContactAggregator {
         return contactId;
     }
 
-    public long insertContact(SQLiteDatabase db, long rawContactId) {
+    protected long insertContact(SQLiteDatabase db, long rawContactId) {
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1, mContactInsert);
         return mContactInsert.executeInsert();
@@ -2110,7 +2121,7 @@ public class ContactAggregator {
      * Execute {@link SQLiteStatement} that will update the
      * {@link Contacts#STARRED} flag for the given {@link RawContacts#_ID}.
      */
-    protected void updateStarred(long rawContactId) {
+    public void updateStarred(long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;

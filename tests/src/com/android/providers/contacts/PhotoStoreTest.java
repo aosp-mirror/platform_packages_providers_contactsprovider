@@ -167,7 +167,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
 
         // Run cleanup with the indication that only the large and huge photos are in use, along
         // with a bogus photo file ID that isn't in the photo store.
-        long bogusPhotoFileId = 42;
+        long bogusPhotoFileId = 123456789;
         Set<Long> photoFileIdsInUse = new HashSet<Long>();
         photoFileIdsInUse.add(resourceIdToPhotoMap.get(R.drawable.earth_large));
         photoFileIdsInUse.add(resourceIdToPhotoMap.get(R.drawable.earth_huge));

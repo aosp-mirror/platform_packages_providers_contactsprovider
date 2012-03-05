@@ -22,6 +22,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Projections;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsProvider2.GroupIdCacheEntry;
+import com.android.providers.contacts.aggregation.ContactAggregator;
 
 import android.content.ContentValues;
 import android.content.Context;

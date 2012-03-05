@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.aggregation.ContactAggregator;
+
 import android.content.Context;
 
 public class DataRowHandlerForCustomMimetype extends DataRowHandler {

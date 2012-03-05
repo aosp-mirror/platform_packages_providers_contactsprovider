@@ -87,7 +87,7 @@ public class CommonNicknameCache  {
     /**
      * Returns nickname cluster IDs or null. Maintains cache.
      */
-    protected String[] getCommonNicknameClusters(String normalizedName) {
+    public String[] getCommonNicknameClusters(String normalizedName) {
         if (mNicknameBloomFilter == null) {
             preloadNicknameBloomFilter();
         }

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
+import com.android.providers.contacts.aggregation.ContactAggregator;
 
 import android.content.ContentValues;
 import android.content.Context;

@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.providers.contacts.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
@@ -47,6 +46,9 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.ViewGroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
+import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.ContactAggregator.AggregationSuggestionParameter;
+import com.android.providers.contacts.aggregation.ProfileAggregator;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.vcard.VCardComposer;
@@ -1812,11 +1814,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return mProfilePhotoStore;
     }
 
-    /* package */ int getMaxDisplayPhotoDim() {
+    public int getMaxDisplayPhotoDim() {
         return mMaxDisplayPhotoDim;
     }
 
-    /* package */ int getMaxThumbnailPhotoDim() {
+    public int getMaxThumbnailPhotoDim() {
         return mMaxThumbnailPhotoDim;
     }
 
@@ -6374,10 +6376,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return false;
     }
 
-    public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
-        mAggregator.get().updateLookupKeyForRawContact(db, rawContactId);
-    }
-
     /**
      * Returns the contact ID that is mentioned the highest number of times.
      */
@@ -7793,7 +7791,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /**
      * Returns true if the specified account type and data set is writable.
      */
-    protected boolean isWritableAccountWithDataSet(String accountTypeAndDataSet) {
+    public boolean isWritableAccountWithDataSet(String accountTypeAndDataSet) {
         if (accountTypeAndDataSet == null) {
             return true;
         }

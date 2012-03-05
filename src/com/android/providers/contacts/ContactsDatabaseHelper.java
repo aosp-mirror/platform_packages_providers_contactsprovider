@@ -83,16 +83,14 @@ import android.util.Log;
 
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
  * {@link android.content.ContentProvider} users get the same reference.
  * Provides handy methods for maintaining package and mime-type lookup tables.
  */
-/* package */ class ContactsDatabaseHelper extends SQLiteOpenHelper {
+public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
     /**
