@@ -4224,7 +4224,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Update {@link Contacts#IN_VISIBLE_GROUP} for all contacts.
      */
     public void updateAllVisible() {
-        updateCustomContactVisibility(getWritableDatabase(), "");
+        updateCustomContactVisibility(getWritableDatabase(), -1);
     }
 
     /**
@@ -4245,7 +4245,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     public boolean updateContactVisible(
             TransactionContext txContext, long contactId, boolean onlyIfChanged) {
         SQLiteDatabase db = getWritableDatabase();
-        updateCustomContactVisibility(db, " AND " + Contacts._ID + "=" + contactId);
+        updateCustomContactVisibility(db, contactId);
 
         String contactIdAsString = String.valueOf(contactId);
         long mimetype = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
@@ -4318,26 +4318,38 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return mContactInDefaultDirectoryQuery.simpleQueryForLong() != 0;
     }
 
-    private void updateCustomContactVisibility(SQLiteDatabase db, String selection) {
+    /**
+     * Update the visible_contacts table according to the current visibility of contacts, which
+     * is defined by {@link Clauses#CONTACT_IS_VISIBLE}.
+     *
+     * If {@code optionalContactId} is non-negative, it'll update only for the specified contact.
+     */
+    private void updateCustomContactVisibility(SQLiteDatabase db, long optionalContactId) {
         final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
         String[] selectionArgs = new String[]{String.valueOf(groupMembershipMimetypeId)};
+
+        final String contactIdSelect = (optionalContactId < 0) ? "" :
+                (Contacts._ID + "=" + optionalContactId + " AND ");
 
         // First delete what needs to be deleted, then insert what needs to be added.
         // Since flash writes are very expensive, this approach is much better than
         // delete-all-insert-all.
-        db.execSQL("DELETE FROM " + Tables.VISIBLE_CONTACTS +
-                   " WHERE " + "_id NOT IN" +
-                        "(SELECT " + Contacts._ID +
-                        " FROM " + Tables.CONTACTS +
-                        " WHERE (" + Clauses.CONTACT_IS_VISIBLE + ")=1) " + selection,
+        db.execSQL(
+                "DELETE FROM " + Tables.VISIBLE_CONTACTS +
+                " WHERE " + Contacts._ID + " IN" +
+                    "(SELECT " + Contacts._ID +
+                    " FROM " + Tables.CONTACTS +
+                    " WHERE " + contactIdSelect + "(" + Clauses.CONTACT_IS_VISIBLE + ")=0) ",
                 selectionArgs);
 
-        db.execSQL("INSERT INTO " + Tables.VISIBLE_CONTACTS +
-                   " SELECT " + Contacts._ID +
-                   " FROM " + Tables.CONTACTS +
-                   " WHERE " + Contacts._ID +
-                   " NOT IN " + Tables.VISIBLE_CONTACTS +
-                           " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=1 " + selection,
+        db.execSQL(
+                "INSERT INTO " + Tables.VISIBLE_CONTACTS +
+                " SELECT " + Contacts._ID +
+                " FROM " + Tables.CONTACTS +
+                " WHERE " +
+                    contactIdSelect +
+                    Contacts._ID + " NOT IN " + Tables.VISIBLE_CONTACTS +
+                    " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=1 ",
                 selectionArgs);
     }
 
