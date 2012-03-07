@@ -746,8 +746,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private final CountryMonitor mCountryMonitor;
     private StringBuilder mSb = new StringBuilder();
 
-    private boolean mReopenDatabase = false;
-
     private static ContactsDatabaseHelper sSingleton = null;
 
     private boolean mUseStrictPhoneNumberComparison;
@@ -765,11 +763,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Private constructor, callers except unit tests should obtain an instance through
-     * {@link #getInstance(android.content.Context)} instead.
+     * Returns a new instance for unit tests.
      */
-    ContactsDatabaseHelper(Context context) {
-        this(context, null, false);
+    @NeededForTesting
+    static ContactsDatabaseHelper getNewInstanceForTest(Context context) {
+        return new ContactsDatabaseHelper(context, null, false);
     }
 
     protected ContactsDatabaseHelper(
@@ -1336,11 +1334,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL("ANALYZE;");
 
             updateSqliteStats(db);
-
-            // We need to close and reopen the database connection so that the stats are
-            // taken into account. Make a note of it and do the actual reopening in the
-            // getWritableDatabase method.
-            mReopenDatabase = true;
         }
 
         ContentResolver.requestSync(null /* all accounts */,
@@ -2390,7 +2383,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             createContactsIndexes(db);
             updateSqliteStats(db);
             upgradeLegacyApiSupport = true;
-            mReopenDatabase = true;
         }
 
         if (upgradeLegacyApiSupport) {
@@ -3877,6 +3869,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, "search_index_segdir",
                     "sqlite_autoindex_search_index_segdir_1", "9 5 1");
 
+            // Force sqlite to reload sqlite_stat1.
+            db.execSQL("ANALYZE sqlite_master;");
         } catch (SQLException e) {
             Log.e(TAG, "Could not update index stats", e);
         }
@@ -3900,17 +3894,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
         db.execSQL("INSERT INTO sqlite_stat1 (tbl,idx,stat) VALUES (?,?,?)",
                 new String[] { table, index, stats });
-    }
-
-    @Override
-    public synchronized SQLiteDatabase getWritableDatabase() {
-        SQLiteDatabase db = super.getWritableDatabase();
-        if (mReopenDatabase) {
-            mReopenDatabase = false;
-            close();
-            db = super.getWritableDatabase();
-        }
-        return db;
     }
 
     /**

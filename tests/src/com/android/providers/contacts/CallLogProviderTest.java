@@ -337,7 +337,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         @Override
         protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
             if (mDbHelper == null) {
-                mDbHelper = new ContactsDatabaseHelper(context);
+                mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
             }
             return mDbHelper;
         }

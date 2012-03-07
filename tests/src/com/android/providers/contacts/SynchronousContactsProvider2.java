@@ -40,7 +40,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         if (mDbHelper == null) {
-            mDbHelper = new ContactsDatabaseHelper(context);
+            mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
         }
         return mDbHelper;
     }
