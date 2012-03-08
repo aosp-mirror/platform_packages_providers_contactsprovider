@@ -2977,7 +2977,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     public void setLocale(ContactsProvider2 provider, Locale locale) {
         Log.i(TAG, "Switching to locale " + locale);
 
-        long start = SystemClock.uptimeMillis();
+        final long start = SystemClock.elapsedRealtime();
         SQLiteDatabase db = getWritableDatabase();
         db.setLocale(locale);
         db.beginTransaction();
@@ -2995,7 +2995,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             db.endTransaction();
         }
 
-        Log.i(TAG, "Locale change completed in " + (SystemClock.uptimeMillis() - start) + "ms");
+        Log.i(TAG, "Locale change completed in " + (SystemClock.elapsedRealtime() - start) + "ms");
     }
 
     /**

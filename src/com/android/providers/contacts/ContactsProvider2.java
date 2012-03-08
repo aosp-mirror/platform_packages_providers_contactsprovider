@@ -7917,7 +7917,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected void upgradeAggregationAlgorithmInBackground() {
         Log.i(TAG, "Upgrading aggregation algorithm");
         int count = 0;
-        long start = SystemClock.currentThreadTimeMillis();
+        final long start = SystemClock.elapsedRealtime();
         SQLiteDatabase db = null;
         try {
             switchToContactMode();
@@ -7951,7 +7951,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (db != null) {
                 db.endTransaction();
             }
-            long end = SystemClock.currentThreadTimeMillis();
+            final long end = SystemClock.elapsedRealtime();
             Log.i(TAG, "Aggregation algorithm upgraded for " + count
                     + " contacts, in " + (end - start) + "ms");
         }

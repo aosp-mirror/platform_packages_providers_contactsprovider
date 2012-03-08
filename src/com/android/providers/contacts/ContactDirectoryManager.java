@@ -187,10 +187,10 @@ public class ContactDirectoryManager {
             return;
         }
 
-        long start = SystemClock.currentThreadTimeMillis();
+        final long start = SystemClock.elapsedRealtime();
         int count = scanAllPackages();
         getDbHelper().setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "1");
-        long end = SystemClock.currentThreadTimeMillis();
+        final long end = SystemClock.elapsedRealtime();
         Log.i(TAG, "Discovered " + count + " contact directories in " + (end - start) + "ms");
 
         // Announce the change to listeners of the contacts authority
