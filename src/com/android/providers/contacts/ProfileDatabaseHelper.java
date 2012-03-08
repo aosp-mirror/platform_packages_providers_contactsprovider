@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.util.NeededForTesting;
+
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
@@ -37,11 +39,11 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
     private static ProfileDatabaseHelper sSingleton = null;
 
     /**
-     * Private constructor, callers except unit tests should obtain an instance through
-     * {@link #getInstance(android.content.Context)} instead.
+     * Returns a new instance for unit tests.
      */
-    ProfileDatabaseHelper(Context context) {
-        this(context, null, false);
+    @NeededForTesting
+    public static ProfileDatabaseHelper getNewInstanceForTest(Context context) {
+        return new ProfileDatabaseHelper(context, null, false);
     }
 
     private ProfileDatabaseHelper(

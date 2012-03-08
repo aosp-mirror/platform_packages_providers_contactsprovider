@@ -157,7 +157,7 @@ public class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
 
         @Override
         protected ContactsDatabaseHelper getDatabaseHelper(Context context) {
-            return new ContactsDatabaseHelper(context);
+            return ContactsDatabaseHelper.getNewInstanceForTest(context);
         }
 
         @Override
