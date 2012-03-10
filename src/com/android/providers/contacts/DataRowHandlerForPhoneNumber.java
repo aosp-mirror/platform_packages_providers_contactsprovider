@@ -41,25 +41,18 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
     @Override
     public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
             ContentValues values) {
-        long dataId;
+        fillNormalizedNumber(values);
+
+        final long dataId = super.insert(db, txContext, rawContactId, values);
         if (values.containsKey(Phone.NUMBER)) {
-            String number = values.getAsString(Phone.NUMBER);
-
-            String numberE164 =
-                    PhoneNumberUtils.formatNumberToE164(number, mDbHelper.getCurrentCountryIso());
-            if (numberE164 != null) {
-                values.put(Phone.NORMALIZED_NUMBER, numberE164);
-            }
-            dataId = super.insert(db, txContext, rawContactId, values);
-
-            updatePhoneLookup(db, rawContactId, dataId, number, numberE164);
+            final String number = values.getAsString(Phone.NUMBER);
+            final String normalizedNumber = values.getAsString(Phone.NORMALIZED_NUMBER);
+            updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, txContext, rawContactId);
-            if (numberE164 != null) {
+            if (normalizedNumber != null) {
                 triggerAggregation(txContext, rawContactId);
             }
-        } else {
-            dataId = super.insert(db, txContext, rawContactId, values);
         }
         return dataId;
     }
@@ -67,18 +60,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
             Cursor c, boolean callerIsSyncAdapter) {
-        String number = null;
-        String numberE164 = null;
-        if (values.containsKey(Phone.NUMBER)) {
-            number = values.getAsString(Phone.NUMBER);
-            if (number != null) {
-                numberE164 = PhoneNumberUtils.formatNumberToE164(number,
-                        mDbHelper.getCurrentCountryIso());
-            }
-            if (numberE164 != null) {
-                values.put(Phone.NORMALIZED_NUMBER, numberE164);
-            }
-        }
+        fillNormalizedNumber(values);
 
         if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
@@ -87,12 +69,33 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
         if (values.containsKey(Phone.NUMBER)) {
             long dataId = c.getLong(DataUpdateQuery._ID);
             long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
-            updatePhoneLookup(db, rawContactId, dataId, number, numberE164);
+            updatePhoneLookup(db, rawContactId, dataId,
+                    values.getAsString(Phone.NUMBER),
+                    values.getAsString(Phone.NORMALIZED_NUMBER));
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, txContext, rawContactId);
             triggerAggregation(txContext, rawContactId);
         }
         return true;
+    }
+
+    private void fillNormalizedNumber(ContentValues values) {
+        // No NUMBER? Also ignore NORMALIZED_NUMBER
+        if (!values.containsKey(Phone.NUMBER)) {
+            values.remove(Phone.NORMALIZED_NUMBER);
+            return;
+        }
+
+        // NUMBER is given. Try to extract NORMALIZED_NUMBER from it, unless it is also given
+        final String number = values.getAsString(Phone.NUMBER);
+        final String numberE164 = values.getAsString(Phone.NORMALIZED_NUMBER);
+        if (number != null && numberE164 == null) {
+            final String newNumberE164 = PhoneNumberUtils.formatNumberToE164(number,
+                    mDbHelper.getCurrentCountryIso());
+            if (newNumberE164 != null) {
+                values.put(Phone.NORMALIZED_NUMBER, newNumberE164);
+            }
+        }
     }
 
     @Override

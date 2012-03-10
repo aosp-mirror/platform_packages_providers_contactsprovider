@@ -923,6 +923,63 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dedupeUri, values1);
     }
 
+    public void testPhonesNormalizedNumber() {
+        final long rawContactId = createRawContact();
+
+        // Write both a number and a normalized number. Those should be written as-is
+        final ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        values.put(Phone.NUMBER, "1234");
+        values.put(Phone.NORMALIZED_NUMBER, "5678");
+        values.put(Phone.TYPE, Phone.TYPE_HOME);
+
+        final Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
+
+        // Ensure both can be looked up
+        assertEquals(1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1234"), null, null));
+        assertEquals(1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "5678"), null, null));
+
+        // Replace both in an UPDATE
+        values.clear();
+        values.put(Phone.NUMBER, "4321");
+        values.put(Phone.NORMALIZED_NUMBER, "8765");
+        mResolver.update(dataUri, values, null, null);
+        assertEquals(0,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1234"), null, null));
+        assertEquals(1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "4321"), null, null));
+        assertEquals(0,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "5678"), null, null));
+        assertEquals(1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "8765"), null, null));
+
+        // Replace only NUMBER ==> NORMALIZED_NUMBER will be inferred (we test that by making
+        // sure the old manual value can not be found anymore)
+        values.clear();
+        values.put(Phone.NUMBER, "1-800-466-5432");
+        mResolver.update(dataUri, values, null, null);
+        assertEquals(
+                1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1-800-466-5432"), null,
+                        null));
+        assertEquals(0,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "8765"), null, null));
+
+        // Replace only NORMALIZED_NUMBER ==> call is ignored, things will be unchanged
+        values.clear();
+        values.put(Phone.NORMALIZED_NUMBER, "8765");
+        mResolver.update(dataUri, values, null, null);
+        assertEquals(
+                1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1-800-466-5432"), null,
+                        null));
+        assertEquals(0,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "8765"), null, null));
+    }
+
     public void testPhonesFilterQuery() {
         testPhonesFilterQueryInter(Phone.CONTENT_FILTER_URI);
     }
