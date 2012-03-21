@@ -72,16 +72,21 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
         assertEquals(0, mPhotoStore.insert(new PhotoProcessor(photo, 256, 96)));
     }
 
+    public void testStore200Photo() throws IOException {
+        // As 200 is below the full photo size, we don't want to see it upscaled
+        runStorageTestForResource(R.drawable.earth_200, 200);
+    }
+
     public void testStoreMediumPhoto() throws IOException {
-        runStorageTestForResource(R.drawable.earth_normal);
+        runStorageTestForResource(R.drawable.earth_normal, 256);
     }
 
     public void testStoreLargePhoto() throws IOException {
-        runStorageTestForResource(R.drawable.earth_large);
+        runStorageTestForResource(R.drawable.earth_large, 256);
     }
 
     public void testStoreHugePhoto() throws IOException {
-        runStorageTestForResource(R.drawable.earth_huge);
+        runStorageTestForResource(R.drawable.earth_huge, 256);
     }
 
     /**
@@ -99,7 +104,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
      *   the size of the photo.
      * @param resourceId The resource ID of the photo file to test.
      */
-    public void runStorageTestForResource(int resourceId) throws IOException {
+    public void runStorageTestForResource(int resourceId, int expectedSize) throws IOException {
         byte[] photo = loadPhotoFromResource(resourceId, PhotoSize.ORIGINAL);
         long photoFileId = mPhotoStore.insert(new PhotoProcessor(photo, 256, 96));
         assertTrue(photoFileId != 0);
@@ -117,8 +122,8 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
         try {
             assertEquals(1, c.getCount());
             c.moveToFirst();
-            assertEquals(256, c.getInt(0));
-            assertEquals(256, c.getInt(1));
+            assertEquals(expectedSize, c.getInt(0));
+            assertEquals(expectedSize, c.getInt(1));
             assertEquals(expectedStoredVersion.length, c.getInt(2));
         } finally {
             c.close();
