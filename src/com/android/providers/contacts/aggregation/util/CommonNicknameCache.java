@@ -14,7 +14,7 @@
  * limitations under the License
  */
 
-package com.android.providers.contacts;
+package com.android.providers.contacts.aggregation.util;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;

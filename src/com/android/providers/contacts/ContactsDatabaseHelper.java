@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
+import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
 

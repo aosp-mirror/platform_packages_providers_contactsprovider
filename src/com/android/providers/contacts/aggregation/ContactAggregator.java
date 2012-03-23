@@ -16,10 +16,7 @@
 
 package com.android.providers.contacts.aggregation;
 
-import com.android.providers.contacts.CommonNicknameCache;
 import com.android.providers.contacts.ContactLookupKey;
-import com.android.providers.contacts.ContactMatcher;
-import com.android.providers.contacts.ContactMatcher.MatchScore;
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
@@ -33,6 +30,9 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
+import com.android.providers.contacts.aggregation.util.ContactMatcher;
+import com.android.providers.contacts.aggregation.util.ContactMatcher.MatchScore;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.NameLookupBuilder;
 import com.android.providers.contacts.NameNormalizer;

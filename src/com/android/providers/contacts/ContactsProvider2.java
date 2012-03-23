@@ -48,6 +48,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.aggregation.ContactAggregator;
 import com.android.providers.contacts.aggregation.ContactAggregator.AggregationSuggestionParameter;
+import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.aggregation.ProfileAggregator;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
