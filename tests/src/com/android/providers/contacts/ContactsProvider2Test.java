@@ -6393,6 +6393,53 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    public void testBuildSingleRowResult() {
+        checkBuildSingleRowResult(
+                new String[] {"b"},
+                new String[] {"a", "b"},
+                new Integer[] {1, 2},
+                new Integer[] {2}
+                );
+
+        checkBuildSingleRowResult(
+                new String[] {"b", "a", "b"},
+                new String[] {"a", "b"},
+                new Integer[] {1, 2},
+                new Integer[] {2, 1, 2}
+                );
+
+        checkBuildSingleRowResult(
+                null, // all columns
+                new String[] {"a", "b"},
+                new Integer[] {1, 2},
+                new Integer[] {1, 2}
+                );
+
+        try {
+            // Access non-existent column
+            ContactsProvider2.buildSingleRowResult(new String[] {"a"}, new String[] {"b"},
+                    new Object[] {1});
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    private void checkBuildSingleRowResult(String[] projection, String[] availableColumns,
+            Object[] data, Integer[] expectedValues) {
+        final Cursor c = ContactsProvider2.buildSingleRowResult(projection, availableColumns, data);
+        try {
+            assertTrue(c.moveToFirst());
+            assertEquals(1, c.getCount());
+            assertEquals(expectedValues.length, c.getColumnCount());
+
+            for (int i = 0; i < expectedValues.length; i++) {
+                assertEquals("column " + i, expectedValues[i], (Integer) c.getInt(i));
+            }
+        } finally {
+            c.close();
+        }
+    }
+
     private Cursor queryGroupMemberships(Account account) {
         Cursor c = mResolver.query(maybeAddAccountQueryParameters(Data.CONTENT_URI, account),
                 new String[]{GroupMembership.GROUP_ROW_ID, GroupMembership.RAW_CONTACT_ID},

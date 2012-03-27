@@ -57,6 +57,7 @@ import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -5253,9 +5254,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case STREAM_ITEMS_LIMIT: {
-                MatrixCursor cursor = new MatrixCursor(new String[]{StreamItems.MAX_ITEMS}, 1);
-                cursor.addRow(new Object[]{MAX_STREAM_ITEMS_PER_RAW_CONTACT});
-                return cursor;
+                return buildSingleRowResult(projection, new String[] {StreamItems.MAX_ITEMS},
+                        new Object[] {MAX_STREAM_ITEMS_PER_RAW_CONTACT});
             }
 
             case STREAM_ITEMS_PHOTOS: {
@@ -5283,11 +5283,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PHOTO_DIMENSIONS: {
-                MatrixCursor cursor = new MatrixCursor(
-                        new String[]{DisplayPhoto.DISPLAY_MAX_DIM, DisplayPhoto.THUMBNAIL_MAX_DIM},
-                        1);
-                cursor.addRow(new Object[]{mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim});
-                return cursor;
+                return buildSingleRowResult(projection,
+                        new String[] {DisplayPhoto.DISPLAY_MAX_DIM, DisplayPhoto.THUMBNAIL_MAX_DIM},
+                        new Object[] {mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim});
             }
 
             case PHONES:
@@ -5848,7 +5846,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PROVIDER_STATUS: {
-                return queryProviderStatus(uri, projection);
+                return buildSingleRowResult(projection,
+                        new String[] {ProviderStatus.STATUS, ProviderStatus.DATA1},
+                        new Object[] {mProviderStatus, mEstimatedStorageRequirement});
             }
 
             case DIRECTORIES : {
@@ -5908,21 +5908,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return c;
     }
 
-    /**
-     * Creates a single-row cursor containing the current status of the provider.
-     */
-    private Cursor queryProviderStatus(Uri uri, String[] projection) {
-        MatrixCursor cursor = new MatrixCursor(projection);
-        RowBuilder row = cursor.newRow();
-        for (int i = 0; i < projection.length; i++) {
-            if (ProviderStatus.STATUS.equals(projection[i])) {
-                row.add(mProviderStatus);
-            } else if (ProviderStatus.DATA1.equals(projection[i])) {
-                row.add(mEstimatedStorageRequirement);
-            }
-        }
-        return cursor;
-    }
 
     /**
      * Runs the query with the supplied contact ID and lookup ID.  If the query succeeds,
@@ -8128,6 +8113,39 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private boolean snippetNeeded(String [] projection) {
         return ContactsDatabaseHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
+    }
+
+    /**
+     * Create a single row cursor for a simple, informational queries, such as
+     * {@link ProviderStatus#CONTENT_URI}.
+     */
+    @VisibleForTesting
+    static Cursor buildSingleRowResult(String[] projection, String[] availableColumns,
+            Object[] data) {
+        Preconditions.checkArgument(availableColumns.length == data.length);
+        if (projection == null) {
+            projection = availableColumns;
+        }
+        final MatrixCursor c = new MatrixCursor(projection, 1);
+        final RowBuilder row = c.newRow();
+
+        // It's O(n^2), but it's okay because we only have a few columns.
+        for (int i = 0; i < c.getColumnCount(); i++) {
+            final String column = c.getColumnName(i);
+
+            boolean found = false;
+            for (int j = 0; j < availableColumns.length; j++) {
+                if (availableColumns[j].equals(column)) {
+                    row.add(data[j]);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                throw new IllegalArgumentException("Invalid column " + projection[i]);
+            }
+        }
+        return c;
     }
 
     /**
