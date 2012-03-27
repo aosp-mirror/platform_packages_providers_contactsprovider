@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
+import com.android.providers.contacts.util.Hex;
 import com.google.android.collect.Sets;
 
 import android.accounts.Account;

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package com.android.providers.contacts;
+package com.android.providers.contacts.util;
 
 /**
  * Basic hex operations: from byte array to string and vice versa.

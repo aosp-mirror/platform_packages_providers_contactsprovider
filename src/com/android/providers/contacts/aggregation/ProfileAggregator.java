@@ -20,10 +20,10 @@ import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteStatement;
 import android.provider.ContactsContract.Contacts;
 
-import com.android.providers.contacts.CommonNicknameCache;
 import com.android.providers.contacts.ContactLookupKey;
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.NameSplitter;
 import com.android.providers.contacts.PhotoPriorityResolver;

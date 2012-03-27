@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package com.android.providers.contacts;
+package com.android.providers.contacts.aggregation.util;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.util.Hex;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.tests.R;
+import com.android.providers.contacts.util.Hex;
 
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
