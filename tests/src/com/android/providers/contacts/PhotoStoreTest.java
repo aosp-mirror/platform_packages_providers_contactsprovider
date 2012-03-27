@@ -75,19 +75,36 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
 
     public void testStore200Photo() throws IOException {
         // As 200 is below the full photo size, we don't want to see it upscaled
-        runStorageTestForResource(R.drawable.earth_200, 200);
+        runStorageTestForResource(R.drawable.earth_200, 200, 200);
+    }
+
+    public void testStoreNonSquare300x200Photo() throws IOException {
+        // The longer side should be downscaled to the target size
+        runStorageTestForResource(R.drawable.earth_300x200, 256, 171);
+    }
+
+    public void testStoreNonSquare300x200PhotoWithCrop() throws IOException {
+        // As 300x200 is below the full photo size, we don't want to see it upscaled
+        // This one is not square, so we expect the longer side to be cropped
+        runStorageTestForResourceWithCrop(R.drawable.earth_300x200, 200, 200);
+    }
+
+    public void testStoreNonSquare600x400PhotoWithCrop() throws IOException {
+        // As 600x400 is above the full photo size, we expect the picture to be cropped and then
+        // scaled
+        runStorageTestForResourceWithCrop(R.drawable.earth_600x400, 256, 256);
     }
 
     public void testStoreMediumPhoto() throws IOException {
-        runStorageTestForResource(R.drawable.earth_normal, 256);
+        runStorageTestForResource(R.drawable.earth_normal, 256, 256);
     }
 
     public void testStoreLargePhoto() throws IOException {
-        runStorageTestForResource(R.drawable.earth_large, 256);
+        runStorageTestForResource(R.drawable.earth_large, 256, 256);
     }
 
     public void testStoreHugePhoto() throws IOException {
-        runStorageTestForResource(R.drawable.earth_huge, 256);
+        runStorageTestForResource(R.drawable.earth_huge, 256, 256);
     }
 
     /**
@@ -105,7 +122,8 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
      *   the size of the photo.
      * @param resourceId The resource ID of the photo file to test.
      */
-    public void runStorageTestForResource(int resourceId, int expectedSize) throws IOException {
+    public void runStorageTestForResource(int resourceId, int expectedWidth,
+            int expectedHeight) throws IOException {
         byte[] photo = loadPhotoFromResource(resourceId, PhotoSize.ORIGINAL);
         long photoFileId = mPhotoStore.insert(new PhotoProcessor(photo, 256, 96));
         assertTrue(photoFileId != 0);
@@ -118,19 +136,36 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
                 Hex.encodeHex(storedVersion, false));
 
         Cursor c = mDb.query(Tables.PHOTO_FILES,
-                new String[]{PhotoFiles.HEIGHT, PhotoFiles.WIDTH, PhotoFiles.FILESIZE},
+                new String[]{PhotoFiles.WIDTH, PhotoFiles.HEIGHT, PhotoFiles.FILESIZE},
                 PhotoFiles._ID + "=?", new String[]{String.valueOf(photoFileId)}, null, null, null);
         try {
             assertEquals(1, c.getCount());
             c.moveToFirst();
-            assertEquals(expectedSize, c.getInt(0));
-            assertEquals(expectedSize, c.getInt(1));
+            assertEquals(expectedWidth + "/" + expectedHeight, c.getInt(0) + "/" + c.getInt(1));
             assertEquals(expectedStoredVersion.length, c.getInt(2));
         } finally {
             c.close();
         }
 
         assertEquals(expectedStoredVersion.length, mPhotoStore.getTotalSize());
+    }
+
+    public void runStorageTestForResourceWithCrop(int resourceId, int expectedWidth,
+            int expectedHeight) throws IOException {
+        byte[] photo = loadPhotoFromResource(resourceId, PhotoSize.ORIGINAL);
+        long photoFileId = mPhotoStore.insert(new PhotoProcessor(photo, 256, 96, true));
+        assertTrue(photoFileId != 0);
+
+        Cursor c = mDb.query(Tables.PHOTO_FILES,
+                new String[]{PhotoFiles.HEIGHT, PhotoFiles.WIDTH, PhotoFiles.FILESIZE},
+                PhotoFiles._ID + "=?", new String[]{String.valueOf(photoFileId)}, null, null, null);
+        try {
+            assertEquals(1, c.getCount());
+            c.moveToFirst();
+            assertEquals(expectedWidth + "/" + expectedHeight, c.getInt(0) + "/" + c.getInt(1));
+        } finally {
+            c.close();
+        }
     }
 
     public void testRemoveEntry() throws IOException {

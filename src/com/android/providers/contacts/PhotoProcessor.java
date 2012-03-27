@@ -134,10 +134,10 @@ import java.io.IOException;
             }
         }
         float scaleFactor = ((float) maxDim) / Math.max(width, height);
-        if (scaleFactor < 1.0 || cropLeft != 0 || cropTop != 0) {
+        if (scaleFactor < 1.0f || cropLeft != 0 || cropTop != 0) {
             // Need to scale or crop the photo.
             Matrix matrix = new Matrix();
-            matrix.setScale(scaleFactor, scaleFactor);
+            if (scaleFactor < 1.0f) matrix.setScale(scaleFactor, scaleFactor);
             scaledBitmap = Bitmap.createBitmap(
                     mOriginal, cropLeft, cropTop, width, height, matrix, false);
         }
