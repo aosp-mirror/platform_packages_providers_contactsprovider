@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
@@ -701,10 +700,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /** In-memory cache of previously found MIME-type mappings */
-    // TODO Use ConcurrentHashMap?
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
-    /** In-memory cache of previously found package name mappings */
-    // TODO Use ConcurrentHashMap?
+
+    /** TODO Remove it */
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
 
     private long mMimeTypeIdEmail;
@@ -4121,6 +4119,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // No valid mapping found, so return null
             return null;
         }
+    }
+
+    public void invalidateAllCache() {
+        Log.w(TAG, "invalidateAllCache: [" + getClass().getSimpleName() + "]");
+
+        mMimetypeCache.clear();
+        mPackageCache.clear();
     }
 
     /**

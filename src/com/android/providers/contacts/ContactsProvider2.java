@@ -2118,7 +2118,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public void onBegin() {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "onBeginTransaction");
+            Log.v(TAG, "onBeginTransaction: " + (inProfileMode() ? "profile" : "contacts"));
         }
         if (inProfileMode()) {
             mProfileAggregator.clearPendingAggregations();
@@ -2132,7 +2132,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public void onCommit() {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "beforeTransactionCommit");
+            Log.v(TAG, "beforeTransactionCommit: " + (inProfileMode() ? "profile" : "contacts"));
         }
         flushTransactionalChanges();
         mAggregator.get().aggregateInTransaction(mTransactionContext.get(), mActiveDb.get());
@@ -2154,7 +2154,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public void onRollback() {
-        // Not used.
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "beforeTransactionRollback: " + (inProfileMode() ? "profile" : "contacts"));
+        }
+        // mDbHelper may not be pointing at the "right" db helper due to a bug,
+        // so we invalidate both for now.
+        mContactsHelper.invalidateAllCache();
+        mProfileHelper.invalidateAllCache();
     }
 
     private void updateSearchIndexInTransaction() {
