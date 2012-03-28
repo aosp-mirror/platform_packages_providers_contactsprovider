@@ -700,12 +700,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /** In-memory cache of previously found MIME-type mappings */
-    // TODO Use ConcurrentHashMap?
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
-    /** In-memory cache of previously found package name mappings */
-    // TODO Use ConcurrentHashMap?
+
+    /** TODO Remove it */
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
 
+    /**
+     * The last known maximum mimetype ID when the current transaction started.  Used to
+     * "Rollback" {@link #mMimetypeCache}.
+     */
+    private long mMaxMimeTypeIdAtTransactionStart;
     private long mMimeTypeIdEmail;
     private long mMimeTypeIdIm;
     private long mMimeTypeIdNickname;
@@ -4119,6 +4123,42 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return null
             return null;
+        }
+    }
+
+    private long getBiggestCachedMimetypeId() {
+        long max = -1;
+        for (long id : mMimetypeCache.values()) {
+            if (id > max) max = id;
+        }
+        return max;
+    }
+
+    public void onBeginTransaction() {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "onBeginTransaction: [" + getClass().getSimpleName() + "]");
+        }
+        mMaxMimeTypeIdAtTransactionStart = getBiggestCachedMimetypeId();
+    }
+
+    public void onCommitTransaction() {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "onCommitTransaction: [" + getClass().getSimpleName() + "]");
+        }
+    }
+
+    public void onRollbackTransaction() {
+        Log.w(TAG, "onRollbackTransaction: [" + getClass().getSimpleName() + "]");
+
+        final Set<String> mimetypesToRemove = Sets.newHashSet();
+        for (String mimetype : mMimetypeCache.keySet()) {
+            if (mMimetypeCache.get(mimetype) > mMaxMimeTypeIdAtTransactionStart) {
+                mimetypesToRemove.add(mimetype);
+            }
+        }
+
+        for (String mimetype : mimetypesToRemove) {
+            mMimetypeCache.remove(mimetype);
         }
     }
 
