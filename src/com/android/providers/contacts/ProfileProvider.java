@@ -140,13 +140,11 @@ public class ProfileProvider extends AbstractContactsProvider {
         return mDelegate.getLocale();
     }
 
-    @Override
     public void onBegin() {
         mDelegate.switchToProfileMode();
         mDelegate.onBegin();
     }
 
-    @Override
     public void onCommit() {
         mDelegate.switchToProfileMode();
         mDelegate.onCommit();

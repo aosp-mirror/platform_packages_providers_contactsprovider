@@ -2125,7 +2125,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mContactAggregator.clearPendingAggregations();
             mContactTransactionContext.clear();
         }
-        mDbHelper.get().onBeginTransaction();
     }
 
     @Override
@@ -2149,15 +2148,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             updateProviderStatus();
             mProviderStatusUpdateNeeded = false;
         }
-        mDbHelper.get().onCommitTransaction();
     }
 
     @Override
     public void onRollback() {
-        if (VERBOSE_LOGGING) {
-            Log.v(TAG, "onRollback");
-        }
-        mDbHelper.get().onRollbackTransaction();
+        // Not used.
     }
 
     private void updateSearchIndexInTransaction() {
