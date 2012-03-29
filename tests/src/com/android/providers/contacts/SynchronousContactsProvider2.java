@@ -30,7 +30,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     public static final String READ_ONLY_ACCOUNT_TYPE = "ro";
 
     private static Boolean sDataWiped = false;
-    private static ContactsDatabaseHelper mDbHelper;
+    private static ContactsDatabaseHelper sDbHelper;
     private boolean mDataWipeEnabled = true;
     private Account mAccount;
     private boolean mNetworkNotified;
@@ -39,20 +39,15 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     @Override
     protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
-        if (mDbHelper == null) {
-            mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
+        if (sDbHelper == null) {
+            sDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
         }
-        return mDbHelper;
+        return sDbHelper;
     }
 
     @Override
     public ProfileProvider getProfileProvider() {
         return new SynchronousProfileProvider(this);
-    }
-
-    public static void resetOpenHelper() {
-        mDbHelper = null;
-        SynchronousProfileProvider.resetOpenHelper();
     }
 
     public void setDataWipeEnabled(boolean flag) {

@@ -23,7 +23,7 @@ import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 import java.util.ArrayList;
 
@@ -36,7 +36,7 @@ import java.util.ArrayList;
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@MediumTest
 public class ContactLookupKeyTest extends BaseContactsProvider2Test {
 
     public void testLookupKeyUsingDisplayNameAndNoAccount() {

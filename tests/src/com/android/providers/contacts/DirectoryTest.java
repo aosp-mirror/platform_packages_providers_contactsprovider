@@ -26,7 +26,7 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;;
 
 
 /**
@@ -38,7 +38,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@MediumTest
 public class DirectoryTest extends BaseContactsProvider2Test {
 
     public void testDefaultDirectory() {
