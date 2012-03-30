@@ -24,7 +24,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.PhotoFiles;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -39,7 +39,7 @@ import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 /**
  * Tests for {@link PhotoStore}.
  */
-@LargeTest
+@MediumTest
 public class PhotoStoreTest extends PhotoLoadingTestCase {
 
     private ContactsActor mActor;

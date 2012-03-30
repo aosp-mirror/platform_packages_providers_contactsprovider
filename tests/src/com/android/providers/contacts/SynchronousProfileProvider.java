@@ -26,7 +26,7 @@ import java.util.Locale;
  */
 public class SynchronousProfileProvider extends ProfileProvider {
 
-    private static ProfileDatabaseHelper mDbHelper;
+    private static ProfileDatabaseHelper sDbHelper;
 
     public SynchronousProfileProvider(ContactsProvider2 delegate) {
         super(delegate);
@@ -34,14 +34,10 @@ public class SynchronousProfileProvider extends ProfileProvider {
 
     @Override
     protected ProfileDatabaseHelper getDatabaseHelper(final Context context) {
-        if (mDbHelper == null) {
-            mDbHelper = ProfileDatabaseHelper.getNewInstanceForTest(context);
+        if (sDbHelper == null) {
+            sDbHelper = ProfileDatabaseHelper.getNewInstanceForTest(context);
         }
-        return mDbHelper;
-    }
-
-    public static void resetOpenHelper() {
-        mDbHelper = null;
+        return sDbHelper;
     }
 
     @Override

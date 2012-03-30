@@ -38,7 +38,7 @@ import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 /**
  * Unit tests for {@link ContactAggregator}.
@@ -49,7 +49,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@MediumTest
 public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     private static final Account ACCOUNT_1 = new Account("account_name_1", "account_type_1");

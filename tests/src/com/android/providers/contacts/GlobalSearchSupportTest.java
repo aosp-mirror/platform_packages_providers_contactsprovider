@@ -27,7 +27,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.StatusUpdates;
-import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.MediumTest;
 
 /**
  * Unit tests for {@link GlobalSearchSupport}.
@@ -39,7 +39,7 @@ import android.test.suitebuilder.annotation.LargeTest;
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </pre></code>
  */
-@LargeTest
+@MediumTest
 public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
     public void testSearchSuggestionsNotInDefaultDirectory() throws Exception {
