@@ -44,10 +44,9 @@ public class PhotoLoadingTestCase extends AndroidTestCase {
         Map<PhotoSize, byte[]> photoMap = Maps.newHashMap();
         public PhotoEntry(byte[] original) {
             try {
-                Resources resources = getContext().getResources();
                 PhotoProcessor processor = new PhotoProcessor(original,
-                        resources.getInteger(R.integer.config_max_display_photo_dim),
-                        resources.getInteger(R.integer.config_max_thumbnail_photo_dim));
+                        PhotoProcessor.getMaxDisplayPhotoSize(),
+                        PhotoProcessor.getMaxThumbnailSize());
                 photoMap.put(PhotoSize.ORIGINAL, original);
                 photoMap.put(PhotoSize.DISPLAY_PHOTO, processor.getDisplayPhotoBytes());
                 photoMap.put(PhotoSize.THUMBNAIL, processor.getThumbnailPhotoBytes());

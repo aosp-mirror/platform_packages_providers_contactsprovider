@@ -1390,11 +1390,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         StrictMode.setThreadPolicy(
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
 
-        Resources resources = getContext().getResources();
-        mMaxDisplayPhotoDim = resources.getInteger(
-                R.integer.config_max_display_photo_dim);
-        mMaxThumbnailPhotoDim = resources.getInteger(
-                R.integer.config_max_thumbnail_photo_dim);
+        mMaxThumbnailPhotoDim = PhotoProcessor.getMaxThumbnailSize();
+        mMaxDisplayPhotoDim = PhotoProcessor.getMaxDisplayPhotoSize();
 
         mFastScrollingIndexCache = new FastScrollingIndexCache(getContext());
 

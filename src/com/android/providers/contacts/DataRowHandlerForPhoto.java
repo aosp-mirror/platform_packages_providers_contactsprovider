@@ -19,10 +19,8 @@ import com.android.providers.contacts.aggregation.ContactAggregator;
 
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.util.Log;
 
@@ -143,10 +141,8 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
     private boolean processPhoto(ContentValues values) {
         byte[] originalPhoto = values.getAsByteArray(Photo.PHOTO);
         if (originalPhoto != null) {
-            int maxDisplayPhotoDim = mContext.getResources().getInteger(
-                    R.integer.config_max_display_photo_dim);
-            int maxThumbnailPhotoDim = mContext.getResources().getInteger(
-                    R.integer.config_max_thumbnail_photo_dim);
+            int maxDisplayPhotoDim = PhotoProcessor.getMaxDisplayPhotoSize();
+            int maxThumbnailPhotoDim = PhotoProcessor.getMaxThumbnailSize();
             try {
                 PhotoProcessor processor = new PhotoProcessor(
                         originalPhoto, maxDisplayPhotoDim, maxThumbnailPhotoDim);

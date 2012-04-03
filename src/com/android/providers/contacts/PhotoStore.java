@@ -194,7 +194,7 @@ public class PhotoStore {
                 byte[] photoBytes = photoProcessor.getDisplayPhotoBytes();
                 file = File.createTempFile("img", null, mStorePath);
                 FileOutputStream fos = new FileOutputStream(file);
-                fos.write(photoProcessor.getDisplayPhotoBytes());
+                fos.write(photoBytes);
                 fos.close();
 
                 // Create the DB entry.

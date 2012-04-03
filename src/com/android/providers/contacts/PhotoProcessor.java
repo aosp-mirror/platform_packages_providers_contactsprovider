@@ -15,9 +15,12 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.util.MemoryUtils;
+
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.os.SystemProperties;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,6 +30,38 @@ import java.io.IOException;
  * photo and a thumbnail photo.
  */
 /* package-protected */ final class PhotoProcessor {
+
+    /**
+     * The default sizes of a thumbnail/display picture. This is used in {@link #initialize()}
+     */
+    private interface PhotoSizes {
+        /** Size of a thumbnail */
+        public static final int DEFAULT_THUMBNAIL = 96;
+
+        /**
+         * Size of a display photo on memory constrained devices (those are devices with less than
+         * {@link #DEFAULT_LARGE_RAM_THRESHOLD} of reported RAM
+         */
+        public static final int DEFAULT_DISPLAY_PHOTO_MEMORY_CONSTRAINED = 480;
+
+        /**
+         * Size of a display photo on devices with enough ram (those are devices with at least
+         * {@link #DEFAULT_LARGE_RAM_THRESHOLD} of reported RAM
+         */
+        public static final int DEFAULT_DISPLAY_PHOTO_LARGE_MEMORY = 720;
+
+        /**
+         * If the device has less than this amount of RAM, it is considered RAM constrained for
+         * photos
+         */
+        public static final int LARGE_RAM_THRESHOLD = 640 * 1024 * 1024;
+
+        /** If present, overrides the size given in {@link #DEFAULT_THUMBNAIL} */
+        public static final String SYS_PROPERTY_THUMBNAIL_SIZE = "contacts.thumbnail_size";
+
+        /** If present, overrides the size determined for the display photo */
+        public static final String SYS_PROPERTY_DISPLAY_PHOTO_SIZE = "contacts.display_photo_size";
+    }
 
     private final int mMaxDisplayPhotoDim;
     private final int mMaxThumbnailPhotoDim;
@@ -139,7 +174,7 @@ import java.io.IOException;
             Matrix matrix = new Matrix();
             if (scaleFactor < 1.0f) matrix.setScale(scaleFactor, scaleFactor);
             scaledBitmap = Bitmap.createBitmap(
-                    mOriginal, cropLeft, cropTop, width, height, matrix, false);
+                    mOriginal, cropLeft, cropTop, width, height, matrix, true);
         }
         return scaledBitmap;
     }
@@ -147,15 +182,17 @@ import java.io.IOException;
     /**
      * Helper method to compress the given bitmap as a JPEG and return the resulting byte array.
      */
-    private byte[] getCompressedBytes(Bitmap b) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        boolean compressed = b.compress(Bitmap.CompressFormat.JPEG, 95, baos);
+    private byte[] getCompressedBytes(Bitmap b, int quality) throws IOException {
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final boolean compressed = b.compress(Bitmap.CompressFormat.JPEG, quality, baos);
+        baos.flush();
+        baos.close();
+        byte[] result = baos.toByteArray();
+
         if (!compressed) {
             throw new IOException("Unable to compress image");
         }
-        baos.flush();
-        baos.close();
-        return baos.toByteArray();
+        return result;
     }
 
     /**
@@ -176,14 +213,19 @@ import java.io.IOException;
      * Retrieves the compressed display photo as a byte array.
      */
     public byte[] getDisplayPhotoBytes() throws IOException {
-        return getCompressedBytes(mDisplayPhoto);
+        return getCompressedBytes(mDisplayPhoto, 75);
     }
 
     /**
      * Retrieves the compressed thumbnail photo as a byte array.
      */
     public byte[] getThumbnailPhotoBytes() throws IOException {
-        return getCompressedBytes(mThumbnailPhoto);
+        // If there is a higher-resolution picture, we can assume we won't need to upscale the
+        // thumbnail often, so we can compress stronger
+        final boolean hasDisplayPhoto = mDisplayPhoto != null &&
+                (mDisplayPhoto.getWidth() > mThumbnailPhoto.getWidth() ||
+                mDisplayPhoto.getHeight() > mThumbnailPhoto.getHeight());
+        return getCompressedBytes(mThumbnailPhoto, hasDisplayPhoto ? 90 : 95);
     }
 
     /**
@@ -198,5 +240,31 @@ import java.io.IOException;
      */
     public int getMaxThumbnailPhotoDim() {
         return mMaxThumbnailPhotoDim;
+    }
+
+    /**
+     * Returns the maximum size in pixel of a thumbnail (which has a default that can be overriden
+     * using a system-property)
+     */
+    public static int getMaxThumbnailSize() {
+        final int sysPropThumbSize =
+                SystemProperties.getInt(PhotoSizes.SYS_PROPERTY_THUMBNAIL_SIZE, -1);
+        return sysPropThumbSize == -1 ? PhotoSizes.DEFAULT_THUMBNAIL : sysPropThumbSize;
+    }
+
+    /**
+     * Returns the maximum size in pixel of a display photo (which is determined based
+     * on available RAM or configured using a system-property)
+     */
+    public static int getMaxDisplayPhotoSize() {
+        final int sysPropDisplaySize =
+                SystemProperties.getInt(PhotoSizes.SYS_PROPERTY_DISPLAY_PHOTO_SIZE, -1);
+        if (sysPropDisplaySize != -1) return sysPropDisplaySize;
+
+        final boolean isExpensiveDevice =
+                MemoryUtils.getTotalMemorySize() >= PhotoSizes.LARGE_RAM_THRESHOLD;
+        return isExpensiveDevice
+                ? PhotoSizes.DEFAULT_DISPLAY_PHOTO_LARGE_MEMORY
+                : PhotoSizes.DEFAULT_DISPLAY_PHOTO_MEMORY_CONSTRAINED;
     }
 }
