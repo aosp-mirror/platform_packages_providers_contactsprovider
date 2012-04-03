@@ -31,6 +31,18 @@ import java.io.IOException;
  */
 /* package-protected */ final class PhotoProcessor {
 
+    /** Compression for display photos. They are very big, so we can use a strong compression */
+    private static final int COMPRESSION_DISPLAY_PHOTO = 75;
+
+    /**
+     * Compression for thumbnails that don't have a full size photo. Those can be blown up
+     * full-screen, so we want to make sure we don't introduce JPEG artifacts here
+     */
+    private static final int COMPRESSION_THUMBNAIL_HIGH = 95;
+
+    /** Compression for thumbnails that also have a display photo */
+    private static final int COMPRESSION_THUMBNAIL_LOW = 90;
+
     /**
      * The default sizes of a thumbnail/display picture. This is used in {@link #initialize()}
      */
@@ -213,7 +225,7 @@ import java.io.IOException;
      * Retrieves the compressed display photo as a byte array.
      */
     public byte[] getDisplayPhotoBytes() throws IOException {
-        return getCompressedBytes(mDisplayPhoto, 75);
+        return getCompressedBytes(mDisplayPhoto, COMPRESSION_DISPLAY_PHOTO);
     }
 
     /**
@@ -225,7 +237,8 @@ import java.io.IOException;
         final boolean hasDisplayPhoto = mDisplayPhoto != null &&
                 (mDisplayPhoto.getWidth() > mThumbnailPhoto.getWidth() ||
                 mDisplayPhoto.getHeight() > mThumbnailPhoto.getHeight());
-        return getCompressedBytes(mThumbnailPhoto, hasDisplayPhoto ? 90 : 95);
+        return getCompressedBytes(mThumbnailPhoto,
+                hasDisplayPhoto ? COMPRESSION_THUMBNAIL_LOW : COMPRESSION_THUMBNAIL_HIGH);
     }
 
     /**
@@ -247,9 +260,8 @@ import java.io.IOException;
      * using a system-property)
      */
     public static int getMaxThumbnailSize() {
-        final int sysPropThumbSize =
-                SystemProperties.getInt(PhotoSizes.SYS_PROPERTY_THUMBNAIL_SIZE, -1);
-        return sysPropThumbSize == -1 ? PhotoSizes.DEFAULT_THUMBNAIL : sysPropThumbSize;
+        return SystemProperties.getInt(
+                PhotoSizes.SYS_PROPERTY_THUMBNAIL_SIZE, PhotoSizes.DEFAULT_THUMBNAIL);
     }
 
     /**
