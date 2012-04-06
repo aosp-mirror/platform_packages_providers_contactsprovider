@@ -49,8 +49,8 @@
         <provider android:name="CallLogProvider"
             android:authorities="call_log"
             android:syncable="false" android:multiprocess="false"
-            android:readPermission="android.permission.READ_CONTACTS"
-            android:writePermission="android.permission.WRITE_CONTACTS">
+            android:readPermission="android.permission.READ_CALL_LOG"
+            android:writePermission="android.permission.WRITE_CALL_LOG">
         </provider>
 
         <provider android:name="VoicemailContentProvider"
