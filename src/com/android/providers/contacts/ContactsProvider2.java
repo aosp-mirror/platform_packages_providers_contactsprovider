@@ -217,6 +217,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
+    /**
+     * If set to "1", we don't remove account data when accounts have been removed.
+     *
+     * This should be used sparingly; even though there are data still available, the UI
+     * don't know anything about them, so they won't show up in the contact filter screen, and
+     * the contact card/editor may get confused to see unknown custom mimetypes.
+     *
+     * We can't spell it out because a property name must be less than 32 chars.
+     */
+    private static final String DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA =
+            "debug.contacts.ksad";
+
     private static final ProfileAwareUriMatcher sUriMatcher =
             new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
 
@@ -4469,6 +4481,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean updateAccountsInBackground(Account[] systemAccounts) {
         if (!haveAccountsChanged(systemAccounts)) {
             return false;
+        }
+        if ("1".equals(SystemProperties.get(DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA))) {
+            Log.w(TAG, "Accounts changed, but not removing stale data for " +
+                    DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA);
+            return true;
         }
         Log.i(TAG, "Accounts changed");
 
