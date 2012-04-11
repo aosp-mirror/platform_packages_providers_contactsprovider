@@ -6975,15 +6975,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // already ruled out partial accounts.
         final boolean validAccount = !TextUtils.isEmpty(accountWithDataSet.getAccountName());
         if (validAccount) {
+            final StringBuilder selectionSb = new StringBuilder();
+
             final Long accountId = mDbHelper.get().getAccountIdOrNull(accountWithDataSet);
             if (accountId == null) {
                 // No such account in the accounts table.  This means, there's no rows to be
                 // selected.
-                return "(1=2)";
+                // Note even in this case, we still need to append the original selection, because
+                // it may have query parameters.  If we remove these we'll get the # of parameters
+                // mismatch exception.
+                selectionSb.append("(1=2)");
+            } else {
+                selectionSb.append(RawContactsColumns.ACCOUNT_ID + "=");
+                selectionSb.append(Long.toString(accountId));
             }
-            final StringBuilder selectionSb = new StringBuilder(
-                    RawContactsColumns.ACCOUNT_ID + "=");
-            selectionSb.append(Long.toString(accountId));
 
             if (!TextUtils.isEmpty(selection)) {
                 selectionSb.append(" AND (");
