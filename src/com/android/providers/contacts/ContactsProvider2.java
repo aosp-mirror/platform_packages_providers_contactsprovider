@@ -5099,9 +5099,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             mDbHelper.get().getMimeTypeId(SipAddress.CONTENT_ITEM_TYPE);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
-                            Contacts.STARRED + "=0 OR " + Contacts.STARRED + " IS NULL",
+                            "(" + Contacts.STARRED + "=0 OR " + Contacts.STARRED + " IS NULL",
                             DataColumns.MIMETYPE_ID + " IN (" +
-                            phoneMimeTypeId + ", " + sipMimeTypeId + ")"));
+                            phoneMimeTypeId + ", " + sipMimeTypeId + ")) AND (" +
+                            RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY + ")"));
                     frequentInnerQuery =
                             qb.buildQuery(subProjection, null, null, null,
                             TIMES_USED_SORT_COLUMN + " DESC", "25");
@@ -5111,8 +5112,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
                             "(" + Contacts.STARRED + " =0 OR " + Contacts.STARRED + " IS NULL)"));
+                    // Note frequentInnerQuery is a grouping query, so the "IN default_directory"
+                    // selection needs to be in HAVING, not in WHERE.
+                    final String HAVING =
+                            RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
                     frequentInnerQuery = qb.buildQuery(subProjection,
-                            null, Contacts._ID, null, null, "25");
+                            null, Contacts._ID, HAVING, null, "25");
                 }
 
                 // We need to wrap the inner queries in an extra select, because they contain
