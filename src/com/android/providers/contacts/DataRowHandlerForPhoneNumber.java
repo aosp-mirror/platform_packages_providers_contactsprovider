@@ -50,9 +50,8 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
             updatePhoneLookup(db, rawContactId, dataId, number, normalizedNumber);
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, txContext, rawContactId);
-            if (normalizedNumber != null) {
-                triggerAggregation(txContext, rawContactId);
-            }
+
+            triggerAggregation(txContext, rawContactId);
         }
         return dataId;
     }
@@ -74,8 +73,10 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
                     values.getAsString(Phone.NORMALIZED_NUMBER));
             mContactAggregator.updateHasPhoneNumber(db, rawContactId);
             fixRawContactDisplayName(db, txContext, rawContactId);
+
             triggerAggregation(txContext, rawContactId);
         }
+
         return true;
     }
 

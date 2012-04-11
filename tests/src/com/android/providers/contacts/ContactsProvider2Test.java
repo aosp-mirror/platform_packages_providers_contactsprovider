@@ -896,30 +896,35 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId2 = createRawContact();
         insertPhoneNumber(rawContactId2, "123456789", true);
 
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
+        assertNotAggregated(rawContactId1, rawContactId2);
+
         ContentValues values1 = new ContentValues();
         values1.put(Contacts.DISPLAY_NAME, "123456789");
         values1.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
         values1.put(Phone.NUMBER, "123456789");
 
-        // Two results should come, since they are separate entries anyway.
+        // There are two phone numbers, so we should get two rows.
         assertStoredValues(Phone.CONTENT_URI, new ContentValues[] {values1, values1});
 
-        // Even with remove_duplicate_entries flag, we should return two results here, because
-        // they have different raw_contact_id-s.
+        // Now set the dedupe flag.  But still we should get two rows, because they're two
+        // different contacts.  We only dedupe within each contact.
         final Uri dedupeUri = Phone.CONTENT_URI.buildUpon()
                 .appendQueryParameter(ContactsContract.REMOVE_DUPLICATE_ENTRIES, "true")
                 .build();
         assertStoredValues(dedupeUri, new ContentValues[] {values1, values1});
 
+        // Now join them into a single contact.
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
 
         assertAggregated(rawContactId1, rawContactId2, "123456789");
 
-        // Contact merge won't affect the default result of Phone Uri.
+        // Contact merge won't affect the default result of Phone Uri, where we don't dedupe.
         assertStoredValues(Phone.CONTENT_URI, new ContentValues[] {values1, values1});
 
-        // We should detect duplicates when requested.
+        // Now we dedupe them.
         assertStoredValues(dedupeUri, values1);
     }
 

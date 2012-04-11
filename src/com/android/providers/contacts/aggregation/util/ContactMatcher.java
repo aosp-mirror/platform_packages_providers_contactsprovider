@@ -381,7 +381,9 @@ public class ContactMatcher {
 
     /**
      * Returns the contactId with the best match score over the specified threshold or -1
-     * if no such contact is found.
+     * if no such contact is found.  If multiple contacts are found, and
+     * {@code allowMultipleMatches} is {@code true}, it returns the first one found, but if
+     * {@code allowMultipleMatches} is {@code false} it'll return {@link #MULTIPLE_MATCHES}.
      */
     public long pickBestMatch(int threshold, boolean allowMultipleMatches) {
         long contactId = -1;
@@ -405,7 +407,9 @@ public class ContactMatcher {
                 if (contactId != -1 && !allowMultipleMatches) {
                     return MULTIPLE_MATCHES;
                 }
-                if (s > maxScore) {
+                // In order to make it stable, let's jut pick the one with the lowest ID
+                // if multiple candidates are found.
+                if ((s > maxScore) || ((s == maxScore) && (contactId > score.mContactId))) {
                     contactId = score.mContactId;
                     maxScore = s;
                 }
