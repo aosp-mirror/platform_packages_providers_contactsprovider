@@ -29,6 +29,7 @@ import android.test.suitebuilder.annotation.MediumTest;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -70,7 +71,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
         byte[] photo = loadPhotoFromResource(R.drawable.earth_small, PhotoSize.ORIGINAL);
 
         // Since the photo is already thumbnail-sized, no file will be stored.
-        assertEquals(0, mPhotoStore.insert(new PhotoProcessor(photo, 256, 96)));
+        assertEquals(0, mPhotoStore.insert(newPhotoProcessor(photo, false)));
     }
 
     public void testStore200Photo() throws IOException {
@@ -96,14 +97,17 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
     }
 
     public void testStoreMediumPhoto() throws IOException {
+        // Source Image is 256x256
         runStorageTestForResource(R.drawable.earth_normal, 256, 256);
     }
 
     public void testStoreLargePhoto() throws IOException {
+        // Source image is 512x512
         runStorageTestForResource(R.drawable.earth_large, 256, 256);
     }
 
     public void testStoreHugePhoto() throws IOException {
+        // Source image is 1024x1024
         runStorageTestForResource(R.drawable.earth_huge, 256, 256);
     }
 
@@ -125,15 +129,16 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
     public void runStorageTestForResource(int resourceId, int expectedWidth,
             int expectedHeight) throws IOException {
         byte[] photo = loadPhotoFromResource(resourceId, PhotoSize.ORIGINAL);
-        long photoFileId = mPhotoStore.insert(new PhotoProcessor(photo, 256, 96));
+        long photoFileId = mPhotoStore.insert(newPhotoProcessor(photo, false));
         assertTrue(photoFileId != 0);
 
-        byte[] expectedStoredVersion = loadPhotoFromResource(resourceId, PhotoSize.DISPLAY_PHOTO);
         File storedFile = new File(mPhotoStore.get(photoFileId).path);
         assertTrue(storedFile.exists());
-        byte[] storedVersion = readInputStreamFully(new FileInputStream(storedFile));
-        assertEquals(Hex.encodeHex(expectedStoredVersion, false),
-                Hex.encodeHex(storedVersion, false));
+        byte[] actualStoredVersion = readInputStreamFully(new FileInputStream(storedFile));
+
+        byte[] expectedStoredVersion = loadPhotoFromResource(resourceId, PhotoSize.DISPLAY_PHOTO);
+
+        EvenMoreAsserts.assertImageRawData(expectedStoredVersion, actualStoredVersion);
 
         Cursor c = mDb.query(Tables.PHOTO_FILES,
                 new String[]{PhotoFiles.WIDTH, PhotoFiles.HEIGHT, PhotoFiles.FILESIZE},
@@ -153,7 +158,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
     public void runStorageTestForResourceWithCrop(int resourceId, int expectedWidth,
             int expectedHeight) throws IOException {
         byte[] photo = loadPhotoFromResource(resourceId, PhotoSize.ORIGINAL);
-        long photoFileId = mPhotoStore.insert(new PhotoProcessor(photo, 256, 96, true));
+        long photoFileId = mPhotoStore.insert(newPhotoProcessor(photo, true));
         assertTrue(photoFileId != 0);
 
         Cursor c = mDb.query(Tables.PHOTO_FILES,
@@ -170,7 +175,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
 
     public void testRemoveEntry() throws IOException {
         byte[] photo = loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.ORIGINAL);
-        long photoFileId = mPhotoStore.insert(new PhotoProcessor(photo, 256, 96));
+        long photoFileId = mPhotoStore.insert(newPhotoProcessor(photo, false));
         PhotoStore.Entry entry = mPhotoStore.get(photoFileId);
         assertTrue(new File(entry.path).exists());
 

@@ -106,6 +106,18 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return true;
     }
 
+    /** We'll use a static size for unit tests */
+    @Override
+    public int getMaxThumbnailDim() {
+        return 96;
+    }
+
+    /** We'll use a static size for unit tests */
+    @Override
+    public int getMaxDisplayPhotoDim() {
+        return 256;
+    }
+
     @Override
     protected void scheduleBackgroundTask(int task) {
         performBackgroundTask(task, null);

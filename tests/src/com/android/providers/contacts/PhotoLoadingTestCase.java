@@ -44,9 +44,7 @@ public class PhotoLoadingTestCase extends AndroidTestCase {
         Map<PhotoSize, byte[]> photoMap = Maps.newHashMap();
         public PhotoEntry(byte[] original) {
             try {
-                PhotoProcessor processor = new PhotoProcessor(original,
-                        PhotoProcessor.getMaxDisplayPhotoSize(),
-                        PhotoProcessor.getMaxThumbnailSize());
+                PhotoProcessor processor = newPhotoProcessor(original, false);
                 photoMap.put(PhotoSize.ORIGINAL, original);
                 photoMap.put(PhotoSize.DISPLAY_PHOTO, processor.getDisplayPhotoBytes());
                 photoMap.put(PhotoSize.THUMBNAIL, processor.getThumbnailPhotoBytes());
@@ -63,6 +61,16 @@ public class PhotoLoadingTestCase extends AndroidTestCase {
     // The test photo will be loaded frequently in tests, so we'll just process it once.
     private static PhotoEntry testPhotoEntry;
 
+    /**
+     * Create a new {@link PhotoProcessor} for unit tests.
+     *
+     * The instance generated here is always configured for 256x256 regardless of the
+     * device memory size.
+     */
+    protected PhotoProcessor newPhotoProcessor(byte[] data, boolean forceCropToSquare)
+            throws IOException {
+        return new PhotoProcessor(data, 256, 96, forceCropToSquare);
+    }
 
     protected byte[] loadTestPhoto() {
         int testPhotoId = com.android.providers.contacts.tests.R.drawable.ic_contact_picture;

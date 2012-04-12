@@ -16,6 +16,13 @@
 
 package com.android.providers.contacts;
 
+import android.graphics.BitmapFactory;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+
 import junit.framework.Assert;
 
 /**
@@ -50,5 +57,42 @@ public final class EvenMoreAsserts {
 
     private static String appendUserMessage(String errorMsg, String userMsg) {
         return userMsg == null ? errorMsg : errorMsg + userMsg;
+    }
+
+    public static void assertImageRawData(byte[] expected, InputStream actualStream)
+            throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        final byte[] buffer = new byte[4096];
+        int count;
+        while ((count = actualStream.read(buffer)) != -1) {
+            baos.write(buffer, 0, count);
+        }
+
+        assertImageRawData(expected, baos.toByteArray());
+    }
+
+    public static void assertImageRawData(byte[] expected, byte[] actual) {
+        String failReason = null;
+        if (expected.length != actual.length) {
+            failReason = "Different data lengths:" +
+                    " expected=" + expected.length + " actual=" + actual.length;
+        } else if (!Arrays.equals(expected, actual)) {
+            failReason = "Different data:";
+        }
+        if (failReason == null) {
+            return;
+        }
+        // Length or hashCode is different.  We'll fail, but put the dimensions in the message.
+        Assert.fail(failReason + ", expected dimentions=" + getImageDimensions(expected) +
+                " actual dimentions=" + getImageDimensions(actual));
+    }
+
+    private static final String getImageDimensions(byte[] imageData) {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(imageData, 0, imageData.length, o);
+
+        return "[" + o.outWidth + " x " + o.outHeight + "]";
     }
 }

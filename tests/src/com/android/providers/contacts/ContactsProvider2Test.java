@@ -2244,7 +2244,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testLoadProfilePhoto() throws IOException {
         long rawContactId = createBasicProfileContact(new ContentValues());
         insertPhoto(rawContactId, R.drawable.earth_normal);
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.THUMBNAIL),
                 Contacts.openContactPhotoInputStream(mResolver, Profile.CONTENT_URI, false));
     }
@@ -2252,7 +2252,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testLoadProfileDisplayPhoto() throws IOException {
         long rawContactId = createBasicProfileContact(new ContentValues());
         insertPhoto(rawContactId, R.drawable.earth_normal);
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
                 Contacts.openContactPhotoInputStream(mResolver, Profile.CONTENT_URI, true));
     }
@@ -3831,8 +3831,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                     R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO);
             while (c.moveToNext()) {
                 String photoUri = c.getString(1);
-                assertInputStreamContent(expectedPhotoBytes,
-                        mResolver.openInputStream(Uri.parse(photoUri)));
+                EvenMoreAsserts.assertImageRawData(
+                        expectedPhotoBytes, mResolver.openInputStream(Uri.parse(photoUri)));
             }
         } finally {
             c.close();
@@ -3892,7 +3892,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Check that the photo stored is the expected one.
         String displayPhotoUri = getStoredValue(photoUri, StreamItemPhotos.PHOTO_URI);
-        assertInputStreamContent(loadPhotoFromResource(R.drawable.nebula, PhotoSize.DISPLAY_PHOTO),
+        EvenMoreAsserts.assertImageRawData(
+                loadPhotoFromResource(R.drawable.nebula, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(Uri.parse(displayPhotoUri)));
     }
 
@@ -3918,7 +3919,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Check that the photo stored is the expected one.
         String displayPhotoUri = getStoredValue(photoUri, StreamItemPhotos.PHOTO_URI);
-        assertInputStreamContent(loadPhotoFromResource(R.drawable.nebula, PhotoSize.DISPLAY_PHOTO),
+        EvenMoreAsserts.assertImageRawData(
+                loadPhotoFromResource(R.drawable.nebula, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(Uri.parse(displayPhotoUri)));
     }
 
@@ -5067,8 +5069,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(photoLookupUriWithoutId, values);
 
         // Try opening as an input stream.
-        assertInputStreamContent(thumbnail, mResolver.openInputStream(photoLookupUriWithId));
-        assertInputStreamContent(thumbnail, mResolver.openInputStream(photoLookupUriWithoutId));
+        EvenMoreAsserts.assertImageRawData(
+                thumbnail, mResolver.openInputStream(photoLookupUriWithId));
+        EvenMoreAsserts.assertImageRawData(
+                thumbnail, mResolver.openInputStream(photoLookupUriWithoutId));
     }
 
     public void testInputStreamForPhoto() throws Exception {
@@ -5079,23 +5083,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = Uri.parse(getStoredValue(contactUri, Contacts.PHOTO_URI));
         Uri photoThumbnailUri = Uri.parse(getStoredValue(contactUri, Contacts.PHOTO_THUMBNAIL_URI));
 
-        assertInputStreamContent(loadTestPhoto(PhotoSize.DISPLAY_PHOTO),
+        EvenMoreAsserts.assertImageRawData(loadTestPhoto(PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(photoUri));
-        assertInputStreamContent(loadTestPhoto(PhotoSize.THUMBNAIL),
+        EvenMoreAsserts.assertImageRawData(loadTestPhoto(PhotoSize.THUMBNAIL),
                 mResolver.openInputStream(photoThumbnailUri));
-    }
-
-    private static void assertInputStreamContent(byte[] expected, InputStream is)
-            throws IOException {
-        try {
-            byte[] observed = new byte[expected.length];
-            int count = is.read(observed);
-            assertEquals(expected.length, count);
-            assertEquals(-1, is.read());
-            MoreAsserts.assertEquals(expected, observed);
-        } finally {
-            is.close();
-        }
     }
 
     public void testSuperPrimaryPhoto() {
@@ -5206,7 +5197,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = Contacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(contactId))
                 .appendPath(Contacts.Photo.DISPLAY_PHOTO).build();
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(photoUri));
     }
@@ -5219,7 +5210,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = Contacts.CONTENT_LOOKUP_URI.buildUpon()
                 .appendPath(lookupKey)
                 .appendPath(Contacts.Photo.DISPLAY_PHOTO).build();
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(photoUri));
     }
@@ -5233,7 +5224,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendPath(lookupKey)
                 .appendPath(String.valueOf(contactId))
                 .appendPath(Contacts.Photo.DISPLAY_PHOTO).build();
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(photoUri));
     }
@@ -5244,7 +5235,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri photoUri = RawContacts.CONTENT_URI.buildUpon()
                 .appendPath(String.valueOf(rawContactId))
                 .appendPath(RawContacts.DisplayPhoto.CONTENT_DIRECTORY).build();
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(photoUri));
     }
@@ -5258,7 +5249,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         String photoUri = getStoredValue(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                 Contacts.PHOTO_URI);
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_normal, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
@@ -5310,7 +5301,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 photoUri);
 
         // Loading the photo URI content should get the thumbnail.
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_small, PhotoSize.THUMBNAIL),
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
@@ -5347,10 +5338,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNotSame(photoUri, thumbnailUri);
 
         // Check the content of the display photo and thumbnail.
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(Uri.parse(photoUri)));
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.THUMBNAIL),
                 mResolver.openInputStream(Uri.parse(thumbnailUri)));
     }
@@ -5385,10 +5376,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         String hugeEarthThumbnailUri = getStoredValue(
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId),
                 Contacts.PHOTO_THUMBNAIL_URI);
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.DISPLAY_PHOTO),
                 mResolver.openInputStream(Uri.parse(hugeEarthPhotoUri)));
-        assertInputStreamContent(
+        EvenMoreAsserts.assertImageRawData(
                 loadPhotoFromResource(R.drawable.earth_huge, PhotoSize.THUMBNAIL),
                 mResolver.openInputStream(Uri.parse(hugeEarthThumbnailUri)));
 
@@ -5590,7 +5581,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(photoUri, thumbnailUri);
 
         // Retrieving the photo URI should get the thumbnail content.
-        assertInputStreamContent(loadPhotoFromResource(R.drawable.earth_small, PhotoSize.THUMBNAIL),
+        EvenMoreAsserts.assertImageRawData(
+                loadPhotoFromResource(R.drawable.earth_small, PhotoSize.THUMBNAIL),
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
 
