@@ -6489,7 +6489,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
-    public void testDeleteDataUsageFeedback() {
+    public void testDeleteDataUsage() {
         // First, there's no frequent.  (We use strequent here only because frequent is hidden
         // and may be removed someday.)
         assertRowCount(0, Contacts.CONTENT_STREQUENT_URI, null, null);
@@ -6507,7 +6507,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertRowCount(1, RawContacts.CONTENT_URI, RawContacts.TIMES_CONTACTED + ">0", null);
 
         // Purge all stats.
-        assertTrue(mResolver.delete(DataUsageFeedback.FEEDBACK_URI, null, null) > 0);
+        assertTrue(mResolver.delete(DataUsageFeedback.DELETE_USAGE_URI, null, null) > 0);
 
         // Now there's no frequent.
         assertRowCount(0, Contacts.CONTENT_STREQUENT_URI, null, null);
@@ -6519,7 +6519,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertRowCount(0, RawContacts.CONTENT_URI, RawContacts.LAST_TIME_CONTACTED + ">0", null);
 
         // Calling it when there's no usage stats will still return a positive value.
-        assertTrue(mResolver.delete(DataUsageFeedback.FEEDBACK_URI, null, null) > 0);
+        assertTrue(mResolver.delete(DataUsageFeedback.DELETE_USAGE_URI, null, null) > 0);
     }
 
     private Cursor queryGroupMemberships(Account account) {

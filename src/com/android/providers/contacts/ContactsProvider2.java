@@ -283,6 +283,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1023;
     private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1024;
     private static final int CONTACTS_FREQUENT = 1025;
+    private static final int CONTACTS_DELETE_USAGE = 1026;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -354,7 +355,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int PROFILE_PHOTO = 19011;
     private static final int PROFILE_DISPLAY_PHOTO = 19012;
 
-    private static final int DATA_USAGE_FEEDBACK = 20000;
     private static final int DATA_USAGE_FEEDBACK_ID = 20001;
 
     private static final int STREAM_ITEMS = 21000;
@@ -1106,6 +1106,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 CONTACTS_STREQUENT_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*", CONTACTS_GROUP);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/frequent", CONTACTS_FREQUENT);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/delete_usage", CONTACTS_DELETE_USAGE);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
@@ -1134,7 +1135,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback", DATA_USAGE_FEEDBACK);
         /** "*" is in CSV form with data ids ("123,456,789") */
         matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback/*", DATA_USAGE_FEEDBACK_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/", CALLABLES);
@@ -3337,6 +3337,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             }
 
+            case CONTACTS_DELETE_USAGE: {
+                return deleteDataUsage();
+            }
+
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
                 invalidateFastScrollingIndexCache();
@@ -3460,10 +3464,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         StreamItemPhotosColumns.CONCRETE_ID + "=? AND "
                                 + StreamItemPhotos.STREAM_ITEM_ID + "=?",
                         new String[]{streamItemPhotoId, streamItemId});
-            }
-
-            case DATA_USAGE_FEEDBACK: {
-                return deleteDataUsageFeedback();
             }
 
             default: {
@@ -3623,7 +3623,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return updateRawContact(rawContactId, mValues, callerIsSyncAdapter);
     }
 
-    private int deleteDataUsageFeedback() {
+    private int deleteDataUsage() {
         final SQLiteDatabase db = mActiveDb.get();
         db.execSQL("UPDATE " + Tables.RAW_CONTACTS + " SET " +
                 Contacts.TIMES_CONTACTED + "=0," +
