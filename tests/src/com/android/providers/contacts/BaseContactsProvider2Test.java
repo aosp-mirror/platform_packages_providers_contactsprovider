@@ -1194,6 +1194,14 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         cursor.close();
     }
 
+    protected void assertRowCount(int expectedCount, Uri uri, String selection, String[] args) {
+        Cursor cursor = mResolver.query(uri, null, selection, args, null);
+        int count = cursor.getCount();
+        cursor.close();
+
+        assertEquals(expectedCount, count);
+    }
+
     /**
      * A contact in the database, and the attributes used to create it.  Construct using
      * {@link GoldenContactBuilder#build()}.

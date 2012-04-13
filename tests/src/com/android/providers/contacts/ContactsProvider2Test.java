@@ -6489,6 +6489,39 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testDeleteDataUsageFeedback() {
+        // First, there's no frequent.  (We use strequent here only because frequent is hidden
+        // and may be removed someday.)
+        assertRowCount(0, Contacts.CONTENT_STREQUENT_URI, null, null);
+
+        ContentValues values = new ContentValues();
+        createContact(values, "First", "Contact", "5551112222", "email1@email.com",
+                StatusUpdates.OFFLINE, 0, 0, 0, 0);
+
+        sendFeedback("email1@email.com", DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values);
+
+        // Now there should be one frequent.
+        assertRowCount(1, Contacts.CONTENT_STREQUENT_URI, null, null);
+
+        assertRowCount(1, Contacts.CONTENT_URI, Contacts.TIMES_CONTACTED + ">0", null);
+        assertRowCount(1, RawContacts.CONTENT_URI, RawContacts.TIMES_CONTACTED + ">0", null);
+
+        // Purge all stats.
+        assertTrue(mResolver.delete(DataUsageFeedback.FEEDBACK_URI, null, null) > 0);
+
+        // Now there's no frequent.
+        assertRowCount(0, Contacts.CONTENT_STREQUENT_URI, null, null);
+
+        // The following values should all be 0 or null.
+        assertRowCount(0, Contacts.CONTENT_URI, Contacts.TIMES_CONTACTED + ">0", null);
+        assertRowCount(0, Contacts.CONTENT_URI, Contacts.LAST_TIME_CONTACTED + ">0", null);
+        assertRowCount(0, RawContacts.CONTENT_URI, RawContacts.TIMES_CONTACTED + ">0", null);
+        assertRowCount(0, RawContacts.CONTENT_URI, RawContacts.LAST_TIME_CONTACTED + ">0", null);
+
+        // Calling it when there's no usage stats will still return a positive value.
+        assertTrue(mResolver.delete(DataUsageFeedback.FEEDBACK_URI, null, null) > 0);
+    }
+
     private Cursor queryGroupMemberships(Account account) {
         Cursor c = mResolver.query(maybeAddAccountQueryParameters(Data.CONTENT_URI, account),
                 new String[]{GroupMembership.GROUP_ROW_ID, GroupMembership.RAW_CONTACT_ID},

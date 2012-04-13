@@ -354,6 +354,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int PROFILE_PHOTO = 19011;
     private static final int PROFILE_DISPLAY_PHOTO = 19012;
 
+    private static final int DATA_USAGE_FEEDBACK = 20000;
     private static final int DATA_USAGE_FEEDBACK_ID = 20001;
 
     private static final int STREAM_ITEMS = 21000;
@@ -1133,6 +1134,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback", DATA_USAGE_FEEDBACK);
         /** "*" is in CSV form with data ids ("123,456,789") */
         matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback/*", DATA_USAGE_FEEDBACK_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/", CALLABLES);
@@ -3460,6 +3462,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new String[]{streamItemPhotoId, streamItemId});
             }
 
+            case DATA_USAGE_FEEDBACK: {
+                return deleteDataUsageFeedback();
+            }
+
             default: {
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.delete(uri, selection, selectionArgs);
@@ -3615,6 +3621,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mValues.putNull(RawContacts.CONTACT_ID);
         mValues.put(RawContacts.DIRTY, 1);
         return updateRawContact(rawContactId, mValues, callerIsSyncAdapter);
+    }
+
+    private int deleteDataUsageFeedback() {
+        final SQLiteDatabase db = mActiveDb.get();
+        db.execSQL("UPDATE " + Tables.RAW_CONTACTS + " SET " +
+                Contacts.TIMES_CONTACTED + "=0," +
+                Contacts.LAST_TIME_CONTACTED + "=NULL"
+                );
+        db.execSQL("UPDATE " + Tables.CONTACTS + " SET " +
+                Contacts.TIMES_CONTACTED + "=0," +
+                Contacts.LAST_TIME_CONTACTED + "=NULL"
+                );
+        db.delete(Tables.DATA_USAGE_STAT, null, null);
+
+        return 1;
     }
 
     @Override
