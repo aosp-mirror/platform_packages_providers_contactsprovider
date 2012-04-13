@@ -1942,7 +1942,7 @@ public class ContactAggregator {
         if (photoFileId == 0) {
             // Assume standard thumbnail size.  Don't bother getting a file size for priority;
             // we should fall back to photo priority resolver if all we have are thumbnails.
-            int thumbDim = mContactsProvider.getMaxThumbnailPhotoDim();
+            int thumbDim = mContactsProvider.getMaxThumbnailDim();
             return new PhotoEntry(thumbDim * thumbDim, 0);
         } else {
             Cursor c = db.query(Tables.PHOTO_FILES, PhotoFileQuery.COLUMNS, PhotoFiles._ID + "=?",

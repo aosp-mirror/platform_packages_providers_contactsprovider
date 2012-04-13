@@ -43,6 +43,23 @@ import java.io.IOException;
     /** Compression for thumbnails that also have a display photo */
     private static final int COMPRESSION_THUMBNAIL_LOW = 90;
 
+    private static int sMaxThumbnailDim;
+    private static int sMaxDisplayPhotoDim;
+
+    static {
+        final boolean isExpensiveDevice =
+                MemoryUtils.getTotalMemorySize() >= PhotoSizes.LARGE_RAM_THRESHOLD;
+
+        sMaxThumbnailDim = SystemProperties.getInt(
+                PhotoSizes.SYS_PROPERTY_THUMBNAIL_SIZE, PhotoSizes.DEFAULT_THUMBNAIL);
+
+        sMaxDisplayPhotoDim = SystemProperties.getInt(
+                PhotoSizes.SYS_PROPERTY_DISPLAY_PHOTO_SIZE,
+                isExpensiveDevice
+                        ? PhotoSizes.DEFAULT_DISPLAY_PHOTO_LARGE_MEMORY
+                        : PhotoSizes.DEFAULT_DISPLAY_PHOTO_MEMORY_CONSTRAINED);
+    }
+
     /**
      * The default sizes of a thumbnail/display picture. This is used in {@link #initialize()}
      */
@@ -260,8 +277,7 @@ import java.io.IOException;
      * using a system-property)
      */
     public static int getMaxThumbnailSize() {
-        return SystemProperties.getInt(
-                PhotoSizes.SYS_PROPERTY_THUMBNAIL_SIZE, PhotoSizes.DEFAULT_THUMBNAIL);
+        return sMaxThumbnailDim;
     }
 
     /**
@@ -269,14 +285,6 @@ import java.io.IOException;
      * on available RAM or configured using a system-property)
      */
     public static int getMaxDisplayPhotoSize() {
-        final int sysPropDisplaySize =
-                SystemProperties.getInt(PhotoSizes.SYS_PROPERTY_DISPLAY_PHOTO_SIZE, -1);
-        if (sysPropDisplaySize != -1) return sysPropDisplaySize;
-
-        final boolean isExpensiveDevice =
-                MemoryUtils.getTotalMemorySize() >= PhotoSizes.LARGE_RAM_THRESHOLD;
-        return isExpensiveDevice
-                ? PhotoSizes.DEFAULT_DISPLAY_PHOTO_LARGE_MEMORY
-                : PhotoSizes.DEFAULT_DISPLAY_PHOTO_MEMORY_CONSTRAINED;
+        return sMaxDisplayPhotoDim;
     }
 }

@@ -1250,17 +1250,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
 
     /**
-     * Maximum dimension (height or width) of display photos.  Larger images will be scaled
-     * to fit.
-     */
-    private int mMaxDisplayPhotoDim;
-
-    /**
-     * Maximum dimension (height or width) of photo thumbnails.
-     */
-    private int mMaxThumbnailPhotoDim;
-
-    /**
      * Sub-provider for handling profile requests against the profile database.
      */
     private ProfileProvider mProfileProvider;
@@ -1401,9 +1390,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean initialize() {
         StrictMode.setThreadPolicy(
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
-
-        mMaxThumbnailPhotoDim = PhotoProcessor.getMaxThumbnailSize();
-        mMaxDisplayPhotoDim = PhotoProcessor.getMaxDisplayPhotoSize();
 
         mFastScrollingIndexCache = new FastScrollingIndexCache(getContext());
 
@@ -1825,12 +1811,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return mProfilePhotoStore;
     }
 
-    public int getMaxDisplayPhotoDim() {
-        return mMaxDisplayPhotoDim;
+    /**
+     * Maximum dimension (height or width) of photo thumbnails.
+     */
+    public int getMaxThumbnailDim() {
+        return PhotoProcessor.getMaxThumbnailSize();
     }
 
-    public int getMaxThumbnailPhotoDim() {
-        return mMaxThumbnailPhotoDim;
+    /**
+     * Maximum dimension (height or width) of display photos.  Larger images will be scaled
+     * to fit.
+     */
+    public int getMaxDisplayPhotoDim() {
+        return PhotoProcessor.getMaxDisplayPhotoSize();
     }
 
     /* package */ NameSplitter getNameSplitter() {
@@ -2727,7 +2720,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Process the photo and store it.
         try {
             long photoFileId = mPhotoStore.get().insert(new PhotoProcessor(photoBytes,
-                    mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim, true), true);
+                    getMaxDisplayPhotoDim(), getMaxThumbnailDim(), true), true);
             if (photoFileId != 0) {
                 values.put(StreamItemPhotos.PHOTO_FILE_ID, photoFileId);
                 values.remove(StreamItemPhotos.PHOTO);
@@ -5311,7 +5304,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PHOTO_DIMENSIONS: {
                 return buildSingleRowResult(projection,
                         new String[] {DisplayPhoto.DISPLAY_MAX_DIM, DisplayPhoto.THUMBNAIL_MAX_DIM},
-                        new Object[] {mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim});
+                        new Object[] {getMaxDisplayPhotoDim(), getMaxThumbnailDim()});
             }
 
             case PHONES:
@@ -7383,8 +7376,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Bitmap b = BitmapFactory.decodeStream(is);
                 if (b != null) {
                     waitForAccess(mWriteAccessLatch);
-                    PhotoProcessor processor = new PhotoProcessor(b, mMaxDisplayPhotoDim,
-                            mMaxThumbnailPhotoDim);
+                    PhotoProcessor processor = new PhotoProcessor(b, getMaxDisplayPhotoDim(),
+                            getMaxThumbnailDim());
 
                     // Store the compressed photo in the photo store.
                     PhotoStore photoStore = ContactsContract.isProfileId(mRawContactId)
