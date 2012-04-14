@@ -108,7 +108,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 700;
+    static final int DATABASE_VERSION = 701;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2375,6 +2375,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 700;
         }
 
+        if (oldVersion < 701) {
+            upgradeToVersion701(db);
+            oldVersion = 701;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -3683,6 +3688,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         sb.append("), account_name = null, account_type = null, data_set = null");
         db.execSQL(sb.toString());
+    }
+
+    private void upgradeToVersion701(SQLiteDatabase db) {
+        db.execSQL("UPDATE raw_contacts SET last_time_contacted =" +
+                " max(ifnull(last_time_contacted, 0), " +
+                " ifnull((SELECT max(last_time_used) " +
+                    " FROM data JOIN data_usage_stat ON (data._id = data_usage_stat.data_id)" +
+                    " WHERE data.raw_contact_id = raw_contacts._id), 0))");
+        // Replace 0 with null.  This isn't really necessary, but we do this anyway for consistency.
+        db.execSQL("UPDATE raw_contacts SET last_time_contacted = null" +
+                " where last_time_contacted = 0");
     }
 
     public String extractHandleFromEmailAddress(String email) {
