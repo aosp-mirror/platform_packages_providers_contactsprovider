@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 import com.android.providers.contacts.util.Hex;
+import com.android.providers.contacts.util.MockClock;
 import com.google.android.collect.Sets;
 
 import android.accounts.Account;
@@ -29,6 +30,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Entity;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
@@ -84,6 +86,12 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected final static String NO_STRING = new String("");
     protected final static Account NO_ACCOUNT = new Account("a", "b");
 
+    /**
+     * Use {@link MockClock#install()} to start using it.
+     * It'll be automatically uninstalled by {@link #tearDown()}.
+     */
+    protected static final MockClock sMockClock = new MockClock();
+
     protected Class<? extends ContentProvider> getProviderClass() {
         return SynchronousContactsProvider2.class;
     }
@@ -114,6 +122,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     @Override
     protected void tearDown() throws Exception {
+        sMockClock.uninstall();
         super.tearDown();
     }
 
@@ -941,7 +950,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertStoredValuesWithProjection(rowUri, new ContentValues[] {expectedValues});
     }
 
-    protected void assertStoredValuesWithProjection(Uri rowUri, ContentValues[] expectedValues) {
+    protected void assertStoredValuesWithProjection(Uri rowUri, ContentValues... expectedValues) {
         assertTrue("Need at least one ContentValues for this test", expectedValues.length > 0);
         Cursor c = mResolver.query(rowUri, buildProjection(expectedValues[0]), null, null, null);
         try {
@@ -954,8 +963,12 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     }
 
     protected void assertStoredValues(
-            Uri rowUri, String selection, String[] selectionArgs, ContentValues[] expectedValues) {
-        Cursor c = mResolver.query(rowUri, null, selection, selectionArgs, null);
+            Uri rowUri, String selection, String[] selectionArgs, ContentValues... expectedValues) {
+        assertStoredValues(mResolver.query(rowUri, null, selection, selectionArgs, null),
+                expectedValues);
+    }
+
+    private void assertStoredValues(Cursor c, ContentValues... expectedValues) {
         try {
             assertEquals("Record count", expectedValues.length, c.getCount());
             assertCursorValues(c, expectedValues);
@@ -964,12 +977,22 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
-    protected void assertStoredValuesOrderly(Uri rowUri, ContentValues[] expectedValues) {
+    /**
+     * A variation of {@link #assertStoredValues}, but it queries directly to the DB.
+     */
+    protected void assertStoredValuesDb(
+            String sql, String[] selectionArgs, ContentValues... expectedValues) {
+        SQLiteDatabase db = ((ContactsProvider2) getProvider()).getDatabaseHelper()
+                .getReadableDatabase();
+        assertStoredValues(db.rawQuery(sql, selectionArgs), expectedValues);
+    }
+
+    protected void assertStoredValuesOrderly(Uri rowUri, ContentValues... expectedValues) {
         assertStoredValuesOrderly(rowUri, null, null, expectedValues);
     }
 
     protected void assertStoredValuesOrderly(Uri rowUri, String selection,
-            String[] selectionArgs, ContentValues[] expectedValues) {
+            String[] selectionArgs, ContentValues... expectedValues) {
         Cursor c = mResolver.query(rowUri, null, selection, selectionArgs, null);
         try {
             assertEquals("Record count", expectedValues.length, c.getCount());
@@ -1058,7 +1081,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
                     break;
                 }
             }
-            assertTrue("Expected values can not be found " + v + message.toString(), found);
+            assertTrue("Expected values can not be found " + v + "," + message.toString(), found);
         }
     }
 
@@ -1067,8 +1090,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         cursor.moveToPosition(-1);
         for (ContentValues v : expectedValues) {
             assertTrue(cursor.moveToNext());
-            assertTrue("ContentValues didn't match " + v + message.toString(),
-                    equalsWithExpectedValues(cursor, v, message));
+            boolean ok = equalsWithExpectedValues(cursor, v, message);
+            assertTrue("ContentValues didn't match.  Pos=" + cursor.getPosition() + ", values=" +
+                    v + message.toString(), ok);
         }
     }
 
@@ -1077,7 +1101,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         for (String column : expectedValues.keySet()) {
             int index = cursor.getColumnIndex(column);
             if (index == -1) {
-                msgBuffer.append("No such column: ").append(column);
+                msgBuffer.append(" No such column: ").append(column);
                 return false;
             }
             Object expectedValue = expectedValues.get(column);
@@ -1092,7 +1116,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             if (expectedValue != null && !expectedValue.equals(value) || value != null
                     && !value.equals(expectedValue)) {
                 msgBuffer
-                        .append("Column value ")
+                        .append(" Column value ")
                         .append(column)
                         .append(" expected <")
                         .append(expectedValue)

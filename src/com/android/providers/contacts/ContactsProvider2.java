@@ -50,6 +50,7 @@ import com.android.providers.contacts.aggregation.ContactAggregator;
 import com.android.providers.contacts.aggregation.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.aggregation.ProfileAggregator;
+import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.vcard.VCardComposer;
@@ -162,7 +163,6 @@ import java.io.Writer;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -243,13 +243,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
             "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
-            " CASE WHEN " + Contacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
-            " (" + Contacts.TIMES_CONTACTED + " + 1) END WHERE " + Contacts._ID + "=?";
+            " ifnull(" + Contacts.TIMES_CONTACTED + ",0)+1" +
+            " WHERE " + Contacts._ID + "=?";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE =
             "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.TIMES_CONTACTED + "=" +
-            " CASE WHEN " + RawContacts.TIMES_CONTACTED + " IS NULL THEN 1 ELSE " +
-            " (" + RawContacts.TIMES_CONTACTED + " + 1) END WHERE " + RawContacts.CONTACT_ID + "=?";
+            " ifnull(" + RawContacts.TIMES_CONTACTED + ",0)+1 " +
+            " WHERE " + RawContacts.CONTACT_ID + "=?";
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
 
@@ -1049,15 +1049,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private final StringBuilder mSb = new StringBuilder();
     private final String[] mSelectionArgs1 = new String[1];
     private final String[] mSelectionArgs2 = new String[2];
+    private final String[] mSelectionArgs3 = new String[3];
+    private final String[] mSelectionArgs4 = new String[4];
     private final ArrayList<String> mSelectionArgs = Lists.newArrayList();
 
     private Account mAccount;
-
-    /**
-     * Stores mapping from type Strings exposed via {@link DataUsageFeedback} to
-     * type integers in {@link DataUsageStatColumns}.
-     */
-    private static final Map<String, Integer> sDataUsageTypeMap;
 
     static {
         // Contacts URI matching table
@@ -1209,14 +1205,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "display_photo/#", DISPLAY_PHOTO_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "photo_dimensions", PHOTO_DIMENSIONS);
-
-        HashMap<String, Integer> tmpTypeMap = new HashMap<String, Integer>();
-        tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_CALL, DataUsageStatColumns.USAGE_TYPE_INT_CALL);
-        tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_LONG_TEXT,
-                DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT);
-        tmpTypeMap.put(DataUsageFeedback.USAGE_TYPE_SHORT_TEXT,
-                DataUsageStatColumns.USAGE_TYPE_INT_SHORT_TEXT);
-        sDataUsageTypeMap = Collections.unmodifiableMap(tmpTypeMap);
     }
 
     private static class DirectoryInfo {
@@ -5386,10 +5374,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         DataColumns.MIMETYPE_ID + "=" + mDbHelper.get().getMimeTypeIdForSip();
 
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
-                Integer typeInt = sDataUsageTypeMap.get(typeParam);
-                if (typeInt == null) {
-                    typeInt = DataUsageStatColumns.USAGE_TYPE_INT_CALL;
-                }
+                final int typeInt = getDataUsageFeedbackType(typeParam,
+                        DataUsageStatColumns.USAGE_TYPE_INT_CALL);
                 setTablesAndProjectionMapForData(qb, uri, projection, true, typeInt);
                 if (match == CALLABLES_FILTER) {
                     qb.appendWhere(" AND ((" + mimeTypeIsPhoneExpression +
@@ -5530,10 +5516,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case EMAILS_FILTER: {
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
-                Integer typeInt = sDataUsageTypeMap.get(typeParam);
-                if (typeInt == null) {
-                    typeInt = DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT;
-                }
+                final int typeInt = getDataUsageFeedbackType(typeParam,
+                        DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT);
                 setTablesAndProjectionMapForData(qb, uri, projection, true, typeInt);
                 String filterParam = null;
 
@@ -8011,10 +7995,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private boolean handleDataUsageFeedback(Uri uri) {
-        final long currentTimeMillis = System.currentTimeMillis();
+        final long currentTimeMillis = Clock.getInstance().currentTimeMillis();
         final String usageType = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
         final String[] ids = uri.getLastPathSegment().trim().split(",");
-        final ArrayList<Long> dataIds = new ArrayList<Long>();
+        final ArrayList<Long> dataIds = new ArrayList<Long>(ids.length);
 
         for (String id : ids) {
             dataIds.add(Long.valueOf(id));
@@ -8028,28 +8012,46 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         // Handle old API. This doesn't affect the result of this entire method.
-        final String[] questionMarks = new String[ids.length];
-        Arrays.fill(questionMarks, "?");
-        final String where = Data._ID + " IN (" + TextUtils.join(",", questionMarks) + ")";
-        final Cursor cursor = mActiveDb.get().query(
-                Views.DATA,
-                new String[] { Data.CONTACT_ID },
-                where, ids, null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                mSelectionArgs1[0] = cursor.getString(0);
-                ContentValues values2 = new ContentValues();
-                values2.put(Contacts.LAST_TIME_CONTACTED, currentTimeMillis);
-                mActiveDb.get().update(Tables.CONTACTS, values2, Contacts._ID + "=?",
-                        mSelectionArgs1);
-                mActiveDb.get().execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
-                mActiveDb.get().execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
-            }
-        } finally {
-            cursor.close();
+        final StringBuilder rawContactIdSelect = new StringBuilder();
+        rawContactIdSelect.append("SELECT " + Data.RAW_CONTACT_ID + " FROM " + Tables.DATA +
+                " WHERE " + Data._ID + " IN (");
+        for (int i = 0; i < ids.length; i++) {
+            if (i > 0) rawContactIdSelect.append(",");
+            rawContactIdSelect.append(ids[i]);
         }
+        rawContactIdSelect.append(")");
 
+        final SQLiteDatabase db = mActiveDb.get();
+
+        mSelectionArgs1[0] = String.valueOf(currentTimeMillis);
+
+        db.execSQL("UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.LAST_TIME_CONTACTED + "=?" +
+                "," + RawContacts.TIMES_CONTACTED + "=" +
+                    "ifnull(" + RawContacts.TIMES_CONTACTED + ",0) + 1" +
+                " WHERE " + RawContacts._ID + " IN (" + rawContactIdSelect.toString() + ")"
+                , mSelectionArgs1);
+        db.execSQL("UPDATE " + Tables.CONTACTS +
+                " SET " + Contacts.LAST_TIME_CONTACTED + "=?" +
+                "," + Contacts.TIMES_CONTACTED + "=" +
+                    "ifnull(" + Contacts.TIMES_CONTACTED + ",0) + 1" +
+                " WHERE " + Contacts._ID + " IN (SELECT " + RawContacts.CONTACT_ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContacts._ID + " IN (" + rawContactIdSelect.toString() + "))"
+                , mSelectionArgs1);
         return successful;
+    }
+
+    private interface DataUsageStatQuery {
+        String TABLE = Tables.DATA_USAGE_STAT;
+
+        String[] COLUMNS = new String[] {
+                DataUsageStatColumns._ID,
+        };
+        int ID = 0;
+
+        String SELECTION = DataUsageStatColumns.DATA_ID + " =? AND "
+                + DataUsageStatColumns.USAGE_TYPE_INT + " =?";
     }
 
     /**
@@ -8060,45 +8062,47 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     /* package */ int updateDataUsageStat(
             List<Long> dataIds, String type, long currentTimeMillis) {
-        final int typeInt = sDataUsageTypeMap.get(type);
-        final String where = DataUsageStatColumns.DATA_ID + " =? AND "
-                + DataUsageStatColumns.USAGE_TYPE_INT + " =?";
-        final String[] columns =
-                new String[] { DataUsageStatColumns._ID, DataUsageStatColumns.TIMES_USED };
-        final ContentValues values = new ContentValues();
-        for (Long dataId : dataIds) {
-            final String[] args = new String[] { dataId.toString(), String.valueOf(typeInt) };
-            mActiveDb.get().beginTransaction();
+
+        final SQLiteDatabase db = mActiveDb.get();
+
+        final String typeString = String.valueOf(getDataUsageFeedbackType(type, null));
+        final String currentTimeMillisString = String.valueOf(currentTimeMillis);
+
+        for (long dataId : dataIds) {
+            final String dataIdString = String.valueOf(dataId);
+            mSelectionArgs2[0] = dataIdString;
+            mSelectionArgs2[1] = typeString;
+            final Cursor cursor = db.query(DataUsageStatQuery.TABLE,
+                    DataUsageStatQuery.COLUMNS, DataUsageStatQuery.SELECTION,
+                    mSelectionArgs2, null, null, null);
             try {
-                final Cursor cursor = mActiveDb.get().query(Tables.DATA_USAGE_STAT, columns, where,
-                        args, null, null, null);
-                try {
-                    if (cursor.getCount() > 0) {
-                        if (!cursor.moveToFirst()) {
-                            Log.e(TAG,
-                                    "moveToFirst() failed while getAccount() returned non-zero.");
-                        } else {
-                            values.clear();
-                            values.put(DataUsageStatColumns.TIMES_USED, cursor.getInt(1) + 1);
-                            values.put(DataUsageStatColumns.LAST_TIME_USED, currentTimeMillis);
-                            mActiveDb.get().update(Tables.DATA_USAGE_STAT, values,
-                                    DataUsageStatColumns._ID + " =?",
-                                    new String[] { cursor.getString(0) });
-                        }
-                    } else {
-                        values.clear();
-                        values.put(DataUsageStatColumns.DATA_ID, dataId);
-                        values.put(DataUsageStatColumns.USAGE_TYPE_INT, typeInt);
-                        values.put(DataUsageStatColumns.TIMES_USED, 1);
-                        values.put(DataUsageStatColumns.LAST_TIME_USED, currentTimeMillis);
-                        mActiveDb.get().insert(Tables.DATA_USAGE_STAT, null, values);
-                    }
-                    mActiveDb.get().setTransactionSuccessful();
-                } finally {
-                    cursor.close();
+                if (cursor.moveToFirst()) {
+                    final long id = cursor.getLong(DataUsageStatQuery.ID);
+
+                    mSelectionArgs2[0] = currentTimeMillisString;
+                    mSelectionArgs2[1] = String.valueOf(id);
+
+                    db.execSQL("UPDATE " + Tables.DATA_USAGE_STAT +
+                            " SET " + DataUsageStatColumns.TIMES_USED + "=" +
+                                "ifnull(" + DataUsageStatColumns.TIMES_USED +",0)+1" +
+                            "," + DataUsageStatColumns.LAST_TIME_USED + "=?" +
+                            " WHERE " + DataUsageStatColumns._ID + "=?",
+                            mSelectionArgs2);
+                } else {
+                    mSelectionArgs4[0] = dataIdString;
+                    mSelectionArgs4[1] = typeString;
+                    mSelectionArgs4[2] = "1"; // times used
+                    mSelectionArgs4[3] = currentTimeMillisString;
+                    db.execSQL("INSERT INTO " + Tables.DATA_USAGE_STAT +
+                            "(" + DataUsageStatColumns.DATA_ID +
+                            "," + DataUsageStatColumns.USAGE_TYPE_INT +
+                            "," + DataUsageStatColumns.TIMES_USED +
+                            "," + DataUsageStatColumns.LAST_TIME_USED +
+                            ") VALUES (?,?,?,?)",
+                            mSelectionArgs4);
                 }
             } finally {
-                mActiveDb.get().endTransaction();
+                cursor.close();
             }
         }
 
@@ -8215,5 +8219,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final long safeDiv(long dividend, long divisor) {
         return (divisor == 0) ? 0 : dividend / divisor;
+    }
+
+    private static final int getDataUsageFeedbackType(String type, Integer defaultType) {
+        if (DataUsageFeedback.USAGE_TYPE_CALL.equals(type)) {
+            return DataUsageStatColumns.USAGE_TYPE_INT_CALL; // 0
+        }
+        if (DataUsageFeedback.USAGE_TYPE_LONG_TEXT.equals(type)) {
+            return DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT; // 1
+        }
+        if (DataUsageFeedback.USAGE_TYPE_SHORT_TEXT.equals(type)) {
+            return DataUsageStatColumns.USAGE_TYPE_INT_SHORT_TEXT; // 2
+        }
+        if (defaultType != null) {
+            return defaultType;
+        }
+        throw new IllegalArgumentException("Invalid usage type " + type);
     }
 }

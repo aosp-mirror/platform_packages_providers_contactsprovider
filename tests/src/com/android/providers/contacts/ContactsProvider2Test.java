@@ -16,11 +16,14 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.TestUtils.cv;
+
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
@@ -75,7 +78,6 @@ import android.text.TextUtils;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.Collator;
 import java.util.ArrayList;
@@ -1512,6 +1514,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId1 = createRawContact();
         String address1 = "address1@email.com";
         insertEmail(rawContactId1, address1);
+
         long rawContactId2 = createRawContact();
         String address2 = "address2@email.com";
         insertEmail(rawContactId2, address2);
@@ -1545,8 +1548,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         sendFeedback(address3, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, v3);
 
-        // account3@email.com should be the first. account2@email.com should also be promoted as
-        // it has same contact id.
+        assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
+                cv(RawContacts._ID, rawContactId1,
+                        RawContacts.TIMES_CONTACTED, 0
+                        ),
+                cv(RawContacts._ID, rawContactId2,
+                        RawContacts.TIMES_CONTACTED, 1
+                        )
+                );
+
+        // account3@email.com should be the first.
         assertStoredValuesOrderly(filterUri1, new ContentValues[] { v3, v1, v2 });
         assertStoredValuesOrderly(filterUri3, new ContentValues[] { v3, v1, v2 });
     }
@@ -6489,28 +6500,172 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
-    public void testDeleteDataUsage() {
+    public void testDataUsageFeedbackAndDelete() {
+
+        sMockClock.install();
+
+        final long startTime = sMockClock.currentTimeMillis();
+
+        final long rid1 = createRawContactWithName("contact", "a");
+        final long did1a = ContentUris.parseId(insertEmail(rid1, "email_1_a@email.com"));
+        final long did1b = ContentUris.parseId(insertEmail(rid1, "email_1_b@email.com"));
+        final long did1p = ContentUris.parseId(insertPhoneNumber(rid1, "555-555-5555"));
+
+        final long rid2 = createRawContactWithName("contact", "b");
+        final long did2a = ContentUris.parseId(insertEmail(rid2, "email_2_a@email.com"));
+        final long did2p = ContentUris.parseId(insertPhoneNumber(rid2, "555-555-5556"));
+
+        // Aggregate 1 and 2
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rid1, rid2);
+
+        final long rid3 = createRawContactWithName("contact", "c");
+        final long did3a = ContentUris.parseId(insertEmail(rid3, "email_3@email.com"));
+        final long did3p = ContentUris.parseId(insertPhoneNumber(rid3, "555-3333"));
+
+        final long rid4 = createRawContactWithName("contact", "d");
+        final long did4p = ContentUris.parseId(insertPhoneNumber(rid4, "555-4444"));
+
+        final long cid1 = queryContactId(rid1);
+        final long cid3 = queryContactId(rid3);
+        final long cid4 = queryContactId(rid4);
+
+        // Make sure 1+2, 3 and 4 aren't aggregated
+        MoreAsserts.assertNotEqual(cid1, cid3);
+        MoreAsserts.assertNotEqual(cid1, cid4);
+        MoreAsserts.assertNotEqual(cid3, cid4);
+
+        // time = startTime
+
         // First, there's no frequent.  (We use strequent here only because frequent is hidden
         // and may be removed someday.)
         assertRowCount(0, Contacts.CONTENT_STREQUENT_URI, null, null);
 
-        ContentValues values = new ContentValues();
-        createContact(values, "First", "Contact", "5551112222", "email1@email.com",
-                StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        // Test 1. touch data 1a
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, did1a);
 
-        sendFeedback("email1@email.com", DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values);
-
-        // Now there should be one frequent.
+        // Now, there's a single frequent.  (contact 1)
         assertRowCount(1, Contacts.CONTENT_STREQUENT_URI, null, null);
 
-        assertRowCount(1, Contacts.CONTENT_URI, Contacts.TIMES_CONTACTED + ">0", null);
-        assertRowCount(1, RawContacts.CONTENT_URI, RawContacts.TIMES_CONTACTED + ">0", null);
+        // time = startTime + 1
+        sMockClock.advance();
 
-        // Purge all stats.
+        // Test 2. touch data 1a, 2a and 3a
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, did1a, did2a, did3a);
+
+        // Now, contact 1 and 3 are in frequent.
+        assertRowCount(2, Contacts.CONTENT_STREQUENT_URI, null, null);
+
+        // time = startTime + 2
+        sMockClock.advance();
+
+        // Test 2. touch data 2p (call)
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_CALL, did2p);
+
+        // There're still two frequent.
+        assertRowCount(2, Contacts.CONTENT_STREQUENT_URI, null, null);
+
+        // time = startTime + 3
+        sMockClock.advance();
+
+        // Test 3. touch data 2p and 3p (short text)
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_SHORT_TEXT, did2p, did3p);
+
+        // Let's check the tables.
+
+        // Fist, check the data_usage_stat table, which has no public URI.
+        assertStoredValuesDb("SELECT " + DataUsageStatColumns.DATA_ID +
+                "," + DataUsageStatColumns.USAGE_TYPE_INT +
+                "," + DataUsageStatColumns.TIMES_USED +
+                "," + DataUsageStatColumns.LAST_TIME_USED +
+                " FROM " + Tables.DATA_USAGE_STAT, null,
+                cv(DataUsageStatColumns.DATA_ID, did1a,
+                        DataUsageStatColumns.USAGE_TYPE_INT,
+                            DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT,
+                        DataUsageStatColumns.TIMES_USED, 2,
+                        DataUsageStatColumns.LAST_TIME_USED, startTime + 1
+                        ),
+                cv(DataUsageStatColumns.DATA_ID, did2a,
+                        DataUsageStatColumns.USAGE_TYPE_INT,
+                            DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT,
+                        DataUsageStatColumns.TIMES_USED, 1,
+                        DataUsageStatColumns.LAST_TIME_USED, startTime + 1
+                        ),
+                cv(DataUsageStatColumns.DATA_ID, did3a,
+                        DataUsageStatColumns.USAGE_TYPE_INT,
+                            DataUsageStatColumns.USAGE_TYPE_INT_LONG_TEXT,
+                        DataUsageStatColumns.TIMES_USED, 1,
+                        DataUsageStatColumns.LAST_TIME_USED, startTime + 1
+                        ),
+                cv(DataUsageStatColumns.DATA_ID, did2p,
+                        DataUsageStatColumns.USAGE_TYPE_INT,
+                            DataUsageStatColumns.USAGE_TYPE_INT_CALL,
+                        DataUsageStatColumns.TIMES_USED, 1,
+                        DataUsageStatColumns.LAST_TIME_USED, startTime + 2
+                        ),
+                cv(DataUsageStatColumns.DATA_ID, did2p,
+                        DataUsageStatColumns.USAGE_TYPE_INT,
+                            DataUsageStatColumns.USAGE_TYPE_INT_SHORT_TEXT,
+                        DataUsageStatColumns.TIMES_USED, 1,
+                        DataUsageStatColumns.LAST_TIME_USED, startTime + 3
+                        ),
+                cv(DataUsageStatColumns.DATA_ID, did3p,
+                        DataUsageStatColumns.USAGE_TYPE_INT,
+                            DataUsageStatColumns.USAGE_TYPE_INT_SHORT_TEXT,
+                        DataUsageStatColumns.TIMES_USED, 1,
+                        DataUsageStatColumns.LAST_TIME_USED, startTime + 3
+                        )
+                );
+
+        // Next, check the raw_contacts table
+        assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
+                cv(RawContacts._ID, rid1,
+                        RawContacts.TIMES_CONTACTED, 2,
+                        RawContacts.LAST_TIME_CONTACTED, startTime + 1
+                        ),
+                cv(RawContacts._ID, rid2,
+                        RawContacts.TIMES_CONTACTED, 3,
+                        RawContacts.LAST_TIME_CONTACTED, startTime + 3
+                        ),
+                cv(RawContacts._ID, rid3,
+                        RawContacts.TIMES_CONTACTED, 2,
+                        RawContacts.LAST_TIME_CONTACTED, startTime + 3
+                        ),
+                cv(RawContacts._ID, rid4,
+                        RawContacts.TIMES_CONTACTED, 0,
+                        RawContacts.LAST_TIME_CONTACTED, null // 4 wasn't touched.
+                        )
+                );
+
+        // Lastly, check the contacts table.
+
+        // Note contact1.TIMES_CONTACTED = 4, even though raw_contact1.TIMES_CONTACTED +
+        // raw_contact1.TIMES_CONTACTED = 5, because in test 2, data 1a and data 2a were touched
+        // at once.
+        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
+                cv(Contacts._ID, cid1,
+                        Contacts.TIMES_CONTACTED, 4,
+                        Contacts.LAST_TIME_CONTACTED, startTime + 3
+                        ),
+                cv(Contacts._ID, cid3,
+                        Contacts.TIMES_CONTACTED, 2,
+                        Contacts.LAST_TIME_CONTACTED, startTime + 3
+                        ),
+                cv(Contacts._ID, cid4,
+                        Contacts.TIMES_CONTACTED, 0,
+                        Contacts.LAST_TIME_CONTACTED, 0 // For contacts, the default is 0, not null.
+                        )
+                );
+
+        // Let's test the delete too.
         assertTrue(mResolver.delete(DataUsageFeedback.DELETE_USAGE_URI, null, null) > 0);
 
         // Now there's no frequent.
         assertRowCount(0, Contacts.CONTENT_STREQUENT_URI, null, null);
+
+        // No rows in the stats table.
+        assertStoredValuesDb("SELECT " + DataUsageStatColumns.DATA_ID +
+                " FROM " + Tables.DATA_USAGE_STAT, null,
+                new ContentValues[0]);
 
         // The following values should all be 0 or null.
         assertRowCount(0, Contacts.CONTENT_URI, Contacts.TIMES_CONTACTED + ">0", null);
@@ -6691,13 +6846,21 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private void sendFeedback(String data1, String usageType, ContentValues values) {
         final long dataId = getStoredLongValue(Data.CONTENT_URI,
                 Data.DATA1 + "=?", new String[] { data1 }, Data._ID);
-        final Uri feedbackUri = DataUsageFeedback.FEEDBACK_URI.buildUpon()
-                .appendPath(String.valueOf(dataId))
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE, usageType)
-                .build();
-        assertNotSame(0, mResolver.update(feedbackUri, new ContentValues(), null, null));
+        MoreAsserts.assertNotEqual(0, updateDataUsageFeedback(usageType, dataId));
         if (values != null && values.containsKey(Contacts.TIMES_CONTACTED)) {
             values.put(Contacts.TIMES_CONTACTED, values.getAsInteger(Contacts.TIMES_CONTACTED) + 1);
         }
+    }
+
+    private int updateDataUsageFeedback(String usageType, long... ids) {
+        final StringBuilder idList = new StringBuilder();
+        for (long id : ids) {
+            if (idList.length() > 0) idList.append(",");
+            idList.append(id);
+        }
+        return mResolver.update(DataUsageFeedback.FEEDBACK_URI.buildUpon()
+                .appendPath(idList.toString())
+                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE, usageType)
+                .build(), new ContentValues(), null, null);
     }
 }
