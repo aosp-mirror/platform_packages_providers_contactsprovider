@@ -232,12 +232,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final ProfileAwareUriMatcher sUriMatcher =
             new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
 
-    /**
-     * Used to insert a column into strequent results, which enables SQL to sort the list using
-     * the total times contacted. See also {@link #sStrequentFrequentProjectionMap}.
-     */
-    private static final String TIMES_USED_SORT_COLUMN = "times_used_sort";
-
     private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.TIMES_USED + " DESC,"
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
 
@@ -490,13 +484,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
             " WHERE " + RawContacts._ID + " IN (";
 
     // Current contacts - those contacted within the last 3 days (in seconds)
-    private static final long EMAIL_FILTER_CURRENT = 3 * 24 * 60 * 60;
+    private static final long LAST_TIME_USED_CURRENT_SEC = 3 * 24 * 60 * 60;
 
     // Recent contacts - those contacted within the last 30 days (in seconds)
-    private static final long EMAIL_FILTER_RECENT = 30 * 24 * 60 * 60;
+    private static final long LAST_TIME_USED_RECENT_SEC = 30 * 24 * 60 * 60;
 
-    private static final String TIME_SINCE_LAST_USED =
+    private static final String TIME_SINCE_LAST_USED_SEC =
             "(strftime('%s', 'now') - " + DataUsageStatColumns.LAST_TIME_USED + "/1000)";
+
+    private static final String SORT_BY_DATA_USAGE =
+            "(CASE WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_CURRENT_SEC +
+            " THEN 0 " +
+                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_RECENT_SEC +
+            " THEN 1 " +
+            " ELSE 2 END), " +
+            DataUsageStatColumns.TIMES_USED + " DESC";
 
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
@@ -509,12 +511,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private static final String EMAIL_FILTER_SORT_ORDER =
         Contacts.STARRED + " DESC, "
-        + "(CASE WHEN " + TIME_SINCE_LAST_USED + " < " + EMAIL_FILTER_CURRENT
-        + " THEN 0 "
-                + " WHEN " + TIME_SINCE_LAST_USED + " < " + EMAIL_FILTER_RECENT
-        + " THEN 1 "
-        + " ELSE 2 END), "
-        + DataUsageStatColumns.TIMES_USED + " DESC, "
+        + SORT_BY_DATA_USAGE + ", "
         + Contacts.IN_VISIBLE_GROUP + " DESC, "
         + Contacts.DISPLAY_NAME + ", "
         + Data.CONTACT_ID + ", "
@@ -688,12 +685,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /** Used for pushing starred contacts to the top of a times contacted list **/
     private static final ProjectionMap sStrequentStarredProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(TIMES_USED_SORT_COLUMN, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.TIMES_USED, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
             .build();
 
     private static final ProjectionMap sStrequentFrequentProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(TIMES_USED_SORT_COLUMN, "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED + ")")
+            .add(DataUsageStatColumns.TIMES_USED,
+                    "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED + ")")
+            .add(DataUsageStatColumns.LAST_TIME_USED,
+                    "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED + ")")
             .build();
 
     /**
@@ -704,7 +705,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final ProjectionMap sStrequentPhoneOnlyStarredProjectionMap
             = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(TIMES_USED_SORT_COLUMN, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.TIMES_USED,
+                    String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
             .add(Phone.NUMBER, "NULL")
             .add(Phone.TYPE, "NULL")
             .add(Phone.LABEL, "NULL")
@@ -719,7 +722,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final ProjectionMap sStrequentPhoneOnlyFrequentProjectionMap
             = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(TIMES_USED_SORT_COLUMN, DataUsageStatColumns.CONCRETE_TIMES_USED)
+            .add(DataUsageStatColumns.TIMES_USED, DataUsageStatColumns.CONCRETE_TIMES_USED)
+            .add(DataUsageStatColumns.LAST_TIME_USED, DataUsageStatColumns.CONCRETE_LAST_TIME_USED)
             .add(Phone.NUMBER)
             .add(Phone.TYPE)
             .add(Phone.LABEL)
@@ -5065,7 +5069,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 String[] subProjection = null;
                 if (projection != null) {
-                    subProjection = appendProjectionArg(projection, TIMES_USED_SORT_COLUMN);
+                    subProjection = new String[projection.length + 2];
+                    System.arraycopy(projection, 0, subProjection, 0, projection.length);
+                    subProjection[projection.length + 0] = DataUsageStatColumns.TIMES_USED;
+                    subProjection[projection.length + 1] = DataUsageStatColumns.LAST_TIME_USED;
                 }
 
                 // Build the first query for starred
@@ -5123,9 +5130,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             DataColumns.MIMETYPE_ID + " IN (" +
                             phoneMimeTypeId + ", " + sipMimeTypeId + ")) AND (" +
                             RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY + ")"));
-                    frequentInnerQuery =
-                            qb.buildQuery(subProjection, null, null, null,
-                            TIMES_USED_SORT_COLUMN + " DESC", "25");
+                    frequentInnerQuery = qb.buildQuery(subProjection, null, null, null,
+                            SORT_BY_DATA_USAGE, "25");
                 } else {
                     setTablesAndProjectionMapForContacts(qb, uri, projection, true);
                     qb.setProjectionMap(sStrequentFrequentProjectionMap);
@@ -5137,7 +5143,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     final String HAVING =
                             RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
                     frequentInnerQuery = qb.buildQuery(subProjection,
-                            null, Contacts._ID, HAVING, null, "25");
+                            null, Contacts._ID, HAVING, SORT_BY_DATA_USAGE, "25");
                 }
 
                 // We need to wrap the inner queries in an extra select, because they contain
@@ -6733,8 +6739,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         qb.setTables(sb.toString());
 
-        boolean useDistinct = distinct
-                || !mDbHelper.get().isInProjection(projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
+        boolean useDistinct = distinct || !ContactsDatabaseHelper.isInProjection(
+                projection, DISTINCT_DATA_PROHIBITING_COLUMNS);
         qb.setDistinct(useDistinct);
 
         final ProjectionMap projectionMap;
@@ -6798,7 +6804,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendContactStatusUpdateJoin(StringBuilder sb, String[] projection,
             String lastStatusUpdateIdColumn) {
-        if (mDbHelper.get().isInProjection(projection,
+        if (ContactsDatabaseHelper.isInProjection(projection,
                 Contacts.CONTACT_STATUS,
                 Contacts.CONTACT_STATUS_RES_PACKAGE,
                 Contacts.CONTACT_STATUS_ICON,
@@ -6813,7 +6819,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendDataStatusUpdateJoin(StringBuilder sb, String[] projection,
             String dataIdColumn) {
-        if (mDbHelper.get().isInProjection(projection,
+        if (ContactsDatabaseHelper.isInProjection(projection,
                 StatusUpdates.STATUS,
                 StatusUpdates.STATUS_RES_PACKAGE,
                 StatusUpdates.STATUS_ICON,
@@ -6833,7 +6839,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendContactPresenceJoin(StringBuilder sb, String[] projection,
             String contactIdColumn) {
-        if (mDbHelper.get().isInProjection(projection,
+        if (ContactsDatabaseHelper.isInProjection(projection,
                 Contacts.CONTACT_PRESENCE, Contacts.CONTACT_CHAT_CAPABILITY)) {
             sb.append(" LEFT OUTER JOIN " + Tables.AGGREGATED_PRESENCE +
                     " ON (" + contactIdColumn + " = "
@@ -6843,7 +6849,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendDataPresenceJoin(StringBuilder sb, String[] projection,
             String dataIdColumn) {
-        if (mDbHelper.get().isInProjection(projection, Data.PRESENCE, Data.CHAT_CAPABILITY)) {
+        if (ContactsDatabaseHelper.isInProjection(
+                projection, Data.PRESENCE, Data.CHAT_CAPABILITY)) {
             sb.append(" LEFT OUTER JOIN " + Tables.PRESENCE +
                     " ON (" + StatusUpdates.DATA_ID + "=" + dataIdColumn + ")");
         }
@@ -7777,17 +7784,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             System.arraycopy(selectionArgs, 0, newSelectionArgs, 1, selectionArgs.length);
             return newSelectionArgs;
         }
-    }
-
-    private String[] appendProjectionArg(String[] projection, String arg) {
-        if (projection == null) {
-            return null;
-        }
-        final int length = projection.length;
-        String[] newProjection = new String[length + 1];
-        System.arraycopy(projection, 0, newProjection, 0, length);
-        newProjection[length] = arg;
-        return newProjection;
     }
 
     protected Account getDefaultAccount() {

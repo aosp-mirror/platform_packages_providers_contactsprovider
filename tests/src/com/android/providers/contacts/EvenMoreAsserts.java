@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import com.google.android.collect.Sets;
+
 import android.content.Context;
 import android.graphics.BitmapFactory;
 
@@ -23,6 +25,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Set;
 
 import junit.framework.Assert;
 
@@ -101,5 +104,13 @@ public final class EvenMoreAsserts {
         BitmapFactory.decodeByteArray(imageData, 0, imageData.length, o);
 
         return "[" + o.outWidth + " x " + o.outHeight + "]";
+    }
+
+    public static void assertUnique(Object... values) {
+        Set<Object> set = Sets.newHashSet();
+        for (Object o : values) {
+            Assert.assertFalse("Duplicate found: " + o, set.contains(o));
+            set.add(o);
+        }
     }
 }

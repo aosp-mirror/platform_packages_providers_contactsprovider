@@ -18,12 +18,12 @@ package com.android.providers.contacts.util;
 
 public class MockClock extends Clock {
     /** Current time.  Only updated with advance(). */
-    private long currentTimeMillis;
+    private long mCurrentTimeMillis;
 
     public void install() {
         Clock.injectInstance(this);
 
-        currentTimeMillis = 100000;
+        mCurrentTimeMillis = 100000;
     }
 
     public void uninstall() {
@@ -32,10 +32,14 @@ public class MockClock extends Clock {
 
     @Override
     public long currentTimeMillis() {
-        return currentTimeMillis;
+        return mCurrentTimeMillis;
+    }
+
+    public void setCurrentTimeMillis(long time) {
+        mCurrentTimeMillis = time;
     }
 
     public void advance() {
-        currentTimeMillis++;
+        mCurrentTimeMillis++;
     }
 }
