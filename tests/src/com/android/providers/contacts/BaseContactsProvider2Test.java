@@ -930,7 +930,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertStoredValues(rowUri, null, null, expectedValues);
     }
 
-    protected void assertStoredValues(Uri rowUri, ContentValues[] expectedValues) {
+    protected void assertStoredValues(Uri rowUri, ContentValues... expectedValues) {
         assertStoredValues(rowUri, null, null, expectedValues);
     }
 
@@ -941,6 +941,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertEquals("Record count", 1, c.getCount());
             c.moveToFirst();
             assertCursorValues(c, expectedValues);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
         } finally {
             c.close();
         }
@@ -957,6 +960,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertEquals("Record count", expectedValues.length, c.getCount());
             c.moveToFirst();
             assertCursorValues(c, expectedValues);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
         } finally {
             c.close();
         }
@@ -972,6 +978,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         try {
             assertEquals("Record count", expectedValues.length, c.getCount());
             assertCursorValues(c, expectedValues);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
         } finally {
             c.close();
         }
@@ -997,6 +1006,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         try {
             assertEquals("Record count", expectedValues.length, c.getCount());
             assertCursorValuesOrderly(c, expectedValues);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
         } finally {
             c.close();
         }
@@ -1045,6 +1057,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertEquals("Record count", 1, c.getCount());
             c.moveToFirst();
             assertCursorValues(c, values);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
         } finally {
             c.close();
         }
@@ -1062,7 +1077,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertTrue(message.toString(), result);
     }
 
-    protected void assertCursorValues(Cursor cursor, ContentValues[] expectedValues) {
+    protected void assertCursorValues(Cursor cursor, ContentValues... expectedValues) {
         StringBuilder message = new StringBuilder();
 
         // In case if expectedValues contains multiple identical values, remember which cursor
@@ -1085,7 +1100,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
-    protected void assertCursorValuesOrderly(Cursor cursor, ContentValues[] expectedValues) {
+    private void assertCursorValuesOrderly(Cursor cursor, ContentValues... expectedValues) {
         StringBuilder message = new StringBuilder();
         cursor.moveToPosition(-1);
         for (ContentValues v : expectedValues) {
@@ -1220,10 +1235,15 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     protected void assertRowCount(int expectedCount, Uri uri, String selection, String[] args) {
         Cursor cursor = mResolver.query(uri, null, selection, args, null);
-        int count = cursor.getCount();
-        cursor.close();
 
-        assertEquals(expectedCount, count);
+        try {
+            assertEquals(expectedCount, cursor.getCount());
+        } catch (Error e) {
+            TestUtils.dumpCursor(cursor);
+            throw e;
+        } finally {
+            cursor.close();
+        }
     }
 
     /**

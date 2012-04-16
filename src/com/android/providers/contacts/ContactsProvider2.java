@@ -1493,7 +1493,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 new DataRowHandlerForGroupMembership(context, dbHelper, contactAggregator,
                         mGroupIdCache));
         handlerMap.put(Photo.CONTENT_ITEM_TYPE,
-                new DataRowHandlerForPhoto(context, dbHelper, contactAggregator, photoStore));
+                new DataRowHandlerForPhoto(context, dbHelper, contactAggregator, photoStore,
+                        getMaxDisplayPhotoDim(), getMaxThumbnailDim()));
         handlerMap.put(Note.CONTENT_ITEM_TYPE,
                 new DataRowHandlerForNote(context, dbHelper, contactAggregator));
     }

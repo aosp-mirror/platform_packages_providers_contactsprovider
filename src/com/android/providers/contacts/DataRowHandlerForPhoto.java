@@ -34,6 +34,8 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
     private static final String TAG = "DataRowHandlerForPhoto";
 
     private final PhotoStore mPhotoStore;
+    private final int mMaxDisplayPhotoDim;
+    private final int mMaxThumbnailPhotoDim;
 
     /**
      * If this is set in the ContentValues passed in, it indicates that the caller has
@@ -45,9 +47,11 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
 
     public DataRowHandlerForPhoto(
             Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator,
-            PhotoStore photoStore) {
+            PhotoStore photoStore, int maxDisplayPhotoDim, int maxThumbnailPhotoDim) {
         super(context, dbHelper, aggregator, Photo.CONTENT_ITEM_TYPE);
         mPhotoStore = photoStore;
+        mMaxDisplayPhotoDim = maxDisplayPhotoDim;
+        mMaxThumbnailPhotoDim = maxThumbnailPhotoDim;
     }
 
     @Override
@@ -141,11 +145,9 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
     private boolean processPhoto(ContentValues values) {
         byte[] originalPhoto = values.getAsByteArray(Photo.PHOTO);
         if (originalPhoto != null) {
-            int maxDisplayPhotoDim = PhotoProcessor.getMaxDisplayPhotoSize();
-            int maxThumbnailPhotoDim = PhotoProcessor.getMaxThumbnailSize();
             try {
                 PhotoProcessor processor = new PhotoProcessor(
-                        originalPhoto, maxDisplayPhotoDim, maxThumbnailPhotoDim);
+                        originalPhoto, mMaxDisplayPhotoDim, mMaxThumbnailPhotoDim);
                 long photoFileId = mPhotoStore.insert(processor);
                 if (photoFileId != 0) {
                     values.put(Photo.PHOTO_FILE_ID, photoFileId);

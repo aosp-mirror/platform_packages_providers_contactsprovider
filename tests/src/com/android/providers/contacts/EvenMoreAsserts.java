@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.content.Context;
 import android.graphics.BitmapFactory;
 
 import java.io.ByteArrayOutputStream;
@@ -59,7 +60,8 @@ public final class EvenMoreAsserts {
         return userMsg == null ? errorMsg : errorMsg + userMsg;
     }
 
-    public static void assertImageRawData(byte[] expected, InputStream actualStream)
+    public static void assertImageRawData(Context context, byte[] expected,
+            InputStream actualStream)
             throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
@@ -68,11 +70,12 @@ public final class EvenMoreAsserts {
         while ((count = actualStream.read(buffer)) != -1) {
             baos.write(buffer, 0, count);
         }
+        actualStream.close();
 
-        assertImageRawData(expected, baos.toByteArray());
+        assertImageRawData(context, expected, baos.toByteArray());
     }
 
-    public static void assertImageRawData(byte[] expected, byte[] actual) {
+    public static void assertImageRawData(Context context, byte[] expected, byte[] actual) {
         String failReason = null;
         if (expected.length != actual.length) {
             failReason = "Different data lengths:" +
@@ -83,9 +86,13 @@ public final class EvenMoreAsserts {
         if (failReason == null) {
             return;
         }
+        String expectedFile = TestUtils.dumpToCacheDir(context, "expected", ".jpg", expected);
+        String actualFile = TestUtils.dumpToCacheDir(context, "actual", ".jpg", actual);
+
         // Length or hashCode is different.  We'll fail, but put the dimensions in the message.
         Assert.fail(failReason + ", expected dimentions=" + getImageDimensions(expected) +
-                " actual dimentions=" + getImageDimensions(actual));
+                " actual dimentions=" + getImageDimensions(actual) +
+                " Data written to " + expectedFile + " and " + actualFile);
     }
 
     private static final String getImageDimensions(byte[] imageData) {

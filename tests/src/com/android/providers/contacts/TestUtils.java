@@ -17,6 +17,13 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.util.Log;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 import junit.framework.Assert;
 
@@ -45,5 +52,47 @@ public class TestUtils {
             }
         }
         return ret;
+    }
+
+    /**
+     * Writes the content of a cursor to the log.
+     */
+    public static final void dumpCursor(Cursor c) {
+        final String TAG = "contacts";
+
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < c.getColumnCount(); i++) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append(c.getColumnName(i));
+        }
+        Log.i(TAG, sb.toString());
+
+        c.moveToPosition(-1);
+        while (c.moveToNext()) {
+            sb.setLength(0);
+            for (int i = 0; i < c.getColumnCount(); i++) {
+                if (sb.length() > 0) sb.append("|");
+
+                // TODO Handle binary data somehow.
+                sb.append(c.getString(i));
+            }
+            Log.i(TAG, sb.toString());
+        }
+    }
+
+    /**
+     * Writes an arbitrary byte array to the test apk's cache directory.
+     */
+    public static final String dumpToCacheDir(Context context, String prefix, String suffix,
+            byte[] data) {
+        try {
+            File file = File.createTempFile(prefix, suffix, context.getCacheDir());
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(data);
+            fos.close();
+            return file.getAbsolutePath();
+        } catch (IOException e) {
+            return "[Failed to write to file: " + e.getMessage() + "]";
+        }
     }
 }

@@ -138,7 +138,8 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
 
         byte[] expectedStoredVersion = loadPhotoFromResource(resourceId, PhotoSize.DISPLAY_PHOTO);
 
-        EvenMoreAsserts.assertImageRawData(expectedStoredVersion, actualStoredVersion);
+        EvenMoreAsserts.assertImageRawData(getContext(),
+                expectedStoredVersion, actualStoredVersion);
 
         Cursor c = mDb.query(Tables.PHOTO_FILES,
                 new String[]{PhotoFiles.WIDTH, PhotoFiles.HEIGHT, PhotoFiles.FILESIZE},
