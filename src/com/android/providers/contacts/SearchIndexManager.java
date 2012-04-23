@@ -45,6 +45,8 @@ import java.util.regex.Pattern;
 public class SearchIndexManager {
     private static final String TAG = "ContactsFTS";
 
+    private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
+
     public static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
     private static final int SEARCH_INDEX_VERSION = 1;
 
@@ -253,33 +255,37 @@ public class SearchIndexManager {
     }
 
     public void updateIndexForRawContacts(Set<Long> contactIds, Set<Long> rawContactIds) {
-        mSb.setLength(0);
-        mSb.append("(");
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "Updating search index for " + contactIds.size() +
+                    " contacts / " + rawContactIds.size() + " raw contacts");
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("(");
         if (!contactIds.isEmpty()) {
-            mSb.append(RawContacts.CONTACT_ID + " IN (");
+            sb.append(RawContacts.CONTACT_ID + " IN (");
             for (Long contactId : contactIds) {
-                mSb.append(contactId).append(",");
+                sb.append(contactId).append(",");
             }
-            mSb.setLength(mSb.length() - 1);
-            mSb.append(')');
+            sb.setLength(sb.length() - 1);
+            sb.append(')');
         }
 
         if (!rawContactIds.isEmpty()) {
             if (!contactIds.isEmpty()) {
-                mSb.append(" OR ");
+                sb.append(" OR ");
             }
-            mSb.append(RawContactsColumns.CONCRETE_ID + " IN (");
+            sb.append(RawContactsColumns.CONCRETE_ID + " IN (");
             for (Long rawContactId : rawContactIds) {
-                mSb.append(rawContactId).append(",");
+                sb.append(rawContactId).append(",");
             }
-            mSb.setLength(mSb.length() - 1);
-            mSb.append(')');
+            sb.setLength(sb.length() - 1);
+            sb.append(')');
         }
 
-        mSb.append(")");
+        sb.append(")");
 
         // The selection to select raw_contacts.
-        final String rawContactsSelection = mSb.toString();
+        final String rawContactsSelection = sb.toString();
 
         // Remove affected search_index rows.
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
@@ -292,7 +298,10 @@ public class SearchIndexManager {
                 , null);
 
         // Then rebuild index for them.
-        buildAndInsertIndex(db, rawContactsSelection);
+        final int count = buildAndInsertIndex(db, rawContactsSelection);
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "Updated search index for " + count + " contacts");
+        }
     }
 
     private int buildAndInsertIndex(SQLiteDatabase db, String selection) {

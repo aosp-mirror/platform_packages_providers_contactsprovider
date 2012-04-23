@@ -21,7 +21,6 @@ import com.google.android.collect.Sets;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
@@ -33,12 +32,12 @@ public class TransactionContext  {
 
     private final boolean mForProfile;
     /** Map from raw contact id to account Id */
-    private HashMap<Long, Long> mInsertedRawContactsAccounts = Maps.newHashMap();
-    private HashSet<Long> mUpdatedRawContacts = Sets.newHashSet();
-    private HashSet<Long> mDirtyRawContacts = Sets.newHashSet();
-    private HashSet<Long> mStaleSearchIndexRawContacts = Sets.newHashSet();
-    private HashSet<Long> mStaleSearchIndexContacts = Sets.newHashSet();
-    private HashMap<Long, Object> mUpdatedSyncStates = Maps.newHashMap();
+    private HashMap<Long, Long> mInsertedRawContactsAccounts;
+    private HashSet<Long> mUpdatedRawContacts;
+    private HashSet<Long> mDirtyRawContacts;
+    private HashSet<Long> mStaleSearchIndexRawContacts;
+    private HashSet<Long> mStaleSearchIndexContacts;
+    private HashMap<Long, Object> mUpdatedSyncStates;
 
     public TransactionContext(boolean forProfile) {
         mForProfile = forProfile;
@@ -49,70 +48,89 @@ public class TransactionContext  {
     }
 
     public void rawContactInserted(long rawContactId, long accountId) {
+        if (mInsertedRawContactsAccounts == null) mInsertedRawContactsAccounts = Maps.newHashMap();
         mInsertedRawContactsAccounts.put(rawContactId, accountId);
     }
 
     public void rawContactUpdated(long rawContactId) {
+        if (mUpdatedRawContacts == null) mUpdatedRawContacts = Sets.newHashSet();
         mUpdatedRawContacts.add(rawContactId);
     }
 
     public void markRawContactDirty(long rawContactId) {
+        if (mDirtyRawContacts == null) mDirtyRawContacts = Sets.newHashSet();
         mDirtyRawContacts.add(rawContactId);
     }
 
     public void syncStateUpdated(long rowId, Object data) {
+        if (mUpdatedSyncStates == null) mUpdatedSyncStates = Maps.newHashMap();
         mUpdatedSyncStates.put(rowId, data);
     }
 
     public void invalidateSearchIndexForRawContact(long rawContactId) {
+        if (mStaleSearchIndexRawContacts == null) mStaleSearchIndexRawContacts = Sets.newHashSet();
         mStaleSearchIndexRawContacts.add(rawContactId);
     }
 
     public void invalidateSearchIndexForContact(long contactId) {
+        if (mStaleSearchIndexContacts == null) mStaleSearchIndexContacts = Sets.newHashSet();
         mStaleSearchIndexContacts.add(contactId);
     }
 
     public Set<Long> getInsertedRawContactIds() {
+        if (mInsertedRawContactsAccounts == null) mInsertedRawContactsAccounts = Maps.newHashMap();
         return mInsertedRawContactsAccounts.keySet();
     }
 
     public Set<Long> getUpdatedRawContactIds() {
+        if (mUpdatedRawContacts == null) mUpdatedRawContacts = Sets.newHashSet();
         return mUpdatedRawContacts;
     }
 
     public Set<Long> getDirtyRawContactIds() {
+        if (mDirtyRawContacts == null) mDirtyRawContacts = Sets.newHashSet();
         return mDirtyRawContacts;
     }
 
     public Set<Long> getStaleSearchIndexRawContactIds() {
+        if (mStaleSearchIndexRawContacts == null) mStaleSearchIndexRawContacts = Sets.newHashSet();
         return mStaleSearchIndexRawContacts;
     }
 
     public Set<Long> getStaleSearchIndexContactIds() {
+        if (mStaleSearchIndexContacts == null) mStaleSearchIndexContacts = Sets.newHashSet();
         return mStaleSearchIndexContacts;
     }
 
     public Set<Entry<Long, Object>> getUpdatedSyncStates() {
+        if (mUpdatedSyncStates == null) mUpdatedSyncStates = Maps.newHashMap();
         return mUpdatedSyncStates.entrySet();
     }
 
     public Long getAccountIdOrNullForRawContact(long rawContactId) {
+        if (mInsertedRawContactsAccounts == null) mInsertedRawContactsAccounts = Maps.newHashMap();
         return mInsertedRawContactsAccounts.get(rawContactId);
     }
 
     public boolean isNewRawContact(long rawContactId) {
+        if (mInsertedRawContactsAccounts == null) mInsertedRawContactsAccounts = Maps.newHashMap();
         return mInsertedRawContactsAccounts.containsKey(rawContactId);
     }
 
-    public void clear() {
-        mInsertedRawContactsAccounts.clear();
-        mUpdatedRawContacts.clear();
-        mUpdatedSyncStates.clear();
-        mDirtyRawContacts.clear();
+    public void clearExceptSearchIndexUpdates() {
+        mInsertedRawContactsAccounts = null;
+        mUpdatedRawContacts = null;
+        mUpdatedSyncStates = null;
+        mDirtyRawContacts = null;
     }
 
     public void clearSearchIndexUpdates() {
-        mStaleSearchIndexRawContacts.clear();
-        mStaleSearchIndexContacts.clear();
+        mStaleSearchIndexRawContacts = null;
+        mStaleSearchIndexContacts = null;
+    }
+
+    public void clearAll() {
+        clearExceptSearchIndexUpdates();
+        clearSearchIndexUpdates();
     }
 }

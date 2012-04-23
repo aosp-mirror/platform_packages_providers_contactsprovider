@@ -115,6 +115,7 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Authorization;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Note;
@@ -213,7 +214,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String PREF_LOCALE = "locale";
 
-    private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 2;
+    private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 3;
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
@@ -1501,6 +1502,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         getMaxDisplayPhotoDim(), getMaxThumbnailDim()));
         handlerMap.put(Note.CONTENT_ITEM_TYPE,
                 new DataRowHandlerForNote(context, dbHelper, contactAggregator));
+        handlerMap.put(Identity.CONTENT_ITEM_TYPE,
+                new DataRowHandlerForIdentity(context, dbHelper, contactAggregator));
     }
 
     @VisibleForTesting
@@ -1821,14 +1824,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return PhotoProcessor.getMaxDisplayPhotoSize();
     }
 
-    /* package */ NameSplitter getNameSplitter() {
-        return mNameSplitter;
-    }
-
-    /* package */ NameLookupBuilder getNameLookupBuilder() {
-        return mNameLookupBuilder;
-    }
-
     @VisibleForTesting
     public ContactDirectoryManager getContactDirectoryManagerForTest() {
         return mContactDirectoryManager;
@@ -2119,10 +2114,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         if (inProfileMode()) {
             mProfileAggregator.clearPendingAggregations();
-            mProfileTransactionContext.clear();
+            mProfileTransactionContext.clearExceptSearchIndexUpdates();
         } else {
             mContactAggregator.clearPendingAggregations();
-            mContactTransactionContext.clear();
+            mContactTransactionContext.clearExceptSearchIndexUpdates();
         }
     }
 
@@ -2207,7 +2202,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
 
-        mTransactionContext.get().clear();
+        mTransactionContext.get().clearExceptSearchIndexUpdates();
     }
 
     /**
@@ -7927,44 +7922,46 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     protected void upgradeAggregationAlgorithmInBackground() {
         Log.i(TAG, "Upgrading aggregation algorithm");
-        int count = 0;
+
         final long start = SystemClock.elapsedRealtime();
-        SQLiteDatabase db = null;
+        setProviderStatus(ProviderStatus.STATUS_UPGRADING);
+
+        // Re-aggregate all visible raw contacts.
         try {
-            switchToContactMode();
-            db = mContactsHelper.getWritableDatabase();
-            mActiveDb.set(db);
-            db.beginTransaction();
-            Cursor cursor = db.query(true,
-                    Tables.RAW_CONTACTS + " r1 JOIN " + Tables.RAW_CONTACTS + " r2",
-                    new String[]{"r1." + RawContacts._ID},
-                    "r1." + RawContacts._ID + "!=r2." + RawContacts._ID +
-                    " AND r1." + RawContacts.CONTACT_ID + "=r2." + RawContacts.CONTACT_ID +
-                    " AND r1." + RawContactsColumns.ACCOUNT_ID +
-                        "=r2." + RawContactsColumns.ACCOUNT_ID,
-                    null, null, null, null, null);
+            int count = 0;
+            SQLiteDatabase db = null;
+            boolean success = false;
             try {
-                while (cursor.moveToNext()) {
-                    long rawContactId = cursor.getLong(0);
-                    mContactAggregator.markForAggregation(rawContactId,
-                            RawContacts.AGGREGATION_MODE_DEFAULT, true);
-                    count++;
-                }
+                // Re-aggregation os only for the contacts DB.
+                switchToContactMode();
+                db = mContactsHelper.getWritableDatabase();
+                mActiveDb.set(db);
+
+                // Start the actual process.
+                db.beginTransaction();
+
+                count = mContactAggregator.markAllVisibleForAggregation(db);
+                mContactAggregator.aggregateInTransaction(mTransactionContext.get(), db);
+
+                updateSearchIndexInTransaction();
+
+                mContactsHelper.setProperty(DbProperties.AGGREGATION_ALGORITHM,
+                        String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
+
+                db.setTransactionSuccessful();
+
+                success = true;
             } finally {
-                cursor.close();
+                mTransactionContext.get().clearAll();
+                if (db != null) {
+                    db.endTransaction();
+                }
+                final long end = SystemClock.elapsedRealtime();
+                Log.i(TAG, "Aggregation algorithm upgraded for " + count + " raw contacts"
+                        + (success ? (" in " + (end - start) + "ms") : " failed"));
             }
-            mContactAggregator.aggregateInTransaction(mTransactionContext.get(), db);
-            updateSearchIndexInTransaction();
-            db.setTransactionSuccessful();
-            mContactsHelper.setProperty(DbProperties.AGGREGATION_ALGORITHM,
-                    String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
-        } finally {
-            if (db != null) {
-                db.endTransaction();
-            }
-            final long end = SystemClock.elapsedRealtime();
-            Log.i(TAG, "Aggregation algorithm upgraded for " + count
-                    + " contacts, in " + (end - start) + "ms");
+        } finally { // Need one more finally because endTransaction() may fail.
+            setProviderStatus(ProviderStatus.STATUS_NORMAL);
         }
     }
 

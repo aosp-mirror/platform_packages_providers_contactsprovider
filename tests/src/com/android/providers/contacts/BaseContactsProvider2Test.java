@@ -38,6 +38,7 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Event;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Note;
@@ -537,6 +538,17 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE);
         values.put(Note.NOTE, note);
+        Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
+        return resultUri;
+    }
+
+    protected Uri insertIdentity(long rawContactId, String identity, String namespace) {
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Identity.CONTENT_ITEM_TYPE);
+        values.put(Identity.NAMESPACE, namespace);
+        values.put(Identity.IDENTITY, identity);
+
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
         return resultUri;
     }

@@ -125,12 +125,6 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertEquals("Johna Smitha", displayName);
     }
 
-    public void testNonAggregationFromSameAccount() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
-        assertNotAggregated(rawContactId1, rawContactId2);
-    }
-
     public void testAggregationOfExactFullNameMatch() {
         long rawContactId1 = createRawContact(ACCOUNT_1);
         insertStructuredName(rawContactId1, "Johnb", "Smithb");
@@ -192,7 +186,6 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
-    // TODO: should this be allowed to match?
     public void testNonAggregationOfLastNameMatch() {
         long rawContactId1 = createRawContact(ACCOUNT_1);
         insertStructuredName(rawContactId1, "Johnf", "Smithf");
@@ -290,21 +283,6 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId2, "1(888)555-1231");
 
         assertAggregated(rawContactId1, rawContactId2);
-    }
-
-    public void testNonAggregationBasedOnPhoneNumberNoNameDataSameAccount() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertPhoneNumber(rawContactId1, "(888)555-1231");
-
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertPhoneNumber(rawContactId2, "1(888)555-1231");
-
-        long rawContactId3 = createRawContact(ACCOUNT_1);
-        insertPhoneNumber(rawContactId3, "888-555-1231");
-
-        assertNotAggregated(rawContactId1, rawContactId2);
-        assertNotAggregated(rawContactId1, rawContactId3);
-        assertNotAggregated(rawContactId2, rawContactId3);
     }
 
     public void testAggregationBasedOnPhoneNumberWhenTargetAggregateHasNoName() {
@@ -451,6 +429,16 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertNickname(rawContactId2, "Rendall");   // To force reaggregation
 
         assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationByIdentity() {
+        long rawContactId1 = createRawContact(ACCOUNT_1);
+        insertIdentity(rawContactId1, "iden1", "namespace1");
+
+        long rawContactId2 = createRawContact(ACCOUNT_2);
+        insertIdentity(rawContactId2, "iden1", "namespace1");
+
+        assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationExceptionKeepIn() {
@@ -664,6 +652,99 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId1, rawContactId4);
         assertNotAggregated(rawContactId3, rawContactId4);
+    }
+
+    public void testNonAggregationFromSameAccount() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testNonAggregationFromSameAccountNoCommonData() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertEmail(rawContactId1, "lightning1@android.com");
+        insertPhoneNumber(rawContactId1, "111-222-3333");
+        insertIdentity(rawContactId1, "iden1", "namespace");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertEmail(rawContactId2, "lightning2@android.com");
+        insertPhoneNumber(rawContactId2, "555-666-7777");
+        insertIdentity(rawContactId1, "iden2", "namespace");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationFromSameAccountEmailSame() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertEmail(rawContactId1, "lightning@android.com");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertEmail(rawContactId2, "lightning@android.com");
+
+        assertAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testNonAggregationFromSameAccountEmailDifferent() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertEmail(rawContactId1, "lightning1@android.com");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertEmail(rawContactId2, "lightning2@android.com");
+        insertEmail(rawContactId2, "lightning3@android.com");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationFromSameAccountIdentitySame() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertIdentity(rawContactId1, "iden", "namespace");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertIdentity(rawContactId2, "iden", "namespace");
+
+        assertAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testNonAggregationFromSameAccountIdentityDifferent() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertIdentity(rawContactId1, "iden1", "namespace1");
+        insertIdentity(rawContactId1, "iden2", "namespace2");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertIdentity(rawContactId2, "iden2", "namespace1");
+        insertIdentity(rawContactId2, "iden1", "namespace2");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationFromSameAccountPhoneNumberSame() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertPhoneNumber(rawContactId1, "111-222-3333");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertPhoneNumber(rawContactId2, "111-222-3333");
+
+        assertAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregationFromSameAccountPhoneNumberNormalizedSame() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertPhoneNumber(rawContactId1, "111-222-3333");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertPhoneNumber(rawContactId2, "+1-111-222-3333");
+
+        assertAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testNonAggregationFromSameAccountPhoneNumberDifferent() {
+        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertPhoneNumber(rawContactId1, "111-222-3333");
+
+        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        insertPhoneNumber(rawContactId2, "111-222-3334");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationSuggestionsBasedOnName() {
