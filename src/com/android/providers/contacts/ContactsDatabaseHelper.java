@@ -108,7 +108,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 701;
+    static final int DATABASE_VERSION = 702;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2380,6 +2380,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 701;
         }
 
+        if (oldVersion < 702) {
+            upgradeToVersion702(db);
+            oldVersion = 702;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -3699,6 +3704,83 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // Replace 0 with null.  This isn't really necessary, but we do this anyway for consistency.
         db.execSQL("UPDATE raw_contacts SET last_time_contacted = null" +
                 " where last_time_contacted = 0");
+    }
+
+    /**
+     * Pre-HC devices don't have correct "NORMALIZED_NUMBERS".  Clear them up.
+     */
+    private void upgradeToVersion702(SQLiteDatabase db) {
+        // All the "correct" Phone.NORMALIZED_NUMBERS should begin with "+".  The upgraded data
+        // don't.  Find all Phone.NORMALIZED_NUMBERS that don't begin with "+".
+        final int count;
+        final long[] dataIds;
+        final long[] rawContactIds;
+        final String[] phoneNumbers;
+        final StringBuilder sbDataIds;
+        final Cursor c = db.rawQuery(
+                "SELECT _id, raw_contact_id, data1 FROM data " +
+                " WHERE mimetype_id=" +
+                    "(SELECT _id FROM mimetypes" +
+                    " WHERE mimetype='vnd.android.cursor.item/phone_v2')" +
+                " AND data4 not like '+%'", // "Not like" will exclude nulls too.
+                null);
+        try {
+            count = c.getCount();
+            if (count == 0) {
+                return;
+            }
+            dataIds = new long[count];
+            rawContactIds = new long[count];
+            phoneNumbers = new String[count];
+            sbDataIds = new StringBuilder();
+
+            c.moveToPosition(-1);
+            while (c.moveToNext()) {
+                final int i = c.getPosition();
+                dataIds[i] = c.getLong(0);
+                rawContactIds[i] = c.getLong(1);
+                phoneNumbers[i] = c.getString(2);
+
+                if (sbDataIds.length() > 0) {
+                    sbDataIds.append(",");
+                }
+                sbDataIds.append(dataIds[i]);
+            }
+        } finally {
+            c.close();
+        }
+
+        final String dataIdList = sbDataIds.toString();
+
+        // Then, update the Data and PhoneLookup tables.
+
+        // First, just null out all Phone.NORMALIZED_NUMBERS for those.
+        db.execSQL("UPDATE data SET data4 = null" +
+                " WHERE _id IN (" + dataIdList + ")");
+
+        // Then, re-create phone_lookup for them.
+        db.execSQL("DELETE FROM phone_lookup" +
+                " WHERE data_id IN (" + dataIdList + ")");
+
+        for (int i = 0; i < count; i++) {
+            // Mimic how DataRowHandlerForPhoneNumber.insert() works when it can't normalize
+            // numbers.
+            final String phoneNumber = phoneNumbers[i];
+            if (TextUtils.isEmpty(phoneNumber)) continue;
+
+            final String normalized = PhoneNumberUtils.normalizeNumber(phoneNumber);
+            if (TextUtils.isEmpty(normalized)) continue;
+
+            db.execSQL("INSERT INTO phone_lookup" +
+                    "(data_id, raw_contact_id, normalized_number, min_match)" +
+                    " VALUES(?,?,?,?)",
+                    new String[] {
+                        String.valueOf(dataIds[i]),
+                        String.valueOf(rawContactIds[i]),
+                        normalized,
+                        PhoneNumberUtils.toCallerIDMinMatch(normalized)
+                    });
+        }
     }
 
     public String extractHandleFromEmailAddress(String email) {
