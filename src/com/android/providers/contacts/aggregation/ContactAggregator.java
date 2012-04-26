@@ -1633,10 +1633,11 @@ public class ContactAggregator {
                     firstLetters.add(firstLetter);
                     final String selection = "(" + NameLookupColumns.NORMALIZED_NAME + " GLOB '"
                             + firstLetter + "*') AND "
-                            + NameLookupColumns.NAME_TYPE + " IN("
+                            + "(" + NameLookupColumns.NAME_TYPE + " IN("
                                     + NameLookupType.NAME_COLLATION_KEY + ","
                                     + NameLookupType.EMAIL_BASED_NICKNAME + ","
-                                    + NameLookupType.NICKNAME + ")";
+                                    + NameLookupType.NICKNAME + ")) AND "
+                            + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
                     matchAllCandidates(db, selection, candidates, matcher,
                             ContactMatcher.MATCHING_ALGORITHM_APPROXIMATE,
                             String.valueOf(FIRST_LETTER_SUGGESTION_HIT_LIMIT));

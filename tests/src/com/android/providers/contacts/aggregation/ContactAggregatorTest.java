@@ -17,7 +17,9 @@
 package com.android.providers.contacts.aggregation;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsProvider2;
+import com.android.providers.contacts.TestUtils;
 import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
 
@@ -27,17 +29,21 @@ import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
+import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
+import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 
 /**
@@ -895,6 +901,42 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertSuggestions(contactId1, "eddie");
     }
 
+    public void testAggregationSuggestionsDontSuggestInvisible() {
+        long rawContactId1 = createRawContactWithName("first", "last", ACCOUNT_1);
+        insertPhoneNumber(rawContactId1, "111-222-3333");
+        insertNickname(rawContactId1, "Superman");
+        insertEmail(rawContactId1, "incredible@android.com");
+
+        // Create another with the exact same name, phone number, nickname and email.
+        long rawContactId2 = createRawContactWithName("first", "last", ACCOUNT_2);
+        insertPhoneNumber(rawContactId2, "111-222-3333");
+        insertNickname(rawContactId2, "Superman");
+        insertEmail(rawContactId2, "incredible@android.com");
+
+        // The aggregator should have joined them.  Split them up.
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId1, rawContactId2);
+
+        long contactId1 = queryContactId(rawContactId1);
+        long contactId2 = queryContactId(rawContactId2);
+
+        // Make sure they're different contacts.
+        MoreAsserts.assertNotEqual(contactId1, contactId2);
+
+        // Contact 2 should be suggested.
+        assertSuggestions(contactId1, contactId2);
+
+        // Make contact 2 invisible.  There's no good api for this, so we just tweak the DB
+        // directly.
+        SQLiteDatabase db = ((ContactsProvider2) getProvider()).getDatabaseHelper()
+                .getWritableDatabase();
+        db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY +
+                " WHERE " + BaseColumns._ID + "=" + contactId2);
+
+        // Now contact 2 shuldn't be suggested.
+        assertSuggestions(contactId1, new long[0]);
+    }
+
     public void testChoosePhotoSetBeforeAggregation() {
         long rawContactId1 = createRawContact();
         setContactAccount(rawContactId1, "donut", "donut_act");
@@ -1362,11 +1404,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
                 new String[] { Contacts._ID, Contacts.CONTACT_PRESENCE },
                 null, null, null);
 
-        assertEquals(suggestions.length, cursor.getCount());
+        try {
+            assertEquals(suggestions.length, cursor.getCount());
 
-        for (int i = 0; i < suggestions.length; i++) {
-            cursor.moveToNext();
-            assertEquals(suggestions[i], cursor.getLong(0));
+            for (int i = 0; i < suggestions.length; i++) {
+                cursor.moveToNext();
+                assertEquals(suggestions[i], cursor.getLong(0));
+            }
+        } finally {
+            TestUtils.dumpCursor(cursor);
         }
 
         cursor.close();
