@@ -25,6 +25,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.SearchSnippetColumns;
+import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 import android.test.suitebuilder.annotation.Suppress;
 
@@ -377,8 +378,10 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         assertStoredValue(buildSearchUri("Last-n"), SearchSnippetColumns.SNIPPET, null);
         assertStoredValue(buildSearchUri("Last-name"), SearchSnippetColumns.SNIPPET, null);
 
-        // With the current implementation this even works, but this may stop working when we
-        // fix the "O'Neill" case below.
+        // This will work too.
+        assertStoredValue(buildSearchUri("Lastname"), SearchSnippetColumns.SNIPPET, null);
+
+        // This doesn't have to work, but it does with the current implementation.
         assertStoredValue(buildSearchUri("name"), SearchSnippetColumns.SNIPPET, null);
     }
 
@@ -391,13 +394,11 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         assertStoredValue(buildSearchUri("Last-"), SearchSnippetColumns.SNIPPET, null);
         assertStoredValue(buildSearchUri("Last-n"), SearchSnippetColumns.SNIPPET, null);
         assertStoredValue(buildSearchUri("Last-name"), SearchSnippetColumns.SNIPPET, null);
+
+        // This will work too.
+        assertStoredValue(buildSearchUri("Lastname"), SearchSnippetColumns.SNIPPET, null);
     }
 
-    /**
-     * Probably both "oneill" and "o'neill" should match "o'neill", but at this point only "oneill"
-     * works.
-     */
-    @Suppress
     public void testNameWithPunctuations() {
         createRawContactWithName("First", "O'Neill");
 
@@ -465,6 +466,23 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
 
         assertStoredValue(buildSearchUri("john", "\u0001,\u0001,\u2026,5", true),
                 SearchSnippetColumns.SNIPPET, "[john@doe.com]");
+    }
+
+    public void testSplitIntoFtsTokens() {
+        checkSplitIntoFtsTokens("a", "a");
+        checkSplitIntoFtsTokens("a_b c%d-e'f", "a_b", "c", "d", "e", "f");
+        checkSplitIntoFtsTokens("  ", new String[0]);
+        // There's are all "control" characters, but treated as "letters".
+        // (See http://en.wikipedia.org/wiki/C1_Controls_and_Latin-1_Supplement for what they are)
+        checkSplitIntoFtsTokens("\u0080 \u0081 \u0082", "\u0080", "\u0081", "\u0082");
+
+        // FFF0 is also a token.
+        checkSplitIntoFtsTokens(" \ufff0  ", "\ufff0");
+    }
+
+    private void checkSplitIntoFtsTokens(String input, String... expectedTokens) {
+        MoreAsserts.assertEquals(expectedTokens,
+                SearchIndexManager.splitIntoFtsTokens(input).toArray(new String[0]));
     }
 
     private Uri buildSearchUri(String filter) {

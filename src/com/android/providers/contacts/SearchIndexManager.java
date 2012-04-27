@@ -20,6 +20,8 @@ import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.google.android.collect.Lists;
+import com.google.common.annotations.VisibleForTesting;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -35,7 +37,9 @@ import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -138,7 +142,7 @@ public class SearchIndexManager {
             appendContent(value, SEPARATOR_SPACE);
         }
 
-        public void appendContent(String value, int format) {
+        private void appendContent(String value, int format) {
             if (TextUtils.isEmpty(value)) {
                 return;
             }
@@ -182,18 +186,33 @@ public class SearchIndexManager {
             mSbTokens.append(token);
         }
 
-        private static final Pattern PATTERN_HYPHEN = Pattern.compile("\\-");
-
         public void appendName(String name) {
             if (TextUtils.isEmpty(name)) {
                 return;
             }
-            if (name.indexOf('-') < 0) {
-                // Common case -- no hyphens in it.
-                appendNameInternal(name);
-            } else {
-                // In order to make hyphenated names searchable, let's split names with '-'.
-                for (String namePart : PATTERN_HYPHEN.split(name)) {
+            // First, put the original name.
+            appendNameInternal(name);
+
+            // Then, if the name contains more than one FTS token, put each token into the index
+            // too.
+            //
+            // This is to make names with special characters searchable, such as "double-barrelled"
+            // "L'Image".
+            //
+            // Here's how it works:
+            // Because we "normalize" names when putting into the index, if we only put
+            // "double-barrelled", the index will only contain "doublebarrelled".
+            // Now, if the user searches for "double-barrelled", the searcher tokenizes it into
+            // two tokens, "double" and "barrelled".  The first one matches "doublebarrelled"
+            // but the second one doesn't (because we only do the prefix match), so
+            // "doublebarrelled" doesn't match.
+            // So, here, we put each token in a name into the index too.  In the case above,
+            // we put also "double" and "barrelled".
+            // With this, queries such as "double-barrelled", "double barrelled", "doublebarrelled"
+            // will all match "double-barrelled".
+            final List<String> nameParts = splitIntoFtsTokens(name);
+            if (nameParts.size() > 1) {
+                for (String namePart : nameParts) {
                     if (!TextUtils.isEmpty(namePart)) {
                         appendNameInternal(namePart);
                     }
@@ -201,6 +220,9 @@ public class SearchIndexManager {
             }
         }
 
+        /**
+         * Normalize a name and add to {@link #mSbName}
+         */
         private void appendNameInternal(String name) {
             if (mSbName.length() != 0) {
                 mSbName.append(' ');
@@ -373,6 +395,29 @@ public class SearchIndexManager {
     }
 
     /**
+     * Token separator that matches SQLite's "simple" tokenizer.
+     * - Unicode codepoints >= 128: Everything
+     * - Unicode codepoints < 128: Alphanumeric and "_"
+     * - Everything else is a separator of tokens
+     */
+    private static final Pattern FTS_TOKEN_SEPARATOR_RE =
+            Pattern.compile("[^\u0080-\uffff\\p{Alnum}_]");
+
+    /**
+     * Tokenize a string in the way as that of SQLite's "simple" tokenizer.
+     */
+    @VisibleForTesting
+    static List<String> splitIntoFtsTokens(String s) {
+        final ArrayList<String> ret = Lists.newArrayList();
+        for (String token : FTS_TOKEN_SEPARATOR_RE.split(s)) {
+            if (!TextUtils.isEmpty(token)) {
+                ret.add(token);
+            }
+        }
+        return ret;
+    }
+
+    /**
      * Tokenizes the query and normalizes/hex encodes each token. The tokenizer uses the same
      * rules as SQLite's "simple" tokenizer. Each token is added to the retokenizer and then
      * returned as a String.
@@ -380,35 +425,9 @@ public class SearchIndexManager {
      * @see FtsQueryBuilder#SCOPED_NAME_NORMALIZING
      */
     public static String getFtsMatchQuery(String query, FtsQueryBuilder ftsQueryBuilder) {
-        // SQLite's "simple" tokenizer uses the following rules to detect characters:
-        //  - Unicode codepoints >= 128: Everything
-        //  - Unicode codepoints < 128: Alphanumeric and "_"
-        // Everything else is a separator of tokens
-        int tokenStart = -1;
         final StringBuilder result = new StringBuilder();
-        for (int i = 0; i <= query.length(); i++) {
-            final boolean isChar;
-            if (i == query.length()) {
-                isChar = false;
-            } else {
-                final char ch = query.charAt(i);
-                if (ch >= 128) {
-                    isChar = true;
-                } else {
-                    isChar = Character.isLetterOrDigit(ch) || ch == '_';
-                }
-            }
-            if (isChar) {
-                if (tokenStart == -1) {
-                    tokenStart = i;
-                }
-            } else {
-                if (tokenStart != -1) {
-                    final String token = query.substring(tokenStart, i);
-                    ftsQueryBuilder.addToken(result, token);
-                    tokenStart = -1;
-                }
-            }
+        for (String token : splitIntoFtsTokens(query)) {
+            ftsQueryBuilder.addToken(result, token);
         }
         return result.toString();
     }

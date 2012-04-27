@@ -108,7 +108,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 702;
+    static final int DATABASE_VERSION = 703;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2383,6 +2383,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 702) {
             upgradeToVersion702(db);
             oldVersion = 702;
+        }
+
+        if (oldVersion < 703) {
+            // Now names like "L'Image" will be searchable.
+            upgradeSearchIndex = true;
+            oldVersion = 703;
         }
 
         if (upgradeViewsAndTriggers) {
