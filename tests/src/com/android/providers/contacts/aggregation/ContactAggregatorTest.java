@@ -926,12 +926,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         // Contact 2 should be suggested.
         assertSuggestions(contactId1, contactId2);
 
-        // Make contact 2 invisible.  There's no good api for this, so we just tweak the DB
-        // directly.
-        SQLiteDatabase db = ((ContactsProvider2) getProvider()).getDatabaseHelper()
-                .getWritableDatabase();
-        db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY +
-                " WHERE " + BaseColumns._ID + "=" + contactId2);
+        // Make contact 2 invisible.
+        markInvisible(contactId2);
 
         // Now contact 2 shuldn't be suggested.
         assertSuggestions(contactId1, new long[0]);

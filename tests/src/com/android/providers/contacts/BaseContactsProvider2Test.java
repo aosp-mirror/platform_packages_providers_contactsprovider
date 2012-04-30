@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.Hex;
 import com.android.providers.contacts.util.MockClock;
 import com.google.android.collect.Sets;
@@ -33,6 +34,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -568,6 +570,14 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
         values.put(AggregationExceptions.TYPE, type);
         assertEquals(1, mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null));
+    }
+
+    protected void markInvisible(long contactId) {
+        // There's no api for this, so we just tweak the DB directly.
+        SQLiteDatabase db = ((ContactsProvider2) getProvider()).getDatabaseHelper()
+                .getWritableDatabase();
+        db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY +
+                " WHERE " + BaseColumns._ID + "=" + contactId);
     }
 
     protected Cursor queryRawContact(long rawContactId) {
