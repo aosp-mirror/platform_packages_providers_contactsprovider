@@ -3310,7 +3310,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 args[1] = Uri.encode(lookupKey);
                 lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
                 Cursor c = query(mActiveDb.get(), lookupQb, null, selection, args, null, null,
-                        null, null);
+                        null, null, null);
                 try {
                     if (c.getCount() == 1) {
                         // contact was unmodified so go ahead and delete it
@@ -4869,6 +4869,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String groupBy = null;
+        String having = null;
         String limit = getLimit(uri);
         boolean snippetDeferred = false;
 
@@ -5178,6 +5179,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 setTablesAndProjectionMapForContacts(qb, uri, projection, true);
                 qb.setProjectionMap(sStrequentFrequentProjectionMap);
                 groupBy = Contacts._ID;
+                having = Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY;
                 if (!TextUtils.isEmpty(sortOrder)) {
                     sortOrder = FREQUENT_ORDER_BY + ", " + sortOrder;
                 } else {
@@ -5714,7 +5716,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     qb.setStrict(true);
                     boolean foundResult = false;
                     Cursor cursor = query(mActiveDb.get(), qb, projection, selection, selectionArgs,
-                            sortOrder, groupBy, limit, cancellationSignal);
+                            sortOrder, groupBy, null, limit, cancellationSignal);
                     try {
                         if (cursor.getCount() > 0) {
                             foundResult = true;
@@ -5905,7 +5907,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Cursor cursor =
                 query(mActiveDb.get(), qb, projection, selection, selectionArgs, sortOrder, groupBy,
-                limit, cancellationSignal);
+                having, limit, cancellationSignal);
 
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
             bundleFastScrollingIndexExtras(cursor, uri, mActiveDb.get(), qb, selection,
@@ -5919,14 +5921,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return cursor;
     }
 
+
     private Cursor query(final SQLiteDatabase db, SQLiteQueryBuilder qb, String[] projection,
             String selection, String[] selectionArgs, String sortOrder, String groupBy,
-            String limit, CancellationSignal cancellationSignal) {
+            String having, String limit, CancellationSignal cancellationSignal) {
         if (projection != null && projection.length == 1
                 && BaseColumns._COUNT.equals(projection[0])) {
             qb.setProjectionMap(sCountProjectionMap);
         }
-        final Cursor c = qb.query(db, projection, selection, selectionArgs, groupBy, null,
+        final Cursor c = qb.query(db, projection, selection, selectionArgs, groupBy, having,
                 sortOrder, limit, cancellationSignal);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
@@ -5958,7 +5961,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         args[1] = Uri.encode(lookupKey);
         lookupQb.appendWhere(contactIdColumn + "=? AND " + lookupKeyColumn + "=?");
         Cursor c = query(db, lookupQb, projection, selection, args, sortOrder,
-                groupBy, limit, cancellationSignal);
+                groupBy, null, limit, cancellationSignal);
         if (c.getCount() != 0) {
             return c;
         }

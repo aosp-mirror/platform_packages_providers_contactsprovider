@@ -2084,6 +2084,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new ContentValues[] {});
     }
 
+    public void testQueryContactFrequentExcludingInvisible() {
+        ContentValues values1 = new ContentValues();
+        final String email1 = "a@acme.com";
+        final long cid1 = createContact(values1, "Noah", "Tever", "18004664411",
+                email1, StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        ContentValues values2 = new ContentValues();
+        final String email2 = "b@acme.com";
+        final long cid2 = createContact(values2, "Sam", "Times", "18004664412",
+                email2, StatusUpdates.INVISIBLE, 0, 0, 0, 0);
+
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
+        sendFeedback(email2, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values2);
+
+        // First, we have two contacts in frequent.
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI, new ContentValues[] {values2, values1});
+
+        // Contact 2 goes invisible.
+        markInvisible(cid2);
+
+        // Now we have only 1 frequent.
+        assertStoredValues(Contacts.CONTENT_FREQUENT_URI, new ContentValues[] {values1});
+    }
+
     public void testQueryContactGroup() {
         long groupId = createGroup(null, "testGroup", "Test Group");
 
