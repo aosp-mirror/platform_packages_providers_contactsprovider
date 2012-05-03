@@ -164,6 +164,7 @@ import java.io.Writer;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -2261,7 +2262,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "insertInTransaction: " + uri + " " + values);
+            Log.v(TAG, "insertInTransaction: uri=" + uri + "  values=[" + values + "]");
         }
 
         // Default active DB to the contacts DB if none has been set.
@@ -3232,7 +3233,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "deleteInTransaction: " + uri);
+            Log.v(TAG, "deleteInTransaction: uri=" + uri +
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs));
         }
 
         // Default active DB to the contacts DB if none has been set.
@@ -3630,7 +3632,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected int updateInTransaction(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "updateInTransaction: " + uri);
+            Log.v(TAG, "updateInTransaction: uri=" + uri +
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                    "  values=[" + values + "]");
         }
 
         // Default active DB to the contacts DB if none has been set.
@@ -4693,7 +4697,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "query uri=" + uri + " selection=" + selection + " order=" + sortOrder);
+            Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                    "  order=[" + sortOrder + "]");
         }
 
         waitForAccess(mReadAccessLatch);
