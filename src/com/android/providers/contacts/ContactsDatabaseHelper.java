@@ -72,7 +72,6 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.SocialContract.Activities;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.telephony.PhoneNumberUtils;
@@ -108,7 +107,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 703;
+    static final int DATABASE_VERSION = 704;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -242,8 +241,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + "LEFT OUTER JOIN groups "
                 + "  ON (mimetypes.mimetype='" + GroupMembership.CONTENT_ITEM_TYPE + "' "
                 + "      AND groups._id = data." + GroupMembership.GROUP_ROW_ID + ") ";
-
-        public static final String ACTIVITIES = "activities";
 
         public static final String ACTIVITIES_JOIN_MIMETYPES = "activities "
                 + "LEFT OUTER JOIN mimetypes ON (activities.mimetype_id = mimetypes._id)";
@@ -702,7 +699,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     /** In-memory cache of previously found MIME-type mappings */
     private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
 
-    /** TODO Remove it */
+    /** In-memory cache the packages table */
     private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
 
     private long mMimeTypeIdEmail;
@@ -718,7 +715,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private SQLiteStatement mContactIdQuery;
     private SQLiteStatement mAggregationModeQuery;
     private SQLiteStatement mDataMimetypeQuery;
-    private SQLiteStatement mActivitiesMimetypeQuery;
 
     /** Precompiled sql statement for setting a data record to the primary. */
     private SQLiteStatement mSetPrimaryStatement;
@@ -787,9 +783,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Clear all the cached database information and re-initialize it.
      *
      * @param db target database
-     * @param accountTableHasId {@code true} if the "accounts" table exists and has the ID column.
-     *    This is normally {@code true}, but needs to be false during database upgrade until
-     *    step 626, where the account ID was introduced.
      */
     private void refreshDatabaseCaches(SQLiteDatabase db) {
         mStatusUpdateDelete = null;
@@ -805,7 +798,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         mNameLookupInsert = null;
         mNameLookupDelete = null;
         mDataMimetypeQuery = null;
-        mActivitiesMimetypeQuery = null;
         mContactIdQuery = null;
         mAggregationModeQuery = null;
         mContactInDefaultDirectoryQuery = null;
@@ -1263,23 +1255,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 VoicemailContract.Status.CONFIGURATION_STATE + " INTEGER," +
                 VoicemailContract.Status.DATA_CHANNEL_STATE + " INTEGER," +
                 VoicemailContract.Status.NOTIFICATION_CHANNEL_STATE + " INTEGER" +
-        ");");
-
-        // Activities table
-        db.execSQL("CREATE TABLE " + Tables.ACTIVITIES + " (" +
-                Activities._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                ActivitiesColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
-                ActivitiesColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
-                Activities.RAW_ID + " TEXT," +
-                Activities.IN_REPLY_TO + " TEXT," +
-                Activities.AUTHOR_CONTACT_ID +  " INTEGER REFERENCES raw_contacts(_id)," +
-                Activities.TARGET_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)," +
-                Activities.PUBLISHED + " INTEGER NOT NULL," +
-                Activities.THREAD_PUBLISHED + " INTEGER NOT NULL," +
-                Activities.TITLE + " TEXT NOT NULL," +
-                Activities.SUMMARY + " TEXT," +
-                Activities.LINK + " TEXT, " +
-                Activities.THUMBNAIL + " BLOB" +
         ");");
 
         db.execSQL("CREATE TABLE " + Tables.STATUS_UPDATES + " (" +
@@ -1940,7 +1915,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
             db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
             db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.ACTIVITIES + ";");
+            db.execSQL("DROP TABLE IF EXISTS activities;");
             db.execSQL("DROP TABLE IF EXISTS " + Tables.CALLS + ";");
             db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
             db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
@@ -2389,6 +2364,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // Now names like "L'Image" will be searchable.
             upgradeSearchIndex = true;
             oldVersion = 703;
+        }
+
+        if (oldVersion < 704) {
+            db.execSQL("DROP TABLE IF EXISTS activities;");
+            oldVersion = 704;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3916,9 +3896,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, Tables.STREAM_ITEM_PHOTOS,
                     null, "50");
 
-            updateIndexStats(db, Tables.ACTIVITIES,
-                    null, "5");
-
             updateIndexStats(db, Tables.VOICEMAIL_STATUS,
                     null, "5");
 
@@ -4017,7 +3994,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
         db.execSQL("DELETE FROM " + Tables.SETTINGS + ";");
-        db.execSQL("DELETE FROM " + Tables.ACTIVITIES + ";");
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
@@ -4197,27 +4173,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // Try database query to find mimetype
             DatabaseUtils.bindObjectToProgram(mDataMimetypeQuery, 1, dataId);
             String mimetype = mDataMimetypeQuery.simpleQueryForString();
-            return mimetype;
-        } catch (SQLiteDoneException e) {
-            // No valid mapping found, so return null
-            return null;
-        }
-    }
-
-    /**
-     * Find the mime-type for the given {@link Activities#_ID}.
-     */
-    public String getActivityMimeType(long activityId) {
-        if (mActivitiesMimetypeQuery == null) {
-            mActivitiesMimetypeQuery = getWritableDatabase().compileStatement(
-                    "SELECT " + MimetypesColumns.MIMETYPE +
-                    " FROM " + Tables.ACTIVITIES_JOIN_MIMETYPES +
-                    " WHERE " + Tables.ACTIVITIES + "." + Activities._ID + "=?");
-        }
-        try {
-            // Try database query to find mimetype
-            DatabaseUtils.bindObjectToProgram(mActivitiesMimetypeQuery, 1, activityId);
-            String mimetype = mActivitiesMimetypeQuery.simpleQueryForString();
             return mimetype;
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return null
