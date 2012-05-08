@@ -15,13 +15,13 @@
  */
 package com.android.providers.contacts;
 
-import android.content.CancellationSignal;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.os.CancellationSignal;
 
 import java.io.FileNotFoundException;
 import java.util.Locale;
