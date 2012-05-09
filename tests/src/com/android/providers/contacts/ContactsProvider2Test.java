@@ -75,6 +75,7 @@ import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
+import android.util.Log;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -5756,7 +5757,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         PhotoStore profilePhotoStore = provider.getProfilePhotoStore();
 
         // Trigger an initial cleanup so another one won't happen while we're running this test.
-        provider.switchToProfileMode();
+        provider.switchToProfileModeForTest();
         provider.cleanupPhotoStore();
 
         // Create the profile contact and add a photo.
@@ -5787,7 +5788,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         profilePhotoStore.remove(streamItemPhotoFileId);
 
         // Manually trigger another cleanup in the provider.
-        provider.switchToProfileMode();
+        provider.switchToProfileModeForTest();
         provider.cleanupPhotoStore();
 
         // The following things should have happened.

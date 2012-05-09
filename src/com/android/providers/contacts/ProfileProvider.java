@@ -81,7 +81,6 @@ public class ProfileProvider extends AbstractContactsProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
         enforceReadPermission(uri);
-        mDelegate.substituteDb(getDatabaseHelper().getReadableDatabase());
         return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
                 cancellationSignal);
     }
@@ -112,10 +111,8 @@ public class ProfileProvider extends AbstractContactsProvider {
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
         if (mode != null && mode.contains("w")) {
             enforceWritePermission();
-            mDelegate.substituteDb(getDatabaseHelper().getWritableDatabase());
         } else {
             enforceReadPermission(uri);
-            mDelegate.substituteDb(getDatabaseHelper().getReadableDatabase());
         }
         return mDelegate.openAssetFileLocal(uri, mode);
     }
@@ -124,7 +121,6 @@ public class ProfileProvider extends AbstractContactsProvider {
         ContactsTransaction transaction = getCurrentTransaction();
         SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
         transaction.startTransactionForDb(db, ContactsProvider2.PROFILE_DB_TAG, this);
-        mDelegate.substituteDb(db);
     }
 
     @Override
@@ -142,20 +138,17 @@ public class ProfileProvider extends AbstractContactsProvider {
 
     @Override
     public void onBegin() {
-        mDelegate.switchToProfileMode();
-        mDelegate.onBegin();
+        mDelegate.onBeginTransactionInternal(true);
     }
 
     @Override
     public void onCommit() {
-        mDelegate.switchToProfileMode();
-        mDelegate.onCommit();
+        mDelegate.onCommitTransactionInternal(true);
     }
 
     @Override
     public void onRollback() {
-        mDelegate.switchToProfileMode();
-        mDelegate.onRollback();
+        mDelegate.onRollbackTransactionInternal(true);
     }
 
     @Override
@@ -166,5 +159,11 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public String getType(Uri uri) {
         return mDelegate.getType(uri);
+    }
+
+    /** Use only for debug logging */
+    @Override
+    public String toString() {
+        return "ProfileProvider";
     }
 }

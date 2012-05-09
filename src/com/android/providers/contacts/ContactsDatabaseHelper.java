@@ -779,6 +779,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         com.android.internal.R.bool.config_use_strict_phone_number_comparation);
     }
 
+    public SQLiteDatabase getDatabase(boolean writable) {
+        return writable ? getWritableDatabase() : getReadableDatabase();
+    }
+
     /**
      * Clear all the cached database information and re-initialize it.
      *

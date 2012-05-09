@@ -21,6 +21,7 @@ import com.google.android.collect.Maps;
 
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteTransactionListener;
+import android.util.Log;
 
 import java.util.List;
 import java.util.Map;
@@ -40,13 +41,16 @@ public class ContactsTransaction {
 
     /**
      * The list of databases that have been enlisted in this transaction.
+     *
+     * Note we insert elements to the head of the list, so that we endTransaction() in the reverse
+     * order.
      */
-    private List<SQLiteDatabase> mDatabasesForTransaction;
+    private final List<SQLiteDatabase> mDatabasesForTransaction;
 
     /**
      * The mapping of tags to databases involved in this transaction.
      */
-    private Map<String, SQLiteDatabase> mDatabaseTagMap;
+    private final Map<String, SQLiteDatabase> mDatabaseTagMap;
 
     /**
      * Whether any actual changes have been made successfully in this transaction.
@@ -97,8 +101,16 @@ public class ContactsTransaction {
      */
     public void startTransactionForDb(SQLiteDatabase db, String tag,
             SQLiteTransactionListener listener) {
+        if (AbstractContactsProvider.ENABLE_TRANSACTION_LOG) {
+            Log.i(AbstractContactsProvider.TAG, "startTransactionForDb: db=" + db.getPath() +
+                    "  tag=" + tag + "  listener=" + listener +
+                    "  startTransaction=" + !hasDbInTransaction(tag),
+                    new RuntimeException("startTransactionForDb"));
+        }
         if (!hasDbInTransaction(tag)) {
-            mDatabasesForTransaction.add(db);
+            // Insert a new db into the head of the list, so that we'll endTransaction() in
+            // the reverse order.
+            mDatabasesForTransaction.add(0, db);
             mDatabaseTagMap.put(tag, db);
             if (listener != null) {
                 db.beginTransactionWithListener(listener);
@@ -154,13 +166,33 @@ public class ContactsTransaction {
     }
 
     /**
+     * @return the tag for a database.  Only intended to be used for logging.
+     */
+    private String getTagForDb(SQLiteDatabase db) {
+        for (String tag : mDatabaseTagMap.keySet()) {
+            if (db == mDatabaseTagMap.get(tag)) {
+                return tag;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Completes the transaction, ending the DB transactions for all associated databases.
      * @param callerIsBatch Whether this is being performed in the context of a batch operation.
      *     If it is not, and the transaction is marked as batch, this call is a no-op.
      */
     public void finish(boolean callerIsBatch) {
+        if (AbstractContactsProvider.ENABLE_TRANSACTION_LOG) {
+            Log.i(AbstractContactsProvider.TAG, "ContactsTransaction.finish  callerIsBatch=" +
+                    callerIsBatch, new RuntimeException("ContactsTransaction.finish"));
+        }
         if (!mBatch || callerIsBatch) {
             for (SQLiteDatabase db : mDatabasesForTransaction) {
+                if (AbstractContactsProvider.ENABLE_TRANSACTION_LOG) {
+                    Log.i(AbstractContactsProvider.TAG, "ContactsTransaction.finish: " +
+                            "endTransaction for " + getTagForDb(db));
+                }
                 // If an exception was thrown while yielding, it's possible that we no longer have
                 // a lock on this database, so we need to check before attempting to end its
                 // transaction.  Otherwise, we should always expect to be in a transaction (and will

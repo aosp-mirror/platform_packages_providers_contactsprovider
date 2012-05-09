@@ -38,9 +38,12 @@ import java.util.ArrayList;
 public abstract class AbstractContactsProvider extends ContentProvider
         implements SQLiteTransactionListener {
 
-    protected static final String TAG = "ContactsProvider";
+    public static final String TAG = "ContactsProvider";
 
-    protected static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
+    public static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
+
+    /** Set true to enable detailed transaction logging. */
+    public static final boolean ENABLE_TRANSACTION_LOG = false; // Don't submit with true.
 
     /**
      * Duration in ms to sleep after successfully yielding the lock during a batch operation.
@@ -72,13 +75,31 @@ public abstract class AbstractContactsProvider extends ContentProvider
      * created by this provider will automatically retrieve a writable database from this helper
      * and initiate a transaction on that database.  This should be used to ensure that operations
      * across multiple databases are all blocked on a single DB lock (to prevent deadlock cases).
+     *
+     * Hint: It's always {@link ContactsDatabaseHelper}.
+     *
+     * TODO Change the structure to make it obvious that it's actually always set, and is the
+     * {@link ContactsDatabaseHelper}.
      */
     private SQLiteOpenHelper mSerializeOnDbHelper;
 
     /**
      * The tag corresponding to the database used for serializing transactions.
+     *
+     * Hint: It's always the contacts db helper tag.
+     *
+     * See also the TODO on {@link #mSerializeOnDbHelper}.
      */
     private String mSerializeDbTag;
+
+    /**
+     * The transaction listener used with {@link #mSerializeOnDbHelper}.
+     *
+     * Hint: It's always {@link ContactsProvider2}.
+     *
+     * See also the TODO on {@link #mSerializeOnDbHelper}.
+     */
+    private SQLiteTransactionListener mSerializedDbTransactionListener;
 
     @Override
     public boolean onCreate() {
@@ -94,12 +115,14 @@ public abstract class AbstractContactsProvider extends ContentProvider
 
     /**
      * Specifies a database helper (and corresponding tag) to serialize all transactions on.
-     * @param serializeOnDbHelper The database helper to use for serializing transactions.
-     * @param tag The tag for this database.
+     *
+     * See also the TODO on {@link #mSerializeOnDbHelper}.
      */
-    public void setDbHelperToSerializeOn(SQLiteOpenHelper serializeOnDbHelper, String tag) {
+    public void setDbHelperToSerializeOn(SQLiteOpenHelper serializeOnDbHelper, String tag,
+            SQLiteTransactionListener listener) {
         mSerializeOnDbHelper = serializeOnDbHelper;
         mSerializeDbTag = tag;
+        mSerializedDbTransactionListener = listener;
     }
 
     public ContactsTransaction getCurrentTransaction() {
@@ -227,12 +250,16 @@ public abstract class AbstractContactsProvider extends ContentProvider
      * @param callerIsBatch Whether the caller is operating in batch mode.
      */
     private ContactsTransaction startTransaction(boolean callerIsBatch) {
+        if (ENABLE_TRANSACTION_LOG) {
+            Log.i(TAG, "startTransaction " + getClass().getSimpleName() +
+                    "  callerIsBatch=" + callerIsBatch, new RuntimeException("startTransaction"));
+        }
         ContactsTransaction transaction = mTransactionHolder.get();
         if (transaction == null) {
             transaction = new ContactsTransaction(callerIsBatch);
             if (mSerializeOnDbHelper != null) {
                 transaction.startTransactionForDb(mSerializeOnDbHelper.getWritableDatabase(),
-                        mSerializeDbTag, this);
+                        mSerializeDbTag, mSerializedDbTransactionListener);
             }
             mTransactionHolder.set(transaction);
         }
@@ -245,6 +272,10 @@ public abstract class AbstractContactsProvider extends ContentProvider
      * @param callerIsBatch Whether the caller is operating in batch mode.
      */
     private void endTransaction(boolean callerIsBatch) {
+        if (ENABLE_TRANSACTION_LOG) {
+            Log.i(TAG, "endTransaction " + getClass().getSimpleName() +
+                    "  callerIsBatch=" + callerIsBatch, new RuntimeException("endTransaction"));
+        }
         ContactsTransaction transaction = mTransactionHolder.get();
         if (transaction != null && (!transaction.isBatch() || callerIsBatch)) {
             try {

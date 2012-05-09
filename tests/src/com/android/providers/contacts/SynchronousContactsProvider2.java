@@ -19,8 +19,11 @@ package com.android.providers.contacts;
 import android.accounts.Account;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
 
 import java.util.Locale;
+
+import junit.framework.Assert;
 
 /**
  * A version of {@link ContactsProvider2} class that performs aggregation
@@ -46,7 +49,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
-    public ProfileProvider getProfileProvider() {
+    public ProfileProvider newProfileProvider() {
         return new SynchronousProfileProvider(this);
     }
 
@@ -202,6 +205,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     @Override
     public void wipeData() {
+        Log.i(TAG, "wipeData");
         super.wipeData();
         SQLiteDatabase db = getDatabaseHelper(getContext()).getWritableDatabase();
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('raw_contacts', 42)");
@@ -209,5 +213,85 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('data', 777)");
 
         getContactDirectoryManagerForTest().scanAllPackages();
+    }
+
+    // Flags to remember which transaction callback has been called for which mode.
+    private boolean mOnBeginTransactionInternalCalledInProfileMode;
+    private boolean mOnCommitTransactionInternalCalledInProfileMode;
+    private boolean mOnRollbackTransactionInternalCalledInProfileMode;
+
+    private boolean mOnBeginTransactionInternalCalledInContactMode;
+    private boolean mOnCommitTransactionInternalCalledInContactMode;
+    private boolean mOnRollbackTransactionInternalCalledInContactMode;
+
+    public void resetTrasactionCallbackCalledFlags() {
+        mOnBeginTransactionInternalCalledInProfileMode = false;
+        mOnCommitTransactionInternalCalledInProfileMode = false;
+        mOnRollbackTransactionInternalCalledInProfileMode = false;
+
+        mOnBeginTransactionInternalCalledInContactMode = false;
+        mOnCommitTransactionInternalCalledInContactMode = false;
+        mOnRollbackTransactionInternalCalledInContactMode = false;
+    }
+
+    @Override
+    protected void onBeginTransactionInternal(boolean forProfile) {
+        super.onBeginTransactionInternal(forProfile);
+        if (forProfile) {
+            mOnBeginTransactionInternalCalledInProfileMode = true;
+        } else {
+            mOnBeginTransactionInternalCalledInContactMode = true;
+        }
+    }
+
+    @Override
+    protected void onCommitTransactionInternal(boolean forProfile) {
+        super.onCommitTransactionInternal(forProfile);
+        if (forProfile) {
+            mOnCommitTransactionInternalCalledInProfileMode = true;
+        } else {
+            mOnCommitTransactionInternalCalledInContactMode = true;
+        }
+    }
+
+    @Override
+    protected void onRollbackTransactionInternal(boolean forProfile) {
+        super.onRollbackTransactionInternal(forProfile);
+        if (forProfile) {
+            mOnRollbackTransactionInternalCalledInProfileMode = true;
+        } else {
+            mOnRollbackTransactionInternalCalledInContactMode = true;
+        }
+    }
+
+    public void assertCommitTransactionCalledForProfileMode() {
+        Assert.assertTrue("begin", mOnBeginTransactionInternalCalledInProfileMode);
+        Assert.assertTrue("commit", mOnCommitTransactionInternalCalledInProfileMode);
+        Assert.assertFalse("rollback", mOnRollbackTransactionInternalCalledInProfileMode);
+    }
+
+    public void assertRollbackTransactionCalledForProfileMode() {
+        Assert.assertTrue("begin", mOnBeginTransactionInternalCalledInProfileMode);
+        Assert.assertFalse("commit", mOnCommitTransactionInternalCalledInProfileMode);
+        Assert.assertTrue("rollback", mOnRollbackTransactionInternalCalledInProfileMode);
+    }
+
+    public void assertNoTransactionsForProfileMode() {
+        Assert.assertFalse("begin", mOnBeginTransactionInternalCalledInProfileMode);
+        Assert.assertFalse("commit", mOnCommitTransactionInternalCalledInProfileMode);
+        Assert.assertFalse("rollback", mOnRollbackTransactionInternalCalledInProfileMode);
+    }
+
+
+    public void assertCommitTransactionCalledForContactMode() {
+        Assert.assertTrue("begin", mOnBeginTransactionInternalCalledInContactMode);
+        Assert.assertTrue("commit", mOnCommitTransactionInternalCalledInContactMode);
+        Assert.assertFalse("rollback", mOnRollbackTransactionInternalCalledInContactMode);
+    }
+
+    public void assertRollbackTransactionCalledForContactMode() {
+        Assert.assertTrue("begin", mOnBeginTransactionInternalCalledInContactMode);
+        Assert.assertFalse("commit", mOnCommitTransactionInternalCalledInContactMode);
+        Assert.assertTrue("rollback", mOnRollbackTransactionInternalCalledInContactMode);
     }
 }
