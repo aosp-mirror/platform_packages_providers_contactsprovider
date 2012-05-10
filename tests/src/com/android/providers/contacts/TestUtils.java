@@ -73,8 +73,14 @@ public class TestUtils {
             for (int i = 0; i < c.getColumnCount(); i++) {
                 if (sb.length() > 0) sb.append("|");
 
-                // TODO Handle binary data somehow.
-                sb.append(c.getString(i));
+                if (c.getType(i) == Cursor.FIELD_TYPE_BLOB) {
+                    byte[] blob = c.getBlob(i);
+                    sb.append("([blob] ");
+                    sb.append(blob == null ? "null" : blob.length + "b");
+                    sb.append(")");
+                } else {
+                    sb.append(c.getString(i));
+                }
             }
             Log.i(TAG, sb.toString());
         }
