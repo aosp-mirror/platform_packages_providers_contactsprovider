@@ -7524,9 +7524,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public String getType(Uri uri) {
-
-        waitForAccess(mReadAccessLatch);
-
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS:
@@ -7559,6 +7556,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_DATA:
                 return Data.CONTENT_TYPE;
             case DATA_ID:
+                // We need db access for this.
+                waitForAccess(mReadAccessLatch);
+
                 long id = ContentUris.parseId(uri);
                 if (ContactsContract.isProfileId(id)) {
                     return mProfileHelper.getDataMimeType(id);
@@ -7606,6 +7606,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case STREAM_ITEMS_PHOTOS:
                 throw new UnsupportedOperationException("Not supported for write-only URI " + uri);
             default:
+                waitForAccess(mReadAccessLatch);
                 return mLegacyApiSupport.getType(uri);
         }
     }
