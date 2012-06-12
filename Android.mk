@@ -8,7 +8,7 @@ LOCAL_SRC_FILES := $(call all-java-files-under, src)
 LOCAL_SRC_FILES += \
         src/com/android/providers/contacts/EventLogTags.logtags
 
-LOCAL_JAVA_LIBRARIES := ext
+LOCAL_JAVA_LIBRARIES := ext telephony-common
 
 LOCAL_STATIC_JAVA_LIBRARIES += android-common com.android.vcard guava
 
