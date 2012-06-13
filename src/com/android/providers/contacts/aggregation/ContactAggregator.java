@@ -791,6 +791,10 @@ public class ContactAggregator {
             mContactUpdate.execute();
             mDbHelper.updateContactVisible(txContext, contactId);
             updateAggregatedStatusUpdate(contactId);
+            // Make sure the raw contact does not contribute to the current contact
+            if (currentContactId != 0) {
+                updateAggregateData(txContext, currentContactId);
+            }
         }
 
         if (contactIdToSplit != -1) {
