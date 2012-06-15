@@ -5395,14 +5395,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
 
                 if (uri.getPathSegments().size() > 2) {
-                    String filterParam = uri.getLastPathSegment();
-                    StringBuilder sb = new StringBuilder();
+                    final String filterParam = uri.getLastPathSegment();
+                    final boolean searchDisplayName = uri.getBooleanQueryParameter(
+                            Phone.SEARCH_DISPLAY_NAME_KEY, true);
+                    final boolean searchPhoneNumber = uri.getBooleanQueryParameter(
+                            Phone.SEARCH_PHONE_NUMBER_KEY, true);
+
+                    final StringBuilder sb = new StringBuilder();
                     sb.append(" AND (");
 
                     boolean hasCondition = false;
-                    final String ftsMatchQuery = SearchIndexManager.getFtsMatchQuery(
-                            filterParam, FtsQueryBuilder.UNSCOPED_NORMALIZING);
-                    if (ftsMatchQuery.length() > 0) {
+                    // TODO This only searches the name field.  Search other fields, such as
+                    // note, nickname, as well.  (Which should be disabled by default.)
+                    // Fix EMAILS_FILTER too.
+                    final String ftsMatchQuery =
+                            searchDisplayName
+                            ? SearchIndexManager.getFtsMatchQuery(filterParam,
+                                    FtsQueryBuilder.UNSCOPED_NORMALIZING)
+                            : null;
+                    if (!TextUtils.isEmpty(ftsMatchQuery)) {
                         sb.append(Data.RAW_CONTACT_ID + " IN " +
                                 "(SELECT " + RawContactsColumns.CONCRETE_ID +
                                 " FROM " + Tables.SEARCH_INDEX +
@@ -5415,35 +5426,37 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         hasCondition = true;
                     }
 
-                    String number = PhoneNumberUtils.normalizeNumber(filterParam);
-                    if (!TextUtils.isEmpty(number)) {
-                        if (hasCondition) {
-                            sb.append(" OR ");
+                    if (searchPhoneNumber) {
+                        final String number = PhoneNumberUtils.normalizeNumber(filterParam);
+                        if (!TextUtils.isEmpty(number)) {
+                            if (hasCondition) {
+                                sb.append(" OR ");
+                            }
+                            sb.append(Data._ID +
+                                    " IN (SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
+                                    + " FROM " + Tables.PHONE_LOOKUP
+                                    + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                            sb.append(number);
+                            sb.append("%')");
+                            hasCondition = true;
                         }
-                        sb.append(Data._ID +
-                                " IN (SELECT DISTINCT " + PhoneLookupColumns.DATA_ID
-                                + " FROM " + Tables.PHONE_LOOKUP
-                                + " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
-                        sb.append(number);
-                        sb.append("%')");
-                        hasCondition = true;
-                    }
 
-                    if (!TextUtils.isEmpty(filterParam) && match == CALLABLES_FILTER) {
-                        // If the request is via Callable uri, Sip addresses matching the filter
-                        // parameter should be returned.
-                        if (hasCondition) {
-                            sb.append(" OR ");
+                        if (!TextUtils.isEmpty(filterParam) && match == CALLABLES_FILTER) {
+                            // If the request is via Callable uri, Sip addresses matching the filter
+                            // parameter should be returned.
+                            if (hasCondition) {
+                                sb.append(" OR ");
+                            }
+                            sb.append("(");
+                            sb.append(mimeTypeIsSipExpression);
+                            sb.append(" AND ((" + Data.DATA1 + " LIKE ");
+                            DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
+                            sb.append(") OR (" + Data.DATA1 + " LIKE ");
+                            // Users may want SIP URIs starting from "sip:"
+                            DatabaseUtils.appendEscapedSQLString(sb, "sip:"+ filterParam + '%');
+                            sb.append(")))");
+                            hasCondition = true;
                         }
-                        sb.append("(");
-                        sb.append(mimeTypeIsSipExpression);
-                        sb.append(" AND ((" + Data.DATA1 + " LIKE ");
-                        DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
-                        sb.append(") OR (" + Data.DATA1 + " LIKE ");
-                        // Users may want SIP URIs starting from "sip:"
-                        DatabaseUtils.appendEscapedSQLString(sb, "sip:"+ filterParam + '%');
-                        sb.append(")))");
-                        hasCondition = true;
                     }
 
                     if (!hasCondition) {

@@ -1172,6 +1172,41 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
     }
 
+    public void testPhonesFilterSearchParams() {
+        final long rid1 = createRawContactWithName("Dad", null);
+        insertPhoneNumber(rid1, "123-456-7890");
+
+        final long rid2 = createRawContactWithName("Mam", null);
+        insertPhoneNumber(rid2, "323-123-4567");
+
+        // By default, "dad" will match both the display name and the phone number.
+        // Because "dad" is "323" after the dialpad conversion, it'll match "Mam" too.
+        assertStoredValues(
+                Phone.CONTENT_FILTER_URI.buildUpon().appendPath("dad").build(),
+                cv(Phone.DISPLAY_NAME, "Dad", Phone.NUMBER, "123-456-7890"),
+                cv(Phone.DISPLAY_NAME, "Mam", Phone.NUMBER, "323-123-4567")
+                );
+        assertStoredValues(
+                Phone.CONTENT_FILTER_URI.buildUpon().appendPath("dad")
+                    .appendQueryParameter(Phone.SEARCH_PHONE_NUMBER_KEY, "0")
+                    .build(),
+                cv(Phone.DISPLAY_NAME, "Dad", Phone.NUMBER, "123-456-7890")
+                );
+
+        assertStoredValues(
+                Phone.CONTENT_FILTER_URI.buildUpon().appendPath("dad")
+                    .appendQueryParameter(Phone.SEARCH_DISPLAY_NAME_KEY, "0")
+                    .build(),
+                cv(Phone.DISPLAY_NAME, "Mam", Phone.NUMBER, "323-123-4567")
+                );
+        assertStoredValues(
+                Phone.CONTENT_FILTER_URI.buildUpon().appendPath("dad")
+                    .appendQueryParameter(Phone.SEARCH_DISPLAY_NAME_KEY, "0")
+                    .appendQueryParameter(Phone.SEARCH_PHONE_NUMBER_KEY, "0")
+                    .build()
+                );
+    }
+
     public void testPhoneLookup() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.CUSTOM_RINGTONE, "d");
