@@ -16,9 +16,7 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.tests.R;
-import com.android.providers.contacts.util.Hex;
+import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -26,16 +24,16 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.PhotoFiles;
 import android.test.suitebuilder.annotation.MediumTest;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.tests.R;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 /**
  * Tests for {@link PhotoStore}.
@@ -81,7 +79,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
 
     public void testStoreNonSquare300x200Photo() throws IOException {
         // The longer side should be downscaled to the target size
-        runStorageTestForResource(R.drawable.earth_300x200, 256, 171);
+        runStorageTestForResource(R.drawable.earth_300x200, 256, 170);
     }
 
     public void testStoreNonSquare300x200PhotoWithCrop() throws IOException {

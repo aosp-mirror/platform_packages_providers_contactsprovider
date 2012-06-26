@@ -15,12 +15,17 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.util.MemoryUtils;
-
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.os.SystemProperties;
+
+import com.android.providers.contacts.util.MemoryUtils;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,6 +47,12 @@ import java.io.IOException;
 
     /** Compression for thumbnails that also have a display photo */
     private static final int COMPRESSION_THUMBNAIL_LOW = 90;
+
+    private static final Paint WHITE_PAINT = new Paint();
+
+    static {
+        WHITE_PAINT.setColor(Color.WHITE);
+    }
 
     private static int sMaxThumbnailDim;
     private static int sMaxDisplayPhotoDim;
@@ -169,43 +180,65 @@ import java.io.IOException;
         if (mOriginal == null) {
             throw new IOException("Invalid image file");
         }
-        mDisplayPhoto = getScaledBitmap(mMaxDisplayPhotoDim);
-        mThumbnailPhoto = getScaledBitmap(mMaxThumbnailPhotoDim);
+        mDisplayPhoto = getNormalizedBitmap(mOriginal, mMaxDisplayPhotoDim, mForceCropToSquare);
+        mThumbnailPhoto = getNormalizedBitmap(mOriginal,mMaxThumbnailPhotoDim, mForceCropToSquare);
     }
 
     /**
      * Scales down the original bitmap to fit within the given maximum width and height.
      * If the bitmap already fits in those dimensions, the original bitmap will be
      * returned unmodified unless the photo processor is set up to crop it to a square.
+     *
+     * Also, if the image has transparency, conevrt it to white.
+     *
+     * @param original Original bitmap
      * @param maxDim Maximum width and height (in pixels) for the image.
+     * @param forceCropToSquare See {@link #PhotoProcessor(Bitmap, int, int, boolean)}
      * @return A bitmap that fits the maximum dimensions.
      */
     @SuppressWarnings({"SuspiciousNameCombination"})
-    private Bitmap getScaledBitmap(int maxDim) {
-        Bitmap scaledBitmap = mOriginal;
-        int width = mOriginal.getWidth();
-        int height = mOriginal.getHeight();
+    @VisibleForTesting
+    static Bitmap getNormalizedBitmap(Bitmap original, int maxDim, boolean forceCropToSquare) {
+        final boolean originalHasAlpha = original.hasAlpha();
+
+        // All cropXxx's are in the original coordinate.
+        int cropWidth = original.getWidth();
+        int cropHeight = original.getHeight();
         int cropLeft = 0;
         int cropTop = 0;
-        if (mForceCropToSquare && width != height) {
+        if (forceCropToSquare && cropWidth != cropHeight) {
             // Crop the image to the square at its center.
-            if (height > width) {
-                cropTop = (height - width) / 2;
-                height = width;
+            if (cropHeight > cropWidth) {
+                cropTop = (cropHeight - cropWidth) / 2;
+                cropHeight = cropWidth;
             } else {
-                cropLeft = (width - height) / 2;
-                width = height;
+                cropLeft = (cropWidth - cropHeight) / 2;
+                cropWidth = cropHeight;
             }
         }
-        float scaleFactor = ((float) maxDim) / Math.max(width, height);
-        if (scaleFactor < 1.0f || cropLeft != 0 || cropTop != 0) {
-            // Need to scale or crop the photo.
-            Matrix matrix = new Matrix();
-            if (scaleFactor < 1.0f) matrix.setScale(scaleFactor, scaleFactor);
-            scaledBitmap = Bitmap.createBitmap(
-                    mOriginal, cropLeft, cropTop, width, height, matrix, true);
+        // Calculate the scale factor.  We don't want to scale up, so the max scale is 1f.
+        final float scaleFactor = Math.min(1f, ((float) maxDim) / Math.max(cropWidth, cropHeight));
+
+        if (scaleFactor < 1.0f || cropLeft != 0 || cropTop != 0 || originalHasAlpha) {
+            final int newWidth = (int) (cropWidth * scaleFactor);
+            final int newHeight = (int) (cropHeight * scaleFactor);
+            final Bitmap scaledBitmap = Bitmap.createBitmap(newWidth, newHeight,
+                    Bitmap.Config.ARGB_8888);
+            final Canvas c = new Canvas(scaledBitmap);
+
+            if (originalHasAlpha) {
+                c.drawRect(0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight(), WHITE_PAINT);
+            }
+
+            final Rect src = new Rect(cropLeft, cropTop,
+                    cropLeft + cropWidth, cropTop + cropHeight);
+            final RectF dst = new RectF(0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight());
+
+            c.drawBitmap(original, src, dst, null);
+            return scaledBitmap;
+        } else {
+            return original;
         }
-        return scaledBitmap;
     }
 
     /**
