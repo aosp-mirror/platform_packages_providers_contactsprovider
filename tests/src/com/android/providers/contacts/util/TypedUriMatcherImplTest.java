@@ -20,9 +20,6 @@ import android.net.Uri;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
 
-import com.android.providers.contacts.util.TypedUriMatcherImpl;
-import com.android.providers.contacts.util.UriType;
-
 /**
  * Unit tests for {@link TypedUriMatcherImpl}.
  * Run the test like this:

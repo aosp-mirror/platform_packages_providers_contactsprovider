@@ -16,13 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
-import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.google.android.collect.Lists;
-import com.google.android.collect.Sets;
-import com.google.common.annotations.VisibleForTesting;
-
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -40,6 +33,13 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
 import android.text.TextUtils;
 import android.util.Log;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
+import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.google.android.collect.Lists;
+import com.google.android.collect.Sets;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;

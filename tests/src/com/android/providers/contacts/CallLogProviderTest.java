@@ -16,9 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.telephony.CallerInfo;
-import com.android.internal.telephony.Connection;
-
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -34,6 +31,9 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.android.internal.telephony.CallerInfo;
+import com.android.internal.telephony.Connection;
 
 import java.util.Arrays;
 import java.util.List;

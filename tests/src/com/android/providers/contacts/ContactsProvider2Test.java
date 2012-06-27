@@ -18,16 +18,6 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.TestUtils.cv;
 
-import com.android.internal.util.ArrayUtils;
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
-import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.tests.R;
-import com.google.android.collect.Lists;
-import com.google.android.collect.Sets;
-
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -75,7 +65,16 @@ import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
-import android.util.Log;
+
+import com.android.internal.util.ArrayUtils;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.tests.R;
+import com.google.android.collect.Lists;
+import com.google.android.collect.Sets;
 
 import java.io.FileInputStream;
 import java.io.IOException;

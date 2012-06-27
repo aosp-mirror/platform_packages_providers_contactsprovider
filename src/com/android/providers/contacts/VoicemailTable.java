@@ -16,12 +16,12 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.VoicemailContentProvider.UriData;
-
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+
+import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
 import java.io.FileNotFoundException;
 

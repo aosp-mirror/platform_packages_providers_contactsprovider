@@ -16,11 +16,11 @@
 
 package com.android.providers.contacts;
 
-import com.android.vcard.VCardComposer;
-import com.android.vcard.VCardConfig;
-
 import android.content.ContentResolver;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.android.vcard.VCardComposer;
+import com.android.vcard.VCardConfig;
 
 /**
  * Tests (or integration tests) verifying if vCard library works well with {@link ContentResolver}.

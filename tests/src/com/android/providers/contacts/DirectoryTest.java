@@ -26,7 +26,7 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
-import android.test.suitebuilder.annotation.MediumTest;;
+import android.test.suitebuilder.annotation.MediumTest;
 
 
 /**

@@ -15,12 +15,12 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
-
 import android.content.ContentValues;
 import android.content.Context;
 import android.provider.ContactsContract.CommonDataKinds.Note;
+
+import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
+import com.android.providers.contacts.aggregation.ContactAggregator;
 
 /**
  * Handler for note data rows.

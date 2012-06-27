@@ -15,14 +15,14 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.aggregation.ContactAggregator;
-
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.util.Log;
+
+import com.android.providers.contacts.aggregation.ContactAggregator;
 
 import java.io.IOException;
 

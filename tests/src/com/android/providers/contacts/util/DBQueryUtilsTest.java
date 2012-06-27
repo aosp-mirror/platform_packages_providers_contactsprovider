@@ -19,12 +19,12 @@ package com.android.providers.contacts.util;
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 
-import com.android.common.content.ProjectionMap;
-import com.android.providers.contacts.EvenMoreAsserts;
-
 import android.content.ContentValues;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.common.content.ProjectionMap;
+import com.android.providers.contacts.EvenMoreAsserts;
 
 /**
  * Unit tests for the {@link DbQueryUtils} class.

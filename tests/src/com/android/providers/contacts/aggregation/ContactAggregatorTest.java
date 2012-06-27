@@ -16,25 +16,15 @@
 
 package com.android.providers.contacts.aggregation;
 
-import com.android.providers.contacts.BaseContactsProvider2Test;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsProvider2;
-import com.android.providers.contacts.TestUtils;
-import com.android.providers.contacts.tests.R;
-import com.google.android.collect.Lists;
-
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
-import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Contacts;
@@ -45,6 +35,11 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.android.providers.contacts.BaseContactsProvider2Test;
+import com.android.providers.contacts.TestUtils;
+import com.android.providers.contacts.tests.R;
+import com.google.android.collect.Lists;
 
 /**
  * Unit tests for {@link ContactAggregator}.

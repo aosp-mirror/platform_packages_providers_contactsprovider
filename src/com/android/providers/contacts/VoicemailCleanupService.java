@@ -16,14 +16,14 @@
 
 package com.android.providers.contacts;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import android.app.IntentService;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
+
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * A service that cleans up voicemail related data for packages that are uninstalled.

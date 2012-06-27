@@ -16,10 +16,10 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.HanziToPinyin.Token;
-
 import android.provider.ContactsContract.FullNameStyle;
 import android.util.SparseArray;
+
+import com.android.providers.contacts.HanziToPinyin.Token;
 
 import java.util.ArrayList;
 import java.util.HashSet;

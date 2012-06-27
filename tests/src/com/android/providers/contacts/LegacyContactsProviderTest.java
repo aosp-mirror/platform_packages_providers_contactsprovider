@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.tests.*;
-
 import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.ContentUris;

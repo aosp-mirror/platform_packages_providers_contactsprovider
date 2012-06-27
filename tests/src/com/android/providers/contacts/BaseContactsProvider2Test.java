@@ -18,11 +18,6 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.util.Hex;
-import com.android.providers.contacts.util.MockClock;
-import com.google.android.collect.Sets;
-
 import android.accounts.Account;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -61,6 +56,11 @@ import android.provider.ContactsContract.StreamItems;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.Hex;
+import com.android.providers.contacts.util.MockClock;
+import com.google.android.collect.Sets;
 
 import java.util.ArrayList;
 import java.util.Arrays;

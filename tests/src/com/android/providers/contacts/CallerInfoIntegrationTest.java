@@ -16,13 +16,13 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.telephony.CallerInfo;
-
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.android.internal.telephony.CallerInfo;
 
 /**
  * Integration test for {@link CallerInfo} and {@link ContactsProvider2}.

@@ -16,16 +16,16 @@
 
 package com.android.providers.contacts;
 
+import android.test.suitebuilder.annotation.SmallTest;
+
 import com.android.providers.contacts.HanziToPinyin.Token;
 
-import android.test.suitebuilder.annotation.SmallTest;
+import junit.framework.TestCase;
 
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
-
-import junit.framework.TestCase;
 
 @SmallTest
 public class HanziToPinyinTest extends TestCase {

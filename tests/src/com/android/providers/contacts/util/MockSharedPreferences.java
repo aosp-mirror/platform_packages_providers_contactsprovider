@@ -16,9 +16,9 @@
 
 package com.android.providers.contacts.util;
 
-import com.google.android.collect.Maps;
-
 import android.content.SharedPreferences;
+
+import com.google.android.collect.Maps;
 
 import java.util.HashMap;
 import java.util.Map;

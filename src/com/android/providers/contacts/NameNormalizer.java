@@ -17,10 +17,10 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.util.Hex;
 
-import java.util.Locale;
-import java.text.Collator;
 import java.text.CollationKey;
+import java.text.Collator;
 import java.text.RuleBasedCollator;
+import java.util.Locale;
 
 /**
  * Converts a name to a normalized form by removing all non-letter characters and normalizing

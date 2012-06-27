@@ -23,11 +23,11 @@ import android.provider.ContactsContract.Contacts;
 import com.android.providers.contacts.ContactLookupKey;
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.NameSplitter;
 import com.android.providers.contacts.PhotoPriorityResolver;
 import com.android.providers.contacts.TransactionContext;
+import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 
 /**
  * A version of the ContactAggregator for use against the profile database.

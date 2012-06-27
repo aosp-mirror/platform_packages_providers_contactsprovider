@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.common.io.MoreCloseables;
-
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -29,6 +27,8 @@ import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.common.io.MoreCloseables;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;

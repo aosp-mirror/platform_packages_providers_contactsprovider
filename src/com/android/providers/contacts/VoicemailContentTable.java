@@ -19,10 +19,6 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
-import com.android.common.content.ProjectionMap;
-import com.android.providers.contacts.VoicemailContentProvider.UriData;
-import com.android.providers.contacts.util.CloseUtils;
-
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -37,6 +33,10 @@ import android.provider.CallLog.Calls;
 import android.provider.OpenableColumns;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
+
+import com.android.common.content.ProjectionMap;
+import com.android.providers.contacts.VoicemailContentProvider.UriData;
+import com.android.providers.contacts.util.CloseUtils;
 
 import java.io.File;
 import java.io.FileNotFoundException;

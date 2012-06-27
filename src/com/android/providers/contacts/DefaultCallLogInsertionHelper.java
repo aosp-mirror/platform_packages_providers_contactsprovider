@@ -16,15 +16,14 @@
 
 package com.android.providers.contacts;
 
+import android.content.ContentValues;
+import android.content.Context;
+import android.provider.CallLog.Calls;
+
 import com.android.i18n.phonenumbers.NumberParseException;
 import com.android.i18n.phonenumbers.PhoneNumberUtil;
 import com.android.i18n.phonenumbers.Phonenumber.PhoneNumber;
 import com.android.i18n.phonenumbers.geocoding.PhoneNumberOfflineGeocoder;
-
-import android.content.ContentValues;
-import android.content.Context;
-import android.provider.CallLog.Calls;
-import android.util.Log;
 
 import java.util.Locale;
 

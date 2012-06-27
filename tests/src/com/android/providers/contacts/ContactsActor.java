@@ -16,9 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.util.MockSharedPreferences;
-import com.google.android.collect.Sets;
-
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerCallback;
@@ -58,6 +55,9 @@ import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
+
+import com.android.providers.contacts.util.MockSharedPreferences;
+import com.google.android.collect.Sets;
 
 import java.io.File;
 import java.io.IOException;

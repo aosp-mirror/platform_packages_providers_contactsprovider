@@ -16,13 +16,13 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.PostalSplitter.Postal;
-
 import android.test.suitebuilder.annotation.SmallTest;
 
-import java.util.Locale;
+import com.android.providers.contacts.PostalSplitter.Postal;
 
 import junit.framework.TestCase;
+
+import java.util.Locale;
 
 /**
  * Tests for {@link PostalSplitter}, especially for ja_JP locale.

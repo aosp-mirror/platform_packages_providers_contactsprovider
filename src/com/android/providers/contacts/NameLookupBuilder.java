@@ -16,10 +16,10 @@
 
 package com.android.providers.contacts;
 
+import android.provider.ContactsContract.FullNameStyle;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-
-import android.provider.ContactsContract.FullNameStyle;
 
 import java.util.Arrays;
 import java.util.Comparator;

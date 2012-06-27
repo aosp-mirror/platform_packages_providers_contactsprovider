@@ -16,9 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
-import com.google.android.collect.Lists;
-
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
@@ -38,6 +35,9 @@ import android.provider.ContactsContract.RawContacts;
 import android.test.mock.MockContentProvider;
 import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
+import com.google.android.collect.Lists;
 
 /**
  * Unit tests for {@link ContactDirectoryManager}. Run the test like this:

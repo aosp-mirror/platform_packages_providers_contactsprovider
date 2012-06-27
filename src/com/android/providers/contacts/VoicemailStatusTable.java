@@ -18,9 +18,6 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 
-import com.android.common.content.ProjectionMap;
-import com.android.providers.contacts.VoicemailContentProvider.UriData;
-
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -31,6 +28,9 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.VoicemailContract.Status;
+
+import com.android.common.content.ProjectionMap;
+import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
 /**
  * Implementation of {@link VoicemailTable.Delegate} for the voicemail status table.

@@ -16,11 +16,10 @@
 
 package com.android.providers.contacts.aggregation.util;
 
-import com.android.providers.contacts.NameNormalizer;
-import com.android.providers.contacts.aggregation.util.NameDistance;
-import com.android.providers.contacts.util.Hex;
-
 import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.providers.contacts.NameNormalizer;
+import com.android.providers.contacts.util.Hex;
 
 import junit.framework.TestCase;
 

@@ -16,17 +16,18 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Maps;
-import com.google.common.annotations.VisibleForTesting;
-
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.ContactsContract.ContactCounts;
 import android.text.TextUtils;
 import android.util.Log;
+
+import com.google.android.collect.Maps;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.util.Map;
 import java.util.regex.Pattern;

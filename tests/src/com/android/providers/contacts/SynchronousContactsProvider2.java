@@ -21,9 +21,9 @@ import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
-import java.util.Locale;
-
 import junit.framework.Assert;
+
+import java.util.Locale;
 
 /**
  * A version of {@link ContactsProvider2} class that performs aggregation

@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.util.MockSharedPreferences;
-
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract.ContactCounts;
@@ -26,6 +24,8 @@ import android.provider.ContactsContract.RawContacts;
 import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.providers.contacts.util.MockSharedPreferences;
 
 @SmallTest
 public class FastScrollingIndexCacheTest extends AndroidTestCase {

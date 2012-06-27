@@ -16,12 +16,12 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Lists;
-import com.google.android.collect.Maps;
-
 import android.content.UriMatcher;
 import android.net.Uri;
 import android.provider.ContactsContract;
+
+import com.google.android.collect.Lists;
+import com.google.android.collect.Maps;
 
 import java.util.List;
 import java.util.Map;

@@ -16,11 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
-import com.android.providers.contacts.util.NeededForTesting;
-import com.google.android.collect.Sets;
-
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -79,6 +74,11 @@ import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
 import android.util.Log;
+
+import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
+import com.android.providers.contacts.util.NeededForTesting;
+import com.google.android.collect.Sets;
 
 import java.util.HashMap;
 import java.util.Locale;

@@ -16,12 +16,12 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.util.NeededForTesting;
-
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.Profile;
+
+import com.android.providers.contacts.util.NeededForTesting;
 
 /**
  * A separate version of the contacts database helper for storing the user's profile data.

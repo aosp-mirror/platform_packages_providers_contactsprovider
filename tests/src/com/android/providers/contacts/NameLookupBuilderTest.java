@@ -19,11 +19,11 @@ package com.android.providers.contacts;
 import android.provider.ContactsContract.FullNameStyle;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import junit.framework.TestCase;
+
 import java.text.Collator;
 import java.util.Arrays;
 import java.util.Locale;
-
-import junit.framework.TestCase;
 
 /**
  * Unit tests for {@link NameLookupBuilder}.

@@ -16,18 +16,18 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Sets;
-
 import android.content.Context;
 import android.graphics.BitmapFactory;
+
+import com.google.android.collect.Sets;
+
+import junit.framework.Assert;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Set;
-
-import junit.framework.Assert;
 
 /**
  * Contains additional assertion methods not found in Junit or MoreAsserts.

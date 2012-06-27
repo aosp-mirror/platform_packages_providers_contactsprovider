@@ -16,12 +16,12 @@
 
 package com.android.providers.contacts.aggregation.util;
 
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.google.android.collect.Maps;
-
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 
 import java.lang.ref.SoftReference;
 import java.util.BitSet;

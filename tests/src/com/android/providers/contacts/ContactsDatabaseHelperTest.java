@@ -16,10 +16,10 @@
 
 package com.android.providers.contacts;
 
+import android.test.suitebuilder.annotation.SmallTest;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.google.android.collect.Sets;
-
-import android.test.suitebuilder.annotation.SmallTest;
 
 import java.util.Set;
 

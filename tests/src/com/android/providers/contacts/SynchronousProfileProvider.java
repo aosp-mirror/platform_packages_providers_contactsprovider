@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.accounts.Account;
 import android.content.Context;
 
 import java.util.Locale;

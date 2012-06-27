@@ -21,11 +21,11 @@ import android.content.Context;
 import android.database.Cursor;
 import android.util.Log;
 
+import junit.framework.Assert;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-
-import junit.framework.Assert;
 
 public class TestUtils {
     private TestUtils() {

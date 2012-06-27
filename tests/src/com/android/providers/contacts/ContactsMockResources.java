@@ -16,9 +16,9 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Maps;
-
 import android.test.mock.MockResources;
+
+import com.google.android.collect.Maps;
 
 import java.util.Map;
 

@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Lists;
-
 import android.accounts.Account;
 import android.content.ContentProviderOperation;
 import android.content.ContentUris;
@@ -32,8 +30,9 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Settings;
-import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.google.android.collect.Lists;
 
 import java.util.ArrayList;
 

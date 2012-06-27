@@ -16,14 +16,14 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
-
 import android.content.ContentUris;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 
 import java.util.ArrayList;
 

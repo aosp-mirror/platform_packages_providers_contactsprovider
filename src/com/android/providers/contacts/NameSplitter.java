@@ -15,13 +15,13 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.util.NeededForTesting;
-
 import android.content.ContentValues;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
-import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.text.TextUtils;
+
+import com.android.providers.contacts.util.NeededForTesting;
 
 import java.lang.Character.UnicodeBlock;
 import java.util.HashSet;

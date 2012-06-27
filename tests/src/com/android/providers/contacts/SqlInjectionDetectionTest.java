@@ -27,8 +27,6 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.Contacts;
 import android.test.suitebuilder.annotation.MediumTest;
 
-import junit.framework.Assert;
-
 /**
  * Unit tests for {@link ContactsProvider2}, to make sure the queries don't allow sql injection.
  *

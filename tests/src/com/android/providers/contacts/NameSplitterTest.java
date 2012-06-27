@@ -16,15 +16,15 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.NameSplitter.Name;
-
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.test.suitebuilder.annotation.SmallTest;
 
-import java.util.Locale;
+import com.android.providers.contacts.NameSplitter.Name;
 
 import junit.framework.TestCase;
+
+import java.util.Locale;
 
 /**
  * Tests for {@link NameSplitter}.

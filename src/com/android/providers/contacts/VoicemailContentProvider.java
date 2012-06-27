@@ -19,11 +19,6 @@ import static android.provider.VoicemailContract.SOURCE_PACKAGE_FIELD;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.util.SelectionBuilder;
-import com.android.providers.contacts.util.TypedUriMatcherImpl;
-import com.google.common.annotations.VisibleForTesting;
-
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
@@ -37,6 +32,11 @@ import android.provider.BaseColumns;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.SelectionBuilder;
+import com.android.providers.contacts.util.TypedUriMatcherImpl;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.io.FileNotFoundException;
 import java.util.List;

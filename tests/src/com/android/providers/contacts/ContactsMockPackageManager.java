@@ -15,8 +15,6 @@
  */
 package com.android.providers.contacts;
 
-import com.google.android.collect.Lists;
-
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
@@ -25,6 +23,8 @@ import android.content.pm.ProviderInfo;
 import android.content.res.Resources;
 import android.os.Binder;
 import android.test.mock.MockPackageManager;
+
+import com.google.android.collect.Lists;
 
 import java.util.HashMap;
 import java.util.List;

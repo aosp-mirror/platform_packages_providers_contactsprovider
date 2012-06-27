@@ -16,12 +16,12 @@
 
 package com.android.providers.contacts;
 
-import com.google.android.collect.Lists;
-import com.google.android.collect.Maps;
-
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteTransactionListener;
 import android.util.Log;
+
+import com.google.android.collect.Lists;
+import com.google.android.collect.Maps;
 
 import java.util.List;
 import java.util.Map;

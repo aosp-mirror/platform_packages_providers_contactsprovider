@@ -15,16 +15,15 @@
  */
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-
-import com.google.common.annotations.VisibleForTesting;
-
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.provider.ContactsContract.PhotoFiles;
 import android.util.Log;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.FileOutputStream;

@@ -20,11 +20,6 @@ package com.android.providers.contacts;
 import static android.Manifest.permission.ADD_VOICEMAIL;
 import static com.android.providers.contacts.Manifest.permission.READ_WRITE_ALL_VOICEMAIL;
 
-import com.android.common.io.MoreCloseables;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.util.DbQueryUtils;
-import com.google.android.collect.Lists;
-
 import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -42,6 +37,11 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
+
+import com.android.common.io.MoreCloseables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.DbQueryUtils;
+import com.google.android.collect.Lists;
 
 import java.util.ArrayList;
 import java.util.Collection;
