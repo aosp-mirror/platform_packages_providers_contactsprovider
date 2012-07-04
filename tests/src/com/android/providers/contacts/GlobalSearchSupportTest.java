@@ -113,8 +113,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         GoldenContact contact = new GoldenContactBuilder().name("Deer", "Dough").photo(
                 loadTestPhoto()).phone("1-800-4664-411").build();
         new SuggestionTesterBuilder(contact).query("1800").expectIcon1Uri(true).expectedText1(
-                "Deer Dough").expectedText2("1-800-4664-411").expectedCreateContactNumber("1800")
-                .build().test();
+                "Deer Dough").expectedText2("1-800-4664-411").build().test();
     }
 
     public void assertCreateContactSuggestion(Cursor c, String number) {
@@ -129,42 +128,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
                 SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
         assertCursorValues(c, values);
-    }
-
-    public void searchSuggestionsByPhoneNumberOnPhoneTest(String number) {
-        getContactsProvider().setIsPhone(true);
-        getContactsProvider().setIsVoiceCapable(true);
-
-        ContentValues values = new ContentValues();
-
-        Uri searchUri = new Uri.Builder().scheme("content").authority(ContactsContract.AUTHORITY)
-                .appendPath(SearchManager.SUGGEST_URI_PATH_QUERY).appendPath(number).build();
-
-        Cursor c = mResolver.query(searchUri, null, null, null, null);
-        assertEquals(2, c.getCount());
-        c.moveToFirst();
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Dial number");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using " + number);
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                String.valueOf(com.android.internal.R.drawable.call_contact));
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-                Intents.SEARCH_SUGGESTION_DIAL_NUMBER_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:" + number);
-        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-                SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
-        assertCursorValues(c, values);
-
-        c.moveToNext();
-        assertCreateContactSuggestion(c, number);
-        c.close();
-    }
-
-    public void testSearchSuggestionsByPhoneNumberOnPhone() throws Exception {
-        searchSuggestionsByPhoneNumberOnPhoneTest("12345678");
-    }
-
-    public void testSearchSuggestionsByAlphnumericPhoneNumberOnPhone() throws Exception {
-        searchSuggestionsByPhoneNumberOnPhoneTest("1800-flowers");
     }
 
     /**
@@ -185,8 +148,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         private final String expectedText2;
 
-        private final String expectedCreateContactNumber;
-
         public SuggestionTester(SuggestionTesterBuilder builder) {
             contact = builder.contact;
             query = builder.query;
@@ -194,7 +155,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             expectedIcon2 = builder.expectedIcon2;
             expectedText1 = builder.expectedText1;
             expectedText2 = builder.expectedText2;
-            expectedCreateContactNumber = builder.expectedCreateContactNumber;
         }
 
         /**
@@ -222,7 +182,7 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                     .appendPath(query).build();
 
             Cursor c = mResolver.query(searchUri, null, null, null, null);
-            assertEquals(expectedCreateContactNumber == null ? 1 : 2, c.getCount());
+            assertEquals(1, c.getCount());
             c.moveToFirst();
 
             String icon1 = c.getString(c.getColumnIndex(SearchManager.SUGGEST_COLUMN_ICON_1));
@@ -236,11 +196,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
             // SearchManager does not declare a constant for _id
             ContentValues values = getContactValues();
             assertCursorValues(c, values);
-
-            if (expectedCreateContactNumber != null) {
-                c.moveToNext();
-                assertCreateContactSuggestion(c, expectedCreateContactNumber);
-            }
 
             c.close();
         }
@@ -360,8 +315,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
 
         private String expectedText2;
 
-        private String expectedCreateContactNumber;
-
         public SuggestionTesterBuilder(GoldenContact contact) {
             this.contact = contact;
         }
@@ -416,11 +369,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
          */
         public SuggestionTesterBuilder expectedText2(String value) {
             expectedText2 = value;
-            return this;
-        }
-
-        public SuggestionTesterBuilder expectedCreateContactNumber(String number) {
-            expectedCreateContactNumber = number;
             return this;
         }
     }
