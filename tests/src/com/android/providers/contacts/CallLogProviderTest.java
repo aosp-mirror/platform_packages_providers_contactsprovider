@@ -16,6 +16,9 @@
 
 package com.android.providers.contacts;
 
+import com.android.internal.telephony.CallerInfo;
+import com.android.internal.telephony.PhoneConstants;
+
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -31,9 +34,6 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.suitebuilder.annotation.MediumTest;
-
-import com.android.internal.telephony.CallerInfo;
-import com.android.internal.telephony.Connection;
 
 import java.util.Arrays;
 import java.util.List;
@@ -180,7 +180,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ci.numberType = Phone.TYPE_CUSTOM;
         ci.numberLabel = "Directory";
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
-                Connection.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 2000, 40);
+                PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 2000, 40);
 
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
