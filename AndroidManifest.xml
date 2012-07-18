@@ -96,5 +96,16 @@
         </receiver>
 
         <service android:name="VoicemailCleanupService"/>
+
+        <activity android:name=".debug.ContactsDumpActivity"
+                android:label="@string/debug_dump_title"
+                android:theme="@android:style/Theme.Holo.Dialog"
+                >
+            <intent-filter>
+                <action android:name="com.android.providers.contacts.DUMP_DATABASE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+
     </application>
 </manifest>
