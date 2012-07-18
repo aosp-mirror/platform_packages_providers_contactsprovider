@@ -18,6 +18,8 @@ package com.android.providers.contacts.aggregation.util;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.util.Hex;
 
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,6 +29,7 @@ import java.util.List;
  * Logic for matching contacts' data and accumulating match scores.
  */
 public class ContactMatcher {
+    private static final String TAG = "ContactMatcher";
 
     // Best possible match score
     public static final int MAX_SCORE = 100;
@@ -296,8 +299,16 @@ public class ContactMatcher {
             return;
         }
 
-        byte[] decodedCandidateName = Hex.decodeHex(candidateName);
-        byte[] decodedName = Hex.decodeHex(name);
+        final byte[] decodedCandidateName;
+        final byte[] decodedName;
+        try {
+            decodedCandidateName = Hex.decodeHex(candidateName);
+            decodedName = Hex.decodeHex(name);
+        } catch (RuntimeException e) {
+            // How could this happen??  See bug 6827136
+            Log.e(TAG, "Failed to decode normalized name.  Skipping.", e);
+            return;
+        }
 
         NameDistance nameDistance = algorithm == MATCHING_ALGORITHM_CONSERVATIVE ?
                 mNameDistanceConservative : mNameDistanceApproximate;

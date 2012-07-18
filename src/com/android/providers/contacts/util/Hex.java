@@ -74,12 +74,16 @@ public class Hex {
 
     /**
      * Quickly converts a hexadecimal string to a byte array.
+     *
+     * TODO Use checked exceptions instead of RuntimeException.  Apparently normalized names *may*
+     * contain non-hex strings and we want to make sure the provider won't crash even with such
+     * input.
      */
     public static byte[] decodeHex(String hexString) {
         int length = hexString.length();
 
         if ((length & 0x01) != 0) {
-            throw new IllegalArgumentException("Odd number of characters.");
+            throw new IllegalArgumentException("Odd number of characters: " + hexString);
         }
 
         boolean badHex = false;
