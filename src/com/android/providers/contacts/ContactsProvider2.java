@@ -7954,38 +7954,64 @@ public class ContactsProvider2 extends AbstractContactsProvider
             int count = 0;
             SQLiteDatabase db = null;
             boolean success = false;
+            boolean transactionStarted = false;
             try {
-                // Re-aggregation os only for the contacts DB.
+                // Re-aggregation is only for the contacts DB.
                 switchToContactMode();
                 db = mContactsHelper.getWritableDatabase();
                 mActiveDb.set(db);
 
                 // Start the actual process.
                 db.beginTransaction();
+                transactionStarted = true;
 
                 count = mContactAggregator.markAllVisibleForAggregation(db);
                 mContactAggregator.aggregateInTransaction(mTransactionContext.get(), db);
 
                 updateSearchIndexInTransaction();
 
-                mContactsHelper.setProperty(DbProperties.AGGREGATION_ALGORITHM,
-                        String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
+                updateAggregationAlgorithmVersion();
 
                 db.setTransactionSuccessful();
 
                 success = true;
             } finally {
                 mTransactionContext.get().clearAll();
-                if (db != null) {
+                if (transactionStarted) {
                     db.endTransaction();
                 }
                 final long end = SystemClock.elapsedRealtime();
                 Log.i(TAG, "Aggregation algorithm upgraded for " + count + " raw contacts"
                         + (success ? (" in " + (end - start) + "ms") : " failed"));
             }
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to upgrade aggregation algorithm; continuing anyway.", e);
+
+            // Got some exception during re-aggregation.  Re-aggregation isn't that important, so
+            // just bump the aggregation algorithm version and let the provider start normally.
+            try {
+                final SQLiteDatabase db =  mContactsHelper.getWritableDatabase();
+                db.beginTransaction();
+                try {
+                    updateAggregationAlgorithmVersion();
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                }
+            } catch (RuntimeException e2) {
+                // Couldn't even update the algorithm version...  There's really nothing we can do
+                // here, so just go ahead and start the provider.  Next time the provider starts
+                // it'll try re-aggregation again, which may or may not succeed.
+                Log.e(TAG, "Failed to bump aggregation algorithm version; continuing anyway.", e2);
+            }
         } finally { // Need one more finally because endTransaction() may fail.
             setProviderStatus(ProviderStatus.STATUS_NORMAL);
         }
+    }
+
+    private void updateAggregationAlgorithmVersion() {
+        mContactsHelper.setProperty(DbProperties.AGGREGATION_ALGORITHM,
+                String.valueOf(PROPERTY_AGGREGATION_ALGORITHM_VERSION));
     }
 
     @VisibleForTesting
