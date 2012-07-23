@@ -21,6 +21,7 @@ import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.test.AndroidTestCase;
+import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.providers.contacts.tests.R;
 
@@ -30,6 +31,7 @@ import com.android.providers.contacts.tests.R;
  *
  * Most of tests are covered by {@link PhotoStoreTest}.
  */
+@SmallTest
 public class PhotoProcessorTest extends AndroidTestCase {
 
     public void testTransparency() {
