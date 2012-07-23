@@ -18,7 +18,9 @@ package com.android.providers.contacts.aggregation.util;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 
 import android.test.AndroidTestCase;
+import android.test.suitebuilder.annotation.SmallTest;
 
+@SmallTest
 public class ContactMatcherTest extends AndroidTestCase {
 
     public void testMatchName_invalidHexDecimal() {
