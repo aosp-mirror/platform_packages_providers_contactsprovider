@@ -28,4 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Accesso a tutti i messaggi vocali"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Consente all\'applicazione di archiviare recuperare tutti i messaggi vocali a cui questo dispositivo può accedere."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Messaggio vocale da "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Copia database di contatti"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Stai per 1) creare una copia del tuo database contenente tutte le informazioni relative ai contatti e l\'intero registro chiamate sulla scheda SD/nell\'archivio USB, leggibile da qualsiasi applicazione e 2) inviarla tramite email. Ricordati di eliminare la copia non appena l\'avrai copiata dal dispositivo o in seguito alla ricezione dell\'email."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Elimina adesso"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Inizia"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Scegli un programma per inviare il file"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Database di contatti allegato"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"È allegato il mio database di contatti contenente tutte le informazioni sui miei contatti. Trattare con cura."</string>
 </resources>

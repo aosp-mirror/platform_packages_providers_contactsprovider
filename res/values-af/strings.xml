@@ -28,4 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Kry toegang tot alle stemboodskappe"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Laat die program toe om alle stemboodskappe te stoor en op te haal wat hierdie toestel kan lees."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Stemboodskap van "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Kopieer kontaktedatabasis"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Jy is op die punt om 1) jou databasis, wat alle kontakverwante inligting en alle oproeprekords insluit, na die SD-kaart/USB-berging te kopieer, wat deur enige program gelees kan word, en 2) dit te e-pos. Onthou om die kopie uit te vee sodra jy dit suksesvol van die toestel af gekopieer het of wanneer die e-pos ontvang is."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Vee nou uit"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Begin"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Kies \'n program om jou lêer te stuur"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"kontaktedatabasis aangeheg"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"My kontaktedatabasis met al my kontakinligting is aangeheg. Hanteer versigtig."</string>
 </resources>

@@ -28,4 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Åtkomst till alla röstmeddelanden"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Tillåter att appen sparar och hämtar alla röstmeddelanden som enheten har åtkomst till."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Röstmeddelande från "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Kopiera kontaktdatabas"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Du är på väg att 1) kopiera databasen som innehåller alla dina kontaktrelaterade uppgifter och hela samtalsloggen till SD-kortet/USB-minnet, där alla appar kan läsa den, och 2) skicka den med e-post. Kom ihåg att ta bort kopian så fort du har kopierat den från enheten eller när e-postmeddelandet har kommit fram."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ta bort nu"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Börja"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Välj program att skicka filen med"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Kontaktdatabas bifogad"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Jag bifogar min kontaktdatabas med alla mina kontaktuppgifter. Hantera den varsamt."</string>
 </resources>

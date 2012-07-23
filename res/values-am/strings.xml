@@ -28,4 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"ሁሉንም  የድምፅ መልዕክቶች ድረስ"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"ትግበራ ይህ መሣሪያ መድረስ የሚችለውን የድምፅ መልዕክቶች በሙሉ ለማከማቸት እና ሰርስሮ ለማውጣት ይፈቅዳል።"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ከ....የድምፅ መልዕክት "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"የእውቂያዎች የውሂብ ጎታ ገልብጥ"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"የሚከተሉት ሊያደርጉ ነው 1) ሁሉንም ከእውቂያዎችዎ ጋር የተገናኙ መረጃዎች እና ሁሉንም የጥሪ ምዝግብ ማስታወሻ ያካተተው የውሂብ ጎታዎ ቅጂ ወደ SD ካርድ/USB ማከማቻ ሊያስቀምጡ ነው፣ ይህም በማንኛውም መተግበሪያ የሚነበብ ነው፣ እና 2) በኢሜይል ሊልኩ ነው። በተሳካ ሁኔታው ከመሣሪያው ገልብጠው ካወጡት በኋላ ወይም ኢሜይሉ ከደረሰ በኋላ ወዲያውንኑ ቅጂውን መሰረዝ እንዳለብዎት ያስታውሱ።"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"አሁን ሰርዝ"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"ጀምር"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"ፋይልዎትን የሚልኩበት ፕሮግራም ይምረጡ"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"የእውቂያዎች የውሂብ ጎታ ተያይዟል"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"የእውቂያዎቼ የውሂብ ጎታ ከሁሉም የእውቂያዎቼ መረጃዎች ጋር አባሪ ተደርጓል። በደንብ ይጠበቅ።"</string>
 </resources>

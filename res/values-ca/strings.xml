@@ -28,4 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Accés a tots els missatges de veu"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permet que l\'aplicació emmagatzemi i recuperi totes les bústies de veu a les quals pot accedir aquest dispositiu."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Missatge de veu de "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Copia la base de dades de contactes"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Estàs a punt de 1) fer una còpia de la teva base de dades, que inclou tota la informació relacionada amb els teus contactes i tots els registres de trucades, a la targeta SD/emmagatzematge USB, que podrà llegir qualsevol aplicació i 2) d\'enviar-la per correu electrònic. Recorda que has de suprimir la còpia tan aviat com l\'hagis transferit fora del dispositiu o tan bon punt rebis el correu electrònic."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Suprimeix ara"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Inicia"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Selecciona un programa per enviar el fitxer"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Base de dades de contactes adjunta"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Aquí adjunta hi ha la meva base de dades de contactes amb tota la informació dels meus contactes. tracta-la amb cura."</string>
 </resources>

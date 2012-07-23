@@ -28,4 +28,18 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"모든 음성사서함에 액세스"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"앱이 이 기기에서 액세스할 수 있는 모든 음성사서함을 저장하고 검색하도록 허용합니다."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"음성사서함 발신자 "</string>
+    <!-- no translation found for debug_dump_title (4916885724165570279) -->
+    <skip />
+    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
+    <skip />
+    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
+    <skip />
+    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
+    <skip />
+    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
+    <skip />
+    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
+    <skip />
+    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
+    <skip />
 </resources>
