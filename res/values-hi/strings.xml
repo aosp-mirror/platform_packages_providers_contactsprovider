@@ -28,18 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"सभी ध्‍वनि‍मेल पर पहुंचें"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"एप्‍लि‍केशन को ऐसे सभी ध्‍वनि‍मेल संग्रहीत और पुनर्प्राप्त करने देता है जि‍न पर यह उपकरण पहुंच सकता है."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"इनका ध्‍वनि‍मेल: "</string>
-    <!-- no translation found for debug_dump_title (4916885724165570279) -->
-    <skip />
-    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
-    <skip />
-    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
-    <skip />
-    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
-    <skip />
+    <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस की प्रतिलिपि बनाएं"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"आप 1) आप अपने डेटाबेस की एक प्रति बनाने वाले हैं, जिसमें समस्त संपर्क संबंधित जानकारी और किसी भी एप्लिकेशन द्वारा पढ़े जाने योग्य SD कार्ड/USB संग्रहण के सभी कॉल लॉग शामिल होते हैं, और 2) उसे ईमेल करने वाले हैं. जब आप उपकरण से उसकी प्रतिलिपि सफलतापूर्वक बना लें या ईमेल प्राप्त हो जाने पर, जितनी जल्दी हो सके प्रतिलिपि हटाना न भूलें."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"अभी हटाएं"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"प्रारंभ करें"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"अपनी फ़ाइल भेजने के लिए कोई प्रोग्राम चुनें"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"संपर्क Db अनुलग्न है"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"मेरी समस्त संपर्क जानकारी के साथ मेरा संपर्क डेटाबेस अनुलग्न है. सावधानी से कार्य करें."</string>
 </resources>

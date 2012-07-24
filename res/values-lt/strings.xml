@@ -28,18 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Pasiekti visus balso pašto pranešimus"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Leidžiama programai saugoti ir nuskaityti visus balso pašto pranešimus, kuriuos gali pasiekti šis įrenginys."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Balso pašto pranešimas nuo "</string>
-    <!-- no translation found for debug_dump_title (4916885724165570279) -->
-    <skip />
-    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
-    <skip />
-    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
-    <skip />
-    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
-    <skip />
+    <string name="debug_dump_title" msgid="4916885724165570279">"Kopijuoti kontaktų duomenis"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Ketinate atlikti šiuos veiksmus: 1) nukopijuoti visus duomenis (į kuriuos įeina visa su kontaktais susijusi informacija ir visų skambučių žurnalas) į SD kortelę arba USB atmintį, kurias gali skaityti bet kuri programa, ir 2) išsiųsti duomenų kopiją el. paštu. Nepamirškite ištrinti kopijos, kai duomenys bus sėkmingai nukopijuoti iš įrenginio arba kai el. laiškas bus gautas."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ištrinti dabar"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Pradėti"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Pasirinkite programą, kad išsiųstumėte failą"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Pridedami kontaktų duomenys"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Pridedami mano kontaktų duomenys su visa kontaktų informacija. Elkitės atsargiai."</string>
 </resources>

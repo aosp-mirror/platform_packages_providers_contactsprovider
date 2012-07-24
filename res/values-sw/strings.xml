@@ -28,18 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Fikia barua zote za sauti"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Inaruhusu programu kuhifadhi na kutoa jumbe zote za sauti ambazo kifaa hiki kinaweza kufikia."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Barua ya sauti kutoka "</string>
-    <!-- no translation found for debug_dump_title (4916885724165570279) -->
-    <skip />
-    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
-    <skip />
-    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
-    <skip />
-    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
-    <skip />
+    <string name="debug_dump_title" msgid="4916885724165570279">"Nakili hifadhidata ya anwani"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Unakaribia 1) kuunda nakala ya hifadhidata yako ambayo ni pamoja na maelezo yote yanayohusiana ya anwani na  kumbukumbu zote za simu kwenye kadi ya SD/hifadhi ya USB, ambayo inasomeka kwa programu yoyote, na 2) kuituma kwa barua pepe.  Kumbuka kufuta nakala pindi tu unapofanikiwa kuinakili kutoka kwenye kifaa au barua inapopokewa."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Futa sasa"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Anza"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Chagua programu ili kutuma faili yako"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Db ya anwani imeambatishwa"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Ambatisho lililipo ni la hifadhidata ya anwani zangu iliyo na maelezo yote ya anwani zangu. Ishughulikie kimakini."</string>
 </resources>

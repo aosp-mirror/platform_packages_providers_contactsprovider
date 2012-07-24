@@ -28,18 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Truy cập tất cả các thư thoại"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Cho phép ứng dụng lưu trữ và truy xuất tất cả thư thoại mà thiết bị này có thể truy cập."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Thư thoại từ "</string>
-    <!-- no translation found for debug_dump_title (4916885724165570279) -->
-    <skip />
-    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
-    <skip />
-    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
-    <skip />
-    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
-    <skip />
+    <string name="debug_dump_title" msgid="4916885724165570279">"Sao chép cơ sở dữ liệu người liên hệ"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Bạn sắp 1) sao chép cơ sở dữ liệu của mình bao gồm tất cả thông tin liên quan đến người liên hệ và toàn bộ nhật ký cuộc gọi sang thẻ SD/bộ lưu trữ USB, bất kỳ ứng dụng nào đều có thể đọc những thông tin này và 2) gửi email dữ liệu. Hãy nhớ xóa bản sao ngay sau khi bạn đã sao chép thành công từ thiết bị hoặc người nhận đã nhận được email."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Xóa ngay"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Bắt đầu"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Chọn chương trình để gửi tệp của bạn"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Đã đính kèm cơ sở dữ liệu người liên hệ"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Phần đính kèm là cơ sở dữ liệu người liên hệ với tất cả thông tin người liên hệ của tôi. Hãy cẩn trọng khi xử lý."</string>
 </resources>

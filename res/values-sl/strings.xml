@@ -28,18 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Dostop do glasovne pošte"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Programu dovoli shranjevanje in prenos sporočil v odzivniku, do katerih lahko dostopa ta naprava."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta s številke "</string>
-    <!-- no translation found for debug_dump_title (4916885724165570279) -->
-    <skip />
-    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
-    <skip />
-    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
-    <skip />
-    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
-    <skip />
+    <string name="debug_dump_title" msgid="4916885724165570279">"Kopiraj zbirko podatkov o stikih"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"S tem dejanjem boste 1) na pomnilniški kartici SD oziroma v pomnilniku USB ustvarili kopijo zbirke podatkov, ki bo vključevala vse informacije v zvezi s stiki in dnevnik klicev ter bo berljiva v vsaki aplikaciji, in 2) jo poslali po e-pošti. Kopijo izbrišite iz pomnilniške naprave, ko jo boste uspešno prekopirali v drugo napravo ali ko bo poslana e-pošta prejeta."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Izbriši zdaj"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Začni"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izberite program za pošiljanje datoteke"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Priložena zbirka podatkov o stikih"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Priložena je zbirka podatkov z vsemi informacijami o stikih. Z e-pošto ravnajte previdno."</string>
 </resources>

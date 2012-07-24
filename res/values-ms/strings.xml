@@ -28,18 +28,11 @@
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Akses semua mel suara"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Membenarkan aplikasi menyimpan dan mengambil semula semua mel suara yang boleh diakses peranti ini."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mel suara daripada "</string>
-    <!-- no translation found for debug_dump_title (4916885724165570279) -->
-    <skip />
-    <!-- no translation found for debug_dump_database_message (5718202172291024953) -->
-    <skip />
-    <!-- no translation found for debug_dump_delete_button (7832879421132026435) -->
-    <skip />
-    <!-- no translation found for debug_dump_start_button (2837506913757600001) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_sender_picker (3534420908672176460) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_subject (108188398416385976) -->
-    <skip />
-    <!-- no translation found for debug_dump_email_body (4577749800871444318) -->
-    <skip />
+    <string name="debug_dump_title" msgid="4916885724165570279">"Salin pangkalan data kenalan"</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Anda akan 1) membuat salinan pangkalan data anda yang termasuk semua maklumat berkaitan kenalan dan semua log panggilan ke kad SD/storan USB yang boleh dibaca oleh sebarang apl dan 2) meng-e-melkannya. Jangan lupa memadamkan salinan sejurus selepas anda berjaya menyalinnya dari peranti atau e-mel diterima."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Padamkan sekarang"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Mula"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Pilih program untuk menghantar fail anda"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Pangkalan Data Kenalan dilampirkan"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Dilampirkan pangkalan data kenalan saya yang mengandungi semua maklumat kenalan. Sila gunakan dengan cermat."</string>
 </resources>
