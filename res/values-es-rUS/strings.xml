@@ -29,10 +29,10 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permite que la aplicación almacene y recupere todos los mensajes de voz a los que este dispositivo puede acceder."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mensaje de voz de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de datos de contactos"</string>
-    <string name="debug_dump_database_message" msgid="5718202172291024953">"Estás a punto de 1) realizar una copia de tu base de datos; la cual incluye toda la información relacionada con tus contactos y el registro de todas tus llamadas y puede ser leída por cualquier aplicación; en el almacenamiento USB o en la tarjeta SD y 2) enviarla por correo. Recuerda eliminar la copia inmediatamente después de guardarla correctamente fuera del dispositivo o de que se haya recibido el correo."</string>
+    <string name="debug_dump_database_message" msgid="5718202172291024953">"Estás a punto de 1) realizar una copia de tu base de datos, que incluye toda la información relacionada con tus contactos y el registro de todas tus llamadas, en el almacenamiento USB o en la tarjeta SD (cualquier aplicación podrá acceder a ella);  y 2) enviarla por correo. Recuerda eliminar la copia inmediatamente después de que la hayas copiado en otro dispositivo o se haya recibido el correo."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eliminar ahora"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Comenzar"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Elige un programa para enviar tu archivo."</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Elige un programa para enviar el archivo."</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Base de datos de contactos adjunta"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"Adjunto a este correo la base de datos de mis contactos con toda la información relacionada ellos. Esta información se debe manejar con cuidado."</string>
 </resources>
