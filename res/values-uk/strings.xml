@@ -31,7 +31,7 @@
     <string name="debug_dump_title" msgid="4916885724165570279">"Копіювати базу даних контактів"</string>
     <string name="debug_dump_database_message" msgid="5718202172291024953">"Ви збираєтеся виконати такі дії: 1) скопіювати базу даних, яка містить усю інформацію про контакти та весь журнал дзвінків, на карту SD або носій USB, які може читати будь-яка програма; 2) надіслати копію електронною поштою. Не забудьте видалити копію, щойно її буде скопійовано з пристрою або отримано електронним листом."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Видалити зараз"</string>
-    <string name="debug_dump_start_button" msgid="2837506913757600001">"Розпочати"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Почати"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Виберіть програму для надсилання файлу"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"У вкладенні – база даних контактів"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"У вкладенні – база даних моїх контактів з усією інформацією про мої контакти. Працюйте з нею обережно."</string>

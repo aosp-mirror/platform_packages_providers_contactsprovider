@@ -34,5 +34,5 @@
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Inizia"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Scegli un programma per inviare il file"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Database di contatti allegato"</string>
-    <string name="debug_dump_email_body" msgid="4577749800871444318">"È allegato il mio database di contatti contenente tutte le informazioni sui miei contatti. Trattare con cura."</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"In allegato è presente il mio database di contatti contenente tutte le informazioni sui miei contatti. Trattare con cura."</string>
 </resources>
