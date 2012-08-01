@@ -209,6 +209,66 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         assertEquals(3, getCount(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null));
     }
 
+    public void testLimitParamReturnsCorrectLimit() {
+        for (int i=0; i<10; i++) {
+            insertCallRecord();
+        }
+        Uri uri = Calls.CONTENT_URI.buildUpon()
+                .appendQueryParameter(Calls.LIMIT_PARAM_KEY, "4")
+                .build();
+        assertEquals(4, getCount(uri, null, null));
+    }
+
+    public void testLimitAndOffsetParamReturnsCorrectEntries() {
+        for (int i=0; i<10; i++) {
+            mResolver.insert(Calls.CONTENT_URI, getDefaultValues(Calls.INCOMING_TYPE));
+        }
+        for (int i=0; i<10; i++) {
+            mResolver.insert(Calls.CONTENT_URI, getDefaultValues(Calls.MISSED_TYPE));
+        }
+        // Limit 4 records.  Discard first 8.
+        Uri uri = Calls.CONTENT_URI.buildUpon()
+                .appendQueryParameter(Calls.LIMIT_PARAM_KEY, "4")
+                .appendQueryParameter(Calls.OFFSET_PARAM_KEY, "8")
+                .build();
+        String[] projection = new String[] {Calls._ID, Calls.TYPE};
+        Cursor c = mResolver.query(uri, projection, null, null, null);
+        try {
+            // First two should be incoming, next two should be missed.
+            for (int i = 0; i < 2; i++) {
+                c.moveToNext();
+                assertEquals(Calls.INCOMING_TYPE, c.getInt(1));
+            }
+            for (int i = 0; i < 2; i++) {
+                c.moveToNext();
+                assertEquals(Calls.MISSED_TYPE, c.getInt(1));
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    public void testUriWithBadLimitParamThrowsException() {
+        assertParamThrowsIllegalArgumentException(Calls.LIMIT_PARAM_KEY, "notvalid");
+    }
+
+    public void testUriWithBadOffsetParamThrowsException() {
+        assertParamThrowsIllegalArgumentException(Calls.OFFSET_PARAM_KEY, "notvalid");
+    }
+
+    private void assertParamThrowsIllegalArgumentException(String key, String value) {
+        Uri uri = Calls.CONTENT_URI.buildUpon()
+                .appendQueryParameter(key, value)
+                .build();
+        try {
+            mResolver.query(uri, null, null, null, null);
+            fail();
+        } catch (IllegalArgumentException e) {
+            assertTrue("Error does not contain value in question.",
+                    e.toString().contains(value));
+        }
+    }
+
     // Test to check that none of the voicemail provider specific fields are
     // insertable through call_log provider.
     public void testCannotAccessVoicemailSpecificFields_Insert() {

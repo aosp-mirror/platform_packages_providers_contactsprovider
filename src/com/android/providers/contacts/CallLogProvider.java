@@ -123,15 +123,15 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
-        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         qb.setTables(Tables.CALLS);
         qb.setProjectionMap(sCallsProjectionMap);
         qb.setStrict(true);
 
-        SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
+        final SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
 
-        int match = sURIMatcher.match(uri);
+        final int match = sURIMatcher.match(uri);
         switch (match) {
             case CALLS:
                 break;
@@ -154,13 +154,45 @@ public class CallLogProvider extends ContentProvider {
                 throw new IllegalArgumentException("Unknown URL " + uri);
         }
 
+        final int limit = getIntParam(uri, Calls.LIMIT_PARAM_KEY, 0);
+        final int offset = getIntParam(uri, Calls.OFFSET_PARAM_KEY, 0);
+        String limitClause = null;
+        if (limit > 0) {
+            limitClause = offset + "," + limit;
+        }
+
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        Cursor c = qb.query(db, projection, selectionBuilder.build(), selectionArgs, null, null,
-                sortOrder, null);
+        final Cursor c = qb.query(db, projection, selectionBuilder.build(), selectionArgs, null,
+                null, sortOrder, limitClause);
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), CallLog.CONTENT_URI);
         }
         return c;
+    }
+
+    /**
+     * Gets an integer query parameter from a given uri.
+     *
+     * @param uri The uri to extract the query parameter from.
+     * @param key The query parameter key.
+     * @param defaultValue A default value to return if the query parameter does not exist.
+     * @return The value from the query parameter in the Uri.  Or the default value if the parameter
+     * does not exist in the uri.
+     * @throws IllegalArgumentException when the value in the query parameter is not an integer.
+     */
+    private int getIntParam(Uri uri, String key, int defaultValue) {
+        String valueString = uri.getQueryParameter(key);
+        if (valueString == null) {
+            return defaultValue;
+        }
+
+        try {
+            return Integer.parseInt(valueString);
+        } catch (NumberFormatException e) {
+            String msg = "Integer required for " + key + " parameter but value '" + valueString +
+                    "' was found instead.";
+            throw new IllegalArgumentException(msg, e);
+        }
     }
 
     @Override
