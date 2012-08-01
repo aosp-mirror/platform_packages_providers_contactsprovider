@@ -33,6 +33,7 @@
             android:authorities="contacts;com.android.contacts"
             android:label="@string/provider_label"
             android:multiprocess="false"
+            android:exported="true"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
             <path-permission
@@ -50,6 +51,7 @@
         <provider android:name="CallLogProvider"
             android:authorities="call_log"
             android:syncable="false" android:multiprocess="false"
+            android:exported="true"
             android:readPermission="android.permission.READ_CALL_LOG"
             android:writePermission="android.permission.WRITE_CALL_LOG">
         </provider>
@@ -57,6 +59,7 @@
         <provider android:name="VoicemailContentProvider"
             android:authorities="com.android.voicemail"
             android:syncable="false" android:multiprocess="false"
+            android:exported="true"
             android:permission="com.android.voicemail.permission.ADD_VOICEMAIL">
         </provider>
 
