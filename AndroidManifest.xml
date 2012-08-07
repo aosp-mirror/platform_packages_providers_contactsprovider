@@ -23,6 +23,7 @@
     <uses-permission android:name="android.permission.SUBSCRIBED_FEEDS_WRITE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.BIND_DIRECTORY_SEARCH" />
 
     <application android:process="android.process.acore"
         android:label="@string/app_label"
