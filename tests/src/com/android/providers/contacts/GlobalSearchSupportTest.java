@@ -116,20 +116,6 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
                 "Deer Dough").expectedText2("1-800-4664-411").build().test();
     }
 
-    public void assertCreateContactSuggestion(Cursor c, String number) {
-        ContentValues values = new ContentValues();
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_1, "Create contact");
-        values.put(SearchManager.SUGGEST_COLUMN_TEXT_2, "using "+ number);
-        values.put(SearchManager.SUGGEST_COLUMN_ICON_1,
-                String.valueOf(com.android.internal.R.drawable.create_contact));
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
-                Intents.SEARCH_SUGGESTION_CREATE_CONTACT_CLICKED);
-        values.put(SearchManager.SUGGEST_COLUMN_INTENT_DATA, "tel:" + number);
-        values.put(SearchManager.SUGGEST_COLUMN_SHORTCUT_ID,
-                SearchManager.SUGGEST_NEVER_MAKE_SHORTCUT);
-        assertCursorValues(c, values);
-    }
-
     /**
      * Tests that the quick search suggestion returns the expected contact
      * information.
