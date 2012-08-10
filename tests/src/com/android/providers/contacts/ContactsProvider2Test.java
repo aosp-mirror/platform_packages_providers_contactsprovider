@@ -1020,11 +1020,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         final Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
 
-        // Ensure both can be looked up
+        // Check the lookup table.
         assertEquals(1,
                 getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1234"), null, null));
         assertEquals(1,
                 getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "5678"), null, null));
+
+        // Check the data table.
+        assertStoredValues(dataUri,
+                cv(Phone.NUMBER, "1234", Phone.NORMALIZED_NUMBER, "5678")
+                );
 
         // Replace both in an UPDATE
         values.clear();
@@ -1040,17 +1045,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1,
                 getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "8765"), null, null));
 
+        assertStoredValues(dataUri,
+                cv(Phone.NUMBER, "4321", Phone.NORMALIZED_NUMBER, "8765")
+                );
+
         // Replace only NUMBER ==> NORMALIZED_NUMBER will be inferred (we test that by making
         // sure the old manual value can not be found anymore)
         values.clear();
-        values.put(Phone.NUMBER, "1-800-466-5432");
+        values.put(Phone.NUMBER, "+1-800-466-5432");
         mResolver.update(dataUri, values, null, null);
         assertEquals(
                 1,
-                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1-800-466-5432"), null,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "+1-800-466-5432"), null,
                         null));
         assertEquals(0,
                 getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "8765"), null, null));
+
+        assertStoredValues(dataUri,
+                cv(Phone.NUMBER, "+1-800-466-5432", Phone.NORMALIZED_NUMBER, "+18004665432")
+                );
 
         // Replace only NORMALIZED_NUMBER ==> call is ignored, things will be unchanged
         values.clear();
@@ -1058,10 +1071,42 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(dataUri, values, null, null);
         assertEquals(
                 1,
-                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "1-800-466-5432"), null,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "+1-800-466-5432"), null,
                         null));
         assertEquals(0,
                 getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "8765"), null, null));
+
+        assertStoredValues(dataUri,
+                cv(Phone.NUMBER, "+1-800-466-5432", Phone.NORMALIZED_NUMBER, "+18004665432")
+                );
+
+        // Replace NUMBER with an "invalid" number which can't be normalized.  It should clear
+        // NORMALIZED_NUMBER.
+
+        // 1. Set 999 to NORMALIZED_NUMBER explicitly.
+        values.clear();
+        values.put(Phone.NUMBER, "888");
+        values.put(Phone.NORMALIZED_NUMBER, "999");
+        mResolver.update(dataUri, values, null, null);
+
+        assertEquals(1,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "999"), null, null));
+
+        assertStoredValues(dataUri,
+                cv(Phone.NUMBER, "888", Phone.NORMALIZED_NUMBER, "999")
+                );
+
+        // 2. Set an invalid number to NUMBER.
+        values.clear();
+        values.put(Phone.NUMBER, "1");
+        mResolver.update(dataUri, values, null, null);
+
+        assertEquals(0,
+                getCount(Uri.withAppendedPath(Phone.CONTENT_FILTER_URI, "999"), null, null));
+
+        assertStoredValues(dataUri,
+                cv(Phone.NUMBER, "1", Phone.NORMALIZED_NUMBER, null)
+                );
     }
 
     public void testPhonesFilterQuery() {

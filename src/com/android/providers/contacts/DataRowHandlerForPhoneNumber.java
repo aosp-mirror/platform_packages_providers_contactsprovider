@@ -93,9 +93,7 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
         if (number != null && numberE164 == null) {
             final String newNumberE164 = PhoneNumberUtils.formatNumberToE164(number,
                     mDbHelper.getCurrentCountryIso());
-            if (newNumberE164 != null) {
-                values.put(Phone.NORMALIZED_NUMBER, newNumberE164);
-            }
+            values.put(Phone.NORMALIZED_NUMBER, newNumberE164);
         }
     }
 
