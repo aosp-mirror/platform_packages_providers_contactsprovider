@@ -16,58 +16,129 @@
 
 package com.android.providers.contacts.debug;
 
-import android.content.Context;
-import android.media.MediaScannerConnection;
-import android.util.Log;
-
+import com.android.providers.contacts.util.Hex;
 import com.google.common.io.Closeables;
+
+import android.content.Context;
+import android.net.Uri;
+import android.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.SecureRandom;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
  * Compress all files under the app data dir into a single zip file.
+ *
+ * Make sure not to output dump filenames anywhere, including logcat.
  */
 public class DataExporter {
     private static String TAG = "DataExporter";
 
     public static final String ZIP_MIME_TYPE = "application/zip";
 
-    /**
-     * Compress all files under the app data dir into a single zip file.
-     */
-    public static void exportData(Context context, File outFile) throws IOException {
-        outFile.delete();
-        Log.i(TAG, "Outfile=" + outFile.getAbsolutePath());
+    public static final String DUMP_FILE_DIRECTORY_NAME = "dumpedfiles";
 
+    public static final String OUT_FILE_SUFFIX = "-contacts-db.zip";
+
+    /**
+     * Compress all files under the app data dir into a single zip file, and return the content://
+     * URI to the file, which can be read via {@link DumpFileProvider}.
+     */
+    public static Uri exportData(Context context) throws IOException {
+        final String fileName = generateRandomName() + OUT_FILE_SUFFIX;
+        final File outFile = getOutputFile(context, fileName);
+
+        // Remove all existing ones.
+        removeDumpFiles(context);
+
+        Log.i(TAG, "Dump started...");
+
+        ensureOutputDirectory(context);
         final ZipOutputStream os = new ZipOutputStream(new FileOutputStream(outFile));
         try {
-            addDirectory(os, context.getFilesDir().getParentFile(), "contacts-files");
+            addDirectory(context, os, context.getFilesDir().getParentFile(), "contacts-files");
         } finally {
             Closeables.closeQuietly(os);
         }
-        // Tell the media scanner about the new file so that it is
-        // immediately available to the user.
-        MediaScannerConnection.scanFile(context,
-                new String[] {outFile.toString()},
-                new String[] {ZIP_MIME_TYPE}, null);
+        Log.i(TAG, "Dump finished.");
+        return DumpFileProvider.AUTHORITY_URI.buildUpon().appendPath(fileName).build();
+    }
+
+    /** @return long random string for a file name */
+    private static String generateRandomName() {
+        final SecureRandom rng = new SecureRandom();
+        final byte[] random = new byte[256 / 8];
+        rng.nextBytes(random);
+
+        return Hex.encodeHex(random, true);
+    }
+
+    private static File getOutputDirectory(Context context) {
+        return new File(context.getCacheDir(), DUMP_FILE_DIRECTORY_NAME);
+    }
+
+    private static void ensureOutputDirectory(Context context) {
+        final File directory = getOutputDirectory(context);
+        if (!directory.exists()) {
+            directory.mkdir();
+        }
+    }
+
+    public static File getOutputFile(Context context, String fileName) {
+        return new File(getOutputDirectory(context), fileName);
+    }
+
+    public static boolean dumpFileExists(Context context) {
+        return getOutputDirectory(context).exists();
+    }
+
+    public static void removeDumpFiles(Context context) {
+        removeFileOrDirectory(getOutputDirectory(context));
+    }
+
+    private static void removeFileOrDirectory(File file) {
+        if (!file.exists()) return;
+
+        if (file.isFile()) {
+            Log.i(TAG, "Removing " + file);
+            file.delete();
+            return;
+        }
+
+        if (file.isDirectory()) {
+            for (File child : file.listFiles()) {
+                removeFileOrDirectory(child);
+            }
+            Log.i(TAG, "Removing " + file);
+            file.delete();
+        }
     }
 
     /**
      * Add all files under {@code current} to {@code os} zip stream
      */
-    private static void addDirectory(ZipOutputStream os, File current, String storedPath)
-            throws IOException {
+    private static void addDirectory(Context context, ZipOutputStream os, File current,
+            String storedPath) throws IOException {
         for (File child : current.listFiles()) {
             final String childStoredPath = storedPath + "/" + child.getName();
 
             if (child.isDirectory()) {
-                addDirectory(os, child, childStoredPath);
+                // Don't need the cache directory, which also contains the dump files.
+                if (child.equals(context.getCacheDir())) {
+                    continue;
+                }
+                // This check is redundant as the output directory should be in the cache dir,
+                // but just in case...
+                if (child.getName().equals(DUMP_FILE_DIRECTORY_NAME)) {
+                    continue;
+                }
+                addDirectory(context, os, child, childStoredPath);
             } else if (child.isFile()) {
                 addFile(os, child, childStoredPath);
             } else {
@@ -82,6 +153,7 @@ public class DataExporter {
      */
     private static void addFile(ZipOutputStream os, File current, String storedPath)
             throws IOException {
+        Log.i(TAG, "Adding " + current.getAbsolutePath() + " ...");
         final InputStream is = new FileInputStream(current);
         os.putNextEntry(new ZipEntry(storedPath));
 
