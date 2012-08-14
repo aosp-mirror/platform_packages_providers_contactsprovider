@@ -16,21 +16,19 @@
 
 package com.android.providers.contacts.debug;
 
+import com.android.providers.contacts.R;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.Window;
 import android.widget.Button;
 
-import com.android.providers.contacts.R;
-
-import java.io.File;
 import java.io.IOException;
 
 /**
@@ -44,9 +42,6 @@ public class ContactsDumpActivity extends Activity implements OnClickListener {
     private Button mConfirmButton;
     private Button mCancelButton;
     private Button mDeleteButton;
-
-    private static final File OUT_FILE = new File(Environment.getExternalStorageDirectory(),
-            "contacts.db.zip");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,7 +62,7 @@ public class ContactsDumpActivity extends Activity implements OnClickListener {
     }
 
     private void updateDeleteButton() {
-        mDeleteButton.setEnabled(OUT_FILE.exists());
+        mDeleteButton.setEnabled(DataExporter.dumpFileExists(this));
     }
 
     @Override
@@ -89,11 +84,10 @@ public class ContactsDumpActivity extends Activity implements OnClickListener {
     }
 
     private void cleanup() {
-        Log.i(TAG, "Deleting " + OUT_FILE);
-        OUT_FILE.delete();
+        DataExporter.removeDumpFiles(this);
     }
 
-    private class DumpDbTask extends AsyncTask<Void, Void, Boolean> {
+    private class DumpDbTask extends AsyncTask<Void, Void, Uri> {
         /**
          * Starts spinner while task is running.
          */
@@ -103,32 +97,30 @@ public class ContactsDumpActivity extends Activity implements OnClickListener {
         }
 
         @Override
-        protected Boolean doInBackground(Void... params) {
+        protected Uri doInBackground(Void... params) {
             try {
-                DataExporter.exportData(getApplicationContext(), OUT_FILE);
-                return true;
+                return DataExporter.exportData(getApplicationContext());
             } catch (IOException e) {
                 Log.e(TAG, "Failed to export", e);
-                return false;
+                return null;
             }
         }
 
         @Override
-        protected void onPostExecute(Boolean success) {
-            if (success != null && success) {
-                emailFile(OUT_FILE);
+        protected void onPostExecute(Uri uri) {
+            if (uri != null) {
+                emailFile(uri);
             }
         }
     }
 
-    private void emailFile(File file) {
-        Log.i(TAG, "Drafting email to send " + file.getAbsolutePath() +
-                " (" + file.length() + " bytes)");
+    private void emailFile(Uri uri) {
+        Log.i(TAG, "Drafting email");
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.debug_dump_email_subject));
         intent.putExtra(Intent.EXTRA_TEXT, getString(R.string.debug_dump_email_body));
         intent.setType(DataExporter.ZIP_MIME_TYPE);
-        intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(file));
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
         startActivityForResult(Intent.createChooser(intent,
                 getString(R.string.debug_dump_email_sender_picker)), 0);
     }

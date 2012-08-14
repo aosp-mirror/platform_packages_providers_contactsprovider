@@ -62,8 +62,8 @@
     <!-- Debug tool - title of the dialog which copies the contact database into the external storage. [CHAR LIMIT=NONE] -->
     <string name="debug_dump_title">Copy contacts database</string>
 
-    <!-- Debug tool - message shown to the user on the dialog which copies the contact database into the external storage. [CHAR LIMIT=NONE] -->
-    <string name="debug_dump_database_message">You are about to 1) make a copy of your database which includes all contacts related information and all call log to the SD card/USB storage, which is readable by any app, and 2) email it.  Remember to delete the copy as soon as you have successfully copied it off the device or the email is received.</string>
+    <!-- Debug tool - message shown to the user on the dialog which sends a copy of  the contact database via email or other apps. [CHAR LIMIT=NONE] -->
+    <string name="debug_dump_database_message">You are about to 1) make a copy of your database which includes all contacts related information and all call log to the internal storage, and 2) email it.  Remember to delete the copy as soon as you have successfully copied it off the device or the email is received.</string>
 
     <!-- Debug tool - dialog button- delete file now [CHAR LIMIT=NONE] -->
     <string name="debug_dump_delete_button">Delete now</string>
