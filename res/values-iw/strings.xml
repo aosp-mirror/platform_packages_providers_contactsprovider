@@ -29,7 +29,8 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"מאפשר ליישום לאחסן ולאחזר את כל הודעות הדואר הקולי שלמכשיר זה יש גישה אליהן."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"הודעה קולית מאת "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"העתקת מסד נתוני אנשי קשר"</string>
-    <string name="debug_dump_database_message" msgid="5718202172291024953">"אתה עומד 1) ליצור עותק של מסד הנתונים שכולל את כל המידע הקשור לאנשי הקשר ואת כל יומני השיחות באחסון כרטיס ה-SD/ USB, אשר ניתן לקריאה על ידי כל יישום, וגם 2) לשלוח אותו בדוא\"ל. זכור למחוק את העותק מיד לאחר שתעתיק אותו בהצלחה מהמכשיר או אחרי שהודעת הדוא\"ל תתקבל."</string>
+    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
+    <skip />
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"מחק עכשיו"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"התחל"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"בחר תוכנית לשליחת הקובץ"</string>
