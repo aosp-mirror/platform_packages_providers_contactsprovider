@@ -29,7 +29,8 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"อนุญาตให้แอปพลิเคชันจัดเก็บและเรียกข้อความเสียงทั้งหมดที่อุปกรณ์นี้สามารถเข้าถึงได้"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ข้อความเสียงจาก "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"คัดลอกฐานข้อมูลผู้ติดต่อ"</string>
-    <string name="debug_dump_database_message" msgid="5718202172291024953">"คุณกำลังจะ 1) สร้างสำเนาฐานข้อมูลซึ่งประกอบด้วยข้อมูลที่เกี่ยวข้องกับผู้ติดต่อทั้งหมดและประวัติการโทรทั้งหมดไปยังการ์ด SD/ที่จัดเก็บข้อมูล USB ซึ่งทุกๆ แอปพลิเคชันสามารถอ่านได้ และ 2) ส่งอีเมลสำเนาฐานข้อมูล อย่าลืมลบสำเนาออกจากอุปกรณ์ทันทีที่คุณคัดลอกเสร็จแล้ว หรือเมื่อผู้รับรับอีเมลแล้ว"</string>
+    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
+    <skip />
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ลบเดี๋ยวนี้"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"เริ่มต้น"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"เลือกโปรแกรมเพื่อส่งไฟล์ของคุณ"</string>

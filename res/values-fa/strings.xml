@@ -29,7 +29,8 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"به برنامه اجازه ذخیره و بازیابی تمام پست‌های صوتی قابل دسترس برای این دستگاه را می‌دهد."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"پست صوتی از "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"کپی پایگاه داده مخاطبین"</string>
-    <string name="debug_dump_database_message" msgid="5718202172291024953">"شما در حال ١) ایجاد یک نسخه از پایگاه داده خود هستید که شامل تمام اطلاعات مربوط به مخاطبین و تمام گزارش‌های تماس در کارت SD/دستگاه ذخیره‌سازی USB است و توسط هر برنامه‌ای قابل خواندن است، و ٢) ایمیل کردن آن. فراموش نکنید که بلافاصله پس از کپی کردن آن از دستگاه یا دریافت ایمیل، این نسخه را حذف کنید."</string>
+    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
+    <skip />
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"اکنون حذف شود"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"شروع"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"یک برنامه را برای ارسال فایل خود انتخاب کنید"</string>

@@ -29,7 +29,8 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permite à aplicação guardar e recuperar todas as mensagens de correio de voz a que este aparelho pode aceder."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Correio de voz de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de dados de contactos"</string>
-    <string name="debug_dump_database_message" msgid="5718202172291024953">"Está prestes a 1) criar uma cópia da nossa base de dados, que inclui todas as informações relacionadas com contactos e o registo de todas as chamadas, para o cartão SD/memória USB, que pode ser lido por qualquer aplicação, e a 2) enviá-la por email. Não se esqueça de eliminar a cópia assim que a tiver copiado com êxito para fora do dispositivo ou tiver recebido a mensagem de email."</string>
+    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
+    <skip />
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eliminar agora"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Iniciar"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Escolha um programa para enviar o ficheiro"</string>
