@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permet que l\'aplicació emmagatzemi i recuperi totes les bústies de veu a les quals pot accedir aquest dispositiu."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Missatge de veu de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copia la base de dades de contactes"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Estàs a punt de: 1) fer una còpia de la teva base de dades, que inclou tota la informació relacionada amb els contactes i tots els registres de trucades de l\'emmagatzematge intern, i 2) d\'enviar-la per correu electrònic. Recorda suprimir la còpia de seguida que l\'hagis copiat correctament al dispositiu o quan hagis rebut el correu electrònic."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Suprimeix ara"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Inicia"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Selecciona un programa per enviar el fitxer"</string>
