@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Lar appen lagre og hente alle talepostmeldinger som denne enheten har tilgang til."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Talemelding fra "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiér kontaktdatabasen"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Du er i ferd med å 1) lage en kopi av databasen som omfatter all kontaktlisterelatert informasjon og alle anropslogger til den interne lagringsplassen, og 2) sende kopien med e-post. Husk å slette kopien så snart du har kopiert den fra enheten eller når e-posten er mottatt."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Slett nå"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Start"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Velg et program for å sende filen"</string>

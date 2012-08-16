@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Tillåter att appen sparar och hämtar alla röstmeddelanden som enheten har åtkomst till."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Röstmeddelande från "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiera kontaktdatabas"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Du kommer att 1) kopiera din databas, inklusive alla kontaktuppgifter och samtalsloggar till det interna lagringsutrymmet, och 2) skicka det via e-post. Kom ihåg att ta bort kopian från enheten när kopieringen har slutförts eller när du har fått e-postmeddelandet."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ta bort nu"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Börja"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Välj program att skicka filen med"</string>
