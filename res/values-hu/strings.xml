@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Lehetővé teszi, hogy az alkalmazás tárolja és lekérje azokat a hangüzeneteket, amelyekhez ez a készülék hozzáférhet."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Hangüzenet tőle: "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Névjegyadatbázis másolása"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Ön arra készül, hogy 1) másolatot készítsen a belső tárhelyre az adatbázisról, amely magában foglalja az összes névjegyet és minden kapcsolódó adatot, valamint a hívásnaplót, illetve hogy 2) e-mailben elküldje azt. Ne feledje azonnal törölni a másolatot, amint sikeresen átmásolta a készülékről, vagy amint megkapta az e-mailt."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Törlés most"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Indítás"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Válasszon programot a fájl elküldéséhez."</string>
