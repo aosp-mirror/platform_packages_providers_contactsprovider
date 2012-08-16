@@ -85,9 +85,10 @@ public class DumpFileProvider extends ContentProvider {
      * for a URI.
      */
     @Override
-    public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
+    public Cursor query(Uri uri, String[] inProjection, String selection, String[] selectionArgs,
             String sortOrder) {
-        if (projection == null) throw new IllegalArgumentException("Projection must not be null");
+        final String[] projection = (inProjection != null) ? inProjection
+                : new String[] {OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE};
 
         final MatrixCursor c = new MatrixCursor(projection);
 
@@ -101,8 +102,14 @@ public class DumpFileProvider extends ContentProvider {
                 // really exists.
                 b.add(extractFileName(uri));
             } else if (OpenableColumns.SIZE.equals(column)) {
-                // Always return "unkown" for file size.
-                b.add(null);
+                final File file = DataExporter.getOutputFile(getContext(), extractFileName(uri));
+
+                if (file.exists()) {
+                    b.add(file.length());
+                } else {
+                    // File doesn't exist -- return null for "unknown".
+                    b.add(null);
+                }
             } else {
                 throw new IllegalArgumentException("Unknown column " + column);
             }
