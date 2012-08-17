@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Разрешава на приложението да съхранява и извлича всички гласови съобщения, до които това устройство има достъп."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Гласова поща от "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Копиране на базата от данни на контактите"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"На път сте 1) да направите копие във вътрешното хранилище на базата си от данни, което включва цялата свързана с контактите информация и всички списъци с обаждания, и 2) да го изпратите по имейл. Не забравяйте да го изтриете веднага след като го копирате успешно от устройството или когато имейлът е получен."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Изтриване сега"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Начало"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Изберете програма, за да изпратите файла си"</string>

@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Binibigyang-daan ang app upang iimbak at kuning muli ang lahat ng voicemail na naa-access ng device na ito."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail mula sa/kay "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopyahin ang database ng mga contact"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Ikaw ay 1) gagawa na ng kopya ng iyong database na kinapapalooban ng lahat ng impormasyong nauugnay sa mga contact at ng lahat ng log ng tawag sa panloob na storage, at 2) ipapadala mo na ito sa email. Alalahaning tanggalin ang kopya sa sandaling matagumpay mo na itong nakopya mula sa device o sa sandaling natanggap na ang email."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Tanggalin ngayon"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Simulan"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Pumili ng program upang ipadala ang iyong file"</string>

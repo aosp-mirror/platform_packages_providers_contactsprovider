@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permet à l\'application de stocker et de récupérer tous les messages vocaux auxquels cet appareil peut accéder."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Message vocal de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copier la base de données de contacts"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Vous êtes sur le point de 1) faire une copie de votre base de données (qui inclut toutes les données relatives aux contacts et l\'intégralité du journal d\'appels) dans la mémoire de stockage interne, puis de 2) l\'envoyer par e-mail. N\'oubliez pas de supprimer la copie une fois qu\'elle a été dupliquée ou dès que l\'e-mail a été reçu."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Supprimer"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Commencer"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Sélectionnez un programme pour envoyer votre fichier"</string>

@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Programu dovoli shranjevanje in prenos sporočil v odzivniku, do katerih lahko dostopa ta naprava."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta s številke "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiraj zbirko podatkov o stikih"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"V naslednjem koraku boste 1) naredili kopijo zbirke podatkov, ki vključuje vse informacije o stikih in celoten dnevnik klicev, v notranji pomnilnik ter 2) jo poslali. Ne pozabite izbrisati kopije iz naprave, ko jo boste uspešno kopirali oziroma ko jo boste prejeli po e-pošti."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Izbriši zdaj"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Začni"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izberite program za pošiljanje datoteke"</string>
