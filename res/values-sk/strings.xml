@@ -29,8 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Umožňuje aplikácii uchovávať a načítavať všetky hlasové správy, ku ktorým má zariadenie prístup."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Hlasová správa od "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopírovanie databázy kontaktov"</string>
-    <!-- no translation found for debug_dump_database_message (406438635002392290) -->
-    <skip />
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Práve sa chystáte 1) vytvoriť v internom ukladacom priestore kópiu svojej databázy, ktorá obsahuje všetky informácie týkajúce sa kontaktov a všetky hovory, a 2) poslať túto databázu e-mailom. Nezabudnite odstrániť kópiu hneď po úspešnom skopírovaní do zariadenia alebo doručení e-mailu."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Odstrániť"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Spustiť"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Vyberte program na odoslanie súboru"</string>
