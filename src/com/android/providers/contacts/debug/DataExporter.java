@@ -29,6 +29,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.SecureRandom;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -61,6 +62,7 @@ public class DataExporter {
 
         ensureOutputDirectory(context);
         final ZipOutputStream os = new ZipOutputStream(new FileOutputStream(outFile));
+        os.setLevel(Deflater.BEST_COMPRESSION);
         try {
             addDirectory(context, os, context.getFilesDir().getParentFile(), "contacts-files");
         } finally {
