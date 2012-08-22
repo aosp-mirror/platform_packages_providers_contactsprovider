@@ -29,7 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Laat die program toe om alle stemboodskappe te stoor en op te haal wat hierdie toestel kan lees."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Stemboodskap van "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopieer kontaktedatabasis"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Jy gaan nou 1) \'n afskrif van jou databasis maak wat alle inligting insluit wat verband hou met kontakte en alle oproeploglêers na die interne stoor, en 2) dit e-pos. Onthou om die kopie uit te vee sodra jy dit suksesvol van die toestel af gekopieer het, of sodra die e-pos ontvang is."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Jy is op die punt om 1) \'n afskrif van jou databasis te maak wat alle inligting insluit wat verband hou met kontakte en alle oproeploglêers na die interne berging, en 2) dit te e-pos. Onthou om die kopie uit te vee sodra jy dit suksesvol van die toestel af gekopieer het, of sodra die e-pos ontvang is."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Vee nou uit"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Begin"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Kies \'n program om jou lêer te stuur"</string>
