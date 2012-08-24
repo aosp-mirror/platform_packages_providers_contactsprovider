@@ -29,7 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Ļauj lietotnei glabāt un izgūt visus balss pasta ziņojumus, kuriem var piekļūt šajā ierīcē."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Balss pasta ziņojums no "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktpersonu datu bāzes kopēšana"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Jūs grasāties 1) iekšējā atmiņā izveidot savas datu bāzes kopiju, ietverot visu kontaktpersonu informāciju un visu zvanu žurnālu, un 2) nosūtīt to pa e-pastu. Dzēsiet kopiju, tiklīdz tā būs veiksmīgi kopēta no ierīces vai tiks saņemts attiecīgais e-pasta ziņojums."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Jūs gatavojaties 1) iekšējā atmiņā izveidot savas datu bāzes kopiju, ietverot visu kontaktpersonu informāciju un visu zvanu žurnālu, un 2) nosūtīt to pa e-pastu. Dzēsiet kopiju, tiklīdz tā būs veiksmīgi kopēta no ierīces vai tiks saņemts attiecīgais e-pasta ziņojums."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Dzēst tūlīt"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Sākt"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izvēlieties programmu, kuru izmantot faila nosūtīšanai"</string>
