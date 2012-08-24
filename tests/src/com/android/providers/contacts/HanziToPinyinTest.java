@@ -99,7 +99,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u4e03', "QI");
         test('\u4e04', "SHANG");
         test('\u4e05', "XIA");
-        test('\u4e06', "");
+        test('\u4e06', "HAN");
         test('\u4e07', "WAN");
         test('\u4e08', "ZHANG");
         test('\u4e09', "SAN");
@@ -167,7 +167,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u4e47', "TUO");
         test('\u4e48', "ME");
         test('\u4e49', "YI");
-        test('\u4e4a', "HO");
+        test('\u4e4a', "YI");
         test('\u4e4b', "ZHI");
         test('\u4e4c', "WU");
         test('\u4e4d', "ZHA");
@@ -194,7 +194,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u4e62', "GAI");
         test('\u4e63', "JIU");
         test('\u4e64', "XIA");
-        test('\u4e65', "");
+        test('\u4e65', "HU");
         test('\u4e66', "SHU");
         test('\u4e67', "DOU");
         test('\u4e68', "SHI");
@@ -207,7 +207,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u4e6f', "HU");
         test('\u4e70', "MAI");
         test('\u4e71', "LUAN");
-        test('\u4e72', "");
+        test('\u4e72', "ZI");
         test('\u4e73', "RU");
         test('\u4e74', "XUE");
         test('\u4e75', "YAN");
@@ -410,7 +410,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u4f3a', "CI");
         test('\u4f3b', "BENG");
         test('\u4f3c', "SHI");
-        test('\u4f3d', "GA");
+        test('\u4f3d', "JIA");
         test('\u4f3e', "PI");
         test('\u4f3f', "YI");
         test('\u4f40', "SI");
@@ -571,7 +571,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u4fdb', "FU");
         test('\u4fdc', "PING");
         test('\u4fdd', "BAO");
-        test('\u4fde', "SHU");
+        test('\u4fde', "YU");
         test('\u4fdf', "QI");
         test('\u4fe0', "XIA");
         test('\u4fe1', "XIN");
@@ -924,7 +924,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u513c', "YAN");
         test('\u513d', "LEI");
         test('\u513e', "NANG");
-        test('\u513f', "R");
+        test('\u513f', "ER");
         test('\u5140', "WU");
         test('\u5141', "YUN");
         test('\u5142', "ZAN");
@@ -943,7 +943,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u514f', "CHANG");
         test('\u5150', "ER");
         test('\u5151', "DUI");
-        test('\u5152', "R");
+        test('\u5152', "ER");
         test('\u5153', "JIN");
         test('\u5154', "TU");
         test('\u5155', "SI");
@@ -982,8 +982,8 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5176', "QI");
         test('\u5177', "JU");
         test('\u5178', "DIAN");
-        test('\u5179', "CI");
-        test('\u517a', "BUN");
+        test('\u5179', "ZI");
+        test('\u517a', "FEN");
         test('\u517b', "YANG");
         test('\u517c', "JIAN");
         test('\u517d', "SHOU");
@@ -1381,7 +1381,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u52fe', "GOU");
         test('\u52ff', "WU");
         test('\u5300', "YUN");
-        test('\u5301', "");
+        test('\u5301', "WEN");
         test('\u5302', "BI");
         test('\u5303', "GAI");
         test('\u5304', "GAI");
@@ -1462,7 +1462,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u534f', "XIE");
         test('\u5350', "WAN");
         test('\u5351', "BEI");
-        test('\u5352', "CU");
+        test('\u5352', "ZU");
         test('\u5353', "ZHUO");
         test('\u5354', "XIE");
         test('\u5355', "DAN");
@@ -1568,7 +1568,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u53b9', "ROU");
         test('\u53ba', "QU");
         test('\u53bb', "QU");
-        test('\u53bc', "");
+        test('\u53bc', "ER");
         test('\u53bd', "LEI");
         test('\u53be', "DU");
         test('\u53bf', "XIAN");
@@ -1634,7 +1634,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u53fb', "LE");
         test('\u53fc', "DIAO");
         test('\u53fd', "JI");
-        test('\u53fe', "");
+        test('\u53fe', "LIAO");
         test('\u53ff', "HONG");
         test('\u5400', "MIE");
         test('\u5401', "XU");
@@ -1718,7 +1718,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u544f', "SHENG");
         test('\u5450', "NE");
         test('\u5451', "TUN");
-        test('\u5452', "M");
+        test('\u5452', "FU");
         test('\u5453', "YI");
         test('\u5454', "DAI");
         test('\u5455', "OU");
@@ -1855,7 +1855,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u54d8', "XING");
         test('\u54d9', "KUAI");
         test('\u54da', "DUO");
-        test('\u54db', "PPUN");
+        test('\u54db', "FEN");
         test('\u54dc', "JI");
         test('\u54dd', "NONG");
         test('\u54de', "MOU");
@@ -1912,7 +1912,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5511', "ZUO");
         test('\u5512', "QIU");
         test('\u5513', "CHE");
-        test('\u5514', "N");
+        test('\u5514', "WU");
         test('\u5515', "ZAO");
         test('\u5516', "YA");
         test('\u5517', "DOU");
@@ -1920,10 +1920,10 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5519', "DI");
         test('\u551a', "QIN");
         test('\u551b', "MA");
-        test('\u551c', "");
+        test('\u551c', "MO");
         test('\u551d', "GONG");
         test('\u551e', "DOU");
-        test('\u551f', "");
+        test('\u551f', "QU");
         test('\u5520', "LAO");
         test('\u5521', "LIANG");
         test('\u5522', "SUO");
@@ -2071,12 +2071,12 @@ public class HanziToPinyinTest extends TestCase {
         test('\u55b0', "CAN");
         test('\u55b1', "LI");
         test('\u55b2', "YO");
-        test('\u55b3', "CHA");
+        test('\u55b3', "ZHA");
         test('\u55b4', "WEI");
         test('\u55b5', "MIAO");
         test('\u55b6', "YING");
         test('\u55b7', "PEN");
-        test('\u55b8', "");
+        test('\u55b8', "BU");
         test('\u55b9', "KUI");
         test('\u55ba', "XI");
         test('\u55bb', "YU");
@@ -2129,7 +2129,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u55ea', "QIN");
         test('\u55eb', "NIE");
         test('\u55ec', "HE");
-        test('\u55ed', "ZI");
+        test('\u55ed', "ZHI");
         test('\u55ee', "SAI");
         test('\u55ef', "N");
         test('\u55f0', "GE");
@@ -2211,7 +2211,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5635', "XIAO");
         test('\u5636', "SI");
         test('\u5637', "HAO");
-        test('\u5638', "M");
+        test('\u5638', "FU");
         test('\u5639', "LIAO");
         test('\u563a', "QIAO");
         test('\u563b', "XI");
@@ -2318,7 +2318,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u56a0', "LIU");
         test('\u56a1', "HAI");
         test('\u56a2', "NANG");
-        test('\u56a3', "AO");
+        test('\u56a3', "XIAO");
         test('\u56a4', "MO");
         test('\u56a5', "YAN");
         test('\u56a6', "LI");
@@ -2368,7 +2368,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u56d2', "LAN");
         test('\u56d3', "NIE");
         test('\u56d4', "NANG");
-        test('\u56d5', "");
+        test('\u56d5', "LAN");
         test('\u56d6', "LO");
         test('\u56d7', "WEI");
         test('\u56d8', "HUI");
@@ -2530,7 +2530,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5774', "LU");
         test('\u5775', "QIU");
         test('\u5776', "MU");
-        test('\u5777', "JIONG");
+        test('\u5777', "KE");
         test('\u5778', "GOU");
         test('\u5779', "XUE");
         test('\u577a', "BA");
@@ -2953,7 +2953,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u591b', "DUO");
         test('\u591c', "YE");
         test('\u591d', "QING");
-        test('\u591e', "");
+        test('\u591e', "WAI");
         test('\u591f', "GOU");
         test('\u5920', "GOU");
         test('\u5921', "QI");
@@ -2970,7 +2970,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u592c', "GUAI");
         test('\u592d', "YAO");
         test('\u592e', "YANG");
-        test('\u592f', "BEN");
+        test('\u592f', "HANG");
         test('\u5930', "GAO");
         test('\u5931', "SHI");
         test('\u5932', "TAO");
@@ -3158,7 +3158,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u59e8', "YI");
         test('\u59e9', "NIAN");
         test('\u59ea', "ZHI");
-        test('\u59eb', "ZHEN");
+        test('\u59eb', "JI");
         test('\u59ec', "JI");
         test('\u59ed', "XIAN");
         test('\u59ee', "HENG");
@@ -3785,7 +3785,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5c54', "NI");
         test('\u5c55', "ZHAN");
         test('\u5c56', "XI");
-        test('\u5c57', "");
+        test('\u5c57', "WEI");
         test('\u5c58', "MAN");
         test('\u5c59', "E");
         test('\u5c5a', "LOU");
@@ -4206,7 +4206,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u5df9', "JIN");
         test('\u5dfa', "XUN");
         test('\u5dfb', "JUAN");
-        test('\u5dfc', "");
+        test('\u5dfc', "BA");
         test('\u5dfd', "XUN");
         test('\u5dfe', "JIN");
         test('\u5dff', "FU");
@@ -4791,7 +4791,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u603b', "ZONG");
         test('\u603c', "DUI");
         test('\u603d', "MO");
-        test('\u603e', "GI");
+        test('\u603e', "ZHI");
         test('\u603f', "YI");
         test('\u6040', "SHI");
         test('\u6041', "NEN");
@@ -5260,7 +5260,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6209', "YUE");
         test('\u620a', "WU");
         test('\u620b', "JIAN");
-        test('\u620c', "QU");
+        test('\u620c', "XU");
         test('\u620d', "SHU");
         test('\u620e', "RONG");
         test('\u620f', "XI");
@@ -5501,7 +5501,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u62fa', "CE");
         test('\u62fb', "HUI");
         test('\u62fc', "PIN");
-        test('\u62fd', "YE");
+        test('\u62fd', "ZHUAI");
         test('\u62fe', "SHI");
         test('\u62ff', "NA");
         test('\u6300', "BAI");
@@ -6118,7 +6118,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6563', "SAN");
         test('\u6564', "KE");
         test('\u6565', "YAN");
-        test('\u6566', "DUI");
+        test('\u6566', "DUN");
         test('\u6567', "JI");
         test('\u6568', "TOU");
         test('\u6569', "XIAO");
@@ -6204,7 +6204,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u65b9', "FANG");
         test('\u65ba', "CHAN");
         test('\u65bb', "HANG");
-        test('\u65bc', "WU");
+        test('\u65bc', "YU");
         test('\u65bd', "SHI");
         test('\u65be', "PEI");
         test('\u65bf', "YOU");
@@ -6229,7 +6229,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u65d2', "LIU");
         test('\u65d3', "SHAO");
         test('\u65d4', "JIAN");
-        test('\u65d5', "");
+        test('\u65d5', "YU");
         test('\u65d6', "YI");
         test('\u65d7', "QI");
         test('\u65d8', "ZHI");
@@ -6505,7 +6505,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u66df', "CHEN");
         test('\u66e0', "KUANG");
         test('\u66e1', "DIE");
-        test('\u66e2', "");
+        test('\u66e2', "LIAO");
         test('\u66e3', "YAN");
         test('\u66e4', "HUO");
         test('\u66e5', "LU");
@@ -6583,7 +6583,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u672d', "ZHA");
         test('\u672e', "SHU");
         test('\u672f', "SHU");
-        test('\u6730', "");
+        test('\u6730', "MU");
         test('\u6731', "ZHU");
         test('\u6732', "REN");
         test('\u6733', "BA");
@@ -6796,7 +6796,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6802', "MEI");
         test('\u6803', "LI");
         test('\u6804', "RONG");
-        test('\u6805', "SHAN");
+        test('\u6805', "ZHA");
         test('\u6806', "ZAO");
         test('\u6807', "BIAO");
         test('\u6808', "ZHAN");
@@ -6804,7 +6804,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u680a', "LONG");
         test('\u680b', "DONG");
         test('\u680c', "LU");
-        test('\u680d', "");
+        test('\u680d', "SHENG");
         test('\u680e', "LI");
         test('\u680f', "LAN");
         test('\u6810', "YONG");
@@ -7086,7 +7086,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6924', "LUO");
         test('\u6925', "ZHI");
         test('\u6926', "QUAN");
-        test('\u6927', "");
+        test('\u6927', "MING");
         test('\u6928', "FU");
         test('\u6929', "GENG");
         test('\u692a', "PENG");
@@ -7113,7 +7113,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u693f', "CHUN");
         test('\u6940', "YU");
         test('\u6941', "HE");
-        test('\u6942', "CHA");
+        test('\u6942', "ZHA");
         test('\u6943', "WO");
         test('\u6944', "PIAN");
         test('\u6945', "BI");
@@ -7166,7 +7166,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6974', "TI");
         test('\u6975', "JI");
         test('\u6976', "JIE");
-        test('\u6977', "JIE");
+        test('\u6977', "KAI");
         test('\u6978', "QIU");
         test('\u6979', "YING");
         test('\u697a', "ROU");
@@ -7399,7 +7399,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6a56', "TANG");
         test('\u6a57', "MENG");
         test('\u6a58', "JU");
-        test('\u6a59', "CHEN");
+        test('\u6a59', "CHENG");
         test('\u6a5a', "SU");
         test('\u6a5b', "JUE");
         test('\u6a5c', "JUE");
@@ -7749,7 +7749,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6bb4', "OU");
         test('\u6bb5', "DUAN");
         test('\u6bb6', "ZHU");
-        test('\u6bb7', "YAN");
+        test('\u6bb7', "YIN");
         test('\u6bb8', "QING");
         test('\u6bb9', "YI");
         test('\u6bba', "SHA");
@@ -8186,7 +8186,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u6d69', "HAO");
         test('\u6d6a', "LANG");
         test('\u6d6b', "HAN");
-        test('\u6d6c', "HAI");
+        test('\u6d6c', "LI");
         test('\u6d6d', "GENG");
         test('\u6d6e', "FU");
         test('\u6d6f', "WU");
@@ -8986,7 +8986,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7082', "ZHONG");
         test('\u7083', "FEN");
         test('\u7084', "NIU");
-        test('\u7085', "GUI");
+        test('\u7085', "JIONG");
         test('\u7086', "WEN");
         test('\u7087', "PO");
         test('\u7088', "YI");
@@ -9277,7 +9277,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u71a5', "TENG");
         test('\u71a6', "JUE");
         test('\u71a7', "ZONG");
-        test('\u71a8', "YU");
+        test('\u71a8', "YUN");
         test('\u71a9', "HU");
         test('\u71aa', "YI");
         test('\u71ab', "ZHI");
@@ -9331,7 +9331,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u71db', "JING");
         test('\u71dc', "MEN");
         test('\u71dd', "JING");
-        test('\u71de', "");
+        test('\u71de', "JIAO");
         test('\u71df', "YING");
         test('\u71e0', "YU");
         test('\u71e1', "YI");
@@ -9660,7 +9660,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u731d', "CU");
         test('\u731e', "SHE");
         test('\u731f', "LIE");
-        test('\u7320', "");
+        test('\u7320', "DIAN");
         test('\u7321', "LUO");
         test('\u7322', "HU");
         test('\u7323', "ZONG");
@@ -9762,7 +9762,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7383', "JUE");
         test('\u7384', "XUAN");
         test('\u7385', "MIAO");
-        test('\u7386', "XUAN");
+        test('\u7386', "ZI");
         test('\u7387', "LU");
         test('\u7388', "LU");
         test('\u7389', "YU");
@@ -9787,7 +9787,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u739c', "GONG");
         test('\u739d', "WU");
         test('\u739e', "FU");
-        test('\u739f', "MIN");
+        test('\u739f', "WEN");
         test('\u73a0', "JIE");
         test('\u73a1', "YA");
         test('\u73a2', "BIN");
@@ -10198,7 +10198,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7537', "NAN");
         test('\u7538', "DIAN");
         test('\u7539', "PING");
-        test('\u753a', "DING");
+        test('\u753a', "TING");
         test('\u753b', "HUA");
         test('\u753c', "TING");
         test('\u753d', "ZHEN");
@@ -10324,7 +10324,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u75b5', "CI");
         test('\u75b6', "XUE");
         test('\u75b7', "ZHI");
-        test('\u75b8', "DA");
+        test('\u75b8', "DAN");
         test('\u75b9', "ZHEN");
         test('\u75ba', "FA");
         test('\u75bb', "ZHI");
@@ -10850,7 +10850,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u77bc', "JIAN");
         test('\u77bd', "GU");
         test('\u77be', "ZHAO");
-        test('\u77bf', "JU");
+        test('\u77bf', "QU");
         test('\u77c0', "MEI");
         test('\u77c1', "CHOU");
         test('\u77c2', "SAO");
@@ -10879,7 +10879,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u77d9', "KAN");
         test('\u77da', "ZHU");
         test('\u77db', "MAO");
-        test('\u77dc', "GUAN");
+        test('\u77dc', "JIN");
         test('\u77dd', "LIN");
         test('\u77de', "YU");
         test('\u77df', "SHUO");
@@ -11006,7 +11006,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7858', "QING");
         test('\u7859', "WEI");
         test('\u785a', "QIAO");
-        test('\u785b', "");
+        test('\u785b', "YI");
         test('\u785c', "KENG");
         test('\u785d', "XIAO");
         test('\u785e', "QUE");
@@ -11030,7 +11030,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7870', "SHA");
         test('\u7871', "KUN");
         test('\u7872', "YU");
-        test('\u7873', "");
+        test('\u7873', "CHI");
         test('\u7874', "HUA");
         test('\u7875', "LU");
         test('\u7876', "CHEN");
@@ -11256,7 +11256,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7952', "TIAO");
         test('\u7953', "FU");
         test('\u7954', "FU");
-        test('\u7955', "BI");
+        test('\u7955', "MI");
         test('\u7956', "ZU");
         test('\u7957', "ZHI");
         test('\u7958', "SUAN");
@@ -11516,7 +11516,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7a4f', "WEN");
         test('\u7a50', "QIU");
         test('\u7a51', "SE");
-        test('\u7a52', "");
+        test('\u7a52', "HE");
         test('\u7a53', "YI");
         test('\u7a54', "HUANG");
         test('\u7a55', "QIE");
@@ -12166,7 +12166,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7cd9', "CAO");
         test('\u7cda', "ZHUANG");
         test('\u7cdb', "TANG");
-        test('\u7cdc', "MEI");
+        test('\u7cdc', "MI");
         test('\u7cdd', "SAN");
         test('\u7cde', "FEN");
         test('\u7cdf', "ZAO");
@@ -12472,7 +12472,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7e04', "YING");
         test('\u7e05', "WEI");
         test('\u7e06', "GENG");
-        test('\u7e07', "");
+        test('\u7e07', "XUAN");
         test('\u7e08', "YING");
         test('\u7e09', "JIN");
         test('\u7e0a', "YI");
@@ -12705,7 +12705,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7eed', "XU");
         test('\u7eee', "QI");
         test('\u7eef', "FEI");
-        test('\u7ef0', "CHAO");
+        test('\u7ef0', "CHUO");
         test('\u7ef1', "SHANG");
         test('\u7ef2', "GUN");
         test('\u7ef3', "SHENG");
@@ -12763,7 +12763,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7f27', "LEI");
         test('\u7f28', "YING");
         test('\u7f29', "SUO");
-        test('\u7f2a', "MIAO");
+        test('\u7f2a', "MOU");
         test('\u7f2b', "SAO");
         test('\u7f2c', "XIE");
         test('\u7f2d', "LIAO");
@@ -12807,7 +12807,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7f53', "GANG");
         test('\u7f54', "WANG");
         test('\u7f55', "HAN");
-        test('\u7f56', "RA");
+        test('\u7f56', "LUO");
         test('\u7f57', "LUO");
         test('\u7f58', "FU");
         test('\u7f59', "MI");
@@ -13042,7 +13042,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u803e', "HONG");
         test('\u803f', "GENG");
         test('\u8040', "ZHI");
-        test('\u8041', "");
+        test('\u8041', "PAN");
         test('\u8042', "NIE");
         test('\u8043', "DAN");
         test('\u8044', "ZHEN");
@@ -13309,7 +13309,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8149', "NAI");
         test('\u814a', "LA");
         test('\u814b', "YE");
-        test('\u814c', "A");
+        test('\u814c', "YAN");
         test('\u814d', "REN");
         test('\u814e', "SHEN");
         test('\u814f', "CHUO");
@@ -13568,7 +13568,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8245', "YU");
         test('\u8246', "LANG");
         test('\u8247', "TING");
-        test('\u8248', "");
+        test('\u8248', "YU");
         test('\u8249', "WEI");
         test('\u824a', "BO");
         test('\u824b', "MENG");
@@ -13661,7 +13661,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u82a2', "REN");
         test('\u82a3', "FU");
         test('\u82a4', "KOU");
-        test('\u82a5', "GAI");
+        test('\u82a5', "JIE");
         test('\u82a6', "LU");
         test('\u82a7', "XU");
         test('\u82a8', "JI");
@@ -13856,7 +13856,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8365', "XING");
         test('\u8366', "LUO");
         test('\u8367', "YING");
-        test('\u8368', "QIAN");
+        test('\u8368', "XUN");
         test('\u8369', "JIN");
         test('\u836a', "SUN");
         test('\u836b', "YIN");
@@ -13904,7 +13904,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8395', "XING");
         test('\u8396', "JING");
         test('\u8397', "CHE");
-        test('\u8398', "SHEN");
+        test('\u8398', "XIN");
         test('\u8399', "JUN");
         test('\u839a', "YAN");
         test('\u839b', "TING");
@@ -13939,7 +13939,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u83b8', "YOU");
         test('\u83b9', "YING");
         test('\u83ba', "YING");
-        test('\u83bb', "");
+        test('\u83bb', "GONG");
         test('\u83bc', "CHUN");
         test('\u83bd', "MANG");
         test('\u83be', "MANG");
@@ -14549,7 +14549,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8613', "SU");
         test('\u8614', "JIONG");
         test('\u8615', "FENG");
-        test('\u8616', "BO");
+        test('\u8616', "NIE");
         test('\u8617', "BO");
         test('\u8618', "RANG");
         test('\u8619', "YI");
@@ -14595,7 +14595,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8641', "KUI");
         test('\u8642', "LU");
         test('\u8643', "JIAN");
-        test('\u8644', "");
+        test('\u8644', "SA");
         test('\u8645', "TENG");
         test('\u8646', "LEI");
         test('\u8647', "QUAN");
@@ -14641,7 +14641,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u866f', "QIU");
         test('\u8670', "DING");
         test('\u8671', "SHI");
-        test('\u8672', "");
+        test('\u8672', "XIA");
         test('\u8673', "JUE");
         test('\u8674', "ZHE");
         test('\u8675', "SHE");
@@ -14857,7 +14857,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8747', "YING");
         test('\u8748', "GUO");
         test('\u8749', "CHAN");
-        test('\u874a', "");
+        test('\u874a', "DING");
         test('\u874b', "LA");
         test('\u874c', "KE");
         test('\u874d', "JIE");
@@ -15399,7 +15399,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8965', "PU");
         test('\u8966', "RU");
         test('\u8967', "ZHI");
-        test('\u8968', "");
+        test('\u8968', "DUI");
         test('\u8969', "SHU");
         test('\u896a', "WA");
         test('\u896b', "SHI");
@@ -15426,7 +15426,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8980', "XI");
         test('\u8981', "YAO");
         test('\u8982', "FENG");
-        test('\u8983', "QIN");
+        test('\u8983', "TAN");
         test('\u8984', "FU");
         test('\u8985', "FIAO");
         test('\u8986', "FU");
@@ -16098,7 +16098,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8c19', "AN");
         test('\u8c1a', "YAN");
         test('\u8c1b', "DI");
-        test('\u8c1c', "MEI");
+        test('\u8c1c', "MI");
         test('\u8c1d', "PIAN");
         test('\u8c1e', "XU");
         test('\u8c1f', "MO");
@@ -16270,7 +16270,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8cc5', "GAI");
         test('\u8cc6', "PIAN");
         test('\u8cc7', "ZI");
-        test('\u8cc8', "GU");
+        test('\u8cc8', "JIA");
         test('\u8cc9', "XU");
         test('\u8cca', "ZEI");
         test('\u8ccb', "JIAO");
@@ -16353,7 +16353,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8d18', "SHANG");
         test('\u8d19', "XUAN");
         test('\u8d1a', "LONG");
-        test('\u8d1b', "GONG");
+        test('\u8d1b', "GAN");
         test('\u8d1c', "ZANG");
         test('\u8d1d', "BEI");
         test('\u8d1e', "ZHEN");
@@ -16388,7 +16388,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u8d3b', "YI");
         test('\u8d3c', "ZEI");
         test('\u8d3d', "ZHI");
-        test('\u8d3e', "GU");
+        test('\u8d3e', "JIA");
         test('\u8d3f', "HUI");
         test('\u8d40', "ZI");
         test('\u8d41', "LIN");
@@ -18014,7 +18014,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u9387', "MEI");
         test('\u9388', "SUO");
         test('\u9389', "DA");
-        test('\u938a', "PANG");
+        test('\u938a', "BANG");
         test('\u938b', "XIA");
         test('\u938c', "LIAN");
         test('\u938d', "SUO");
@@ -18515,7 +18515,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u957c', "QU");
         test('\u957d', "LIAO");
         test('\u957e', "MI");
-        test('\u957f', "ZHANG");
+        test('\u957f', "CHANG");
         test('\u9580', "MEN");
         test('\u9581', "MA");
         test('\u9582', "SHUAN");
@@ -18534,7 +18534,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u958f', "RUN");
         test('\u9590', "SAN");
         test('\u9591', "XIAN");
-        test('\u9592', "JIAN");
+        test('\u9592', "XIAN");
         test('\u9593', "JIAN");
         test('\u9594', "MIN");
         test('\u9595', "XIA");
@@ -18595,7 +18595,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u95cc', "LAN");
         test('\u95cd', "DU");
         test('\u95ce', "QUAN");
-        test('\u95cf', "PHDENG");
+        test('\u95cf', "FENG");
         test('\u95d0', "TIAN");
         test('\u95d1', "NIE");
         test('\u95d2', "TA");
@@ -18619,7 +18619,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u95e4', "HUAN");
         test('\u95e5', "TA");
         test('\u95e6', "WEN");
-        test('\u95e7', "");
+        test('\u95e7', "TA");
         test('\u95e8', "MEN");
         test('\u95e9', "SHUAN");
         test('\u95ea', "SHAN");
@@ -19170,7 +19170,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u9804', "KUI");
         test('\u9805', "XIANG");
         test('\u9806', "SHUN");
-        test('\u9807', "AN");
+        test('\u9807', "HAN");
         test('\u9808', "XU");
         test('\u9809', "YI");
         test('\u980a', "XU");
@@ -19303,7 +19303,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u9889', "JIE");
         test('\u988a', "JIA");
         test('\u988b', "TING");
-        test('\u988c', "GE");
+        test('\u988c', "HE");
         test('\u988d', "YING");
         test('\u988e', "JIONG");
         test('\u988f', "KE");
@@ -19593,7 +19593,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u99ab', "XIN");
         test('\u99ac', "MA");
         test('\u99ad', "YU");
-        test('\u99ae', "PING");
+        test('\u99ae', "FENG");
         test('\u99af', "HAN");
         test('\u99b0', "DI");
         test('\u99b1', "TUO");
@@ -20558,7 +20558,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u9d69', "FU");
         test('\u9d6a', "AN");
         test('\u9d6b', "ZHUO");
-        test('\u9d6c', "FENG");
+        test('\u9d6c', "PENG");
         test('\u9d6d', "QIN");
         test('\u9d6e', "QIAN");
         test('\u9d6f', "BEI");
@@ -20902,7 +20902,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u9eba', "MIAN");
         test('\u9ebb', "MA");
         test('\u9ebc', "ME");
-        test('\u9ebd', "ME");
+        test('\u9ebd', "MO");
         test('\u9ebe', "HUI");
         test('\u9ebf', "MO");
         test('\u9ec0', "ZOU");
