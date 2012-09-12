@@ -5768,10 +5768,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     selectionArgs = mDbHelper.get().buildSipContactQuery(sb, sipAddress);
                     selection = sb.toString();
                 } else {
+                    // Use this flag to track whether sortOrder was originally empty
+                    boolean sortOrderIsEmpty = false;
                     if (TextUtils.isEmpty(sortOrder)) {
                         // Default the sort order to something reasonable so we get consistent
                         // results when callers don't request an ordering
                         sortOrder = " length(lookup.normalized_number) DESC";
+                        sortOrderIsEmpty = true;
                     }
 
                     String number = uri.getPathSegments().size() > 1
@@ -5786,7 +5789,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                     // Peek at the results of the first query (which attempts to use fully
                     // normalized and internationalized numbers for comparison).  If no results
-                    // were returned, fall back to doing a match of the trailing 7 digits.
+                    // were returned, fall back to using the SQLite function
+                    // phone_number_compare_loose.
                     qb.setStrict(true);
                     boolean foundResult = false;
                     Cursor cursor = query(db, qb, projection, selection, selectionArgs,
@@ -5796,9 +5800,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             foundResult = true;
                             return cursor;
                         } else {
+                            // Use fallback lookup method
+
                             qb = new SQLiteQueryBuilder();
-                            mDbHelper.get().buildMinimalPhoneLookupAndContactQuery(
-                                    qb, normalizedNumber);
+
+                            // use the raw number instead of the normalized number because
+                            // phone_number_compare_loose in SQLite works only with non-normalized
+                            // numbers
+                            mDbHelper.get().buildFallbackPhoneLookupAndContactQuery(qb, number);
+
                             qb.setProjectionMap(sPhoneLookupProjectionMap);
                         }
                     } finally {
