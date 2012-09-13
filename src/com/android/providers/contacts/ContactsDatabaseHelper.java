@@ -4541,28 +4541,33 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 sb.append(" OR ");
             }
             if (hasNumber) {
-                int numberLen = number.length();
-                sb.append(" lookup.len <= ");
-                sb.append(numberLen);
-                sb.append(" AND substr(");
-                DatabaseUtils.appendEscapedSQLString(sb, number);
-                sb.append(',');
-                sb.append(numberLen);
-                sb.append(" - lookup.len + 1) = lookup.normalized_number");
+                // skip the suffix match entirely if we are using strict number comparison
+                if (!mUseStrictPhoneNumberComparison) {
+                    int numberLen = number.length();
+                    sb.append(" lookup.len <= ");
+                    sb.append(numberLen);
+                    sb.append(" AND substr(");
+                    DatabaseUtils.appendEscapedSQLString(sb, number);
+                    sb.append(',');
+                    sb.append(numberLen);
+                    sb.append(" - lookup.len + 1) = lookup.normalized_number");
 
-                // Some countries (e.g. Brazil) can have incoming calls which contain only the local
-                // number (no country calling code and no area code). This case is handled below.
-                // Details see b/5197612.
-                // This also handles a Gingerbread -> ICS upgrade issue; see b/5638376.
-                sb.append(" OR (");
-                sb.append(" lookup.len > ");
-                sb.append(numberLen);
-                sb.append(" AND substr(lookup.normalized_number,");
-                sb.append("lookup.len + 1 - ");
-                sb.append(numberLen);
-                sb.append(") = ");
-                DatabaseUtils.appendEscapedSQLString(sb, number);
-                sb.append(")");
+                    // Some countries (e.g. Brazil) can have incoming calls which contain only the local
+                    // number (no country calling code and no area code). This case is handled below.
+                    // Details see b/5197612.
+                    // This also handles a Gingerbread -> ICS upgrade issue; see b/5638376.
+                    sb.append(" OR (");
+                    sb.append(" lookup.len > ");
+                    sb.append(numberLen);
+                    sb.append(" AND substr(lookup.normalized_number,");
+                    sb.append("lookup.len + 1 - ");
+                    sb.append(numberLen);
+                    sb.append(") = ");
+                    DatabaseUtils.appendEscapedSQLString(sb, number);
+                    sb.append(")");
+                } else {
+                    sb.append("0");
+                }
             }
             sb.append(')');
         }
@@ -5288,6 +5293,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public String getCurrentCountryIso() {
         return mCountryMonitor.getCountryIso();
+    }
+
+    @NeededForTesting
+    /* package */ void setUseStrictPhoneNumberComparisonForTest(boolean useStrict) {
+        mUseStrictPhoneNumberComparison = useStrict;
+    }
+
+    @NeededForTesting
+    /* package */ boolean getUseStrictPhoneNumberComparisonForTest() {
+        return mUseStrictPhoneNumberComparison;
     }
 
     @NeededForTesting
