@@ -17,11 +17,13 @@ package com.android.providers.contacts;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.CancellationSignal;
+import android.provider.ContactsContract.Intents;
 
 import java.io.FileNotFoundException;
 import java.util.Locale;
@@ -31,7 +33,6 @@ import java.util.Locale;
  * database from the rest of contacts.
  */
 public class ProfileProvider extends AbstractContactsProvider {
-
     private static final String READ_PERMISSION = "android.permission.READ_PROFILE";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_PROFILE";
 
@@ -144,6 +145,7 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public void onCommit() {
         mDelegate.onCommitTransactionInternal(true);
+        sendProfileChangedBroadcast();
     }
 
     @Override
@@ -165,5 +167,10 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public String toString() {
         return "ProfileProvider";
+    }
+
+    private void sendProfileChangedBroadcast() {
+        final Intent intent = new Intent(Intents.ACTION_PROFILE_CHANGED);
+        getContext().sendBroadcast(intent, READ_PERMISSION);
     }
 }

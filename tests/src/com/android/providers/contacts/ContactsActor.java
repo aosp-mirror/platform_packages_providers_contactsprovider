@@ -28,6 +28,7 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -340,6 +341,16 @@ public class ContactsActor {
         @Override
         public void enforceCallingOrSelfPermission(String permission, String message) {
             enforceCallingPermission(permission, message);
+        }
+
+        @Override
+        public void sendBroadcast(Intent intent) {
+            mOverallContext.sendBroadcast(intent);
+        }
+
+        @Override
+        public void sendBroadcast(Intent intent, String receiverPermission) {
+            mOverallContext.sendBroadcast(intent, receiverPermission);
         }
     }
 
