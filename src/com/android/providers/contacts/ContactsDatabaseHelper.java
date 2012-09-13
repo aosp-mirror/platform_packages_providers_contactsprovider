@@ -4453,20 +4453,35 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * As opposed to {@link #buildPhoneLookupAndContactQuery}, this phone lookup will only do
-     * a comparison based on the last seven digits of the given phone number.  This is only intended
-     * to be used as a fallback, in case the regular lookup does not return any results.
+     * Phone lookup method that uses the custom SQLite function phone_number_compare_loose
+     * that serves as a fallback in case the regular lookup does not return any results.
      * @param qb The query builder.
      * @param number The phone number to search for.
      */
-    public void buildMinimalPhoneLookupAndContactQuery(SQLiteQueryBuilder qb, String number) {
-        String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
-        StringBuilder sb = new StringBuilder();
-        appendPhoneLookupTables(sb, minMatch, true);
+    public void buildFallbackPhoneLookupAndContactQuery(SQLiteQueryBuilder qb, String number) {
+        final String minMatch = PhoneNumberUtils.toCallerIDMinMatch(number);
+        final StringBuilder sb = new StringBuilder();
+        //append lookup tables
+        sb.append(Tables.RAW_CONTACTS);
+        sb.append(" JOIN " + Views.CONTACTS + " as contacts_view"
+                + " ON (contacts_view._id = " + Tables.RAW_CONTACTS
+                + "." + RawContacts.CONTACT_ID + ")" +
+                " JOIN (SELECT " + PhoneLookupColumns.DATA_ID + "," +
+                PhoneLookupColumns.NORMALIZED_NUMBER + " FROM "+ Tables.PHONE_LOOKUP + " "
+                + "WHERE (" + Tables.PHONE_LOOKUP + "." + PhoneLookupColumns.MIN_MATCH + " = '");
+        sb.append(minMatch);
+        sb.append("')) AS lookup " +
+                "ON lookup." + PhoneLookupColumns.DATA_ID + "=" + Tables.DATA + "." + Data._ID
+                + " JOIN " + Tables.DATA + " "
+                + "ON " + Tables.DATA + "." + Data.RAW_CONTACT_ID + "=" + Tables.RAW_CONTACTS + "."
+                + RawContacts._ID);
+
         qb.setTables(sb.toString());
 
-        sb = new StringBuilder();
-        appendPhoneLookupSelection(sb, null, null);
+        sb.setLength(0);
+        sb.append("PHONE_NUMBERS_EQUAL(" + Tables.DATA + "." + Phone.NUMBER + ", ");
+        DatabaseUtils.appendEscapedSQLString(sb, number);
+        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0)");
         qb.appendWhere(sb.toString());
     }
 

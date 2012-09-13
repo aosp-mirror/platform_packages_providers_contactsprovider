@@ -1282,6 +1282,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // call id should  match to both "8004664411" and "+18004664411".
         Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "4664411");
         assertEquals(2, getCount(lookupUri2, null, null));
+
+        // A wrong area code 799 vs 800 should not be matched
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "7994664411");
+        assertEquals(0, getCount(lookupUri2, null, null));
     }
 
     public void testPhoneLookupUseCases() {
@@ -1309,6 +1313,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // match with national format
         lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "650 861 0000");
         assertEquals(1, getCount(lookupUri2, null, null));
+
+        // does not match with wrong area code
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "649 861 0000");
+        assertEquals(0, getCount(lookupUri2, null, null));
+
+        // does not match with missing digits in mistyped area code
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "5 861 0000");
+        assertEquals(0, getCount(lookupUri2, null, null));
+
+        // does not match with missing digit in mistyped area code
+        lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "65 861 0000");
+        assertEquals(0, getCount(lookupUri2, null, null));
 
         // National format in contacts
         values.clear();
@@ -1352,8 +1368,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testIntlPhoneLookupUseCases() {
-        // Checks the logic that relies on using the trailing 7-digits as a fallback for phone
-        // number lookups.
+        // Checks the logic that relies on phone_number_compare_loose(Gingerbread) as a fallback
+        //for phone number lookups.
         String fullNumber = "01197297427289";
 
         ContentValues values = new ContentValues();
@@ -1371,9 +1387,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(2, getCount(Uri.withAppendedPath(
                 PhoneLookup.CONTENT_FILTER_URI, "097427289"), null, null));
 
-        // Shorter (local) number with +0 prefix should also match.
-        assertEquals(2, getCount(Uri.withAppendedPath(
-                PhoneLookup.CONTENT_FILTER_URI, "+097427289"), null, null));
+        // Number with international (+972) prefix should also match.
+        assertEquals(1, getCount(Uri.withAppendedPath(
+                PhoneLookup.CONTENT_FILTER_URI, "+97297427289"), null, null));
 
         // Same shorter number with dashes should match.
         assertEquals(2, getCount(Uri.withAppendedPath(
