@@ -1415,10 +1415,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
 
         // Initialize the pre-authorized URI duration.
-        mPreAuthorizedUriDuration = android.provider.Settings.Secure.getLong(
-                getContext().getContentResolver(),
-                android.provider.Settings.Secure.CONTACTS_PREAUTH_URI_EXPIRATION,
-                DEFAULT_PREAUTHORIZED_URI_EXPIRATION);
+        mPreAuthorizedUriDuration = DEFAULT_PREAUTHORIZED_URI_EXPIRATION;
 
         scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
