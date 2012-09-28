@@ -1563,6 +1563,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM: {
                 if (isAggregationUpgradeNeeded()) {
                     upgradeAggregationAlgorithmInBackground();
+                    invalidateFastScrollingIndexCache();
                 }
                 break;
             }
@@ -3836,6 +3837,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case AGGREGATION_EXCEPTIONS: {
                 count = updateAggregationException(db, values);
+                invalidateFastScrollingIndexCache();
                 break;
             }
 
