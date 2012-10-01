@@ -1638,6 +1638,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
         mContactsHelper.setLocale(this, currentLocale);
         mProfileHelper.setLocale(this, currentLocale);
+        mSearchIndexManager.updateIndex(true);
         prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
         invalidateFastScrollingIndexCache();
         setProviderStatus(providerStatus);
@@ -1668,7 +1669,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     protected void updateSearchIndexInBackground() {
-        mSearchIndexManager.updateIndex();
+        mSearchIndexManager.updateIndex(false);
     }
 
     protected void updateDirectoriesInBackground(boolean rescan) {
