@@ -5932,7 +5932,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case SEARCH_SUGGESTIONS: {
                 return mGlobalSearchSupport.handleSearchSuggestionsQuery(
-                        db, uri, projection, limit);
+                        db, uri, projection, limit, cancellationSignal);
             }
 
             case SEARCH_SHORTCUT: {
@@ -5940,7 +5940,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 String filter = getQueryParameter(
                         uri, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
                 return mGlobalSearchSupport.handleSearchShortcutRefresh(
-                        db, projection, lookupKey, filter);
+                        db, projection, lookupKey, filter, cancellationSignal);
             }
 
             case RAW_CONTACT_ENTITIES:

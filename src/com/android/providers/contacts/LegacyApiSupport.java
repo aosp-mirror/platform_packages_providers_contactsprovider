@@ -1877,13 +1877,13 @@ public class LegacyApiSupport {
 
             case SEARCH_SUGGESTIONS:
                 return mGlobalSearchSupport.handleSearchSuggestionsQuery(
-                        db, uri, projection, limit);
+                        db, uri, projection, limit, null);
 
             case SEARCH_SHORTCUT: {
                 String lookupKey = uri.getLastPathSegment();
                 String filter = ContactsProvider2.getQueryParameter(uri, "filter");
                 return mGlobalSearchSupport.handleSearchShortcutRefresh(
-                        db, projection, lookupKey, filter);
+                        db, projection, lookupKey, filter, null);
             }
 
             case LIVE_FOLDERS_PEOPLE:
