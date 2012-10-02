@@ -107,7 +107,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 704;
+    static final int DATABASE_VERSION = 705;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2375,6 +2375,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 704;
         }
 
+        if (oldVersion < 705) {
+            // Before this version, we didn't rebuild the search index on locale changes, so
+            // if the locale has changed after sync, the index contains gets stale.
+            // To correct the issue we have to rebuild the index here.
+            upgradeSearchIndex = true;
+            oldVersion = 705;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2535,8 +2543,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
                 + " ADD " + RawContacts.SORT_KEY_ALTERNATIVE
                 + " TEXT COLLATE " + ContactsProvider2.PHONEBOOK_COLLATOR_NAME + ";");
-
-        final Locale locale = Locale.getDefault();
 
         NameSplitter splitter = createNameSplitter();
 

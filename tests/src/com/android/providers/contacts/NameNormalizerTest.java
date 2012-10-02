@@ -16,7 +16,11 @@
 
 package com.android.providers.contacts;
 
+import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
+
+import java.text.RuleBasedCollator;
+import java.util.Locale;
 
 import junit.framework.TestCase;
 
@@ -31,6 +35,25 @@ import junit.framework.TestCase;
  */
 @SmallTest
 public class NameNormalizerTest extends TestCase {
+
+    private Locale mOriginalLocale;
+
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+
+        mOriginalLocale = Locale.getDefault();
+
+        // Run all test in en_US
+        Locale.setDefault(Locale.US);
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        Locale.setDefault(mOriginalLocale);
+        super.tearDown();
+    }
 
     public void testDifferent() {
         final String name1 = NameNormalizer.normalize("Helene");
@@ -68,5 +91,34 @@ public class NameNormalizerTest extends TestCase {
 
     public void testComplexityLength() {
         assertTrue(NameNormalizer.compareComplexity("helene2009", "helene") > 0);
+    }
+
+    public void testGetCollators() {
+        final RuleBasedCollator compressing1 = NameNormalizer.getCompressingCollator();
+        final RuleBasedCollator complexity1 = NameNormalizer.getComplexityCollator();
+
+        assertNotNull(compressing1);
+        assertNotNull(complexity1);
+        assertNotSame(compressing1, complexity1);
+
+        // Get again.  Should be cached.
+        final RuleBasedCollator compressing2 = NameNormalizer.getCompressingCollator();
+        final RuleBasedCollator complexity2 = NameNormalizer.getComplexityCollator();
+
+        assertSame(compressing1, compressing2);
+        assertSame(complexity1, complexity2);
+
+        // Change locale -- now new collators should be returned.
+        Locale.setDefault(Locale.FRANCE);
+
+        final RuleBasedCollator compressing3 = NameNormalizer.getCompressingCollator();
+        final RuleBasedCollator complexity3 = NameNormalizer.getComplexityCollator();
+
+        assertNotNull(compressing3);
+        assertNotNull(complexity3);
+        assertNotSame(compressing3, complexity3);
+
+        assertNotSame(compressing1, compressing3);
+        assertNotSame(complexity1, complexity3);
     }
 }
