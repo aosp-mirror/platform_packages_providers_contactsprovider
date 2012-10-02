@@ -5025,7 +5025,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_AS_MULTI_VCARD: {
-                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US);
                 String currentDateString = dateFormat.format(new Date()).toString();
                 return mActiveDb.get().rawQuery(
                     "SELECT" +
