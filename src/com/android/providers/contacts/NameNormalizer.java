@@ -16,6 +16,7 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.util.Hex;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.text.CollationKey;
 import java.text.Collator;
@@ -28,17 +29,45 @@ import java.util.Locale;
  */
 public class NameNormalizer {
 
-    private static final RuleBasedCollator sCompressingCollator;
-    static {
-        sCompressingCollator = (RuleBasedCollator)Collator.getInstance(Locale.getDefault());
-        sCompressingCollator.setStrength(Collator.PRIMARY);
-        sCompressingCollator.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
+    private static final Object sCollatorLock = new Object();
+
+    private static Locale sCollatorLocale;
+
+    private static RuleBasedCollator sCachedCompressingCollator;
+    private static RuleBasedCollator sCachedComplexityCollator;
+
+    /**
+     * Ensure that the cached collators are for the current locale.
+     */
+    private static void ensureCollators() {
+        final Locale locale = Locale.getDefault();
+        if (locale.equals(sCollatorLocale)) {
+            return;
+        }
+        sCollatorLocale = locale;
+
+        sCachedCompressingCollator = (RuleBasedCollator) Collator.getInstance(locale);
+        sCachedCompressingCollator.setStrength(Collator.PRIMARY);
+        sCachedCompressingCollator.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
+
+        sCachedComplexityCollator = (RuleBasedCollator) Collator.getInstance(locale);
+        sCachedComplexityCollator.setStrength(Collator.SECONDARY);
     }
 
-    private static final RuleBasedCollator sComplexityCollator;
-    static {
-        sComplexityCollator = (RuleBasedCollator)Collator.getInstance(Locale.getDefault());
-        sComplexityCollator.setStrength(Collator.SECONDARY);
+    @VisibleForTesting
+    static RuleBasedCollator getCompressingCollator() {
+        synchronized (sCollatorLock) {
+            ensureCollators();
+            return sCachedCompressingCollator;
+        }
+    }
+
+    @VisibleForTesting
+    static RuleBasedCollator getComplexityCollator() {
+        synchronized (sCollatorLock) {
+            ensureCollators();
+            return sCachedComplexityCollator;
+        }
     }
 
     /**
@@ -46,7 +75,7 @@ public class NameNormalizer {
      * of names.  It ignores non-letter, non-digit characters, and removes accents.
      */
     public static String normalize(String name) {
-        CollationKey key = sCompressingCollator.getCollationKey(lettersAndDigitsOnly(name));
+        CollationKey key = getCompressingCollator().getCollationKey(lettersAndDigitsOnly(name));
         return Hex.encodeHex(key.toByteArray(), true);
     }
 
@@ -57,7 +86,7 @@ public class NameNormalizer {
     public static int compareComplexity(String name1, String name2) {
         String clean1 = lettersAndDigitsOnly(name1);
         String clean2 = lettersAndDigitsOnly(name2);
-        int diff = sComplexityCollator.compare(clean1, clean2);
+        int diff = getComplexityCollator().compare(clean1, clean2);
         if (diff != 0) {
             return diff;
         }

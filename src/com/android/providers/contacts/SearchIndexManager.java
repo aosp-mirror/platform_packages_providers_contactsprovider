@@ -243,13 +243,19 @@ public class SearchIndexManager {
         mDbHelper = (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
     }
 
-    public void updateIndex() {
-        if (getSearchIndexVersion() == SEARCH_INDEX_VERSION) {
-            return;
+    public void updateIndex(boolean force) {
+        if (force) {
+            setSearchIndexVersion(0);
+        } else {
+            if (getSearchIndexVersion() == SEARCH_INDEX_VERSION) {
+                return;
+            }
         }
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
+            // We do a version check again, because the version might have been modified after
+            // the first check.  We need to do the check again in a transaction to make sure.
             if (getSearchIndexVersion() != SEARCH_INDEX_VERSION) {
                 rebuildIndex(db);
                 setSearchIndexVersion(SEARCH_INDEX_VERSION);
