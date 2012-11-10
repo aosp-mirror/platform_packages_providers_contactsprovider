@@ -107,7 +107,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 705;
+    static final int DATABASE_VERSION = 706;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1276,7 +1276,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         ");");
 
         createDirectoriesTable(db);
-        createSearchIndexTable(db);
+        createSearchIndexTable(db, false /* we build stats table later */);
 
         db.execSQL("CREATE TABLE " + Tables.DATA_USAGE_STAT + "(" +
                 DataUsageStatColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -1297,7 +1297,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         createContactsViews(db);
         createGroupsView(db);
         createContactsTriggers(db);
-        createContactsIndexes(db);
+        createContactsIndexes(db, false /* we build stats table later */);
 
         loadNicknameLookupTable(db);
 
@@ -1344,7 +1344,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         setProperty(db, DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
     }
 
-    public void createSearchIndexTable(SQLiteDatabase db) {
+    public void createSearchIndexTable(SQLiteDatabase db, boolean rebuildSqliteStats) {
         db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
         db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
                 + " USING FTS4 ("
@@ -1353,6 +1353,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + SearchIndexColumns.NAME + " TEXT, "
                     + SearchIndexColumns.TOKENS + " TEXT"
                 + ")");
+        if (rebuildSqliteStats) {
+            updateSqliteStats(db);
+        }
     }
 
     private void createContactsTriggers(SQLiteDatabase db) {
@@ -1492,7 +1495,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " END");
     }
 
-    private void createContactsIndexes(SQLiteDatabase db) {
+    private void createContactsIndexes(SQLiteDatabase db, boolean rebuildSqliteStats) {
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
         db.execSQL("CREATE INDEX name_lookup_index ON " + Tables.NAME_LOOKUP + " (" +
                 NameLookupColumns.NORMALIZED_NAME + "," +
@@ -1510,6 +1513,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
                 RawContacts.SORT_KEY_ALTERNATIVE +
         ");");
+
+        if (rebuildSqliteStats) {
+            updateSqliteStats(db);
+        }
     }
 
     private void createContactsViews(SQLiteDatabase db) {
@@ -1940,6 +1947,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         boolean upgradeLegacyApiSupport = false;
         boolean upgradeSearchIndex = false;
         boolean rescanDirectories = false;
+        boolean rebuildSqliteStats = false;
 
         if (oldVersion == 99) {
             upgradeViewsAndTriggers = true;
@@ -2383,13 +2391,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 705;
         }
 
+        if (oldVersion < 706) {
+            // Prior to this version, we didn't rebuild the stats table after drop operations,
+            // which resulted in losing some of the rows from the stats table.
+            rebuildSqliteStats = true;
+            oldVersion = 706;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
             createContactsTriggers(db);
-            createContactsIndexes(db);
-            updateSqliteStats(db);
+            createContactsIndexes(db, false /* we build stats table later */);
             upgradeLegacyApiSupport = true;
+            rebuildSqliteStats = true;
         }
 
         if (upgradeLegacyApiSupport) {
@@ -2397,18 +2412,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
 
         if (upgradeNameLookup) {
-            rebuildNameLookup(db);
+            rebuildNameLookup(db, false /* we build stats table later */);
+            rebuildSqliteStats = true;
         }
 
         if (upgradeSearchIndex) {
-            createSearchIndexTable(db);
+            createSearchIndexTable(db, false /* we build stats table later */);
             setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
+            rebuildSqliteStats = true;
         }
 
         if (rescanDirectories) {
             // Force the next ContactDirectoryManager.scanAllPackages() to rescan all packages.
             // (It's called from the BACKGROUND_TASK_UPDATE_ACCOUNTS background task.)
             setProperty(db, DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
+        }
+
+        if (rebuildSqliteStats) {
+            updateSqliteStats(db);
         }
 
         if (oldVersion != newVersion) {
@@ -2970,10 +2991,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "WHERE NOT EXISTS (SELECT 1 FROM raw_contacts WHERE contact_id=contacts._id)");
     }
 
-    private void rebuildNameLookup(SQLiteDatabase db) {
+    private void rebuildNameLookup(SQLiteDatabase db, boolean rebuildSqliteStats) {
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
         insertNameLookup(db);
-        createContactsIndexes(db);
+        createContactsIndexes(db, rebuildSqliteStats);
     }
 
     /**
@@ -2994,7 +3015,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             loadNicknameLookupTable(db);
             insertNameLookup(db);
             rebuildSortKeys(db, provider);
-            createContactsIndexes(db);
+            createContactsIndexes(db, true);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -3844,16 +3865,51 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     /**
      * Adds index stats into the SQLite database to force it to always use the lookup indexes.
+     *
+     * Note if you drop a table or an index, the corresponding row will be removed from this table.
+     * Make sure to call this method after such operations.
      */
     private void updateSqliteStats(SQLiteDatabase db) {
+        if (!mDatabaseOptimizationEnabled) {
+            return; // We don't use sqlite_stat1 during tests.
+        }
 
         // Specific stats strings are based on an actual large database after running ANALYZE
         // Important here are relative sizes. Raw-Contacts is slightly bigger than Contacts
         // Warning: Missing tables in here will make SQLite assume to contain 1000000 rows,
         // which can lead to catastrophic query plans for small tables
 
-        // See the latest of version of http://www.sqlite.org/cgi/src/finfo?name=src/analyze.c
-        // for what these numbers mean.
+        // What these numbers mean is described in this file.
+        // http://www.sqlite.org/cgi/src/finfo?name=src/analyze.c
+
+        // Excerpt:
+        /*
+        ** Format of sqlite_stat1:
+        **
+        ** There is normally one row per index, with the index identified by the
+        ** name in the idx column.  The tbl column is the name of the table to
+        ** which the index belongs.  In each such row, the stat column will be
+        ** a string consisting of a list of integers.  The first integer in this
+        ** list is the number of rows in the index and in the table.  The second
+        ** integer is the average number of rows in the index that have the same
+        ** value in the first column of the index.  The third integer is the average
+        ** number of rows in the index that have the same value for the first two
+        ** columns.  The N-th integer (for N>1) is the average number of rows in
+        ** the index which have the same value for the first N-1 columns.  For
+        ** a K-column index, there will be K+1 integers in the stat column.  If
+        ** the index is unique, then the last integer will be 1.
+        **
+        ** The list of integers in the stat column can optionally be followed
+        ** by the keyword "unordered".  The "unordered" keyword, if it is present,
+        ** must be separated from the last integer by a single space.  If the
+        ** "unordered" keyword is present, then the query planner assumes that
+        ** the index is unordered and will not use the index for a range query.
+        **
+        ** If the sqlite_stat1.idx column is NULL, then the sqlite_stat1.stat
+        ** column contains a single integer which is the (estimated) number of
+        ** rows in the table identified by sqlite_stat1.tbl.
+        */
+
         try {
             db.execSQL("DELETE FROM sqlite_stat1");
             updateIndexStats(db, Tables.CONTACTS,
