@@ -19,7 +19,7 @@ package com.android.providers.contacts;
 import android.accounts.Account;
 import android.text.TextUtils;
 
-import com.android.internal.util.Objects;
+import com.google.common.base.Objects;
 
 /**
  * Account information that includes the data set, if any.
