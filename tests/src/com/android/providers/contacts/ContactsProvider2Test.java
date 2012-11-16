@@ -1180,7 +1180,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values3.putNull(Phone.LABEL);
 
         final Uri filterUri6 = Uri.withAppendedPath(baseFilterUri, "Chilled");
-        assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
+        assertStoredValues(filterUri6, new ContentValues[]{values1, values2, values3});
 
         // Insert a SIP address. From here, Phone URI and Callable URI may return different results
         // than each other.
@@ -1247,10 +1247,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 );
         assertStoredValues(
                 Phone.CONTENT_FILTER_URI.buildUpon().appendPath("dad")
-                    .appendQueryParameter(Phone.SEARCH_DISPLAY_NAME_KEY, "0")
-                    .appendQueryParameter(Phone.SEARCH_PHONE_NUMBER_KEY, "0")
-                    .build()
-                );
+                        .appendQueryParameter(Phone.SEARCH_DISPLAY_NAME_KEY, "0")
+                        .appendQueryParameter(Phone.SEARCH_PHONE_NUMBER_KEY, "0")
+                        .build()
+        );
     }
 
     public void testPhoneLookup() {
@@ -1688,7 +1688,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         v3.put(Email.ADDRESS, "address3@email.com");
 
         Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "address");
-        assertStoredValuesOrderly(filterUri, new ContentValues[] { v1, v2, v3 });
+        assertStoredValuesOrderly(filterUri, new ContentValues[]{v1, v2, v3});
     }
 
     /**
@@ -1737,12 +1737,54 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri filterUri3 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
                 .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_1.name)
                 .build();
-        assertStoredValuesOrderly(filterUri3, new ContentValues[] { v1, v2 });
+        assertStoredValuesOrderly(filterUri3, new ContentValues[]{v1, v2});
 
         Uri filterUri4 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
                 .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, ACCOUNT_2.name)
                 .build();
         assertStoredValuesOrderly(filterUri4, new ContentValues[] { v2, v1 });
+    }
+
+    /**
+     * Test emails with the same domain as primary account are ordered first.
+     */
+    public void testEmailFilterSameDomainAccountOrder() {
+        final Account account = new Account("tester@email.com", "not_used");
+        final long rawContactId = createRawContact(account);
+        insertEmail(rawContactId, "account1@testemail.com");
+        insertEmail(rawContactId, "account1@email.com");
+
+        final ContentValues v1 = cv(Email.ADDRESS, "account1@testemail.com");
+        final ContentValues v2 = cv(Email.ADDRESS, "account1@email.com");
+
+        Uri filterUri1 = Email.CONTENT_FILTER_URI.buildUpon().appendPath("acc")
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME, account.name)
+                .appendQueryParameter(ContactsContract.PRIMARY_ACCOUNT_TYPE, account.type)
+                .build();
+        assertStoredValuesOrderly(filterUri1, v2, v1);
+    }
+
+    /**
+     * Test "default" emails are sorted above emails used last.
+     */
+    public void testEmailFilterDefaultOverUsageSort() {
+        final long rawContactId = createRawContact(ACCOUNT_1);
+        final Uri emailUri1 = insertEmail(rawContactId, "account1@testemail.com");
+        final Uri emailUri2 = insertEmail(rawContactId, "account2@testemail.com");
+        insertEmail(rawContactId, "account3@testemail.com", true);
+
+        // Update account1 and account 2 to have higher usage.
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, emailUri1);
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, emailUri1);
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, emailUri2);
+
+        final ContentValues v1 = cv(Email.ADDRESS, "account1@testemail.com");
+        final ContentValues v2 = cv(Email.ADDRESS, "account2@testemail.com");
+        final ContentValues v3 = cv(Email.ADDRESS, "account3@testemail.com");
+
+        // Test that account 3 is first even though account 1 and 2 have higher usage.
+        Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "acc");
+        assertStoredValuesOrderly(filterUri, v3, v1, v2);
     }
 
     /** Tests {@link DataUsageFeedback} correctly promotes a data row instead of a raw contact. */
@@ -7205,6 +7247,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (values != null && values.containsKey(Contacts.TIMES_CONTACTED)) {
             values.put(Contacts.TIMES_CONTACTED, values.getAsInteger(Contacts.TIMES_CONTACTED) + 1);
         }
+    }
+
+    private void updateDataUsageFeedback(String usageType, Uri resultUri) {
+        final long id = ContentUris.parseId(resultUri);
+        final boolean successful = updateDataUsageFeedback(usageType, id) > 0;
+        assertTrue(successful);
     }
 
     private int updateDataUsageFeedback(String usageType, long... ids) {
