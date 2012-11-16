@@ -271,7 +271,7 @@ public class SearchIndexManager {
         final long start = SystemClock.elapsedRealtime();
         int count = 0;
         try {
-            mDbHelper.createSearchIndexTable(db);
+            mDbHelper.createSearchIndexTable(db, true);
             count = buildAndInsertIndex(db, null);
         } finally {
             mContactsProvider.setProviderStatus(ProviderStatus.STATUS_NORMAL);
