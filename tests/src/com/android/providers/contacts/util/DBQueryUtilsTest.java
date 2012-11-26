@@ -18,13 +18,15 @@ package com.android.providers.contacts.util;
 
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
+import static com.android.providers.contacts.util.DbQueryUtils.escapeLikeValue;
 
 import android.content.ContentValues;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.EvenMoreAsserts;
+
+import junit.framework.TestCase;
 
 /**
  * Unit tests for the {@link DbQueryUtils} class.
@@ -34,7 +36,7 @@ import com.android.providers.contacts.EvenMoreAsserts;
  * </code>
  */
 @SmallTest
-public class DBQueryUtilsTest extends AndroidTestCase {
+public class DBQueryUtilsTest extends TestCase {
     public void testGetEqualityClause() {
         assertEquals("(foo = 'bar')", DbQueryUtils.getEqualityClause("foo", "bar"));
         assertEquals("(foo = 2)", DbQueryUtils.getEqualityClause("foo", 2));
@@ -70,5 +72,31 @@ public class DBQueryUtilsTest extends AndroidTestCase {
                 checkForSupportedColumns(projectionMap, values);
             }
         });
+    }
+
+    public void testEscapeLikeValuesEscapesUnderscores() {
+        StringBuilder sb = new StringBuilder();
+        DbQueryUtils.escapeLikeValue(sb, "my_test_string", '\\');
+        assertEquals("my\\_test\\_string", sb.toString());
+
+        sb = new StringBuilder();
+        DbQueryUtils.escapeLikeValue(sb, "_test_", '\\');
+        assertEquals("\\_test\\_", sb.toString());
+    }
+
+    public void testEscapeLikeValuesEscapesPercents() {
+        StringBuilder sb = new StringBuilder();
+        escapeLikeValue(sb, "my%test%string", '\\');
+        assertEquals("my\\%test\\%string", sb.toString());
+
+        sb = new StringBuilder();
+        escapeLikeValue(sb, "%test%", '\\');
+        assertEquals("\\%test\\%", sb.toString());
+    }
+
+    public void testEscapeLikeValuesNoChanges() {
+        StringBuilder sb = new StringBuilder();
+        escapeLikeValue(sb, "my test string", '\\');
+        assertEquals("my test string", sb.toString());
     }
 }

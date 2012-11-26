@@ -513,12 +513,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private static final String EMAIL_FILTER_SORT_ORDER =
         Contacts.STARRED + " DESC, "
+        + Data.IS_SUPER_PRIMARY + " DESC, "
+        + Data.IS_PRIMARY + " DESC, "
         + SORT_BY_DATA_USAGE + ", "
         + Contacts.IN_VISIBLE_GROUP + " DESC, "
         + Contacts.DISPLAY_NAME + ", "
-        + Data.CONTACT_ID + ", "
-        + Data.IS_SUPER_PRIMARY + " DESC, "
-        + Data.IS_PRIMARY + " DESC";
+        + Data.CONTACT_ID;
 
     /** Currently same as {@link #EMAIL_FILTER_SORT_ORDER} */
     private static final String PHONE_FILTER_SORT_ORDER = EMAIL_FILTER_SORT_ORDER;
@@ -5648,6 +5648,26 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     } else {
                         sortOrder = EMAIL_FILTER_SORT_ORDER;
                     }
+
+                    final String primaryAccountName =
+                            uri.getQueryParameter(ContactsContract.PRIMARY_ACCOUNT_NAME);
+                    if (!TextUtils.isEmpty(primaryAccountName)) {
+                        final int index = primaryAccountName.indexOf('@');
+                        if (index != -1) {
+                            // Purposely include '@' in matching.
+                            final String domain = primaryAccountName.substring(index);
+                            final char escapeChar = '\\';
+
+                            final StringBuilder likeValue = new StringBuilder();
+                            likeValue.append('%');
+                            DbQueryUtils.escapeLikeValue(likeValue, domain, escapeChar);
+                            selectionArgs = appendSelectionArg(selectionArgs, likeValue.toString());
+
+                            // similar email domains is the last sort preference.
+                            sortOrder += ", (CASE WHEN " + Data.DATA1 + " like ? ESCAPE '" +
+                                    escapeChar + "' THEN 0 ELSE 1 END)";
+                        }
+                    }
                 }
                 break;
             }
@@ -7856,6 +7876,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             String[] newSelectionArgs = new String[newLength];
             newSelectionArgs[0] = arg;
             System.arraycopy(selectionArgs, 0, newSelectionArgs, 1, selectionArgs.length);
+            return newSelectionArgs;
+        }
+    }
+
+    private String[] appendSelectionArg(String[] selectionArgs, String arg) {
+        if (selectionArgs == null) {
+            return new String[]{arg};
+        } else {
+            int newLength = selectionArgs.length + 1;
+            String[] newSelectionArgs = new String[newLength];
+            newSelectionArgs[newLength] = arg;
+            System.arraycopy(selectionArgs, 0, newSelectionArgs, 0, selectionArgs.length - 1);
             return newSelectionArgs;
         }
     }
