@@ -1912,6 +1912,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     @Override
+    public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        Log.i(TAG, "ContactsProvider cannot proceed because downgrading your database is not " +
+                "supported. To continue, please either re-upgrade to your previous Android " +
+                "version, or clear all application data in Contacts Storage (this will result " +
+                "in the loss of all local contacts that are not synced). To avoid data loss, " +
+                "your contacts database will not be wiped automatically.");
+        super.onDowngrade(db, oldVersion, newVersion);
+    }
+
+    @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 99) {
             Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
