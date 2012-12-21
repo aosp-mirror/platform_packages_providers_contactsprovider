@@ -8283,7 +8283,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return a boolean indicating if the query is one word or not
      */
     private boolean isSingleWordQuery(String query) {
-        return query.split(QUERY_TOKENIZER_REGEX).length == 1;
+        // Split can remove empty trailing tokens but cannot remove starting empty tokens so we
+        // have to loop.
+        String[] tokens = query.split(QUERY_TOKENIZER_REGEX, 0);
+        int count = 0;
+        for (String token : tokens) {
+            if (!"".equals(token)) {
+                count++;
+            }
+        }
+        return count == 1;
     }
 
     /**
