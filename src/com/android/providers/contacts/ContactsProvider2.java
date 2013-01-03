@@ -6136,26 +6136,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private static final class AddressBookIndexQuery {
-        public static final String LETTER = "letter";
-        public static final String TITLE = "title";
+        public static final String NAME = "name";
+        public static final String LABEL = "label";
         public static final String COUNT = "count";
 
         public static final String[] COLUMNS = new String[] {
-                LETTER, TITLE, COUNT
+                NAME, LABEL, COUNT
         };
 
-        public static final int COLUMN_LETTER = 0;
-        public static final int COLUMN_TITLE = 1;
+        public static final int COLUMN_NAME = 0;
+        public static final int COLUMN_LABEL = 1;
         public static final int COLUMN_COUNT = 2;
 
-        // The first letter of the sort key column is what is used for the index headings.
-        public static final String SECTION_HEADING = "SUBSTR(%1$s,1,1)";
-
-        public static final String ORDER_BY = LETTER + " COLLATE " + PHONEBOOK_COLLATOR_NAME;
+        // PHONEBOOK collator registered in sqlite3_android.cpp
+        public static final String ORDER_BY = NAME + " COLLATE " + PHONEBOOK_COLLATOR_NAME;
     }
 
     /**
-     * Computes counts by the address book index titles and returns it as {@link Bundle} which
+     * Computes counts by the address book index labels and returns it as {@link Bundle} which
      * will be appended to a {@link Cursor} as extras.
      */
     private static Bundle getFastScrollingIndexExtras(final Uri queryUri, final SQLiteDatabase db,
@@ -6181,10 +6179,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         HashMap<String, String> projectionMap = Maps.newHashMap();
-        String sectionHeading = String.format(Locale.US, AddressBookIndexQuery.SECTION_HEADING,
-                sortKey);
-        projectionMap.put(AddressBookIndexQuery.LETTER,
-                sectionHeading + " AS " + AddressBookIndexQuery.LETTER);
+        projectionMap.put(AddressBookIndexQuery.NAME,
+                sortKey + " AS " + AddressBookIndexQuery.NAME);
 
         // If "what to count" is not specified, we just count all records.
         if (TextUtils.isEmpty(countExpression)) {
@@ -6193,14 +6189,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         /**
          * Use the GET_PHONEBOOK_INDEX function, which is an android extension for SQLite3,
-         * to map the first letter of the sort key to a character that is traditionally
-         * used in phonebooks to represent that letter.  For example, in Korean it will
-         * be the first consonant in the letter; for Japanese it will be Hiragana rather
-         * than Katakana.
+         * to map the sort key to a character that is traditionally used in phonebooks to
+         * label its section.  For example, in Korean it will be the first consonant in the
+         * letter; for Japanese it will be Hiragana rather than Katakana. Note the label may
+         * be more than one character in some languages, such as "CH" in Czech.
          */
-        projectionMap.put(AddressBookIndexQuery.TITLE,
-                "GET_PHONEBOOK_INDEX(" + sectionHeading + ",'" + currentLocale.toString() + "')"
-                        + " AS " + AddressBookIndexQuery.TITLE);
+        projectionMap.put(AddressBookIndexQuery.LABEL,
+                "GET_PHONEBOOK_INDEX(" + sortKey + ",'" + currentLocale.toString() + "')"
+                        + " AS " + AddressBookIndexQuery.LABEL);
         projectionMap.put(AddressBookIndexQuery.COUNT,
                 "COUNT(" + countExpression + ") AS " + AddressBookIndexQuery.COUNT);
         qb.setProjectionMap(projectionMap);
@@ -6212,23 +6208,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         try {
             int groupCount = indexCursor.getCount();
-            String titles[] = new String[groupCount];
+            String labels[] = new String[groupCount];
             int counts[] = new int[groupCount];
             int indexCount = 0;
-            String currentTitle = null;
+            String currentLabel = null;
 
             // Since GET_PHONEBOOK_INDEX is a many-to-1 function, we may end up
-            // with multiple entries for the same title.  The following code
+            // with multiple entries for the same label.  The following code
             // collapses those duplicates.
             for (int i = 0; i < groupCount; i++) {
                 indexCursor.moveToNext();
-                String title = indexCursor.getString(AddressBookIndexQuery.COLUMN_TITLE);
-                if (title == null) {
-                    title = "";
+                String label = indexCursor.getString(AddressBookIndexQuery.COLUMN_LABEL);
+                if (label == null) {
+                    label = "";
                 }
                 int count = indexCursor.getInt(AddressBookIndexQuery.COLUMN_COUNT);
-                if (indexCount == 0 || !TextUtils.equals(title, currentTitle)) {
-                    titles[indexCount] = currentTitle = title;
+                if (indexCount == 0 || !TextUtils.equals(label, currentLabel)) {
+                    labels[indexCount] = currentLabel = label;
                     counts[indexCount] = count;
                     indexCount++;
                 } else {
@@ -6237,15 +6233,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             if (indexCount < groupCount) {
-                String[] newTitles = new String[indexCount];
-                System.arraycopy(titles, 0, newTitles, 0, indexCount);
-                titles = newTitles;
+                String[] newLabels = new String[indexCount];
+                System.arraycopy(labels, 0, newLabels, 0, indexCount);
+                labels = newLabels;
 
                 int[] newCounts = new int[indexCount];
                 System.arraycopy(counts, 0, newCounts, 0, indexCount);
                 counts = newCounts;
             }
-            return FastScrollingIndexCache.buildExtraBundle(titles, counts);
+            return FastScrollingIndexCache.buildExtraBundle(labels, counts);
         } finally {
             indexCursor.close();
         }
