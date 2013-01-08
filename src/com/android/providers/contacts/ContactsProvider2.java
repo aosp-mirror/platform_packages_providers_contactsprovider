@@ -5466,7 +5466,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     final String ftsMatchQuery =
                             searchDisplayName
                             ? SearchIndexManager.getFtsMatchQuery(filterParam,
-                                    FtsQueryBuilder.UNSCOPED_NORMALIZING)
+                                    FtsQueryBuilder.SCOPED_NAME_NORMALIZING)
                             : null;
                     if (!TextUtils.isEmpty(ftsMatchQuery)) {
                         sb.append(Data.RAW_CONTACT_ID + " IN " +
@@ -5475,7 +5475,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 " JOIN " + Tables.RAW_CONTACTS +
                                 " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
                                         + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
-                                " WHERE " + SearchIndexColumns.NAME + " MATCH '");
+                                " WHERE " + Tables.SEARCH_INDEX + " MATCH '");
                         sb.append(ftsMatchQuery);
                         sb.append("')");
                         hasCondition = true;
