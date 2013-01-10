@@ -4991,6 +4991,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 " FROM " + Tables.DATA +
                 " WHERE " + Data.RAW_CONTACT_ID + "=?" +
                         " AND (" + Data.DATA1 + " NOT NULL OR " +
+                                Data.DATA8 + " NOT NULL OR " +
+                                Data.DATA9 + " NOT NULL OR " +
+                                Data.DATA10 + " NOT NULL OR " +  // Phonetic name not empty
                                 Organization.TITLE + " NOT NULL)";
 
         public static final int MIMETYPE = 0;
@@ -5145,6 +5148,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
 
         if (bestPhoneticName != null) {
+            if (displayNamePrimary == null) {
+                displayNamePrimary = bestPhoneticName;
+            }
+            if (displayNameAlternative == null) {
+                displayNameAlternative = bestPhoneticName;
+            }
+            // Phonetic names disregard name order so displayNamePrimary and displayNameAlternative
+            // are the same.
             sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
             if (bestPhoneticNameStyle == PhoneticNameStyle.UNDEFINED) {
                 bestPhoneticNameStyle = mNameSplitter.guessPhoneticNameStyle(bestPhoneticName);
