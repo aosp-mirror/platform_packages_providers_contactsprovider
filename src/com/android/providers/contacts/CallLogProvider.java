@@ -20,6 +20,7 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
 
+import android.app.AppOpsManager;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -94,6 +95,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
+        setAppOps(AppOpsManager.OP_READ_CALL_LOG, AppOpsManager.OP_WRITE_CALL_LOG);
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, "CallLogProvider.onCreate start");
         }

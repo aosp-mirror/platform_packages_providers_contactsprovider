@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
+import android.app.AppOpsManager;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -1354,6 +1355,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.d(Constants.PERFORMANCE_TAG, "ContactsProvider2.onCreate start");
         }
         super.onCreate();
+        setAppOps(AppOpsManager.OP_READ_CONTACTS, AppOpsManager.OP_WRITE_CONTACTS);
         try {
             return initialize();
         } catch (RuntimeException e) {
