@@ -330,9 +330,6 @@ public class NameSplitter {
         }
 
         String firstToken = tokenizer.mTokens[tokenizer.mStartPointer];
-        if (mPrefixesSet.contains(firstToken.toUpperCase())) {
-           tokenizer.mStartPointer++;
-        }
         int count = 0;
         for (int i = tokenizer.mStartPointer; i < tokenizer.mEndPointer; i++) {
             tokens[count++] = tokenizer.mTokens[i];
