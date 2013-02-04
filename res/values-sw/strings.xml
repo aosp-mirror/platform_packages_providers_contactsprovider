@@ -26,7 +26,7 @@
     <string name="default_directory" msgid="93961630309570294">"Anwani"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Nyingineyo"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Fikia barua zote za sauti"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Inaruhusu programu kuhifadhi na kutoa jumbe zote za sauti ambazo kifaa hiki kinaweza kufikia."</string>
+    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Inaruhusu programu kuhifadhi na kutoa mawasiliano yote ya sauti ambayo kifaa hiki kinaweza kufikia."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Barua ya sauti kutoka "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Nakili hifadhidata ya anwani"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Unakaribia 1) kuunda nakala ya hifadhidata yako ambayo inajumuisha maelezo yote yanayohusiana na anwani na kumbukumbu zote za simu katika hifadhi ya ndani, na 2) uitume kwa barua pepe. Kumbuka kufuta nakala pindi tu unapoinakili kwa ufanisi kutoka kwenye kifaa au barua pepe imepokewa."</string>
