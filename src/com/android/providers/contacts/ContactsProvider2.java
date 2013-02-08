@@ -7156,6 +7156,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     public AssetFileDescriptor openAssetFileLocal(Uri uri, String mode)
             throws FileNotFoundException {
+        // In some cases to implement this, we will need to do further queries
+        // on the content provider.  We have already done the permission check for
+        // access to the uri given here, so we don't need to do further checks on
+        // the queries we will do to populate it.  Also this makes sure that when
+        // we go through any app ops checks for those queries that the calling uid
+        // and package names match at that point.
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            return openAssetFileInner(uri, mode);
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+    }
+
+    private AssetFileDescriptor openAssetFileInner(Uri uri, String mode)
+            throws FileNotFoundException {
 
         final boolean writing = mode.contains("w");
 
