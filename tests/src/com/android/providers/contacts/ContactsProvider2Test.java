@@ -69,9 +69,11 @@ import android.text.TextUtils;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.tests.R;
 import com.google.android.collect.Lists;
@@ -112,6 +114,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -146,6 +152,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -184,6 +194,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -224,6 +238,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -271,6 +289,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.NAME_VERIFIED,
                 RawContacts.SORT_KEY_PRIMARY,
                 RawContacts.SORT_KEY_ALTERNATIVE,
+                RawContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 RawContacts.TIMES_CONTACTED,
                 RawContacts.LAST_TIME_CONTACTED,
                 RawContacts.CUSTOM_RINGTONE,
@@ -337,6 +359,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -406,6 +432,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -490,6 +520,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHONETIC_NAME_STYLE,
                 Contacts.SORT_KEY_PRIMARY,
                 Contacts.SORT_KEY_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_LABEL_PRIMARY,
+                ContactsColumns.PHONEBOOK_BUCKET_PRIMARY,
+                ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE,
+                ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE,
                 Contacts.LAST_TIME_CONTACTED,
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
@@ -1212,7 +1246,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Sanity test. Run tests for "Chilled Guacamole" again and see nothing changes
         // after the Sip address being inserted.
         assertStoredValues(filterUri2, values);
-        assertStoredValues(filterUri3, values);
         assertEquals(0, getCount(filterUri4, null, null));
         assertEquals(0, getCount(filterUri5, null, null));
         assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
@@ -3034,6 +3067,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactWithoutPhoneticName() {
+        ContactLocaleUtils.setLocale(Locale.ENGLISH);
         final long rawContactId = createRawContact(null);
 
         ContentValues values = new ContentValues();
@@ -3051,7 +3085,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(RawContacts.PHONETIC_NAME);
         values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
         values.put(RawContacts.SORT_KEY_PRIMARY, "John K. Doe, Jr.");
+        values.put(RawContactsColumns.PHONEBOOK_LABEL_PRIMARY, "J");
         values.put(RawContacts.SORT_KEY_ALTERNATIVE, "Doe, John K., Jr.");
+        values.put(RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "D");
 
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         assertStoredValues(rawContactUri, values);
@@ -3063,7 +3099,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.putNull(Contacts.PHONETIC_NAME);
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
         values.put(Contacts.SORT_KEY_PRIMARY, "John K. Doe, Jr.");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_PRIMARY, "J");
         values.put(Contacts.SORT_KEY_ALTERNATIVE, "Doe, John K., Jr.");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "D");
 
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId));
@@ -3074,15 +3112,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactWithChineseName() {
-
-        // Only run this test when Chinese collation is supported
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseCollator()) {
             return;
         }
+        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
 
         long rawContactId = createRawContact(null);
 
         ContentValues values = new ContentValues();
+        // "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B"
         values.put(StructuredName.DISPLAY_NAME, "\u6BB5\u5C0F\u6D9B");
         Uri dataUri = insertStructuredName(rawContactId, values);
 
@@ -3092,8 +3130,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.DISPLAY_NAME_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
         values.putNull(RawContacts.PHONETIC_NAME);
         values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
-        values.put(RawContacts.SORT_KEY_PRIMARY, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
-        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
+        values.put(RawContacts.SORT_KEY_PRIMARY, "\u6BB5\u5C0F\u6D9B");
+        values.put(RawContactsColumns.PHONEBOOK_LABEL_PRIMARY, "D");
+        values.put(RawContacts.SORT_KEY_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
+        values.put(RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "D");
 
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         assertStoredValues(rawContactUri, values);
@@ -3104,8 +3144,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.DISPLAY_NAME_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
         values.putNull(Contacts.PHONETIC_NAME);
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
-        values.put(Contacts.SORT_KEY_PRIMARY, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
-        values.put(Contacts.SORT_KEY_ALTERNATIVE, "DUAN \u6BB5 XIAO \u5C0F TAO \u6D9B");
+        values.put(Contacts.SORT_KEY_PRIMARY, "\u6BB5\u5C0F\u6D9B");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_PRIMARY, "D");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "\u6BB5\u5C0F\u6D9B");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "D");
 
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId));
@@ -3116,6 +3158,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactWithJapaneseName() {
+        if (!hasJapaneseCollator()) {
+            return;
+        }
+        ContactLocaleUtils.setLocale(Locale.JAPAN);
         long rawContactId = createRawContact(null);
 
         ContentValues values = new ContentValues();
@@ -3131,6 +3177,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.JAPANESE);
         values.put(RawContacts.SORT_KEY_PRIMARY, "\u304B\u3044\u304F\u3046");
         values.put(RawContacts.SORT_KEY_ALTERNATIVE, "\u304B\u3044\u304F\u3046");
+        values.put(RawContactsColumns.PHONEBOOK_LABEL_PRIMARY, "\u304B");
+        values.put(RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "\u304B");
 
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         assertStoredValues(rawContactUri, values);
@@ -3143,6 +3191,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.JAPANESE);
         values.put(Contacts.SORT_KEY_PRIMARY, "\u304B\u3044\u304F\u3046");
         values.put(Contacts.SORT_KEY_ALTERNATIVE, "\u304B\u3044\u304F\u3046");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_PRIMARY, "\u304B");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "\u304B");
 
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId));
@@ -3230,10 +3280,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
         values.put(Contacts.SORT_KEY_PRIMARY, "Monsters Inc");
         values.put(Contacts.SORT_KEY_ALTERNATIVE, "Monsters Inc");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_PRIMARY, "M");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "M");
         assertStoredValues(uri, values);
     }
 
     public void testDisplayNameFromOrganizationWithJapanesePhoneticName() {
+        if (!hasJapaneseCollator()) {
+            return;
+        }
+        ContactLocaleUtils.setLocale(Locale.JAPAN);
         long rawContactId = createRawContact();
         long contactId = queryContactId(rawContactId);
         ContentValues values = new ContentValues();
@@ -3252,22 +3308,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.JAPANESE);
         values.put(Contacts.SORT_KEY_PRIMARY, "\u30C9\u30B3\u30E2");
         values.put(Contacts.SORT_KEY_ALTERNATIVE, "\u30C9\u30B3\u30E2");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_PRIMARY, "\u305F");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "\u305F");
         assertStoredValues(uri, values);
     }
 
     public void testDisplayNameFromOrganizationWithChineseName() {
-        boolean hasChineseCollator = false;
-        final Locale locale[] = Collator.getAvailableLocales();
-        for (int i = 0; i < locale.length; i++) {
-            if (locale[i].equals(Locale.CHINA)) {
-                hasChineseCollator = true;
-                break;
-            }
-        }
-
-        if (!hasChineseCollator) {
+        if (!hasChineseCollator()) {
             return;
         }
+        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
 
         long rawContactId = createRawContact();
         long contactId = queryContactId(rawContactId);
@@ -3284,8 +3334,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.DISPLAY_NAME, "\u4E2D\u56FD\u7535\u4FE1");
         values.putNull(Contacts.PHONETIC_NAME);
         values.put(Contacts.PHONETIC_NAME_STYLE, PhoneticNameStyle.UNDEFINED);
-        values.put(Contacts.SORT_KEY_PRIMARY, "ZHONG \u4E2D GUO \u56FD DIAN \u7535 XIN \u4FE1");
-        values.put(Contacts.SORT_KEY_ALTERNATIVE, "ZHONG \u4E2D GUO \u56FD DIAN \u7535 XIN \u4FE1");
+        values.put(Contacts.SORT_KEY_PRIMARY, "\u4E2D\u56FD\u7535\u4FE1");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_PRIMARY, "Z");
+        values.put(Contacts.SORT_KEY_ALTERNATIVE, "\u4E2D\u56FD\u7535\u4FE1");
+        values.put(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE, "Z");
         assertStoredValues(uri, values);
     }
 
@@ -6186,6 +6238,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         testChangingPrimary(true, true);
     }
 
+    public void testContactSortOrder() {
+        assertEquals(ContactsColumns.PHONEBOOK_BUCKET_PRIMARY + ", "
+                     + Contacts.SORT_KEY_PRIMARY,
+                     ContactsProvider2.getLocalizedSortOrder(Contacts.SORT_KEY_PRIMARY));
+        assertEquals(ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + ", "
+                     + Contacts.SORT_KEY_ALTERNATIVE,
+                     ContactsProvider2.getLocalizedSortOrder(Contacts.SORT_KEY_ALTERNATIVE));
+        assertEquals(ContactsColumns.PHONEBOOK_BUCKET_PRIMARY + " DESC, "
+                     + Contacts.SORT_KEY_PRIMARY + " DESC",
+                     ContactsProvider2.getLocalizedSortOrder(Contacts.SORT_KEY_PRIMARY + " DESC"));
+        String suffix = " COLLATE LOCALIZED DESC";
+        assertEquals(ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + suffix
+                     + ", " + Contacts.SORT_KEY_ALTERNATIVE + suffix,
+                     ContactsProvider2.getLocalizedSortOrder(Contacts.SORT_KEY_ALTERNATIVE
+                                                             + suffix));
+    }
+
     public void testContactCounts() {
         Uri uri = Contacts.CONTENT_URI.buildUpon()
                 .appendQueryParameter(ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
@@ -6201,7 +6270,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         Cursor cursor = mResolver.query(uri,
                 new String[]{Contacts.DISPLAY_NAME},
-                null, null, Contacts.SORT_KEY_PRIMARY + " COLLATE LOCALIZED");
+                null, null, Contacts.SORT_KEY_PRIMARY);
 
         assertFirstLetterValues(cursor, "", "B", "J", "M", "R", "T");
         assertFirstLetterCounts(cursor,    1,   1,   1,   2,   2,   1);
@@ -7265,5 +7334,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendPath(idList.toString())
                 .appendQueryParameter(DataUsageFeedback.USAGE_TYPE, usageType)
                 .build(), new ContentValues(), null, null);
+    }
+
+    private boolean hasChineseCollator() {
+        final Locale locale[] = Collator.getAvailableLocales();
+        for (int i = 0; i < locale.length; i++) {
+            if (locale[i].equals(Locale.CHINA)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasJapaneseCollator() {
+        final Locale locale[] = Collator.getAvailableLocales();
+        for (int i = 0; i < locale.length; i++) {
+            if (locale[i].equals(Locale.JAPAN)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

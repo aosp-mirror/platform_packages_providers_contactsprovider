@@ -565,6 +565,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Contacts.SEND_TO_VOICEMAIL)
             .add(Contacts.SORT_KEY_ALTERNATIVE)
             .add(Contacts.SORT_KEY_PRIMARY)
+            .add(ContactsColumns.PHONEBOOK_LABEL_PRIMARY)
+            .add(ContactsColumns.PHONEBOOK_BUCKET_PRIMARY)
+            .add(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE)
+            .add(ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
             .add(Contacts.STARRED)
             .add(Contacts.TIMES_CONTACTED)
             .add(Contacts.HAS_PHONE_NUMBER)
@@ -752,6 +756,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(RawContacts.PHONETIC_NAME_STYLE)
             .add(RawContacts.SORT_KEY_PRIMARY)
             .add(RawContacts.SORT_KEY_ALTERNATIVE)
+            .add(RawContactsColumns.PHONEBOOK_LABEL_PRIMARY)
+            .add(RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY)
+            .add(RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE)
+            .add(RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
             .add(RawContacts.TIMES_CONTACTED)
             .add(RawContacts.LAST_TIME_CONTACTED)
             .add(RawContacts.CUSTOM_RINGTONE)
@@ -1443,7 +1451,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
         mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
-        ContactLocaleUtils.getIntance().setLocale(mCurrentLocale);
+        ContactLocaleUtils.setLocale(mCurrentLocale);
         mContactAggregator = new ContactAggregator(this, mContactsHelper,
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
@@ -6011,8 +6019,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         qb.setStrict(true);
 
+        // Auto-rewrite SORT_KEY_{PRIMARY, ALTERNATIVE} sort orders.
+        String localizedSortOrder = getLocalizedSortOrder(sortOrder);
         Cursor cursor =
-                query(db, qb, projection, selection, selectionArgs, sortOrder, groupBy,
+                query(db, qb, projection, selection, selectionArgs, localizedSortOrder, groupBy,
                 having, limit, cancellationSignal);
 
         if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
@@ -6025,6 +6035,34 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         return cursor;
+    }
+
+
+    // Rewrites query sort orders using SORT_KEY_{PRIMARY, ALTERNATIVE}
+    // to use PHONEBOOK_BUCKET_{PRIMARY, ALTERNATIVE} as primary key; all
+    // other sort orders are returned unchanged. Preserves ordering
+    // (eg 'DESC') if present.
+    protected static String getLocalizedSortOrder(String sortOrder) {
+        String localizedSortOrder = sortOrder;
+        if (sortOrder != null) {
+            String sortKey;
+            String sortOrderSuffix = "";
+            int spaceIndex = sortOrder.indexOf(' ');
+            if (spaceIndex != -1) {
+                sortKey = sortOrder.substring(0, spaceIndex);
+                sortOrderSuffix = sortOrder.substring(spaceIndex);
+            } else {
+                sortKey = sortOrder;
+            }
+            if (TextUtils.equals(sortKey, Contacts.SORT_KEY_PRIMARY)) {
+                localizedSortOrder = ContactsColumns.PHONEBOOK_BUCKET_PRIMARY
+                    + sortOrderSuffix + ", " + sortOrder;
+            } else if (TextUtils.equals(sortKey, Contacts.SORT_KEY_ALTERNATIVE)) {
+                localizedSortOrder = ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE
+                    + sortOrderSuffix + ", " + sortOrder;
+            }
+        }
+        return localizedSortOrder;
     }
 
 
@@ -6122,7 +6160,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final long start = System.currentTimeMillis();
 
                 b = getFastScrollingIndexExtras(queryUri, db, qb, selection, selectionArgs,
-                        sortOrder, countExpression, cancellationSignal, getLocale());
+                        sortOrder, countExpression, cancellationSignal);
 
                 final long end = System.currentTimeMillis();
                 final int time = (int) (end - start);
@@ -6139,19 +6177,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final class AddressBookIndexQuery {
         public static final String NAME = "name";
+        public static final String BUCKET = "bucket";
         public static final String LABEL = "label";
         public static final String COUNT = "count";
 
         public static final String[] COLUMNS = new String[] {
-                NAME, LABEL, COUNT
+            NAME, BUCKET, LABEL, COUNT
         };
 
         public static final int COLUMN_NAME = 0;
-        public static final int COLUMN_LABEL = 1;
-        public static final int COLUMN_COUNT = 2;
+        public static final int COLUMN_BUCKET = 1;
+        public static final int COLUMN_LABEL = 2;
+        public static final int COLUMN_COUNT = 3;
 
-        // PHONEBOOK collator registered in sqlite3_android.cpp
-        public static final String ORDER_BY = NAME + " COLLATE " + PHONEBOOK_COLLATOR_NAME;
+        public static final String GROUP_BY = BUCKET + ", " + LABEL;
+        public static final String ORDER_BY =
+            BUCKET + ", " +  NAME + " COLLATE " + PHONEBOOK_COLLATOR_NAME;
     }
 
     /**
@@ -6161,7 +6202,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static Bundle getFastScrollingIndexExtras(final Uri queryUri, final SQLiteDatabase db,
             final SQLiteQueryBuilder qb, final String selection, final String[] selectionArgs,
             final String sortOrder, String countExpression,
-            final CancellationSignal cancellationSignal, final Locale currentLocale) {
+            final CancellationSignal cancellationSignal) {
         String sortKey;
 
         // The sort order suffix could be something like "DESC".
@@ -6180,69 +6221,53 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sortKey = Contacts.SORT_KEY_PRIMARY;
         }
 
+        String bucketKey;
+        String labelKey;
+        if (TextUtils.equals(sortKey, Contacts.SORT_KEY_PRIMARY)) {
+            bucketKey = ContactsColumns.PHONEBOOK_BUCKET_PRIMARY;
+            labelKey = ContactsColumns.PHONEBOOK_LABEL_PRIMARY;
+        } else if (TextUtils.equals(sortKey, Contacts.SORT_KEY_ALTERNATIVE)) {
+            bucketKey = ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE;
+            labelKey = ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE;
+        } else {
+            return null;
+        }
+
         HashMap<String, String> projectionMap = Maps.newHashMap();
         projectionMap.put(AddressBookIndexQuery.NAME,
                 sortKey + " AS " + AddressBookIndexQuery.NAME);
+        projectionMap.put(AddressBookIndexQuery.BUCKET,
+                bucketKey + " AS " + AddressBookIndexQuery.BUCKET);
+        projectionMap.put(AddressBookIndexQuery.LABEL,
+                labelKey + " AS " + AddressBookIndexQuery.LABEL);
 
         // If "what to count" is not specified, we just count all records.
         if (TextUtils.isEmpty(countExpression)) {
             countExpression = "*";
         }
 
-        /**
-         * Use the GET_PHONEBOOK_INDEX function, which is an android extension for SQLite3,
-         * to map the sort key to a character that is traditionally used in phonebooks to
-         * label its section.  For example, in Korean it will be the first consonant in the
-         * letter; for Japanese it will be Hiragana rather than Katakana. Note the label may
-         * be more than one character in some languages, such as "CH" in Czech.
-         */
-        projectionMap.put(AddressBookIndexQuery.LABEL,
-                "GET_PHONEBOOK_INDEX(" + sortKey + ",'" + currentLocale.toString() + "')"
-                        + " AS " + AddressBookIndexQuery.LABEL);
         projectionMap.put(AddressBookIndexQuery.COUNT,
                 "COUNT(" + countExpression + ") AS " + AddressBookIndexQuery.COUNT);
         qb.setProjectionMap(projectionMap);
+        String orderBy = AddressBookIndexQuery.BUCKET + sortOrderSuffix
+            + ", " + AddressBookIndexQuery.NAME + " COLLATE "
+            + PHONEBOOK_COLLATOR_NAME + sortOrderSuffix;
 
         Cursor indexCursor = qb.query(db, AddressBookIndexQuery.COLUMNS, selection, selectionArgs,
-                AddressBookIndexQuery.ORDER_BY, null /* having */,
-                AddressBookIndexQuery.ORDER_BY + sortOrderSuffix,
-                null, cancellationSignal);
+                AddressBookIndexQuery.GROUP_BY, null /* having */,
+                orderBy, null, cancellationSignal);
 
         try {
-            int groupCount = indexCursor.getCount();
-            String labels[] = new String[groupCount];
-            int counts[] = new int[groupCount];
-            int indexCount = 0;
-            String currentLabel = null;
+            int numLabels = indexCursor.getCount();
+            String labels[] = new String[numLabels];
+            int counts[] = new int[numLabels];
 
-            // Since GET_PHONEBOOK_INDEX is a many-to-1 function, we may end up
-            // with multiple entries for the same label.  The following code
-            // collapses those duplicates.
-            for (int i = 0; i < groupCount; i++) {
+            for (int i = 0; i < numLabels; i++) {
                 indexCursor.moveToNext();
-                String label = indexCursor.getString(AddressBookIndexQuery.COLUMN_LABEL);
-                if (label == null) {
-                    label = "";
-                }
-                int count = indexCursor.getInt(AddressBookIndexQuery.COLUMN_COUNT);
-                if (indexCount == 0 || !TextUtils.equals(label, currentLabel)) {
-                    labels[indexCount] = currentLabel = label;
-                    counts[indexCount] = count;
-                    indexCount++;
-                } else {
-                    counts[indexCount - 1] += count;
-                }
+                labels[i] = indexCursor.getString(AddressBookIndexQuery.COLUMN_LABEL);
+                counts[i] = indexCursor.getInt(AddressBookIndexQuery.COLUMN_COUNT);
             }
 
-            if (indexCount < groupCount) {
-                String[] newLabels = new String[indexCount];
-                System.arraycopy(labels, 0, newLabels, 0, indexCount);
-                labels = newLabels;
-
-                int[] newCounts = new int[indexCount];
-                System.arraycopy(counts, 0, newCounts, 0, indexCount);
-                counts = newCounts;
-            }
             return FastScrollingIndexCache.buildExtraBundle(labels, counts);
         } finally {
             indexCursor.close();

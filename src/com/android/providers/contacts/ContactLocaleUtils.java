@@ -17,78 +17,263 @@
 package com.android.providers.contacts;
 
 import android.provider.ContactsContract.FullNameStyle;
-import android.util.SparseArray;
+import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
 
+import java.lang.Character.UnicodeBlock;
+import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import libcore.icu.AlphabeticIndex;
 
 /**
- * This utility class provides customized sort key and name lookup key according the locale.
+ * This utility class provides specialized handling for locale specific
+ * information: labels, name lookup keys.
  */
 public class ContactLocaleUtils {
+    public static final String TAG = "ContactLocale";
 
     /**
-     * This class is the default implementation.
-     * <p>
-     * It should be the base class for other locales' implementation.
+     * This class is the default implementation and should be the base class
+     * for other locales.
+     *
+     * sortKey: same as name
+     * nameLookupKeys: none
+     * labels: uses ICU AlphabeticIndex for labels and extends by labeling
+     *     phone numbers "#".  Eg English labels are: [A-Z], #, " "
      */
-    public class ContactLocaleUtilsBase {
-        public String getSortKey(String displayName) {
-            return displayName;
+    private static class ContactLocaleUtilsBase {
+        private static final String EMPTY_STRING = "";
+        private static final String NUMBER_STRING = "#";
+
+        protected final AlphabeticIndex mAlphabeticIndex;
+        private final int mAlphabeticIndexBucketCount;
+        private final int mNumberBucketIndex;
+
+        public ContactLocaleUtilsBase(Locale locale) {
+            mAlphabeticIndex = new AlphabeticIndex(locale);
+            mAlphabeticIndex.addLabels(Locale.US);
+            // Force creation of lazy-init data structures.
+            mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
+            mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
         }
+
+        public String getSortKey(String name) {
+            return name;
+        }
+
+        /**
+         * Returns the bucket index for the specified string. AlphabeticIndex
+         * sorts strings into buckets numbered in order from 0 to N, where the
+         * exact value of N depends on how many representative index labels are
+         * used in a particular locale. This routine adds one additional bucket
+         * for phone numbers. It attempts to detect phone numbers and shifts
+         * the bucket indexes returned by AlphabeticIndex in order to make room
+         * for the new # bucket, so the returned range becomes 0 to N+1.
+         */
+        public int getBucketIndex(String name) {
+            boolean prefixIsNumeric = false;
+            final int length = name.length();
+            int offset = 0;
+            while (offset < length) {
+                int codePoint = Character.codePointAt(name, offset);
+                // Ignore standard phone number separators and identify any
+                // string that otherwise starts with a number.
+                if (Character.isDigit(codePoint)) {
+                    prefixIsNumeric = true;
+                    break;
+                } else if (!Character.isSpaceChar(codePoint) &&
+                           codePoint != '+' && codePoint != '(' &&
+                           codePoint != ')' && codePoint != '.' &&
+                           codePoint != '-' && codePoint != '#') {
+                    break;
+                }
+                offset += Character.charCount(codePoint);
+            }
+            if (prefixIsNumeric) {
+                return mNumberBucketIndex;
+            }
+
+            final int bucket = mAlphabeticIndex.getBucketIndex(name);
+            if (bucket < 0) {
+                return -1;
+            }
+            if (bucket >= mNumberBucketIndex) {
+                return bucket + 1;
+            }
+            return bucket;
+        }
+
+        /**
+         * Returns the number of buckets in use (one more than AlphabeticIndex
+         * uses, because this class adds a bucket for phone numbers).
+         */
+        public int getBucketCount() {
+            return mAlphabeticIndexBucketCount + 1;
+        }
+
+        /**
+         * Returns the label for the specified bucket index if a valid index,
+         * otherwise returns an empty string. '#' is returned for the phone
+         * number bucket; for all others, the AlphabeticIndex label is returned.
+         */
+        public String getBucketLabel(int bucketIndex) {
+            if (bucketIndex < 0 || bucketIndex >= getBucketCount()) {
+                return EMPTY_STRING;
+            } else if (bucketIndex == mNumberBucketIndex) {
+                return NUMBER_STRING;
+            } else if (bucketIndex > mNumberBucketIndex) {
+                --bucketIndex;
+            }
+            return mAlphabeticIndex.getBucketLabel(bucketIndex);
+        }
+
         @SuppressWarnings("unused")
         public Iterator<String> getNameLookupKeys(String name) {
             return null;
         }
+
+        public ArrayList<String> getLabels() {
+            final int bucketCount = getBucketCount();
+            final ArrayList<String> labels = new ArrayList<String>(bucketCount);
+            for(int i = 0; i < bucketCount; ++i) {
+                labels.add(getBucketLabel(i));
+            }
+            return labels;
+        }
     }
 
     /**
-     * The classes to generate the Chinese style sort and search keys.
-     * <p>
-     * The sorting key is generated as each Chinese character' pinyin proceeding with
-     * space and character itself. If the character's pinyin unable to find, the character
-     * itself will be used.
-     * <p>
-     * The below additional name lookup keys will be generated.
-     * a. Chinese character's pinyin and pinyin's initial character.
-     * b. Latin word and the initial character for Latin word.
-     * The name lookup keys are generated to make sure the name can be found by from any
-     * initial character.
+     * Japanese specific locale overrides.
+     *
+     * sortKey: unchanged (same as name)
+     * nameLookupKeys: unchanged (none)
+     * labels: extends default labels by labeling unlabeled CJ characters
+     *     with the Japanese character 他 ("misc"). Japanese labels are:
+     *     あ, か, さ, た, な, は, ま, や, ら, わ, 他, [A-Z], #, " "
      */
-    private class ChineseContactUtils extends ContactLocaleUtilsBase {
+    private static class JapaneseContactUtils extends ContactLocaleUtilsBase {
+        // \u4ed6 is Japanese character 他 ("misc")
+        private static final String JAPANESE_MISC_LABEL = "\u4ed6";
+        private final int mMiscBucketIndex;
+
+        public JapaneseContactUtils(Locale locale) {
+            super(locale);
+            // Determine which bucket AlphabeticIndex is lumping unclassified
+            // Japanese characters into by looking up the bucket index for
+            // a representative Kanji/CJK unified ideograph (\u65e5 is the
+            // character '日').
+            mMiscBucketIndex = super.getBucketIndex("\u65e5");
+        }
+
+        // Set of UnicodeBlocks for unified CJK (Chinese) characters and
+        // Japanese characters. This includes all code blocks that might
+        // contain a character used in Japanese (which is why unified CJK
+        // blocks are included but Korean Hangul and jamo are not).
+        private static final Set<Character.UnicodeBlock> CJ_BLOCKS;
+        static {
+            Set<UnicodeBlock> set = new HashSet<UnicodeBlock>();
+            set.add(UnicodeBlock.HIRAGANA);
+            set.add(UnicodeBlock.KATAKANA);
+            set.add(UnicodeBlock.KATAKANA_PHONETIC_EXTENSIONS);
+            set.add(UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS);
+            set.add(UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS);
+            set.add(UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A);
+            set.add(UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B);
+            set.add(UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION);
+            set.add(UnicodeBlock.CJK_RADICALS_SUPPLEMENT);
+            set.add(UnicodeBlock.CJK_COMPATIBILITY);
+            set.add(UnicodeBlock.CJK_COMPATIBILITY_FORMS);
+            set.add(UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS);
+            set.add(UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS_SUPPLEMENT);
+            CJ_BLOCKS = Collections.unmodifiableSet(set);
+        }
+
+        /**
+         * Helper routine to identify unlabeled Chinese or Japanese characters
+         * to put in a 'misc' bucket.
+         *
+         * @return true if the specified Unicode code point is Chinese or
+         *              Japanese
+         */
+        private static boolean isChineseOrJapanese(int codePoint) {
+            return CJ_BLOCKS.contains(UnicodeBlock.of(codePoint));
+        }
+
+        /**
+         * Returns the bucket index for the specified string. Adds an
+         * additional 'misc' bucket for Kanji characters to the base class set.
+         */
         @Override
-        public String getSortKey(String displayName) {
-            ArrayList<Token> tokens = HanziToPinyin.getInstance().get(displayName);
-            if (tokens != null && tokens.size() > 0) {
-                StringBuilder sb = new StringBuilder();
-                for (Token token : tokens) {
-                    // Put Chinese character's pinyin, then proceed with the
-                    // character itself.
-                    if (Token.PINYIN == token.type) {
-                        if (sb.length() > 0) {
-                            sb.append(' ');
-                        }
-                        sb.append(token.target);
-                        sb.append(' ');
-                        sb.append(token.source);
-                    } else {
-                        if (sb.length() > 0) {
-                            sb.append(' ');
-                        }
-                        sb.append(token.source);
-                    }
-                }
-                return sb.toString();
+        public int getBucketIndex(String name) {
+            final int bucketIndex = super.getBucketIndex(name);
+            if ((bucketIndex == mMiscBucketIndex &&
+                 !isChineseOrJapanese(Character.codePointAt(name, 0))) ||
+                bucketIndex > mMiscBucketIndex) {
+                return bucketIndex + 1;
             }
-            return super.getSortKey(displayName);
+            return bucketIndex;
+        }
+
+        /**
+         * Returns the number of buckets in use (one more than the base class
+         * uses, because this class adds a bucket for Kanji).
+         */
+        @Override
+        public int getBucketCount() {
+            return super.getBucketCount() + 1;
+        }
+
+        /**
+         * Returns the label for the specified bucket index if a valid index,
+         * otherwise returns an empty string. '他' is returned for unclassified
+         * Kanji; for all others, the label determined by the base class is
+         * returned.
+         */
+        @Override
+        public String getBucketLabel(int bucketIndex) {
+            if (bucketIndex == mMiscBucketIndex) {
+                return JAPANESE_MISC_LABEL;
+            } else if (bucketIndex > mMiscBucketIndex) {
+                --bucketIndex;
+            }
+            return super.getBucketLabel(bucketIndex);
+        }
+    }
+
+    /**
+     * Chinese specific locale overrides. Uses ICU Transliterator for
+     * generating pinyin transliteration.
+     *
+     * sortKey: unchanged (same as name)
+     * nameLookupKeys: adds additional name lookup keys
+     *     - Chinese character's pinyin and pinyin's initial character.
+     *     - Latin word and initial character.
+     * labels: unchanged
+     *     Simplified Chinese labels are the same as English: [A-Z], #, " "
+     *     Traditional Chinese labels are stroke count, then English labels:
+     *         [1-18], [A-Z], #, " "
+     */
+    private static class ChineseContactUtils extends ContactLocaleUtilsBase {
+        public ChineseContactUtils(Locale locale) {
+            super(locale);
         }
 
         @Override
         public Iterator<String> getNameLookupKeys(String name) {
+            return getPinyinNameLookupKeys(name);
+        }
+
+        public static Iterator<String> getPinyinNameLookupKeys(String name) {
             // TODO : Reduce the object allocation.
             HashSet<String> keys = new HashSet<String>();
             ArrayList<Token> tokens = HanziToPinyin.getInstance().get(name);
@@ -96,9 +281,9 @@ public class ContactLocaleUtils {
             final StringBuilder keyPinyin = new StringBuilder();
             final StringBuilder keyInitial = new StringBuilder();
             // There is no space among the Chinese Characters, the variant name
-            // lookup key wouldn't work for Chinese. The keyOrignal is used to
+            // lookup key wouldn't work for Chinese. The keyOriginal is used to
             // build the lookup keys for itself.
-            final StringBuilder keyOrignal = new StringBuilder();
+            final StringBuilder keyOriginal = new StringBuilder();
             for (int i = tokenCount - 1; i >= 0; i--) {
                 final Token token = tokens.get(i);
                 if (Token.PINYIN == token.type) {
@@ -109,18 +294,66 @@ public class ContactLocaleUtils {
                     if (keyPinyin.length() > 0) {
                         keyPinyin.insert(0, ' ');
                     }
-                    if (keyOrignal.length() > 0) {
-                        keyOrignal.insert(0, ' ');
+                    if (keyOriginal.length() > 0) {
+                        keyOriginal.insert(0, ' ');
                     }
                     keyPinyin.insert(0, token.source);
                     keyInitial.insert(0, token.source.charAt(0));
                 }
-                keyOrignal.insert(0, token.source);
-                keys.add(keyOrignal.toString());
+                keyOriginal.insert(0, token.source);
+                keys.add(keyOriginal.toString());
                 keys.add(keyPinyin.toString());
                 keys.add(keyInitial.toString());
             }
             return keys.iterator();
+        }
+    }
+
+    /**
+     * Traditional Chinese specific locale overrides. Rewrites ICU labels
+     * to correct ICU 4.9 labels.
+     *
+     * TODO: remove once ICU is upgraded to 5.0 and labels are fixed
+     *
+     * sortKey: unchanged from base class (same as name)
+     * nameLookupKeys: unchanged from ChineseContactUtils
+     * labels: unchanged
+     *     Simplified Chinese labels are the same as English: [A-Z], #, " "
+     *     Traditional Chinese labels are stroke count, then English labels:
+     *         [1-18]劃, [A-Z], #, " "
+     */
+    private static class TraditionalChineseContactUtils
+        extends ChineseContactUtils {
+        // Remap ICU 4.9 labels to desired values
+        private static final Map<String, String> labelMap;
+        static {
+            Map<String, String> map = new HashMap<String, String>();
+            final List<String> oldLabels =
+                Arrays.asList("\u4E00", "\u4E01", "\u4E08", "\u4E0D",
+                              "\u4E14", "\u4E1E", "\u4E32", "\u4E26",
+                              "\u4EAD", "\u4E58", "\u4E7E", "\u5080",
+                              "\u4E82", "\u50CE", "\u50F5", "\u5110",
+                              "\u511F", "\u53E2", "\u5133", "\u56B4",
+                              "\u5137", "\u513B", "\u56CC", "\u56D1",
+                              "\u5EF3");
+            int strokeCount = 1;
+            for(String oldLabel : oldLabels) {
+                String newLabel = "" + strokeCount + "\u5283";
+                map.put(oldLabel, newLabel);
+                ++strokeCount;
+            }
+            labelMap = Collections.unmodifiableMap(map);
+        }
+
+        public TraditionalChineseContactUtils(Locale locale) {
+            super(locale);
+        }
+
+        @Override
+        public String getBucketLabel(int bucketIndex) {
+            final String label = super.getBucketLabel(bucketIndex);
+            final String remappedLabel = labelMap.get(label);
+            return remappedLabel != null ? remappedLabel : label;
         }
     }
 
@@ -129,84 +362,94 @@ public class ContactLocaleUtils {
     private static final String KOREAN_LANGUAGE = Locale.KOREAN.getLanguage().toLowerCase();
 
     private static ContactLocaleUtils sSingleton;
-    private final SparseArray<ContactLocaleUtilsBase> mUtils =
-            new SparseArray<ContactLocaleUtilsBase>();
 
-    private final ContactLocaleUtilsBase mBase = new ContactLocaleUtilsBase();
+    private final Locale mLocale;
+    private final String mLanguage;
+    private final ContactLocaleUtilsBase mUtils;
 
-    private String mLanguage;
-
-    private ContactLocaleUtils() {
-        setLocale(null);
-    }
-
-    public void setLocale(Locale currentLocale) {
-        if (currentLocale == null) {
-            mLanguage = Locale.getDefault().getLanguage().toLowerCase();
+    private ContactLocaleUtils(Locale locale) {
+        if (locale == null) {
+            mLocale = Locale.getDefault();
         } else {
-            mLanguage = currentLocale.getLanguage().toLowerCase();
+            mLocale = locale;
         }
-    }
-
-    public String getSortKey(String displayName, int nameStyle) {
-        return getForSort(Integer.valueOf(nameStyle)).getSortKey(displayName);
-    }
-
-    public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
-        return getForNameLookup(Integer.valueOf(nameStyle)).getNameLookupKeys(name);
-    }
-
-    /**
-     *  Determine which utility should be used for generating NameLookupKey.
-     *  <p>
-     *  a. For Western style name, if the current language is Chinese, the
-     *     ChineseContactUtils should be used.
-     *  b. For Chinese and CJK style name if current language is neither Japanese or Korean,
-     *     the ChineseContactUtils should be used.
-     */
-    private ContactLocaleUtilsBase getForNameLookup(Integer nameStyle) {
-        int nameStyleInt = nameStyle.intValue();
-        Integer adjustedUtil = Integer.valueOf(getAdjustedStyle(nameStyleInt));
-        if (CHINESE_LANGUAGE.equals(mLanguage) && nameStyleInt == FullNameStyle.WESTERN) {
-            adjustedUtil = Integer.valueOf(FullNameStyle.CHINESE);
-        }
-        return get(adjustedUtil);
-    }
-
-    private synchronized ContactLocaleUtilsBase get(Integer nameStyle) {
-        ContactLocaleUtilsBase utils = mUtils.get(nameStyle);
-        if (utils == null) {
-            if (nameStyle.intValue() == FullNameStyle.CHINESE) {
-                utils = new ChineseContactUtils();
-                mUtils.put(nameStyle, utils);
+        mLanguage = mLocale.getLanguage().toLowerCase();
+        if (mLanguage.equals(JAPANESE_LANGUAGE)) {
+            mUtils = new JapaneseContactUtils(mLocale);
+        } else if (mLanguage.equals(CHINESE_LANGUAGE)) {
+            if (isLocale(Locale.TRADITIONAL_CHINESE)) {
+                mUtils = new TraditionalChineseContactUtils(mLocale);
+            } else {
+                mUtils = new ChineseContactUtils(mLocale);
             }
+        } else {
+            mUtils = new ContactLocaleUtilsBase(mLocale);
         }
-        return (utils == null) ? mBase : utils;
+        Log.i(TAG, "AddressBook Labels [" + mLocale.toString() + "]: "
+              + getLabels().toString());
     }
 
-    /**
-     *  Determine the which utility should be used for generating sort key.
-     *  <p>
-     *  For Chinese and CJK style name if current language is neither Japanese or Korean,
-     *  the ChineseContactUtils should be used.
-     */
-    private ContactLocaleUtilsBase getForSort(Integer nameStyle) {
-        return get(Integer.valueOf(getAdjustedStyle(nameStyle.intValue())));
+    public boolean isLocale(Locale locale) {
+        return mLocale.equals(locale);
     }
 
-    public static synchronized ContactLocaleUtils getIntance() {
+    public static synchronized ContactLocaleUtils getInstance() {
         if (sSingleton == null) {
-            sSingleton = new ContactLocaleUtils();
+            sSingleton = new ContactLocaleUtils(null);
         }
         return sSingleton;
     }
 
-    private int getAdjustedStyle(int nameStyle) {
-        if (nameStyle == FullNameStyle.CJK  && !JAPANESE_LANGUAGE.equals(mLanguage) &&
-                !KOREAN_LANGUAGE.equals(mLanguage)) {
-            return FullNameStyle.CHINESE;
-        } else {
-            return nameStyle;
+    public static synchronized void setLocale(Locale locale) {
+        if (sSingleton == null || !sSingleton.isLocale(locale)) {
+            sSingleton = new ContactLocaleUtils(locale);
         }
     }
+
+    public String getSortKey(String name, int nameStyle) {
+        return mUtils.getSortKey(name);
+    }
+
+    public int getBucketIndex(String name) {
+        return mUtils.getBucketIndex(name);
+    }
+
+    public int getBucketCount() {
+        return mUtils.getBucketCount();
+    }
+
+    public String getBucketLabel(int bucketIndex) {
+        return mUtils.getBucketLabel(bucketIndex);
+    }
+
+    public String getLabel(String name) {
+        return getBucketLabel(getBucketIndex(name));
+    }
+
+    public ArrayList<String> getLabels() {
+        return mUtils.getLabels();
+    }
+
+    /**
+     *  Determine which utility should be used for generating NameLookupKey.
+     *  (ie, whether we generate Pinyin lookup keys or not)
+     *
+     *  a. For unclassified CJK name, if current locale language is neither
+     *     Japanese nor Korean, use ChineseContactUtils.
+     *  b. If we're sure this is a Chinese name, always use ChineseContactUtils.
+     *  c. Otherwise, use whichever ContactUtils are appropriate for the locale
+     *     (so, Western names in Chinese locale will use ChineseContactUtils)
+     */
+    public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
+        if (nameStyle == FullNameStyle.CJK &&
+            !JAPANESE_LANGUAGE.equals(mLanguage) &&
+            !KOREAN_LANGUAGE.equals(mLanguage)) {
+            return ChineseContactUtils.getPinyinNameLookupKeys(name);
+        }
+        if (nameStyle == FullNameStyle.CHINESE) {
+            return ChineseContactUtils.getPinyinNameLookupKeys(name);
+        }
+        return mUtils.getNameLookupKeys(name);
+    }
+
 }

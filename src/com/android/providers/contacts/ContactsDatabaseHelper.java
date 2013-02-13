@@ -107,7 +107,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 706;
+    static final int DATABASE_VERSION = 707;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -359,6 +359,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Contacts.SEND_TO_VOICEMAIL;
         public static final String CONCRETE_LOOKUP_KEY = Tables.CONTACTS + "."
                 + Contacts.LOOKUP_KEY;
+        public static final String PHONEBOOK_LABEL_PRIMARY = "phonebook_label";
+        public static final String PHONEBOOK_BUCKET_PRIMARY = "phonebook_bucket";
+        public static final String PHONEBOOK_LABEL_ALTERNATIVE = "phonebook_label_alt";
+        public static final String PHONEBOOK_BUCKET_ALTERNATIVE = "phonebook_bucket_alt";
     }
 
     public interface RawContactsColumns {
@@ -403,7 +407,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONCRETE_CONTACT_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.CONTACT_ID;
         public static final String CONCRETE_NAME_VERIFIED =
-                Tables.RAW_CONTACTS + "." + RawContacts.NAME_VERIFIED;
+            Tables.RAW_CONTACTS + "." + RawContacts.NAME_VERIFIED;
+        public static final String PHONEBOOK_LABEL_PRIMARY =
+            ContactsColumns.PHONEBOOK_LABEL_PRIMARY;
+        public static final String PHONEBOOK_BUCKET_PRIMARY =
+            ContactsColumns.PHONEBOOK_BUCKET_PRIMARY;
+        public static final String PHONEBOOK_LABEL_ALTERNATIVE =
+            ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE;
+        public static final String PHONEBOOK_BUCKET_ALTERNATIVE =
+            ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE;
     }
 
     public interface ViewRawContactsColumns {
@@ -983,8 +995,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 RawContacts.PHONETIC_NAME_STYLE + " TEXT," +
                 RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE " +
                         ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
+                RawContactsColumns.PHONEBOOK_LABEL_PRIMARY + " TEXT," +
+                RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY + " INTEGER," +
                 RawContacts.SORT_KEY_ALTERNATIVE + " TEXT COLLATE " +
                         ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
+                RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + " TEXT," +
+                RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + " INTEGER," +
                 RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
@@ -1612,8 +1628,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         + " AS " + Contacts.PHONETIC_NAME_STYLE + ", "
                 + "name_raw_contact." + RawContacts.SORT_KEY_PRIMARY
                         + " AS " + Contacts.SORT_KEY_PRIMARY + ", "
+                + "name_raw_contact." + RawContactsColumns.PHONEBOOK_LABEL_PRIMARY
+                        + " AS " + ContactsColumns.PHONEBOOK_LABEL_PRIMARY + ", "
+                + "name_raw_contact." + RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY
+                        + " AS " + ContactsColumns.PHONEBOOK_BUCKET_PRIMARY + ", "
                 + "name_raw_contact." + RawContacts.SORT_KEY_ALTERNATIVE
-                        + " AS " + Contacts.SORT_KEY_ALTERNATIVE;
+                        + " AS " + Contacts.SORT_KEY_ALTERNATIVE + ", "
+                + "name_raw_contact." + RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE
+                        + " AS " + ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + ", "
+                + "name_raw_contact." + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE
+                        + " AS " + ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE;
 
         String dataSelect = "SELECT "
                 + DataColumns.CONCRETE_ID + " AS " + Data._ID + ","
@@ -1670,7 +1694,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContacts.PHONETIC_NAME  + ", "
                 + RawContacts.PHONETIC_NAME_STYLE  + ", "
                 + RawContacts.SORT_KEY_PRIMARY  + ", "
+                + RawContactsColumns.PHONEBOOK_LABEL_PRIMARY  + ", "
+                + RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY  + ", "
                 + RawContacts.SORT_KEY_ALTERNATIVE + ", "
+                + RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE  + ", "
+                + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE  + ", "
                 + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + rawContactOptionColumns + ", "
                 + syncColumns
@@ -2408,6 +2436,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 706;
         }
 
+        if (oldVersion < 707) {
+            upgradeToVersion707(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 707;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2718,8 +2752,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 sortKey = sortKeyAlternative = phoneticName;
             } else if (name.fullNameStyle == FullNameStyle.CHINESE ||
                     name.fullNameStyle == FullNameStyle.CJK) {
-                sortKey = sortKeyAlternative = ContactLocaleUtils.getIntance()
-                        .getSortKey(displayName, name.fullNameStyle);
+                sortKey = sortKeyAlternative = displayName;
             }
 
             if (sortKey == null) {
@@ -2776,20 +2809,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 organizationUpdate.bindLong(2, dataId);
                 organizationUpdate.execute();
 
-                String sortKey = null;
-                if (phoneticName == null && company != null) {
-                    int nameStyle = splitter.guessFullNameStyle(company);
-                    nameStyle = splitter.getAdjustedFullNameStyle(nameStyle);
-                    if (nameStyle == FullNameStyle.CHINESE ||
-                            nameStyle == FullNameStyle.CJK ) {
-                        sortKey = ContactLocaleUtils.getIntance()
-                                .getSortKey(company, nameStyle);
-                    }
-                }
-
-                if (sortKey == null) {
-                    sortKey = company;
-                }
+                String sortKey = company;
 
                 updateRawContact205(rawContactUpdate, rawContactId, company,
                         company, phoneticNameStyle, phoneticName, sortKey, sortKey);
@@ -3808,6 +3828,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         PhoneNumberUtils.toCallerIDMinMatch(normalized)
                     });
         }
+    }
+
+    private void upgradeToVersion707(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
+                + " ADD " + RawContactsColumns.PHONEBOOK_LABEL_PRIMARY + " TEXT;");
+        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
+                + " ADD " + RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY + " INTEGER;");
+        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
+                + " ADD " + RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + " TEXT;");
+        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
+                + " ADD " + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + " INTEGER;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
@@ -5172,15 +5203,28 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             }
             if (displayNameStyle == FullNameStyle.CHINESE ||
                     displayNameStyle == FullNameStyle.CJK) {
-                sortKeyPrimary = sortKeyAlternative =
-                        ContactLocaleUtils.getIntance().getSortKey(
-                                sortNamePrimary, displayNameStyle);
+                sortKeyPrimary = sortKeyAlternative = sortNamePrimary;
             }
         }
 
         if (sortKeyPrimary == null) {
             sortKeyPrimary = sortNamePrimary;
             sortKeyAlternative = sortNameAlternative;
+        }
+
+        String phonebookLabelPrimary = "";
+        String phonebookLabelAlternative = "";
+        int phonebookBucketPrimary = 0;
+        int phonebookBucketAlternative = 0;
+        ContactLocaleUtils localeUtils = ContactLocaleUtils.getInstance();
+
+        if (sortKeyPrimary != null) {
+            phonebookBucketPrimary = localeUtils.getBucketIndex(sortKeyPrimary);
+            phonebookLabelPrimary = localeUtils.getBucketLabel(phonebookBucketPrimary);
+        }
+        if (sortKeyAlternative != null) {
+            phonebookBucketAlternative = localeUtils.getBucketIndex(sortKeyAlternative);
+            phonebookLabelAlternative = localeUtils.getBucketLabel(phonebookBucketAlternative);
         }
 
         if (mRawContactDisplayNameUpdate == null) {
@@ -5193,7 +5237,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             RawContacts.PHONETIC_NAME + "=?," +
                             RawContacts.PHONETIC_NAME_STYLE + "=?," +
                             RawContacts.SORT_KEY_PRIMARY + "=?," +
-                            RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
+                            RawContactsColumns.PHONEBOOK_LABEL_PRIMARY + "=?," +
+                            RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY + "=?," +
+                            RawContacts.SORT_KEY_ALTERNATIVE + "=?," +
+                            RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + "=?," +
+                            RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + "=?" +
                     " WHERE " + RawContacts._ID + "=?");
         }
 
@@ -5203,8 +5251,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         bindString(mRawContactDisplayNameUpdate, 4, bestPhoneticName);
         mRawContactDisplayNameUpdate.bindLong(5, bestPhoneticNameStyle);
         bindString(mRawContactDisplayNameUpdate, 6, sortKeyPrimary);
-        bindString(mRawContactDisplayNameUpdate, 7, sortKeyAlternative);
-        mRawContactDisplayNameUpdate.bindLong(8, rawContactId);
+        bindString(mRawContactDisplayNameUpdate, 7, phonebookLabelPrimary);
+        mRawContactDisplayNameUpdate.bindLong(8, phonebookBucketPrimary);
+        bindString(mRawContactDisplayNameUpdate, 9, sortKeyAlternative);
+        bindString(mRawContactDisplayNameUpdate, 10, phonebookLabelAlternative);
+        mRawContactDisplayNameUpdate.bindLong(11, phonebookBucketAlternative);
+        mRawContactDisplayNameUpdate.bindLong(12, rawContactId);
         mRawContactDisplayNameUpdate.execute();
     }
 

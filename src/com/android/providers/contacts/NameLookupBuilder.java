@@ -321,7 +321,7 @@ public abstract class NameLookupBuilder {
 
     private void appendNameShorthandLookup(IndexBuilder builder, String name, int fullNameStyle) {
         Iterator<String> it =
-                ContactLocaleUtils.getIntance().getNameLookupKeys(name, fullNameStyle);
+                ContactLocaleUtils.getInstance().getNameLookupKeys(name, fullNameStyle);
         if (it != null) {
             while (it.hasNext()) {
                 builder.appendName(it.next());
