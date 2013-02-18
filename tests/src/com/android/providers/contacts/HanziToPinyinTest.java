@@ -16,17 +16,16 @@
 
 package com.android.providers.contacts;
 
+import android.os.SystemClock;
 import android.test.suitebuilder.annotation.SmallTest;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
 
 import junit.framework.TestCase;
 
-import java.text.Collator;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Locale;
 
 @SmallTest
 public class HanziToPinyinTest extends TestCase {
@@ -36,22 +35,48 @@ public class HanziToPinyinTest extends TestCase {
     private final static String ONE_UNKNOWN = "\uFF71";
     private final static String MISC = "test\u675C   Test with space\uFF71\uFF71\u675C";
 
+    private static int testCount = 0;
+    private static long startTime = 0;
+
+    private boolean hasChineseTransliterator() {
+        return HanziToPinyin.getInstance().hasChineseTransliterator();
+    }
+
     private void test(final char hanzi, final String expectedPinyin) throws Exception {
+        if (startTime == 0) {
+            startTime = SystemClock.elapsedRealtime();
+        }
         final String hanziString = Character.toString(hanzi);
         ArrayList<Token> tokens = HanziToPinyin.getInstance().get(hanziString);
         assertEquals(tokens.size(), 1);
+        final String newString = tokens.get(0).target;
         if (TextUtils.isEmpty(expectedPinyin)) {
-            assertEquals(tokens.get(0).type, Token.UNKNOWN);
-            assertTrue(tokens.get(0).target.equals(hanziString));
+            assertEquals("Expected no transliteration for '" + hanziString
+                         + "' but got '" + newString + "'",
+                         tokens.get(0).type, Token.UNKNOWN);
+            assertTrue("Expected to get back original string for '"
+                       + hanziString  + "' but got '" + newString + "'",
+                       newString.equals(hanziString));
         } else {
-            assertEquals(tokens.get(0).type, Token.PINYIN);
-            assertTrue(tokens.get(0).target.equalsIgnoreCase(expectedPinyin));
+            assertEquals("Expected transliteration for '" + hanziString
+                         + "' of '" + expectedPinyin + "' but got none",
+                         tokens.get(0).type, Token.PINYIN);
+            assertTrue("Expected transliteration for '" + hanziString + "' of '"
+                       + expectedPinyin + "' but got '" + newString + "'",
+                       newString.equalsIgnoreCase(expectedPinyin));
+        }
+        ++testCount;
+        if ((testCount%1000) == 0) {
+            long elapsedTimeMS = SystemClock.elapsedRealtime() - startTime;
+            Log.i("HanziToPinyinTest", "Transliteration calls: " + testCount
+                  + " [" + elapsedTimeMS + "ms total/"
+                  + (float) elapsedTimeMS/testCount + "ms avg]");
         }
     }
 
     @SmallTest
     public void testGetToken() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         ArrayList<Token> tokens = HanziToPinyin.getInstance().get(ONE_HANZI);
@@ -90,7 +115,7 @@ public class HanziToPinyinTest extends TestCase {
      */
     @SmallTest
     public void test_0() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u4e00', "YI");
@@ -1121,7 +1146,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_1() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u5200', "DAO");
@@ -2152,7 +2177,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_2() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u5600', "DI");
@@ -3183,7 +3208,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_3() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u5a00', "SONG");
@@ -4214,7 +4239,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_4() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u5e00', "ZA");
@@ -5245,7 +5270,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_5() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u6200', "LIAN");
@@ -6276,7 +6301,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_6() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u6600', "YUN");
@@ -7307,7 +7332,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_7() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u6a00', "DI");
@@ -8338,7 +8363,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_8() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u6e00', "BEN");
@@ -9369,7 +9394,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_9() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u7200', "HE");
@@ -10400,7 +10425,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_10() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u7600', "YU");
@@ -11431,7 +11456,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_11() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u7a00', "XI");
@@ -12462,7 +12487,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_12() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u7e00', "XIA");
@@ -13493,7 +13518,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_13() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u8200', "YAO");
@@ -14524,7 +14549,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_14() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u8600', "TUO");
@@ -15555,7 +15580,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_15() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u8a00', "YAN");
@@ -16586,7 +16611,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_16() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u8e00', "CHU");
@@ -17617,7 +17642,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_17() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u9200', "BA");
@@ -18648,7 +18673,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_18() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u9600', "FA");
@@ -19679,7 +19704,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_19() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u9a00', "E");
@@ -20710,7 +20735,7 @@ public class HanziToPinyinTest extends TestCase {
 
     @SmallTest
     public void test_20() throws Exception {
-        if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
+        if (!hasChineseTransliterator()) {
             return;
         }
         test('\u9e00', "CHU");
