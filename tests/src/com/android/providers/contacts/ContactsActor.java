@@ -199,7 +199,7 @@ public class ContactsActor {
         ContentProvider provider = providerClass.newInstance();
         ProviderInfo info = new ProviderInfo();
         info.authority = authority;
-        provider.attachInfo(mProviderContext, info);
+        provider.attachInfoForTesting(mProviderContext, info);
         resolver.addProvider(authority, provider);
         return provider;
     }
