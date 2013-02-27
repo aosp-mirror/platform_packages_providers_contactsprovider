@@ -63,7 +63,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         private MatrixCursor mResponse;
 
         @Override
-        public void attachInfo(Context context, ProviderInfo info) {
+        public void attachInfoForTesting(Context context, ProviderInfo info) {
             mAuthority = info.authority;
         }
 
