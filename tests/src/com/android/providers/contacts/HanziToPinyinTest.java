@@ -10266,7 +10266,7 @@ public class HanziToPinyinTest extends TestCase {
         test('\u7562', "BI");
         test('\u7563', "DA");
         test('\u7564', "ZHI");
-        test('\u7565', "E");
+        test('\u7565', "LUE");
         test('\u7566', "QI");
         test('\u7567', "LUE");
         test('\u7568', "PAN");

@@ -311,9 +311,9 @@ public class ContactLocaleUtils {
 
     /**
      * Traditional Chinese specific locale overrides. Rewrites ICU labels
-     * to correct ICU 4.9 labels.
+     * to correct ICU 50 labels.
      *
-     * TODO: remove once ICU is upgraded to 5.0 and labels are fixed
+     * TODO: remove once ICU is upgraded to 51 and labels are fixed
      *
      * sortKey: unchanged from base class (same as name)
      * nameLookupKeys: unchanged from ChineseContactUtils
@@ -324,7 +324,7 @@ public class ContactLocaleUtils {
      */
     private static class TraditionalChineseContactUtils
         extends ChineseContactUtils {
-        // Remap ICU 4.9 labels to desired values
+        // Remap ICU 50 labels to desired values
         private static final Map<String, String> labelMap;
         static {
             Map<String, String> map = new HashMap<String, String>();

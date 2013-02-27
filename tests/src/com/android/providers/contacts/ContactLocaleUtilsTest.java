@@ -34,6 +34,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String LATIN_NAME = "John Smith";
     private static final String LATIN_NAME_2 = "John Paul Jones";
     private static final String KANJI_NAME = "\u65e5";
+    private static final String ARABIC_NAME = "\u0646\u0648\u0631"; /* Noor */
     private static final String CHINESE_NAME = "\u675C\u9D51";
     private static final String CHINESE_LATIN_MIX_NAME_1 = "D\u675C\u9D51";
     private static final String CHINESE_LATIN_MIX_NAME_2 = "MARY \u675C\u9D51";
@@ -72,8 +73,39 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
+    private static final String[] LABELS_AR = {
+        "", "\u0627", "\u062a", "\u062b", "\u062c", "\u062d", "\u062e",
+        "\u062f", "\u0630", "\u0631", "\u0632", "\u0633", "\u0634", "\u0635",
+        "\u0636", "\u0637", "\u0638", "\u0639", "\u063a", "\u0641", "\u0642",
+        "\u0643", "\u0644", "\u0645", "\u0646", "\u0647", "\u0648", "\u064a",
+        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "#", ""};
 
     private static final String JAPANESE_MISC = "\u4ed6";
+
+    private static final Locale LOCALE_ARABIC = new Locale("ar");
+    private boolean hasChineseCollator;
+    private boolean hasJapaneseCollator;
+    private boolean hasKoreanCollator;
+    private boolean hasArabicCollator;
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        final Locale locale[] = Collator.getAvailableLocales();
+        for (int i = 0; i < locale.length; i++) {
+            if (locale[i].equals(Locale.CHINA)) {
+                hasChineseCollator = true;
+            } else if (locale[i].equals(Locale.JAPAN)) {
+                hasJapaneseCollator = true;
+            } else if (locale[i].equals(Locale.KOREA)) {
+                hasKoreanCollator = true;
+            } else if (locale[i].equals(LOCALE_ARABIC)) {
+                hasArabicCollator = true;
+            }
+        }
+    }
 
     private String getLabel(String name) {
         ContactLocaleUtils utils = ContactLocaleUtils.getInstance();
@@ -105,7 +137,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testJapaneseContactLocaleUtils() throws Exception {
-        if (!hasJapaneseCollator()) {
+        if (!hasJapaneseCollator) {
             return;
         }
 
@@ -122,13 +154,13 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
                 FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_NAME_KEY);
 
-        // Following two tests are broken with ICU 4.9
+        // Following two tests are broken with ICU 50
         verifyLabels(getLabels(), LABELS_JA_JP);
         assertEquals("B", getLabel("Bob Smith"));
     }
 
     public void testChineseContactLocaleUtils() throws Exception {
-        if (!hasChineseCollator()) {
+        if (!hasChineseCollator) {
             return;
         }
 
@@ -145,7 +177,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
-        assertEquals("12\u5283", getLabel(CHINESE_NAME));
+        assertEquals("7\u5283", getLabel(CHINESE_NAME));
         assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
 
         ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
@@ -159,14 +191,14 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(CHINESE_LATIN_MIX_NAME_2, FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_LATIN_MIX_NAME_2_KEY);
 
-        // Following test broken with ICU 4.9
+        // Following test broken with ICU 50
         ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
         verifyLabels(getLabels(), LABELS_ZH_TW);
         assertEquals("B", getLabel("Bob Smith"));
     }
 
     public void testChineseStyleNameWithDifferentLocale() throws Exception {
-        if (!hasChineseCollator()) {
+        if (!hasChineseCollator) {
             return;
         }
 
@@ -191,9 +223,28 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testKoreanContactLocaleUtils() throws Exception {
+        if (!hasKoreanCollator) {
+            return;
+        }
+
         ContactLocaleUtils.setLocale(Locale.KOREA);
+        assertEquals("\u1100", getLabel("\u1100"));
+        assertEquals("\u1100", getLabel("\u3131"));
+        assertEquals("\u1100", getLabel("\u1101"));
+        assertEquals("\u1112", getLabel("\u1161"));
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_KO);
+    }
+
+    public void testArabicContactLocaleUtils() throws Exception {
+        if (!hasArabicCollator) {
+            return;
+        }
+
+        ContactLocaleUtils.setLocale(LOCALE_ARABIC);
+        assertEquals("\u0646", getLabel(ARABIC_NAME));
+        assertEquals("B", getLabel("Bob Smith"));
+        verifyLabels(getLabels(), LABELS_AR);
     }
 
     private void verifyKeys(final Iterator<String> resultKeys, final String[] expectedKeys)
@@ -210,25 +261,5 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
             throws Exception {
         assertEquals(new ArrayList<String>(Arrays.asList(expectedLabels)),
                      resultLabels);
-    }
-
-    private boolean hasChineseCollator() {
-        final Locale locale[] = Collator.getAvailableLocales();
-        for (int i = 0; i < locale.length; i++) {
-            if (locale[i].equals(Locale.CHINA)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean hasJapaneseCollator() {
-        final Locale locale[] = Collator.getAvailableLocales();
-        for (int i = 0; i < locale.length; i++) {
-            if (locale[i].equals(Locale.JAPAN)) {
-                return true;
-            }
-        }
-        return false;
     }
 }
