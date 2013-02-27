@@ -54,7 +54,7 @@ public class FastScrollingIndexCacheTest extends AndroidTestCase {
         super.setUp();
 
         mPrefs = new MockSharedPreferences();
-        mCache = new FastScrollingIndexCache(mPrefs);
+        mCache = FastScrollingIndexCache.getInstance(mPrefs);
     }
 
     private void assertBundle(String[] expectedTitles, int[] expectedCounts, Bundle actual) {
@@ -141,7 +141,8 @@ public class FastScrollingIndexCacheTest extends AndroidTestCase {
         // Now, create a new cache instance (with the same shared preferences)
         // It should restore the cache content from the preferences...
 
-        FastScrollingIndexCache cache2 = new FastScrollingIndexCache(mPrefs);
+        FastScrollingIndexCache.releaseInstance();
+        FastScrollingIndexCache cache2 = FastScrollingIndexCache.getInstance(mPrefs);
         assertBundle(TITLES_0, COUNTS_0, cache2.get(null, null, null, null, null));
         assertBundle(TITLES_1, COUNTS_1, cache2.get(URI_A, "*s*", PROJECTION_0, "*so*", "*ce*"));
         assertBundle(TITLES_2, COUNTS_2, cache2.get(URI_A, "*s*", PROJECTION_1, "*so*", "*ce*"));
