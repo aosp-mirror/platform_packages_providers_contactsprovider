@@ -1800,7 +1800,33 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Test "default" emails are sorted above emails used last.
      */
-    public void testEmailFilterDefaultOverUsageSort() {
+    public void testEmailFilterSuperPrimaryOverUsageSort() {
+        final long rawContactId = createRawContact(ACCOUNT_1);
+        final Uri emailUri1 = insertEmail(rawContactId, "account1@testemail.com");
+        final Uri emailUri2 = insertEmail(rawContactId, "account2@testemail.com");
+        insertEmail(rawContactId, "account3@testemail.com", true, true);
+
+        // Update account1 and account 2 to have higher usage.
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, emailUri1);
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, emailUri1);
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, emailUri2);
+
+        final ContentValues v1 = cv(Email.ADDRESS, "account1@testemail.com");
+        final ContentValues v2 = cv(Email.ADDRESS, "account2@testemail.com");
+        final ContentValues v3 = cv(Email.ADDRESS, "account3@testemail.com");
+
+        // Test that account 3 is first even though account 1 and 2 have higher usage.
+        Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "acc");
+        assertStoredValuesOrderly(filterUri, v3, v1, v2);
+    }
+
+    /**
+     * Test primary emails are sorted below emails used last.
+     *
+     * primary may be set without super primary.  Only super primary indicates "default" in the
+     * contact ui.
+     */
+    public void testEmailFilterUsageOverPrimarySort() {
         final long rawContactId = createRawContact(ACCOUNT_1);
         final Uri emailUri1 = insertEmail(rawContactId, "account1@testemail.com");
         final Uri emailUri2 = insertEmail(rawContactId, "account2@testemail.com");
@@ -1817,7 +1843,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Test that account 3 is first even though account 1 and 2 have higher usage.
         Uri filterUri = Uri.withAppendedPath(Email.CONTENT_FILTER_URI, "acc");
-        assertStoredValuesOrderly(filterUri, v3, v1, v2);
+        assertStoredValuesOrderly(filterUri, v1, v2, v3);
     }
 
     /** Tests {@link DataUsageFeedback} correctly promotes a data row instead of a raw contact. */
