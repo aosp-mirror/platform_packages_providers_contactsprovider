@@ -261,7 +261,7 @@ public class ContactLocaleUtils {
      * labels: unchanged
      *     Simplified Chinese labels are the same as English: [A-Z], #, " "
      *     Traditional Chinese labels are stroke count, then English labels:
-     *         [1-18], [A-Z], #, " "
+     *         [1-33, 35, 36, 48]劃, [A-Z], #, " "
      */
     private static class ChineseContactUtils extends ContactLocaleUtilsBase {
         public ChineseContactUtils(Locale locale) {
@@ -309,54 +309,6 @@ public class ContactLocaleUtils {
         }
     }
 
-    /**
-     * Traditional Chinese specific locale overrides. Rewrites ICU labels
-     * to correct ICU 50 labels.
-     *
-     * TODO: remove once ICU is upgraded to 51 and labels are fixed
-     *
-     * sortKey: unchanged from base class (same as name)
-     * nameLookupKeys: unchanged from ChineseContactUtils
-     * labels: unchanged
-     *     Simplified Chinese labels are the same as English: [A-Z], #, " "
-     *     Traditional Chinese labels are stroke count, then English labels:
-     *         [1-18]劃, [A-Z], #, " "
-     */
-    private static class TraditionalChineseContactUtils
-        extends ChineseContactUtils {
-        // Remap ICU 50 labels to desired values
-        private static final Map<String, String> labelMap;
-        static {
-            Map<String, String> map = new HashMap<String, String>();
-            final List<String> oldLabels =
-                Arrays.asList("\u4E00", "\u4E01", "\u4E08", "\u4E0D",
-                              "\u4E14", "\u4E1E", "\u4E32", "\u4E26",
-                              "\u4EAD", "\u4E58", "\u4E7E", "\u5080",
-                              "\u4E82", "\u50CE", "\u50F5", "\u5110",
-                              "\u511F", "\u53E2", "\u5133", "\u56B4",
-                              "\u5137", "\u513B", "\u56CC", "\u56D1",
-                              "\u5EF3");
-            int strokeCount = 1;
-            for(String oldLabel : oldLabels) {
-                String newLabel = "" + strokeCount + "\u5283";
-                map.put(oldLabel, newLabel);
-                ++strokeCount;
-            }
-            labelMap = Collections.unmodifiableMap(map);
-        }
-
-        public TraditionalChineseContactUtils(Locale locale) {
-            super(locale);
-        }
-
-        @Override
-        public String getBucketLabel(int bucketIndex) {
-            final String label = super.getBucketLabel(bucketIndex);
-            final String remappedLabel = labelMap.get(label);
-            return remappedLabel != null ? remappedLabel : label;
-        }
-    }
-
     private static final String CHINESE_LANGUAGE = Locale.CHINESE.getLanguage().toLowerCase();
     private static final String JAPANESE_LANGUAGE = Locale.JAPANESE.getLanguage().toLowerCase();
     private static final String KOREAN_LANGUAGE = Locale.KOREAN.getLanguage().toLowerCase();
@@ -377,11 +329,7 @@ public class ContactLocaleUtils {
         if (mLanguage.equals(JAPANESE_LANGUAGE)) {
             mUtils = new JapaneseContactUtils(mLocale);
         } else if (mLanguage.equals(CHINESE_LANGUAGE)) {
-            if (isLocale(Locale.TRADITIONAL_CHINESE)) {
-                mUtils = new TraditionalChineseContactUtils(mLocale);
-            } else {
-                mUtils = new ChineseContactUtils(mLocale);
-            }
+            mUtils = new ChineseContactUtils(mLocale);
         } else {
             mUtils = new ContactLocaleUtilsBase(mLocale);
         }

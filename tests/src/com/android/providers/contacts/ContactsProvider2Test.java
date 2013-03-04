@@ -6311,6 +6311,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    public void testContactCountsWithGermanNames() {
+        if (!hasGermanCollator()) {
+            return;
+        }
+        ContactLocaleUtils.setLocale(Locale.GERMANY);
+
+        Uri uri = Contacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
+
+        createRawContactWithName("Josef", "Sacher");
+        createRawContactWithName("Franz", "Schiller");
+        createRawContactWithName("Eckart", "Steiff");
+        createRawContactWithName("Klaus", "Seiler");
+        createRawContactWithName("Lars", "Sultan");
+        createRawContactWithName("Heidi", "Rilke");
+        createRawContactWithName("Suse", "Thomas");
+
+        Cursor cursor = mResolver.query(uri,
+                new String[]{Contacts.DISPLAY_NAME},
+                null, null, Contacts.SORT_KEY_ALTERNATIVE);
+
+        assertFirstLetterValues(cursor, "R", "S", "Sch", "St", "T");
+        assertFirstLetterCounts(cursor,   1,   3,     1,    1,   1);
+        cursor.close();
+    }
+
     private void assertFirstLetterValues(Cursor cursor, String... expected) {
         String[] actual = cursor.getExtras()
                 .getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES);
@@ -7376,6 +7402,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         final Locale locale[] = Collator.getAvailableLocales();
         for (int i = 0; i < locale.length; i++) {
             if (locale[i].equals(Locale.JAPAN)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasGermanCollator() {
+        final Locale locale[] = Collator.getAvailableLocales();
+        for (int i = 0; i < locale.length; i++) {
+            if (locale[i].equals(Locale.GERMANY)) {
                 return true;
             }
         }
