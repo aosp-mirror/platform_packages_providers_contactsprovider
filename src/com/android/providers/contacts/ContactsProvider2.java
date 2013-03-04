@@ -515,11 +515,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String EMAIL_FILTER_SORT_ORDER =
         Contacts.STARRED + " DESC, "
         + Data.IS_SUPER_PRIMARY + " DESC, "
-        + Data.IS_PRIMARY + " DESC, "
         + SORT_BY_DATA_USAGE + ", "
         + Contacts.IN_VISIBLE_GROUP + " DESC, "
         + Contacts.DISPLAY_NAME + ", "
-        + Data.CONTACT_ID;
+        + Data.CONTACT_ID + ", "
+        + Data.IS_PRIMARY + " DESC";
 
     /** Currently same as {@link #EMAIL_FILTER_SORT_ORDER} */
     private static final String PHONE_FILTER_SORT_ORDER = EMAIL_FILTER_SORT_ORDER;

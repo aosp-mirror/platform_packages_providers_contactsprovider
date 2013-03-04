@@ -335,8 +335,18 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return insertEmail(rawContactId, email, primary, Email.TYPE_HOME, null);
     }
 
+    protected Uri insertEmail(long rawContactId, String email, boolean primary,
+            boolean superPrimary) {
+        return insertEmail(rawContactId, email, primary, superPrimary, Email.TYPE_HOME, null);
+    }
+
     protected Uri insertEmail(long rawContactId, String email, boolean primary, int type,
             String label) {
+        return insertEmail(rawContactId, email, primary, false, type, label);
+    }
+
+    protected Uri insertEmail(long rawContactId, String email, boolean primary,
+            boolean superPrimary, int type,  String label) {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
@@ -345,6 +355,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         values.put(Email.LABEL, label);
         if (primary) {
             values.put(Data.IS_PRIMARY, 1);
+        }
+        if (superPrimary) {
+            values.put(Data.IS_SUPER_PRIMARY, 1);
         }
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
