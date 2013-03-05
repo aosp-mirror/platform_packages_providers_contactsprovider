@@ -1390,7 +1390,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         StrictMode.setThreadPolicy(
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
 
-        mFastScrollingIndexCache = new FastScrollingIndexCache(getContext());
+        mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
 
         mContactsHelper = getDatabaseHelper(getContext());
         mDbHelper.set(mContactsHelper);
@@ -1623,6 +1623,26 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_CHANGE_LOCALE);
     }
 
+    private static boolean needsToUpdateLocaleData(SharedPreferences prefs,
+            Locale locale,ContactsDatabaseHelper contactsHelper,
+            ProfileDatabaseHelper profileHelper) {
+        final String providerLocale = prefs.getString(PREF_LOCALE, null);
+
+        // If locale matches that of the provider, and neither DB needs
+        // updating, there's nothing to do. A DB might require updating
+        // as a result of a system upgrade.
+        if (!locale.toString().equals(providerLocale)) {
+            Log.i(TAG, "Locale has changed from " + providerLocale
+                    + " to " + locale.toString());
+            return true;
+        }
+        if (contactsHelper.needsToUpdateLocaleData(locale) ||
+                profileHelper.needsToUpdateLocaleData(locale)) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Verifies that the contacts database is properly configured for the current locale.
      * If not, changes the database locale to the current locale using an asynchronous task.
@@ -1637,21 +1657,42 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return;
         }
 
-        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        final String providerLocale = prefs.getString(PREF_LOCALE, null);
         final Locale currentLocale = mCurrentLocale;
-        if (currentLocale.toString().equals(providerLocale)) {
+        final SharedPreferences prefs =
+            PreferenceManager.getDefaultSharedPreferences(getContext());
+        if (!needsToUpdateLocaleData(prefs, currentLocale,
+                        mContactsHelper, mProfileHelper)) {
             return;
         }
 
         int providerStatus = mProviderStatus;
         setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
-        mContactsHelper.setLocale(this, currentLocale);
-        mProfileHelper.setLocale(this, currentLocale);
+        mContactsHelper.setLocale(currentLocale);
+        mProfileHelper.setLocale(currentLocale);
         mSearchIndexManager.updateIndex(true);
-        prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).apply();
-        invalidateFastScrollingIndexCache();
+        prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
         setProviderStatus(providerStatus);
+    }
+
+    // Static update routine for use by ContactsUpgradeReceiver during startup.
+    // This clears the search index and marks it to be rebuilt, but doesn't
+    // actually rebuild it. That is done later by
+    // BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
+    protected static void updateLocaleOffline(Context context,
+            ContactsDatabaseHelper contactsHelper,
+            ProfileDatabaseHelper profileHelper) {
+        final Locale currentLocale = Locale.getDefault();
+        final SharedPreferences prefs =
+            PreferenceManager.getDefaultSharedPreferences(context);
+        if (!needsToUpdateLocaleData(prefs, currentLocale,
+                        contactsHelper, profileHelper)) {
+            return;
+        }
+
+        contactsHelper.setLocale(currentLocale);
+        profileHelper.setLocale(currentLocale);
+        contactsHelper.rebuildSearchIndex();
+        prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
     }
 
     /**

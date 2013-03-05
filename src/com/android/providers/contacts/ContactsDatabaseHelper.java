@@ -84,6 +84,8 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
 
+import libcore.icu.ICU;
+
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
  * {@link android.content.ContentProvider} users get the same reference.
@@ -107,7 +109,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 707;
+    static final int DATABASE_VERSION = 708;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -706,6 +708,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String DIRECTORY_SCAN_COMPLETE = "directoryScanComplete";
         String AGGREGATION_ALGORITHM = "aggregation_v2";
         String KNOWN_ACCOUNTS = "known_accounts";
+        String ICU_VERSION = "icu_version";
+        String LOCALE = "locale";
     }
 
     /** In-memory cache of previously found MIME-type mappings */
@@ -1986,6 +1990,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         boolean upgradeSearchIndex = false;
         boolean rescanDirectories = false;
         boolean rebuildSqliteStats = false;
+        boolean upgradeLocaleSpecificData = false;
 
         if (oldVersion == 99) {
             upgradeViewsAndTriggers = true;
@@ -2442,6 +2447,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 707;
         }
 
+        if (oldVersion < 708) {
+            // Sort keys, phonebook labels and buckets, and search keys have
+            // changed so force a rebuild.
+            upgradeLocaleSpecificData = true;
+            oldVersion = 708;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2455,14 +2467,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             LegacyApiSupport.createViews(db);
         }
 
+        if (upgradeLocaleSpecificData) {
+            upgradeLocaleData(db, false /* we build stats table later */);
+            // Name lookups are rebuilt as part of the full locale rebuild
+            upgradeNameLookup = false;
+            upgradeSearchIndex = true;
+            rebuildSqliteStats = true;
+        }
+
         if (upgradeNameLookup) {
             rebuildNameLookup(db, false /* we build stats table later */);
             rebuildSqliteStats = true;
         }
 
         if (upgradeSearchIndex) {
-            createSearchIndexTable(db, false /* we build stats table later */);
-            setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
+            rebuildSearchIndex(db, false /* we build stats table later */);
             rebuildSqliteStats = true;
         }
 
@@ -3027,25 +3046,81 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         createContactsIndexes(db, rebuildSqliteStats);
     }
 
+    protected void rebuildSearchIndex() {
+        rebuildSearchIndex(getWritableDatabase(), true);
+    }
+
+    private void rebuildSearchIndex(SQLiteDatabase db, boolean rebuildSqliteStats) {
+        createSearchIndexTable(db, rebuildSqliteStats);
+        setProperty(db, SearchIndexManager.PROPERTY_SEARCH_INDEX_VERSION, "0");
+    }
+
     /**
-     * Regenerates all locale-sensitive data: nickname_lookup, name_lookup and sort keys.
+     * Checks whether the current ICU code version matches that used to build
+     * the locale specific data in the ContactsDB.
      */
-    public void setLocale(ContactsProvider2 provider, Locale locale) {
-        Log.i(TAG, "Switching to locale " + locale);
+    public boolean needsToUpdateLocaleData(Locale locale) {
+        final String dbLocale = getProperty(DbProperties.LOCALE, "");
+        if (!dbLocale.equals(locale.toString())) {
+            return true;
+        }
+        final String curICUVersion = ICU.getIcuVersion();
+        final String dbICUVersion = getProperty(DbProperties.ICU_VERSION,
+                "(unknown)");
+        if (!curICUVersion.equals(dbICUVersion)) {
+            Log.i(TAG, "ICU version has changed. Current version is "
+                    + curICUVersion + "; DB was built with " + dbICUVersion);
+            return true;
+        }
+        return false;
+    }
+
+    private void upgradeLocaleData(SQLiteDatabase db, boolean rebuildSqliteStats) {
+        final Locale locale = Locale.getDefault();
+        Log.i(TAG, "Upgrading locale data for " + locale
+                + " (ICU v" + ICU.getIcuVersion() + ")");
+        final long start = SystemClock.elapsedRealtime();
+        initializeCache(db);
+        rebuildLocaleData(db, locale, rebuildSqliteStats);
+        Log.i(TAG, "Locale update completed in " + (SystemClock.elapsedRealtime() - start) + "ms");
+    }
+
+    private void rebuildLocaleData(SQLiteDatabase db, Locale locale,
+            boolean rebuildSqliteStats) {
+        db.execSQL("DROP INDEX raw_contact_sort_key1_index");
+        db.execSQL("DROP INDEX raw_contact_sort_key2_index");
+        db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
+
+        loadNicknameLookupTable(db);
+        insertNameLookup(db);
+        rebuildSortKeys(db);
+        createContactsIndexes(db, rebuildSqliteStats);
+
+        FastScrollingIndexCache.getInstance(mContext).invalidate();
+        // Update the ICU version used to generate the locale derived data
+        // so we can tell when we need to rebuild with new ICU versions.
+        setProperty(db, DbProperties.ICU_VERSION, ICU.getIcuVersion());
+        setProperty(db, DbProperties.LOCALE, locale.toString());
+    }
+
+    /**
+     * Regenerates all locale-sensitive data if needed:
+     * nickname_lookup, name_lookup and sort keys. Invalidates the fast
+     * scrolling index cache.
+     */
+    public void setLocale(Locale locale) {
+        if (!needsToUpdateLocaleData(locale)) {
+            return;
+        }
+        Log.i(TAG, "Switching to locale " + locale
+                + " (ICU v" + ICU.getIcuVersion() + ")");
 
         final long start = SystemClock.elapsedRealtime();
         SQLiteDatabase db = getWritableDatabase();
         db.setLocale(locale);
         db.beginTransaction();
         try {
-            db.execSQL("DROP INDEX raw_contact_sort_key1_index");
-            db.execSQL("DROP INDEX raw_contact_sort_key2_index");
-            db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
-
-            loadNicknameLookupTable(db);
-            insertNameLookup(db);
-            rebuildSortKeys(db, provider);
-            createContactsIndexes(db, true);
+            rebuildLocaleData(db, locale, true);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -3057,7 +3132,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     /**
      * Regenerates sort keys for all contacts.
      */
-    private void rebuildSortKeys(SQLiteDatabase db, ContactsProvider2 provider) {
+    private void rebuildSortKeys(SQLiteDatabase db) {
         Cursor cursor = db.query(Tables.RAW_CONTACTS, new String[]{RawContacts._ID},
                 null, null, null, null, null);
         try {
@@ -4776,7 +4851,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Returns the value from the {@link Tables#PROPERTIES} table.
      */
     public String getProperty(String key, String defaultValue) {
-        Cursor cursor = getReadableDatabase().query(Tables.PROPERTIES,
+        return getProperty(getReadableDatabase(), key, defaultValue);
+    }
+
+    public String getProperty(SQLiteDatabase db, String key, String defaultValue) {
+        Cursor cursor = db.query(Tables.PROPERTIES,
                 new String[]{PropertiesColumns.PROPERTY_VALUE},
                 PropertiesColumns.PROPERTY_KEY + "=?",
                 new String[]{key}, null, null, null);
