@@ -29,7 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Zezwala aplikacji na przechowywanie i pobieranie wszystkich wiadomości głosowych, do których ma dostęp to urządzenie."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Poczta głosowa od "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiuj bazę danych kontaktów"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Zamierzasz: 1) utworzyć w pamięci wewnętrznej kopię bazy danych ze wszystkimi informacjami o kontaktach i dziennikiem połączeń, 2) wysłać ją e-mailem. Pamiętaj, by usunąć kopię zaraz po zapisaniu jej na innym nośniku lub odebraniu e-maila."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Zamierzasz: 1) utworzyć w pamięci wewnętrznej kopię bazy danych ze wszystkimi informacjami o kontaktach i rejestrem połączeń, 2) wysłać ją e-mailem. Pamiętaj, by usunąć kopię zaraz po zapisaniu jej na innym nośniku lub odebraniu e-maila."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Usuń teraz"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Rozpocznij"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Wybierz program, którego użyjesz do wysłania pliku"</string>
