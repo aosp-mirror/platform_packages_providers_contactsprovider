@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 import libcore.icu.AlphabeticIndex;
+import libcore.icu.AlphabeticIndex.ImmutableIndex;
 
 /**
  * This utility class provides specialized handling for locale specific
@@ -55,14 +56,13 @@ public class ContactLocaleUtils {
         private static final String EMPTY_STRING = "";
         private static final String NUMBER_STRING = "#";
 
-        protected final AlphabeticIndex mAlphabeticIndex;
+        protected final ImmutableIndex mAlphabeticIndex;
         private final int mAlphabeticIndexBucketCount;
         private final int mNumberBucketIndex;
 
         public ContactLocaleUtilsBase(Locale locale) {
-            mAlphabeticIndex = new AlphabeticIndex(locale);
-            mAlphabeticIndex.addLabels(Locale.US);
-            // Force creation of lazy-init data structures.
+            mAlphabeticIndex = new AlphabeticIndex(locale)
+                .addLabels(Locale.US).getImmutableIndex();
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
         }
