@@ -88,24 +88,22 @@ public class FastScrollingIndexCache {
     private static FastScrollingIndexCache sSingleton;
 
     public static FastScrollingIndexCache getInstance(Context context) {
-        return getInstance(PreferenceManager.getDefaultSharedPreferences(context));
-    }
-
-    public static synchronized FastScrollingIndexCache getInstance(
-            SharedPreferences prefs) {
         if (sSingleton == null) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             sSingleton = new FastScrollingIndexCache(prefs);
         }
         return sSingleton;
     }
 
-    private FastScrollingIndexCache(SharedPreferences prefs) {
-        mPrefs = prefs;
+    @VisibleForTesting
+    static synchronized FastScrollingIndexCache getInstanceForTest(
+            SharedPreferences prefs) {
+        sSingleton = new FastScrollingIndexCache(prefs);
+        return sSingleton;
     }
 
-    @VisibleForTesting
-    protected static synchronized void releaseInstance() {
-        sSingleton = null;
+    private FastScrollingIndexCache(SharedPreferences prefs) {
+        mPrefs = prefs;
     }
 
     /**
