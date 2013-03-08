@@ -32,6 +32,7 @@ import android.os.AsyncTask;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Callable;
+import android.provider.ContactsContract.CommonDataKinds.Contactables;;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -2008,6 +2009,159 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.remove(Data._ID);
         assertStoredValues(dedupeUri, values);
     }
+
+    public void testDataContentUriInvisibleQuery() {
+        final ContentValues values = new ContentValues();
+        final long contactId = createContact(values, "John", "Doe",
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                        StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
+
+        final Uri uri = Data.CONTENT_URI.buildUpon().
+                appendQueryParameter(Data.VISIBLE_CONTACTS_ONLY, "true").build();
+        assertEquals(4, getCount(uri, null, null));
+
+        markInvisible(contactId);
+
+        assertEquals(0, getCount(uri, null, null));
+    }
+
+    public void testContactablesQuery() {
+        final long rawContactId = createRawContactWithName("Hot", "Tamale");
+
+        insertPhoneNumber(rawContactId, "510-123-5769");
+        insertEmail(rawContactId, "tamale@acme.com");
+
+        final ContentValues cv1 = new ContentValues();
+        cv1.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        cv1.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        cv1.put(Email.DATA, "tamale@acme.com");
+        cv1.put(Email.TYPE, Email.TYPE_HOME);
+        cv1.putNull(Email.LABEL);
+
+        final ContentValues cv2 = new ContentValues();
+        cv2.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        cv2.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        cv2.put(Phone.DATA, "510-123-5769");
+        cv2.put(Phone.TYPE, Phone.TYPE_HOME);
+        cv2.putNull(Phone.LABEL);
+
+        final Uri filterUri0 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "");
+        assertEquals(0, getCount(filterUri0, null, null));
+
+        final Uri filterUri1 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "tamale");
+        assertStoredValues(filterUri1, cv1, cv2);
+
+        final Uri filterUri2 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "hot");
+        assertStoredValues(filterUri2, cv1, cv2);
+
+        final Uri filterUri3 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "tamale@ac");
+        assertStoredValues(filterUri3, cv1, cv2);
+
+        final Uri filterUri4 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "510");
+        assertStoredValues(filterUri4, cv1, cv2);
+
+        final Uri filterUri5 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "cold");
+        assertEquals(0, getCount(filterUri5, null, null));
+
+        final Uri filterUri6 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI,
+                "tamale@google");
+        assertEquals(0, getCount(filterUri6, null, null));
+
+        final Uri filterUri7 = Contactables.CONTENT_URI;
+        assertStoredValues(filterUri7, cv1, cv2);
+    }
+
+    public void testContactablesMultipleQuery() {
+
+        final long rawContactId = createRawContactWithName("Hot", "Tamale");
+        insertPhoneNumber(rawContactId, "510-123-5769");
+        insertEmail(rawContactId, "tamale@acme.com");
+        insertEmail(rawContactId, "hot@google.com");
+
+        final long rawContactId2 = createRawContactWithName("Cold", "Tamago");
+        insertEmail(rawContactId2, "eggs@farmers.org");
+
+        final long rawContactId3 = createRawContactWithName("John", "Doe");
+        insertPhoneNumber(rawContactId3, "518-354-1111");
+        insertEmail(rawContactId3, "doeadeer@afemaledeer.com");
+
+        final ContentValues cv1 = new ContentValues();
+        cv1.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        cv1.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        cv1.put(Email.DATA, "tamale@acme.com");
+        cv1.put(Email.TYPE, Email.TYPE_HOME);
+        cv1.putNull(Email.LABEL);
+
+        final ContentValues cv2 = new ContentValues();
+        cv2.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        cv2.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        cv2.put(Phone.DATA, "510-123-5769");
+        cv2.put(Phone.TYPE, Phone.TYPE_HOME);
+        cv2.putNull(Phone.LABEL);
+
+        final ContentValues cv3 = new ContentValues();
+        cv3.put(Contacts.DISPLAY_NAME, "Hot Tamale");
+        cv3.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        cv3.put(Email.DATA, "hot@google.com");
+        cv3.put(Email.TYPE, Email.TYPE_HOME);
+        cv3.putNull(Email.LABEL);
+
+        final ContentValues cv4 = new ContentValues();
+        cv4.put(Contacts.DISPLAY_NAME, "Cold Tamago");
+        cv4.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        cv4.put(Email.DATA, "eggs@farmers.org");
+        cv4.put(Email.TYPE, Email.TYPE_HOME);
+        cv4.putNull(Email.LABEL);
+
+        final ContentValues cv5 = new ContentValues();
+        cv5.put(Contacts.DISPLAY_NAME, "John Doe");
+        cv5.put(Data.MIMETYPE, Email.CONTENT_ITEM_TYPE);
+        cv5.put(Email.DATA, "doeadeer@afemaledeer.com");
+        cv5.put(Email.TYPE, Email.TYPE_HOME);
+        cv5.putNull(Email.LABEL);
+
+        final ContentValues cv6 = new ContentValues();
+        cv6.put(Contacts.DISPLAY_NAME, "John Doe");
+        cv6.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        cv6.put(Phone.DATA, "518-354-1111");
+        cv6.put(Phone.TYPE, Phone.TYPE_HOME);
+        cv6.putNull(Phone.LABEL);
+
+        final Uri filterUri1 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "tamale");
+
+        assertStoredValues(filterUri1, cv1, cv2, cv3);
+
+        final Uri filterUri2 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "hot");
+        assertStoredValues(filterUri2, cv1, cv2, cv3);
+
+        final Uri filterUri3 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "tam");
+        assertStoredValues(filterUri3, cv1, cv2, cv3, cv4);
+
+        final Uri filterUri4 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "518");
+        assertStoredValues(filterUri4, cv5, cv6);
+
+        final Uri filterUri5 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "doe");
+        assertStoredValues(filterUri5, cv5, cv6);
+
+        final Uri filterUri6 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI, "51");
+        assertStoredValues(filterUri6, cv1, cv2, cv3, cv5, cv6);
+
+        final Uri filterUri7 = Uri.withAppendedPath(Contactables.CONTENT_FILTER_URI,
+                "tamale@google");
+        assertEquals(0, getCount(filterUri7, null, null));
+
+        final Uri filterUri8 = Contactables.CONTENT_URI;
+        assertStoredValues(filterUri8, cv1, cv2, cv3, cv4, cv5, cv6);
+
+        // test VISIBLE_CONTACTS_ONLY boolean parameter
+        final Uri filterUri9 = filterUri6.buildUpon().appendQueryParameter(
+                Contactables.VISIBLE_CONTACTS_ONLY, "true").build();
+        assertStoredValues(filterUri9, cv1, cv2, cv3, cv5, cv6);
+        // mark Hot Tamale as invisible - cv1, cv2, and cv3 should no longer be in the cursor
+        markInvisible(queryContactId(rawContactId));
+        assertStoredValues(filterUri9, cv5, cv6);
+    }
+
 
     public void testQueryContactData() {
         ContentValues values = new ContentValues();
