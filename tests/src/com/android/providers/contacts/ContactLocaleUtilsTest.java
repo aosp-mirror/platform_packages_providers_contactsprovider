@@ -51,6 +51,10 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
+    private static final String[] LABELS_DE = {
+        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "Sch", "St", "T", "U", "V", "W", "X",
+        "Y", "Z", "#", ""};
     private static final String[] LABELS_JA_JP = {
         "", "\u3042", "\u304B", "\u3055", "\u305F", "\u306A", "\u306F",
         "\u307E", "\u3084", "\u3089", "\u308F", "\u4ED6",
@@ -62,22 +66,25 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "7\u5283", "8\u5283", "9\u5283", "10\u5283", "11\u5283", "12\u5283",
         "13\u5283", "14\u5283", "15\u5283", "16\u5283", "17\u5283", "18\u5283",
         "19\u5283", "20\u5283", "21\u5283", "22\u5283", "23\u5283", "24\u5283",
-        "25\u5283",
+        "25\u5283", "26\u5283", "27\u5283", "28\u5283", "29\u5283", "30\u5283",
+        "31\u5283", "32\u5283", "33\u5283",
+        "35\u5283", "36\u5283", "39\u5283", "48\u5283",
         "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_KO = {
-        "",  "\u1100", "\u1102", "\u1103", "\u1105", "\u1106", "\u1107",
-        "\u1109", "\u110B", "\u110C", "\u110E", "\u110F", "\u1110", "\u1111",
-        "\u1112",
+        "", "\u3131", "\u3134", "\u3137", "\u3139", "\u3141", "\u3142",
+        "\u3145", "\u3147", "\u3148", "\u314A", "\u314B", "\u314C", "\u314D",
+        "\u314E",
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_AR = {
-        "", "\u0627", "\u062a", "\u062b", "\u062c", "\u062d", "\u062e",
-        "\u062f", "\u0630", "\u0631", "\u0632", "\u0633", "\u0634", "\u0635",
-        "\u0636", "\u0637", "\u0638", "\u0639", "\u063a", "\u0641", "\u0642",
-        "\u0643", "\u0644", "\u0645", "\u0646", "\u0647", "\u0648", "\u064a",
+        "", "\u0627", "\u0628", "\u062a", "\u062b", "\u062c", "\u062d",
+        "\u062e", "\u062f", "\u0630", "\u0631", "\u0632", "\u0633", "\u0634",
+        "\u0635", "\u0636", "\u0637", "\u0638", "\u0639", "\u063a", "\u0641",
+        "\u0642", "\u0643", "\u0644", "\u0645", "\u0646", "\u0647", "\u0648",
+        "\u064a",
         "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
@@ -89,6 +96,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private boolean hasJapaneseCollator;
     private boolean hasKoreanCollator;
     private boolean hasArabicCollator;
+    private boolean hasGermanCollator;
 
     @Override
     protected void setUp() throws Exception {
@@ -103,6 +111,8 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
                 hasKoreanCollator = true;
             } else if (locale[i].equals(LOCALE_ARABIC)) {
                 hasArabicCollator = true;
+            } else if (locale[i].equals(Locale.GERMANY)) {
+                hasGermanCollator = true;
             }
         }
     }
@@ -228,10 +238,10 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         }
 
         ContactLocaleUtils.setLocale(Locale.KOREA);
-        assertEquals("\u1100", getLabel("\u1100"));
-        assertEquals("\u1100", getLabel("\u3131"));
-        assertEquals("\u1100", getLabel("\u1101"));
-        assertEquals("\u1112", getLabel("\u1161"));
+        assertEquals("\u3131", getLabel("\u1100"));
+        assertEquals("\u3131", getLabel("\u3131"));
+        assertEquals("\u3131", getLabel("\u1101"));
+        assertEquals("\u314e", getLabel("\u1161"));
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_KO);
     }
@@ -245,6 +255,18 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("\u0646", getLabel(ARABIC_NAME));
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_AR);
+    }
+
+    public void testGermanContactLocaleUtils() throws Exception {
+        if (!hasGermanCollator) {
+            return;
+        }
+
+        ContactLocaleUtils.setLocale(Locale.GERMANY);
+        assertEquals("S", getLabel("Sacher"));
+        assertEquals("Sch", getLabel("Schiller"));
+        assertEquals("St", getLabel("Steiff"));
+        verifyLabels(getLabels(), LABELS_DE);
     }
 
     private void verifyKeys(final Iterator<String> resultKeys, final String[] expectedKeys)
