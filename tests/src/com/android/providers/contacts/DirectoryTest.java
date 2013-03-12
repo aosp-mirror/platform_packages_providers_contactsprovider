@@ -28,6 +28,8 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
 import android.test.suitebuilder.annotation.MediumTest;
 
+import com.android.providers.contacts.testutil.RawContactUtil;
+
 
 /**
  * Unit tests for {@link ContactsProvider2}, directory functionality.
@@ -74,7 +76,8 @@ public class DirectoryTest extends BaseContactsProvider2Test {
     }
 
     public void testForwardingToLocalContacts() {
-        long contactId = queryContactId(createRawContactWithName("John", "Doe"));
+        long contactId = queryContactId(RawContactUtil.createRawContactWithName(mResolver, "John",
+                "Doe"));
 
         Uri contentUri = Contacts.CONTENT_URI.buildUpon().appendQueryParameter(
                 ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(Directory.DEFAULT)).build();
@@ -92,13 +95,14 @@ public class DirectoryTest extends BaseContactsProvider2Test {
     public void testForwardingToLocalInvisibleContacts() {
 
         // Visible because there is no account
-        long contactId1 = queryContactId(createRawContactWithName("Bob", "Parr"));
+        long contactId1 = queryContactId(RawContactUtil.createRawContactWithName(mResolver, "Bob",
+                "Parr"));
 
         Account account = new Account("accountName", "accountType");
         long groupId = createGroup(account, "sid", "def",
                 0 /* visible */,  true /* auto-add */, false /* fav */);
-        long contactId2 = queryContactId(createRawContactWithName("Helen", "Parr",
-                account));
+        long contactId2 = queryContactId(RawContactUtil.createRawContactWithName(mResolver, "Helen",
+                "Parr", account));
 
         Uri contentUri = Contacts.CONTENT_URI.buildUpon().appendQueryParameter(
                 ContactsContract.DIRECTORY_PARAM_KEY, String.valueOf(Directory.LOCAL_INVISIBLE))

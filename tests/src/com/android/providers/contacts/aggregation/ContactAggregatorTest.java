@@ -39,6 +39,9 @@ import android.test.suitebuilder.annotation.MediumTest;
 import com.android.providers.contacts.BaseContactsProvider2Test;
 import com.android.providers.contacts.TestUtils;
 import com.android.providers.contacts.tests.R;
+import com.android.providers.contacts.testutil.DataUtil;
+import com.android.providers.contacts.testutil.RawContactUtil;
+
 import com.google.android.collect.Lists;
 
 /**
@@ -64,8 +67,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     };
 
     public void testCrudAggregationExceptions() throws Exception {
-        long rawContactId1 = createRawContactWithName("zz", "top");
-        long rawContactId2 = createRawContactWithName("aa", "bottom");
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "zz", "top");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "aa", "bottom");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
@@ -112,9 +115,9 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationCreatesNewAggregate() {
-        long rawContactId = createRawContact();
+        long rawContactId = RawContactUtil.createRawContact(mResolver);
 
-        Uri resultUri = insertStructuredName(rawContactId, "Johna", "Smitha");
+        Uri resultUri = DataUtil.insertStructuredName(mResolver, rawContactId, "Johna", "Smitha");
 
         // Parse the URI and confirm that it contains an ID
         assertTrue(ContentUris.parseId(resultUri) != 0);
@@ -127,11 +130,11 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationOfExactFullNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johnb", "Smithb");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johnb", "Smithb");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johnb", "Smithb");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johnb", "Smithb");
 
         assertAggregated(rawContactId1, rawContactId2, "Johnb Smithb");
     }
@@ -140,17 +143,17 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         Account account = new Account("accountName", "accountType");
         createAutoAddGroup(account);
 
-        long rawContactId1 = createRawContact(account);
-        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Flynn", "Ryder");
 
         // Hide by removing from all groups
         removeGroupMemberships(rawContactId1);
 
-        long rawContactId2 = createRawContact(account);
-        insertStructuredName(rawContactId2, "Flynn", "Ryder");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Flynn", "Ryder");
 
-        long rawContactId3 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId3, "Flynn", "Ryder");
 
         assertNotAggregated(rawContactId1, rawContactId2);
         assertNotAggregated(rawContactId1, rawContactId3);
@@ -158,261 +161,262 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationOfCaseInsensitiveFullNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johnc", "Smithc");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johnc", "Smithc");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johnc", "smithc");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johnc", "smithc");
 
         assertAggregated(rawContactId1, rawContactId2, "Johnc Smithc");
     }
 
     public void testAggregationOfLastNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, null, "Johnd");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, null, "Johnd");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, null, "johnd");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, null, "johnd");
 
         assertAggregated(rawContactId1, rawContactId2, "Johnd");
     }
 
     public void testNonAggregationOfFirstNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johne", "Smithe");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johne", "Smithe");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johne", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johne", null);
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testNonAggregationOfLastNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johnf", "Smithf");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johnf", "Smithf");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, null, "Smithf");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, null, "Smithf");
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationOfConcatenatedFullNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johng", "Smithg");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johng", "Smithg");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "johngsmithg", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "johngsmithg", null);
 
         assertAggregated(rawContactId1, rawContactId2, "Johng Smithg");
     }
 
     public void testAggregationOfNormalizedFullNameMatch() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "helene bjorn", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "helene bjorn", null);
 
         assertAggregated(rawContactId1, rawContactId2, "H\u00e9l\u00e8ne Bj\u00f8rn");
     }
 
     public void testAggregationOfNormalizedFullNameMatchWithReadOnlyAccount() {
-        long rawContactId1 = createRawContact(new Account("acct", READ_ONLY_ACCOUNT_TYPE));
-        insertStructuredName(rawContactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("acct",
+                READ_ONLY_ACCOUNT_TYPE));
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "H\u00e9l\u00e8ne", "Bj\u00f8rn");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "helene bjorn", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "helene bjorn", null);
 
         assertAggregated(rawContactId1, rawContactId2, "helene bjorn");
     }
 
     public void testAggregationOfNumericNames() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "123", null);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "123", null);
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "1-2-3", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "1-2-3", null);
 
         assertAggregated(rawContactId1, rawContactId2, "1-2-3");
     }
 
     public void testAggregationOfInconsistentlyParsedNames() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
 
         ContentValues values = new ContentValues();
         values.put(StructuredName.DISPLAY_NAME, "604 Arizona Ave");
         values.put(StructuredName.GIVEN_NAME, "604");
         values.put(StructuredName.MIDDLE_NAME, "Arizona");
         values.put(StructuredName.FAMILY_NAME, "Ave");
-        insertStructuredName(rawContactId1, values);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, values);
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         values.clear();
         values.put(StructuredName.DISPLAY_NAME, "604 Arizona Ave");
         values.put(StructuredName.GIVEN_NAME, "604");
         values.put(StructuredName.FAMILY_NAME, "Arizona Ave");
-        insertStructuredName(rawContactId2, values);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, values);
 
         assertAggregated(rawContactId1, rawContactId2, "604 Arizona Ave");
     }
 
     public void testAggregationBasedOnMiddleName() {
         ContentValues values = new ContentValues();
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         values.put(StructuredName.GIVEN_NAME, "John");
         values.put(StructuredName.GIVEN_NAME, "Abigale");
         values.put(StructuredName.FAMILY_NAME, "James");
 
-        insertStructuredName(rawContactId1, values);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, values);
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         values.clear();
         values.put(StructuredName.GIVEN_NAME, "John");
         values.put(StructuredName.GIVEN_NAME, "Marie");
         values.put(StructuredName.FAMILY_NAME, "James");
-        insertStructuredName(rawContactId2, values);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, values);
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberNoNameData() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "(888)555-1231");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "1(888)555-1231");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWhenTargetAggregateHasNoName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "(888)555-1232");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johnl", "Smithl");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johnl", "Smithl");
         insertPhoneNumber(rawContactId2, "1(888)555-1232");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWhenNewContactHasNoName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johnm", "Smithm");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johnm", "Smithm");
         insertPhoneNumber(rawContactId1, "(888)555-1233");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "1(888)555-1233");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWithDifferentNames() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Baby", "Bear");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Baby", "Bear");
         insertPhoneNumber(rawContactId1, "(888)555-1235");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Blind", "Mouse");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Blind", "Mouse");
         insertPhoneNumber(rawContactId2, "1(888)555-1235");
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnPhoneNumberWithJustFirstName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Chick", "Notnull");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Chick", "Notnull");
         insertPhoneNumber(rawContactId1, "(888)555-1236");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Chick", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Chick", null);
         insertPhoneNumber(rawContactId2, "1(888)555-1236");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailNoNameData() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertEmail(rawContactId1, "lightning@android.com");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertEmail(rawContactId2, "lightning@android.com");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailWhenTargetAggregateHasNoName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertEmail(rawContactId1, "mcqueen@android.com");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Lightning", "McQueen");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Lightning", "McQueen");
         insertEmail(rawContactId2, "mcqueen@android.com");
 
         assertAggregated(rawContactId1, rawContactId2, "Lightning McQueen");
     }
 
     public void testAggregationBasedOnEmailWhenNewContactHasNoName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Doc", "Hudson");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Doc", "Hudson");
         insertEmail(rawContactId1, "doc@android.com");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertEmail(rawContactId2, "doc@android.com");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationBasedOnEmailWithDifferentNames() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Chick", "Hicks");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Chick", "Hicks");
         insertEmail(rawContactId1, "hicky@android.com");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Luigi", "Guido");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Luigi", "Guido");
         insertEmail(rawContactId2, "hicky@android.com");
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationByCommonNicknameWithLastName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Bill", "Gore");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Bill", "Gore");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "William", "Gore");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "William", "Gore");
 
         assertAggregated(rawContactId1, rawContactId2, "William Gore");
     }
 
     public void testAggregationByCommonNicknameOnly() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Lawrence", null);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Lawrence", null);
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Larry", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Larry", null);
 
         assertAggregated(rawContactId1, rawContactId2, "Lawrence");
     }
 
     public void testAggregationByNicknameNoStructuredName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertNickname(rawContactId1, "Frozone");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertNickname(rawContactId2, "Frozone");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationByNicknameWithDifferentNames() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Helen", "Parr");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Helen", "Parr");
         insertNickname(rawContactId1, "Elastigirl");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Shawn", "Johnson");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Shawn", "Johnson");
         insertNickname(rawContactId2, "Elastigirl");
 
         assertNotAggregated(rawContactId1, rawContactId2);
@@ -421,11 +425,11 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testNonAggregationOnOrganization() {
         ContentValues values = new ContentValues();
         values.put(Organization.TITLE, "Monsters, Inc");
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertOrganization(rawContactId1, values);
         insertNickname(rawContactId1, "Boo");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertOrganization(rawContactId2, values);
         insertNickname(rawContactId2, "Rendall");   // To force reaggregation
 
@@ -433,21 +437,21 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationByIdentity() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         insertIdentity(rawContactId1, "iden1", "namespace1");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertIdentity(rawContactId2, "iden1", "namespace1");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationExceptionKeepIn() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johnk", "Smithk");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johnk", "Smithk");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johnkx", "Smithkx");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johnkx", "Smithkx");
 
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
@@ -471,11 +475,11 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationExceptionKeepOut() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johnh", "Smithh");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johnh", "Smithh");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johnh", "Smithh");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johnh", "Smithh");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
@@ -484,14 +488,14 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationExceptionKeepOutCheckUpdatesDisplayName() {
-        long rawContactId1 = createRawContact(ACCOUNT_1);
-        insertStructuredName(rawContactId1, "Johni", "Smithi");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Johni", "Smithi");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Johnj", "Smithj");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Johnj", "Smithj");
 
-        long rawContactId3 = createRawContact(ACCOUNT_3);
-        insertStructuredName(rawContactId3, "Johnm", "Smithm");
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver, ACCOUNT_3);
+        DataUtil.insertStructuredName(mResolver, rawContactId3, "Johnm", "Smithm");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
@@ -533,9 +537,9 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationExceptionKeepOutCheckResultDisplayNames() {
-        long rawContactId1 = createRawContactWithName("c", "c", ACCOUNT_1);
-        long rawContactId2 = createRawContactWithName("b", "b", ACCOUNT_2);
-        long rawContactId3 = createRawContactWithName("a", "a", ACCOUNT_3);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "c", "c", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "b", "b", ACCOUNT_2);
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "a", "a", ACCOUNT_3);
 
         // Join all contacts
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
@@ -569,12 +573,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testNonAggregationWithMultipleAffinities() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         assertNotAggregated(rawContactId1, rawContactId2);
 
         // There are two aggregates this raw contact could join, so it should join neither
-        long rawContactId3 = createRawContactWithName("John", "Doe", ACCOUNT_2);
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_2);
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId2, rawContactId3);
 
@@ -583,13 +590,16 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testSplitBecauseOfMultipleAffinities() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_2);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_2);
         assertAggregated(rawContactId1, rawContactId2);
 
         // The aggregate this raw contact could join has a raw contact from the same account,
         // let's not aggregate and break up the existing aggregate because of the ambiguity
-        long rawContactId3 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId2, rawContactId3);
         assertNotAggregated(rawContactId1, rawContactId2);
@@ -599,14 +609,14 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         Account account = new Account("accountName", "accountType");
         createAutoAddGroup(account);
 
-        long rawContactId1 = createRawContact(account);
-        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Flynn", "Ryder");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Flynn", "Ryder");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Flynn", "Ryder");
 
-        long rawContactId3 = createRawContact(account);
-        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId3, "Flynn", "Ryder");
 
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId2, rawContactId3);
@@ -624,15 +634,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         Account account = new Account("accountName", "accountType");
         createAutoAddGroup(account);
 
-        long rawContactId1 = createRawContact(account);
-        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Flynn", "Ryder");
         insertPhoneNumber(rawContactId1, "1234567890");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "1234567890");
 
-        long rawContactId3 = createRawContact(account);
-        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId3, "Flynn", "Ryder");
 
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId2, rawContactId3);
@@ -650,15 +660,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         Account account = new Account("accountName", "accountType");
         long groupId = createAutoAddGroup(account);
 
-        long rawContactId1 = createRawContact(account);
-        insertStructuredName(rawContactId1, "Flynn", "Ryder");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Flynn", "Ryder");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
-        insertStructuredName(rawContactId2, "Flynn", "Ryder");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Flynn", "Ryder");
 
-        long rawContactId3 = createRawContact(account);
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver, account);
         removeGroupMemberships(rawContactId3);
-        insertStructuredName(rawContactId3, "Flynn", "Ryder");
+        DataUtil.insertStructuredName(mResolver, rawContactId3, "Flynn", "Ryder");
 
         assertAggregated(rawContactId1, rawContactId2, "Flynn Ryder");
         assertNotAggregated(rawContactId1, rawContactId3);
@@ -672,9 +682,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testNonSplitBecauseOfMultipleAffinitiesWhenOverridden() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_2);
-        long rawContactId3 = createRawContactWithName("John", "Doe", ACCOUNT_3);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_2);
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_3);
         assertAggregated(rawContactId1, rawContactId2);
         assertAggregated(rawContactId1, rawContactId3);
         setAggregationException(
@@ -684,7 +697,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
         // The aggregate this raw contact could join has a raw contact from the same account,
         // let's not aggregate and break up the existing aggregate because of the ambiguity
-        long rawContactId4 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId4 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         assertAggregated(rawContactId1, rawContactId2);     // Aggregation exception
         assertNotAggregated(rawContactId1, rawContactId3);
         assertNotAggregated(rawContactId1, rawContactId4);
@@ -692,18 +706,22 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testNonAggregationFromSameAccount() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testNonAggregationFromSameAccountNoCommonData() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertEmail(rawContactId1, "lightning1@android.com");
         insertPhoneNumber(rawContactId1, "111-222-3333");
         insertIdentity(rawContactId1, "iden1", "namespace");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertEmail(rawContactId2, "lightning2@android.com");
         insertPhoneNumber(rawContactId2, "555-666-7777");
         insertIdentity(rawContactId1, "iden2", "namespace");
@@ -712,20 +730,24 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationFromSameAccountEmailSame() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertEmail(rawContactId1, "lightning@android.com");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertEmail(rawContactId2, "lightning@android.com");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testNonAggregationFromSameAccountEmailDifferent() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertEmail(rawContactId1, "lightning1@android.com");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertEmail(rawContactId2, "lightning2@android.com");
         insertEmail(rawContactId2, "lightning3@android.com");
 
@@ -733,21 +755,25 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationFromSameAccountIdentitySame() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertIdentity(rawContactId1, "iden", "namespace");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertIdentity(rawContactId2, "iden", "namespace");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testNonAggregationFromSameAccountIdentityDifferent() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertIdentity(rawContactId1, "iden1", "namespace1");
         insertIdentity(rawContactId1, "iden2", "namespace2");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertIdentity(rawContactId2, "iden2", "namespace1");
         insertIdentity(rawContactId2, "iden1", "namespace2");
 
@@ -755,52 +781,58 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationFromSameAccountPhoneNumberSame() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "111-222-3333");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId2, "111-222-3333");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationFromSameAccountPhoneNumberNormalizedSame() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "111-222-3333");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId2, "+1-111-222-3333");
 
         assertAggregated(rawContactId1, rawContactId2);
     }
 
     public void testNonAggregationFromSameAccountPhoneNumberDifferent() {
-        long rawContactId1 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "111-222-3333");
 
-        long rawContactId2 = createRawContactWithName("John", "Doe", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId2, "111-222-3334");
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
     public void testAggregationSuggestionsBasedOnName() {
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Duane", null);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Duane", null);
 
         // Exact name match
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Duane", null);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Duane", null);
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
 
         // Edit distance == 0.84
-        long rawContactId3 = createRawContact();
-        insertStructuredName(rawContactId3, "Dwayne", null);
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId3, "Dwayne", null);
 
         // Edit distance == 0.6
-        long rawContactId4 = createRawContact();
-        insertStructuredName(rawContactId4, "Donny", null);
+        long rawContactId4 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId4, "Donny", null);
 
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
@@ -812,12 +844,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testAggregationSuggestionsBasedOnPhoneNumber() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Lord", "Farquaad");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Lord", "Farquaad");
         insertPhoneNumber(rawContactId1, "(888)555-1236");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Talking", "Donkey");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Talking", "Donkey");
         insertPhoneNumber(rawContactId2, "1(888)555-1236");
 
         long contactId1 = queryContactId(rawContactId1);
@@ -830,12 +862,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testAggregationSuggestionsBasedOnEmailAddress() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Carl", "Fredricksen");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Carl", "Fredricksen");
         insertEmail(rawContactId1, "up@android.com");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Charles", "Muntz");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Charles", "Muntz");
         insertEmail(rawContactId2, "up@android.com");
 
         long contactId1 = queryContactId(rawContactId1);
@@ -848,12 +880,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testAggregationSuggestionsBasedOnEmailAddressApproximateMatch() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Bob", null);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Bob", null);
         insertEmail(rawContactId1, "incredible@android.com");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Lucius", "Best");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Lucius", "Best");
         insertEmail(rawContactId2, "incrediball@android.com");
 
         long contactId1 = queryContactId(rawContactId1);
@@ -864,12 +896,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationSuggestionsBasedOnNickname() {
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Peter", "Parker");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Peter", "Parker");
         insertNickname(rawContactId1, "Spider-Man");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Manny", "Spider");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Manny", "Spider");
 
         long contactId1 = queryContactId(rawContactId1);
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
@@ -880,12 +912,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationSuggestionsBasedOnNicknameMatchingName() {
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Clark", "Kent");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Clark", "Kent");
         insertNickname(rawContactId1, "Superman");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Roy", "Williams");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Roy", "Williams");
         insertNickname(rawContactId2, "superman");
 
         long contactId1 = queryContactId(rawContactId1);
@@ -897,11 +929,11 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationSuggestionsBasedOnCommonNickname() {
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Dick", "Cherry");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Dick", "Cherry");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Richard", "Cherry");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Richard", "Cherry");
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
@@ -914,12 +946,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testAggregationSuggestionsBasedOnPhoneNumberWithFilter() {
 
         // Create two contacts that would not be aggregated because of name mismatch
-        long rawContactId1 = createRawContact();
-        insertStructuredName(rawContactId1, "Lord", "Farquaad");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Lord", "Farquaad");
         insertPhoneNumber(rawContactId1, "(888)555-1236");
 
-        long rawContactId2 = createRawContact();
-        insertStructuredName(rawContactId2, "Talking", "Donkey");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Talking", "Donkey");
         insertPhoneNumber(rawContactId2, "1(888)555-1236");
 
         long contactId1 = queryContactId(rawContactId1);
@@ -933,13 +965,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationSuggestionsDontSuggestInvisible() {
-        long rawContactId1 = createRawContactWithName("first", "last", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "first", "last",
+                ACCOUNT_1);
         insertPhoneNumber(rawContactId1, "111-222-3333");
         insertNickname(rawContactId1, "Superman");
         insertEmail(rawContactId1, "incredible@android.com");
 
         // Create another with the exact same name, phone number, nickname and email.
-        long rawContactId2 = createRawContactWithName("first", "last", ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "first", "last",
+                ACCOUNT_2);
         insertPhoneNumber(rawContactId2, "111-222-3333");
         insertNickname(rawContactId2, "Superman");
         insertEmail(rawContactId2, "incredible@android.com");
@@ -965,15 +999,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testChoosePhotoSetBeforeAggregation() {
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         insertPhoto(rawContactId1);
 
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         long cupcakeId = ContentUris.parseId(insertPhoto(rawContactId2));
 
-        long rawContactId3 = createRawContact();
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId3, "froyo", "froyo_act");
         insertPhoto(rawContactId3);
 
@@ -985,17 +1019,17 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testChoosePhotoSetAfterAggregation() {
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         insertPhoto(rawContactId1);
 
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         long cupcakeId = ContentUris.parseId(insertPhoto(rawContactId2));
 
-        long rawContactId3 = createRawContact();
+        long rawContactId3 = RawContactUtil.createRawContact(mResolver);
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId3);
         setContactAccount(rawContactId3, "froyo", "froyo_act");
@@ -1015,7 +1049,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testChooseLargerPhotoByDimensions() {
         // Donut photo is 256x256.
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         long normalEarthDataId = ContentUris.parseId(
                 insertPhoto(rawContactId1, R.drawable.earth_normal));
@@ -1024,7 +1058,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
                 Photo.PHOTO_FILE_ID);
 
         // Cupcake would normally have priority, but its photo is 200x200.
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         insertPhoto(rawContactId2, R.drawable.earth_200);
 
@@ -1037,7 +1071,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testChooseLargerPhotoByFileSize() {
         // Donut photo is a 256x256 photo of a nebula.
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         long nebulaDataId = ContentUris.parseId(
                 insertPhoto(rawContactId1, R.drawable.nebula));
@@ -1047,7 +1081,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
         // Cupcake would normally have priority, but its photo (of a galaxy) has the same dimensions
         // as Donut's, but a smaller filesize.
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         insertPhoto(rawContactId2, R.drawable.galaxy);
 
@@ -1060,7 +1094,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testChooseFilePhotoOverThumbnail() {
         // Donut photo is a 256x256 photo of Earth.
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         long normalEarthDataId = ContentUris.parseId(
                 insertPhoto(rawContactId1, R.drawable.earth_normal));
@@ -1069,7 +1103,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
                 Photo.PHOTO_FILE_ID);
 
         // Cupcake would normally have priority, but its photo of Earth is thumbnail-sized.
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         insertPhoto(rawContactId2, R.drawable.earth_small);
 
@@ -1082,12 +1116,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testFallbackToAccountPriorityForSamePhoto() {
         // Donut photo is a 256x256 photo of Earth.
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         insertPhoto(rawContactId1, R.drawable.earth_normal);
 
         // Cupcake has the same 256x256 photo of Earth.
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         long cupcakeEarthDataId = ContentUris.parseId(
                 insertPhoto(rawContactId2, R.drawable.earth_normal));
@@ -1104,13 +1138,13 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testFallbackToAccountPriorityForDifferingThumbnails() {
         // Donut photo is a 96x96 thumbnail of Earth.
-        long rawContactId1 = createRawContact();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId1, "donut", "donut_act");
         insertPhoto(rawContactId1, R.drawable.earth_small);
 
         // Cupcake photo is the 96x96 "no contact" placeholder (smaller filesize than the Earth
         // picture, but thumbnail filesizes are ignored in the aggregator).
-        long rawContactId2 = createRawContact();
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         setContactAccount(rawContactId2, "cupcake", "cupcake_act");
         long cupcakeDataId = ContentUris.parseId(
                 insertPhoto(rawContactId2, R.drawable.ic_contact_picture));
@@ -1123,7 +1157,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testDisplayNameSources() {
-        long rawContactId = createRawContact();
+        long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
 
         assertNull(queryDisplayName(contactId));
@@ -1145,15 +1179,18 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         values.clear();
         values.put(StructuredName.GIVEN_NAME, "Eclair");
         values.put(StructuredName.FAMILY_NAME, "Android");
-        insertStructuredName(rawContactId, values);
+        DataUtil.insertStructuredName(mResolver, rawContactId, values);
         assertEquals("Eclair Android", queryDisplayName(contactId));
     }
 
     public void testVerifiedName() {
-        long rawContactId1 = createRawContactWithName("test1", "TEST1", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "test1", "TEST1",
+                ACCOUNT_1);
         storeValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.NAME_VERIFIED, "1");
-        long rawContactId2 = createRawContactWithName("test2", "TEST2", ACCOUNT_2);
-        long rawContactId3 = createRawContactWithName("test3", "TEST3 LONG", ACCOUNT_3);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "test2", "TEST2",
+                ACCOUNT_2);
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "test3",
+                "TEST3 LONG", ACCOUNT_3);
 
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
                 rawContactId2);
@@ -1179,15 +1216,15 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     public void testAggregationModeSuspendedSeparateTransactions() {
 
         // Setting aggregation mode to SUSPENDED should prevent aggregation from happening
-        long rawContactId1 = createRawContact(ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
         storeValue(RawContacts.CONTENT_URI, rawContactId1,
                 RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_SUSPENDED);
-        Uri name1 = insertStructuredName(rawContactId1, "THE", "SAME");
+        Uri name1 = DataUtil.insertStructuredName(mResolver, rawContactId1, "THE", "SAME");
 
-        long rawContactId2 = createRawContact(ACCOUNT_2);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         storeValue(RawContacts.CONTENT_URI, rawContactId2,
                 RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_SUSPENDED);
-        insertStructuredName(rawContactId2, "THE", "SAME");
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "THE", "SAME");
 
         assertNotAggregated(rawContactId1, rawContactId2);
 
@@ -1365,12 +1402,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregatedStatusUpdate() {
-        long rawContactId1 = createRawContact();
-        Uri dataUri1 = insertStructuredName(rawContactId1, "john", "doe");
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        Uri dataUri1 = DataUtil.insertStructuredName(mResolver, rawContactId1, "john", "doe");
         insertStatusUpdate(ContentUris.parseId(dataUri1), StatusUpdates.AWAY, "Green", 100,
                 StatusUpdates.CAPABILITY_HAS_CAMERA);
-        long rawContactId2 = createRawContact();
-        Uri dataUri2 = insertStructuredName(rawContactId2, "john", "doe");
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
+        Uri dataUri2 = DataUtil.insertStructuredName(mResolver, rawContactId2, "john", "doe");
         insertStatusUpdate(ContentUris.parseId(dataUri2), StatusUpdates.AVAILABLE, "Red", 50,
                 StatusUpdates.CAPABILITY_HAS_CAMERA);
         setAggregationException(
@@ -1391,8 +1428,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     }
 
     public void testAggregationSuggestionsByName() throws Exception {
-        long rawContactId1 = createRawContactWithName("first1", "last1");
-        long rawContactId2 = createRawContactWithName("first2", "last2");
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "first1", "last1");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "first2", "last2");
 
         Uri uri = AggregationSuggestions.builder()
                 .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "last1 first1")

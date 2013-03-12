@@ -23,6 +23,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import com.android.internal.telephony.CallerInfo;
+import com.android.providers.contacts.testutil.DataUtil;
 
 /**
  * Integration test for {@link CallerInfo} and {@link ContactsProvider2}.
@@ -44,7 +45,7 @@ public class CallerInfoIntegrationTest extends BaseContactsProvider2Test {
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
         long rawContactId = ContentUris.parseId(rawContactUri);
 
-        insertStructuredName(rawContactId, "Hot", "Tamale");
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "800-466-4411");
 
         CallerInfo callerInfo = CallerInfo.getCallerInfo(getProvider().getContext(), "18004664411");
