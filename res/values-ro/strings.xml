@@ -30,7 +30,7 @@
     <string name="voicemail_from_column" msgid="435732568832121444">"Mesaj vocal de la "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiaţi baza de date a agendei"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Sunteţi pe cale 1) să faceţi o copie, pe stocarea internă, a bazei dvs. de date care include toate informaţiile referitoare la agendă şi întregul jurnal de apeluri şi 2) să trimiteţi această copie prin e-mail. Nu uitaţi să ştergeţi această copie după ce aţi copiat-o de pe dispozitiv sau după ce a fost primit e-mailul."</string>
-    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ştergeţi acum"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ștergeţi acum"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Porniţi"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Alegeţi un program pentru a trimite fişierul"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Atașată baza de date a agendei"</string>
