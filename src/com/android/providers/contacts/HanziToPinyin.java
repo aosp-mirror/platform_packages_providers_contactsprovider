@@ -34,7 +34,8 @@ public class HanziToPinyin {
     private static final String TAG = "HanziToPinyin";
 
     private static HanziToPinyin sInstance;
-    private final Transliterator mPinyinTransliterator;
+    private Transliterator mPinyinTransliterator;
+    private Transliterator mAsciiTransliterator;
 
     public static class Token {
         /**
@@ -71,14 +72,13 @@ public class HanziToPinyin {
     }
 
     private HanziToPinyin() {
-        Transliterator t = null;
         try {
-            t = new Transliterator("Han-Latin/Names; Latin-Ascii; Any-Upper");
+            mPinyinTransliterator = new Transliterator("Han-Latin/Names; Latin-Ascii; Any-Upper");
+            mAsciiTransliterator = new Transliterator("Latin-Ascii");
         } catch (RuntimeException e) {
             Log.w(TAG, "Han-Latin/Names transliterator data is missing,"
                   + " HanziToPinyin is disabled");
         }
-        mPinyinTransliterator = t;
     }
 
     public boolean hasChineseTransliterator() {
@@ -94,14 +94,22 @@ public class HanziToPinyin {
         }
     }
 
-    private Token getToken(char character) {
-        Token token = new Token();
+    private void tokenize(char character, Token token) {
         token.source = Character.toString(character);
 
-        if (character < 256) {
+        // ASCII
+        if (character < 128) {
             token.type = Token.LATIN;
             token.target = token.source;
-            return token;
+            return;
+        }
+
+        // Extended Latin. Transcode these to ASCII equivalents
+        if (character < 0x250 || (0x1e00 <= character && character < 0x1eff)) {
+            token.type = Token.LATIN;
+            token.target = mAsciiTransliterator == null ? token.source :
+                mAsciiTransliterator.transliterate(token.source);
+            return;
         }
 
         token.type = Token.PINYIN;
@@ -111,7 +119,6 @@ public class HanziToPinyin {
             token.type = Token.UNKNOWN;
             token.target = token.source;
         }
-        return token;
     }
 
     /**
@@ -125,40 +132,37 @@ public class HanziToPinyin {
             // return empty tokens.
             return tokens;
         }
+
         final int inputLength = input.length();
         final StringBuilder sb = new StringBuilder();
         int tokenType = Token.LATIN;
+        Token token = new Token();
+
         // Go through the input, create a new token when
         // a. Token type changed
         // b. Get the Pinyin of current charater.
         // c. current character is space.
         for (int i = 0; i < inputLength; i++) {
             final char character = input.charAt(i);
-            if (character == ' ') {
+            if (Character.isSpaceChar(character)) {
                 if (sb.length() > 0) {
                     addToken(sb, tokens, tokenType);
                 }
-            } else if (character < 256) {
-                if (tokenType != Token.LATIN && sb.length() > 0) {
-                    addToken(sb, tokens, tokenType);
-                }
-                tokenType = Token.LATIN;
-                sb.append(character);
             } else {
-                Token t = getToken(character);
-                if (t.type == Token.PINYIN) {
+                tokenize(character, token);
+                if (token.type == Token.PINYIN) {
                     if (sb.length() > 0) {
                         addToken(sb, tokens, tokenType);
                     }
-                    tokens.add(t);
-                    tokenType = Token.PINYIN;
+                    tokens.add(token);
+                    token = new Token();
                 } else {
-                    if (tokenType != t.type && sb.length() > 0) {
+                    if (tokenType != token.type && sb.length() > 0) {
                         addToken(sb, tokens, tokenType);
                     }
-                    tokenType = t.type;
-                    sb.append(character);
+                    sb.append(token.target);
                 }
+                tokenType = token.type;
             }
         }
         if (sb.length() > 0) {

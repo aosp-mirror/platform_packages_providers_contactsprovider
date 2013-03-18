@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 
 @SmallTest
@@ -160,9 +161,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
 
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
-        Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
-                FullNameStyle.CHINESE);
-        verifyKeys(keys, CHINESE_NAME_KEY);
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
 
         // Following two tests are broken with ICU 50
         verifyLabels(getLabels(), LABELS_JA_JP);
@@ -213,14 +212,12 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         }
 
         ContactLocaleUtils.setLocale(Locale.ENGLISH);
-        Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
-                FullNameStyle.CHINESE);
-        verifyKeys(keys, CHINESE_NAME_KEY);
-        keys = getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK);
-        verifyKeys(keys, CHINESE_NAME_KEY);
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
 
-        ContactLocaleUtils.setLocale(Locale.CHINESE);
-        keys = getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK);
+        ContactLocaleUtils.setLocale(Locale.CHINA);
+        Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
+                FullNameStyle.CJK);
         verifyKeys(keys, CHINESE_NAME_KEY);
         keys = getNameLookupKeys(LATIN_NAME, FullNameStyle.WESTERN);
         verifyKeys(keys, LATIN_NAME_KEY);
@@ -228,8 +225,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         verifyKeys(keys, LATIN_NAME_KEY_2);
 
         ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-        keys = getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK);
-        verifyKeys(keys, CHINESE_NAME_KEY);
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
     }
 
     public void testKoreanContactLocaleUtils() throws Exception {
@@ -278,10 +274,14 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals(new HashSet<String>(Arrays.asList(expectedKeys)), allKeys);
     }
 
+    // Verify that the initial set of resultLabels matches the expectedLabels.
+    // Ignore the (large) number of secondary locale labels that make up the
+    // tail labels in the result set right before the final "#" and "" buckets.
     private void verifyLabels(final ArrayList<String> resultLabels,
-                              final String[] expectedLabels)
-            throws Exception {
-        assertEquals(new ArrayList<String>(Arrays.asList(expectedLabels)),
-                     resultLabels);
+            final String[] expectedLabels) throws Exception {
+        final List<String> expectedLabelList = Arrays.asList(expectedLabels);
+        final int numLabels = expectedLabelList.size() - 2;
+        assertEquals(expectedLabelList.subList(0, numLabels),
+                resultLabels.subList(0, numLabels));
     }
 }
