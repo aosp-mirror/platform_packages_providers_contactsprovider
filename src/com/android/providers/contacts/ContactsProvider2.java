@@ -69,6 +69,7 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Authorization;
+import android.provider.ContactsContract.CommonDataKinds.Contactables;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Identity;
@@ -304,6 +305,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CALLABLES = 3011;
     private static final int CALLABLES_ID = 3012;
     private static final int CALLABLES_FILTER = 3013;
+    private static final int CONTACTABLES = 3014;
+    private static final int CONTACTABLES_FILTER = 3015;
 
     private static final int PHONE_LOOKUP = 4000;
 
@@ -1152,6 +1155,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/#", CALLABLES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter", CALLABLES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter/*", CALLABLES_FILTER);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/", CONTACTABLES);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/filter", CONTACTABLES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/filter/*",
+                CONTACTABLES_FILTER);
 
         matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
         matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
@@ -5723,6 +5731,108 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
+            case CONTACTABLES:
+            case CONTACTABLES_FILTER: {
+                setTablesAndProjectionMapForData(qb, uri, projection, false);
+
+                String filterParam = null;
+
+                final int uriPathSize = uri.getPathSegments().size();
+                if (uriPathSize > 3) {
+                    filterParam = uri.getLastPathSegment();
+                    if (TextUtils.isEmpty(filterParam)) {
+                        filterParam = null;
+                    }
+                }
+
+                // CONTACTABLES_FILTER but no query provided, return an empty cursor
+                if (uriPathSize > 2 && filterParam == null) {
+                    qb.appendWhere(" AND 0");
+                    break;
+                }
+
+                if (uri.getBooleanQueryParameter(Contactables.VISIBLE_CONTACTS_ONLY, false)) {
+                    qb.appendWhere(" AND " + Data.CONTACT_ID + " in " +
+                            Tables.DEFAULT_DIRECTORY);
+                    }
+
+                final StringBuilder sb = new StringBuilder();
+
+                // we only want data items that are either email addresses or phone numbers
+                sb.append(" AND (");
+                sb.append(DataColumns.MIMETYPE_ID + " IN (");
+                sb.append(mDbHelper.get().getMimeTypeIdForEmail());
+                sb.append(",");
+                sb.append(mDbHelper.get().getMimeTypeIdForPhone());
+                sb.append("))");
+
+                // Rest of the query is only relevant if we are handling CONTACTABLES_FILTER
+                if (uriPathSize < 3) {
+                    qb.appendWhere(sb);
+                    break;
+                }
+
+                // but we want all the email addresses and phone numbers that belong to
+                // all contacts that have any data items (or name) that match the query
+                sb.append(" AND ");
+                sb.append("(" + Data.CONTACT_ID + " IN (");
+
+                // All contacts where the email address data1 column matches the query
+                sb.append(
+                        "SELECT " + RawContacts.CONTACT_ID +
+                        " FROM " + Tables.DATA + " JOIN " + Tables.RAW_CONTACTS +
+                        " ON " + Tables.DATA + "." + Data.RAW_CONTACT_ID + "=" +
+                        Tables.RAW_CONTACTS + "." + RawContacts._ID +
+                        " WHERE (" + DataColumns.MIMETYPE_ID + "=");
+                sb.append(mDbHelper.get().getMimeTypeIdForEmail());
+
+                sb.append(" AND " + Data.DATA1 + " LIKE ");
+                DatabaseUtils.appendEscapedSQLString(sb, filterParam + '%');
+                sb.append(")");
+
+                // All contacts where the phone number matches the query (determined by checking
+                // Tables.PHONE_LOOKUP
+                final String number = PhoneNumberUtils.normalizeNumber(filterParam);
+                if (!TextUtils.isEmpty(number)) {
+                    sb.append("UNION SELECT DISTINCT " + RawContacts.CONTACT_ID +
+                            " FROM " + Tables.PHONE_LOOKUP + " JOIN " + Tables.RAW_CONTACTS +
+                            " ON (" + Tables.PHONE_LOOKUP + "." +
+                            PhoneLookupColumns.RAW_CONTACT_ID + "=" +
+                            Tables.RAW_CONTACTS + "." + RawContacts._ID + ")" +
+                            " WHERE " + PhoneLookupColumns.NORMALIZED_NUMBER + " LIKE '");
+                    sb.append(number);
+                    sb.append("%'");
+                }
+
+                // All contacts where the name matches the query (determined by checking
+                // Tables.SEARCH_INDEX
+                sb.append(
+                        " UNION SELECT " + Data.CONTACT_ID +
+                        " FROM " + Tables.DATA + " JOIN " + Tables.RAW_CONTACTS +
+                        " ON " + Tables.DATA + "." + Data.RAW_CONTACT_ID + "=" +
+                        Tables.RAW_CONTACTS + "." + RawContacts._ID +
+
+                        " WHERE " + Data.RAW_CONTACT_ID + " IN " +
+
+                        "(SELECT " + RawContactsColumns.CONCRETE_ID +
+                        " FROM " + Tables.SEARCH_INDEX +
+                        " JOIN " + Tables.RAW_CONTACTS +
+                        " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
+                        + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
+
+                        " WHERE " + SearchIndexColumns.NAME + " MATCH '");
+
+                final String ftsMatchQuery = SearchIndexManager.getFtsMatchQuery(
+                        filterParam, FtsQueryBuilder.UNSCOPED_NORMALIZING);
+                sb.append(ftsMatchQuery);
+                sb.append("')");
+
+                sb.append("))");
+                qb.appendWhere(sb);
+
+                break;
+            }
+
             case POSTALS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
@@ -5804,6 +5914,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case DATA:
             case PROFILE_DATA: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
+                if (uri.getBooleanQueryParameter(Data.VISIBLE_CONTACTS_ONLY, false)) {
+                    qb.appendWhere(" AND " + Data.CONTACT_ID + " in " +
+                            Tables.DEFAULT_DIRECTORY);
+                }
                 break;
             }
 
