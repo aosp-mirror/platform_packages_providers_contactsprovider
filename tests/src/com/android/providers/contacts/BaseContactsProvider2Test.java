@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
+import static com.android.providers.contacts.TestUtils.cv;
 
 import android.accounts.Account;
 import android.content.ContentProvider;
@@ -1112,6 +1113,22 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertTrue(message.toString(), result);
     }
 
+    protected void assertCursorContains(Cursor cursor, ContentValues expectedValues) {
+        final StringBuilder message = new StringBuilder();
+        boolean found = false;
+        cursor.moveToPosition(-1);
+        while (cursor.moveToNext()) {
+            message.setLength(0);
+            final int pos = cursor.getPosition();
+            found = equalsWithExpectedValues(cursor, expectedValues, message);
+            if (found) {
+                break;
+            }
+        }
+        assertTrue("Expected values can not be found " + expectedValues + "," + message.toString(),
+                found);
+    }
+
     protected void assertCursorValues(Cursor cursor, ContentValues... expectedValues) {
         StringBuilder message = new StringBuilder();
 
@@ -1177,6 +1194,25 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             }
         }
         return true;
+    }
+
+    private static final String[] DATA_USAGE_PROJECTION =
+            new String[] {Data.DATA1, Data.TIMES_USED, Data.LAST_TIME_USED};
+
+    protected void assertDataUsageCursorContains(Uri uri, String data1, int timesUsed,
+            int lastTimeUsed) {
+        final Cursor cursor = mResolver.query(uri, DATA_USAGE_PROJECTION, null, null,
+                null);
+        try {
+            assertCursorContains(cursor,
+                    cv(
+                            Data.DATA1, data1,
+                            Data.TIMES_USED, timesUsed,
+                            Data.LAST_TIME_USED, lastTimeUsed)
+            );
+        } finally {
+            cursor.close();
+        }
     }
 
     private String[] buildProjection(ContentValues values) {
