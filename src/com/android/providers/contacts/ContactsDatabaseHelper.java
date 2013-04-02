@@ -109,7 +109,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 708;
+    static final int DATABASE_VERSION = 709;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -996,6 +996,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 RawContacts.DISPLAY_NAME_SOURCE + " INTEGER NOT NULL DEFAULT " +
                         DisplayNameSources.UNDEFINED + "," +
                 RawContacts.PHONETIC_NAME + " TEXT," +
+                // TODO: PHONETIC_NAME_STYLE should be INTEGER. There is a
+                // mismatch between how the column is created here (TEXT) and
+                // how it is created in upgradeToVersion205 (INTEGER).
                 RawContacts.PHONETIC_NAME_STYLE + " TEXT," +
                 RawContacts.SORT_KEY_PRIMARY + " TEXT COLLATE " +
                         ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
@@ -2452,6 +2455,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // changed so force a rebuild.
             upgradeLocaleSpecificData = true;
             oldVersion = 708;
+        }
+        if (oldVersion < 709) {
+            // Added secondary locale phonebook labels; changed Japanese
+            // and Chinese sort keys.
+            upgradeLocaleSpecificData = true;
+            oldVersion = 709;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -5271,6 +5280,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 bestPhoneticNameStyle = mNameSplitter.guessPhoneticNameStyle(bestPhoneticName);
             }
         } else {
+            bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
             if (displayNameStyle == FullNameStyle.UNDEFINED) {
                 displayNameStyle = mNameSplitter.guessFullNameStyle(bestDisplayName);
                 if (displayNameStyle == FullNameStyle.UNDEFINED

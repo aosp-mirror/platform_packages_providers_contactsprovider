@@ -3337,6 +3337,27 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dataUri, values);
     }
 
+    public void testJapaneseNameContactInEnglishLocale() {
+        // Need Japanese locale data for transliteration
+        if (!hasJapaneseCollator()) {
+            return;
+        }
+        ContactLocaleUtils.setLocale(Locale.US);
+        long rawContactId = createRawContact(null);
+
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.GIVEN_NAME, "\u7A7A\u6D77");
+        values.put(StructuredName.PHONETIC_GIVEN_NAME, "\u304B\u3044\u304F\u3046");
+        insertStructuredName(rawContactId, values);
+
+        long contactId = queryContactId(rawContactId);
+        // en_US should behave same as ja_JP (match on Hiragana and Romaji
+        // but not Pinyin)
+        assertContactFilter(contactId, "\u304B\u3044\u304F\u3046");
+        assertContactFilter(contactId, "kaiku");
+        assertContactFilterNoResult("kong");
+    }
+
     public void testContactWithJapaneseName() {
         if (!hasJapaneseCollator()) {
             return;
@@ -3380,6 +3401,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // The same values should be available through a join with Data
         assertStoredValues(dataUri, values);
+
+        long contactId = queryContactId(rawContactId);
+        // ja_JP should match on Hiragana and Romaji but not Pinyin
+        assertContactFilter(contactId, "\u304B\u3044\u304F\u3046");
+        assertContactFilter(contactId, "kaiku");
+        assertContactFilterNoResult("kong");
     }
 
     public void testDisplayNameUpdate() {
@@ -3570,8 +3597,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     private void assertContactFilterNoResult(String filter) {
-        Uri filterUri4 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, filter);
-        assertEquals(0, getCount(filterUri4, null, null));
+        Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filter));
+        assertEquals(0, getCount(filterUri, null, null));
     }
 
     public void testSearchSnippetOrganization() throws Exception {

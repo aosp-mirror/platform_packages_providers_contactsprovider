@@ -21,6 +21,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.FullNameStyle;
+import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
 
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
@@ -141,6 +142,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
             name.fromValues(augmented);
             // As the name could be changed, let's guess the name style again.
             name.fullNameStyle = FullNameStyle.UNDEFINED;
+            name.phoneticNameStyle = PhoneticNameStyle.UNDEFINED;
             mSplitter.guessNameStyle(name);
             int unadjustedFullNameStyle = name.fullNameStyle;
             name.fullNameStyle = mSplitter.getAdjustedFullNameStyle(name.fullNameStyle);
@@ -155,8 +157,11 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                         mSplitter.guessFullNameStyle(unstruct));
             }
             if (!update.containsKey(StructuredName.PHONETIC_NAME_STYLE)) {
-                update.put(StructuredName.PHONETIC_NAME_STYLE,
-                        mSplitter.guessPhoneticNameStyle(unstruct));
+                NameSplitter.Name name = new NameSplitter.Name();
+                name.fromValues(update);
+                name.phoneticNameStyle = PhoneticNameStyle.UNDEFINED;
+                mSplitter.guessNameStyle(name);
+                update.put(StructuredName.PHONETIC_NAME_STYLE, name.phoneticNameStyle);
             }
         }
     }
@@ -219,7 +224,14 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                 builder.appendName(phoneticGiven);
                 mSb.append(phoneticGiven);
             }
-            builder.appendName(mSb.toString().trim());
+            final String phoneticName = mSb.toString().trim();
+            int phoneticNameStyle = builder.getInt(StructuredName.PHONETIC_NAME_STYLE);
+            if (phoneticNameStyle == PhoneticNameStyle.UNDEFINED) {
+                phoneticNameStyle = mSplitter.guessPhoneticNameStyle(phoneticName);
+            }
+            builder.appendName(phoneticName);
+            mNameLookupBuilder.appendNameShorthandLookup(builder, phoneticName,
+                    phoneticNameStyle);
         }
     }
 }

@@ -17,6 +17,8 @@
 package com.android.providers.contacts;
 
 import android.provider.ContactsContract.FullNameStyle;
+import android.provider.ContactsContract.PhoneticNameStyle;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
@@ -35,6 +37,7 @@ import java.util.Set;
 
 import libcore.icu.AlphabeticIndex;
 import libcore.icu.AlphabeticIndex.ImmutableIndex;
+import libcore.icu.Transliterator;
 
 /**
  * This utility class provides specialized handling for locale specific
@@ -42,6 +45,13 @@ import libcore.icu.AlphabeticIndex.ImmutableIndex;
  */
 public class ContactLocaleUtils {
     public static final String TAG = "ContactLocale";
+
+    public static final Locale LOCALE_ARABIC = new Locale("ar");
+    public static final Locale LOCALE_GREEK = new Locale("el");
+    public static final Locale LOCALE_HEBREW = new Locale("he");
+    // Ukrainian labels are superset of Russian
+    public static final Locale LOCALE_UKRAINIAN = new Locale("uk");
+    public static final Locale LOCALE_THAI = new Locale("th");
 
     /**
      * This class is the default implementation and should be the base class
@@ -61,8 +71,28 @@ public class ContactLocaleUtils {
         private final int mNumberBucketIndex;
 
         public ContactLocaleUtilsBase(Locale locale) {
+            // AlphabeticIndex.getBucketLabel() uses a binary search across
+            // the entire label set so care should be taken about growing this
+            // set too large. The following set determines for which locales
+            // we will show labels other than your primary locale. General rules
+            // of thumb for adding a locale: should be a supported locale; and
+            // should not be included if from a name it is not deterministic
+            // which way to label it (so eg Chinese cannot be added because
+            // the labeling of a Chinese character varies between Simplified,
+            // Traditional, and Japanese locales). Use English only for all
+            // Latin based alphabets. Ukrainian is chosen for Cyrillic because
+            // its alphabet is a superset of Russian.
             mAlphabeticIndex = new AlphabeticIndex(locale)
-                .addLabels(Locale.US).getImmutableIndex();
+                .setMaxLabelCount(300)
+                .addLabels(Locale.ENGLISH)
+                .addLabels(Locale.JAPANESE)
+                .addLabels(Locale.KOREAN)
+                .addLabels(LOCALE_THAI)
+                .addLabels(LOCALE_ARABIC)
+                .addLabels(LOCALE_HEBREW)
+                .addLabels(LOCALE_GREEK)
+                .addLabels(LOCALE_UKRAINIAN)
+                .getImmutableIndex();
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
         }
@@ -138,7 +168,7 @@ public class ContactLocaleUtils {
         }
 
         @SuppressWarnings("unused")
-        public Iterator<String> getNameLookupKeys(String name) {
+        public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
             return null;
         }
 
@@ -248,11 +278,56 @@ public class ContactLocaleUtils {
             }
             return super.getBucketLabel(bucketIndex);
         }
+
+        @Override
+        public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
+            // Hiragana and Katakana will be positively identified as Japanese.
+            if (nameStyle == PhoneticNameStyle.JAPANESE) {
+                return getRomajiNameLookupKeys(name);
+            }
+            return null;
+        }
+
+        private static boolean mInitializedTransliterator;
+        private static Transliterator mJapaneseTransliterator;
+
+        private static Transliterator getJapaneseTransliterator() {
+            synchronized(JapaneseContactUtils.class) {
+                if (!mInitializedTransliterator) {
+                    mInitializedTransliterator = true;
+                    Transliterator t = null;
+                    try {
+                        t = new Transliterator("Hiragana-Latin; Katakana-Latin;"
+                                + " Latin-Ascii");
+                    } catch (RuntimeException e) {
+                        Log.w(TAG, "Hiragana/Katakana-Latin transliterator data"
+                                + " is missing");
+                    }
+                    mJapaneseTransliterator = t;
+                }
+                return mJapaneseTransliterator;
+            }
+        }
+
+        public static Iterator<String> getRomajiNameLookupKeys(String name) {
+            final Transliterator t = getJapaneseTransliterator();
+            if (t == null) {
+                return null;
+            }
+            final String romajiName = t.transliterate(name);
+            if (TextUtils.isEmpty(romajiName) ||
+                    TextUtils.equals(name, romajiName)) {
+                return null;
+            }
+            final HashSet<String> keys = new HashSet<String>();
+            keys.add(romajiName);
+            return keys.iterator();
+        }
     }
 
     /**
-     * Chinese specific locale overrides. Uses ICU Transliterator for
-     * generating pinyin transliteration.
+     * Simplified Chinese specific locale overrides. Uses ICU Transliterator
+     * for generating pinyin transliteration.
      *
      * sortKey: unchanged (same as name)
      * nameLookupKeys: adds additional name lookup keys
@@ -260,17 +335,20 @@ public class ContactLocaleUtils {
      *     - Latin word and initial character.
      * labels: unchanged
      *     Simplified Chinese labels are the same as English: [A-Z], #, " "
-     *     Traditional Chinese labels are stroke count, then English labels:
-     *         [1-33, 35, 36, 48]劃, [A-Z], #, " "
      */
-    private static class ChineseContactUtils extends ContactLocaleUtilsBase {
-        public ChineseContactUtils(Locale locale) {
+    private static class SimplifiedChineseContactUtils
+        extends ContactLocaleUtilsBase {
+        public SimplifiedChineseContactUtils(Locale locale) {
             super(locale);
         }
 
         @Override
-        public Iterator<String> getNameLookupKeys(String name) {
-            return getPinyinNameLookupKeys(name);
+        public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
+            if (nameStyle != FullNameStyle.JAPANESE &&
+                    nameStyle != FullNameStyle.KOREAN) {
+                return getPinyinNameLookupKeys(name);
+            }
+            return null;
         }
 
         public static Iterator<String> getPinyinNameLookupKeys(String name) {
@@ -286,6 +364,9 @@ public class ContactLocaleUtils {
             final StringBuilder keyOriginal = new StringBuilder();
             for (int i = tokenCount - 1; i >= 0; i--) {
                 final Token token = tokens.get(i);
+                if (Token.UNKNOWN == token.type) {
+                    continue;
+                }
                 if (Token.PINYIN == token.type) {
                     keyPinyin.insert(0, token.target);
                     keyInitial.insert(0, token.target.charAt(0));
@@ -328,8 +409,8 @@ public class ContactLocaleUtils {
         mLanguage = mLocale.getLanguage().toLowerCase();
         if (mLanguage.equals(JAPANESE_LANGUAGE)) {
             mUtils = new JapaneseContactUtils(mLocale);
-        } else if (mLanguage.equals(CHINESE_LANGUAGE)) {
-            mUtils = new ChineseContactUtils(mLocale);
+        } else if (mLocale.equals(Locale.CHINA)) {
+            mUtils = new SimplifiedChineseContactUtils(mLocale);
         } else {
             mUtils = new ContactLocaleUtilsBase(mLocale);
         }
@@ -382,22 +463,21 @@ public class ContactLocaleUtils {
      *  Determine which utility should be used for generating NameLookupKey.
      *  (ie, whether we generate Pinyin lookup keys or not)
      *
-     *  a. For unclassified CJK name, if current locale language is neither
-     *     Japanese nor Korean, use ChineseContactUtils.
-     *  b. If we're sure this is a Chinese name, always use ChineseContactUtils.
-     *  c. Otherwise, use whichever ContactUtils are appropriate for the locale
-     *     (so, Western names in Chinese locale will use ChineseContactUtils)
+     *  Hiragana and Katakana are tagged as JAPANESE; Kanji is unclassified
+     *  and tagged as CJK. For Hiragana/Katakana names, generate Romaji
+     *  lookup keys when not in a Chinese or Korean locale.
+     *
+     *  Otherwise, use the default behavior of that locale:
+     *  a. For Japan, generate Romaji lookup keys for Hiragana/Katakana.
+     *  b. For Simplified Chinese locale, generate Pinyin lookup keys.
      */
     public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
-        if (nameStyle == FullNameStyle.CJK &&
-            !JAPANESE_LANGUAGE.equals(mLanguage) &&
-            !KOREAN_LANGUAGE.equals(mLanguage)) {
-            return ChineseContactUtils.getPinyinNameLookupKeys(name);
+        if (nameStyle == FullNameStyle.JAPANESE &&
+                !CHINESE_LANGUAGE.equals(mLanguage) &&
+                !KOREAN_LANGUAGE.equals(mLanguage)) {
+            return JapaneseContactUtils.getRomajiNameLookupKeys(name);
         }
-        if (nameStyle == FullNameStyle.CHINESE) {
-            return ChineseContactUtils.getPinyinNameLookupKeys(name);
-        }
-        return mUtils.getNameLookupKeys(name);
+        return mUtils.getNameLookupKeys(name, nameStyle);
     }
 
 }
