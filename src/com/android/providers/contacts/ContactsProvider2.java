@@ -210,6 +210,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private static final int DEFAULT_PREAUTHORIZED_URI_EXPIRATION = 5 * 60 * 1000;
 
+    private static final int USAGE_TYPE_ALL = -1;
+
     /**
      * Random URI parameter that will be appended to preauthorized URIs for uniqueness.
      */
@@ -671,6 +673,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Data.STATUS_ICON, StatusUpdatesColumns.CONCRETE_STATUS_ICON)
             .build();
 
+    private static final ProjectionMap sDataUsageColumns = ProjectionMap.builder()
+            .add(Data.TIMES_USED, Tables.DATA_USAGE_STAT + "." + Data.TIMES_USED)
+            .add(Data.LAST_TIME_USED, Tables.DATA_USAGE_STAT + "." + Data.LAST_TIME_USED)
+            .build();
+
     /** Contains just BaseColumns._COUNT */
     private static final ProjectionMap sCountProjectionMap = ProjectionMap.builder()
             .add(BaseColumns._COUNT, "COUNT(*)")
@@ -824,6 +831,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .addAll(sRawContactColumns)
             .addAll(sContactsColumns)
             .addAll(sContactPresenceColumns)
+            .addAll(sDataUsageColumns)
             .build();
 
     /** Contains columns from the data view used for SIP address lookup. */
@@ -841,6 +849,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .addAll(sDataPresenceColumns)
             .addAll(sContactsColumns)
             .addAll(sContactPresenceColumns)
+            .addAll(sDataUsageColumns)
             .build();
 
     /** Contains columns from the data view used for SIP address lookup. */
@@ -5913,7 +5922,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DATA:
             case PROFILE_DATA: {
-                setTablesAndProjectionMapForData(qb, uri, projection, false);
+                final String usageType = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
+                final int typeInt = getDataUsageFeedbackType(usageType, USAGE_TYPE_ALL);
+                setTablesAndProjectionMapForData(qb, uri, projection, false, typeInt);
                 if (uri.getBooleanQueryParameter(Data.VISIBLE_CONTACTS_ONLY, false)) {
                     qb.appendWhere(" AND " + Data.CONTACT_ID + " in " +
                             Tables.DEFAULT_DIRECTORY);
@@ -7009,9 +7020,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         appendDataPresenceJoin(sb, projection, DataColumns.CONCRETE_ID);
         appendDataStatusUpdateJoin(sb, projection, DataColumns.CONCRETE_ID);
 
-        if (usageType != null) {
-            appendDataUsageStatJoin(sb, usageType, DataColumns.CONCRETE_ID);
-        }
+        appendDataUsageStatJoin(sb, usageType == null ? USAGE_TYPE_ALL : usageType,
+                DataColumns.CONCRETE_ID);
 
         qb.setTables(sb.toString());
 
@@ -7108,9 +7118,29 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private void appendDataUsageStatJoin(StringBuilder sb, int usageType, String dataIdColumn) {
-        sb.append(" LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT +
-                " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=" + dataIdColumn +
-                " AND " + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=" + usageType + ")");
+        if (usageType != USAGE_TYPE_ALL) {
+            sb.append(" LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT +
+                    " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=");
+            sb.append(dataIdColumn);
+            sb.append(" AND " + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=");
+            sb.append(usageType);
+            sb.append(")");
+        } else {
+            sb.append(
+                    " LEFT OUTER JOIN " +
+                        "(SELECT " +
+                            DataUsageStatColumns.CONCRETE_DATA_ID + ", " +
+                            "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED +
+                                ") as " + DataUsageStatColumns.TIMES_USED + ", " +
+                            "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED +
+                                ") as " + DataUsageStatColumns.LAST_TIME_USED +
+                        " FROM " + Tables.DATA_USAGE_STAT + " GROUP BY " +
+                            DataUsageStatColumns.DATA_ID + ") as " + Tables.DATA_USAGE_STAT
+                    );
+            sb.append(" ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=");
+            sb.append(dataIdColumn);
+            sb.append(")");
+        }
     }
 
     private void appendContactPresenceJoin(StringBuilder sb, String[] projection,

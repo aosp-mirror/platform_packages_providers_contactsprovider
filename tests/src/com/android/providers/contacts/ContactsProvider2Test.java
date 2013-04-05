@@ -32,7 +32,7 @@ import android.os.AsyncTask;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Callable;
-import android.provider.ContactsContract.CommonDataKinds.Contactables;;
+import android.provider.ContactsContract.CommonDataKinds.Contactables;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Im;
@@ -343,6 +343,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.STATUS_RES_PACKAGE,
                 Data.STATUS_LABEL,
                 Data.STATUS_ICON,
+                Data.TIMES_USED,
+                Data.LAST_TIME_USED,
                 RawContacts.ACCOUNT_NAME,
                 RawContacts.ACCOUNT_TYPE,
                 RawContacts.DATA_SET,
@@ -424,6 +426,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.STATUS_RES_PACKAGE,
                 Data.STATUS_LABEL,
                 Data.STATUS_ICON,
+                Data.TIMES_USED,
+                Data.LAST_TIME_USED,
                 RawContacts.RAW_CONTACT_IS_USER_PROFILE,
                 Contacts._ID,
                 Contacts.DISPLAY_NAME_PRIMARY,
@@ -2514,6 +2518,48 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Now we have only 1 frequent.
         assertStoredValues(Contacts.CONTENT_FREQUENT_URI, new ContentValues[] {values1});
+
+    }
+
+    public void testQueryDataUsageStat() {
+        ContentValues values1 = new ContentValues();
+        final String email1 = "a@acme.com";
+        final long cid1 = createContact(values1, "Noah", "Tever", "18004664411",
+                email1, StatusUpdates.OFFLINE, 0, 0, 0, 0);
+
+        sMockClock.install();
+        sMockClock.setCurrentTimeMillis(100);
+
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
+
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 1, 100);
+
+        sMockClock.setCurrentTimeMillis(111);
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
+
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 2, 111);
+
+        sMockClock.setCurrentTimeMillis(123);
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_SHORT_TEXT, values1);
+
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 3, 123);
+
+        final Uri dataUriWithUsageTypeLongText = Data.CONTENT_URI.buildUpon().appendQueryParameter(
+                DataUsageFeedback.USAGE_TYPE, DataUsageFeedback.USAGE_TYPE_LONG_TEXT).build();
+
+        assertDataUsageCursorContains(dataUriWithUsageTypeLongText, "a@acme.com", 2, 111);
+
+        sMockClock.setCurrentTimeMillis(200);
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
+        sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
+
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 6, 200);
+
+        final Uri dataUriWithUsageTypeCall = Data.CONTENT_URI.buildUpon().appendQueryParameter(
+                DataUsageFeedback.USAGE_TYPE, DataUsageFeedback.USAGE_TYPE_CALL).build();
+
+        assertDataUsageCursorContains(dataUriWithUsageTypeCall, "a@acme.com", 3, 200);
     }
 
     public void testQueryContactGroup() {
