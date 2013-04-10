@@ -3414,12 +3414,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             return;
         }
         ContactLocaleUtils.setLocale(Locale.US);
-        long rawContactId = createRawContact(null);
+        long rawContactId = RawContactUtil.createRawContact(null);
 
         ContentValues values = new ContentValues();
         values.put(StructuredName.GIVEN_NAME, "\u7A7A\u6D77");
         values.put(StructuredName.PHONETIC_GIVEN_NAME, "\u304B\u3044\u304F\u3046");
-        insertStructuredName(rawContactId, values);
+        DataUtil.insertStructuredName(mResolver, rawContactId, values);
 
         long contactId = queryContactId(rawContactId);
         // en_US should behave same as ja_JP (match on Hiragana and Romaji
