@@ -35,6 +35,11 @@ public class TransactionContext  {
     private HashMap<Long, Long> mInsertedRawContactsAccounts;
     private HashSet<Long> mUpdatedRawContacts;
     private HashSet<Long> mDirtyRawContacts;
+    // Set used to track what has been changed and deleted. This is needed so we can update the
+    // contact last touch timestamp.  Dirty set above is only set when sync adapter is false.
+    // {@see android.provider.ContactsContract#CALLER_IS_SYNCADAPTER}. While the set below will
+    // contain all changed contacts.
+    private HashSet<Long> mChangedRawContacts;
     private HashSet<Long> mStaleSearchIndexRawContacts;
     private HashSet<Long> mStaleSearchIndexContacts;
     private HashMap<Long, Object> mUpdatedSyncStates;
@@ -50,6 +55,8 @@ public class TransactionContext  {
     public void rawContactInserted(long rawContactId, long accountId) {
         if (mInsertedRawContactsAccounts == null) mInsertedRawContactsAccounts = Maps.newHashMap();
         mInsertedRawContactsAccounts.put(rawContactId, accountId);
+
+        markRawContactChangedOrDeletedOrInserted(rawContactId);
     }
 
     public void rawContactUpdated(long rawContactId) {
@@ -57,9 +64,22 @@ public class TransactionContext  {
         mUpdatedRawContacts.add(rawContactId);
     }
 
-    public void markRawContactDirty(long rawContactId) {
-        if (mDirtyRawContacts == null) mDirtyRawContacts = Sets.newHashSet();
-        mDirtyRawContacts.add(rawContactId);
+    public void markRawContactDirtyAndChanged(long rawContactId, boolean isSyncAdapter) {
+        if (!isSyncAdapter) {
+            if (mDirtyRawContacts == null) {
+                mDirtyRawContacts = Sets.newHashSet();
+            }
+            mDirtyRawContacts.add(rawContactId);
+        }
+
+        markRawContactChangedOrDeletedOrInserted(rawContactId);
+    }
+
+    public void markRawContactChangedOrDeletedOrInserted(long rawContactId) {
+        if (mChangedRawContacts == null) {
+            mChangedRawContacts = Sets.newHashSet();
+        }
+        mChangedRawContacts.add(rawContactId);
     }
 
     public void syncStateUpdated(long rowId, Object data) {
@@ -92,6 +112,11 @@ public class TransactionContext  {
         return mDirtyRawContacts;
     }
 
+    public Set<Long> getChangedRawContactIds() {
+        if (mChangedRawContacts == null) mChangedRawContacts = Sets.newHashSet();
+        return mChangedRawContacts;
+    }
+
     public Set<Long> getStaleSearchIndexRawContactIds() {
         if (mStaleSearchIndexRawContacts == null) mStaleSearchIndexRawContacts = Sets.newHashSet();
         return mStaleSearchIndexRawContacts;
@@ -122,6 +147,7 @@ public class TransactionContext  {
         mUpdatedRawContacts = null;
         mUpdatedSyncStates = null;
         mDirtyRawContacts = null;
+        mChangedRawContacts = null;
     }
 
     public void clearSearchIndexUpdates() {

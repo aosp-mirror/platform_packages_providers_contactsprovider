@@ -142,6 +142,8 @@ import com.android.providers.contacts.aggregation.ContactAggregator;
 import com.android.providers.contacts.aggregation.ContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.aggregation.ProfileAggregator;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
+import com.android.providers.contacts.database.ContactsTableUtil;
+import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
@@ -194,6 +196,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 8;
     private static final int BACKGROUND_TASK_CHANGE_LOCALE = 9;
     private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
+    private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
 
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
@@ -368,6 +371,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int DISPLAY_PHOTO_ID = 22000;
     private static final int PHOTO_DIMENSIONS = 22001;
+
+    private static final int DELETED_CONTACTS = 23000;
+    private static final int DELETED_CONTACTS_ID = 23001;
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
@@ -577,6 +583,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Contacts.STARRED)
             .add(Contacts.TIMES_CONTACTED)
             .add(Contacts.HAS_PHONE_NUMBER)
+            .add(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
             .build();
 
     private static final ProjectionMap sContactsPresenceColumns = ProjectionMap.builder()
@@ -904,6 +911,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Groups.SYNC2)
             .add(Groups.SYNC3)
             .add(Groups.SYNC4)
+            .build();
+
+    private static final ProjectionMap sDeletedContactsProjectionMap = ProjectionMap.builder()
+            .add(ContactsContract.DeletedContacts.CONTACT_ID)
+            .add(ContactsContract.DeletedContacts.CONTACT_DELETED_TIMESTAMP)
             .build();
 
     /**
@@ -1237,6 +1249,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "display_photo/#", DISPLAY_PHOTO_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "photo_dimensions", PHOTO_DIMENSIONS);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts", DELETED_CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts/#", DELETED_CONTACTS_ID);
     }
 
     private static class DirectoryInfo {
@@ -1627,6 +1642,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     switchToContactMode(); // Switch to the default, just in case.
                     break;
                 }
+            }
+
+            case BACKGROUND_TASK_CLEAN_DELETE_LOG: {
+                final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+                DeletedContactsTableUtil.deleteOldLogs(db);
             }
         }
     }
@@ -2286,6 +2306,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             db.execSQL(mSb.toString());
         }
 
+        final Set<Long> changedRawContacts = mTransactionContext.get().getChangedRawContactIds();
+        ContactsTableUtil.updateContactLastUpdate(db, changedRawContacts);
+
         // Update sync states.
         for (Map.Entry<Long, Object> entry : mTransactionContext.get().getUpdatedSyncStates()) {
             long id = entry.getKey();
@@ -2707,9 +2730,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         id = rowHandler.insert(db, mTransactionContext.get(), rawContactId, mValues);
-        if (!callerIsSyncAdapter) {
-            mTransactionContext.get().markRawContactDirty(rawContactId);
-        }
+        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId, callerIsSyncAdapter);
         mTransactionContext.get().rawContactUpdated(rawContactId);
         return id;
     }
@@ -2932,9 +2953,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 String mimeType = c.getString(DataRowHandler.DataDeleteQuery.MIMETYPE);
                 DataRowHandler rowHandler = getDataRowHandler(mimeType);
                 count += rowHandler.delete(db, mTransactionContext.get(), c);
-                if (!callerIsSyncAdapter) {
-                    mTransactionContext.get().markRawContactDirty(rawContactId);
-                }
+                mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId,
+                        callerIsSyncAdapter);
             }
         } finally {
             c.close();
@@ -3026,7 +3046,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     if (c.getLong(1) != 0) {
                         final long rawContactId = c.getLong(0);
                         insertDataGroupMembership(rawContactId, result);
-                        mTransactionContext.get().markRawContactDirty(rawContactId);
+                        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId,
+                                callerIsSyncAdapter);
                     }
                 }
             } finally {
@@ -3617,7 +3638,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mProviderStatusUpdateNeeded = true;
 
-        return db.delete(Tables.CONTACTS, Contacts._ID + "=" + contactId, null);
+        int result = ContactsTableUtil.deleteContact(db, contactId);
+        scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
+        return result;
     }
 
     public int deleteRawContact(long rawContactId, long contactId, boolean callerIsSyncAdapter) {
@@ -3640,14 +3663,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         if (callerIsSyncAdapter || rawContactIsLocal(rawContactId)) {
+
+            // When a raw contact is deleted, a sqlite trigger deletes the parent contact.
+            // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
+            // because it's in a trigger.  Consider removing trigger and replacing with java code.
+            // This has to happen before the raw contact is deleted since it relies on the number
+            // of raw contacts.
+            ContactsTableUtil.deleteContactIfSingleton(db, rawContactId);
+
             db.delete(Tables.PRESENCE,
                     PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             int count = db.delete(Tables.RAW_CONTACTS,
                     RawContacts._ID + "=" + rawContactId, null);
+
             mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
+            mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
             return count;
         } else {
-            mDbHelper.get().removeContactIfSingleton(rawContactId);
+            ContactsTableUtil.deleteContactIfSingleton(db, rawContactId);
             return markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
         }
     }
@@ -4350,6 +4383,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // and change accounts at the same time.)
                 mTransactionContext.get().rawContactInserted(rawContactId, accountId);
             }
+            mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
         }
         return count;
     }
@@ -4487,6 +4521,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, Contacts.TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
+        mValues.put(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
+                Clock.getInstance().currentTimeMillis());
 
         int rslt = db.update(Tables.CONTACTS, mValues, Contacts._ID + "=?",
                 mSelectionArgs1);
@@ -6176,6 +6212,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case COMPLETE_NAME: {
                 return completeName(uri, projection);
+            }
+
+            case DELETED_CONTACTS: {
+                qb.setTables(Tables.DELETED_CONTACTS);
+                qb.setProjectionMap(sDeletedContactsProjectionMap);
+                break;
+            }
+
+            case DELETED_CONTACTS_ID: {
+                String id = uri.getLastPathSegment();
+                qb.setTables(Tables.DELETED_CONTACTS);
+                qb.setProjectionMap(sDeletedContactsProjectionMap);
+                qb.appendWhere(ContactsContract.DeletedContacts.CONTACT_ID + "=?");
+                selectionArgs = insertSelectionArg(selectionArgs, id);
+                break;
             }
 
             default:

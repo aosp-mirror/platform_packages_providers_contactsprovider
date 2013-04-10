@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -77,6 +78,9 @@ import android.util.Log;
 
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
+import com.android.providers.contacts.database.ContactsTableUtil;
+import com.android.providers.contacts.database.DeletedContactsTableUtil;
+import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
 
@@ -109,13 +113,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      * </pre>
      */
-    static final int DATABASE_VERSION = 709;
+    static final int DATABASE_VERSION = 710;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
+        public static final String DELETED_CONTACTS = "deleted_contacts";
         public static final String RAW_CONTACTS = "raw_contacts";
         public static final String STREAM_ITEMS = "stream_items";
         public static final String STREAM_ITEM_PHOTOS = "stream_item_photos";
@@ -361,6 +366,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Contacts.SEND_TO_VOICEMAIL;
         public static final String CONCRETE_LOOKUP_KEY = Tables.CONTACTS + "."
                 + Contacts.LOOKUP_KEY;
+        public static final String CONCRETE_CONTACT_LAST_UPDATED_TIMESTAMP = Tables.CONTACTS + "."
+                + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP;
         public static final String PHONEBOOK_LABEL_PRIMARY = "phonebook_label";
         public static final String PHONEBOOK_BUCKET_PRIMARY = "phonebook_bucket";
         public static final String PHONEBOOK_LABEL_ALTERNATIVE = "phonebook_label_alt";
@@ -961,16 +968,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.LOOKUP_KEY + " TEXT," +
-                ContactsColumns.LAST_STATUS_UPDATE_ID + " INTEGER REFERENCES data(_id)" +
+                ContactsColumns.LAST_STATUS_UPDATE_ID + " INTEGER REFERENCES data(_id)," +
+                Contacts.CONTACT_LAST_UPDATED_TIMESTAMP + " INTEGER" +
         ");");
 
-        db.execSQL("CREATE INDEX contacts_has_phone_index ON " + Tables.CONTACTS + " (" +
-                Contacts.HAS_PHONE_NUMBER +
-        ");");
+        ContactsTableUtil.createIndexes(db);
 
-        db.execSQL("CREATE INDEX contacts_name_raw_contact_id_index ON " + Tables.CONTACTS + " (" +
-                Contacts.NAME_RAW_CONTACT_ID +
-        ");");
+        // deleted_contacts table
+        DeletedContactsTableUtil.create(db);
 
         // Raw_contacts table
         db.execSQL("CREATE TABLE " + Tables.RAW_CONTACTS + " (" +
@@ -1339,6 +1344,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
+
+        // Only send broadcasts for regular contacts db.
+        if (dbForProfile() == 0) {
+            mContext.sendBroadcast(new Intent(ContactsContract.Intents.CONTACTS_DATABASE_CREATED),
+                    android.Manifest.permission.READ_CONTACTS);
+        }
     }
 
     protected void initializeAutoIncrementSequences(SQLiteDatabase db) {
@@ -1608,7 +1619,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Contacts.PHOTO_FILE_ID + ", "
                 + "CAST(" + Clauses.CONTACT_VISIBLE + " AS INTEGER) AS "
                         + Contacts.IN_VISIBLE_GROUP + ", "
-                + ContactsColumns.LAST_STATUS_UPDATE_ID;
+                + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
+                + ContactsColumns.CONCRETE_CONTACT_LAST_UPDATED_TIMESTAMP;
 
         String contactOptionColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
@@ -2461,6 +2473,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // and Chinese sort keys.
             upgradeLocaleSpecificData = true;
             oldVersion = 709;
+        }
+
+        if (oldVersion < 710) {
+            upgradeToVersion710(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 710;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3925,6 +3943,29 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " ADD " + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + " INTEGER;");
     }
 
+    private void upgradeToVersion710(SQLiteDatabase db) {
+
+        // Adding timestamp to contacts table.
+        db.execSQL("ALTER TABLE contacts"
+                + " ADD contact_last_updated_timestamp INTEGER;");
+
+        db.execSQL("UPDATE contacts"
+                + " SET contact_last_updated_timestamp"
+                + " = " + System.currentTimeMillis());
+
+        db.execSQL("CREATE INDEX contacts_contact_last_updated_timestamp_index "
+                + "ON contacts(contact_last_updated_timestamp)");
+
+        // New deleted contacts table.
+        db.execSQL("CREATE TABLE deleted_contacts (" +
+                "contact_id INTEGER PRIMARY KEY," +
+                "contact_deleted_timestamp INTEGER NOT NULL default 0"
+                + ");");
+
+        db.execSQL("CREATE INDEX deleted_contacts_contact_deleted_timestamp_index "
+                + "ON deleted_contacts(contact_deleted_timestamp)");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -4041,6 +4082,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     "contacts_has_phone_index", "9000 500");
             updateIndexStats(db, Tables.CONTACTS,
                     "contacts_name_raw_contact_id_index", "9000 1");
+            updateIndexStats(db, Tables.CONTACTS, MoreDatabaseUtils.buildIndexName(Tables.CONTACTS,
+                    Contacts.CONTACT_LAST_UPDATED_TIMESTAMP), "9000 10");
 
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contacts_contact_id_index", "10000 2");
@@ -4188,6 +4231,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.CALLS + ";");
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
+        db.execSQL("DELETE FROM " + Tables.DELETED_CONTACTS + ";");
 
         initializeCache(db);
 
@@ -4831,29 +4875,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public SyncStateContentProviderHelper getSyncState() {
         return mSyncState;
-    }
-
-    /**
-     * Delete the aggregate contact if it has no constituent raw contacts other
-     * than the supplied one.
-     */
-    public void removeContactIfSingleton(long rawContactId) {
-        SQLiteDatabase db = getWritableDatabase();
-
-        // Obtain contact ID from the supplied raw contact ID
-        String contactIdFromRawContactId = "(SELECT " + RawContacts.CONTACT_ID + " FROM "
-                + Tables.RAW_CONTACTS + " WHERE " + RawContacts._ID + "=" + rawContactId + ")";
-
-        // Find other raw contacts in the same aggregate contact
-        String otherRawContacts = "(SELECT contacts1." + RawContacts._ID + " FROM "
-                + Tables.RAW_CONTACTS + " contacts1 JOIN " + Tables.RAW_CONTACTS + " contacts2 ON ("
-                + "contacts1." + RawContacts.CONTACT_ID + "=contacts2." + RawContacts.CONTACT_ID
-                + ") WHERE contacts1." + RawContacts._ID + "!=" + rawContactId + ""
-                + " AND contacts2." + RawContacts._ID + "=" + rawContactId + ")";
-
-        db.execSQL("DELETE FROM " + Tables.CONTACTS
-                + " WHERE " + Contacts._ID + "=" + contactIdFromRawContactId
-                + " AND NOT EXISTS " + otherRawContacts + ";");
     }
 
     /**

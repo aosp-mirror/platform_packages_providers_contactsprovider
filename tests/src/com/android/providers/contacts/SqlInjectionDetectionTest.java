@@ -27,6 +27,8 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.Contacts;
 import android.test.suitebuilder.annotation.MediumTest;
 
+import com.android.providers.contacts.testutil.RawContactUtil;
+
 /**
  * Unit tests for {@link ContactsProvider2}, to make sure the queries don't allow sql injection.
  *
@@ -41,7 +43,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
     private static final String[] PHONE_ID_PROJECTION = new String[] { Phone._ID };
 
     public void testPhoneQueryValid() {
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "555-123-4567");
 
         assertQueryValid(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
@@ -49,7 +51,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
     }
 
     public void testPhoneQueryBadProjection() {
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "555-123-4567");
 
         assertQueryThrows(IllegalArgumentException.class, Phone.CONTENT_URI,
@@ -57,7 +59,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
     }
 
     public void testPhoneQueryBadSelection() {
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "555-123-4567");
 
         assertQueryThrows(SQLiteException.class, Phone.CONTENT_URI, PHONE_ID_PROJECTION,
@@ -65,7 +67,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
     }
 
     public void testPhoneQueryBadSortOrder() {
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "555-123-4567");
 
         assertQueryThrows(SQLiteException.class, Phone.CONTENT_URI,
@@ -74,7 +76,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
 
     public void testPhoneQueryBadLimit() {
         // Non-numeric query parameters are ignored by the provider
-        long rawContactId = createRawContactWithName("Hot", "Tamale");
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
         insertPhoneNumber(rawContactId, "555-123-4567");
 
         Builder builder = Contacts.CONTENT_FILTER_URI.buildUpon();

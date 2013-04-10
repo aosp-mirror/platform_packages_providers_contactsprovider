@@ -162,9 +162,7 @@ public abstract class DataRowHandler {
             txContext.invalidateSearchIndexForRawContact(rawContactId);
         }
 
-        if (!callerIsSyncAdapter) {
-            txContext.markRawContactDirty(rawContactId);
-        }
+        txContext.markRawContactDirtyAndChanged(rawContactId, callerIsSyncAdapter);
 
         return true;
     }

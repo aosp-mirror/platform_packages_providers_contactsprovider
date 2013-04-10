@@ -25,9 +25,11 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.Intents;
 import android.provider.ContactsContract.StatusUpdates;
 import android.test.suitebuilder.annotation.MediumTest;
+
+import com.android.providers.contacts.testutil.DataUtil;
+import com.android.providers.contacts.testutil.RawContactUtil;
 
 /**
  * Unit tests for {@link GlobalSearchSupport}.
@@ -48,8 +50,8 @@ public class GlobalSearchSupportTest extends BaseContactsProvider2Test {
         // Creating an AUTO_ADD group will exclude all ungrouped contacts from global search
         createGroup(account, "any", "any", 0 /* visible */, true /* auto-add */, false /* fav */);
 
-        long rawContactId = createRawContact(account);
-        insertStructuredName(rawContactId, "Deer", "Dough");
+        long rawContactId = RawContactUtil.createRawContact(mResolver, account);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Deer", "Dough");
 
         // Remove the new contact from all groups
         mResolver.delete(Data.CONTENT_URI, Data.RAW_CONTACT_ID + "=" + rawContactId
