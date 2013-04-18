@@ -110,6 +110,7 @@ import android.util.Log;
 
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
@@ -4667,7 +4668,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // WARNING: This method can be run in either contacts mode or profile mode.  It is
         // absolutely imperative that no calls be made inside the following try block that can
-        // interact with the contacts DB.  Otherwise it is quite possible for a deadlock to occur.
+        // interact with a specific contacts or profile DB.  Otherwise it is quite possible for a
+        // deadlock to occur.  i.e. always use the current database in mDbHelper and do not access
+        // mContactsHelper or mProfileHelper directly.
+        //
+        // The problem may be a bit more subtle if you also access something that stores the current
+        // db instance in it's constructor.  updateSearchIndexInTransaction relies on the
+        // SearchIndexManager which upon construction, stores the current db. In this case,
+        // SearchIndexManager always contains the contact DB. This is why the
+        // updateSearchIndexInTransaction is protected with !isInProfileMode now.
         try {
             // First, remove stale rows from raw_contacts, groups, and related tables.
 
@@ -4722,6 +4731,33 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                         " FROM " + Tables.RAW_CONTACTS +
                                         " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
                                         accountIdParams);
+
+                        // Delta api is only needed for regular contacts.
+                        if (!inProfileMode()) {
+                            // Contacts are deleted by a trigger on the raw_contacts table.
+                            // But we also need to insert the contact into the delete log.
+                            // This logic is being consolidated into the ContactsTableUtil.
+                            HashSet<Long> rawContactIds = Sets.newHashSet();
+                            final Cursor cursor = db.rawQuery(
+                                    "SELECT " + RawContactsColumns.CONCRETE_ID +
+                                            " FROM " + Tables.RAW_CONTACTS +
+                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
+                                    accountIdParams);
+                            try {
+                                while (cursor.moveToNext()) {
+                                    final long rawContactId = cursor.getLong(0);
+                                    rawContactIds.add(rawContactId);
+                                    ContactsTableUtil.deleteContactIfSingleton(db, rawContactId);
+                                }
+                            } finally {
+                                MoreCloseables.closeQuietly(cursor);
+                            }
+
+                            // If the contact was not deleted, it's last updated timestamp needs to
+                            // be refreshed since one of it's raw contacts got removed.
+                            ContactsTableUtil.updateContactLastUpdate(db, rawContactIds);
+                        }
+
                         db.execSQL(
                                 "DELETE FROM " + Tables.RAW_CONTACTS +
                                 " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
