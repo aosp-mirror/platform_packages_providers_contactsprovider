@@ -22,6 +22,7 @@ import static com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract;
+import android.text.TextUtils;
 
 import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.util.Clock;
@@ -64,8 +65,7 @@ public class ContactsTableUtil {
             return;
         }
 
-        final Long[] bindArgs = rawContactIds.toArray(new Long[rawContactIds.size()]);
-        db.execSQL(buildUpdateLastUpdateSql(rawContactIds), bindArgs);
+        db.execSQL(buildUpdateLastUpdateSql(rawContactIds));
     }
 
     /**
@@ -75,14 +75,19 @@ public class ContactsTableUtil {
      * @return The update sql statement.
      */
     private static String buildUpdateLastUpdateSql(Set<Long> rawContactIds) {
-        final String bindSql = MoreDatabaseUtils.buildBindArgString(rawContactIds.size());
+        // Not using bind args here due to sqlite bind arg size limit.  Large number of bind args
+        // will cause a sqlite error:
+        //     android.database.sqlite.SQLiteException: too many SQL variables (code 1)
+        // Sql injection is not possible because input is a set of Long.  If any part of the sql
+        // is built with user input strings, then this must be converted to using bind args.
         final String sql = "UPDATE " + Tables.CONTACTS
                 + " SET " + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP + " = "
                 + Clock.getInstance().currentTimeMillis()
                 + " WHERE " + Contacts._ID + " IN ( "
                 + "  SELECT " + ContactsContract.RawContacts.CONTACT_ID
                 + "  FROM " + Tables.RAW_CONTACTS
-                + "  WHERE " + ContactsContract.RawContacts._ID + " IN (" + bindSql + ") "
+                + "  WHERE " + ContactsContract.RawContacts._ID
+                + " IN (" + TextUtils.join(",", rawContactIds) + ") "
                 + ")";
         return sql;
     }
