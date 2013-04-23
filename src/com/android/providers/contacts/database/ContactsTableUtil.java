@@ -19,6 +19,7 @@ package com.android.providers.contacts.database;
 import static android.provider.ContactsContract.Contacts;
 import static com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
+import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract;
@@ -54,13 +55,22 @@ public class ContactsTableUtil {
                 Contacts.CONTACT_LAST_UPDATED_TIMESTAMP));
     }
 
+    public static void updateContactLastUpdateByContactId(SQLiteDatabase db, long contactId) {
+        final ContentValues values = new ContentValues();
+        values.put(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
+                Clock.getInstance().currentTimeMillis());
+        db.update(Tables.CONTACTS, values, Contacts._ID + " = ?",
+                new String[] {String.valueOf(contactId)});
+    }
+
     /**
      * Refreshes the last updated timestamp of the contact with the current time.
      *
      * @param db The sqlite database instance.
      * @param rawContactIds A set of raw contacts ids to refresh the contact for.
      */
-    public static void updateContactLastUpdate(SQLiteDatabase db, Set<Long> rawContactIds) {
+    public static void updateContactLastUpdateByRawContactId(SQLiteDatabase db,
+            Set<Long> rawContactIds) {
         if (rawContactIds.isEmpty()) {
             return;
         }
