@@ -2308,7 +2308,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         final Set<Long> changedRawContacts = mTransactionContext.get().getChangedRawContactIds();
-        ContactsTableUtil.updateContactLastUpdate(db, changedRawContacts);
+        ContactsTableUtil.updateContactLastUpdateByRawContactId(db, changedRawContacts);
 
         // Update sync states.
         for (Map.Entry<Long, Object> entry : mTransactionContext.get().getUpdatedSyncStates()) {
@@ -4701,8 +4701,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                     // getAccountIdOrNull() really shouldn't return null here, but just in case...
                     if (accountIdOrNull != null) {
+                        final String accountId = Long.toString(accountIdOrNull);
                         final String[] accountIdParams =
-                                new String[] {Long.toString(accountIdOrNull)};
+                                new String[] {accountId};
                         db.execSQL(
                                 "DELETE FROM " + Tables.GROUPS +
                                 " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?",
@@ -4737,17 +4738,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             // Contacts are deleted by a trigger on the raw_contacts table.
                             // But we also need to insert the contact into the delete log.
                             // This logic is being consolidated into the ContactsTableUtil.
-                            HashSet<Long> rawContactIds = Sets.newHashSet();
-                            final Cursor cursor = db.rawQuery(
-                                    "SELECT " + RawContactsColumns.CONCRETE_ID +
+
+                            // deleteContactIfSingleton() does not work in this case because raw
+                            // contacts will be deleted in a single batch below.  Contacts with
+                            // multiple raw contacts in the same account will be missed.
+
+                            // Find all contacts that do not have raw contacts in other accounts.
+                            // These should be deleted.
+                            Cursor cursor = db.rawQuery(
+                                    "SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
                                             " FROM " + Tables.RAW_CONTACTS +
-                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
-                                    accountIdParams);
+                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
+                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            " NOT IN (" +
+                                            "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            "    FROM " + Tables.RAW_CONTACTS +
+                                            "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                            + ")", accountIdParams);
                             try {
                                 while (cursor.moveToNext()) {
-                                    final long rawContactId = cursor.getLong(0);
-                                    rawContactIds.add(rawContactId);
-                                    ContactsTableUtil.deleteContactIfSingleton(db, rawContactId);
+                                    final long contactId = cursor.getLong(0);
+                                    ContactsTableUtil.deleteContact(db, contactId);
                                 }
                             } finally {
                                 MoreCloseables.closeQuietly(cursor);
@@ -4755,7 +4766,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                             // If the contact was not deleted, it's last updated timestamp needs to
                             // be refreshed since one of it's raw contacts got removed.
-                            ContactsTableUtil.updateContactLastUpdate(db, rawContactIds);
+                            // Find all contacts that will not be deleted (i.e. contacts with
+                            // raw contacts in other accounts)
+                            cursor = db.rawQuery(
+                                    "SELECT DISTINCT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            " FROM " + Tables.RAW_CONTACTS +
+                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
+                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            " IN (" +
+                                            "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            "    FROM " + Tables.RAW_CONTACTS +
+                                            "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                            + ")", accountIdParams);
+                            try {
+                                while (cursor.moveToNext()) {
+                                    final long contactId = cursor.getLong(0);
+                                    ContactsTableUtil.updateContactLastUpdateByContactId(db,
+                                            contactId);
+                                }
+                            } finally {
+                                MoreCloseables.closeQuietly(cursor);
+                            }
                         }
 
                         db.execSQL(
