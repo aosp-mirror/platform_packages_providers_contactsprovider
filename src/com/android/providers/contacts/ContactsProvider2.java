@@ -156,6 +156,8 @@ import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import libcore.io.IoUtils;
+
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -7870,6 +7872,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
+            } finally {
+                IoUtils.closeQuietly(is);
             }
             return null;
         }
