@@ -1347,8 +1347,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         // Only send broadcasts for regular contacts db.
         if (dbForProfile() == 0) {
-            mContext.sendBroadcast(new Intent(ContactsContract.Intents.CONTACTS_DATABASE_CREATED),
-                    android.Manifest.permission.READ_CONTACTS);
+            final Intent dbCreatedIntent =
+                    new Intent(ContactsContract.Intents.CONTACTS_DATABASE_CREATED);
+            dbCreatedIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+            mContext.sendBroadcast(dbCreatedIntent, android.Manifest.permission.READ_CONTACTS);
         }
     }
 
