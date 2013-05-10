@@ -4239,12 +4239,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public NameSplitter createNameSplitter() {
+        return createNameSplitter(Locale.getDefault());
+    }
+
+    public NameSplitter createNameSplitter(Locale locale) {
         mNameSplitter = new NameSplitter(
                 mContext.getString(com.android.internal.R.string.common_name_prefixes),
                 mContext.getString(com.android.internal.R.string.common_last_name_prefixes),
                 mContext.getString(com.android.internal.R.string.common_name_suffixes),
                 mContext.getString(com.android.internal.R.string.common_name_conjunctions),
-                Locale.getDefault());
+                locale);
         return mNameSplitter;
     }
 

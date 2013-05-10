@@ -1482,7 +1482,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mLegacyApiSupport = new LegacyApiSupport(context, mContactsHelper, this,
                 mGlobalSearchSupport);
         mCurrentLocale = getLocale();
-        mNameSplitter = mContactsHelper.createNameSplitter();
+        mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocale);
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocale);
         mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
