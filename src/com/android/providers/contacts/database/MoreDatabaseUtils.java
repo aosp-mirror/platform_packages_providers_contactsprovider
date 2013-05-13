@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts.database;
 
+import com.android.providers.contacts.util.NeededForTesting;
+
 /**
  * Static methods for database operations.
  */
@@ -40,6 +42,7 @@ public class MoreDatabaseUtils {
      * @param field The field that was originally used to create the index.
      * @return The drop index sql statement.
      */
+    @NeededForTesting
     public static String buildDropIndexSql(String table, String field) {
         return "DROP INDEX IF EXISTS " + buildIndexName(table, field);
     }
@@ -63,6 +66,7 @@ public class MoreDatabaseUtils {
      * @param numArgs The number of arguments.
      * @return A string that can be used for bind args in a sql where clause.
      */
+    @NeededForTesting
     public static String buildBindArgString(int numArgs) {
         final StringBuilder sb = new StringBuilder();
         String delimiter = "";
