@@ -3414,7 +3414,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             return;
         }
         ContactLocaleUtils.setLocale(Locale.US);
-        long rawContactId = RawContactUtil.createRawContact(null);
+        long rawContactId = RawContactUtil.createRawContact(mResolver, null);
 
         ContentValues values = new ContentValues();
         values.put(StructuredName.GIVEN_NAME, "\u7A7A\u6D77");
