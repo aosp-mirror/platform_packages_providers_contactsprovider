@@ -306,9 +306,9 @@ public class CallLogProvider extends ContentProvider {
         return new DbModifierWithNotification(Tables.CALLS, insertHelper, context());
     }
 
+    private static final Integer VOICEMAIL_TYPE = new Integer(Calls.VOICEMAIL_TYPE);
     private boolean hasVoicemailValue(ContentValues values) {
-        return values.containsKey(Calls.TYPE) &&
-                values.getAsInteger(Calls.TYPE).equals(Calls.VOICEMAIL_TYPE);
+        return VOICEMAIL_TYPE.equals(values.getAsInteger(Calls.TYPE));
     }
 
     /**

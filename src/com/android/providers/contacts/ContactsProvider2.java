@@ -1966,6 +1966,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private int getIntValue(ContentValues values, String key, int defaultValue) {
+        final Integer value = values.getAsInteger(key);
+        return value != null ? value : defaultValue;
+    }
+
+    private boolean flagExists(ContentValues values, String key) {
+        return values.getAsInteger(key) != null;
+    }
+
+    private boolean flagIsSet(ContentValues values, String key) {
+        return getIntValue(values, key, 0) != 0;
+    }
+
+    private boolean flagIsClear(ContentValues values, String key) {
+        return getIntValue(values, key, 1) == 0;
+    }
+
     /**
      * Determines whether the given URI should be directed to the profile
      * database rather than the contacts database.  This is true under either
@@ -1998,11 +2015,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         int match = sUriMatcher.match(uri);
         if (INSERT_URI_ID_VALUE_MAP.containsKey(match)) {
             String idField = INSERT_URI_ID_VALUE_MAP.get(match);
-            if (values.containsKey(idField)) {
-                long id = values.getAsLong(idField);
-                if (ContactsContract.isProfileId(id)) {
-                    return true;
-                }
+            Long id = values.getAsLong(idField);
+            if (id != null && ContactsContract.isProfileId(id)) {
+                return true;
             }
         }
         return false;
@@ -2616,8 +2631,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mValues.remove(RawContacts.DATA_SET);
         mValues.put(RawContactsColumns.ACCOUNT_ID, accountId);
 
-        if (values.containsKey(RawContacts.DELETED)
-                && values.getAsInteger(RawContacts.DELETED) != 0) {
+        if (flagIsSet(values, RawContacts.DELETED)) {
             mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
@@ -2625,10 +2639,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         long rawContactId = db.insert(Tables.RAW_CONTACTS,
                 RawContacts.CONTACT_ID, mValues);
-        int aggregationMode = RawContacts.AGGREGATION_MODE_DEFAULT;
-        if (mValues.containsKey(RawContacts.AGGREGATION_MODE)) {
-            aggregationMode = mValues.getAsInteger(RawContacts.AGGREGATION_MODE);
-        }
+        int aggregationMode = getIntValue(values, RawContacts.AGGREGATION_MODE,
+                RawContacts.AGGREGATION_MODE_DEFAULT);
         mAggregator.get().markNewForAggregation(rawContactId, aggregationMode);
 
         // Trigger creation of a Contact based on this RawContact at the end of transaction
@@ -2636,9 +2648,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         if (!callerIsSyncAdapter) {
             addAutoAddMembership(rawContactId);
-            final Long starred = values.getAsLong(RawContacts.STARRED);
-            if (starred != null && starred != 0) {
-                updateFavoritesMembership(rawContactId, starred != 0);
+            if (flagIsSet(values, RawContacts.STARRED)) {
+                updateFavoritesMembership(rawContactId, true);
             }
         }
 
@@ -2712,7 +2723,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mValues.clear();
         mValues.putAll(values);
 
-        long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
+        Long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
+        if (rawContactId == null) {
+            throw new IllegalArgumentException(Data.RAW_CONTACT_ID + " is required");
+        }
 
         // Replace package with internal mapping
         final String packageName = mValues.getAsString(Data.RES_PACKAGE);
@@ -2754,7 +2768,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mValues.clear();
         mValues.putAll(values);
 
-        long rawContactId = mValues.getAsLong(StreamItems.RAW_CONTACT_ID);
+        Long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
+        if (rawContactId == null) {
+            throw new IllegalArgumentException(Data.RAW_CONTACT_ID + " is required");
+        }
 
         // Don't attempt to insert accounts params - they don't exist in the stream items table.
         mValues.remove(RawContacts.ACCOUNT_NAME);
@@ -2790,8 +2807,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mValues.clear();
         mValues.putAll(values);
 
-        long streamItemId = mValues.getAsLong(StreamItemPhotos.STREAM_ITEM_ID);
-        if (streamItemId != 0) {
+        Long streamItemId = mValues.getAsLong(StreamItemPhotos.STREAM_ITEM_ID);
+        if (streamItemId != null && streamItemId != 0) {
             long rawContactId = lookupRawContactIdForStreamId(streamItemId);
 
             // Don't attempt to insert accounts params - they don't exist in the stream item
@@ -2821,9 +2838,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return Whether the insert or update should proceed.
      */
     private boolean processStreamItemPhoto(ContentValues values, boolean forUpdate) {
-        if (!values.containsKey(StreamItemPhotos.PHOTO)) {
-            return forUpdate;
-        }
         byte[] photoBytes = values.getAsByteArray(StreamItemPhotos.PHOTO);
         if (photoBytes == null) {
             return forUpdate;
@@ -3025,9 +3039,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         mValues.remove(Groups.RES_PACKAGE);
 
-        final boolean isFavoritesGroup = mValues.getAsLong(Groups.FAVORITES) != null
-                ? mValues.getAsLong(Groups.FAVORITES) != 0
-                : false;
+        final boolean isFavoritesGroup = flagIsSet(mValues, Groups.FAVORITES);
 
         if (!callerIsSyncAdapter) {
             mValues.put(Groups.DIRTY, 1);
@@ -3193,9 +3205,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             }
 
-            if (values.containsKey(StatusUpdates.DATA_ID)) {
+            final String dataID = values.getAsString(StatusUpdates.DATA_ID);
+            if (dataID != null) {
                 mSb.append(" AND " + DataColumns.CONCRETE_ID + "=?");
-                mSelectionArgs.add(values.getAsString(StatusUpdates.DATA_ID));
+                mSelectionArgs.add(dataID);
             }
         }
 
@@ -3220,7 +3233,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
 
-        if (values.containsKey(StatusUpdates.PRESENCE)) {
+        final String presence = values.getAsString(StatusUpdates.PRESENCE);
+        if (presence != null) {
             if (customProtocol == null) {
                 // We cannot allow a null in the custom protocol field, because SQLite3 does not
                 // properly enforce uniqueness of null values
@@ -3234,11 +3248,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mValues.put(StatusUpdates.PROTOCOL, protocol);
             mValues.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
             mValues.put(StatusUpdates.IM_HANDLE, handle);
-            if (values.containsKey(StatusUpdates.IM_ACCOUNT)) {
-                mValues.put(StatusUpdates.IM_ACCOUNT, values.getAsString(StatusUpdates.IM_ACCOUNT));
+            final String imAccount = values.getAsString(StatusUpdates.IM_ACCOUNT);
+            if (imAccount != null) {
+                mValues.put(StatusUpdates.IM_ACCOUNT, imAccount);
             }
-            mValues.put(StatusUpdates.PRESENCE,
-                    values.getAsString(StatusUpdates.PRESENCE));
+            mValues.put(StatusUpdates.PRESENCE, presence);
             mValues.put(StatusUpdates.CHAT_CAPABILITY,
                     values.getAsString(StatusUpdates.CHAT_CAPABILITY));
 
@@ -4214,8 +4228,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // resolver will not be able to request a sync for the right source (unless it is updated
         // to key off account with data set).
         // i.e. requestSync only takes Account, not AccountWithDataSet.
-        if (updatedValues.containsKey(Groups.SHOULD_SYNC)
-                && updatedValues.getAsInteger(Groups.SHOULD_SYNC) != 0) {
+        if (flagIsSet(updatedValues, Groups.SHOULD_SYNC)) {
             for (Account account : affectedAccounts) {
                 ContentResolver.requestSync(account, ContactsContract.AUTHORITY, new Bundle());
             }
@@ -4270,8 +4283,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         final ContactsDatabaseHelper dbHelper = mDbHelper.get();
 
-        final boolean requestUndoDelete = (values.containsKey(RawContacts.DELETED)
-                && values.getAsInteger(RawContacts.DELETED) == 0);
+        final boolean requestUndoDelete = flagIsClear(values, RawContacts.DELETED);
 
         final boolean isAccountNameChanging = values.containsKey(RawContacts.ACCOUNT_NAME);
         final boolean isAccountTypeChanging = values.containsKey(RawContacts.ACCOUNT_TYPE);
@@ -4333,19 +4345,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         int count = db.update(Tables.RAW_CONTACTS, values, selection, mSelectionArgs1);
         if (count != 0) {
-            if (values.containsKey(RawContacts.AGGREGATION_MODE)) {
-                int aggregationMode = values.getAsInteger(RawContacts.AGGREGATION_MODE);
-
-                // As per ContactsContract documentation, changing aggregation mode
-                // to DEFAULT should not trigger aggregation
-                if (aggregationMode != RawContacts.AGGREGATION_MODE_DEFAULT) {
-                    mAggregator.get().markForAggregation(rawContactId, aggregationMode, false);
-                }
+            int aggregationMode = getIntValue(values, RawContacts.AGGREGATION_MODE,
+                    RawContacts.AGGREGATION_MODE_DEFAULT);
+            // As per ContactsContract documentation, changing aggregation mode
+            // to DEFAULT should not trigger aggregation
+            if (aggregationMode != RawContacts.AGGREGATION_MODE_DEFAULT) {
+                mAggregator.get().markForAggregation(rawContactId, aggregationMode, false);
             }
-            if (values.containsKey(RawContacts.STARRED)) {
+            if (flagExists(values, RawContacts.STARRED)) {
                 if (!callerIsSyncAdapter) {
                     updateFavoritesMembership(rawContactId,
-                            values.getAsLong(RawContacts.STARRED) != 0);
+                            flagIsSet(values, RawContacts.STARRED));
                 }
                 mAggregator.get().updateStarred(rawContactId);
             } else {
@@ -4370,11 +4380,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (values.containsKey(RawContacts.SOURCE_ID)) {
                 mAggregator.get().updateLookupKeyForRawContact(db, rawContactId);
             }
-            if (values.containsKey(RawContacts.NAME_VERIFIED)) {
-
+            if (flagExists(values, RawContacts.NAME_VERIFIED)) {
                 // If setting NAME_VERIFIED for this raw contact, reset it for all
                 // other raw contacts in the same aggregate
-                if (values.getAsInteger(RawContacts.NAME_VERIFIED) != 0) {
+                if (flagIsSet(values, RawContacts.NAME_VERIFIED)) {
                     mDbHelper.get().resetNameVerifiedForOtherRawContacts(rawContactId);
                 }
                 mAggregator.get().updateDisplayNameForRawContact(db, rawContactId);
@@ -4487,7 +4496,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return 0;
         }
 
-        if (mValues.containsKey(RawContacts.STARRED)) {
+        boolean hasStarredValue = flagExists(mValues, RawContacts.STARRED);
+        if (hasStarredValue) {
             // Mark dirty when changing starred to trigger sync
             mValues.put(RawContacts.DIRTY, 1);
         }
@@ -4496,7 +4506,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         db.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?"
                 + " AND " + RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0", mSelectionArgs1);
 
-        if (mValues.containsKey(RawContacts.STARRED) && !callerIsSyncAdapter) {
+        if (hasStarredValue && !callerIsSyncAdapter) {
             Cursor cursor = db.query(Views.RAW_CONTACTS,
                     new String[] { RawContacts._ID }, RawContacts.CONTACT_ID + "=?",
                     mSelectionArgs1, null, null, null);
@@ -4504,7 +4514,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 while (cursor.moveToNext()) {
                     long rawContactId = cursor.getLong(0);
                     updateFavoritesMembership(rawContactId,
-                            mValues.getAsLong(RawContacts.STARRED) != 0);
+                            flagIsSet(mValues, RawContacts.STARRED));
                 }
             } finally {
                 cursor.close();
@@ -4539,9 +4549,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
-        int exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
-        long rcId1 = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID1);
-        long rcId2 = values.getAsInteger(AggregationExceptions.RAW_CONTACT_ID2);
+        Integer exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
+        Long rcId1 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID1);
+        Long rcId2 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID2);
+        if (exceptionType == null || rcId1 == null || rcId2 == null) {
+            return 0;
+        }
 
         long rawContactId1;
         long rawContactId2;

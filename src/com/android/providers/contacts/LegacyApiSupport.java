@@ -848,11 +848,12 @@ public class LegacyApiSupport {
     }
 
     private long getRequiredValue(ContentValues values, String column) {
-        if (!values.containsKey(column)) {
+        final Long value = values.getAsLong(column);
+        if (value == null) {
             throw new RuntimeException("Required value: " + column);
         }
 
-        return values.getAsLong(column);
+        return value;
     }
 
     private long insertPeople(ContentValues values) {
@@ -1149,12 +1150,9 @@ public class LegacyApiSupport {
     }
 
     private void updateContactTime(long rawContactId, ContentValues values) {
-        long lastTimeContacted;
-        if (values.containsKey(People.LAST_TIME_CONTACTED)) {
-            lastTimeContacted = values.getAsLong(People.LAST_TIME_CONTACTED);
-        } else {
-            lastTimeContacted = System.currentTimeMillis();
-        }
+        final Long storedTimeContacted = values.getAsLong(People.LAST_TIME_CONTACTED);
+        final long lastTimeContacted = storedTimeContacted != null ?
+            storedTimeContacted : System.currentTimeMillis();
 
         // TODO check sanctions
         long contactId = mDbHelper.getContactId(rawContactId);

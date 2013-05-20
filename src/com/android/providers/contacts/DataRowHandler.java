@@ -184,8 +184,8 @@ public abstract class DataRowHandler {
      */
     private void handlePrimaryAndSuperPrimary(ContentValues values, long dataId,
             long rawContactId) {
-        final boolean hasPrimary = values.containsKey(Data.IS_PRIMARY);
-        final boolean hasSuperPrimary = values.containsKey(Data.IS_SUPER_PRIMARY);
+        final boolean hasPrimary = values.getAsInteger(Data.IS_PRIMARY) != null;
+        final boolean hasSuperPrimary = values.getAsInteger(Data.IS_SUPER_PRIMARY) != null;
 
         // Nothing to do? Bail out early
         if (!hasPrimary && !hasSuperPrimary) return;
