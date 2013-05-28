@@ -94,7 +94,7 @@ public class NameLookupBuilderTest extends TestCase {
 
     public void testSingleUniqueNameWithPrefix() {
         mBuilder.insertNameLookup(0, 0, "Mr. Foo", FullNameStyle.UNDEFINED);
-        assertEquals("(0:Foo)(2:Foo)", mBuilder.inserted());
+        assertEquals("(0:Mr.Foo)(2:MrFoo)(1:Foo.Mr)(2:FooMr)", mBuilder.inserted());
     }
 
     public void testTwoUniqueNames() {

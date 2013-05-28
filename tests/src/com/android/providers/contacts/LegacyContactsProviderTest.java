@@ -910,7 +910,6 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     private void putContactValuesExceptName(ContentValues values) {
         // Populating only unhidden columns
-        values.put(People.PHONETIC_NAME, "Dear Doe");
         values.put(People.NOTES, "Cash Cow");
         values.put(People.TIMES_CONTACTED, 3);
         values.put(People.LAST_TIME_CONTACTED, 10);
