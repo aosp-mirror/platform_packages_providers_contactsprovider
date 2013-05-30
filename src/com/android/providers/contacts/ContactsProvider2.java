@@ -531,7 +531,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         + Data.IS_SUPER_PRIMARY + " DESC, "
         + SORT_BY_DATA_USAGE + ", "
         + Contacts.IN_VISIBLE_GROUP + " DESC, "
-        + Contacts.DISPLAY_NAME + ", "
+        + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC, "
         + Data.CONTACT_ID + ", "
         + Data.IS_PRIMARY + " DESC";
 
@@ -6072,7 +6072,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     if (TextUtils.isEmpty(sortOrder)) {
                         // Default the sort order to something reasonable so we get consistent
                         // results when callers don't request an ordering
-                        sortOrder = Contacts.DISPLAY_NAME + " ASC";
+                        sortOrder = Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
                     }
 
                     String sipAddress = uri.getPathSegments().size() > 1
