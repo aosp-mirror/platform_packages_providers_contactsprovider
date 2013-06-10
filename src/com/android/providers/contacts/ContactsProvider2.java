@@ -8521,13 +8521,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 " WHERE " + RawContacts._ID + " IN (" + rawContactIdSelect.toString() + ")"
                 , mSelectionArgs1);
         db.execSQL("UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.LAST_TIME_CONTACTED + "=?" +
+                " SET " + Contacts.LAST_TIME_CONTACTED + "=?1" +
                 "," + Contacts.TIMES_CONTACTED + "=" +
                     "ifnull(" + Contacts.TIMES_CONTACTED + ",0) + 1" +
+                "," + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP + "=?1" +
                 " WHERE " + Contacts._ID + " IN (SELECT " + RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + RawContacts._ID + " IN (" + rawContactIdSelect.toString() + "))"
                 , mSelectionArgs1);
+
         return successful;
     }
 
