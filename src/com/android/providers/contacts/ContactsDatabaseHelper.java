@@ -114,7 +114,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   800-899 Key Lime Pie
      * </pre>
      */
-    static final int DATABASE_VERSION = 800;
+    static final int DATABASE_VERSION = 801;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -718,6 +718,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String KNOWN_ACCOUNTS = "known_accounts";
         String ICU_VERSION = "icu_version";
         String LOCALE = "locale";
+        String DATABASE_TIME_CREATED = "database_time_created";
     }
 
     /** In-memory cache of previously found MIME-type mappings */
@@ -948,6 +949,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         Log.i(TAG, "Bootstrapping database version: " + DATABASE_VERSION);
 
         mSyncState.createDatabase(db);
+
+        // Create the properties table first so the create time is available as soon as possible.
+        // The create time is needed by BOOT_COMPLETE to send broadcasts.
+        db.execSQL("CREATE TABLE " + Tables.PROPERTIES + " (" +
+                PropertiesColumns.PROPERTY_KEY + " TEXT PRIMARY KEY, " +
+                PropertiesColumns.PROPERTY_VALUE + " TEXT " +
+                ");");
+        setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
+                System.currentTimeMillis()));
 
         db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
                 AccountsColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -1301,11 +1311,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 StatusUpdates.STATUS_ICON + " INTEGER" +
         ");");
 
-        db.execSQL("CREATE TABLE " + Tables.PROPERTIES + " (" +
-                PropertiesColumns.PROPERTY_KEY + " TEXT PRIMARY KEY, " +
-                PropertiesColumns.PROPERTY_VALUE + " TEXT " +
-        ");");
-
         createDirectoriesTable(db);
         createSearchIndexTable(db, false /* we build stats table later */);
 
@@ -1347,14 +1352,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
-
-        // Only send broadcasts for regular contacts db.
-        if (dbForProfile() == 0) {
-            final Intent dbCreatedIntent =
-                    new Intent(ContactsContract.Intents.CONTACTS_DATABASE_CREATED);
-            dbCreatedIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-            mContext.sendBroadcast(dbCreatedIntent, android.Manifest.permission.READ_CONTACTS);
-        }
     }
 
     protected void initializeAutoIncrementSequences(SQLiteDatabase db) {
@@ -2489,6 +2486,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 800) {
             upgradeToVersion800(db);
             oldVersion = 800;
+        }
+
+        if (oldVersion < 801) {
+            setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
+                    System.currentTimeMillis()));
         }
 
         if (upgradeViewsAndTriggers) {
