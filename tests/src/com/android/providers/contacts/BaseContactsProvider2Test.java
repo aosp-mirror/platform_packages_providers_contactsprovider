@@ -29,7 +29,6 @@ import android.content.Entity;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
-import android.os.Bundle;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -50,7 +49,6 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.SearchSnippetColumns;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
@@ -839,32 +837,10 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertEquals("Record count for " + uri, 1, c.getCount());
 
             if (c.moveToFirst()) {
-                value = getCursorStringValue(c, column);
+                value = c.getString(c.getColumnIndex(column));
             }
         } finally {
             c.close();
-        }
-        return value;
-    }
-
-    /**
-     * Retrieves the string value in the given column, handling deferred snippeting if the requested
-     * column is the snippet and the cursor specifies it.
-     */
-    protected String getCursorStringValue(Cursor c, String column) {
-        String value = c.getString(c.getColumnIndex(column));
-        if (SearchSnippetColumns.SNIPPET.equals(column)) {
-            Bundle extras = c.getExtras();
-            if (extras.containsKey(ContactsContract.DEFERRED_SNIPPETING)) {
-                String displayName = "No display name";
-                int displayNameColumnIndex = c.getColumnIndex(Contacts.DISPLAY_NAME);
-                if (displayNameColumnIndex != -1) {
-                    displayName = c.getString(displayNameColumnIndex);
-                }
-                String query = extras.getString(ContactsContract.DEFERRED_SNIPPETING_QUERY);
-                value = ContactsContract.snippetize(value, displayName, query,
-                        '[', ']', "...", 5);
-            }
         }
         return value;
     }
@@ -904,6 +880,20 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertEquals("Record count", 1, c.getCount());
             c.moveToFirst();
             assertCursorValues(c, expectedValues);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
+        } finally {
+            c.close();
+        }
+    }
+
+    protected void assertContainsValues(Uri rowUri, ContentValues expectedValues) {
+        Cursor c = mResolver.query(rowUri, null, null, null, null);
+        try {
+            assertEquals("Record count", 1, c.getCount());
+            c.moveToFirst();
+            assertCursorValuesPartialMatch(c, expectedValues);
         } catch (Error e) {
             TestUtils.dumpCursor(c);
             throw e;
@@ -1040,7 +1030,13 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertTrue(message.toString(), result);
     }
 
-    protected void assertCursorContains(Cursor cursor, ContentValues expectedValues) {
+    protected void assertCursorValuesPartialMatch(Cursor cursor, ContentValues expectedValues) {
+        StringBuilder message = new StringBuilder();
+        boolean result = expectedValuePartiallyMatches(cursor, expectedValues, message);
+        assertTrue(message.toString(), result);
+    }
+
+    protected void assertCursorHasAnyRecordMatch(Cursor cursor, ContentValues expectedValues) {
         final StringBuilder message = new StringBuilder();
         boolean found = false;
         cursor.moveToPosition(-1);
@@ -1090,6 +1086,25 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
+    private boolean expectedValuePartiallyMatches(Cursor cursor, ContentValues expectedValues,
+            StringBuilder msgBuffer) {
+        for (String column : expectedValues.keySet()) {
+            int index = cursor.getColumnIndex(column);
+            if (index == -1) {
+                msgBuffer.append(" No such column: ").append(column);
+                return false;
+            }
+            String expectedValue = expectedValues.getAsString(column);
+            String value = cursor.getString(cursor.getColumnIndex(column));
+            if (value != null && !value.contains(expectedValue)) {
+                msgBuffer.append(" Column value ").append(column).append(" expected to contain <")
+                        .append(expectedValue).append(">, but was <").append(value).append('>');
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
             StringBuilder msgBuffer) {
         for (String column : expectedValues.keySet()) {
@@ -1105,7 +1120,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
                 value = Hex.encodeHex(cursor.getBlob(index), false);
             } else {
                 expectedValue = expectedValues.getAsString(column);
-                value = getCursorStringValue(cursor, column);
+                value = cursor.getString(cursor.getColumnIndex(column));
             }
             if (expectedValue != null && !expectedValue.equals(value) || value != null
                     && !value.equals(expectedValue)) {
@@ -1131,12 +1146,8 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         final Cursor cursor = mResolver.query(uri, DATA_USAGE_PROJECTION, null, null,
                 null);
         try {
-            assertCursorContains(cursor,
-                    cv(
-                            Data.DATA1, data1,
-                            Data.TIMES_USED, timesUsed,
-                            Data.LAST_TIME_USED, lastTimeUsed)
-            );
+            assertCursorHasAnyRecordMatch(cursor, cv(Data.DATA1, data1, Data.TIMES_USED, timesUsed,
+                    Data.LAST_TIME_USED, lastTimeUsed));
         } finally {
             cursor.close();
         }

@@ -3700,8 +3700,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "engineer, [acmecorp]");
-        assertStoredValues(filterUri, values);
+        values.put(SearchSnippetColumns.SNIPPET, "acmecorp");
+        assertContainsValues(filterUri, values);
     }
 
     public void testSearchSnippetEmail() throws Exception {
@@ -3716,7 +3716,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "[acme@corp.com]");
+        values.put(SearchSnippetColumns.SNIPPET, "acme@corp.com");
         assertStoredValues(filterUri, values);
     }
 
@@ -3770,6 +3770,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return builder.build();
     }
 
+    public ContentValues createSnippetContentValues(long contactId, String snippet) {
+        final ContentValues values = new ContentValues();
+        values.clear();
+        values.put(Contacts._ID, contactId);
+        values.put(SearchSnippetColumns.SNIPPET, snippet);
+        return values;
+    }
+
     public void testSearchSnippetNickname() throws Exception {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -3781,7 +3789,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "[Incredible]");
+        values.put(SearchSnippetColumns.SNIPPET, "Incredible");
         assertStoredValues(filterUri, values);
     }
 
@@ -3791,13 +3799,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         DataUtil.insertStructuredName(mResolver, rawContactId, "Cave", "Johnson");
         insertEmail(rawContactId, "cave@aperturescience.com", true);
 
-        ContentValues emptySnippet = new ContentValues();
-        emptySnippet.clear();
-        emptySnippet.put(Contacts._ID, contactId);
-        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+        ContentValues snippet = createSnippetContentValues(contactId, "cave@aperturescience.com");
 
-        assertStoredValues(buildFilterUri("cave", true), emptySnippet);
-        assertStoredValues(buildFilterUri("john", true), emptySnippet);
+        assertContainsValues(buildFilterUri("cave", true), snippet);
+        assertContainsValues(buildFilterUri("john", true), snippet);
     }
 
     public void testSearchSnippetEmptyForNicknameInDisplayName() throws Exception {
@@ -3806,12 +3811,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertNickname(rawContactId, "Caveman");
         insertEmail(rawContactId, "cave@aperturescience.com", true);
 
-        ContentValues emptySnippet = new ContentValues();
-        emptySnippet.clear();
-        emptySnippet.put(Contacts._ID, contactId);
-        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+        ContentValues snippet = createSnippetContentValues(contactId, "cave@aperturescience.com");
 
-        assertStoredValues(buildFilterUri("cave", true), emptySnippet);
+        assertContainsValues(buildFilterUri("cave", true), snippet);
     }
 
     public void testSearchSnippetEmptyForCompanyInDisplayName() throws Exception {
@@ -3824,12 +3826,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertOrganization(rawContactId, company);
         insertEmail(rawContactId, "aperturepresident@aperturescience.com", true);
 
-        ContentValues emptySnippet = new ContentValues();
-        emptySnippet.clear();
-        emptySnippet.put(Contacts._ID, contactId);
-        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+        ContentValues snippet = createSnippetContentValues(contactId, "aperturepresident");
 
-        assertStoredValues(buildFilterUri("aperture", true), emptySnippet);
+        assertContainsValues(buildFilterUri("aperture", true), snippet);
     }
 
     public void testSearchSnippetEmptyForPhoneInDisplayName() throws Exception {
@@ -3838,12 +3837,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, "860-555-1234");
         insertEmail(rawContactId, "860@aperturescience.com", true);
 
-        ContentValues emptySnippet = new ContentValues();
-        emptySnippet.clear();
-        emptySnippet.put(Contacts._ID, contactId);
-        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+        ContentValues snippet = createSnippetContentValues(contactId, "860-555-1234");
 
-        assertStoredValues(buildFilterUri("860", true), emptySnippet);
+        assertContainsValues(buildFilterUri("860", true), snippet);
     }
 
     public void testSearchSnippetEmptyForEmailInDisplayName() throws Exception {
@@ -3852,12 +3848,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "cave@aperturescience.com", true);
         insertNote(rawContactId, "Cave Johnson is president of Aperture Science");
 
-        ContentValues emptySnippet = new ContentValues();
-        emptySnippet.clear();
-        emptySnippet.put(Contacts._ID, contactId);
-        emptySnippet.put(SearchSnippetColumns.SNIPPET, (String) null);
+        ContentValues snippet = createSnippetContentValues(contactId,
+                "Cave Johnson is president of Aperture Science");
 
-        assertStoredValues(buildFilterUri("cave", true), emptySnippet);
+        assertContainsValues(buildFilterUri("cave", true), snippet);
     }
 
     public void testDisplayNameUpdateFromStructuredNameUpdate() {
