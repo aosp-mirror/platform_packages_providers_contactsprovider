@@ -63,7 +63,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.SOURCE_DATA,
             Voicemails.STATE};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 18;
+    private static final int NUM_CALLLOG_FIELDS = 19;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -131,6 +131,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
         values.put(Calls.NUMBER, "1-800-263-7643");
+        values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
         values.put(Calls.CACHED_NAME, "1-800-GOOG-411");
@@ -185,6 +186,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
         values.put(Calls.NUMBER, "1-800-263-7643");
+        values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
         values.put(Calls.CACHED_NAME, "1-800-GOOG-411");
@@ -369,6 +371,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, callType);
         values.put(Calls.NUMBER, "1-800-4664-411");
+        values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 1000);
         values.put(Calls.DURATION, 30);
         values.put(Calls.NEW, 1);

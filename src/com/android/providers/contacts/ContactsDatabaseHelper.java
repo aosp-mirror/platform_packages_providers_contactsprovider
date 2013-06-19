@@ -111,9 +111,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   550-599 Honeycomb-MR2
      *   600-699 Ice Cream Sandwich
      *   700-799 Jelly Bean
+     *   800-899 Key Lime Pie
      * </pre>
      */
-    static final int DATABASE_VERSION = 710;
+    static final int DATABASE_VERSION = 800;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -1254,6 +1255,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE " + Tables.CALLS + " (" +
                 Calls._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 Calls.NUMBER + " TEXT," +
+                Calls.NUMBER_PRESENTATION + " INTEGER NOT NULL DEFAULT " +
+                        Calls.PRESENTATION_ALLOWED + "," +
                 Calls.DATE + " INTEGER," +
                 Calls.DURATION + " INTEGER," +
                 Calls.TYPE + " INTEGER," +
@@ -2481,6 +2484,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeToVersion710(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 710;
+        }
+
+        if (oldVersion < 800) {
+            upgradeToVersion800(db);
+            oldVersion = 800;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -3935,14 +3943,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void upgradeToVersion707(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContactsColumns.PHONEBOOK_LABEL_PRIMARY + " TEXT;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY + " INTEGER;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + " TEXT;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + " INTEGER;");
+        db.execSQL("ALTER TABLE raw_contacts phonebook_label TEXT;");
+        db.execSQL("ALTER TABLE raw_contacts ADD phonebook_bucket INTEGER;");
+        db.execSQL("ALTER TABLE raw_contacts ADD phonebook_label_alt TEXT;");
+        db.execSQL("ALTER TABLE raw_contacts ADD phonebook_bucket_alt INTEGER;");
     }
 
     private void upgradeToVersion710(SQLiteDatabase db) {
@@ -3966,6 +3970,19 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         db.execSQL("CREATE INDEX deleted_contacts_contact_deleted_timestamp_index "
                 + "ON deleted_contacts(contact_deleted_timestamp)");
+    }
+
+    private void upgradeToVersion800(SQLiteDatabase db) {
+        // Default Calls.PRESENTATION_ALLOWED=1
+        db.execSQL("ALTER TABLE calls ADD presentation INTEGER NOT NULL DEFAULT 1;");
+
+        // Re-map CallerInfo.{..}_NUMBER strings to Calls.PRESENTATION_{..} ints
+        //  PRIVATE_NUMBER="-2" -> PRESENTATION_RESTRICTED=2
+        //  UNKNOWN_NUMBER="-1" -> PRESENTATION_UNKNOWN   =3
+        // PAYPHONE_NUMBER="-3" -> PRESENTATION_PAYPHONE  =4
+        db.execSQL("UPDATE calls SET presentation=2, number='' WHERE number='-2';");
+        db.execSQL("UPDATE calls SET presentation=3, number='' WHERE number='-1';");
+        db.execSQL("UPDATE calls SET presentation=4, number='' WHERE number='-3';");
     }
 
     public String extractHandleFromEmailAddress(String email) {
