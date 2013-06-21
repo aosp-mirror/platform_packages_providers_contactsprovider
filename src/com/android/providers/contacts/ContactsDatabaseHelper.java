@@ -2491,6 +2491,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 801) {
             setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
                     System.currentTimeMillis()));
+            oldVersion = 801;
         }
 
         if (upgradeViewsAndTriggers) {
