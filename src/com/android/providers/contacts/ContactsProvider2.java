@@ -1774,13 +1774,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // No accounts/no contacts status is true if there are no account and
         // there are no contacts or one profile contact
         if (mContactsAccountCount == 0) {
-            long contactsNum = DatabaseUtils.queryNumEntries(mContactsHelper.getReadableDatabase(),
-                    Tables.CONTACTS, null);
+            boolean isContactsEmpty = DatabaseUtils.queryIsEmpty(mContactsHelper.getReadableDatabase(), Tables.CONTACTS);
             long profileNum = DatabaseUtils.queryNumEntries(mProfileHelper.getReadableDatabase(),
                     Tables.CONTACTS, null);
 
             // TODO: Different status if there is a profile but no contacts?
-            if (contactsNum == 0 && profileNum <= 1) {
+            if (isContactsEmpty && profileNum <= 1) {
                 setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
             } else {
                 setProviderStatus(ProviderStatus.STATUS_NORMAL);
