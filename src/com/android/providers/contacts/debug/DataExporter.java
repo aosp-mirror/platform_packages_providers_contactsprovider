@@ -46,6 +46,7 @@ public class DataExporter {
     public static final String DUMP_FILE_DIRECTORY_NAME = "dumpedfiles";
 
     public static final String OUT_FILE_SUFFIX = "-contacts-db.zip";
+    public static final String VALID_FILE_NAME_REGEX = "[0-9A-Fa-f]+-contacts-db\\.zip";
 
     /**
      * Compress all files under the app data dir into a single zip file, and return the content://
@@ -79,6 +80,20 @@ public class DataExporter {
         rng.nextBytes(random);
 
         return Hex.encodeHex(random, true);
+    }
+
+    public static void ensureValidFileName(String fileName) {
+        // Do not allow queries to use relative paths to leave the root directory. Otherwise they
+        // can gain access to other files such as the contacts database.
+        if (fileName.contains("..")) {
+            throw new IllegalArgumentException(".. path specifier not allowed. Bad file name: " +
+                    fileName);
+        }
+        // White list dump files.
+        if (!fileName.matches(VALID_FILE_NAME_REGEX)) {
+            throw new IllegalArgumentException("Only " + VALID_FILE_NAME_REGEX +
+                    " files are supported. Bad file name: " + fileName);
+        }
     }
 
     private static File getOutputDirectory(Context context) {
