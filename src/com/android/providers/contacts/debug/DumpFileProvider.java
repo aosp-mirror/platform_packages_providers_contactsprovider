@@ -76,7 +76,10 @@ public class DumpFileProvider extends ContentProvider {
         if (!"r".equals(mode)) {
             throw new UnsupportedOperationException();
         }
-        final File file = DataExporter.getOutputFile(getContext(), extractFileName(uri));
+
+        final String fileName = extractFileName(uri);
+        DataExporter.ensureValidFileName(fileName);
+        final File file = DataExporter.getOutputFile(getContext(), fileName);
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
@@ -87,6 +90,9 @@ public class DumpFileProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] inProjection, String selection, String[] selectionArgs,
             String sortOrder) {
+        final String fileName = extractFileName(uri);
+        DataExporter.ensureValidFileName(fileName);
+
         final String[] projection = (inProjection != null) ? inProjection
                 : new String[] {OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE};
 
@@ -100,9 +106,9 @@ public class DumpFileProvider extends ContentProvider {
             if (OpenableColumns.DISPLAY_NAME.equals(column)) {
                 // Just return the requested path as the display name.  We don't care if the file
                 // really exists.
-                b.add(extractFileName(uri));
+                b.add(fileName);
             } else if (OpenableColumns.SIZE.equals(column)) {
-                final File file = DataExporter.getOutputFile(getContext(), extractFileName(uri));
+                final File file = DataExporter.getOutputFile(getContext(), fileName);
 
                 if (file.exists()) {
                     b.add(file.length());
@@ -117,4 +123,5 @@ public class DumpFileProvider extends ContentProvider {
 
         return c;
     }
+
 }
