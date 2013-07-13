@@ -3946,7 +3946,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void upgradeToVersion707(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE raw_contacts phonebook_label TEXT;");
+        db.execSQL("ALTER TABLE raw_contacts ADD phonebook_label TEXT;");
         db.execSQL("ALTER TABLE raw_contacts ADD phonebook_bucket INTEGER;");
         db.execSQL("ALTER TABLE raw_contacts ADD phonebook_label_alt TEXT;");
         db.execSQL("ALTER TABLE raw_contacts ADD phonebook_bucket_alt INTEGER;");
