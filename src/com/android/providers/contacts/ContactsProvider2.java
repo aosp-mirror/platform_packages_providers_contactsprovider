@@ -92,6 +92,7 @@ import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhotoFiles;
+import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
@@ -179,6 +180,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
@@ -377,6 +379,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int DELETED_CONTACTS = 23000;
     private static final int DELETED_CONTACTS_ID = 23001;
+
+    private static final int PINNED_POSITION_UPDATE = 24001;
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
@@ -584,6 +588,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE)
             .add(ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
             .add(Contacts.STARRED)
+            .add(Contacts.PINNED)
             .add(Contacts.TIMES_CONTACTED)
             .add(Contacts.HAS_PHONE_NUMBER)
             .add(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
@@ -785,6 +790,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(RawContacts.CUSTOM_RINGTONE)
             .add(RawContacts.SEND_TO_VOICEMAIL)
             .add(RawContacts.STARRED)
+            .add(RawContacts.PINNED)
             .add(RawContacts.AGGREGATION_MODE)
             .add(RawContacts.RAW_CONTACT_IS_USER_PROFILE)
             .addAll(sRawContactColumns)
@@ -1255,6 +1261,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts", DELETED_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts/#", DELETED_CONTACTS_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "pinned_position_update",
+                PINNED_POSITION_UPDATE);
     }
 
     private static class DirectoryInfo {
@@ -4029,6 +4038,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
+            case PINNED_POSITION_UPDATE: {
+                final boolean forceStarWhenPinning = uri.getBooleanQueryParameter(
+                        PinnedPositions.STAR_WHEN_PINNING, false);
+                count = handlePinningUpdate(values, forceStarWhenPinning);
+                break;
+            }
+
             default: {
                 mSyncToNetwork = true;
                 return mLegacyApiSupport.update(uri, values, selection, selectionArgs);
@@ -4357,6 +4373,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             flagIsSet(values, RawContacts.STARRED));
                 }
                 mAggregator.get().updateStarred(rawContactId);
+                mAggregator.get().updatePinned(rawContactId);
             } else {
                 // if this raw contact is being associated with an account, then update the
                 // favorites group membership based on whether or not this contact is starred.
@@ -4489,6 +4506,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, Contacts.TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
+        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.PINNED,
+                values, Contacts.PINNED);
 
         // Nothing to update - just return
         if (mValues.size() == 0) {
@@ -4533,6 +4552,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, Contacts.TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, Contacts.STARRED);
+        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.PINNED,
+                values, Contacts.PINNED);
         mValues.put(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
                 Clock.getInstance().currentTimeMillis());
 
@@ -8480,6 +8501,68 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // feature" instead, in which case we'd do something like:
         // return
         //   getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_VOICE_CALLS);
+    }
+
+    /**
+     * Handles pinning update information from clients.
+     *
+     * @param values ContentValues containing key-value pairs where keys correspond to
+     * the contactId for which to update the pinnedPosition, and the value is the actual
+     * pinned position (a positive integer).
+     * @return The number of contacts that had their pinned positions updated.
+     */
+    private int handlePinningUpdate(ContentValues values, boolean forceStarWhenPinning) {
+        if (values.size() == 0) return 0;
+        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        final String[] args;
+        if (forceStarWhenPinning) {
+            args = new String[3];
+        } else {
+            args = new String[2];
+        }
+
+        final StringBuilder sb = new StringBuilder();
+
+        sb.append("UPDATE " + Tables.CONTACTS + " SET " + Contacts.PINNED + "=?2");
+        if (forceStarWhenPinning) {
+            sb.append("," + Contacts.STARRED + "=?3");
+        }
+        sb.append(" WHERE " + Contacts._ID + " =?1;");
+        final String contactSQL = sb.toString();
+
+        sb.setLength(0);
+        sb.append("UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.PINNED + "=?2");
+        if (forceStarWhenPinning) {
+            sb.append("," + RawContacts.STARRED + "=?3");
+        }
+        sb.append(" WHERE " + RawContacts.CONTACT_ID + " =?1;");
+        final String rawContactSQL = sb.toString();
+
+        int count = 0;
+        for (String id : values.keySet()) {
+            count++;
+            final long contactId;
+            try {
+                contactId = Integer.valueOf(id);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("contactId must be a positive integer. Found: "
+                        + id);
+            }
+
+            final Integer pinnedPosition = values.getAsInteger(id);
+            if (pinnedPosition == null || pinnedPosition < 0) {
+                throw new IllegalArgumentException("Pinned position must be a positive integer.");
+            }
+            args[0] = String.valueOf(contactId);
+            args[1] = String.valueOf(pinnedPosition);
+            if (forceStarWhenPinning) {
+                args[2] = (pinnedPosition == PinnedPositions.UNPINNED ? "0" : "1");
+            }
+            db.execSQL(contactSQL, args);
+
+            db.execSQL(rawContactSQL, args);
+        }
+        return count;
     }
 
     private boolean handleDataUsageFeedback(Uri uri) {

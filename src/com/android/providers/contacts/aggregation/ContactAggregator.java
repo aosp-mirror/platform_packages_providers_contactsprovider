@@ -33,6 +33,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
+import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
@@ -152,11 +153,13 @@ public class ContactAggregator {
     private SQLiteStatement mDisplayNameUpdate;
     private SQLiteStatement mLookupKeyUpdate;
     private SQLiteStatement mStarredUpdate;
+    private SQLiteStatement mPinnedUpdate;
     private SQLiteStatement mContactIdAndMarkAggregatedUpdate;
     private SQLiteStatement mContactIdUpdate;
     private SQLiteStatement mMarkAggregatedUpdate;
     private SQLiteStatement mContactUpdate;
     private SQLiteStatement mContactInsert;
+    private SQLiteStatement mResetPinnedForRawContact;
 
     private HashMap<Long, Integer> mRawContactsMarkedForAggregation = Maps.newHashMap();
 
@@ -333,6 +336,11 @@ public class ContactAggregator {
                 + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " AND "
                 + RawContacts.STARRED + "=1)" + " WHERE " + Contacts._ID + "=?");
 
+        mPinnedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + Contacts.PINNED + "=(SELECT MIN(" + RawContacts.PINNED + ") FROM "
+                + Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "="
+                + ContactsColumns.CONCRETE_ID + ") WHERE " + Contacts._ID + "=?");
+
         mContactIdAndMarkAggregatedUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
                 " SET " + RawContacts.CONTACT_ID + "=?, "
@@ -356,6 +364,11 @@ public class ContactAggregator {
 
         mContactUpdate = db.compileStatement(ContactReplaceSqlStatement.UPDATE_SQL);
         mContactInsert = db.compileStatement(ContactReplaceSqlStatement.INSERT_SQL);
+
+        mResetPinnedForRawContact = db.compileStatement(
+                "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContacts.PINNED + "=" + PinnedPositions.UNPINNED +
+                " WHERE " + RawContacts._ID + "=?");
 
         mMimeTypeIdEmail = mDbHelper.getMimeTypeId(Email.CONTENT_ITEM_TYPE);
         mMimeTypeIdIdentity = mDbHelper.getMimeTypeId(Identity.CONTENT_ITEM_TYPE);
@@ -989,10 +1002,13 @@ public class ContactAggregator {
     }
 
     /**
-     * Creates a stand-alone Contact for the given raw contact ID.
+     * Creates a stand-alone Contact for the given raw contact ID. This is only called
+     * when splitting an existing merged contact into separate raw contacts.
      */
     private void createNewContactForRawContact(
             TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
+        // All split contacts should automatically be unpinned.
+        unpinRawContact(rawContactId);
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1,
                 mContactInsert);
@@ -1095,6 +1111,11 @@ public class ContactAggregator {
         mPresenceContactIdUpdate.bindLong(1, contactId);
         mPresenceContactIdUpdate.bindLong(2, rawContactId);
         mPresenceContactIdUpdate.execute();
+    }
+
+    private void unpinRawContact(long rawContactId) {
+        mResetPinnedForRawContact.bindLong(1, rawContactId);
+        mResetPinnedForRawContact.execute();
     }
 
     interface AggregateExceptionPrefetchQuery {
@@ -1705,6 +1726,7 @@ public class ContactAggregator {
                         + RawContacts.LAST_TIME_CONTACTED + ","
                         + RawContacts.TIMES_CONTACTED + ","
                         + RawContacts.STARRED + ","
+                        + RawContacts.PINNED + ","
                         + RawContacts.NAME_VERIFIED + ","
                         + DataColumns.CONCRETE_ID + ","
                         + DataColumns.CONCRETE_MIMETYPE_ID + ","
@@ -1740,11 +1762,12 @@ public class ContactAggregator {
         int LAST_TIME_CONTACTED = 9;
         int TIMES_CONTACTED = 10;
         int STARRED = 11;
-        int NAME_VERIFIED = 12;
-        int DATA_ID = 13;
-        int MIMETYPE_ID = 14;
-        int IS_SUPER_PRIMARY = 15;
-        int PHOTO_FILE_ID = 16;
+        int PINNED = 12;
+        int NAME_VERIFIED = 13;
+        int DATA_ID = 14;
+        int MIMETYPE_ID = 15;
+        int IS_SUPER_PRIMARY = 16;
+        int PHOTO_FILE_ID = 17;
     }
 
     private interface ContactReplaceSqlStatement {
@@ -1759,6 +1782,7 @@ public class ContactAggregator {
                         + Contacts.LAST_TIME_CONTACTED + "=?, "
                         + Contacts.TIMES_CONTACTED + "=?, "
                         + Contacts.STARRED + "=?, "
+                        + Contacts.PINNED + "=?, "
                         + Contacts.HAS_PHONE_NUMBER + "=?, "
                         + Contacts.LOOKUP_KEY + "=?, "
                         + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP + "=? " +
@@ -1774,11 +1798,12 @@ public class ContactAggregator {
                         + Contacts.LAST_TIME_CONTACTED + ", "
                         + Contacts.TIMES_CONTACTED + ", "
                         + Contacts.STARRED + ", "
+                        + Contacts.PINNED + ", "
                         + Contacts.HAS_PHONE_NUMBER + ", "
                         + Contacts.LOOKUP_KEY + ", "
                         + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP
                         + ") " +
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
 
         int NAME_RAW_CONTACT_ID = 1;
         int PHOTO_ID = 2;
@@ -1788,10 +1813,11 @@ public class ContactAggregator {
         int LAST_TIME_CONTACTED = 6;
         int TIMES_CONTACTED = 7;
         int STARRED = 8;
-        int HAS_PHONE_NUMBER = 9;
-        int LOOKUP_KEY = 10;
-        int CONTACT_LAST_UPDATED_TIMESTAMP = 11;
-        int CONTACT_ID = 12;
+        int PINNED = 9;
+        int HAS_PHONE_NUMBER = 10;
+        int LOOKUP_KEY = 11;
+        int CONTACT_LAST_UPDATED_TIMESTAMP = 12;
+        int CONTACT_ID = 13;
     }
 
     /**
@@ -1830,6 +1856,7 @@ public class ContactAggregator {
         long contactLastTimeContacted = 0;
         int contactTimesContacted = 0;
         int contactStarred = 0;
+        int contactPinned = PinnedPositions.UNPINNED;
         int hasPhoneNumber = 0;
         StringBuilder lookupKey = new StringBuilder();
 
@@ -1885,6 +1912,11 @@ public class ContactAggregator {
                     if (c.getInt(RawContactsQuery.STARRED) != 0) {
                         contactStarred = 1;
                     }
+
+                    // contactPinned should be the lowest value of its constituent raw contacts,
+                    // excluding 0
+                    final int rawContactPinned = c.getInt(RawContactsQuery.PINNED);
+                    contactPinned = Math.min(contactPinned, rawContactPinned);
 
                     appendLookupKey(
                             lookupKey,
@@ -1951,6 +1983,8 @@ public class ContactAggregator {
                 contactTimesContacted);
         statement.bindLong(ContactReplaceSqlStatement.STARRED,
                 contactStarred);
+        statement.bindLong(ContactReplaceSqlStatement.PINNED,
+                contactPinned);
         statement.bindLong(ContactReplaceSqlStatement.HAS_PHONE_NUMBER,
                 hasPhoneNumber);
         statement.bindString(ContactReplaceSqlStatement.LOOKUP_KEY,
@@ -2321,6 +2355,20 @@ public class ContactAggregator {
 
         mStarredUpdate.bindLong(1, contactId);
         mStarredUpdate.execute();
+    }
+
+    /**
+     * Execute {@link SQLiteStatement} that will update the
+     * {@link Contacts#PINNED} flag for the given {@link RawContacts#_ID}.
+     */
+    public void updatePinned(long rawContactId) {
+        long contactId = mDbHelper.getContactId(rawContactId);
+        if (contactId == 0) {
+            return;
+        }
+
+        mPinnedUpdate.bindLong(1, contactId);
+        mPinnedUpdate.execute();
     }
 
     /**
