@@ -37,6 +37,7 @@ import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import com.android.providers.contacts.util.CloseUtils;
+import com.google.common.collect.ImmutableSet;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -53,6 +54,21 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     private static final String DATA_DIRECTORY = "voicemail-data";
 
     private static final String[] FILENAME_ONLY_PROJECTION = new String[] { Voicemails._DATA };
+
+    private static final ImmutableSet<String> ALLOWED_COLUMNS = new ImmutableSet.Builder<String>()
+            .add(Voicemails._ID)
+            .add(Voicemails.NUMBER)
+            .add(Voicemails.DATE)
+            .add(Voicemails.DURATION)
+            .add(Voicemails.IS_READ)
+            .add(Voicemails.STATE)
+            .add(Voicemails.SOURCE_DATA)
+            .add(Voicemails.SOURCE_PACKAGE)
+            .add(Voicemails.HAS_CONTENT)
+            .add(Voicemails.MIME_TYPE)
+            .add(OpenableColumns.DISPLAY_NAME)
+            .add(OpenableColumns.SIZE)
+            .build();
 
     private final String mTableName;
     private final SQLiteOpenHelper mDbHelper;
@@ -211,8 +227,10 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     @Override
     public int update(UriData uriData, ContentValues values, String selection,
             String[] selectionArgs) {
-        checkForSupportedColumns(mVoicemailProjectionMap, values);
+
+        checkForSupportedColumns(ALLOWED_COLUMNS, values, "Updates are not allowed.");
         checkUpdateSupported(uriData);
+
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         // TODO: This implementation does not allow bulk update because it only accepts
         // URI that include message Id. I think we do want to support bulk update.
