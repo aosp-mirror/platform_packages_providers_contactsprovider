@@ -39,6 +39,7 @@ import com.google.common.collect.ImmutableSet;
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import com.android.providers.contacts.util.CloseUtils;
+import com.google.common.collect.ImmutableSet;
 
 import java.io.File;
 import java.io.FileNotFoundException;
