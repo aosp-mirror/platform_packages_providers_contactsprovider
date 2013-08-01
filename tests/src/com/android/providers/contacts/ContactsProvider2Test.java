@@ -239,6 +239,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Phone.NUMBER,
                 Phone.TYPE,
                 Phone.LABEL,
+                Phone.CONTACT_ID
         });
     }
 

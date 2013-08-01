@@ -743,6 +743,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Phone.NUMBER, "NULL")
             .add(Phone.TYPE, "NULL")
             .add(Phone.LABEL, "NULL")
+            .add(Phone.CONTACT_ID, "NULL")
             .build();
 
     /**
@@ -759,6 +760,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Phone.NUMBER)
             .add(Phone.TYPE)
             .add(Phone.LABEL)
+            .add(Phone.CONTACT_ID)
             .add(Contacts.IS_USER_PROFILE, "NULL")
             .build();
 
