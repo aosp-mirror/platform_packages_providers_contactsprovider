@@ -504,6 +504,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
             " SET " + RawContacts.VERSION + " = " + RawContacts.VERSION + " + 1" +
             " WHERE " + RawContacts._ID + " IN (";
 
+    /** Sql for undemoting a demoted contact **/
+    private static final String UNDEMOTE_CONTACT =
+            "UPDATE " + Tables.CONTACTS +
+            " SET " + Contacts.PINNED + " = " + PinnedPositions.UNPINNED +
+            " WHERE " + Contacts._ID + " = ?1 AND " + Contacts.PINNED + " <= " +
+            PinnedPositions.DEMOTED;
+
+    /** Sql for undemoting a demoted raw contact **/
+    private static final String UNDEMOTE_RAW_CONTACT =
+            "UPDATE " + Tables.RAW_CONTACTS +
+            " SET " + RawContacts.PINNED + " = " + PinnedPositions.UNPINNED +
+            " WHERE " + RawContacts.CONTACT_ID + " = ?1 AND " + Contacts.PINNED + " <= " +
+            PinnedPositions.DEMOTED;
+
     // Current contacts - those contacted within the last 3 days (in seconds)
     private static final long LAST_TIME_USED_CURRENT_SEC = 3 * 24 * 60 * 60;
 
@@ -8551,20 +8565,35 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         + id);
             }
 
+            // If contact is to be undemoted, go through a separate un-demotion process
+            final String undemote = values.getAsString(id);
+            if (PinnedPositions.UNDEMOTE.equals(undemote)) {
+                undemoteContact(db, contactId);
+                continue;
+            }
+
             final Integer pinnedPosition = values.getAsInteger(id);
-            if (pinnedPosition == null || pinnedPosition < 0) {
-                throw new IllegalArgumentException("Pinned position must be a positive integer.");
+            if (pinnedPosition == null) {
+                throw new IllegalArgumentException("Pinned position must be an integer.");
             }
             args[0] = String.valueOf(contactId);
             args[1] = String.valueOf(pinnedPosition);
             if (forceStarWhenPinning) {
-                args[2] = (pinnedPosition == PinnedPositions.UNPINNED ? "0" : "1");
+                args[2] = (pinnedPosition == PinnedPositions.UNPINNED ||
+                        pinnedPosition == PinnedPositions.DEMOTED ? "0" : "1");
             }
             db.execSQL(contactSQL, args);
 
             db.execSQL(rawContactSQL, args);
         }
         return count;
+    }
+
+    private void undemoteContact(SQLiteDatabase db, long id) {
+        final String[] arg = new String[1];
+        arg[0] = String.valueOf(id);
+        db.execSQL(UNDEMOTE_CONTACT, arg);
+        db.execSQL(UNDEMOTE_RAW_CONTACT, arg);
     }
 
     private boolean handleDataUsageFeedback(Uri uri) {

@@ -339,7 +339,8 @@ public class ContactAggregator {
         mPinnedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
                 + Contacts.PINNED + "=(SELECT MIN(" + RawContacts.PINNED + ") FROM "
                 + Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "="
-                + ContactsColumns.CONCRETE_ID + ") WHERE " + Contacts._ID + "=?");
+                + ContactsColumns.CONCRETE_ID + " AND " + RawContacts.PINNED + ">"
+                + PinnedPositions.DEMOTED + ") WHERE " + Contacts._ID + "=?");
 
         mContactIdAndMarkAggregatedUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -1914,9 +1915,11 @@ public class ContactAggregator {
                     }
 
                     // contactPinned should be the lowest value of its constituent raw contacts,
-                    // excluding 0
+                    // excluding negative integers
                     final int rawContactPinned = c.getInt(RawContactsQuery.PINNED);
-                    contactPinned = Math.min(contactPinned, rawContactPinned);
+                    if (rawContactPinned >= 0) {
+                        contactPinned = Math.min(contactPinned, rawContactPinned);
+                    }
 
                     appendLookupKey(
                             lookupKey,
@@ -2366,7 +2369,6 @@ public class ContactAggregator {
         if (contactId == 0) {
             return;
         }
-
         mPinnedUpdate.bindLong(1, contactId);
         mPinnedUpdate.execute();
     }
