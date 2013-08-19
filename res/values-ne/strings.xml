@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="8024311725474286801">"एन्ड्रोइड कोर अनुप्रयोगहरू"</string>
+    <string name="app_label" msgid="3389954322874982620">"सम्पर्कहरू भण्डारण"</string>
+    <string name="provider_label" msgid="6012150850819899907">"सम्पर्कहरू"</string>
+    <string name="upgrade_msg" msgid="8640807392794309950">"सम्पर्क डेटाबेस अद्यावधिक गर्दै।"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"सम्पर्क अद्यावधिकका लागि अझै धेरै मेमोरी चाहिन्छ।"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"सम्पर्कका लागि भणडारण अद्यावधिक गर्दै"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"अद्यावधिक कार्य पुरा गर्न छुनुहोस्।"</string>
+    <string name="default_directory" msgid="93961630309570294">"सम्पर्कहरू"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"अन्य"</string>
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"सम्पूर्ण भ्वाइसमेलहरू पहुँच गर्नुहोस्"</string>
+    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"यो उपकरणले पहुँच गर्न सक्ने हरेक भ्वाइसमेलहरू यो अनुप्रयोगलाई भण्डारण गर्न र पुन:बहाली गर्न अनुमति दिन्छ।"</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"बाट भ्वाइसमेल "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"सम्पर्क डेटाबेस प्रतिलिप गर्नुहोस्"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"तपाईँले केही बेरमा १) आन्तरिक भण्डारणमा सम्पुर्ण सम्पर्क सम्बन्धी जानकारी र कल लग भएको डेटाबेसको एउटा प्रतिलिपी बनाउनुहोस्, र  2) उनीहरूलाई इमेल गर्नुहोस्। उपरकणमा प्रतिलिपीको नक्कल पार्ना साथ अथवा इमेल प्राप्त हुने बित्तिकै प्रतिलिपी मेटाउन ख्याल गर्नुहोस्।"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"अहिले हटाउनुहोस्"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"सुरु गर्नुहोस्"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"आफ्नो फाइल पठाउनका लागि एउटा प्रोग्राम छान्नुहोस्।"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"सम्पर्क Db संलग्न गरिएको छ।"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"संलग्न मेरा सम्पुर्ण जानकारीको सम्पर्क डेटाबेस हो। सावधानीपूर्वक राख्नुहोस्।"</string>
+</resources>
