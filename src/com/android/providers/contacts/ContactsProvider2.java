@@ -7940,7 +7940,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             final byte[] byteData = stream.toByteArray();
             return makeAssetFileDescriptor(
-                    ParcelFileDescriptor.fromData(byteData, CONTACT_MEMORY_FILE_NAME));
+                    ParcelFileDescriptor.fromData(byteData, CONTACT_MEMORY_FILE_NAME),
+                    byteData.length);
         } catch (IOException e) {
             Log.w(TAG, "Problem writing stream into an ParcelFileDescriptor: " + e.toString());
             return null;
