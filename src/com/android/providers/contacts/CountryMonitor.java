@@ -22,6 +22,8 @@ import android.location.CountryDetector;
 import android.location.CountryListener;
 import android.os.Looper;
 
+import java.util.Locale;
+
 /**
  * This class monitors the change of country.
  * <p>
@@ -45,12 +47,20 @@ public class CountryMonitor {
         if (mCurrentCountryIso == null) {
             final CountryDetector countryDetector =
                     (CountryDetector) mContext.getSystemService(Context.COUNTRY_DETECTOR);
-            mCurrentCountryIso = countryDetector.detectCountry().getCountryIso();
-            countryDetector.addCountryListener(new CountryListener() {
-                public void onCountryDetected(Country country) {
-                    mCurrentCountryIso = country.getCountryIso();
-                }
-            }, Looper.getMainLooper());
+            Country country = null;
+            if (countryDetector != null) country = countryDetector.detectCountry();
+
+            if (country == null) {
+                // Fallback to Locale if there are issues with CountryDetector
+                return Locale.getDefault().getCountry();
+            }
+
+            mCurrentCountryIso = country.getCountryIso();
+                countryDetector.addCountryListener(new CountryListener() {
+                    public void onCountryDetected(Country country) {
+                        mCurrentCountryIso = country.getCountryIso();
+                    }
+                }, Looper.getMainLooper());
         }
         return mCurrentCountryIso;
     }
