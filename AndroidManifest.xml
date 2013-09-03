@@ -8,7 +8,7 @@
             android:label="@string/read_write_all_voicemail_label"
             android:description="@string/read_write_all_voicemail_description"
             android:permissionGroup="android.permission-group.PERSONAL_INFO"
-            android:protectionLevel="signature"
+            android:protectionLevel="system|signature"
             />
 
     <uses-permission android:name="android.permission.READ_CONTACTS" />
