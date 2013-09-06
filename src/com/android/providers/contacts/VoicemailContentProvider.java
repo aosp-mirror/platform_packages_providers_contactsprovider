@@ -244,12 +244,12 @@ public class VoicemailContentProvider extends ContentProvider
         // If content values don't contain the provider, calculate the right provider to use.
         if (!values.containsKey(SOURCE_PACKAGE_FIELD)) {
             String provider = uriData.hasSourcePackage() ?
-                    uriData.getSourcePackage() : getCallingPackage();
+                    uriData.getSourcePackage() : getCallingPackage_();
             values.put(SOURCE_PACKAGE_FIELD, provider);
         }
         // You must have access to the provider given in values.
         if (!mVoicemailPermissions.callerHasFullAccess()) {
-            checkPackagesMatch(getCallingPackage(),
+            checkPackagesMatch(getCallingPackage_(),
                     values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD),
                     uriData.getUri());
         }
@@ -344,10 +344,10 @@ public class VoicemailContentProvider extends ContentProvider
                 throw new SecurityException(String.format(
                         "Provider %s does not have %s permission." +
                                 "\nPlease set query parameter '%s' in the URI.\nURI: %s",
-                        getCallingPackage(), Manifest.permission.READ_WRITE_ALL_VOICEMAIL,
+                        getCallingPackage_(), Manifest.permission.READ_WRITE_ALL_VOICEMAIL,
                         VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, uriData.getUri()));
             }
-            checkPackagesMatch(getCallingPackage(), uriData.getSourcePackage(), uriData.getUri());
+            checkPackagesMatch(getCallingPackage_(), uriData.getSourcePackage(), uriData.getUri());
         }
     }
 
@@ -359,7 +359,7 @@ public class VoicemailContentProvider extends ContentProvider
      * package name. It's also possible (though very unlikely) for us to be unable to work out what
      * your calling package is, in which case we will return null.
      */
-    /* package for test */String getCallingPackage() {
+    /* package for test */String getCallingPackage_() {
         int caller = Binder.getCallingUid();
         if (caller == 0) {
             return null;
@@ -395,6 +395,6 @@ public class VoicemailContentProvider extends ContentProvider
         if (mVoicemailPermissions.callerHasFullAccess()) {
             return null;
         }
-        return getEqualityClause(Voicemails.SOURCE_PACKAGE, getCallingPackage());
+        return getEqualityClause(Voicemails.SOURCE_PACKAGE, getCallingPackage_());
     }
 }
