@@ -126,6 +126,8 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
 
     @Override
     public void appendSearchableData(IndexBuilder builder) {
+        builder.appendNameFromColumn(Organization.TITLE);
+        builder.appendNameFromColumn(Organization.COMPANY);
         builder.appendContentFromColumn(Organization.TITLE);
         builder.appendContentFromColumn(Organization.COMPANY, IndexBuilder.SEPARATOR_COMMA);
         builder.appendContentFromColumn(Organization.PHONETIC_NAME,
