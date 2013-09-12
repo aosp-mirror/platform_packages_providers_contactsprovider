@@ -5682,13 +5682,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     sb.append(" AND (");
 
                     boolean hasCondition = false;
-                    // TODO This only searches the name field.  Search other fields, such as
-                    // note, nickname, as well.  (Which should be disabled by default.)
-                    // Fix EMAILS_FILTER too.
+                    // This searches the name, nickname and organization fields.
                     final String ftsMatchQuery =
                             searchDisplayName
                             ? SearchIndexManager.getFtsMatchQuery(filterParam,
-                                    FtsQueryBuilder.SCOPED_NAME_NORMALIZING)
+                                    FtsQueryBuilder.UNSCOPED_NORMALIZING)
                             : null;
                     if (!TextUtils.isEmpty(ftsMatchQuery)) {
                         sb.append(Data.RAW_CONTACT_ID + " IN " +
@@ -5697,7 +5695,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 " JOIN " + Tables.RAW_CONTACTS +
                                 " ON (" + Tables.SEARCH_INDEX + "." + SearchIndexColumns.CONTACT_ID
                                         + "=" + RawContactsColumns.CONCRETE_CONTACT_ID + ")" +
-                                " WHERE " + Tables.SEARCH_INDEX + " MATCH '");
+                                " WHERE " + SearchIndexColumns.NAME + " MATCH '");
                         sb.append(ftsMatchQuery);
                         sb.append("')");
                         hasCondition = true;

@@ -112,10 +112,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   550-599 Honeycomb-MR2
      *   600-699 Ice Cream Sandwich
      *   700-799 Jelly Bean
-     *   800-899 Key Lime Pie
+     *   800-899 Kitkat
      * </pre>
      */
-    static final int DATABASE_VERSION = 802;
+    static final int DATABASE_VERSION = 803;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2509,6 +2509,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeToVersion802(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 802;
+        }
+
+        if (oldVersion < 803) {
+            // Rebuild the search index so that names, organizations and nicknames are
+            // now indexed as names.
+            upgradeSearchIndex = true;
+            oldVersion = 803;
         }
 
         if (upgradeViewsAndTriggers) {

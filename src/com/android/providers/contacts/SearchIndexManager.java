@@ -186,6 +186,10 @@ public class SearchIndexManager {
             mSbTokens.append(token);
         }
 
+        public void appendNameFromColumn(String columnName) {
+            appendName(getString(columnName));
+        }
+
         public void appendName(String name) {
             if (TextUtils.isEmpty(name)) {
                 return;
