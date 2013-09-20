@@ -104,8 +104,6 @@ public class LegacyApiSupport {
     private static final int PEOPLE_FILTER = 29;
     private static final int DELETED_PEOPLE = 30;
     private static final int DELETED_GROUPS = 31;
-    private static final int SEARCH_SUGGESTIONS = 32;
-    private static final int SEARCH_SHORTCUT = 33;
     private static final int PHONES_FILTER = 34;
     private static final int LIVE_FOLDERS_PEOPLE = 35;
     private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = 36;
@@ -349,12 +347,6 @@ public class LegacyApiSupport {
         matcher.addURI(authority, "organizations", ORGANIZATIONS);
         matcher.addURI(authority, "organizations/#", ORGANIZATIONS_ID);
 //        matcher.addURI(authority, "voice_dialer_timestamp", VOICE_DIALER_TIMESTAMP);
-        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY,
-                SEARCH_SUGGESTIONS);
-        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
-                SEARCH_SUGGESTIONS);
-        matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
-                SEARCH_SHORTCUT);
         matcher.addURI(authority, "settings", SETTINGS);
 
         matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
@@ -500,7 +492,6 @@ public class LegacyApiSupport {
     private final ContactsDatabaseHelper mDbHelper;
     private final ContactsProvider2 mContactsProvider;
     private final NameSplitter mPhoneticNameSplitter;
-    private final GlobalSearchSupport mGlobalSearchSupport;
 
     private final SQLiteStatement mDataMimetypeQuery;
     private final SQLiteStatement mDataRawContactIdQuery;
@@ -517,11 +508,10 @@ public class LegacyApiSupport {
 
 
     public LegacyApiSupport(Context context, ContactsDatabaseHelper contactsDatabaseHelper,
-            ContactsProvider2 contactsProvider, GlobalSearchSupport globalSearchSupport) {
+            ContactsProvider2 contactsProvider) {
         mContext = context;
         mContactsProvider = contactsProvider;
         mDbHelper = contactsDatabaseHelper;
-        mGlobalSearchSupport = globalSearchSupport;
 
         mPhoneticNameSplitter = new NameSplitter("", "", "", context
                 .getString(com.android.internal.R.string.common_name_conjunctions), Locale
@@ -1873,17 +1863,6 @@ public class LegacyApiSupport {
                 qb.appendWhere(uri.getPathSegments().get(1));
                 break;
 
-            case SEARCH_SUGGESTIONS:
-                return mGlobalSearchSupport.handleSearchSuggestionsQuery(
-                        db, uri, projection, limit, null);
-
-            case SEARCH_SHORTCUT: {
-                String lookupKey = uri.getLastPathSegment();
-                String filter = ContactsProvider2.getQueryParameter(uri, "filter");
-                return mGlobalSearchSupport.handleSearchShortcutRefresh(
-                        db, projection, lookupKey, filter, null);
-            }
-
             case LIVE_FOLDERS_PEOPLE:
                 return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_URI,
                         projection, selection, selectionArgs, sortOrder);
@@ -2076,10 +2055,6 @@ public class LegacyApiSupport {
                 return "vnd.android.cursor.dir/organizations";
             case ORGANIZATIONS_ID:
                 return "vnd.android.cursor.item/organization";
-            case SEARCH_SUGGESTIONS:
-                return SearchManager.SUGGEST_MIME_TYPE;
-            case SEARCH_SHORTCUT:
-                return SearchManager.SHORTCUT_MIME_TYPE;
             default:
                 throw new IllegalArgumentException(mDbHelper.exceptionMessage(uri));
         }
