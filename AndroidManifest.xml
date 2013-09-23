@@ -34,15 +34,6 @@
             android:exported="true"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
-            <path-permission
-                    android:pathPrefix="/search_suggest_query"
-                    android:readPermission="android.permission.GLOBAL_SEARCH" />
-            <path-permission
-                    android:pathPrefix="/search_suggest_shortcut"
-                    android:readPermission="android.permission.GLOBAL_SEARCH" />
-            <path-permission
-                    android:pathPattern="/contacts/.*/photo"
-                    android:readPermission="android.permission.GLOBAL_SEARCH" />
             <grant-uri-permission android:pathPattern=".*" />
         </provider>
 
