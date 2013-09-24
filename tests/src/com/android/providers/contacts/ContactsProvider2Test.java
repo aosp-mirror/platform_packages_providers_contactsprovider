@@ -2317,8 +2317,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testQueryContactStrequent() {
         ContentValues values1 = new ContentValues();
         final String email1 = "a@acme.com";
+        final String phoneNumber1 = "18004664411";
         final int timesContacted1 = 0;
-        createContact(values1, "Noah", "Tever", "18004664411",
+        createContact(values1, "Noah", "Tever", phoneNumber1,
                 email1, StatusUpdates.OFFLINE, timesContacted1, 0, 0,
                 StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
         final String phoneNumber2 = "18004664412";
@@ -2364,18 +2365,42 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .build();
         assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values3 });
 
-        // Now the 4th contact has a phone number.
-        insertPhoneNumber(rawContactId4, "18004664414");
+        // Now the 4th contact has three phone numbers, one of which is called twice and
+        // the other once
+        final String phoneNumber4 = "18004664414";
+        final String phoneNumber5 = "18004664415";
+        final String phoneNumber6 = "18004664416";
+        insertPhoneNumber(rawContactId4, phoneNumber4);
+        insertPhoneNumber(rawContactId4, phoneNumber5);
+        insertPhoneNumber(rawContactId4, phoneNumber6);
+        values3.put(Phone.NUMBER, phoneNumber3);
+        values4.put(Phone.NUMBER, phoneNumber4);
 
-        // Phone only strequent should return 4th contact.
-        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values4, values3 });
+        sendFeedback(phoneNumber5, DataUsageFeedback.USAGE_TYPE_CALL, values4);
+        sendFeedback(phoneNumber5, DataUsageFeedback.USAGE_TYPE_CALL, values4);
+        sendFeedback(phoneNumber6, DataUsageFeedback.USAGE_TYPE_CALL, values4);
+
+        // Create a ContentValues object representing the second phone number of contact 4
+        final ContentValues values5 = new ContentValues(values4);
+        values5.put(Phone.NUMBER, phoneNumber5);
+
+        // Create a ContentValues object representing the third phone number of contact 4
+        final ContentValues values6 = new ContentValues(values4);
+        values6.put(Phone.NUMBER, phoneNumber6);
+
+        // Phone only strequent should return all phone numbers belonging to the 4th contact,
+        // and then contact 3.
+        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] {values5, values6,
+                values4, values3});
 
         // Send feedback for the 2rd phone number, pretending we send the person a SMS message.
         sendFeedback(phoneNumber2, DataUsageFeedback.USAGE_TYPE_SHORT_TEXT, values1);
 
         // SMS feedback shouldn't affect phone-only results.
-        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { values4, values3 });
+        assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] {values5, values6,
+                values4, values3});
 
+        values4.remove(Phone.NUMBER);
         Uri filterUri = Uri.withAppendedPath(Contacts.CONTENT_STREQUENT_FILTER_URI, "fay");
         assertStoredValues(filterUri, values4);
     }
@@ -4523,7 +4548,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
 
         assertEquals(1, streamItemIds.size());
-        assertEquals(doomedStreamItemId, streamItemIds.get(0));
     }
 
     public void testInsertStreamItemOlderThanOldestInLimit() {
