@@ -515,21 +515,31 @@ public class ContactsProvider2 extends AbstractContactsProvider
             " WHERE " + RawContacts.CONTACT_ID + " = ?1 AND " + Contacts.PINNED + " <= " +
             PinnedPositions.DEMOTED;
 
-    // Current contacts - those contacted within the last 3 days (in seconds)
-    private static final long LAST_TIME_USED_CURRENT_SEC = 3 * 24 * 60 * 60;
+    // Contacts contacted within the last 3 days (in seconds)
+    private static final long LAST_TIME_USED_3_DAYS_SEC = 3L * 24 * 60 * 60;
 
-    // Recent contacts - those contacted within the last 30 days (in seconds)
-    private static final long LAST_TIME_USED_RECENT_SEC = 30 * 24 * 60 * 60;
+    // Contacts contacted within the last 7 days (in seconds)
+    private static final long LAST_TIME_USED_7_DAYS_SEC = 7L * 24 * 60 * 60;
+
+    // Contacts contacted within the last 14 days (in seconds)
+    private static final long LAST_TIME_USED_14_DAYS_SEC = 14L * 24 * 60 * 60;
+
+    // Contacts contacted within the last 30 days (in seconds)
+    private static final long LAST_TIME_USED_30_DAYS_SEC = 30L * 24 * 60 * 60;
 
     private static final String TIME_SINCE_LAST_USED_SEC =
             "(strftime('%s', 'now') - " + DataUsageStatColumns.LAST_TIME_USED + "/1000)";
 
     private static final String SORT_BY_DATA_USAGE =
-            "(CASE WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_CURRENT_SEC +
+            "(CASE WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_3_DAYS_SEC +
             " THEN 0 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_RECENT_SEC +
+                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_7_DAYS_SEC +
             " THEN 1 " +
-            " ELSE 2 END), " +
+                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_14_DAYS_SEC +
+            " THEN 2 " +
+                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_30_DAYS_SEC +
+            " THEN 3 " +
+            " ELSE 4 END), " +
             DataUsageStatColumns.TIMES_USED + " DESC";
 
     /*
@@ -5414,7 +5424,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 // We need to wrap the inner queries in an extra select, because they contain
                 // their own SORT and LIMIT
-                final String frequentQuery = "SELECT * FROM (" + frequentInnerQuery + ")";
+
+                // Phone numbers that were used more than 30 days ago are dropped from frequents
+                final String frequentQuery = "SELECT * FROM (" + frequentInnerQuery + ") WHERE " +
+                        TIME_SINCE_LAST_USED_SEC + "<" + LAST_TIME_USED_30_DAYS_SEC;
                 final String starredQuery = "SELECT * FROM (" + starredInnerQuery + ")";
 
                 // Put them together
