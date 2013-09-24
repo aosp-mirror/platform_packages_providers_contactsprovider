@@ -764,6 +764,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Phone.NUMBER)
             .add(Phone.TYPE)
             .add(Phone.LABEL)
+            .add(Phone.IS_SUPER_PRIMARY)
             .add(Phone.CONTACT_ID)
             .add(Contacts.IS_USER_PROFILE, "NULL")
             .build();
