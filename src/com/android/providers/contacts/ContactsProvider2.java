@@ -752,28 +752,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /**
      * Used for Strequent Uri with {@link ContactsContract#STREQUENT_PHONE_ONLY}, which allows
-     * users to obtain part of Data columns. Right now Starred part just returns NULL for
-     * those data columns (frequent part should return real ones in data table).
-     **/
-    private static final ProjectionMap sStrequentPhoneOnlyStarredProjectionMap
-            = ProjectionMap.builder()
-            .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED,
-                    String.valueOf(Long.MAX_VALUE))
-            .add(DataUsageStatColumns.LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
-            .add(Phone.NUMBER, "NULL")
-            .add(Phone.TYPE, "NULL")
-            .add(Phone.LABEL, "NULL")
-            .add(Phone.CONTACT_ID, "NULL")
-            .build();
-
-    /**
-     * Used for Strequent Uri with {@link ContactsContract#STREQUENT_PHONE_ONLY}, which allows
      * users to obtain part of Data columns. We hard-code {@link Contacts#IS_USER_PROFILE} to NULL,
      * because sContactsProjectionMap specifies a field that doesn't exist in the view behind the
      * query that uses this projection map.
      **/
-    private static final ProjectionMap sStrequentPhoneOnlyFrequentProjectionMap
+    private static final ProjectionMap sStrequentPhoneOnlyProjectionMap
             = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
             .add(DataUsageStatColumns.TIMES_USED, DataUsageStatColumns.CONCRETE_TIMES_USED)
@@ -5351,35 +5334,55 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     subProjection[projection.length + 1] = DataUsageStatColumns.LAST_TIME_USED;
                 }
 
-                // Build the first query for starred
-                setTablesAndProjectionMapForContacts(qb, uri, projection, false);
-                qb.setProjectionMap(phoneOnly ?
-                        sStrequentPhoneOnlyStarredProjectionMap
-                        : sStrequentStarredProjectionMap);
-                if (phoneOnly) {
-                    qb.appendWhere(DbQueryUtils.concatenateClauses(
-                            selection, Contacts.HAS_PHONE_NUMBER + "=1"));
-                }
-                qb.setStrict(true);
-                final String starredInnerQuery = qb.buildQuery(subProjection,
-                        Contacts.STARRED + "=1", Contacts._ID, null,
-                        Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC", null);
-
-                // Reset the builder.
-                qb = new SQLiteQueryBuilder();
-                qb.setStrict(true);
-
-                // Build the second query for frequent part. These JOINS can be very slow
+                // String that will store the query for starred contacts. For phone only queries,
+                // these will return a list of all phone numbers that belong to starred contacts.
+                final String starredInnerQuery;
+                // String that will store the query for frequents. These JOINS can be very slow
                 // if assembled in the wrong order. Be sure to test changes against huge databases.
                 final String frequentInnerQuery;
+
                 if (phoneOnly) {
                     final StringBuilder tableBuilder = new StringBuilder();
                     // In phone only mode, we need to look at view_data instead of
                     // contacts/raw_contacts to obtain actual phone numbers. One problem is that
                     // view_data is much larger than view_contacts, so our query might become much
                     // slower.
-                    //
-                    // To avoid the possible slow down, we start from data usage table and join
+
+                    // For starred phone numbers, we select only phone numbers that belong to
+                    // starred contacts, and then do an outer join against the data usage table,
+                    // to make sure that even if a starred number hasn't been previously used,
+                    // it is included in the list of strequent numbers.
+                    tableBuilder.append("(SELECT * FROM " + Views.DATA + " WHERE "
+                            + Contacts.STARRED + "=1)" + " AS " + Tables.DATA
+                        + " LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT
+                            + " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "="
+                                + DataColumns.CONCRETE_ID + " AND "
+                            + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "="
+                                + DataUsageStatColumns.USAGE_TYPE_INT_CALL + ")");
+                    appendContactPresenceJoin(tableBuilder, projection, RawContacts.CONTACT_ID);
+                    appendContactStatusUpdateJoin(tableBuilder, projection,
+                            ContactsColumns.LAST_STATUS_UPDATE_ID);
+                    qb.setTables(tableBuilder.toString());
+                    qb.setProjectionMap(sStrequentPhoneOnlyProjectionMap);
+                    final long phoneMimeTypeId =
+                            mDbHelper.get().getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
+                    final long sipMimeTypeId =
+                            mDbHelper.get().getMimeTypeId(SipAddress.CONTENT_ITEM_TYPE);
+
+                    qb.appendWhere(DbQueryUtils.concatenateClauses(
+                            selection,
+                                "(" + Contacts.STARRED + "=1",
+                                DataColumns.MIMETYPE_ID + " IN (" +
+                            phoneMimeTypeId + ", " + sipMimeTypeId + ")) AND (" +
+                            RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY + ")"));
+                    starredInnerQuery = qb.buildQuery(subProjection, null, null,
+                        null, Data.IS_SUPER_PRIMARY + " DESC," + SORT_BY_DATA_USAGE, null);
+
+                    qb = new SQLiteQueryBuilder();
+                    qb.setStrict(true);
+                    // Construct the query string for frequent phone numbers
+                    tableBuilder.setLength(0);
+                    // For frequent phone numbers, we start from data usage table and join
                     // view_data to the table, assuming data usage table is quite smaller than
                     // data rows (almost always it should be), and we don't want any phone
                     // numbers not used by the user. This way sqlite is able to drop a number of
@@ -5393,13 +5396,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     appendContactPresenceJoin(tableBuilder, projection, RawContacts.CONTACT_ID);
                     appendContactStatusUpdateJoin(tableBuilder, projection,
                             ContactsColumns.LAST_STATUS_UPDATE_ID);
-
                     qb.setTables(tableBuilder.toString());
-                    qb.setProjectionMap(sStrequentPhoneOnlyFrequentProjectionMap);
-                    final long phoneMimeTypeId =
-                            mDbHelper.get().getMimeTypeId(Phone.CONTENT_ITEM_TYPE);
-                    final long sipMimeTypeId =
-                            mDbHelper.get().getMimeTypeId(SipAddress.CONTENT_ITEM_TYPE);
+                    qb.setProjectionMap(sStrequentPhoneOnlyProjectionMap);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
                             "(" + Contacts.STARRED + "=0 OR " + Contacts.STARRED + " IS NULL",
@@ -5408,7 +5406,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY + ")"));
                     frequentInnerQuery = qb.buildQuery(subProjection, null, null, null,
                             SORT_BY_DATA_USAGE, "25");
+
                 } else {
+                    // Build the first query for starred contacts
+                    qb.setStrict(true);
+                    setTablesAndProjectionMapForContacts(qb, uri, projection, false);
+                    qb.setProjectionMap(sStrequentStarredProjectionMap);
+
+                    starredInnerQuery = qb.buildQuery(subProjection,
+                            Contacts.STARRED + "=1", Contacts._ID, null,
+                            Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC", null);
+
+                    // Reset the builder, and build the second query for frequents contacts
+                    qb = new SQLiteQueryBuilder();
+                    qb.setStrict(true);
+
                     setTablesAndProjectionMapForContacts(qb, uri, projection, true);
                     qb.setProjectionMap(sStrequentFrequentProjectionMap);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
