@@ -33,6 +33,7 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
@@ -40,6 +41,7 @@ import com.android.providers.contacts.util.SelectionBuilder;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Call log content provider.
@@ -146,10 +148,16 @@ public class CallLogProvider extends ContentProvider {
             }
 
             case CALLS_FILTER: {
-                String phoneNumber = uri.getPathSegments().get(2);
-                qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ");
-                qb.appendWhereEscapeString(phoneNumber);
-                qb.appendWhere(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
+                List<String> pathSegments = uri.getPathSegments();
+                String phoneNumber = pathSegments.size() >= 2 ? pathSegments.get(2) : null;
+                if (!TextUtils.isEmpty(phoneNumber)) {
+                    qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ");
+                    qb.appendWhereEscapeString(phoneNumber);
+                    qb.appendWhere(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
+                } else {
+                    qb.appendWhere(Calls.NUMBER_PRESENTATION + "!="
+                            + Calls.PRESENTATION_ALLOWED);
+                }
                 break;
             }
 
