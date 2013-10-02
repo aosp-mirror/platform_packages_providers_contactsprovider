@@ -25,17 +25,23 @@ import com.android.i18n.phonenumbers.PhoneNumberUtil;
 import com.android.i18n.phonenumbers.Phonenumber.PhoneNumber;
 import com.android.i18n.phonenumbers.geocoding.PhoneNumberOfflineGeocoder;
 
+import com.google.android.collect.Sets;
+
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Default implementation of {@link CallLogInsertionHelper}.
  * <p>
  * It added the country ISO abbreviation and the geocoded location.
+ * It checks for legacy unknown numbers and updates number presentation.
  * <p>
  * It uses {@link PhoneNumberOfflineGeocoder} to compute the geocoded location of a phone number.
  */
 /*package*/ class DefaultCallLogInsertionHelper implements CallLogInsertionHelper {
     private static DefaultCallLogInsertionHelper sInstance;
+
+    private static final Set<String> LEGACY_UNKNOWN_NUMBERS = Sets.newHashSet("-1", "-2", "-3");
 
     private final CountryMonitor mCountryMonitor;
     private PhoneNumberUtil mPhoneNumberUtil;
@@ -62,6 +68,12 @@ import java.util.Locale;
         // Insert the geocoded location, so that we do not need to compute it on the fly.
         values.put(Calls.GEOCODED_LOCATION,
                 getGeocodedLocationFor(values.getAsString(Calls.NUMBER), countryIso));
+
+        final String number = values.getAsString(Calls.NUMBER);
+        if (LEGACY_UNKNOWN_NUMBERS.contains(number)) {
+            values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_UNKNOWN);
+            values.put(Calls.NUMBER, "");
+        }
     }
 
     private String getCurrentCountryIso() {
