@@ -339,6 +339,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int PROFILE_SYNCSTATE = 11002;
     private static final int PROFILE_SYNCSTATE_ID = 11003;
 
+    private static final int SEARCH_SUGGESTIONS = 12001;
+    private static final int SEARCH_SHORTCUT = 12002;
+
     private static final int RAW_CONTACT_ENTITIES = 15001;
 
     private static final int PROVIDER_STATUS = 16001;
@@ -1222,6 +1225,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "status_updates", STATUS_UPDATES);
         matcher.addURI(ContactsContract.AUTHORITY, "status_updates/#", STATUS_UPDATES_ID);
 
+        matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY,
+                SEARCH_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY + "/*",
+                SEARCH_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
+                SEARCH_SHORTCUT);
+
         matcher.addURI(ContactsContract.AUTHORITY, "provider_status", PROVIDER_STATUS);
 
         matcher.addURI(ContactsContract.AUTHORITY, "directories", DIRECTORIES);
@@ -1367,6 +1377,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private final SecureRandom mRandom = new SecureRandom();
 
     private LegacyApiSupport mLegacyApiSupport;
+    private GlobalSearchSupport mGlobalSearchSupport;
     private CommonNicknameCache mCommonNicknameCache;
     private SearchIndexManager mSearchIndexManager;
 
@@ -1442,6 +1453,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         setDbHelperToSerializeOn(mContactsHelper, CONTACTS_DB_TAG, this);
 
         mContactDirectoryManager = new ContactDirectoryManager(this);
+        mGlobalSearchSupport = new GlobalSearchSupport(this);
 
         // The provider is closed for business until fully initialized
         mReadAccessLatch = new CountDownLatch(1);
@@ -1486,7 +1498,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private void initForDefaultLocale() {
         Context context = getContext();
-        mLegacyApiSupport = new LegacyApiSupport(context, mContactsHelper, this);
+        mLegacyApiSupport = new LegacyApiSupport(context, mContactsHelper, this,
+                mGlobalSearchSupport);
         mCurrentLocale = getLocale();
         mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocale);
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
@@ -6291,6 +6304,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
+            case SEARCH_SUGGESTIONS: {
+                return mGlobalSearchSupport.handleSearchSuggestionsQuery(
+                        db, uri, projection, limit, cancellationSignal);
+            }
+
+            case SEARCH_SHORTCUT: {
+                String lookupKey = uri.getLastPathSegment();
+                String filter = getQueryParameter(
+                        uri, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
+                return mGlobalSearchSupport.handleSearchShortcutRefresh(
+                        db, projection, lookupKey, filter, cancellationSignal);
+            }
+
             case RAW_CONTACT_ENTITIES:
             case PROFILE_RAW_CONTACT_ENTITIES: {
                 setTablesAndProjectionMapForRawEntities(qb, uri);
@@ -8068,6 +8094,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return Settings.CONTENT_TYPE;
             case AGGREGATION_SUGGESTIONS:
                 return Contacts.CONTENT_TYPE;
+            case SEARCH_SUGGESTIONS:
+                return SearchManager.SUGGEST_MIME_TYPE;
+            case SEARCH_SHORTCUT:
+                return SearchManager.SHORTCUT_MIME_TYPE;
             case DIRECTORIES:
                 return Directory.CONTENT_TYPE;
             case DIRECTORIES_ID:
