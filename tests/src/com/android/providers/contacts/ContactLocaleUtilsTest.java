@@ -37,6 +37,9 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String KANJI_NAME = "\u65e5";
     private static final String ARABIC_NAME = "\u0646\u0648\u0631"; /* Noor */
     private static final String CHINESE_NAME = "\u675C\u9D51";
+    private static final String SERBIAN_NAME = "\u0408\u0435\u043B\u0435\u043D\u0430";
+    private static final String UKRAINIAN_NAME = "\u0407";
+    private static final String UKRAINIAN_NAME_2 = "\u0490";
     private static final String CHINESE_LATIN_MIX_NAME_1 = "D\u675C\u9D51";
     private static final String CHINESE_LATIN_MIX_NAME_2 = "MARY \u675C\u9D51";
     private static final String[] CHINESE_NAME_KEY = {"\u9D51", "\u675C\u9D51", "JUAN", "DUJUAN",
@@ -93,11 +96,15 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String JAPANESE_MISC = "\u4ed6";
 
     private static final Locale LOCALE_ARABIC = new Locale("ar");
+    private static final Locale LOCALE_SERBIAN = new Locale("sr");
+    private static final Locale LOCALE_UKRAINIAN = new Locale("uk");
     private boolean hasChineseCollator;
     private boolean hasJapaneseCollator;
     private boolean hasKoreanCollator;
     private boolean hasArabicCollator;
     private boolean hasGermanCollator;
+    private boolean hasSerbianCollator;
+    private boolean hasUkrainianCollator;
 
     @Override
     protected void setUp() throws Exception {
@@ -114,6 +121,10 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
                 hasArabicCollator = true;
             } else if (locale[i].equals(Locale.GERMANY)) {
                 hasGermanCollator = true;
+            } else if (locale[i].equals(LOCALE_SERBIAN)) {
+                hasSerbianCollator = true;
+            } else if (locale[i].equals(LOCALE_UKRAINIAN)) {
+                hasUkrainianCollator = true;
             }
         }
     }
@@ -142,6 +153,16 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("", getLabel(CHINESE_NAME));
         assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
         assertEquals("B", getLabel("Bob Smith"));
+
+        if (hasArabicCollator) {
+            assertEquals("\u0646", getLabel(ARABIC_NAME));
+        }
+        if (hasSerbianCollator) {
+            assertEquals("\u0408", getLabel(SERBIAN_NAME));
+        }
+        if (hasUkrainianCollator) {
+            assertEquals("\u0407", getLabel(UKRAINIAN_NAME));
+        }
 
         assertNull(getNameLookupKeys(LATIN_NAME, FullNameStyle.UNDEFINED));
         verifyLabels(getLabels(), LABELS_EN_US);
@@ -251,6 +272,30 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("\u0646", getLabel(ARABIC_NAME));
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_AR);
+    }
+
+    public void testSerbianContactLocaleUtils() throws Exception {
+        if (!hasSerbianCollator) {
+            return;
+        }
+
+        ContactLocaleUtils.setLocale(LOCALE_SERBIAN);
+        assertEquals("\u0408", getLabel(SERBIAN_NAME));
+        assertEquals("B", getLabel("Bob Smith"));
+    }
+
+    public void testUkrainianContactLocaleUtils() throws Exception {
+        if (!hasUkrainianCollator) {
+            return;
+        }
+
+        ContactLocaleUtils.setLocale(LOCALE_UKRAINIAN);
+        assertEquals("\u0407", getLabel(UKRAINIAN_NAME));
+        // ICU 52 has a bug whereby this letter has a bucket created only if
+        // Ukrainian is the primary language. Once this is fixed also test this
+        // label when in English locale.
+        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_2));
+        assertEquals("B", getLabel("Bob Smith"));
     }
 
     public void testGermanContactLocaleUtils() throws Exception {

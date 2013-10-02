@@ -49,7 +49,8 @@ public class ContactLocaleUtils {
     public static final Locale LOCALE_ARABIC = new Locale("ar");
     public static final Locale LOCALE_GREEK = new Locale("el");
     public static final Locale LOCALE_HEBREW = new Locale("he");
-    // Ukrainian labels are superset of Russian
+    // Serbian and Ukrainian labels are complementary supersets of Russian
+    public static final Locale LOCALE_SERBIAN = new Locale("sr");
     public static final Locale LOCALE_UKRAINIAN = new Locale("uk");
     public static final Locale LOCALE_THAI = new Locale("th");
 
@@ -80,8 +81,9 @@ public class ContactLocaleUtils {
             // which way to label it (so eg Chinese cannot be added because
             // the labeling of a Chinese character varies between Simplified,
             // Traditional, and Japanese locales). Use English only for all
-            // Latin based alphabets. Ukrainian is chosen for Cyrillic because
-            // its alphabet is a superset of Russian.
+            // Latin based alphabets. Ukrainian and Serbian are chosen for
+            // Cyrillic because their alphabets are complementary supersets
+            // of Russian.
             mAlphabeticIndex = new AlphabeticIndex(locale)
                 .setMaxLabelCount(300)
                 .addLabels(Locale.ENGLISH)
@@ -92,6 +94,7 @@ public class ContactLocaleUtils {
                 .addLabels(LOCALE_HEBREW)
                 .addLabels(LOCALE_GREEK)
                 .addLabels(LOCALE_UKRAINIAN)
+                .addLabels(LOCALE_SERBIAN)
                 .getImmutableIndex();
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
