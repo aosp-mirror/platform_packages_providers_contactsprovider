@@ -5058,12 +5058,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return sb.toString();
     }
 
-    protected String getCountryIso() {
-        CountryDetector detector =
-            (CountryDetector) mContext.getSystemService(Context.COUNTRY_DETECTOR);
-        return detector.detectCountry().getCountryIso();
-    }
-
     public void deleteStatusUpdate(long dataId) {
         if (mStatusUpdateDelete == null) {
             mStatusUpdateDelete = getWritableDatabase().compileStatement(
