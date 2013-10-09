@@ -7014,7 +7014,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (isPhoneNumber) {
                 phoneNumber = PhoneNumberUtils.normalizeNumber(filter);
                 numberE164 = PhoneNumberUtils.formatNumberToE164(phoneNumber,
-                        mDbHelper.get().getCountryIso());
+                        mDbHelper.get().getCurrentCountryIso());
             }
         }
 
