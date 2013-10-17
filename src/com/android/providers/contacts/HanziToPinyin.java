@@ -121,12 +121,19 @@ public class HanziToPinyin {
         }
     }
 
+    public String transliterate(final String input) {
+        if (!hasChineseTransliterator() || TextUtils.isEmpty(input)) {
+            return null;
+        }
+        return mPinyinTransliterator.transliterate(input);
+    }
+
     /**
      * Convert the input to a array of tokens. The sequence of ASCII or Unknown characters without
      * space will be put into a Token, One Hanzi character which has pinyin will be treated as a
      * Token. If there is no Chinese transliterator, the empty token array is returned.
      */
-    public ArrayList<Token> get(final String input) {
+    public ArrayList<Token> getTokens(final String input) {
         ArrayList<Token> tokens = new ArrayList<Token>();
         if (!hasChineseTransliterator() || TextUtils.isEmpty(input)) {
             // return empty tokens.

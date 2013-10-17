@@ -1406,7 +1406,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private boolean mSyncToNetwork;
 
-    private Locale mCurrentLocale;
+    private LocaleSet mCurrentLocales;
     private int mContactsAccountCount;
 
     private HandlerThread mBackgroundThread;
@@ -1504,6 +1504,40 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return true;
     }
 
+    // Updates the locale set to reflect a new system locale.
+    private static LocaleSet updateLocaleSet(LocaleSet oldLocales, Locale newLocale) {
+        final Locale prevLocale = oldLocales.getPrimaryLocale();
+        // If primary locale is unchanged then no change to locale set.
+        if (newLocale.equals(prevLocale)) {
+            return oldLocales;
+        }
+        // Otherwise, construct a new locale set based on the new locale
+        // and the previous primary locale.
+        return new LocaleSet(newLocale, prevLocale).normalize();
+    }
+
+    private static LocaleSet getProviderPrefLocales(SharedPreferences prefs) {
+        final String providerLocaleString = prefs.getString(PREF_LOCALE, null);
+        return LocaleSet.getLocaleSet(providerLocaleString);
+    }
+
+    // Called by initForDefaultLocale. Returns an updated locale set using the
+    // current system locale.
+    private LocaleSet getLocaleSet() {
+        final Locale curLocale = getLocale();
+        if (mCurrentLocales != null) {
+            return updateLocaleSet(mCurrentLocales, curLocale);
+        }
+        // On startup need to reload the locale set from prefs for update.
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        return updateLocaleSet(getProviderPrefLocales(prefs), curLocale);
+    }
+
+    // Static routine called on startup by updateLocaleOffline.
+    private static LocaleSet getLocaleSet(SharedPreferences prefs, Locale curLocale) {
+        return updateLocaleSet(getProviderPrefLocales(prefs), curLocale);
+    }
+
     /**
      * (Re)allocates all locale-sensitive structures.
      */
@@ -1511,12 +1545,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Context context = getContext();
         mLegacyApiSupport =
                 new LegacyApiSupport(context, mContactsHelper, this, mGlobalSearchSupport);
-        mCurrentLocale = getLocale();
-        mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocale);
+        mCurrentLocales = getLocaleSet();
+        mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocales.getPrimaryLocale());
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
-        mPostalSplitter = new PostalSplitter(mCurrentLocale);
+        mPostalSplitter = new PostalSplitter(mCurrentLocales.getPrimaryLocale());
         mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
-        ContactLocaleUtils.setLocale(mCurrentLocale);
+        ContactLocaleUtils.setLocales(mCurrentLocales);
         mContactAggregator = new ContactAggregator(this, mContactsHelper,
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
@@ -1694,20 +1728,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private static boolean needsToUpdateLocaleData(SharedPreferences prefs,
-            Locale locale,ContactsDatabaseHelper contactsHelper,
+            LocaleSet locales, ContactsDatabaseHelper contactsHelper,
             ProfileDatabaseHelper profileHelper) {
-        final String providerLocale = prefs.getString(PREF_LOCALE, null);
+        final String providerLocales = prefs.getString(PREF_LOCALE, null);
 
         // If locale matches that of the provider, and neither DB needs
         // updating, there's nothing to do. A DB might require updating
         // as a result of a system upgrade.
-        if (!locale.toString().equals(providerLocale)) {
-            Log.i(TAG, "Locale has changed from " + providerLocale
-                    + " to " + locale.toString());
+        if (!locales.toString().equals(providerLocales)) {
+            Log.i(TAG, "Locale has changed from " + providerLocales
+                    + " to " + locales);
             return true;
         }
-        if (contactsHelper.needsToUpdateLocaleData(locale) ||
-                profileHelper.needsToUpdateLocaleData(locale)) {
+        if (contactsHelper.needsToUpdateLocaleData(locales) ||
+                profileHelper.needsToUpdateLocaleData(locales)) {
             return true;
         }
         return false;
@@ -1727,18 +1761,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return;
         }
 
-        final Locale currentLocale = mCurrentLocale;
+        final LocaleSet currentLocales = mCurrentLocales;
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        if (!needsToUpdateLocaleData(prefs, currentLocale, mContactsHelper, mProfileHelper)) {
+        if (!needsToUpdateLocaleData(prefs, currentLocales, mContactsHelper, mProfileHelper)) {
             return;
         }
 
         int providerStatus = mProviderStatus;
         setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
-        mContactsHelper.setLocale(currentLocale);
-        mProfileHelper.setLocale(currentLocale);
+        mContactsHelper.setLocale(currentLocales);
+        mProfileHelper.setLocale(currentLocales);
         mSearchIndexManager.updateIndex(true);
-        prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
+        prefs.edit().putString(PREF_LOCALE, currentLocales.toString()).commit();
         setProviderStatus(providerStatus);
     }
 
@@ -1750,17 +1784,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Context context,
             ContactsDatabaseHelper contactsHelper,
             ProfileDatabaseHelper profileHelper) {
-
-        final Locale currentLocale = Locale.getDefault();
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        if (!needsToUpdateLocaleData(prefs, currentLocale, contactsHelper, profileHelper)) {
+        final LocaleSet currentLocales = getLocaleSet(prefs, Locale.getDefault());
+        if (!needsToUpdateLocaleData(prefs, currentLocales, contactsHelper, profileHelper)) {
             return;
         }
 
-        contactsHelper.setLocale(currentLocale);
-        profileHelper.setLocale(currentLocale);
+        contactsHelper.setLocale(currentLocales);
+        profileHelper.setLocale(currentLocales);
         contactsHelper.rebuildSearchIndex();
-        prefs.edit().putString(PREF_LOCALE, currentLocale.toString()).commit();
+        prefs.edit().putString(PREF_LOCALE, currentLocales.toString()).commit();
     }
 
     /**

@@ -40,7 +40,7 @@ public class HanziToPinyinTest extends TestCase {
 
     private void test(final char hanzi, final String expectedPinyin) throws Exception {
         final String hanziString = Character.toString(hanzi);
-        ArrayList<Token> tokens = HanziToPinyin.getInstance().get(hanziString);
+        ArrayList<Token> tokens = HanziToPinyin.getInstance().getTokens(hanziString);
         assertEquals(tokens.size(), 1);
         final String newString = tokens.get(0).target;
         if (TextUtils.isEmpty(expectedPinyin)) {
@@ -65,27 +65,27 @@ public class HanziToPinyinTest extends TestCase {
         if (!hasChineseTransliterator()) {
             return;
         }
-        ArrayList<Token> tokens = HanziToPinyin.getInstance().get(ONE_HANZI);
+        ArrayList<Token> tokens = HanziToPinyin.getInstance().getTokens(ONE_HANZI);
         assertEquals(tokens.size(), 1);
         assertEquals(tokens.get(0).type, Token.PINYIN);
         assertTrue(tokens.get(0).target.equalsIgnoreCase("DU"));
 
-        tokens = HanziToPinyin.getInstance().get(TWO_HANZI);
+        tokens = HanziToPinyin.getInstance().getTokens(TWO_HANZI);
         assertEquals(tokens.size(), 2);
         assertEquals(tokens.get(0).type, Token.PINYIN);
         assertEquals(tokens.get(1).type, Token.PINYIN);
         assertTrue(tokens.get(0).target.equalsIgnoreCase("DU"));
         assertTrue(tokens.get(1).target.equalsIgnoreCase("JUAN"));
 
-        tokens = HanziToPinyin.getInstance().get(ASSIC);
+        tokens = HanziToPinyin.getInstance().getTokens(ASSIC);
         assertEquals(tokens.size(), 1);
         assertEquals(tokens.get(0).type, Token.LATIN);
 
-        tokens = HanziToPinyin.getInstance().get(ONE_UNKNOWN);
+        tokens = HanziToPinyin.getInstance().getTokens(ONE_UNKNOWN);
         assertEquals(tokens.size(), 1);
         assertEquals(tokens.get(0).type, Token.UNKNOWN);
 
-        tokens = HanziToPinyin.getInstance().get(MISC);
+        tokens = HanziToPinyin.getInstance().getTokens(MISC);
         assertEquals(tokens.size(), 7);
         assertEquals(tokens.get(0).type, Token.LATIN);
         assertEquals(tokens.get(1).type, Token.PINYIN);

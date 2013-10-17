@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import android.provider.ContactsContract.FullNameStyle;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
+import android.util.Log;
 
 import java.text.Collator;
 import java.util.ArrayList;
@@ -30,6 +31,8 @@ import java.util.Locale;
 
 @SmallTest
 public class ContactLocaleUtilsTest extends AndroidTestCase {
+    private static final String TAG = "ContactLocaleUtilsTest";
+
     private static final String PHONE_NUMBER_1 = "+1 (650) 555-1212";
     private static final String PHONE_NUMBER_2 = "650-555-1212";
     private static final String LATIN_NAME = "John Smith";
@@ -94,7 +97,8 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final Locale LOCALE_ARABIC = new Locale("ar");
     private static final Locale LOCALE_SERBIAN = new Locale("sr");
     private static final Locale LOCALE_UKRAINIAN = new Locale("uk");
-    private boolean hasChineseCollator;
+    private boolean hasSimplifiedChineseCollator;
+    private boolean hasTraditionalChineseCollator;
     private boolean hasJapaneseCollator;
     private boolean hasKoreanCollator;
     private boolean hasArabicCollator;
@@ -107,8 +111,10 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         super.setUp();
         final Locale locale[] = Collator.getAvailableLocales();
         for (int i = 0; i < locale.length; i++) {
-            if (locale[i].equals(Locale.CHINA)) {
-                hasChineseCollator = true;
+            if (LocaleSet.isLocaleSimplifiedChinese(locale[i])) {
+                hasSimplifiedChineseCollator = true;
+            } else if (LocaleSet.isLocaleTraditionalChinese(locale[i])) {
+                hasTraditionalChineseCollator = true;
             } else if (locale[i].equals(Locale.JAPAN)) {
                 hasJapaneseCollator = true;
             } else if (locale[i].equals(Locale.KOREA)) {
@@ -166,6 +172,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
 
     public void testJapaneseContactLocaleUtils() throws Exception {
         if (!hasJapaneseCollator) {
+            Log.w(TAG, "Japanese collator not found; skipping test");
             return;
         }
 
@@ -180,13 +187,13 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
 
-        // Following two tests are broken with ICU 50
-        verifyLabels(getLabels(), LABELS_JA_JP);
         assertEquals("B", getLabel("Bob Smith"));
+        verifyLabels(getLabels(), LABELS_JA_JP);
     }
 
     public void testChineseContactLocaleUtils() throws Exception {
-        if (!hasChineseCollator) {
+        if (!hasSimplifiedChineseCollator) {
+            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
             return;
         }
 
@@ -199,12 +206,16 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_EN_US);
 
-        ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-        assertEquals("#", getLabel(PHONE_NUMBER_1));
-        assertEquals("#", getLabel(PHONE_NUMBER_2));
-        assertEquals("J", getLabel(LATIN_NAME));
-        assertEquals("7\u5283", getLabel(CHINESE_NAME));
-        assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
+        if (hasTraditionalChineseCollator) {
+            ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
+            assertEquals("#", getLabel(PHONE_NUMBER_1));
+            assertEquals("#", getLabel(PHONE_NUMBER_2));
+            assertEquals("J", getLabel(LATIN_NAME));
+            assertEquals("7\u5283", getLabel(CHINESE_NAME));
+            assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
+        } else {
+            Log.w(TAG, "Traditional Chinese collator not found");
+        }
 
         ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
@@ -217,14 +228,45 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(CHINESE_LATIN_MIX_NAME_2, FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_LATIN_MIX_NAME_2_KEY);
 
-        // Following test broken with ICU 50
-        ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-        verifyLabels(getLabels(), LABELS_ZH_TW);
-        assertEquals("B", getLabel("Bob Smith"));
+        if (hasTraditionalChineseCollator) {
+            ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
+            assertEquals("B", getLabel("Bob Smith"));
+            verifyLabels(getLabels(), LABELS_ZH_TW);
+        }
+    }
+
+    public void testPinyinEnabledSecondaryLocale() throws Exception {
+        if (!hasSimplifiedChineseCollator) {
+            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
+            return;
+        }
+
+        ContactLocaleUtils.setLocales(
+                new LocaleSet(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE));
+        assertEquals("D", getLabel(CHINESE_NAME));
+
+        Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
+                FullNameStyle.CHINESE);
+        verifyKeys(keys, CHINESE_NAME_KEY);
+    }
+
+    public void testPinyinDisabledSecondaryLocale() throws Exception {
+        if (!hasSimplifiedChineseCollator) {
+            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
+            return;
+        }
+
+        ContactLocaleUtils.setLocales(
+                new LocaleSet(Locale.ENGLISH, Locale.JAPAN));
+        assertEquals("", getLabel(CHINESE_NAME));
+
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
     }
 
     public void testChineseStyleNameWithDifferentLocale() throws Exception {
-        if (!hasChineseCollator) {
+        if (!hasSimplifiedChineseCollator) {
+            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
             return;
         }
 
@@ -232,7 +274,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
 
-        ContactLocaleUtils.setLocale(Locale.CHINA);
+        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
                 FullNameStyle.CJK);
         verifyKeys(keys, CHINESE_NAME_KEY);
@@ -241,12 +283,15 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(LATIN_NAME_2, FullNameStyle.WESTERN);
         verifyKeys(keys, LATIN_NAME_KEY_2);
 
-        ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
+        if (hasTraditionalChineseCollator) {
+            ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
+            assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
+        }
     }
 
     public void testKoreanContactLocaleUtils() throws Exception {
         if (!hasKoreanCollator) {
+            Log.w(TAG, "Korean collator not found; skipping test");
             return;
         }
 
@@ -261,6 +306,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
 
     public void testArabicContactLocaleUtils() throws Exception {
         if (!hasArabicCollator) {
+            Log.w(TAG, "Arabic collator not found; skipping test");
             return;
         }
 
@@ -272,6 +318,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
 
     public void testSerbianContactLocaleUtils() throws Exception {
         if (!hasSerbianCollator) {
+            Log.w(TAG, "Serbian collator not found; skipping test");
             return;
         }
 
@@ -282,6 +329,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
 
     public void testUkrainianContactLocaleUtils() throws Exception {
         if (!hasUkrainianCollator) {
+            Log.w(TAG, "Ukrainian collator not found; skipping test");
             return;
         }
 

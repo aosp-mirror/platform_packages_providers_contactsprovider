@@ -3266,9 +3266,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Checks whether the current ICU code version matches that used to build
      * the locale specific data in the ContactsDB.
      */
-    public boolean needsToUpdateLocaleData(Locale locale) {
+    public boolean needsToUpdateLocaleData(LocaleSet locales) {
         final String dbLocale = getProperty(DbProperties.LOCALE, "");
-        if (!dbLocale.equals(locale.toString())) {
+        if (!dbLocale.equals(locales.toString())) {
             return true;
         }
         final String curICUVersion = ICU.getIcuVersion();
@@ -3283,16 +3283,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void upgradeLocaleData(SQLiteDatabase db, boolean rebuildSqliteStats) {
-        final Locale locale = Locale.getDefault();
-        Log.i(TAG, "Upgrading locale data for " + locale
+        final String dbLocale = getProperty(DbProperties.LOCALE, "");
+        final LocaleSet locales = LocaleSet.getDefault();
+        Log.i(TAG, "Upgrading locale data for " + locales
                 + " (ICU v" + ICU.getIcuVersion() + ")");
         final long start = SystemClock.elapsedRealtime();
         initializeCache(db);
-        rebuildLocaleData(db, locale, rebuildSqliteStats);
+        rebuildLocaleData(db, locales, rebuildSqliteStats);
         Log.i(TAG, "Locale update completed in " + (SystemClock.elapsedRealtime() - start) + "ms");
     }
 
-    private void rebuildLocaleData(SQLiteDatabase db, Locale locale, boolean rebuildSqliteStats) {
+    private void rebuildLocaleData(SQLiteDatabase db, LocaleSet locales, boolean rebuildSqliteStats) {
         db.execSQL("DROP INDEX raw_contact_sort_key1_index");
         db.execSQL("DROP INDEX raw_contact_sort_key2_index");
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
@@ -3306,7 +3307,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // Update the ICU version used to generate the locale derived data
         // so we can tell when we need to rebuild with new ICU versions.
         setProperty(db, DbProperties.ICU_VERSION, ICU.getIcuVersion());
-        setProperty(db, DbProperties.LOCALE, locale.toString());
+        setProperty(db, DbProperties.LOCALE, locales.toString());
     }
 
     /**
@@ -3314,19 +3315,19 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * nickname_lookup, name_lookup and sort keys. Invalidates the fast
      * scrolling index cache.
      */
-    public void setLocale(Locale locale) {
-        if (!needsToUpdateLocaleData(locale)) {
+    public void setLocale(LocaleSet locales) {
+        if (!needsToUpdateLocaleData(locales)) {
             return;
         }
-        Log.i(TAG, "Switching to locale " + locale
+        Log.i(TAG, "Switching to locale " + locales
                 + " (ICU v" + ICU.getIcuVersion() + ")");
 
         final long start = SystemClock.elapsedRealtime();
         SQLiteDatabase db = getWritableDatabase();
-        db.setLocale(locale);
+        db.setLocale(locales.getPrimaryLocale());
         db.beginTransaction();
         try {
-            rebuildLocaleData(db, locale, true);
+            rebuildLocaleData(db, locales, true);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();

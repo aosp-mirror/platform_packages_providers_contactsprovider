@@ -22,6 +22,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.lang.Character.UnicodeBlock;
 import java.util.Arrays;
@@ -70,8 +71,9 @@ public class ContactLocaleUtils {
         protected final ImmutableIndex mAlphabeticIndex;
         private final int mAlphabeticIndexBucketCount;
         private final int mNumberBucketIndex;
+        private final boolean mEnableSecondaryLocalePinyin;
 
-        public ContactLocaleUtilsBase(Locale locale) {
+        public ContactLocaleUtilsBase(LocaleSet locales) {
             // AlphabeticIndex.getBucketLabel() uses a binary search across
             // the entire label set so care should be taken about growing this
             // set too large. The following set determines for which locales
@@ -84,9 +86,14 @@ public class ContactLocaleUtils {
             // Latin based alphabets. Ukrainian and Serbian are chosen for
             // Cyrillic because their alphabets are complementary supersets
             // of Russian.
-            mAlphabeticIndex = new AlphabeticIndex(locale)
-                .setMaxLabelCount(300)
-                .addLabels(Locale.ENGLISH)
+            final Locale secondaryLocale = locales.getSecondaryLocale();
+            mEnableSecondaryLocalePinyin = locales.isSecondaryLocaleSimplifiedChinese();
+            AlphabeticIndex ai = new AlphabeticIndex(locales.getPrimaryLocale())
+                .setMaxLabelCount(300);
+            if (secondaryLocale != null) {
+                ai.addLabels(secondaryLocale);
+            }
+            mAlphabeticIndex = ai.addLabels(Locale.ENGLISH)
                 .addLabels(Locale.JAPANESE)
                 .addLabels(Locale.KOREAN)
                 .addLabels(LOCALE_THAI)
@@ -136,6 +143,13 @@ public class ContactLocaleUtils {
                 return mNumberBucketIndex;
             }
 
+            /**
+             * TODO: ICU 52 AlphabeticIndex doesn't support Simplified Chinese
+             * as a secondary locale. Remove the following if that is added.
+             */
+            if (mEnableSecondaryLocalePinyin) {
+                name = HanziToPinyin.getInstance().transliterate(name);
+            }
             final int bucket = mAlphabeticIndex.getBucketIndex(name);
             if (bucket < 0) {
                 return -1;
@@ -199,8 +213,8 @@ public class ContactLocaleUtils {
         private static final String JAPANESE_MISC_LABEL = "\u4ed6";
         private final int mMiscBucketIndex;
 
-        public JapaneseContactUtils(Locale locale) {
-            super(locale);
+        public JapaneseContactUtils(LocaleSet locales) {
+            super(locales);
             // Determine which bucket AlphabeticIndex is lumping unclassified
             // Japanese characters into by looking up the bucket index for
             // a representative Kanji/CJK unified ideograph (\u65e5 is the
@@ -341,8 +355,8 @@ public class ContactLocaleUtils {
      */
     private static class SimplifiedChineseContactUtils
         extends ContactLocaleUtilsBase {
-        public SimplifiedChineseContactUtils(Locale locale) {
-            super(locale);
+        public SimplifiedChineseContactUtils(LocaleSet locales) {
+            super(locales);
         }
 
         @Override
@@ -357,7 +371,7 @@ public class ContactLocaleUtils {
         public static Iterator<String> getPinyinNameLookupKeys(String name) {
             // TODO : Reduce the object allocation.
             HashSet<String> keys = new HashSet<String>();
-            ArrayList<Token> tokens = HanziToPinyin.getInstance().get(name);
+            ArrayList<Token> tokens = HanziToPinyin.getInstance().getTokens(name);
             final int tokenCount = tokens.size();
             final StringBuilder keyPinyin = new StringBuilder();
             final StringBuilder keyInitial = new StringBuilder();
@@ -393,48 +407,49 @@ public class ContactLocaleUtils {
         }
     }
 
-    private static final String CHINESE_LANGUAGE = Locale.CHINESE.getLanguage().toLowerCase();
     private static final String JAPANESE_LANGUAGE = Locale.JAPANESE.getLanguage().toLowerCase();
-    private static final String KOREAN_LANGUAGE = Locale.KOREAN.getLanguage().toLowerCase();
 
     private static ContactLocaleUtils sSingleton;
 
-    private final Locale mLocale;
-    private final String mLanguage;
+    private final LocaleSet mLocales;
     private final ContactLocaleUtilsBase mUtils;
 
-    private ContactLocaleUtils(Locale locale) {
-        if (locale == null) {
-            mLocale = Locale.getDefault();
+    private ContactLocaleUtils(LocaleSet locales) {
+        if (locales == null) {
+            mLocales = LocaleSet.getDefault();
         } else {
-            mLocale = locale;
+            mLocales = locales;
         }
-        mLanguage = mLocale.getLanguage().toLowerCase();
-        if (mLanguage.equals(JAPANESE_LANGUAGE)) {
-            mUtils = new JapaneseContactUtils(mLocale);
-        } else if (mLocale.equals(Locale.CHINA)) {
-            mUtils = new SimplifiedChineseContactUtils(mLocale);
+        if (mLocales.isPrimaryLanguage(JAPANESE_LANGUAGE)) {
+            mUtils = new JapaneseContactUtils(mLocales);
+        } else if (mLocales.isPrimaryLocaleSimplifiedChinese()) {
+            mUtils = new SimplifiedChineseContactUtils(mLocales);
         } else {
-            mUtils = new ContactLocaleUtilsBase(mLocale);
+            mUtils = new ContactLocaleUtilsBase(mLocales);
         }
-        Log.i(TAG, "AddressBook Labels [" + mLocale.toString() + "]: "
-              + getLabels().toString());
+        Log.i(TAG, "AddressBook Labels [" + mLocales.toString() + "]: "
+                + getLabels().toString());
     }
 
-    public boolean isLocale(Locale locale) {
-        return mLocale.equals(locale);
+    public boolean isLocale(LocaleSet locales) {
+        return mLocales.equals(locales);
     }
 
     public static synchronized ContactLocaleUtils getInstance() {
         if (sSingleton == null) {
-            sSingleton = new ContactLocaleUtils(null);
+            sSingleton = new ContactLocaleUtils(LocaleSet.getDefault());
         }
         return sSingleton;
     }
 
+    @VisibleForTesting
     public static synchronized void setLocale(Locale locale) {
-        if (sSingleton == null || !sSingleton.isLocale(locale)) {
-            sSingleton = new ContactLocaleUtils(locale);
+        setLocales(new LocaleSet(locale));
+    }
+
+    public static synchronized void setLocales(LocaleSet locales) {
+        if (sSingleton == null || !sSingleton.isLocale(locales)) {
+            sSingleton = new ContactLocaleUtils(locales);
         }
     }
 
@@ -464,7 +479,7 @@ public class ContactLocaleUtils {
 
     /**
      *  Determine which utility should be used for generating NameLookupKey.
-     *  (ie, whether we generate Pinyin lookup keys or not)
+     *  (ie, whether we generate Romaji or Pinyin lookup keys or not)
      *
      *  Hiragana and Katakana are tagged as JAPANESE; Kanji is unclassified
      *  and tagged as CJK. For Hiragana/Katakana names, generate Romaji
@@ -475,10 +490,17 @@ public class ContactLocaleUtils {
      *  b. For Simplified Chinese locale, generate Pinyin lookup keys.
      */
     public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
-        if (nameStyle == FullNameStyle.JAPANESE &&
-                !CHINESE_LANGUAGE.equals(mLanguage) &&
-                !KOREAN_LANGUAGE.equals(mLanguage)) {
-            return JapaneseContactUtils.getRomajiNameLookupKeys(name);
+        if (!mLocales.isPrimaryLocaleCJK()) {
+            if (mLocales.isSecondaryLocaleSimplifiedChinese()) {
+                if (nameStyle == FullNameStyle.CHINESE ||
+                        nameStyle == FullNameStyle.CJK) {
+                    return SimplifiedChineseContactUtils.getPinyinNameLookupKeys(name);
+                }
+            } else {
+                if (nameStyle == FullNameStyle.JAPANESE) {
+                    return JapaneseContactUtils.getRomajiNameLookupKeys(name);
+                }
+            }
         }
         return mUtils.getNameLookupKeys(name, nameStyle);
     }
