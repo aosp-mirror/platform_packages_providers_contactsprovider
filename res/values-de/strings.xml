@@ -25,7 +25,7 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Zum Abschluss des Upgrades berühren"</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Sonstige"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Zugriff auf alle Mailbox-Nachrichten"</string>
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Auf alle Mailbox-Nachrichten zugreifen"</string>
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Ermöglicht der App das Speichern und Abrufen aller Mailbox-Nachrichten, auf die dieses Gerät zugreifen kann"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mailbox-Nachricht von "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktdatenbank kopieren"</string>
