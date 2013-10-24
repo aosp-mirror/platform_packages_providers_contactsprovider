@@ -26,7 +26,7 @@
     <string name="default_directory" msgid="93961630309570294">"אנשי קשר"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"אחר"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"גישה לכל הודעות הדואר הקולי"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"מאפשר ליישום לאחסן ולאחזר את כל הודעות הדואר הקולי שלמכשיר זה יש גישה אליהן."</string>
+    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"מאפשר לאפליקציה לאחסן ולאחזר את כל הודעות הדואר הקולי שלמכשיר זה יש גישה אליהן."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"הודעה קולית מאת "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"העתקת מסד נתוני אנשי קשר"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"אתה עומד 1) ליצור עותק באחסון הפנימי של מסד הנתונים שכולל את כל המידע הקשור לאנשי הקשר וכל יומני השיחות, 2) לשלוח אותו בדוא\"ל. זכור למחוק את העותק מיד לאחר שתעתיק אותו בהצלחה מהמכשיר או כשהודעת הדוא\"ל מתקבלת."</string>
