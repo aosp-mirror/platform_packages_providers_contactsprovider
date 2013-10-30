@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"تطبيقات Android المركزية"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"‏تطبيقات Android المركزية"</string>
     <string name="app_label" msgid="3389954322874982620">"تخزين جهات الاتصال"</string>
     <string name="provider_label" msgid="6012150850819899907">"جهات الاتصال"</string>
     <string name="upgrade_msg" msgid="8640807392794309950">"جارٍ ترقية قاعدة بيانات جهات الاتصال."</string>
