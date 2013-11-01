@@ -69,6 +69,7 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Authorization;
+import android.provider.ContactsContract.CommonDataKinds.Callable;
 import android.provider.ContactsContract.CommonDataKinds.Contactables;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -87,6 +88,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DataUsageFeedback;
+import android.provider.ContactsContract.DeletedContacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
@@ -933,8 +935,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .build();
 
     private static final ProjectionMap sDeletedContactsProjectionMap = ProjectionMap.builder()
-            .add(ContactsContract.DeletedContacts.CONTACT_ID)
-            .add(ContactsContract.DeletedContacts.CONTACT_DELETED_TIMESTAMP)
+            .add(DeletedContacts.CONTACT_ID)
+            .add(DeletedContacts.CONTACT_DELETED_TIMESTAMP)
             .build();
 
     /**
@@ -1116,94 +1118,132 @@ public class ContactsProvider2 extends AbstractContactsProvider
     static {
         // Contacts URI matching table
         final UriMatcher matcher = sUriMatcher;
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts", CONTACTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#", CONTACTS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/data", CONTACTS_ID_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/entities", CONTACTS_ID_ENTITIES);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions",
-                AGGREGATION_SUGGESTIONS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/suggestions/*",
-                AGGREGATION_SUGGESTIONS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_ID_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/display_photo",
-                CONTACTS_ID_DISPLAY_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/stream_items",
-                CONTACTS_ID_STREAM_ITEMS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter", CONTACTS_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter/*", CONTACTS_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*", CONTACTS_LOOKUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/data", CONTACTS_LOOKUP_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/photo",
-                CONTACTS_LOOKUP_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#", CONTACTS_LOOKUP_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/data",
-                CONTACTS_LOOKUP_ID_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/photo",
-                CONTACTS_LOOKUP_ID_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/display_photo",
-                CONTACTS_LOOKUP_DISPLAY_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/display_photo",
-                CONTACTS_LOOKUP_ID_DISPLAY_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/entities",
-                CONTACTS_LOOKUP_ENTITIES);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/entities",
-                CONTACTS_LOOKUP_ID_ENTITIES);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/stream_items",
-                CONTACTS_LOOKUP_STREAM_ITEMS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/lookup/*/#/stream_items",
-                CONTACTS_LOOKUP_ID_STREAM_ITEMS);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_vcard/*", CONTACTS_AS_VCARD);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/as_multi_vcard/*",
-                CONTACTS_AS_MULTI_VCARD);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/", CONTACTS_STREQUENT);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/strequent/filter/*",
-                CONTACTS_STREQUENT_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*", CONTACTS_GROUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/frequent", CONTACTS_FREQUENT);
-        matcher.addURI(ContactsContract.AUTHORITY, "contacts/delete_usage", CONTACTS_DELETE_USAGE);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/data", RAW_CONTACTS_ID_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/display_photo",
+        String path = Contacts.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#",CONTACTS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/data", CONTACTS_ID_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/entities", CONTACTS_ID_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/suggestions",
+                AGGREGATION_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/suggestions/*",
+                AGGREGATION_SUGGESTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/photo", CONTACTS_ID_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/display_photo",
+                CONTACTS_ID_DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/stream_items",
+                CONTACTS_ID_STREAM_ITEMS);
+
+        path = Contacts.CONTENT_FILTER_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, CONTACTS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", CONTACTS_FILTER);
+
+        path = Contacts.CONTENT_LOOKUP_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", CONTACTS_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/data", CONTACTS_LOOKUP_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/photo", CONTACTS_LOOKUP_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/#", CONTACTS_LOOKUP_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/#/data", CONTACTS_LOOKUP_ID_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/#/photo", CONTACTS_LOOKUP_ID_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/display_photo",
+                CONTACTS_LOOKUP_DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/#/display_photo",
+                CONTACTS_LOOKUP_ID_DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/entities", CONTACTS_LOOKUP_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/#/entities",
+                CONTACTS_LOOKUP_ID_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/stream_items",
+                CONTACTS_LOOKUP_STREAM_ITEMS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*/#/stream_items",
+                CONTACTS_LOOKUP_ID_STREAM_ITEMS);
+
+        matcher.addURI(ContactsContract.AUTHORITY, Contacts.CONTENT_VCARD_URI.getPath() + "/*",
+                CONTACTS_AS_VCARD);
+
+        matcher.addURI(ContactsContract.AUTHORITY,
+                Contacts.CONTENT_MULTI_VCARD_URI.getPath() + "/*", CONTACTS_AS_MULTI_VCARD);
+
+        matcher.addURI(ContactsContract.AUTHORITY, Contacts.CONTENT_STREQUENT_URI.getPath(),
+                CONTACTS_STREQUENT);
+
+        matcher.addURI(ContactsContract.AUTHORITY,
+                Contacts.CONTENT_STREQUENT_FILTER_URI.getPath() + "/*", CONTACTS_STREQUENT_FILTER);
+
+        matcher.addURI(ContactsContract.AUTHORITY, Contacts.CONTENT_GROUP_URI.getPath() + "/*",
+                CONTACTS_GROUP);
+
+        matcher.addURI(ContactsContract.AUTHORITY, Contacts.CONTENT_FREQUENT_URI.getPath(),
+                CONTACTS_FREQUENT);
+
+        matcher.addURI(ContactsContract.AUTHORITY, DataUsageFeedback.DELETE_USAGE_URI.getPath(),
+                CONTACTS_DELETE_USAGE);
+
+        path = RawContacts.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, RAW_CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", RAW_CONTACTS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/data", RAW_CONTACTS_ID_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/display_photo",
                 RAW_CONTACTS_ID_DISPLAY_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/entity", RAW_CONTACT_ID_ENTITY);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items",
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/entity", RAW_CONTACT_ID_ENTITY);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/stream_items",
                 RAW_CONTACTS_ID_STREAM_ITEMS);
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#/stream_items/#",
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/stream_items/#",
                 RAW_CONTACTS_ID_STREAM_ITEMS_ID);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "raw_contact_entities", RAW_CONTACT_ENTITIES);
+        path = RawContactsEntity.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, RAW_CONTACT_ENTITIES);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/phones", PHONES);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/#", PHONES_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter", PHONES_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/emails", EMAILS);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/#", EMAILS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup", EMAILS_LOOKUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup/*", EMAILS_LOOKUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter", EMAILS_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
+        path = Data.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", DATA_ID);
+
+        path = Phone.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, PHONES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", PHONES_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/filter", PHONES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/filter/*", PHONES_FILTER);
+
+        path = Email.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, EMAILS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", EMAILS_ID);
+
+        path = Email.CONTENT_LOOKUP_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, EMAILS_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", EMAILS_LOOKUP);
+
+        path = Email.CONTENT_FILTER_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, EMAILS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", EMAILS_FILTER);
+
+        path = StructuredPostal.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, POSTALS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", POSTALS_ID);
+
+        path = DataUsageFeedback.FEEDBACK_URI.getPath();
         /** "*" is in CSV form with data ids ("123,456,789") */
-        matcher.addURI(ContactsContract.AUTHORITY, "data/usagefeedback/*", DATA_USAGE_FEEDBACK_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/", CALLABLES);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/#", CALLABLES_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter", CALLABLES_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter/*", CALLABLES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", DATA_USAGE_FEEDBACK_ID);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/", CONTACTABLES);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/filter", CONTACTABLES_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/filter/*",
-                CONTACTABLES_FILTER);
+        path = Callable.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, CALLABLES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", CALLABLES_ID);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "groups", GROUPS);
-        matcher.addURI(ContactsContract.AUTHORITY, "groups/#", GROUPS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "groups_summary", GROUPS_SUMMARY);
+        path = Callable.CONTENT_FILTER_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, CALLABLES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", CALLABLES_FILTER);
+
+        path = Contactables.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, CONTACTABLES);
+
+        path = Contactables.CONTENT_FILTER_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, CONTACTABLES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", CONTACTABLES_FILTER);
+
+        path = Groups.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, GROUPS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", GROUPS_ID);
+
+        path = Groups.CONTENT_SUMMARY_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, GROUPS_SUMMARY);
 
         matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH, SYNCSTATE);
         matcher.addURI(ContactsContract.AUTHORITY, SyncStateContentProviderHelper.PATH + "/#",
@@ -1214,16 +1254,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 "profile/" + SyncStateContentProviderHelper.PATH + "/#",
                 PROFILE_SYNCSTATE_ID);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
-        matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
-                AGGREGATION_EXCEPTIONS);
-        matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions/*",
-                AGGREGATION_EXCEPTION_ID);
+        path = PhoneLookup.CONTENT_FILTER_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", PHONE_LOOKUP);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "settings", SETTINGS);
+        path = AggregationExceptions.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, AGGREGATION_EXCEPTIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/*", AGGREGATION_EXCEPTION_ID);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "status_updates", STATUS_UPDATES);
-        matcher.addURI(ContactsContract.AUTHORITY, "status_updates/#", STATUS_UPDATES_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, Settings.CONTENT_URI.getPath(), SETTINGS);
+
+        path = StatusUpdates.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, STATUS_UPDATES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", STATUS_UPDATES_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY,
                 SEARCH_SUGGESTIONS);
@@ -1232,47 +1274,59 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
                 SEARCH_SHORTCUT);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "provider_status", PROVIDER_STATUS);
+        matcher.addURI(ContactsContract.AUTHORITY, ProviderStatus.CONTENT_URI.getPath(),
+                PROVIDER_STATUS);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "directories", DIRECTORIES);
-        matcher.addURI(ContactsContract.AUTHORITY, "directories/#", DIRECTORIES_ID);
+        path = Directory.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, DIRECTORIES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", DIRECTORIES_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "complete_name", COMPLETE_NAME);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "profile", PROFILE);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/entities", PROFILE_ENTITIES);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/data", PROFILE_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/data/#", PROFILE_DATA_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/photo", PROFILE_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/display_photo", PROFILE_DISPLAY_PHOTO);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/as_vcard", PROFILE_AS_VCARD);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts", PROFILE_RAW_CONTACTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#",
-                PROFILE_RAW_CONTACTS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#/data",
-                PROFILE_RAW_CONTACTS_ID_DATA);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contacts/#/entity",
-                PROFILE_RAW_CONTACTS_ID_ENTITIES);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/status_updates",
+        path = Profile.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, PROFILE);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/entities", PROFILE_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/data", PROFILE_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/data/#", PROFILE_DATA_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/photo", PROFILE_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/display_photo", PROFILE_DISPLAY_PHOTO);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/status_updates",
                 PROFILE_STATUS_UPDATES);
-        matcher.addURI(ContactsContract.AUTHORITY, "profile/raw_contact_entities",
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/raw_contact_entities",
                 PROFILE_RAW_CONTACT_ENTITIES);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "stream_items", STREAM_ITEMS);
-        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/photo", STREAM_ITEMS_PHOTOS);
-        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#", STREAM_ITEMS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#/photo", STREAM_ITEMS_ID_PHOTOS);
-        matcher.addURI(ContactsContract.AUTHORITY, "stream_items/#/photo/#",
+        path = Profile.CONTENT_VCARD_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, PROFILE_AS_VCARD);
+
+        path = Profile.CONTENT_RAW_CONTACTS_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, PROFILE_RAW_CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", PROFILE_RAW_CONTACTS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/data", PROFILE_RAW_CONTACTS_ID_DATA);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/entity",
+                PROFILE_RAW_CONTACTS_ID_ENTITIES);
+
+        path = StreamItems.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, STREAM_ITEMS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/photo", STREAM_ITEMS_PHOTOS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", STREAM_ITEMS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/photo", STREAM_ITEMS_ID_PHOTOS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#/photo/#",
                 STREAM_ITEMS_ID_PHOTOS_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "stream_items_limit", STREAM_ITEMS_LIMIT);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "display_photo/#", DISPLAY_PHOTO_ID);
-        matcher.addURI(ContactsContract.AUTHORITY, "photo_dimensions", PHOTO_DIMENSIONS);
+        matcher.addURI(ContactsContract.AUTHORITY, StreamItems.CONTENT_LIMIT_URI.getPath(),
+                STREAM_ITEMS_LIMIT);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts", DELETED_CONTACTS);
-        matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts/#", DELETED_CONTACTS_ID);
+        matcher.addURI(ContactsContract.AUTHORITY, DisplayPhoto.CONTENT_URI.getPath() + "/#",
+                DISPLAY_PHOTO_ID);
 
-        matcher.addURI(ContactsContract.AUTHORITY, "pinned_position_update",
+        matcher.addURI(ContactsContract.AUTHORITY,
+                DisplayPhoto.CONTENT_MAX_DIMENSIONS_URI.getPath(), PHOTO_DIMENSIONS);
+
+        path = DeletedContacts.CONTENT_URI.getPath();
+        matcher.addURI(ContactsContract.AUTHORITY, path, DELETED_CONTACTS);
+        matcher.addURI(ContactsContract.AUTHORITY, path + "/#", DELETED_CONTACTS_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, PinnedPositions.UPDATE_URI.getPath(),
                 PINNED_POSITION_UPDATE);
     }
 
@@ -6366,7 +6420,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 String id = uri.getLastPathSegment();
                 qb.setTables(Tables.DELETED_CONTACTS);
                 qb.setProjectionMap(sDeletedContactsProjectionMap);
-                qb.appendWhere(ContactsContract.DeletedContacts.CONTACT_ID + "=?");
+                qb.appendWhere(DeletedContacts.CONTACT_ID + "=?");
                 selectionArgs = insertSelectionArg(selectionArgs, id);
                 break;
             }

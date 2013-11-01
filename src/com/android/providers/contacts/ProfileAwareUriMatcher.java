@@ -67,7 +67,13 @@ public class ProfileAwareUriMatcher extends UriMatcher {
 
         // Do a second tokenization pass to determine whether the URI may apply to profiles.
         if (path != null) {
-            String[] tokens = PATH_SPLIT_PATTERN.split(path);
+            String newPath = path;
+            // Strip leading slash if present.
+            if (path.length() > 0 && path.charAt(0) == '/') {
+                newPath = path.substring(1);
+            }
+            String[] tokens = PATH_SPLIT_PATTERN.split(newPath);
+
             if (tokens != null) {
 
                 // Keep track of whether we've passed a "lookup" token in the path; wildcards after
