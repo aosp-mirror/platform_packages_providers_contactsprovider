@@ -32,7 +32,7 @@
     <string name="debug_dump_database_message" msgid="406438635002392290">"אתה עומד 1) ליצור עותק באחסון הפנימי של מסד הנתונים שכולל את כל המידע הקשור לאנשי הקשר וכל יומני השיחות, 2) לשלוח אותו בדוא\"ל. זכור למחוק את העותק מיד לאחר שתעתיק אותו בהצלחה מהמכשיר או כשהודעת הדוא\"ל מתקבלת."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"מחק עכשיו"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"התחל"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"בחר תוכנית לשליחת הקובץ"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"בחר תכנית לשליחת הקובץ"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"מסד נתוני אנשי קשר מצורף"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"מצורף מסד הנתונים של אנשי הקשר שלי עם כל פרטי אנשי הקשר. שמור עליו היטב."</string>
 </resources>
