@@ -1358,6 +1358,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
+
+        // Only send broadcasts for regular contacts db.
+        if (dbForProfile() == 0) {
+            final Intent dbCreatedIntent = new Intent(
+                    ContactsContract.Intents.CONTACTS_DATABASE_CREATED);
+            dbCreatedIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+            mContext.sendBroadcast(dbCreatedIntent, android.Manifest.permission.READ_CONTACTS);
+        }
     }
 
     protected void initializeAutoIncrementSequences(SQLiteDatabase db) {
