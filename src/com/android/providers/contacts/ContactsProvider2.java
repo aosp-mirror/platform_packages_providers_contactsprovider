@@ -4849,10 +4849,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                             " FROM " + Tables.RAW_CONTACTS +
                                             " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
                                             " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            " IS NOT NULL" +
+                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
                                             " NOT IN (" +
                                             "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
                                             "    FROM " + Tables.RAW_CONTACTS +
                                             "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                            + "  AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                            "    IS NOT NULL"
                                             + ")", accountIdParams);
                             try {
                                 while (cursor.moveToNext()) {
