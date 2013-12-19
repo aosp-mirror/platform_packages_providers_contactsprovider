@@ -29,7 +29,7 @@
     <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Inaruhusu programu kuhifadhi na kutoa mawasiliano yote ya sauti ambayo kifaa hiki kinaweza kufikia."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Barua ya sauti kutoka "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Nakili hifadhidata ya anwani"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Unakaribia 1) kuunda nakala ya hifadhidata yako ambayo inajumuisha maelezo yote yanayohusiana na anwani na kumbukumbu zote za simu katika hifadhi ya ndani, na 2) uitume kwa barua pepe. Kumbuka kufuta nakala pindi tu unapoinakili kwa ufanisi kutoka kwenye kifaa au barua pepe imepokewa."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Unaelekea 1) kuunda nakala ya hifadhidata yako ambayo inajumuisha maelezo yote yanayohusiana na anwani na kumbukumbu zote za simu katika hifadhi ya ndani, na 2) uitume kwa barua pepe. Kumbuka kufuta nakala pindi tu utakapomaliza kuinakili kutoka kwenye kifaa au barua pepe itakapopokewa."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Futa sasa"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Anza"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Chagua programu ili kutuma faili yako"</string>
