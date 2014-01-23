@@ -20,9 +20,9 @@
     <string name="app_label" msgid="3389954322874982620">"የዕውቂያ ማከማቻ"</string>
     <string name="provider_label" msgid="6012150850819899907">"እውቅያዎች"</string>
     <string name="upgrade_msg" msgid="8640807392794309950">"የእውቂያዎችን ውሂብ ጎታ በማሻሻል ላይ፡፡"</string>
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"የእውቅያዎች  አሻሽል  ተጨማሪ ማህደረ ትውስታ ይፈልጋል"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"የእውቅያዎች አልቅ ተጨማሪ ማህደረ ትውስታ ይፈልጋል"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ለእውቅያዎች ማከማቻ በማሻሻል ላይ"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"አሻሽሉን ለማጠናቀቅ ንካ፡፡"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"አሻሽሉን ለማላቅ ይንኩ"</string>
     <string name="default_directory" msgid="93961630309570294">"እውቅያዎች"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ሌላ"</string>
     <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"ሁሉንም  የድምፅ መልዕክቶች ድረስ"</string>
