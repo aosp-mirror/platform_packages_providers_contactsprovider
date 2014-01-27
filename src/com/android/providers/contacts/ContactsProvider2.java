@@ -5486,8 +5486,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     qb.setProjectionMap(sStrequentStarredProjectionMap);
 
                     starredInnerQuery = qb.buildQuery(subProjection,
-                            Contacts.STARRED + "=1", Contacts._ID, null,
-                            Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC", null);
+                            DbQueryUtils.concatenateClauses(selection, Contacts.STARRED + "=1"),
+                            Contacts._ID, null, Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC",
+                            null);
 
                     // Reset the builder, and build the second query for frequents contacts
                     qb = new SQLiteQueryBuilder();
