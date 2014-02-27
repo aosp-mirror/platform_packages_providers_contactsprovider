@@ -114,6 +114,7 @@ import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
@@ -182,7 +183,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
@@ -6206,13 +6206,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     selectionArgs = mDbHelper.get().buildSipContactQuery(sb, sipAddress);
                     selection = sb.toString();
                 } else {
-                    // Use this flag to track whether sortOrder was originally empty
-                    boolean sortOrderIsEmpty = false;
                     if (TextUtils.isEmpty(sortOrder)) {
                         // Default the sort order to something reasonable so we get consistent
                         // results when callers don't request an ordering
                         sortOrder = " length(lookup.normalized_number) DESC";
-                        sortOrderIsEmpty = true;
                     }
 
                     String number = uri.getPathSegments().size() > 1
@@ -6225,29 +6222,46 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             qb, normalizedNumber, numberE164);
                     qb.setProjectionMap(sPhoneLookupProjectionMap);
 
+                    // removeNonStarMatchesFromCursor() requires the cursor to contain
+                    // PhoneLookup.NUMBER. Therefore, if the projection explicitly omits it, extend
+                    // the projection.
+                    String[] projectionWithNumber = projection;
+                    if (projection != null
+                            && !ArrayUtils.contains(projection,PhoneLookup.NUMBER)) {
+                        projectionWithNumber = ArrayUtils.appendElement(String.class, projection,
+                                PhoneLookup.NUMBER);
+                    }
+
                     // Peek at the results of the first query (which attempts to use fully
                     // normalized and internationalized numbers for comparison).  If no results
                     // were returned, fall back to using the SQLite function
                     // phone_number_compare_loose.
                     qb.setStrict(true);
                     boolean foundResult = false;
-                    Cursor cursor = query(db, qb, projection, selection, selectionArgs,
+                    Cursor cursor = query(db, qb, projectionWithNumber, selection, selectionArgs,
                             sortOrder, groupBy, null, limit, cancellationSignal);
                     try {
                         if (cursor.getCount() > 0) {
                             foundResult = true;
-                            return cursor;
+                            return PhoneLookupWithStarPrefix
+                                    .removeNonStarMatchesFromCursor(number, cursor);
                         } else {
                             // Use fallback lookup method
 
                             qb = new SQLiteQueryBuilder();
+                            qb.setProjectionMap(sPhoneLookupProjectionMap);
+                            qb.setStrict(true);
 
                             // use the raw number instead of the normalized number because
                             // phone_number_compare_loose in SQLite works only with non-normalized
                             // numbers
                             mDbHelper.get().buildFallbackPhoneLookupAndContactQuery(qb, number);
 
-                            qb.setProjectionMap(sPhoneLookupProjectionMap);
+                            final Cursor fallbackCursor = query(db, qb, projectionWithNumber,
+                                    selection, selectionArgs, sortOrder, groupBy, having, limit,
+                                    cancellationSignal);
+                            return PhoneLookupWithStarPrefix
+                                    .removeNonStarMatchesFromCursor(number, fallbackCursor);
                         }
                     } finally {
                         if (!foundResult) {

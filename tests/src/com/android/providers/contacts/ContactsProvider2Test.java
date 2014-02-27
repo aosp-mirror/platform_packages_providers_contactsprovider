@@ -1353,6 +1353,131 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 
+    public void testPhoneLookupStarUseCases() {
+        // Create two raw contacts with numbers "*123" and "12 3". This is a real life example
+        // from b/13195334.
+        final ContentValues values = new ContentValues();
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Emergency", /* familyName =*/ null);
+        insertPhoneNumber(rawContactId, "*123");
+
+        rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        rawContactId = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Voicemail", /* familyName =*/ null);
+        insertPhoneNumber(rawContactId, "12 3");
+
+        // Verify: "123" returns the "Voicemail" raw contact id. It should not match
+        // a phone number that starts with a "*".
+        Uri lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "123");
+        values.clear();
+        values.put(PhoneLookup.DISPLAY_NAME, "Voicemail");
+        assertStoredValues(lookupUri, null, null, new ContentValues[] {values});
+
+        lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "(1) 23");
+        values.clear();
+        values.put(PhoneLookup.DISPLAY_NAME, "Voicemail");
+        assertStoredValues(lookupUri, null, null, new ContentValues[] {values});
+
+        // Verify: "*123" returns the "Emergency" raw contact id.
+        lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "*1-23");
+        values.clear();
+        values.put(PhoneLookup.DISPLAY_NAME, "Emergency");
+        assertStoredValues(lookupUri, null, null, new ContentValues[] {values});
+    }
+
+    public void testPhoneLookupReturnsNothingRatherThanStar() {
+        // Create Emergency raw contact with "*123456789" number.
+        final ContentValues values = new ContentValues();
+        final Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        final long rawContactId1 = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Emergency",
+                /* familyName =*/ null);
+        insertPhoneNumber(rawContactId1, "*123456789");
+
+        // Lookup should return no results. It does not ignore stars even when no other matches.
+        final Uri lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "123456789");
+        assertEquals(0, getCount(lookupUri, null, null));
+    }
+
+    public void testPhoneLookupReturnsNothingRatherThanMissStar() {
+        // Create Voice Mail raw contact with "123456789" number.
+        final ContentValues values = new ContentValues();
+        final Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        final long rawContactId1 = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Voice mail",
+                /* familyName =*/ null);
+        insertPhoneNumber(rawContactId1, "123456789");
+
+        // Lookup should return no results. It does not ignore stars even when no other matches.
+        final Uri lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "*123456789");
+        assertEquals(0, getCount(lookupUri, null, null));
+    }
+
+    public void testPhoneLookupStarNoFallbackMatch() {
+        final ContentValues values = new ContentValues();
+        final Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        final long rawContactId1 = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Voice mail",
+                /* familyName =*/ null);
+        insertPhoneNumber(rawContactId1, "*011123456789");
+
+        // The numbers "+123456789" and "*011123456789" are a "fallback" match. The + is equivalent
+        // to "011". This lookup should return no results. Lookup does not ignore
+        // stars, even when doing a fallback lookup.
+        final Uri lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "+123456789");
+        assertEquals(0, getCount(lookupUri, null, null));
+    }
+
+    public void testPhoneLookupStarNotBreakFallbackMatching() {
+        // Create a raw contact with a phone number starting with "011"
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
+        long rawContactId = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "No star",
+                /* familyName =*/ null);
+        insertPhoneNumber(rawContactId, "011123456789");
+
+        // Create a raw contact with a phone number starting with "*011"
+        rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
+        rawContactId = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Has star",
+                /* familyName =*/ null);
+        insertPhoneNumber(rawContactId, "*011123456789");
+
+        // A phone number starting with "+" can (fallback) match the same phone number starting
+        // with "001". Verify that this fallback matching still occurs in the presence of
+        // numbers starting with "*"s.
+        final Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI,
+                "+123456789");
+        final ContentValues values = new ContentValues();
+        values.put(PhoneLookup.DISPLAY_NAME, "No star");
+        assertStoredValues(lookupUri1, null, null, new ContentValues[] {values});
+    }
+
+    public void testPhoneLookupExplicitProjection() {
+        final ContentValues values = new ContentValues();
+        final Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        final long rawContactId1 = ContentUris.parseId(rawContactUri);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Voice mail",
+                /* familyName =*/ null);
+        insertPhoneNumber(rawContactId1, "+1234567");
+
+        // Performing a query with a non-null projection with or without PhoneLookup.Number inside
+        // it should not cause a crash.
+        Uri lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "1234567");
+        String[] projection = new String[] {PhoneLookup.DISPLAY_NAME};
+        mResolver.query(lookupUri, projection, null, null, null);
+        projection = new String[] {PhoneLookup.DISPLAY_NAME, PhoneLookup.NUMBER};
+        mResolver.query(lookupUri, projection, null, null, null);
+
+        // Shouldn't crash for a fallback query either
+        lookupUri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "*0111234567");
+        projection = new String[] {PhoneLookup.DISPLAY_NAME};
+        mResolver.query(lookupUri, projection, null, null, null);
+        projection = new String[] {PhoneLookup.DISPLAY_NAME, PhoneLookup.NUMBER};
+        mResolver.query(lookupUri, projection, null, null, null);
+    }
+
     public void testPhoneLookupUseCases() {
         ContentValues values = new ContentValues();
         Uri rawContactUri;
