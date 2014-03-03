@@ -5886,7 +5886,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     sb.append(")");
                     qb.appendWhere(sb);
                 }
-                groupBy = Email.DATA + "," + RawContacts.CONTACT_ID;
+
+                // Group by a unique email address on a per account basis, to make sure that
+                // account promotion sort order correctly ranks email addresses that are in
+                // multiple accounts
+                groupBy = Email.DATA + "," + RawContacts.CONTACT_ID + "," +
+                        RawContacts.ACCOUNT_NAME + "," + RawContacts.ACCOUNT_TYPE;
                 if (sortOrder == null) {
                     final String accountPromotionSortOrder = getAccountPromotionSortOrder(uri);
                     if (!TextUtils.isEmpty(accountPromotionSortOrder)) {
