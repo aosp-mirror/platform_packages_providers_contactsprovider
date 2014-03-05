@@ -113,9 +113,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   600-699 Ice Cream Sandwich
      *   700-799 Jelly Bean
      *   800-899 Kitkat
+     *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 803;
+    static final int DATABASE_VERSION = 900;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -348,6 +349,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             "EXISTS (SELECT _id FROM " + Tables.VISIBLE_CONTACTS
                 + " WHERE " + Tables.CONTACTS +"." + Contacts._ID
                         + "=" + Tables.VISIBLE_CONTACTS +"." + Contacts._ID + ")";
+
+        public static final String CONTACT_IN_DEFAULT_DIRECTORY =
+                "EXISTS (SELECT _id FROM " + Tables.DEFAULT_DIRECTORY
+                        + " WHERE " + Tables.CONTACTS +"." + Contacts._ID
+                        + "=" + Tables.DEFAULT_DIRECTORY +"." + Contacts._ID + ")";
     }
 
     public interface ContactsColumns {
@@ -1635,6 +1641,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Contacts.PHOTO_FILE_ID + ", "
                 + "CAST(" + Clauses.CONTACT_VISIBLE + " AS INTEGER) AS "
                         + Contacts.IN_VISIBLE_GROUP + ", "
+                + "CAST(" + Clauses.CONTACT_IN_DEFAULT_DIRECTORY + " AS INTEGER) AS "
+                        + Contacts.IN_DEFAULT_DIRECTORY + ", "
                 + ContactsColumns.LAST_STATUS_UPDATE_ID + ", "
                 + ContactsColumns.CONCRETE_CONTACT_LAST_UPDATED_TIMESTAMP;
 
@@ -2524,6 +2532,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // now indexed as names.
             upgradeSearchIndex = true;
             oldVersion = 803;
+        }
+
+        if (oldVersion < 900) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 900;
         }
 
         if (upgradeViewsAndTriggers) {

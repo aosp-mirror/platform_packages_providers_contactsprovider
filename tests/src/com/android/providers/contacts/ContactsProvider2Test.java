@@ -131,6 +131,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -171,6 +172,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -215,6 +217,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -263,6 +266,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -388,6 +392,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -465,6 +470,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -555,6 +561,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.TIMES_CONTACTED,
                 Contacts.STARRED,
                 Contacts.PINNED,
+                Contacts.IN_DEFAULT_DIRECTORY,
                 Contacts.IN_VISIBLE_GROUP,
                 Contacts.PHOTO_ID,
                 Contacts.PHOTO_FILE_ID,
@@ -635,6 +642,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.LAST_TIME_CONTACTED,
                 PhoneLookup.TIMES_CONTACTED,
                 PhoneLookup.STARRED,
+                PhoneLookup.IN_DEFAULT_DIRECTORY,
                 PhoneLookup.IN_VISIBLE_GROUP,
                 PhoneLookup.PHOTO_ID,
                 PhoneLookup.PHOTO_URI,
@@ -2180,6 +2188,28 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         markInvisible(contactId);
 
         assertEquals(0, getCount(uri, null, null));
+    }
+
+    public void testInDefaultDirectoryData() {
+        final ContentValues values = new ContentValues();
+        final long contactId = createContact(values, "John", "Doe",
+                "18004664411", "goog411@acme.com", StatusUpdates.INVISIBLE, 4, 1, 0,
+                StatusUpdates.CAPABILITY_HAS_CAMERA);
+
+        final StringBuilder query = new StringBuilder()
+                .append(Data.MIMETYPE).append("='").append(Email.CONTENT_ITEM_TYPE)
+                .append("' AND ").append(Email.DATA).append("=? AND ")
+                .append(Contacts.IN_DEFAULT_DIRECTORY).append("=1");
+
+        assertEquals(1,
+                getCount(Email.CONTENT_URI, query.toString(), new String[]{"goog411@acme.com"}));
+
+        // Fire!
+        markInvisible(contactId);
+
+        // Verify: making a contact visible changes the IN_DEFAULT_DIRECTORY data value.
+        assertEquals(0,
+                getCount(Email.CONTENT_URI, query.toString(), new String[]{"goog411@acme.com"}));
     }
 
     public void testContactablesQuery() {
