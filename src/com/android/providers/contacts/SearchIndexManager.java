@@ -294,24 +294,25 @@ public class SearchIndexManager {
         StringBuilder sb = new StringBuilder();
         sb.append("(");
         if (!contactIds.isEmpty()) {
+            // Select all raw contacts that belong to all contacts in contactIds
             sb.append(RawContacts.CONTACT_ID + " IN (");
-            for (Long contactId : contactIds) {
-                sb.append(contactId).append(",");
-            }
-            sb.setLength(sb.length() - 1);
+            TextUtils.join(",", contactIds);
             sb.append(')');
         }
-
         if (!rawContactIds.isEmpty()) {
             if (!contactIds.isEmpty()) {
                 sb.append(" OR ");
             }
-            sb.append(RawContactsColumns.CONCRETE_ID + " IN (");
-            for (Long rawContactId : rawContactIds) {
-                sb.append(rawContactId).append(",");
-            }
-            sb.setLength(sb.length() - 1);
-            sb.append(')');
+            // Select all raw contacts that belong to the same contact as all raw contacts
+            // in rawContactIds. For every raw contact in rawContactIds that we are updating
+            // the index for, we need to rebuild the search index for all raw contacts belonging
+            // to the same contact, because we can only update the search index on a per-contact
+            // basis.
+            sb.append(RawContacts.CONTACT_ID + " IN " +
+                    "(SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContactsColumns.CONCRETE_ID + " IN (");
+            TextUtils.join(",", rawContactIds);
+            sb.append("))");
         }
 
         sb.append(")");
@@ -331,6 +332,7 @@ public class SearchIndexManager {
 
         // Then rebuild index for them.
         final int count = buildAndInsertIndex(db, rawContactsSelection);
+
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "Updated search index for " + count + " contacts");
         }
