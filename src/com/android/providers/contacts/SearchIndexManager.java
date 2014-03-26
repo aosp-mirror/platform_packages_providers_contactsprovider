@@ -296,7 +296,7 @@ public class SearchIndexManager {
         if (!contactIds.isEmpty()) {
             // Select all raw contacts that belong to all contacts in contactIds
             sb.append(RawContacts.CONTACT_ID + " IN (");
-            TextUtils.join(",", contactIds);
+            sb.append(TextUtils.join(",", contactIds));
             sb.append(')');
         }
         if (!rawContactIds.isEmpty()) {
@@ -311,7 +311,7 @@ public class SearchIndexManager {
             sb.append(RawContacts.CONTACT_ID + " IN " +
                     "(SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + RawContactsColumns.CONCRETE_ID + " IN (");
-            TextUtils.join(",", rawContactIds);
+            sb.append(TextUtils.join(",", rawContactIds));
             sb.append("))");
         }
 
