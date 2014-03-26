@@ -116,7 +116,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 900;
+    static final int DATABASE_VERSION = 901;
 
     private static final String DATABASE_NAME = "contacts2.db";
     private static final String DATABASE_PRESENCE = "presence_db";
@@ -2537,6 +2537,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 900) {
             upgradeViewsAndTriggers = true;
             oldVersion = 900;
+        }
+
+        if (oldVersion < 901) {
+            // Rebuild the search index to fix any search index that was previously in a
+            // broken state due to b/11059351
+            upgradeSearchIndex = true;
+            oldVersion = 901;
         }
 
         if (upgradeViewsAndTriggers) {
