@@ -154,6 +154,7 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
+
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
@@ -1095,11 +1096,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String[] EMPTY_STRING_ARRAY = new String[0];
 
-    /**
-     * Notification ID for failure to import contacts.
-     */
-    private static final int LEGACY_IMPORT_FAILED_NOTIFICATION = 1;
-
     private static final String DEFAULT_SNIPPET_ARG_START_MATCH = "[";
     private static final String DEFAULT_SNIPPET_ARG_END_MATCH = "]";
     private static final String DEFAULT_SNIPPET_ARG_ELLIPSIS = "...";
@@ -1545,6 +1541,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_PROVIDER_STATUS);
         scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
+        scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
 
         return true;
     }
@@ -1718,13 +1715,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     cleanupPhotoStore();
 
                     switchToContactMode(); // Switch to the default, just in case.
-                    break;
                 }
+                break;
             }
 
             case BACKGROUND_TASK_CLEAN_DELETE_LOG: {
                 final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
                 DeletedContactsTableUtil.deleteOldLogs(db);
+                break;
             }
         }
     }
@@ -2537,7 +2535,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case SETTINGS: {
-                id = insertSettings(uri, values);
+                id = insertSettings(values);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -2666,12 +2664,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Same as {@link #resolveAccountWithDataSet}, but returns the account id for the
+     * Same as {@link #resolveAccountWithDataSet}, but returns the account ID for the
      *     {@link AccountWithDataSet}.  Used for insert.
      *
      * May update the account cache; must be used only in a transaction.
      */
-    private long resolveAccountIdInTransaction(Uri uri, ContentValues values) {
+    private long resolveAccountIdInTransaction(Uri uri) {
         return mDbHelper.get().getOrCreateAccountIdInTransaction(
                 resolveAccountWithDataSet(uri, mValues));
     }
@@ -2699,7 +2697,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mValues.putAll(values);
         mValues.putNull(RawContacts.CONTACT_ID);
 
-        final long accountId = resolveAccountIdInTransaction(uri, mValues);
+        final long accountId = resolveAccountIdInTransaction(uri);
         mValues.remove(RawContacts.ACCOUNT_NAME);
         mValues.remove(RawContacts.ACCOUNT_TYPE);
         mValues.remove(RawContacts.DATA_SET);
@@ -2883,8 +2881,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Long streamItemId = mValues.getAsLong(StreamItemPhotos.STREAM_ITEM_ID);
         if (streamItemId != null && streamItemId != 0) {
-            long rawContactId = lookupRawContactIdForStreamId(streamItemId);
-
             // Don't attempt to insert accounts params - they don't exist in the stream item
             // photos table.
             mValues.remove(RawContacts.ACCOUNT_NAME);
@@ -2901,9 +2897,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Processes the photo contained in the {@link ContactsContract.StreamItemPhotos#PHOTO}
-     * field of the given values, attempting to store it in the photo store.  If successful,
-     * the resulting photo file ID will be added to the values for insert/update in the table.
+     * Processes the photo contained in the {@link StreamItemPhotos#PHOTO} field of the given
+     * values, attempting to store it in the photo store.  If successful, the resulting photo
+     * file ID will be added to the values for insert/update in the table.
      * <p>
      * If updating, it is valid for the picture to be empty or unspecified (the function will
      * still return true).  If inserting, a valid picture must be specified.
@@ -3127,7 +3123,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // If the inserted group is a favorite group, add all starred raw contacts to it.
             mSelectionArgs1[0] = Long.toString(accountId);
             Cursor c = db.query(Tables.RAW_CONTACTS,
-                    new String[]{RawContacts._ID, RawContacts.STARRED},
+                    new String[] {RawContacts._ID, RawContacts.STARRED},
                     RawContactsColumns.CONCRETE_ACCOUNT_ID + "=?", mSelectionArgs1,
                     null, null, null);
             try {
@@ -3151,7 +3147,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return result;
     }
 
-    private long insertSettings(Uri uri, ContentValues values) {
+    private long insertSettings(ContentValues values) {
         // Before inserting, ensure that no settings record already exists for the
         // values being inserted (this used to be enforced by a primary key, but that no
         // longer works with the nullable data_set field added).
@@ -3184,7 +3180,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         selectionArgs = new String[] {accountName, accountType, dataSet};
                     }
                 }
-                return updateSettings(uri, values, selection, selectionArgs);
+                return updateSettings(values, selection, selectionArgs);
             }
         } finally {
             c.close();
@@ -3333,7 +3329,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // Insert the presence update
             db.replace(Tables.PRESENCE, null, mValues);
         }
-
 
         if (values.containsKey(StatusUpdates.STATUS)) {
             String status = values.getAsString(StatusUpdates.STATUS);
@@ -3517,7 +3512,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final List<String> pathSegments = uri.getPathSegments();
                 final String lookupKey = pathSegments.get(2);
                 SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
-                setTablesAndProjectionMapForContacts(lookupQb, uri, null);
+                setTablesAndProjectionMapForContacts(lookupQb, null);
                 long contactId = ContentUris.parseId(uri);
                 String[] args;
                 if (selectionArgs == null) {
@@ -3624,7 +3619,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case SETTINGS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteSettings(uri, appendAccountToSelection(uri, selection), selectionArgs);
+                return deleteSettings(appendAccountToSelection(uri, selection), selectionArgs);
             }
 
             case STATUS_UPDATES:
@@ -3634,24 +3629,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case STREAM_ITEMS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteStreamItems(uri, new ContentValues(), selection, selectionArgs);
+                return deleteStreamItems(selection, selectionArgs);
             }
 
             case STREAM_ITEMS_ID: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteStreamItems(uri, new ContentValues(),
-                        StreamItems._ID + "=?",
-                        new String[]{uri.getLastPathSegment()});
+                return deleteStreamItems(
+                    StreamItems._ID + "=?", new String[]{uri.getLastPathSegment()});
             }
 
             case RAW_CONTACTS_ID_STREAM_ITEMS_ID: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 String rawContactId = uri.getPathSegments().get(1);
                 String streamItemId = uri.getLastPathSegment();
-                return deleteStreamItems(uri, new ContentValues(),
+                return deleteStreamItems(
                         StreamItems.RAW_CONTACT_ID + "=? AND " + StreamItems._ID + "=?",
                         new String[]{rawContactId, streamItemId});
-
             }
 
             case STREAM_ITEMS_ID_PHOTOS: {
@@ -3660,15 +3653,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 String selectionWithId =
                         (StreamItemPhotos.STREAM_ITEM_ID + "=" + streamItemId + " ")
                                 + (selection == null ? "" : " AND (" + selection + ")");
-                return deleteStreamItemPhotos(uri, new ContentValues(),
-                        selectionWithId, selectionArgs);
+                return deleteStreamItemPhotos(selectionWithId, selectionArgs);
             }
 
             case STREAM_ITEMS_ID_PHOTOS_ID: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 String streamItemId = uri.getPathSegments().get(1);
                 String streamItemPhotoId = uri.getPathSegments().get(3);
-                return deleteStreamItemPhotos(uri, new ContentValues(),
+                return deleteStreamItemPhotos(
                         StreamItemPhotosColumns.CONCRETE_ID + "=? AND "
                                 + StreamItemPhotos.STREAM_ITEM_ID + "=?",
                         new String[]{streamItemPhotoId, streamItemId});
@@ -3697,15 +3689,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mValues.clear();
                 mValues.put(Groups.DELETED, 1);
                 mValues.put(Groups.DIRTY, 1);
-                return db.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId,
-                        null);
+                return db.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
             }
         } finally {
             mVisibleTouched = true;
         }
     }
 
-    private int deleteSettings(Uri uri, String selection, String[] selectionArgs) {
+    private int deleteSettings(String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         final int count = db.delete(Tables.SETTINGS, selection, selectionArgs);
         mVisibleTouched = true;
@@ -3804,8 +3795,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
       return db.delete(Tables.PRESENCE, selection, selectionArgs);
     }
 
-    private int deleteStreamItems(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
+    private int deleteStreamItems(String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         int count = 0;
         final Cursor c = db.query(Views.STREAM_ITEMS, Projections.ID,
@@ -3827,8 +3817,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 new String[]{String.valueOf(streamItemId)});
     }
 
-    private int deleteStreamItemPhotos(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
+    private int deleteStreamItemPhotos(String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         return db.delete(Tables.STREAM_ITEM_PHOTOS, selection, selectionArgs);
     }
@@ -4007,7 +3996,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case GROUPS: {
-               count = updateGroups(uri, values, appendAccountIdToSelection(uri, selection),
+               count = updateGroups(values, appendAccountIdToSelection(uri, selection),
                         selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
@@ -4020,8 +4009,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(groupId));
                 String selectionWithId = Groups._ID + "=? "
                         + (selection == null ? "" : " AND " + selection);
-                count = updateGroups(uri, values, selectionWithId, selectionArgs,
-                        callerIsSyncAdapter);
+                count = updateGroups(values, selectionWithId, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
                 }
@@ -4035,25 +4023,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case SETTINGS: {
-                count = updateSettings(uri, values, appendAccountToSelection(uri, selection),
-                        selectionArgs);
+                count = updateSettings(
+                        values, appendAccountToSelection(uri, selection), selectionArgs);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
 
             case STATUS_UPDATES:
             case PROFILE_STATUS_UPDATES: {
-                count = updateStatusUpdate(uri, values, selection, selectionArgs);
+                count = updateStatusUpdate(values, selection, selectionArgs);
                 break;
             }
 
             case STREAM_ITEMS: {
-                count = updateStreamItems(uri, values, selection, selectionArgs);
+                count = updateStreamItems(values, selection, selectionArgs);
                 break;
             }
 
             case STREAM_ITEMS_ID: {
-                count = updateStreamItems(uri, values, StreamItems._ID + "=?",
+                count = updateStreamItems(values, StreamItems._ID + "=?",
                         new String[]{uri.getLastPathSegment()});
                 break;
             }
@@ -4061,20 +4049,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case RAW_CONTACTS_ID_STREAM_ITEMS_ID: {
                 String rawContactId = uri.getPathSegments().get(1);
                 String streamItemId = uri.getLastPathSegment();
-                count = updateStreamItems(uri, values,
+                count = updateStreamItems(values,
                         StreamItems.RAW_CONTACT_ID + "=? AND " + StreamItems._ID + "=?",
                         new String[]{rawContactId, streamItemId});
                 break;
             }
 
             case STREAM_ITEMS_PHOTOS: {
-                count = updateStreamItemPhotos(uri, values, selection, selectionArgs);
+                count = updateStreamItemPhotos(values, selection, selectionArgs);
                 break;
             }
 
             case STREAM_ITEMS_ID_PHOTOS: {
                 String streamItemId = uri.getPathSegments().get(1);
-                count = updateStreamItemPhotos(uri, values,
+                count = updateStreamItemPhotos(values,
                         StreamItemPhotos.STREAM_ITEM_ID + "=?", new String[]{streamItemId});
                 break;
             }
@@ -4082,7 +4070,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case STREAM_ITEMS_ID_PHOTOS_ID: {
                 String streamItemId = uri.getPathSegments().get(1);
                 String streamItemPhotoId = uri.getPathSegments().get(3);
-                count = updateStreamItemPhotos(uri, values,
+                count = updateStreamItemPhotos(values,
                         StreamItemPhotosColumns.CONCRETE_ID + "=? AND " +
                                 StreamItemPhotosColumns.CONCRETE_STREAM_ITEM_ID + "=?",
                         new String[]{streamItemPhotoId, streamItemId});
@@ -4120,8 +4108,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return count;
     }
 
-    private int updateStatusUpdate(Uri uri, ContentValues values, String selection,
-        String[] selectionArgs) {
+    private int updateStatusUpdate(ContentValues values, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         // update status_updates table, if status is provided
         // TODO should account type/name be appended to the where clause?
@@ -4145,8 +4132,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return updateCount;
     }
 
-    private int updateStreamItems(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
+    private int updateStreamItems(ContentValues values, String selection, String[] selectionArgs) {
         // Stream items can't be moved to a new raw contact.
         values.remove(StreamItems.RAW_CONTACT_ID);
 
@@ -4160,8 +4146,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return db.update(Tables.STREAM_ITEMS, values, selection, selectionArgs);
     }
 
-    private int updateStreamItemPhotos(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
+    private int updateStreamItemPhotos(
+            ContentValues values, String selection, String[] selectionArgs) {
+
         // Stream item photos can't be moved to a new stream item.
         values.remove(StreamItemPhotos.STREAM_ITEM_ID);
 
@@ -4231,7 +4218,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         int DATA_SET = 3;
     }
 
-    private int updateGroups(Uri uri, ContentValues originalValues, String selectionWithId,
+    private int updateGroups(ContentValues originalValues, String selectionWithId,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
         mGroupIdCache.clear();
 
@@ -4317,8 +4304,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return returnCount;
     }
 
-    private int updateSettings(Uri uri, ContentValues values, String selection,
-            String[] selectionArgs) {
+    private int updateSettings(ContentValues values, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         final int count = db.update(Tables.SETTINGS, values, selection, selectionArgs);
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
@@ -4558,8 +4544,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return count;
     }
 
-    private int updateContactOptions(SQLiteDatabase db, long contactId, ContentValues values,
-            boolean callerIsSyncAdapter) {
+    private int updateContactOptions(
+            SQLiteDatabase db, long contactId, ContentValues values, boolean callerIsSyncAdapter) {
 
         mValues.clear();
         ContactsDatabaseHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
@@ -4575,8 +4561,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.PINNED,
                 values, Contacts.PINNED);
 
-        // Nothing to update - just return
         if (mValues.size() == 0) {
+            // Nothing to update, bail out.
             return 0;
         }
 
@@ -5051,19 +5037,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // Otherwise proceed with a normal query against the contacts DB.
         switchToContactMode();
+
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
-        if (directory == null) {
-            return addSnippetExtrasToCursor(uri,
-                    queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
-                    cancellationSignal));
-        } else if (directory.equals("0")) {
-            return addSnippetExtrasToCursor(uri,
-                    queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                    Directory.DEFAULT, cancellationSignal));
-        } else if (directory.equals("1")) {
-            return addSnippetExtrasToCursor(uri,
-                    queryLocal(uri, projection, selection, selectionArgs, sortOrder,
-                    Directory.LOCAL_INVISIBLE, cancellationSignal));
+        final long directoryId =
+                (directory == null ? -1 :
+                (directory.equals("0") ? Directory.DEFAULT :
+                (directory.equals("1") ? Directory.LOCAL_INVISIBLE : Long.MIN_VALUE)));
+
+        if (directoryId > Long.MIN_VALUE) {
+            final Cursor cursor = queryLocal(uri, projection, selection, selectionArgs, sortOrder,
+                    directoryId, cancellationSignal);
+            return addSnippetExtrasToCursor(uri, cursor);
         }
 
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -5094,9 +5078,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             projection = getDefaultProjection(uri);
         }
 
-        Cursor cursor = getContext().getContentResolver().query(directoryUri, projection, selection,
-                selectionArgs, sortOrder);
-
+        Cursor cursor = getContext().getContentResolver().query(
+                directoryUri, projection, selection, selectionArgs, sortOrder);
         if (cursor == null) {
             return null;
         }
@@ -5221,14 +5204,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         selectionArgs, sortOrder);
 
             case CONTACTS: {
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 appendLocalDirectoryAndAccountSelectionIfNeeded(qb, directoryId, uri);
                 break;
             }
 
             case CONTACTS_ID: {
                 long contactId = ContentUris.parseId(uri);
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(contactId));
                 qb.appendWhere(Contacts._ID + "=?");
                 break;
@@ -5247,9 +5230,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (segmentCount == 4) {
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
-                    setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
+                    setTablesAndProjectionMapForContacts(lookupQb, projection);
 
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Contacts._ID, contactId, Contacts.LOOKUP_KEY, lookupKey,
                             cancellationSignal);
@@ -5258,7 +5241,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     }
                 }
 
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 selectionArgs = insertSelectionArg(selectionArgs,
                         String.valueOf(lookupContactIdByLookupKey(db, lookupKey)));
                 qb.appendWhere(Contacts._ID + "=?");
@@ -5284,7 +5267,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         lookupQb.appendWhere(" AND " + Data._ID + "=" + Contacts.PHOTO_ID);
                     }
                     lookupQb.appendWhere(" AND ");
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Data.CONTACT_ID, contactId, Data.LOOKUP_KEY, lookupKey,
                             cancellationSignal);
@@ -5327,7 +5310,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
                     setTablesAndProjectionMapForStreamItems(lookupQb);
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             StreamItems.CONTACT_ID, contactId,
                             StreamItems.CONTACT_LOOKUP_KEY, lookupKey,
@@ -5484,7 +5467,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 } else {
                     // Build the first query for starred contacts
                     qb.setStrict(true);
-                    setTablesAndProjectionMapForContacts(qb, uri, projection, false);
+                    setTablesAndProjectionMapForContacts(qb, projection, false);
                     qb.setProjectionMap(sStrequentStarredProjectionMap);
 
                     starredInnerQuery = qb.buildQuery(subProjection,
@@ -5496,7 +5479,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     qb = new SQLiteQueryBuilder();
                     qb.setStrict(true);
 
-                    setTablesAndProjectionMapForContacts(qb, uri, projection, true);
+                    setTablesAndProjectionMapForContacts(qb, projection, true);
                     qb.setProjectionMap(sStrequentFrequentProjectionMap);
                     qb.appendWhere(DbQueryUtils.concatenateClauses(
                             selection,
@@ -5546,7 +5529,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_FREQUENT: {
-                setTablesAndProjectionMapForContacts(qb, uri, projection, true);
+                setTablesAndProjectionMapForContacts(qb, projection, true);
                 qb.setProjectionMap(sStrequentFrequentProjectionMap);
                 groupBy = Contacts._ID;
                 having = Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY;
@@ -5559,7 +5542,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_GROUP: {
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 if (uri.getPathSegments().size() > 2) {
                     qb.appendWhere(CONTACTS_IN_GROUP_SELECT);
                     String groupMimeTypeId = String.valueOf(
@@ -5571,7 +5554,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PROFILE: {
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 break;
             }
 
@@ -5626,7 +5609,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     setTablesAndProjectionMapForEntities(lookupQb, uri, projection);
                     lookupQb.appendWhere(" AND ");
 
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
+                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db,
                             projection, selection, selectionArgs, sortOrder, groupBy, limit,
                             Contacts.Entity.CONTACT_ID, contactId,
                             Contacts.Entity.LOOKUP_KEY, lookupKey,
@@ -6343,7 +6326,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     }
                 }
 
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
 
                 return mAggregator.get().queryAggregationSuggestions(qb, projection, contactId,
                         maxSuggestions, filter, parameters);
@@ -6359,11 +6342,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final String groupMembershipMimetypeId = Long.toString(mDbHelper.get()
                         .getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
                 if (projection != null && projection.length != 0 &&
-                        mDbHelper.get().isInProjection(projection, Settings.UNGROUPED_COUNT)) {
+                        ContactsDatabaseHelper.isInProjection(
+                                projection, Settings.UNGROUPED_COUNT)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
                 if (projection != null && projection.length != 0 &&
-                        mDbHelper.get().isInProjection(
+                        ContactsDatabaseHelper.isInProjection(
                                 projection, Settings.UNGROUPED_WITH_PHONES)) {
                     selectionArgs = insertSelectionArg(selectionArgs, groupMembershipMimetypeId);
                 }
@@ -6528,7 +6512,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @param cancellationSignal
      */
     private Cursor queryWithContactIdAndLookupKey(SQLiteQueryBuilder lookupQb,
-            SQLiteDatabase db, Uri uri,
+            SQLiteDatabase db,
             String[] projection, String selection, String[] selectionArgs,
             String sortOrder, String groupBy, String limit,
             String contactIdColumn, long contactId, String lookupKeyColumn, String lookupKey,
@@ -6598,7 +6582,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // Not in the cache.  Generate and put.
                 final long start = System.currentTimeMillis();
 
-                b = getFastScrollingIndexExtras(queryUri, db, qb, selection, selectionArgs,
+                b = getFastScrollingIndexExtras(db, qb, selection, selectionArgs,
                         sortOrder, countExpression, cancellationSignal);
 
                 final long end = System.currentTimeMillis();
@@ -6638,7 +6622,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Computes counts by the address book index labels and returns it as {@link Bundle} which
      * will be appended to a {@link Cursor} as extras.
      */
-    private static Bundle getFastScrollingIndexExtras(final Uri queryUri, final SQLiteDatabase db,
+    private static Bundle getFastScrollingIndexExtras(final SQLiteDatabase db,
             final SQLiteQueryBuilder qb, final String selection, final String[] selectionArgs,
             final String sortOrder, String countExpression,
             final CancellationSignal cancellationSignal) {
@@ -6987,9 +6971,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
-            String[] projection) {
-        setTablesAndProjectionMapForContacts(qb, uri, projection, false);
+    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, String[] projection) {
+        setTablesAndProjectionMapForContacts(qb, projection, false);
     }
 
     /**
@@ -6997,8 +6980,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Note that this uses INNER JOIN instead of LEFT OUTER JOIN, so some of data in Contacts
      * may be dropped.
      */
-    private void setTablesAndProjectionMapForContacts(SQLiteQueryBuilder qb, Uri uri,
-            String[] projection, boolean includeDataUsageStat) {
+    private void setTablesAndProjectionMapForContacts(
+            SQLiteQueryBuilder qb, String[] projection, boolean includeDataUsageStat) {
         StringBuilder sb = new StringBuilder();
         if (includeDataUsageStat) {
             sb.append(Views.DATA_USAGE_STAT + " AS " + Tables.DATA_USAGE_STAT);
@@ -7426,8 +7409,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private void appendDataPresenceJoin(StringBuilder sb, String[] projection,
-            String dataIdColumn) {
+    private void appendDataPresenceJoin(
+        StringBuilder sb, String[] projection, String dataIdColumn) {
+
         if (ContactsDatabaseHelper.isInProjection(
                 projection, Data.PRESENCE, Data.CHAT_CAPABILITY)) {
             sb.append(" LEFT OUTER JOIN " + Tables.PRESENCE +
@@ -7435,8 +7419,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private void appendLocalDirectoryAndAccountSelectionIfNeeded(SQLiteQueryBuilder qb,
-            long directoryId, Uri uri) {
+    private void appendLocalDirectoryAndAccountSelectionIfNeeded(
+            SQLiteQueryBuilder qb, long directoryId, Uri uri) {
+
         final StringBuilder sb = new StringBuilder();
         if (directoryId == Directory.DEFAULT) {
             sb.append("(" + Contacts._ID + " IN " + Tables.DEFAULT_DIRECTORY + ")");
@@ -7735,9 +7720,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (segmentCount == 5) {
                     long contactId = Long.parseLong(pathSegments.get(3));
                     SQLiteQueryBuilder lookupQb = new SQLiteQueryBuilder();
-                    setTablesAndProjectionMapForContacts(lookupQb, uri, projection);
-                    Cursor c = queryWithContactIdAndLookupKey(lookupQb, db, uri,
-                            projection, null, null, null, null, null,
+                    setTablesAndProjectionMapForContacts(lookupQb, projection);
+                    Cursor c = queryWithContactIdAndLookupKey(
+                            lookupQb, db, projection, null, null, null, null, null,
                             Contacts._ID, contactId, Contacts.LOOKUP_KEY, lookupKey, null);
                     if (c != null) {
                         try {
@@ -7758,7 +7743,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
 
                 SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-                setTablesAndProjectionMapForContacts(qb, uri, projection);
+                setTablesAndProjectionMapForContacts(qb, projection);
                 long contactId = lookupContactIdByLookupKey(db, lookupKey);
                 Cursor c = qb.query(db, projection, Contacts._ID + "=?",
                         new String[]{String.valueOf(contactId)}, null, null, null);
