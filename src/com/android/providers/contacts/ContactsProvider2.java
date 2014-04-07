@@ -69,7 +69,6 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Authorization;
-import android.provider.ContactsContract.CommonDataKinds.Callable;
 import android.provider.ContactsContract.CommonDataKinds.Contactables;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -1340,7 +1339,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // Random number generator.
     private final SecureRandom mRandom = new SecureRandom();
 
-    private final ContentValues mValues = new ContentValues();
     private final HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
 
     private PhotoStore mContactsPhotoStore;
@@ -2616,17 +2614,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Same as {@link #resolveAccountWithDataSet}, but returns the account ID for the
-     *     {@link AccountWithDataSet}.  Used for insert.
-     *
-     * May update the account cache; must be used only in a transaction.
-     */
-    private long resolveAccountIdInTransaction(Uri uri) {
-        return mDbHelper.get().getOrCreateAccountIdInTransaction(
-                resolveAccountWithDataSet(uri, mValues));
-    }
-
-    /**
      * Inserts an item in the contacts table
      *
      * @param values the values for the new row
@@ -2637,32 +2624,32 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Inserts an item in the raw contacts table
+     * Inserts a new entry into the raw-contacts table.
      *
-     * @param uri the values for the new row
-     * @param values the account this contact should be associated with. may be null.
-     * @param callerIsSyncAdapter
-     * @return the row ID of the newly created row
+     * @param uri The insertion URI.
+     * @param inputValues The values for the new row.
+     * @param callerIsSyncAdapter True to identify the entity invoking this method as a SyncAdapter
+     *     and false otherwise.
+     * @return the ID of the newly-created row.
      */
-    private long insertRawContact(Uri uri, ContentValues values, boolean callerIsSyncAdapter) {
-        mValues.clear();
-        mValues.putAll(values);
-        mValues.putNull(RawContacts.CONTACT_ID);
+    private long insertRawContact(
+            Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
 
-        final long accountId = resolveAccountIdInTransaction(uri);
-        mValues.remove(RawContacts.ACCOUNT_NAME);
-        mValues.remove(RawContacts.ACCOUNT_TYPE);
-        mValues.remove(RawContacts.DATA_SET);
-        mValues.put(RawContactsColumns.ACCOUNT_ID, accountId);
+        // Create a shallow copy and initialize the contact ID to null.
+        final ContentValues values = new ContentValues(inputValues);
+        values.putNull(RawContacts.CONTACT_ID);
 
+        // Populate the relevant values before inserting the new entry into the database.
+        final long accountId = replaceAccountInfoByAccountId(uri, values);
         if (flagIsSet(values, RawContacts.DELETED)) {
-            mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
+            values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
+        // Insert the new entry.
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        final long rawContactId = db.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, values);
 
-        long rawContactId = db.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, mValues);
-        int aggregationMode = getIntValue(values, RawContacts.AGGREGATION_MODE,
+        final int aggregationMode = getIntValue(values, RawContacts.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_DEFAULT);
         mAggregator.get().markNewForAggregation(rawContactId, aggregationMode);
 
@@ -2722,6 +2709,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         groupMembershipValues.put(GroupMembership.RAW_CONTACT_ID, rawContactId);
         groupMembershipValues.put(DataColumns.MIMETYPE_ID,
                 mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
+
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         db.insert(Tables.DATA, null, groupMembershipValues);
     }
@@ -2731,48 +2719,46 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Long.toString(mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE)),
                 Long.toString(groupId),
                 Long.toString(rawContactId)};
+
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         db.delete(Tables.DATA, SELECTION_GROUPMEMBERSHIP_DATA, selectionArgs);
     }
 
     /**
-     * Inserts an item in the data table
+     * Inserts a new entry into the (contact) data table.
      *
-     * @param values the values for the new row
-     * @return the row ID of the newly created row
+     * @param inputValues The values for the new row.
+     * @return The ID of the newly-created row.
      */
-    private long insertData(ContentValues values, boolean callerIsSyncAdapter) {
-        long id = 0;
-        mValues.clear();
-        mValues.putAll(values);
-
-        Long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
+    private long insertData(ContentValues inputValues, boolean callerIsSyncAdapter) {
+        final Long rawContactId = inputValues.getAsLong(Data.RAW_CONTACT_ID);
         if (rawContactId == null) {
             throw new IllegalArgumentException(Data.RAW_CONTACT_ID + " is required");
         }
 
-        // Replace package with internal mapping.
-        final String packageName = mValues.getAsString(Data.RES_PACKAGE);
-        if (packageName != null) {
-            mValues.put(DataColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
-        }
-        mValues.remove(Data.RES_PACKAGE);
-
-        // Replace mimetype with internal mapping.
-        final String mimeType = mValues.getAsString(Data.MIMETYPE);
+        final String mimeType = inputValues.getAsString(Data.MIMETYPE);
         if (TextUtils.isEmpty(mimeType)) {
             throw new IllegalArgumentException(Data.MIMETYPE + " is required");
         }
 
-        mValues.put(DataColumns.MIMETYPE_ID, mDbHelper.get().getMimeTypeId(mimeType));
-        mValues.remove(Data.MIMETYPE);
+        // The input seem valid, create a shallow copy.
+        final ContentValues values = new ContentValues(inputValues);
 
-        DataRowHandler rowHandler = getDataRowHandler(mimeType);
+        // Populate the relevant values before inserting the new entry into the database.
+        replacePackageNameByPackageId(values);
+
+        // Replace the mimetype by the corresponding mimetype ID.
+        values.put(DataColumns.MIMETYPE_ID, mDbHelper.get().getMimeTypeId(mimeType));
+        values.remove(Data.MIMETYPE);
+
+        // Insert the new entry.
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        id = rowHandler.insert(db, mTransactionContext.get(), rawContactId, mValues);
-        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId, callerIsSyncAdapter);
-        mTransactionContext.get().rawContactUpdated(rawContactId);
-        return id;
+        final TransactionContext context = mTransactionContext.get();
+        final long dataId = getDataRowHandler(mimeType).insert(db, context, rawContactId, values);
+        context.markRawContactDirtyAndChanged(rawContactId, callerIsSyncAdapter);
+        context.rawContactUpdated(rawContactId);
+
+        return dataId;
     }
 
     /**
@@ -2783,68 +2769,67 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * oldest, it will be immediately deleted, and this will return 0).
      *
      * @param uri the insertion URI
-     * @param values the values for the new row
+     * @param inputValues the values for the new row
      * @return the stream item _ID of the newly created row, or 0 if it was not created
      */
-    private long insertStreamItem(Uri uri, ContentValues values) {
-        long id = 0;
-        mValues.clear();
-        mValues.putAll(values);
-
-        Long rawContactId = mValues.getAsLong(Data.RAW_CONTACT_ID);
+    private long insertStreamItem(Uri uri, ContentValues inputValues) {
+        Long rawContactId = inputValues.getAsLong(Data.RAW_CONTACT_ID);
         if (rawContactId == null) {
             throw new IllegalArgumentException(Data.RAW_CONTACT_ID + " is required");
         }
 
-        // Don't attempt to insert accounts params - they don't exist in the stream items table.
-        mValues.remove(RawContacts.ACCOUNT_NAME);
-        mValues.remove(RawContacts.ACCOUNT_TYPE);
+        // The input seem valid, create a shallow copy.
+        final ContentValues values = new ContentValues(inputValues);
+
+        // Update the relevant values before inserting the new entry into the database.  The
+        // account parameters are not added since they don't exist in the stream items table.
+        values.remove(RawContacts.ACCOUNT_NAME);
+        values.remove(RawContacts.ACCOUNT_TYPE);
 
         // Insert the new stream item.
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        id = db.insert(Tables.STREAM_ITEMS, null, mValues);
+        final long id = db.insert(Tables.STREAM_ITEMS, null, values);
         if (id == -1) {
-            // Insertion failed.
-            return 0;
+            return 0;  // Insertion failed.
         }
 
         // Check to see if we're over the limit for stream items under this raw contact.
         // It's possible that the inserted stream item is older than the the existing
         // ones, in which case it may be deleted immediately (resetting the ID to 0).
-        id = cleanUpOldStreamItems(rawContactId, id);
-
-        return id;
+        return cleanUpOldStreamItems(rawContactId, id);
     }
 
     /**
      * Inserts an item in the stream_item_photos table.  The account is checked against
      * the account in the raw contact that owns the stream item being modified.
      *
-     * @param uri the insertion URI
-     * @param values the values for the new row
-     * @return the stream item photo _ID of the newly created row, or 0 if there was an issue
-     *     with processing the photo or creating the row
+     * @param uri the insertion URI.
+     * @param inputValues The values for the new row.
+     * @return The stream item photo _ID of the newly created row, or 0 if there was an issue
+     *     with processing the photo or creating the row.
      */
-    private long insertStreamItemPhoto(Uri uri, ContentValues values) {
-        long id = 0;
-        mValues.clear();
-        mValues.putAll(values);
-
-        Long streamItemId = mValues.getAsLong(StreamItemPhotos.STREAM_ITEM_ID);
-        if (streamItemId != null && streamItemId != 0) {
-            // Don't attempt to insert accounts params - they don't exist in the stream item
-            // photos table.
-            mValues.remove(RawContacts.ACCOUNT_NAME);
-            mValues.remove(RawContacts.ACCOUNT_TYPE);
-
-            // Process the photo and store it.
-            if (processStreamItemPhoto(mValues, false)) {
-                // Insert the stream item photo.
-                final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-                id = db.insert(Tables.STREAM_ITEM_PHOTOS, null, mValues);
-            }
+    private long insertStreamItemPhoto(Uri uri, ContentValues inputValues) {
+        final Long streamItemId = inputValues.getAsLong(StreamItemPhotos.STREAM_ITEM_ID);
+        if (streamItemId == null || streamItemId == 0) {
+            return 0;
         }
-        return id;
+
+        // The input seem valid, create a shallow copy.
+        final ContentValues values = new ContentValues(inputValues);
+
+        // Update the relevant values before inserting the new entry into the database.  The
+        // account parameters are not added since they don't exist in the stream items table.
+        values.remove(RawContacts.ACCOUNT_NAME);
+        values.remove(RawContacts.ACCOUNT_TYPE);
+
+        // Attempt to process and store the photo.
+        if (!processStreamItemPhoto(values, false)) {
+            return 0;
+        }
+
+        // Insert the new entry and return its ID.
+        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        return db.insert(Tables.STREAM_ITEM_PHOTOS, null, values);
     }
 
     /**
@@ -3018,38 +3003,32 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Inserts an item in the groups table
+     * Inserts a new entry into the groups table.
+     *
+     * @param uri The insertion URI.
+     * @param inputValues The values for the new row.
+     * @param callerIsSyncAdapter True to identify the entity invoking this method as a SyncAdapter
+     *     and false otherwise.
+     * @return the ID of the newly-created row.
      */
-    private long insertGroup(Uri uri, ContentValues values, boolean callerIsSyncAdapter) {
-        mValues.clear();
-        mValues.putAll(values);
+    private long insertGroup(Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
+        // Create a shallow copy.
+        final ContentValues values = new ContentValues(inputValues);
 
-        final long accountId = mDbHelper.get().getOrCreateAccountIdInTransaction(
-                resolveAccountWithDataSet(uri, mValues));
-        mValues.remove(Groups.ACCOUNT_NAME);
-        mValues.remove(Groups.ACCOUNT_TYPE);
-        mValues.remove(Groups.DATA_SET);
-        mValues.put(GroupsColumns.ACCOUNT_ID, accountId);
-
-        // Replace package with internal mapping.
-        final String packageName = mValues.getAsString(Groups.RES_PACKAGE);
-        if (packageName != null) {
-            mValues.put(GroupsColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
-        }
-        mValues.remove(Groups.RES_PACKAGE);
-
-        final boolean isFavoritesGroup = flagIsSet(mValues, Groups.FAVORITES);
-
+        // Populate the relevant values before inserting the new entry into the database.
+        final long accountId = replaceAccountInfoByAccountId(uri, values);
+        replacePackageNameByPackageId(values);
         if (!callerIsSyncAdapter) {
-            mValues.put(Groups.DIRTY, 1);
+            values.put(Groups.DIRTY, 1);
         }
 
+        // Insert the new entry.
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        final long groupId = db.insert(Tables.GROUPS, Groups.TITLE, values);
 
-        long result = db.insert(Tables.GROUPS, Groups.TITLE, mValues);
-
+        final boolean isFavoritesGroup = flagIsSet(values, Groups.FAVORITES);
         if (!callerIsSyncAdapter && isFavoritesGroup) {
-            // If the inserted group is a favorite group, add all starred raw contacts to it.
+            // Favorite group, add all starred raw contacts to it.
             mSelectionArgs1[0] = Long.toString(accountId);
             Cursor c = db.query(Tables.RAW_CONTACTS,
                     new String[] {RawContacts._ID, RawContacts.STARRED},
@@ -3059,7 +3038,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 while (c.moveToNext()) {
                     if (c.getLong(1) != 0) {
                         final long rawContactId = c.getLong(0);
-                        insertDataGroupMembership(rawContactId, result);
+                        insertDataGroupMembership(rawContactId, groupId);
                         mTransactionContext.get().markRawContactDirtyAndChanged(
                                 rawContactId, callerIsSyncAdapter);
                     }
@@ -3069,11 +3048,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
 
-        if (mValues.containsKey(Groups.GROUP_VISIBLE)) {
+        if (values.containsKey(Groups.GROUP_VISIBLE)) {
             mVisibleTouched = true;
         }
-
-        return result;
+        return groupId;
     }
 
     private long insertSettings(ContentValues values) {
@@ -3130,16 +3108,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /**
      * Inserts a status update.
      */
-    private long insertStatusUpdate(ContentValues values) {
-        final String handle = values.getAsString(StatusUpdates.IM_HANDLE);
-        final Integer protocol = values.getAsInteger(StatusUpdates.PROTOCOL);
+    private long insertStatusUpdate(ContentValues inputValues) {
+        final String handle = inputValues.getAsString(StatusUpdates.IM_HANDLE);
+        final Integer protocol = inputValues.getAsInteger(StatusUpdates.PROTOCOL);
         String customProtocol = null;
 
-        ContactsDatabaseHelper dbHelper = mDbHelper.get();
+        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
         final SQLiteDatabase db = dbHelper.getWritableDatabase();
 
         if (protocol != null && protocol == Im.PROTOCOL_CUSTOM) {
-            customProtocol = values.getAsString(StatusUpdates.CUSTOM_PROTOCOL);
+            customProtocol = inputValues.getAsString(StatusUpdates.CUSTOM_PROTOCOL);
             if (TextUtils.isEmpty(customProtocol)) {
                 throw new IllegalArgumentException(
                         "CUSTOM_PROTOCOL is required when PROTOCOL=PROTOCOL_CUSTOM");
@@ -3148,7 +3126,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         long rawContactId = -1;
         long contactId = -1;
-        Long dataId = values.getAsLong(StatusUpdates.DATA_ID);
+        Long dataId = inputValues.getAsLong(StatusUpdates.DATA_ID);
         String accountType = null;
         String accountName = null;
         mSb.setLength(0);
@@ -3205,7 +3183,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             }
 
-            final String dataID = values.getAsString(StatusUpdates.DATA_ID);
+            final String dataID = inputValues.getAsString(StatusUpdates.DATA_ID);
             if (dataID != null) {
                 mSb.append(" AND " + DataColumns.CONCRETE_ID + "=?");
                 mSelectionArgs.add(dataID);
@@ -3233,7 +3211,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
 
-        final String presence = values.getAsString(StatusUpdates.PRESENCE);
+        final String presence = inputValues.getAsString(StatusUpdates.PRESENCE);
         if (presence != null) {
             if (customProtocol == null) {
                 // We cannot allow a null in the custom protocol field, because SQLite3 does not
@@ -3241,28 +3219,28 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 customProtocol = "";
             }
 
-            mValues.clear();
-            mValues.put(StatusUpdates.DATA_ID, dataId);
-            mValues.put(PresenceColumns.RAW_CONTACT_ID, rawContactId);
-            mValues.put(PresenceColumns.CONTACT_ID, contactId);
-            mValues.put(StatusUpdates.PROTOCOL, protocol);
-            mValues.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
-            mValues.put(StatusUpdates.IM_HANDLE, handle);
-            final String imAccount = values.getAsString(StatusUpdates.IM_ACCOUNT);
+            final ContentValues values = new ContentValues();
+            values.put(StatusUpdates.DATA_ID, dataId);
+            values.put(PresenceColumns.RAW_CONTACT_ID, rawContactId);
+            values.put(PresenceColumns.CONTACT_ID, contactId);
+            values.put(StatusUpdates.PROTOCOL, protocol);
+            values.put(StatusUpdates.CUSTOM_PROTOCOL, customProtocol);
+            values.put(StatusUpdates.IM_HANDLE, handle);
+            final String imAccount = inputValues.getAsString(StatusUpdates.IM_ACCOUNT);
             if (imAccount != null) {
-                mValues.put(StatusUpdates.IM_ACCOUNT, imAccount);
+                values.put(StatusUpdates.IM_ACCOUNT, imAccount);
             }
-            mValues.put(StatusUpdates.PRESENCE, presence);
-            mValues.put(StatusUpdates.CHAT_CAPABILITY,
-                    values.getAsString(StatusUpdates.CHAT_CAPABILITY));
+            values.put(StatusUpdates.PRESENCE, presence);
+            values.put(StatusUpdates.CHAT_CAPABILITY,
+                    inputValues.getAsString(StatusUpdates.CHAT_CAPABILITY));
 
-            // Insert the presence update
-            db.replace(Tables.PRESENCE, null, mValues);
+            // Insert the presence update.
+            db.replace(Tables.PRESENCE, null, values);
         }
 
-        if (values.containsKey(StatusUpdates.STATUS)) {
-            String status = values.getAsString(StatusUpdates.STATUS);
-            String resPackage = values.getAsString(StatusUpdates.STATUS_RES_PACKAGE);
+        if (inputValues.containsKey(StatusUpdates.STATUS)) {
+            String status = inputValues.getAsString(StatusUpdates.STATUS);
+            String resPackage = inputValues.getAsString(StatusUpdates.STATUS_RES_PACKAGE);
             Resources resources = getContext().getResources();
             if (!TextUtils.isEmpty(resPackage)) {
                 PackageManager pm = getContext().getPackageManager();
@@ -3272,14 +3250,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     Log.w(TAG, "Contact status update resource package not found: " + resPackage);
                 }
             }
-            Integer labelResourceId = values.getAsInteger(StatusUpdates.STATUS_LABEL);
+            Integer labelResourceId = inputValues.getAsInteger(StatusUpdates.STATUS_LABEL);
 
             if ((labelResourceId == null || labelResourceId == 0) && protocol != null) {
                 labelResourceId = Im.getProtocolLabelResource(protocol);
             }
             String labelResource = getResourceName(resources, "string", labelResourceId);
 
-            Integer iconResourceId = values.getAsInteger(StatusUpdates.STATUS_ICON);
+            Integer iconResourceId = inputValues.getAsInteger(StatusUpdates.STATUS_ICON);
             // TODO compute the default icon based on the protocol
 
             String iconResource = getResourceName(resources, "drawable", iconResourceId);
@@ -3287,7 +3265,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (TextUtils.isEmpty(status)) {
                 dbHelper.deleteStatusUpdate(dataId);
             } else {
-                Long timestamp = values.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
+                Long timestamp = inputValues.getAsLong(StatusUpdates.STATUS_TIMESTAMP);
                 if (timestamp != null) {
                     dbHelper.replaceStatusUpdate(
                             dataId, timestamp, status, resPackage, iconResourceId, labelResourceId);
@@ -3614,10 +3592,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (callerIsSyncAdapter) {
                 return db.delete(Tables.GROUPS, Groups._ID + "=" + groupId, null);
             }
-            mValues.clear();
-            mValues.put(Groups.DELETED, 1);
-            mValues.put(Groups.DIRTY, 1);
-            return db.update(Tables.GROUPS, mValues, Groups._ID + "=" + groupId, null);
+
+            final ContentValues values = new ContentValues();
+            values.put(Groups.DELETED, 1);
+            values.put(Groups.DIRTY, 1);
+            return db.update(Tables.GROUPS, values, Groups._ID + "=" + groupId, null);
         } finally {
             mVisibleTouched = true;
         }
@@ -3672,8 +3651,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         if (callerIsSyncAdapter || rawContactIsLocal(rawContactId)) {
-
-            // When a raw contact is deleted, a sqlite trigger deletes the parent contact.
+            // When a raw contact is deleted, a SQLite trigger deletes the parent contact.
             // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
             // because it's in a trigger.  Consider removing trigger and replacing with java code.
             // This has to happen before the raw contact is deleted since it relies on the number
@@ -3761,13 +3739,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mSyncToNetwork = true;
 
-        mValues.clear();
-        mValues.put(RawContacts.DELETED, 1);
-        mValues.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
-        mValues.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
-        mValues.putNull(RawContacts.CONTACT_ID);
-        mValues.put(RawContacts.DIRTY, 1);
-        return updateRawContact(db, rawContactId, mValues, callerIsSyncAdapter);
+        final ContentValues values = new ContentValues();
+        values.put(RawContacts.DELETED, 1);
+        values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
+        values.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
+        values.putNull(RawContacts.CONTACT_ID);
+        values.put(RawContacts.DIRTY, 1);
+        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
     }
 
     private int deleteDataUsage() {
@@ -4098,28 +4076,37 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return mSb.toString();
     }
 
-    private ContentValues getSettableColumnsForStatusUpdatesTable(ContentValues values) {
-        mValues.clear();
-        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS, values,
-            StatusUpdates.STATUS);
-        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_TIMESTAMP, values,
-            StatusUpdates.STATUS_TIMESTAMP);
-        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_RES_PACKAGE, values,
-            StatusUpdates.STATUS_RES_PACKAGE);
-        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_LABEL, values,
-            StatusUpdates.STATUS_LABEL);
-        ContactsDatabaseHelper.copyStringValue(mValues, StatusUpdates.STATUS_ICON, values,
-            StatusUpdates.STATUS_ICON);
-        return mValues;
+    private ContentValues getSettableColumnsForStatusUpdatesTable(ContentValues inputValues) {
+        final ContentValues values = new ContentValues();
+
+        ContactsDatabaseHelper.copyStringValue(
+                values, StatusUpdates.STATUS,
+                inputValues, StatusUpdates.STATUS);
+        ContactsDatabaseHelper.copyStringValue(
+                values, StatusUpdates.STATUS_TIMESTAMP,
+                inputValues, StatusUpdates.STATUS_TIMESTAMP);
+        ContactsDatabaseHelper.copyStringValue(
+                values, StatusUpdates.STATUS_RES_PACKAGE,
+                inputValues, StatusUpdates.STATUS_RES_PACKAGE);
+        ContactsDatabaseHelper.copyStringValue(
+                values, StatusUpdates.STATUS_LABEL,
+                inputValues, StatusUpdates.STATUS_LABEL);
+        ContactsDatabaseHelper.copyStringValue(
+                values, StatusUpdates.STATUS_ICON,
+                inputValues, StatusUpdates.STATUS_ICON);
+
+        return values;
     }
 
-    private ContentValues getSettableColumnsForPresenceTable(ContentValues values) {
-        mValues.clear();
+    private ContentValues getSettableColumnsForPresenceTable(ContentValues inputValues) {
+        final ContentValues values = new ContentValues();
+
         ContactsDatabaseHelper.copyStringValue(
-                mValues, StatusUpdates.PRESENCE, values, StatusUpdates.PRESENCE);
+              values, StatusUpdates.PRESENCE, inputValues, StatusUpdates.PRESENCE);
         ContactsDatabaseHelper.copyStringValue(
-                mValues, StatusUpdates.CHAT_CAPABILITY, values, StatusUpdates.CHAT_CAPABILITY);
-        return mValues;
+              values, StatusUpdates.CHAT_CAPABILITY, inputValues, StatusUpdates.CHAT_CAPABILITY);
+
+        return values;
     }
 
     private interface GroupAccountQuery {
@@ -4299,8 +4286,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (isAccountChanging) {
                 // We can't change the original ContentValues, as it'll be re-used over all
                 // updateRawContact invocations in a transaction, so we need to create a new one.
-                // (However we don't want to use mValues here, because mValues may be used in some
-                // other methods that are called by this method.)
                 final ContentValues originalValues = values;
                 values = new ContentValues();
                 values.clear();
@@ -4387,19 +4372,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return count;
     }
 
-    private int updateData(Uri uri, ContentValues values, String selection,
+    private int updateData(Uri uri, ContentValues inputValues, String selection,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
 
-        mValues.clear();
-        mValues.putAll(values);
-        mValues.remove(Data._ID);
-        mValues.remove(Data.RAW_CONTACT_ID);
-        mValues.remove(Data.MIMETYPE);
+        final ContentValues values = new ContentValues(inputValues);
+        values.remove(Data._ID);
+        values.remove(Data.RAW_CONTACT_ID);
+        values.remove(Data.MIMETYPE);
 
-        String packageName = values.getAsString(Data.RES_PACKAGE);
+        String packageName = inputValues.getAsString(Data.RES_PACKAGE);
         if (packageName != null) {
-            mValues.remove(Data.RES_PACKAGE);
-            mValues.put(DataColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
+            values.remove(Data.RES_PACKAGE);
+            values.put(DataColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
         }
 
         if (!callerIsSyncAdapter) {
@@ -4415,7 +4399,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 selection, selectionArgs, null, -1 /* directory ID */, null);
         try {
             while(c.moveToNext()) {
-                count += updateData(mValues, c, callerIsSyncAdapter);
+                count += updateData(values, c, callerIsSyncAdapter);
             }
         } finally {
             c.close();
@@ -4464,35 +4448,40 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateContactOptions(
-            SQLiteDatabase db, long contactId, ContentValues values, boolean callerIsSyncAdapter) {
+            SQLiteDatabase db, long contactId, ContentValues inputValues, boolean callerIsSyncAdapter) {
 
-        mValues.clear();
-        ContactsDatabaseHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
-                values, Contacts.CUSTOM_RINGTONE);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
-                values, Contacts.SEND_TO_VOICEMAIL);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
-                values, Contacts.LAST_TIME_CONTACTED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
-                values, Contacts.TIMES_CONTACTED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
-                values, Contacts.STARRED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.PINNED,
-                values, Contacts.PINNED);
+        final ContentValues values = new ContentValues();
+        ContactsDatabaseHelper.copyStringValue(
+                values, RawContacts.CUSTOM_RINGTONE,
+                inputValues, Contacts.CUSTOM_RINGTONE);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.SEND_TO_VOICEMAIL,
+                inputValues, Contacts.SEND_TO_VOICEMAIL);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.LAST_TIME_CONTACTED,
+                inputValues, Contacts.LAST_TIME_CONTACTED);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.TIMES_CONTACTED,
+                inputValues, Contacts.TIMES_CONTACTED);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.STARRED,
+                inputValues, Contacts.STARRED);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.PINNED,
+                inputValues, Contacts.PINNED);
 
-        if (mValues.size() == 0) {
-            // Nothing to update, bail out.
-            return 0;
+        if (values.size() == 0) {
+            return 0;  // Nothing to update, bail out.
         }
 
-        boolean hasStarredValue = flagExists(mValues, RawContacts.STARRED);
+        boolean hasStarredValue = flagExists(values, RawContacts.STARRED);
         if (hasStarredValue) {
-            // Mark dirty when changing starred to trigger sync
-            mValues.put(RawContacts.DIRTY, 1);
+            // Mark dirty when changing starred to trigger sync.
+            values.put(RawContacts.DIRTY, 1);
         }
 
         mSelectionArgs1[0] = String.valueOf(contactId);
-        db.update(Tables.RAW_CONTACTS, mValues, RawContacts.CONTACT_ID + "=?"
+        db.update(Tables.RAW_CONTACTS, values, RawContacts.CONTACT_ID + "=?"
                 + " AND " + RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0", mSelectionArgs1);
 
         if (hasStarredValue && !callerIsSyncAdapter) {
@@ -4503,36 +4492,43 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 while (cursor.moveToNext()) {
                     long rawContactId = cursor.getLong(0);
                     updateFavoritesMembership(rawContactId,
-                            flagIsSet(mValues, RawContacts.STARRED));
+                            flagIsSet(values, RawContacts.STARRED));
                 }
             } finally {
                 cursor.close();
             }
         }
 
-        // Copy changeable values to prevent automatically managed fields from
-        // being explicitly updated by clients.
-        mValues.clear();
-        ContactsDatabaseHelper.copyStringValue(mValues, RawContacts.CUSTOM_RINGTONE,
-                values, Contacts.CUSTOM_RINGTONE);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
-                values, Contacts.SEND_TO_VOICEMAIL);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
-                values, Contacts.LAST_TIME_CONTACTED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
-                values, Contacts.TIMES_CONTACTED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
-                values, Contacts.STARRED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.PINNED,
-                values, Contacts.PINNED);
-        mValues.put(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
+        // Copy changeable values to prevent automatically managed fields from being explicitly
+        // updated by clients.
+        values.clear();
+        ContactsDatabaseHelper.copyStringValue(
+                values, RawContacts.CUSTOM_RINGTONE,
+                inputValues, Contacts.CUSTOM_RINGTONE);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.SEND_TO_VOICEMAIL,
+                inputValues, Contacts.SEND_TO_VOICEMAIL);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.LAST_TIME_CONTACTED,
+                inputValues, Contacts.LAST_TIME_CONTACTED);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.TIMES_CONTACTED,
+                inputValues, Contacts.TIMES_CONTACTED);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.STARRED,
+                inputValues, Contacts.STARRED);
+        ContactsDatabaseHelper.copyLongValue(
+                values, RawContacts.PINNED,
+                inputValues, Contacts.PINNED);
+
+        values.put(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
                 Clock.getInstance().currentTimeMillis());
 
-        int rslt = db.update(Tables.CONTACTS, mValues, Contacts._ID + "=?",
+        int rslt = db.update(Tables.CONTACTS, values, Contacts._ID + "=?",
                 mSelectionArgs1);
 
-        if (values.containsKey(Contacts.LAST_TIME_CONTACTED) &&
-                !values.containsKey(Contacts.TIMES_CONTACTED)) {
+        if (inputValues.containsKey(Contacts.LAST_TIME_CONTACTED) &&
+                !inputValues.containsKey(Contacts.TIMES_CONTACTED)) {
             db.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
             db.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
         }
@@ -4674,7 +4670,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // mContactsHelper or mProfileHelper directly.
         //
         // The problem may be a bit more subtle if you also access something that stores the current
-        // db instance in it's constructor.  updateSearchIndexInTransaction relies on the
+        // db instance in its constructor.  updateSearchIndexInTransaction relies on the
         // SearchIndexManager which upon construction, stores the current db. In this case,
         // SearchIndexManager always contains the contact DB. This is why the
         // updateSearchIndexInTransaction is protected with !isInProfileMode now.
@@ -4769,8 +4765,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 MoreCloseables.closeQuietly(cursor);
                             }
 
-                            // If the contact was not deleted, it's last updated timestamp needs to
-                            // be refreshed since one of it's raw contacts got removed.
+                            // If the contact was not deleted, its last updated timestamp needs to
+                            // be refreshed since one of its raw contacts got removed.
                             // Find all contacts that will not be deleted (i.e. contacts with
                             // raw contacts in other accounts)
                             cursor = db.rawQuery(
@@ -8755,6 +8751,42 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private boolean snippetNeeded(String [] projection) {
         return ContactsDatabaseHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
+    }
+
+    /**
+     * Replaces the package name by the corresponding package ID.
+     *
+     * @param values The {@link ContentValues} object to operate on.
+     */
+    private void replacePackageNameByPackageId(ContentValues values) {
+        if (values != null) {
+            final String packageName = values.getAsString(Data.RES_PACKAGE);
+            if (packageName != null) {
+                values.put(DataColumns.PACKAGE_ID, mDbHelper.get().getPackageId(packageName));
+            }
+            values.remove(Data.RES_PACKAGE);
+        }
+    }
+
+    /**
+     * Replaces the account info fields by the corresponding account ID.
+     *
+     * @param uri The relevant URI.
+     * @param values The {@link ContentValues} object to operate on.
+     * @return The corresponding account ID.
+     */
+    private long replaceAccountInfoByAccountId(Uri uri, ContentValues values) {
+        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
+        final long id = mDbHelper.get().getOrCreateAccountIdInTransaction(account);
+        values.put(RawContactsColumns.ACCOUNT_ID, id);
+
+        // Only remove the account information once the account ID is extracted (since these
+        // fields are actually used by resolveAccountWithDataSet to extract the relevant ID).
+        values.remove(RawContacts.ACCOUNT_NAME);
+        values.remove(RawContacts.ACCOUNT_TYPE);
+        values.remove(RawContacts.DATA_SET);
+
+        return id;
     }
 
     /**
