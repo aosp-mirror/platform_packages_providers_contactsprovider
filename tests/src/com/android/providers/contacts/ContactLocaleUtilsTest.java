@@ -55,10 +55,6 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
-    private static final String[] LABELS_DE = {
-        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-        "N", "O", "P", "Q", "R", "S", "Sch", "St", "T", "U", "V", "W", "X",
-        "Y", "Z", "#", ""};
     private static final String[] LABELS_JA_JP = {
         "", "\u3042", "\u304B", "\u3055", "\u305F", "\u306A", "\u306F",
         "\u307E", "\u3084", "\u3089", "\u308F", "\u4ED6",
@@ -305,9 +301,11 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
 
         ContactLocaleUtils.setLocale(Locale.GERMANY);
         assertEquals("S", getLabel("Sacher"));
-        assertEquals("Sch", getLabel("Schiller"));
-        assertEquals("St", getLabel("Steiff"));
-        verifyLabels(getLabels(), LABELS_DE);
+
+        // ICU 51 has labels Sch and St. These were removed in ICU 52
+        assertEquals("S", getLabel("Schiller"));
+        assertEquals("S", getLabel("Steiff"));
+        verifyLabels(getLabels(), LABELS_EN_US);
     }
 
     private void verifyKeys(final Iterator<String> resultKeys, final String[] expectedKeys)
