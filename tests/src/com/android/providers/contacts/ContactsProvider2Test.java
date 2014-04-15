@@ -6783,32 +6783,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
-    public void testContactCountsWithGermanNames() {
-        if (!hasGermanCollator()) {
-            return;
-        }
-        ContactLocaleUtils.setLocale(Locale.GERMANY);
-
-        Uri uri = Contacts.CONTENT_URI.buildUpon()
-                .appendQueryParameter(ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
-
-        RawContactUtil.createRawContactWithName(mResolver, "Josef", "Sacher");
-        RawContactUtil.createRawContactWithName(mResolver, "Franz", "Schiller");
-        RawContactUtil.createRawContactWithName(mResolver, "Eckart", "Steiff");
-        RawContactUtil.createRawContactWithName(mResolver, "Klaus", "Seiler");
-        RawContactUtil.createRawContactWithName(mResolver, "Lars", "Sultan");
-        RawContactUtil.createRawContactWithName(mResolver, "Heidi", "Rilke");
-        RawContactUtil.createRawContactWithName(mResolver, "Suse", "Thomas");
-
-        Cursor cursor = mResolver.query(uri,
-                new String[]{Contacts.DISPLAY_NAME},
-                null, null, Contacts.SORT_KEY_ALTERNATIVE);
-
-        assertFirstLetterValues(cursor, "R", "S", "Sch", "St", "T");
-        assertFirstLetterCounts(cursor,   1,   3,     1,    1,   1);
-        cursor.close();
-    }
-
     private void assertFirstLetterValues(Cursor cursor, String... expected) {
         String[] actual = cursor.getExtras()
                 .getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES);
