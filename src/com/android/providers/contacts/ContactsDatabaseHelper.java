@@ -2723,6 +2723,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 803;
         }
 
+        if (oldVersion < 804) {
+            // Reserved.
+            oldVersion = 804;
+        }
+
         if (oldVersion < 900) {
             upgradeViewsAndTriggers = true;
             oldVersion = 900;
