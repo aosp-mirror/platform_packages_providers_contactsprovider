@@ -3283,7 +3283,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void upgradeLocaleData(SQLiteDatabase db, boolean rebuildSqliteStats) {
-        final String dbLocale = getProperty(DbProperties.LOCALE, "");
         final LocaleSet locales = LocaleSet.getDefault();
         Log.i(TAG, "Upgrading locale data for " + locales
                 + " (ICU v" + ICU.getIcuVersion() + ")");
