@@ -25,6 +25,8 @@ import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.providers.contacts.tests.R;
 
+import java.io.IOException;
+
 
 /**
  * Tests for {@link PhotoProcessor}.
@@ -34,7 +36,7 @@ import com.android.providers.contacts.tests.R;
 @SmallTest
 public class PhotoProcessorTest extends AndroidTestCase {
 
-    public void testTransparency() {
+    public void testTransparency() throws IOException {
         final Drawable source = getTestContext().getResources().getDrawable(
                 R.drawable.transparent_10x10);
         final Bitmap sourceBitmap = ((BitmapDrawable) source).getBitmap();
