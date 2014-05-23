@@ -102,8 +102,12 @@ public class NameNormalizer {
 
     /**
      * Returns a string containing just the letters and digits from the original string.
+     * Returns empty string if the original string is null.
      */
     private static String lettersAndDigitsOnly(String name) {
+        if (name == null) {
+            return "";
+        }
         char[] letters = name.toCharArray();
         int length = 0;
         for (int i = 0; i < letters.length; i++) {
