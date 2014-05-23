@@ -195,10 +195,12 @@ import java.io.IOException;
      * @param maxDim Maximum width and height (in pixels) for the image.
      * @param forceCropToSquare See {@link #PhotoProcessor(Bitmap, int, int, boolean)}
      * @return A bitmap that fits the maximum dimensions.
+     * @throws IOException If bitmap decoding or scaling fails.
      */
     @SuppressWarnings({"SuspiciousNameCombination"})
     @VisibleForTesting
-    static Bitmap getNormalizedBitmap(Bitmap original, int maxDim, boolean forceCropToSquare) {
+    static Bitmap getNormalizedBitmap(Bitmap original, int maxDim, boolean forceCropToSquare)
+            throws IOException {
         final boolean originalHasAlpha = original.hasAlpha();
 
         // All cropXxx's are in the original coordinate.
@@ -222,6 +224,9 @@ import java.io.IOException;
         if (scaleFactor < 1.0f || cropLeft != 0 || cropTop != 0 || originalHasAlpha) {
             final int newWidth = (int) (cropWidth * scaleFactor);
             final int newHeight = (int) (cropHeight * scaleFactor);
+            if (newWidth <= 0 || newHeight <= 0) {
+                throw new IOException("Invalid bitmap dimensions");
+            }
             final Bitmap scaledBitmap = Bitmap.createBitmap(newWidth, newHeight,
                     Bitmap.Config.ARGB_8888);
             final Canvas c = new Canvas(scaledBitmap);
