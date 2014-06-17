@@ -134,7 +134,7 @@ public class CallLogProvider extends ContentProvider {
         qb.setStrict(true);
 
         final SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
-        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
+        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, true /*isQuery*/);
 
         final int match = sURIMatcher.match(uri);
         switch (match) {
@@ -257,7 +257,7 @@ public class CallLogProvider extends ContentProvider {
         }
 
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
-        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
+        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
@@ -280,7 +280,7 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
-        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder);
+        checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
@@ -327,9 +327,11 @@ public class CallLogProvider extends ContentProvider {
      * modify the selection to restrict to non-voicemail entries only.
      */
     private void checkVoicemailPermissionAndAddRestriction(Uri uri,
-            SelectionBuilder selectionBuilder) {
+            SelectionBuilder selectionBuilder, boolean isQuery) {
         if (isAllowVoicemailRequest(uri)) {
-            mVoicemailPermissions.checkCallerHasFullAccess();
+            if (!(isQuery && mVoicemailPermissions.callerHasFullReadAccess())) {
+                mVoicemailPermissions.checkCallerHasFullAccess();
+            }
         } else {
             selectionBuilder.addClause(EXCLUDE_VOICEMAIL_SELECTION);
         }

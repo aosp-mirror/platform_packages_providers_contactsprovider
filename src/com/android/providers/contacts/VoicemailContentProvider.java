@@ -108,7 +108,7 @@ public class VoicemailContentProvider extends ContentProvider
             String sortOrder) {
         UriData uriData = checkPermissionsAndCreateUriDataForReadOperation(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
-        selectionBuilder.addClause(getPackageRestrictionClause());
+        selectionBuilder.addClause(getPackageRestrictionClause(true/*isQuery*/));
         return getTableDelegate(uriData).query(uriData, projection, selectionBuilder.build(),
                 selectionArgs, sortOrder);
     }
@@ -117,7 +117,7 @@ public class VoicemailContentProvider extends ContentProvider
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         UriData uriData = checkPermissionsAndCreateUriData(uri, values);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
-        selectionBuilder.addClause(getPackageRestrictionClause());
+        selectionBuilder.addClause(getPackageRestrictionClause(false/*isQuery*/));
         return getTableDelegate(uriData).update(uriData, values, selectionBuilder.build(),
                 selectionArgs);
     }
@@ -126,7 +126,7 @@ public class VoicemailContentProvider extends ContentProvider
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         UriData uriData = checkPermissionsAndCreateUriData(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
-        selectionBuilder.addClause(getPackageRestrictionClause());
+        selectionBuilder.addClause(getPackageRestrictionClause(false/*isQuery*/));
         return getTableDelegate(uriData).delete(uriData, selectionBuilder.build(), selectionArgs);
     }
 
@@ -288,6 +288,11 @@ public class VoicemailContentProvider extends ContentProvider
                 == PackageManager.PERMISSION_GRANTED) {
             return UriData.createUriData(uri);
         }
+
+        if (mVoicemailPermissions.callerHasFullReadAccess()) {
+            return UriData.createUriData(uri);
+        }
+
         return checkPermissionsAndCreateUriData(uri);
     }
 
@@ -330,8 +335,8 @@ public class VoicemailContentProvider extends ContentProvider
     }
 
     /**
-     * Checks that either the caller has READ_WRITE_ALL_VOICEMAIL permission, or has the
-     * ADD_VOICEMAIL permission and is using a URI that matches
+     * Checks that either the caller has READ_WRITE_ALL_VOICEMAIL permission,
+     * or has the ADD_VOICEMAIL permission and is using a URI that matches
      * /voicemail/?source_package=[source-package] where [source-package] is the same as the calling
      * package.
      *
@@ -391,7 +396,10 @@ public class VoicemailContentProvider extends ContentProvider
      * Creates a clause to restrict the selection to the calling provider or null if the caller has
      * access to all data.
      */
-    private String getPackageRestrictionClause() {
+    private String getPackageRestrictionClause(boolean isQuery) {
+        if (isQuery && mVoicemailPermissions.callerHasFullReadAccess()) {
+            return null;
+        }
         if (mVoicemailPermissions.callerHasFullAccess()) {
             return null;
         }

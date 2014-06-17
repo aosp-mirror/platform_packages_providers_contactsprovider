@@ -36,9 +36,15 @@ public class VoicemailPermissions {
         return callerHasPermission(android.Manifest.permission.ADD_VOICEMAIL);
     }
 
+
+    /** Determine if the calling process has full read access to all voicemails. */
+    public boolean callerHasFullReadAccess() {
+        return callerHasPermission(android.Manifest.permission.READ_ALL_VOICEMAIL);
+    }
+
     /** Determines if the calling process has access to all voicemails. */
     public boolean callerHasFullAccess() {
-        return callerHasPermission(android.Manifest.permission.ADD_VOICEMAIL) &&
+        return callerHasOwnVoicemailAccess() &&
                 callerHasPermission(Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
     }
 
@@ -55,6 +61,18 @@ public class VoicemailPermissions {
     }
 
     /**
+     * Checks that the caller has permissions to read ALL voicemails.
+     *
+     * @throws SecurityException if the caller does not have the voicemail source permission.
+     */
+    public void checkCallerHasFullReadAccess() {
+        if (!callerHasFullReadAccess()) {
+            throw new SecurityException(String.format("The caller must have %s permission: ",
+                    android.Manifest.permission.READ_ALL_VOICEMAIL));
+        }
+    }
+
+     /**
      * Checks that the caller has permissions to access ALL voicemails.
      *
      * @throws SecurityException if the caller does not have the voicemail source permission.
@@ -73,10 +91,14 @@ public class VoicemailPermissions {
                 android.Manifest.permission.ADD_VOICEMAIL);
     }
 
+    /** Determines if the given package has read full access. */
+    public boolean packageHasFullReadAccess(String packageName) {
+        return packageHasPermission(packageName, android.Manifest.permission.READ_ALL_VOICEMAIL);
+    }
+
     /** Determines if the given package has full access. */
     public boolean packageHasFullAccess(String packageName) {
-        return packageHasPermission(
-                packageName, android.Manifest.permission.ADD_VOICEMAIL) &&
+        return packageHasOwnVoicemailAccess(packageName) &&
                 packageHasPermission(packageName, Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
     }
 
