@@ -7911,7 +7911,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /*******************************************************
      * Pinning support tests
      */
-    public void testPinnedPositionsUpdateForceStar() {
+    public void testPinnedPositionsUpdate() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i3 = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -7933,18 +7933,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 cv(RawContacts._ID, i4.mRawContactId, RawContacts.PINNED, unpinned)
         );
 
-        final ContentValues values = cv(i1.mContactId, 1, i3.mContactId, 3, i4.mContactId, 2);
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI.buildUpon()
-                .appendQueryParameter(PinnedPositions.STAR_WHEN_PINNING, "true").build(),
-                values, null, null);
+        final ArrayList<ContentProviderOperation> operations =
+                new ArrayList<ContentProviderOperation>();
 
-        // Pinning a contact should automatically star it if we specified the boolean parameter
+        operations.add(newPinningOperation(i1.mContactId, 1, true));
+        operations.add(newPinningOperation(i3.mContactId, 3, true));
+        operations.add(newPinningOperation(i4.mContactId, 2, false));
+
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
 
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
                 cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 1),
                 cv(Contacts._ID, i2.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 0),
                 cv(Contacts._ID, i3.mContactId, Contacts.PINNED, 3, Contacts.STARRED, 1),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 1)
+                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 0)
         );
 
         // Make sure the values are propagated to raw contacts
@@ -7956,17 +7958,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 cv(RawContacts._ID, i4.mRawContactId, RawContacts.PINNED, 2)
         );
 
-        final ContentValues unpin = cv(i3.mContactId, unpinned);
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI.buildUpon()
-                .appendQueryParameter(PinnedPositions.STAR_WHEN_PINNING, "true").build(),
-                unpin, null, null);
+        operations.clear();
 
-        // Unpinning a contact should automatically unstar it
+        // Now unpin the contact
+        operations.add(newPinningOperation(i3.mContactId, unpinned, false));
+
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
+
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
                 cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 1),
                 cv(Contacts._ID, i2.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 0),
                 cv(Contacts._ID, i3.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 0),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 1)
+                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 0)
         );
 
         assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
@@ -7975,132 +7978,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         RawContacts.STARRED, 0),
                 cv(Contacts._ID, i3.mRawContactId, RawContacts.PINNED, unpinned,
                         RawContacts.STARRED, 0),
-                cv(Contacts._ID, i4.mRawContactId, RawContacts.PINNED, 2, RawContacts.STARRED, 1)
-        );
-    }
-
-    public void testPinnedPositionsUpdateDontForceStar() {
-        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i3 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i4 = DatabaseAsserts.assertAndCreateContact(mResolver);
-
-        final int unpinned = PinnedPositions.UNPINNED;
-
-        final ContentValues values = cv(i1.mContactId, 1, i3.mContactId, 3, i4.mContactId, 2);
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI, values, null, null);
-
-        // Pinning a contact should not automatically star it
-
-        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 0),
-                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 0),
-                cv(Contacts._ID, i3.mContactId, Contacts.PINNED, 3, Contacts.STARRED, 0),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 0)
-        );
-
-        // Make sure the values are propagated to raw contacts
-
-        assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 1,
-                        RawContacts.STARRED, 0),
-                cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, unpinned,
-                        RawContacts.STARRED, 0),
-                cv(RawContacts._ID, i3.mRawContactId, RawContacts.PINNED, 3,
-                        RawContacts.STARRED, 0),
-                cv(RawContacts._ID, i4.mRawContactId, RawContacts.PINNED, 2,
-                        RawContacts.STARRED, 0)
-        );
-
-
-        // Manually star contact 3
-        assertEquals(1, updateItem(Contacts.CONTENT_URI, i3.mContactId, Contacts.STARRED, "1"));
-
-        // Check the third contact and raw contact is starred
-        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 0),
-                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 0),
-                cv(Contacts._ID, i3.mContactId, Contacts.PINNED, 3, Contacts.STARRED, 1),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 0)
-        );
-
-        assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 1,
-                        RawContacts.STARRED, 0),
-                cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, unpinned,
-                        RawContacts.STARRED, 0),
-                cv(RawContacts._ID, i3.mRawContactId, RawContacts.PINNED, 3,
-                        RawContacts.STARRED, 1),
-                cv(RawContacts._ID, i4.mRawContactId, RawContacts.PINNED, 2,
-                        RawContacts.STARRED, 0)
-        );
-
-        final ContentValues unpin = cv(i3.mContactId, unpinned);
-
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI, unpin, null, null);
-
-        // Unpinning a contact should not automatically unstar it
-        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 0),
-                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 0),
-                cv(Contacts._ID, i3.mContactId, Contacts.PINNED, unpinned, Contacts.STARRED, 1),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, 2, Contacts.STARRED, 0)
-        );
-
-        assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mRawContactId, RawContacts.PINNED, 1, RawContacts.STARRED, 0),
-                cv(Contacts._ID, i2.mRawContactId, RawContacts.PINNED, unpinned,
-                        RawContacts.STARRED, 0),
-                cv(Contacts._ID, i3.mRawContactId, RawContacts.PINNED, unpinned,
-                        RawContacts.STARRED, 1),
                 cv(Contacts._ID, i4.mRawContactId, RawContacts.PINNED, 2, RawContacts.STARRED, 0)
-        );
-    }
-
-    public void testPinnedPositionsUpdateIllegalValues() {
-        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i3 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i4 = DatabaseAsserts.assertAndCreateContact(mResolver);
-
-        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED),
-                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED),
-                cv(Contacts._ID, i3.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED)
-        );
-
-        // Unsupported string
-        final ContentValues values = cv(i1.mContactId, 1, i3.mContactId, 3, i4.mContactId,
-                "undemotemeplease!");
-        try {
-            mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI, values, null, null);
-            fail("Pinned position must be an integer.");
-        } catch (IllegalArgumentException expected) {
-        }
-
-        // Float
-        final ContentValues values2 = cv(i1.mContactId, "1.1");
-        try {
-            mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI, values2, null, null);
-            fail("Pinned position must be an integer");
-        } catch (IllegalArgumentException expected) {
-        }
-
-        // nothing should have been changed
-
-        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED),
-                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED),
-                cv(Contacts._ID, i3.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED),
-                cv(Contacts._ID, i4.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED)
-        );
-
-        assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED),
-                cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED),
-                cv(RawContacts._ID, i3.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED),
-                cv(RawContacts._ID, i4.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED)
         );
     }
 
@@ -8112,11 +7990,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         final DatabaseAsserts.ContactIdPair i5 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i6 = DatabaseAsserts.assertAndCreateContact(mResolver);
 
-        final ContentValues values = cv(i1.mContactId, 1, i2.mContactId, 2, i3.mContactId, 3,
-                i5.mContactId, 5, i6.mContactId, 6);
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI.buildUpon()
-                .appendQueryParameter(PinnedPositions.STAR_WHEN_PINNING, "true").build(),
-                values, null, null);
+        final ArrayList<ContentProviderOperation> operations =
+                new ArrayList<ContentProviderOperation>();
+
+        operations.add(newPinningOperation(i1.mContactId, 1, true));
+        operations.add(newPinningOperation(i2.mContactId, 2, true));
+        operations.add(newPinningOperation(i3.mContactId, 3, true));
+        operations.add(newPinningOperation(i5.mContactId, 5, true));
+        operations.add(newPinningOperation(i6.mContactId, 6, true));
+
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
 
         // aggregate raw contact 1 and 4 together.
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, i1.mRawContactId,
@@ -8189,12 +8072,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         RawContacts.STARRED, 1)
         );
 
-
-
         // now demote contact 5
-        final ContentValues cv = cv(i5.mContactId, PinnedPositions.DEMOTED);
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI.buildUpon().build(),
-                cv, null, null);
+        operations.clear();
+        operations.add(newPinningOperation(i5.mContactId, PinnedPositions.DEMOTED, false));
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
 
         // Get new contact Ids for contacts composing of raw contacts 1 and 4 because they have
         // changed.
@@ -8222,16 +8103,43 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
     }
 
+    public void testPinnedPositionsDemoteIllegalArguments() {
+        try {
+            mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,
+                    null, null);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,
+                    "1.1", null);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,
+                    "NotANumber", null);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        // Valid contact ID that does not correspond to an actual contact is silently ignored
+        mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD, "999",
+                null);
+    }
+
     public void testPinnedPositionsAfterDemoteAndUndemote() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
 
-        final ContentValues values = cv(i1.mContactId, 0, i2.mContactId, PinnedPositions.DEMOTED);
-
         // Pin contact 1 and demote contact 2
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI.buildUpon().
-                appendQueryParameter(PinnedPositions.STAR_WHEN_PINNING, "true").
-                build(), values, null, null);
+        final ArrayList<ContentProviderOperation> operations =
+                new ArrayList<ContentProviderOperation>();
+        operations.add(newPinningOperation(i1.mContactId, 0, true));
+        operations.add(newPinningOperation(i2.mContactId, PinnedPositions.DEMOTED, false));
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
 
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
                 cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 0, Contacts.STARRED, 1),
@@ -8247,10 +8155,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
 
         // Now undemote both contacts
-        final ContentValues values2 = cv(i1.mContactId, PinnedPositions.UNDEMOTE, i2.mContactId,
-                PinnedPositions.UNDEMOTE);
-        mResolver.update(ContactsContract.PinnedPositions.UPDATE_URI.buildUpon().
-                build(), values2, null, null);
+        mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,
+                String.valueOf(i1.mContactId), null);
+        mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,
+                String.valueOf(i2.mContactId), null);
+
 
         // Contact 1 remains pinned at 0, while contact 2 becomes unpinned
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
@@ -8265,6 +8174,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED,
                         RawContacts.STARRED, 0)
         );
+    }
+
+    private ContentProviderOperation newPinningOperation(long id, int pinned, boolean star) {
+        final Uri uri = Uri.withAppendedPath(Contacts.CONTENT_URI, String.valueOf(id));
+        final ContentValues values = new ContentValues();
+        values.put(Contacts.PINNED, pinned);
+        values.put(Contacts.STARRED, star ? 1 : 0);
+        return ContentProviderOperation.newUpdate(uri).withValues(values).build();
     }
 
     /**

@@ -2170,7 +2170,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public Bundle call(String method, String arg, Bundle extras) {
         waitForAccess(mReadAccessLatch);
         switchToContactMode();
-        if (method.equals(Authorization.AUTHORIZATION_METHOD)) {
+        if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
             Uri uri = (Uri) extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
 
             // Check permissions on the caller.  The URI can only be pre-authorized if the caller
@@ -2185,6 +2185,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Bundle response = new Bundle();
             response.putParcelable(Authorization.KEY_AUTHORIZED_URI, authUri);
             return response;
+        } else if (PinnedPositions.UNDEMOTE_METHOD.equals(method)) {
+            final long id;
+            try {
+                id = Long.valueOf(arg);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Contact ID must be a valid long number.");
+            }
+            undemoteContact(mDbHelper.get().getWritableDatabase(), id);
+            return null;
         }
         return null;
     }
