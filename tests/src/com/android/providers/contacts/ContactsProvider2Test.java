@@ -582,6 +582,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.CONTACT_STATUS_ICON,
                 Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
                 GroupMembership.GROUP_SOURCE_ID,
+                DataUsageStatColumns.TIMES_USED,
+                DataUsageStatColumns.LAST_TIME_USED,
         });
     }
 
