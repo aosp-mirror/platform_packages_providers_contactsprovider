@@ -7322,7 +7322,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sb.append(
                     " LEFT OUTER JOIN " +
                         "(SELECT " +
-                            DataUsageStatColumns.CONCRETE_DATA_ID + " as STAT_ID, " +
+                            DataUsageStatColumns.CONCRETE_DATA_ID + " as STAT_DATA_ID, " +
                             "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED +
                                 ") as " + DataUsageStatColumns.TIMES_USED + ", " +
                             "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED +
@@ -7330,7 +7330,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         " FROM " + Tables.DATA_USAGE_STAT + " GROUP BY " +
                             DataUsageStatColumns.CONCRETE_DATA_ID + ") as " + Tables.DATA_USAGE_STAT
                     );
-            sb.append(" ON (STAT_ID=");
+            sb.append(" ON (STAT_DATA_ID=");
             sb.append(dataIdColumn);
             sb.append(")");
         }
