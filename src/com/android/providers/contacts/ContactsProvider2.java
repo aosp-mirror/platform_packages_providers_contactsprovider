@@ -849,6 +849,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .addAll(sRawContactSyncColumns)
             .addAll(sDataColumns)
             .addAll(sDataPresenceColumns)
+            .addAll(sDataUsageColumns)
             .build();
 
     /** Contains columns in PhoneLookup which are not contained in the data view. */
@@ -7270,6 +7271,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         appendContactStatusUpdateJoin(sb, projection, ContactsColumns.LAST_STATUS_UPDATE_ID);
         appendDataPresenceJoin(sb, projection, Contacts.Entity.DATA_ID);
         appendDataStatusUpdateJoin(sb, projection, Contacts.Entity.DATA_ID);
+        // Only support USAGE_TYPE_ALL for now. Can add finer grain if needed in the future.
+        appendDataUsageStatJoin(sb, USAGE_TYPE_ALL, Contacts.Entity.DATA_ID);
 
         qb.setTables(sb.toString());
         qb.setProjectionMap(sEntityProjectionMap);
@@ -7319,15 +7322,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sb.append(
                     " LEFT OUTER JOIN " +
                         "(SELECT " +
-                            DataUsageStatColumns.CONCRETE_DATA_ID + ", " +
+                            DataUsageStatColumns.CONCRETE_DATA_ID + " as STAT_ID, " +
                             "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED +
                                 ") as " + DataUsageStatColumns.TIMES_USED + ", " +
                             "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED +
                                 ") as " + DataUsageStatColumns.LAST_TIME_USED +
                         " FROM " + Tables.DATA_USAGE_STAT + " GROUP BY " +
-                            DataUsageStatColumns.DATA_ID + ") as " + Tables.DATA_USAGE_STAT
+                            DataUsageStatColumns.CONCRETE_DATA_ID + ") as " + Tables.DATA_USAGE_STAT
                     );
-            sb.append(" ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=");
+            sb.append(" ON (STAT_ID=");
             sb.append(dataIdColumn);
             sb.append(")");
         }
