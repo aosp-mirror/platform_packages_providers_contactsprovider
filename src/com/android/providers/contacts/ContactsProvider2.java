@@ -393,8 +393,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int DELETED_CONTACTS = 23000;
     private static final int DELETED_CONTACTS_ID = 23001;
 
-    private static final int PINNED_POSITION_UPDATE = 24001;
-
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
     // map) is in the profile ID-space (see {@link ProfileDatabaseHelper#PROFILE_ID_SPACE}).
@@ -1281,9 +1279,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts", DELETED_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts/#", DELETED_CONTACTS_ID);
-
-        matcher.addURI(ContactsContract.AUTHORITY, "pinned_position_update",
-                PINNED_POSITION_UPDATE);
     }
 
     private static class DirectoryInfo {
@@ -4031,13 +4026,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DATA_USAGE_FEEDBACK_ID: {
                 count = handleDataUsageFeedback(uri) ? 1 : 0;
-                break;
-            }
-
-            case PINNED_POSITION_UPDATE: {
-                final boolean forceStarWhenPinning =
-                        uri.getBooleanQueryParameter(PinnedPositions.STAR_WHEN_PINNING, false);
-                count = handlePinningUpdate(values, forceStarWhenPinning);
                 break;
             }
 
@@ -8544,73 +8532,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // feature" instead, in which case we'd do something like:
         // return
         //   getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_VOICE_CALLS);
-    }
-
-    /**
-     * Handles pinning update information from clients.
-     *
-     * @param values ContentValues containing key-value pairs where keys correspond to
-     * the contactId for which to update the pinnedPosition, and the value is the actual
-     * pinned position (a positive integer).
-     * @return The number of contacts that had their pinned positions updated.
-     */
-    private int handlePinningUpdate(ContentValues values, boolean forceStarWhenPinning) {
-        if (values.size() == 0) {
-            return 0;
-        }
-
-        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        final String[] args = new String[forceStarWhenPinning ? 3 : 2];
-
-        final StringBuilder sb = new StringBuilder();
-        sb.append("UPDATE " + Tables.CONTACTS + " SET " + Contacts.PINNED + "=?2");
-        if (forceStarWhenPinning) {
-            sb.append("," + Contacts.STARRED + "=?3");
-        }
-        sb.append(" WHERE " + Contacts._ID + " =?1;");
-        final String contactSQL = sb.toString();
-
-        sb.setLength(0);
-        sb.append("UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.PINNED + "=?2");
-        if (forceStarWhenPinning) {
-            sb.append("," + RawContacts.STARRED + "=?3");
-        }
-        sb.append(" WHERE " + RawContacts.CONTACT_ID + " =?1;");
-        final String rawContactSQL = sb.toString();
-
-        int count = 0;
-        for (String id : values.keySet()) {
-            count++;
-            final long contactId;
-            try {
-                contactId = Integer.valueOf(id);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                        "contactId must be a positive integer. Found: " + id);
-            }
-
-            // If contact is to be undemoted, go through a separate un-demotion process
-            final String undemote = values.getAsString(id);
-            if (PinnedPositions.UNDEMOTE.equals(undemote)) {
-                undemoteContact(db, contactId);
-                continue;
-            }
-
-            final Integer pinnedPosition = values.getAsInteger(id);
-            if (pinnedPosition == null) {
-                throw new IllegalArgumentException("Pinned position must be an integer.");
-            }
-            args[0] = String.valueOf(contactId);
-            args[1] = String.valueOf(pinnedPosition);
-            if (forceStarWhenPinning) {
-                args[2] = (pinnedPosition == PinnedPositions.UNPINNED ||
-                        pinnedPosition == PinnedPositions.DEMOTED ? "0" : "1");
-            }
-            db.execSQL(contactSQL, args);
-
-            db.execSQL(rawContactSQL, args);
-        }
-        return count;
     }
 
     private void undemoteContact(SQLiteDatabase db, long id) {
