@@ -19,6 +19,8 @@ package com.android.providers.contacts;
 import com.android.internal.telephony.CallerInfo;
 import com.android.internal.telephony.PhoneConstants;
 
+import android.app.Activity;
+import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -33,6 +35,7 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
+import android.telecomm.Subscription;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import java.util.Arrays;
@@ -63,7 +66,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.SOURCE_DATA,
             Voicemails.STATE};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 19;
+    private static final int NUM_CALLLOG_FIELDS = 21;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -180,8 +183,14 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ci.name = "1-800-GOOG-411";
         ci.numberType = Phone.TYPE_CUSTOM;
         ci.numberLabel = "Directory";
+        final ComponentName sComponentName = new ComponentName(
+                "com.android.telecomm",
+                "TelecommServiceImpl");
+        Subscription subscription = new Subscription(
+                sComponentName, "sub0", Uri.parse("tel:000-000-0000"), 0, 0, 0, true, true);
+
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
-                PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 2000, 40);
+                PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, subscription, 2000, 40);
 
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
@@ -194,6 +203,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
         values.put(Calls.COUNTRY_ISO, "us");
         values.put(Calls.GEOCODED_LOCATION, "usa");
+        values.put(Calls.SUBSCRIPTION_COMPONENT_NAME, "com.android.telecomm/TelecommServiceImpl");
+        values.put(Calls.SUBSCRIPTION_ID, "sub0");
         assertStoredValues(uri, values);
     }
 
