@@ -2455,7 +2455,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "insertInTransaction: uri=" + uri + "  values=[" + values + "]");
+            Log.v(TAG, "insertInTransaction: uri=" + uri + "  values=[" + values + "]" +
+                    " CPID=" + Binder.getCallingPid());
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -3397,7 +3398,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "deleteInTransaction: uri=" + uri +
-                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs));
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                    " CPID=" + Binder.getCallingPid());
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -3807,7 +3809,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
-                    "  values=[" + values + "]");
+                    "  values=[" + values + "] CPID=" + Binder.getCallingPid());
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -4962,7 +4964,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
-                    "  order=[" + sortOrder + "]");
+                    "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid());
         }
 
         waitForAccess(mReadAccessLatch);
@@ -7550,7 +7552,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         } finally {
             if (VERBOSE_LOGGING) {
-                Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success);
+                Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success +
+                        " CPID=" + Binder.getCallingPid());
             }
         }
     }
