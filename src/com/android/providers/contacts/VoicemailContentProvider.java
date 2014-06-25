@@ -99,14 +99,14 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri, values);
+        UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
         return getTableDelegate(uriData).insert(uriData, values);
     }
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
-        UriData uriData = checkPermissionsAndCreateUriDataForReadOperation(uri);
+        UriData uriData = checkPermissionsAndCreateUriDataForRead(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause(true/*isQuery*/));
         return getTableDelegate(uriData).query(uriData, projection, selectionBuilder.build(),
@@ -115,7 +115,7 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri, values);
+        UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause(false/*isQuery*/));
         return getTableDelegate(uriData).update(uriData, values, selectionBuilder.build(),
@@ -124,7 +124,7 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
+        UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause(false/*isQuery*/));
         return getTableDelegate(uriData).delete(uriData, selectionBuilder.build(), selectionArgs);
@@ -134,9 +134,9 @@ public class VoicemailContentProvider extends ContentProvider
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         UriData uriData = null;
         if (mode.equals("r")) {
-            uriData = checkPermissionsAndCreateUriDataForReadOperation(uri);
+            uriData = checkPermissionsAndCreateUriDataForRead(uri);
         } else {
-            uriData = checkPermissionsAndCreateUriData(uri);
+            uriData = checkPermissionsAndCreateUriDataForWrite(uri);
         }
         // openFileHelper() relies on "_data" column to be populated with the file path.
         return getTableDelegate(uriData).openFile(uriData, mode);
@@ -247,8 +247,9 @@ public class VoicemailContentProvider extends ContentProvider
                     uriData.getSourcePackage() : getCallingPackage_();
             values.put(SOURCE_PACKAGE_FIELD, provider);
         }
+
         // You must have access to the provider given in values.
-        if (!mVoicemailPermissions.callerHasFullAccess()) {
+        if (!mVoicemailPermissions.callerHasManageAccess()) {
             checkPackagesMatch(getCallingPackage_(),
                     values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD),
                     uriData.getUri());
@@ -278,10 +279,10 @@ public class VoicemailContentProvider extends ContentProvider
     }
 
     /**
-     * Performs necessary voicemail permission checks common to all operations and returns
-     * the structured representation, {@link UriData}, of the supplied uri.
+     * Ensures that the caller has the permissions to perform a query/read operation, and
+     * then returns the structured representation {@link UriData} of the supplied uri.
      */
-    private UriData checkPermissionsAndCreateUriDataForReadOperation(Uri uri) {
+    private UriData checkPermissionsAndCreateUriDataForRead(Uri uri) {
         // If the caller has been explicitly granted read permission to this URI then no need to
         // check further.
         if (context().checkCallingUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -293,26 +294,29 @@ public class VoicemailContentProvider extends ContentProvider
             return UriData.createUriData(uri);
         }
 
-        return checkPermissionsAndCreateUriData(uri);
+        return checkPermissionsAndCreateUriData(uri, true);
     }
 
     /**
      * Performs necessary voicemail permission checks common to all operations and returns
      * the structured representation, {@link UriData}, of the supplied uri.
      */
-    private UriData checkPermissionsAndCreateUriData(Uri uri) {
-        mVoicemailPermissions.checkCallerHasOwnVoicemailAccess();
+    private UriData checkPermissionsAndCreateUriData(Uri uri, boolean read) {
         UriData uriData = UriData.createUriData(uri);
-        checkPackagePermission(uriData);
+        if (!hasReadWritePermission(read)) {
+            mVoicemailPermissions.checkCallerHasOwnVoicemailAccess();
+            checkPackagePermission(uriData);
+        }
         return uriData;
     }
 
     /**
-     * Same as {@link #checkPackagePermission(UriData)}. In addition does permission check
-     * on the ContentValues.
+     * Ensures that the caller has the permissions to perform an update/delete operation, and
+     * then returns the structured representation {@link UriData} of the supplied uri.
+     * Also does a permission check on the ContentValues.
      */
-    private UriData checkPermissionsAndCreateUriData(Uri uri, ContentValues... valuesArray) {
-        UriData uriData = checkPermissionsAndCreateUriData(uri);
+    private UriData checkPermissionsAndCreateUriDataForWrite(Uri uri, ContentValues... valuesArray) {
+        UriData uriData = checkPermissionsAndCreateUriData(uri, false);
         for (ContentValues values : valuesArray) {
             checkSourcePackageSameIfSet(uriData, values);
         }
@@ -329,13 +333,13 @@ public class VoicemailContentProvider extends ContentProvider
             String errorMsg = String.format("Permission denied for URI: %s\n. " +
                     "Package %s cannot perform this operation for %s. Requires %s permission.",
                     uri, callingPackage, voicemailSourcePackage,
-                    Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
+                    android.Manifest.permission.MANAGE_VOICEMAIL);
             throw new SecurityException(errorMsg);
         }
     }
 
     /**
-     * Checks that either the caller has READ_WRITE_ALL_VOICEMAIL permission,
+     * Checks that either the caller has the MANAGE_VOICEMAIL permission,
      * or has the ADD_VOICEMAIL permission and is using a URI that matches
      * /voicemail/?source_package=[source-package] where [source-package] is the same as the calling
      * package.
@@ -343,13 +347,13 @@ public class VoicemailContentProvider extends ContentProvider
      * @throws SecurityException if the check fails.
      */
     private void checkPackagePermission(UriData uriData) {
-        if (!mVoicemailPermissions.callerHasFullAccess()) {
+        if (!mVoicemailPermissions.callerHasManageAccess()) {
             if (!uriData.hasSourcePackage()) {
                 // You cannot have a match if this is not a provider URI.
                 throw new SecurityException(String.format(
                         "Provider %s does not have %s permission." +
                                 "\nPlease set query parameter '%s' in the URI.\nURI: %s",
-                        getCallingPackage_(), Manifest.permission.READ_WRITE_ALL_VOICEMAIL,
+                        getCallingPackage_(), android.Manifest.permission.MANAGE_VOICEMAIL,
                         VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, uriData.getUri()));
             }
             checkPackagesMatch(getCallingPackage_(), uriData.getSourcePackage(), uriData.getUri());
@@ -381,7 +385,7 @@ public class VoicemailContentProvider extends ContentProvider
         // which one we return.
         String bestSoFar = callerPackages[0];
         for (String callerPackage : callerPackages) {
-            if (mVoicemailPermissions.packageHasFullAccess(callerPackage)) {
+            if (mVoicemailPermissions.packageHasManageAccess(callerPackage)) {
                 // Full always wins, we can return early.
                 return callerPackage;
             }
@@ -397,12 +401,21 @@ public class VoicemailContentProvider extends ContentProvider
      * access to all data.
      */
     private String getPackageRestrictionClause(boolean isQuery) {
-        if (isQuery && mVoicemailPermissions.callerHasFullReadAccess()) {
-            return null;
-        }
-        if (mVoicemailPermissions.callerHasFullAccess()) {
+        if (hasReadWritePermission(isQuery)) {
             return null;
         }
         return getEqualityClause(Voicemails.SOURCE_PACKAGE, getCallingPackage_());
+    }
+
+    /**
+     * Whether or not the calling package has the appropriate read/write permission
+     *
+     * @param read Whether or not this operation is a read
+     *
+     * @return True if the package has the permission required to perform the read/write operation
+     */
+    private boolean hasReadWritePermission(boolean read) {
+        return read ? mVoicemailPermissions.callerHasFullReadAccess() :
+            mVoicemailPermissions.callerHasManageAccess();
     }
 }
