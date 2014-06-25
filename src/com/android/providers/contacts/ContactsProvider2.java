@@ -193,6 +193,8 @@ import java.util.concurrent.CountDownLatch;
 public class ContactsProvider2 extends AbstractContactsProvider
         implements OnAccountsUpdateListener {
 
+    private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
+
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
           "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
           " ifnull(" + Contacts.TIMES_CONTACTED + ",0)+1" +
@@ -2181,6 +2183,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             response.putParcelable(Authorization.KEY_AUTHORIZED_URI, authUri);
             return response;
         } else if (PinnedPositions.UNDEMOTE_METHOD.equals(method)) {
+            getContext().enforceCallingOrSelfPermission(WRITE_PERMISSION, null);
             final long id;
             try {
                 id = Long.valueOf(arg);
