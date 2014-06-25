@@ -18,7 +18,7 @@
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android 核心应用"</string>
     <string name="app_label" msgid="3389954322874982620">"联系人存储"</string>
-    <string name="provider_label" msgid="6012150850819899907">"联系人"</string>
+    <string name="provider_label" msgid="6012150850819899907">"通讯录"</string>
     <string name="upgrade_msg" msgid="8640807392794309950">"正在升级联系人数据库。"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"联系人升级需要更多的存储空间。"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"正在升级存储器以容纳更多联系人"</string>
