@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 The Android Open Source Project
+T * Copyright (C) 2009 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 901;
+    static final int DATABASE_VERSION = 902;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1466,6 +1466,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.DATE + " INTEGER," +
                 Calls.DURATION + " INTEGER," +
                 Calls.TYPE + " INTEGER," +
+                Calls.SUBSCRIPTION_COMPONENT_NAME + " TEXT," +
+                Calls.SUBSCRIPTION_ID + " TEXT," +
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
                 Calls.CACHED_NUMBER_TYPE + " INTEGER," +
@@ -2738,6 +2740,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // broken state due to b/11059351
             upgradeSearchIndex = true;
             oldVersion = 901;
+        }
+
+        if (oldVersion < 902) {
+            upgradeToVersion902(db);
+            oldVersion = 902;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4041,6 +4048,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 ContactsContract.PinnedPositions.UNPINNED + ";");
         db.execSQL("ALTER TABLE raw_contacts ADD pinned INTEGER NOT NULL DEFAULT  " +
                 ContactsContract.PinnedPositions.UNPINNED + ";");
+    }
+
+    private void upgradeToVersion902(SQLiteDatabase db) {
+        // adding subscription identifier to call log table
+        db.execSQL("ALTER TABLE calls ADD "+ Calls.SUBSCRIPTION_COMPONENT_NAME + " TEXT;");
+        db.execSQL("ALTER TABLE calls ADD "+ Calls.SUBSCRIPTION_ID + " TEXT;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
