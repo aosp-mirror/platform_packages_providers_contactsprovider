@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Aplicacións básicas de Android"</string>
+    <string name="app_label" msgid="3389954322874982620">"Almacenamento de contactos"</string>
+    <string name="provider_label" msgid="6012150850819899907">"Contactos"</string>
+    <string name="upgrade_msg" msgid="8640807392794309950">"Actualizando a base de datos de contactos."</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"A actualización dos contactos necesita máis memoria."</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Actualizando almacenamento dos contactos"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Toca para completar a actualización."</string>
+    <string name="default_directory" msgid="93961630309570294">"Contactos"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Outro"</string>
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Acceder a todos os correos de voz"</string>
+    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permite á aplicación almacenar e recuperar todos os correos de voz aos que pode acceder este dispositivo."</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Correo de voz de "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de datos dos contactos"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Estás a punto de 1) realizar unha copia da túa base de datos que inclúe toda a información relacionada cos contactos e todos os rexistros de chamadas no almacenamento interno, e de 2) envialo por correo electrónico. Non esquezas eliminar a copia en canto a copies correctamente fóra do dispositivo ou en canto se reciba o correo electrónico."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eliminar agora"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Iniciar"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Escoller un programa para enviar o teu ficheiro"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Base de datos de contactos anexada"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"A miña base de datos de contactos con toda a información dos meus contactos vai anexada a esta mensaxe. Debe tratarse con coidado."</string>
+</resources>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Androidပင်မ အပ်ပလီကေးရှင်းများ"</string>
+    <string name="app_label" msgid="3389954322874982620">"လိပ်စာများသိမ်းဆည်းသောအပ်ပလီကေးရှင်း"</string>
+    <string name="provider_label" msgid="6012150850819899907">"အဆက်အသွယ်များ"</string>
+    <string name="upgrade_msg" msgid="8640807392794309950">"လိပ်စာဒေတာဘေ့စ်အား အဆင့်မြှင့်ခြင်း"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"အဆက်အသွယ်များ အဆင့်မြှင့်ခြင်းအတွက် မှတ်ဉာဏ်စွမ်းရည်ပိုလိုအပ်သည်"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"အဆယ်အသွယ်များ သိမ်းဆည်းရန် နေရာ အဆင့်မြှင့်ခြင်း"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"အဆင့်မြှင့်ခြင်း ပြီးဆုံးရန် ထိကိုင်ပါ"</string>
+    <string name="default_directory" msgid="93961630309570294">"အဆက်အသွယ်များ"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"တစ်ခြား"</string>
+    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"အသံစာများအား ရယူနိုင်ခြင်း"</string>
+    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"အပ်ပလီကေးရှင်းအား ဤစက်ထဲမှ ရယူနိုင်သော အသံစာများအား သိမ်းဆည်းခွင့်နှင့် ရယူခွင့် ပြုပါ"</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"မှ အသံစာ "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"လိပ်စာဒေတာဘေ့စ်ကို ကူးရန်"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"သင့်အနေဖြင့် ၁) လိပ်စာအားလုံးနဲ့ဆိုင်သော အချက်အလက်များ၊ ဖုန်းခေါ်မှု မှတ်တမ်းများ ပါဝင်သော ဒေတာဘေ့စ်ကို စက်အတွင်းသိမ်းဆည်းသော ကော်ပီတစ်ခု ပြုလုပ်ပြီး ၂) အီးမေးလ်ပို့ခြင်း လုပ်တော့မည် ဖြစ်ပါသည်။ ဒီကော်ပီကို စက်ထဲမှ ထုတ်ပြီးပြီးချင်း သို့မဟုတ် အီးမေးလ်ရောက်ရှိပြီးချင်းချင်း ဖျက်ပစ်ဖို့ မမေ့ပါနှင့်။"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"အခုဖျက်ပါ"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"စတင်ရန်"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"သင့်ဖိုင်အား ပို့ရန် ပရိုဂရမ် ရွေးပါ"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"လိပ်စာဒေတာဘေ့စ်ပူးတွဲပါရှိ"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"ပူးတွဲပါဟာ ကျွန်ုပ်၏ လိပ်စာများ အကုန်ပါဝင်သော လိပ်စာ ဒေတာဘေ့စ်ဖြစ်ပါတယ်။ သတိနှင့် သုံးပါ။"</string>
+</resources>
