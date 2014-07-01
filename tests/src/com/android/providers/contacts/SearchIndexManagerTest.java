@@ -24,7 +24,7 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.SearchSnippetColumns;
+import android.provider.ContactsContract.SearchSnippets;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 import android.test.suitebuilder.annotation.Suppress;
@@ -97,12 +97,12 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         values.put(StructuredName.DISPLAY_NAME, "\u695A\u8FAD");    // CHUCI
         DataUtil.insertStructuredName(mResolver, rawContactId, values);
 
-        assertStoredValue(buildSearchUri("\u695A\u8FAD"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("\u8FAD"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("CI"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("CHUCI"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("CC"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("C"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\u695A\u8FAD"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\u8FAD"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("CI"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("CHUCI"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("CC"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("C"), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchIndexForKoreanName() {
@@ -133,16 +133,16 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         DataUtil.insertStructuredName(mResolver, rawContactId, values);
 
         // Full name: Lee Sang Il
-        assertStoredValue(buildSearchUri("\uC774\uC0C1\uC77C"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\uC774\uC0C1\uC77C"), SearchSnippets.SNIPPET, null);
 
         // Given name: Sang Il
-        assertStoredValue(buildSearchUri("\uC0C1\uC77C"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\uC0C1\uC77C"), SearchSnippets.SNIPPET, null);
 
         // Consonants of given name: SIOS IEUNG
-        assertStoredValue(buildSearchUri("\u1109\u110B"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\u1109\u110B"), SearchSnippets.SNIPPET, null);
 
         // Consonants of full name: RIEUL SIOS IEUNG
-        assertStoredValue(buildSearchUri("\u110B\u1109\u110B"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\u110B\u1109\u110B"), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchByKoreanNameWithTwoCharactersFamilyName() {
@@ -161,17 +161,17 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
 
         // Full name: Sun Woo Young Nyeu
         assertStoredValue(
-                buildSearchUri("\uC120\uC6B0\uC6A9\uB140"), SearchSnippetColumns.SNIPPET, null);
+                buildSearchUri("\uC120\uC6B0\uC6A9\uB140"), SearchSnippets.SNIPPET, null);
 
         // Given name: Young Nyeu
-        assertStoredValue(buildSearchUri("\uC6A9\uB140"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\uC6A9\uB140"), SearchSnippets.SNIPPET, null);
 
         // Consonants of given name: IEUNG NIEUN
-        assertStoredValue(buildSearchUri("\u110B\u1102"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("\u110B\u1102"), SearchSnippets.SNIPPET, null);
 
         // Consonants of full name: SIOS IEUNG IEUNG NIEUN
         assertStoredValue(
-                buildSearchUri("\u1109\u110B\u110B\u1102"), SearchSnippetColumns.SNIPPET, null);
+                buildSearchUri("\u1109\u110B\u110B\u1102"), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchIndexForOrganization() {
@@ -258,7 +258,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertNote(rawContactId, "Please note: three notes or more make up a chord.");
 
         assertStoredValue(
-                buildSearchUri("thr", "[,],-,2", false), SearchSnippetColumns.SNIPPET,
+                buildSearchUri("thr", "[,],-,2", false), SearchSnippets.SNIPPET,
                 "-note: [three]-");
     }
 
@@ -271,53 +271,53 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         RawContactUtil.createRawContactWithName(mResolver, "John Jay", "Doe");
 
         // We are supposed to find the contact, but return a null snippet
-        assertStoredValue(buildSearchUri("john"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("jay"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("doe"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("john"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("jay"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("doe"), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchByPrefixName() {
         RawContactUtil.createRawContactWithName(mResolver, "John Jay", "Doe");
 
         // prefix searches
-        assertStoredValue(buildSearchUri("jo ja"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("J D"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Doe, John"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("jo ja"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("J D"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Doe, John"), SearchSnippets.SNIPPET, null);
     }
 
     public void testGermanUmlautFullameCapitalizationSearch() {
         RawContactUtil.createRawContactWithName(mResolver, "Matthäus BJÖRN Bünyamin", "Reißer");
 
         // make sure we can find those, independent of the capitalization
-        assertStoredValue(buildSearchUri("matthäus"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Matthäus"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("MATTHÄUS"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("matthäus"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Matthäus"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("MATTHÄUS"), SearchSnippets.SNIPPET, null);
 
-        assertStoredValue(buildSearchUri("björn"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Björn"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("BJÖRN"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("björn"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Björn"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("BJÖRN"), SearchSnippets.SNIPPET, null);
 
-        assertStoredValue(buildSearchUri("bünyamin"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Bünyamin"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("BUNYAMIN"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("bünyamin"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Bünyamin"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("BUNYAMIN"), SearchSnippets.SNIPPET, null);
 
         // There is no capital version of ß. It is capitalized as double-S instead
-        assertStoredValue(buildSearchUri("Reißer"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Reisser"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("REISSER"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Reißer"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Reisser"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("REISSER"), SearchSnippets.SNIPPET, null);
     }
 
     public void testHangulNameLeadConsonantAsYouTypeSearch() {
         createRawContactWithDisplayName("홍길동");
         // the korean name uses three compound characters. this test makes sure
         // that the name can be found by typing in only the lead consonant
-        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㄱ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㄱㄷ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㄱ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㄱㄷ"), SearchSnippets.SNIPPET, null);
 
         // same again, this time only for the first name
-        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㄱㄷ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㄷ"), SearchSnippets.SNIPPET, null);
     }
 
     public void testHangulNameFullAsYouTypeSearch() {
@@ -326,23 +326,23 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         // the korean name uses three compound characters. this test makes sure
         // that the name can be found by typing in the full nine letters. the search string
         // shows the name is being built "as you type"
-        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("호"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍ㄱ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍기"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍길"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍길ㄷ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍길도"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("홍길동"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("호"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍ㄱ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍기"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길ㄷ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길도"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("홍길동"), SearchSnippets.SNIPPET, null);
 
         // same again, this time only for the first name
-        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("기"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("길"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("길ㄷ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("길도"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("길동"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("기"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길ㄷ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길도"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("길동"), SearchSnippets.SNIPPET, null);
     }
 
 
@@ -354,61 +354,61 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         // the korean name uses three compound characters. this test makes sure
         // that the name can be found by typing each syllable as a single character.
         // This can be achieved using the Korean IM by pressing ㅎ, space, backspace, ㅗ and so on
-        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷㅗ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷㅗ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㅎㅗㅇㄱㅣㄹㄷㅗㅇ"), SearchSnippets.SNIPPET, null);
 
         // same again, this time only for the first name
-        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㄱㅣ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㄱㅣㄹ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗ"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗㅇ"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗ"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("ㄱㅣㄹㄷㅗㅇ"), SearchSnippets.SNIPPET, null);
     }
 
     public void testNameWithHyphen() {
         RawContactUtil.createRawContactWithName(mResolver, "First", "Last-name");
 
-        assertStoredValue(buildSearchUri("First"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last-"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last-n"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last-name"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("First"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-n"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-name"), SearchSnippets.SNIPPET, null);
 
         // This will work too.
-        assertStoredValue(buildSearchUri("Lastname"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Lastname"), SearchSnippets.SNIPPET, null);
 
         // This doesn't have to work, but it does with the current implementation.
-        assertStoredValue(buildSearchUri("name"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("name"), SearchSnippets.SNIPPET, null);
     }
 
     /** Same as {@link #testNameWithHyphen} except the name has double hyphens. */
     public void testNameWithDoubleHyphens() {
         RawContactUtil.createRawContactWithName(mResolver, "First", "Last--name");
 
-        assertStoredValue(buildSearchUri("First"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last-"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last-n"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("Last-name"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("First"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-n"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Last-name"), SearchSnippets.SNIPPET, null);
 
         // This will work too.
-        assertStoredValue(buildSearchUri("Lastname"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("Lastname"), SearchSnippets.SNIPPET, null);
     }
 
     public void testNameWithPunctuations() {
         RawContactUtil.createRawContactWithName(mResolver, "First", "O'Neill");
 
-        assertStoredValue(buildSearchUri("first"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("oneill"), SearchSnippetColumns.SNIPPET, null);
-        assertStoredValue(buildSearchUri("o'neill"), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("first"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("oneill"), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildSearchUri("o'neill"), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchByEmailAddress() {
@@ -417,11 +417,11 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "john@doe.com");
         insertNote(rawContactId, "a hundred dollar note for doe@john.com and bob parr");
 
-        assertStoredValue(buildSearchUri("john@d", true), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("john@d", true), SearchSnippets.SNIPPET,
                 "[john@doe.com]");
-        assertStoredValue(buildSearchUri("doe@j", true), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("doe@j", true), SearchSnippets.SNIPPET,
                 "...note for [doe@john.com] and bob...");
-        assertStoredValue(buildSearchUri("bob@p", true), SearchSnippetColumns.SNIPPET, null);
+        assertStoredValue(buildSearchUri("bob@p", true), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchByPhoneNumber() {
@@ -431,15 +431,15 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "john@doe.com");
         insertNote(rawContactId, "the eighteenth episode of Seinfeld, 650-253-0000");
 
-        assertStoredValue(buildSearchUri("33 (0)1 42 68 53 00"), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("33 (0)1 42 68 53 00"), SearchSnippets.SNIPPET,
                 "[330142685300]");
-        assertStoredValue(buildSearchUri("8004664"), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("8004664"), SearchSnippets.SNIPPET,
                 "[(800)GOOG-123]");
-        assertStoredValue(buildSearchUri("650-2"), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("650-2"), SearchSnippets.SNIPPET,
                 "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
 
         // for numbers outside of the real phone field, any order (and prefixing) is allowed
-        assertStoredValue(buildSearchUri("25 650"), SearchSnippetColumns.SNIPPET,
+        assertStoredValue(buildSearchUri("25 650"), SearchSnippets.SNIPPET,
                 "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
     }
 
@@ -456,7 +456,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         // assertStoredValue internally do the client-side snippetizing, which done by
         // getCursorStringValue(), which is hardcoded to use [ and ].
         assertStoredValue(buildSearchUri("505", "\u0001,\u0001,\u2026,5", true),
-                SearchSnippetColumns.SNIPPET, "[505]-123-4567");
+                SearchSnippets.SNIPPET, "[505]-123-4567");
     }
 
     /**
@@ -469,7 +469,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "john@doe.com");
 
         assertStoredValue(buildSearchUri("john", "\u0001,\u0001,\u2026,5", true),
-                SearchSnippetColumns.SNIPPET, "[john@doe.com]");
+                SearchSnippets.SNIPPET, "[john@doe.com]");
     }
 
     public void testSplitIntoFtsTokens() {
@@ -500,10 +500,10 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
     private Uri buildSearchUri(String filter, String args, boolean deferredSnippeting) {
         Builder builder = Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(filter);
         if (args != null) {
-            builder.appendQueryParameter(SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY, args);
+            builder.appendQueryParameter(SearchSnippets.SNIPPET_ARGS_PARAM_KEY, args);
         }
         if (deferredSnippeting) {
-            builder.appendQueryParameter(SearchSnippetColumns.DEFERRED_SNIPPETING_KEY, "1");
+            builder.appendQueryParameter(SearchSnippets.DEFERRED_SNIPPETING_KEY, "1");
         }
         return builder.build();
     }

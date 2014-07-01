@@ -59,7 +59,7 @@ import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
-import android.provider.ContactsContract.SearchSnippetColumns;
+import android.provider.ContactsContract.SearchSnippets;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
@@ -286,7 +286,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.CONTACT_STATUS_LABEL,
                 Contacts.CONTACT_STATUS_ICON,
                 Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
-                SearchSnippetColumns.SNIPPET,
+                SearchSnippets.SNIPPET,
         });
     }
 
@@ -3922,7 +3922,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "acmecorp");
+        values.put(SearchSnippets.SNIPPET, "acmecorp");
         assertContainsValues(filterUri, values);
     }
 
@@ -3938,7 +3938,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "acme@corp.com");
+        values.put(SearchSnippets.SNIPPET, "acme@corp.com");
         assertStoredValues(filterUri, values);
     }
 
@@ -3965,7 +3965,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "[(860) 555-1234]");
+        values.put(SearchSnippets.SNIPPET, "[(860) 555-1234]");
 
         assertStoredValues(Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI,
                 Uri.encode("86 (0) 5-55-12-34")), values);
@@ -3996,7 +3996,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         final ContentValues values = new ContentValues();
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, snippet);
+        values.put(SearchSnippets.SNIPPET, snippet);
         return values;
     }
 
@@ -4011,7 +4011,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(Contacts._ID, contactId);
-        values.put(SearchSnippetColumns.SNIPPET, "Incredible");
+        values.put(SearchSnippets.SNIPPET, "Incredible");
         assertStoredValues(filterUri, values);
     }
 

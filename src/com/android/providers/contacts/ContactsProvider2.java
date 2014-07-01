@@ -98,7 +98,7 @@ import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
-import android.provider.ContactsContract.SearchSnippetColumns;
+import android.provider.ContactsContract.SearchSnippets;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
@@ -650,7 +650,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .build();
 
     private static final ProjectionMap sSnippetColumns = ProjectionMap.builder()
-            .add(SearchSnippetColumns.SNIPPET)
+            .add(SearchSnippets.SNIPPET)
             .build();
 
     private static final ProjectionMap sRawContactColumns = ProjectionMap.builder()
@@ -5045,7 +5045,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private Cursor addSnippetExtrasToCursor(Uri uri, Cursor cursor) {
 
         // If the cursor doesn't contain a snippet column, don't bother wrapping it.
-        if (cursor.getColumnIndex(SearchSnippetColumns.SNIPPET) < 0) {
+        if (cursor.getColumnIndex(SearchSnippets.SNIPPET) < 0) {
             return cursor;
         }
 
@@ -6953,7 +6953,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         if (TextUtils.isEmpty(filter) || (directoryId != -1 && directoryId != Directory.DEFAULT)) {
-            sb.append(" JOIN (SELECT NULL AS " + SearchSnippetColumns.SNIPPET + " WHERE 0)");
+            sb.append(" JOIN (SELECT NULL AS " + SearchSnippets.SNIPPET + " WHERE 0)");
         } else {
             appendSearchIndexJoin(sb, uri, projection, filter, deferSnippeting);
         }
@@ -6970,7 +6970,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (snippetNeeded(projection)) {
             String[] args = null;
             String snippetArgs =
-                    getQueryParameter(uri, SearchSnippetColumns.SNIPPET_ARGS_PARAM_KEY);
+                    getQueryParameter(uri, SearchSnippets.SNIPPET_ARGS_PARAM_KEY);
             if (snippetArgs != null) {
                 args = snippetArgs.split(",");
             }
@@ -7101,7 +7101,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     sb.append("NULL");
                 }
             }
-            sb.append(" AS " + SearchSnippetColumns.SNIPPET);
+            sb.append(" AS " + SearchSnippets.SNIPPET);
         }
 
         sb.append(" FROM " + Tables.SEARCH_INDEX);
@@ -8696,7 +8696,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private boolean deferredSnippetingRequested(Uri uri) {
         String deferredSnippeting =
-                getQueryParameter(uri, SearchSnippetColumns.DEFERRED_SNIPPETING_KEY);
+                getQueryParameter(uri, SearchSnippets.DEFERRED_SNIPPETING_KEY);
         return !TextUtils.isEmpty(deferredSnippeting) &&  deferredSnippeting.equals("1");
     }
 
@@ -8722,7 +8722,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return a boolean indicating if a snippet is needed or not.
      */
     private boolean snippetNeeded(String [] projection) {
-        return ContactsDatabaseHelper.isInProjection(projection, SearchSnippetColumns.SNIPPET);
+        return ContactsDatabaseHelper.isInProjection(projection, SearchSnippets.SNIPPET);
     }
 
     /**

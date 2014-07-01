@@ -28,7 +28,7 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.SearchSnippetColumns;
+import android.provider.ContactsContract.SearchSnippets;
 import android.provider.ContactsContract.StatusUpdates;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -234,7 +234,7 @@ public class GlobalSearchSupport {
                         + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE + ", "
                         + Contacts.LAST_TIME_CONTACTED);
         if (haveFilter) {
-            sb.append(", " + SearchSnippetColumns.SNIPPET);
+            sb.append(", " + SearchSnippets.SNIPPET);
         }
         sb.append(" FROM ");
         sb.append(Views.CONTACTS);
