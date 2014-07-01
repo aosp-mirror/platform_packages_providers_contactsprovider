@@ -19,7 +19,6 @@ package com.android.providers.contacts;
 import com.android.internal.telephony.CallerInfo;
 import com.android.internal.telephony.PhoneConstants;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -35,7 +34,7 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
-import android.telecomm.Subscription;
+import android.telecomm.PhoneAccount;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import java.util.Arrays;
@@ -186,8 +185,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         final ComponentName sComponentName = new ComponentName(
                 "com.android.telecomm",
                 "TelecommServiceImpl");
-        Subscription subscription = new Subscription(
-                sComponentName, "sub0", Uri.parse("tel:000-000-0000"), 0, 0, 0, true, true);
+        PhoneAccount subscription = new PhoneAccount(
+                sComponentName, "sub0", Uri.parse("tel:000-000-0000"), "", "", true, true);
 
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, subscription, 2000, 40);
@@ -203,8 +202,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
         values.put(Calls.COUNTRY_ISO, "us");
         values.put(Calls.GEOCODED_LOCATION, "usa");
-        values.put(Calls.SUBSCRIPTION_COMPONENT_NAME, "com.android.telecomm/TelecommServiceImpl");
-        values.put(Calls.SUBSCRIPTION_ID, "sub0");
+        values.put(Calls.ACCOUNT_COMPONENT_NAME, "com.android.telecomm/TelecommServiceImpl");
+        values.put(Calls.ACCOUNT_ID, "sub0");
         assertStoredValues(uri, values);
     }
 
