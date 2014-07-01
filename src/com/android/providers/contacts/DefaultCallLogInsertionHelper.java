@@ -19,6 +19,8 @@ package com.android.providers.contacts;
 import android.content.ContentValues;
 import android.content.Context;
 import android.provider.CallLog.Calls;
+import android.telephony.PhoneNumberUtils;
+import android.text.TextUtils;
 
 import com.android.i18n.phonenumbers.NumberParseException;
 import com.android.i18n.phonenumbers.PhoneNumberUtil;
@@ -73,6 +75,15 @@ import java.util.Set;
         if (LEGACY_UNKNOWN_NUMBERS.contains(number)) {
             values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_UNKNOWN);
             values.put(Calls.NUMBER, "");
+        }
+
+        // Check for a normalized number; if not present attempt to determine one now.
+        if (!values.containsKey(Calls.CACHED_NORMALIZED_NUMBER) &&
+                !TextUtils.isEmpty(number)) {
+            String normalizedNumber = PhoneNumberUtils.formatNumberToE164(number, countryIso);
+            if (!TextUtils.isEmpty(normalizedNumber)) {
+                values.put(Calls.CACHED_NORMALIZED_NUMBER, normalizedNumber);
+            }
         }
     }
 

@@ -114,7 +114,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 902;
+    static final int DATABASE_VERSION = 903;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2747,6 +2747,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 902;
         }
 
+        if (oldVersion < 903) {
+            upgradeToVersion903(db);
+            oldVersion = 903;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4054,6 +4059,59 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // adding subscription identifier to call log table
         db.execSQL("ALTER TABLE calls ADD "+ Calls.SUBSCRIPTION_COMPONENT_NAME + " TEXT;");
         db.execSQL("ALTER TABLE calls ADD "+ Calls.SUBSCRIPTION_ID + " TEXT;");
+    }
+
+    /**
+     * Searches for any calls in the call log with no normalized phone number and attempts to add
+     * one if the number can be normalized.
+     *
+     * @param db The database.
+     */
+    private void upgradeToVersion903(SQLiteDatabase db) {
+        // Find the calls in the call log with no normalized phone number.
+        final Cursor c = db.rawQuery(
+                "SELECT _id, number, countryiso FROM calls " +
+                        " WHERE (normalized_number is null OR normalized_number = '') " +
+                        " AND countryiso != '' AND countryiso is not null " +
+                        " AND number != '' AND number is not null;",
+                null
+        );
+
+        try {
+            if (c.getCount() == 0) {
+                return;
+            }
+
+            db.beginTransaction();
+            try {
+                c.moveToPosition(-1);
+                while (c.moveToNext()) {
+                    final long callId = c.getLong(0);
+                    final String unNormalizedNumber = c.getString(1);
+                    final String countryIso = c.getString(2);
+
+                    // Attempt to get normalized number.
+                    String normalizedNumber = PhoneNumberUtils
+                            .formatNumberToE164(unNormalizedNumber, countryIso);
+
+                    if (!TextUtils.isEmpty(normalizedNumber)) {
+                        db.execSQL("UPDATE calls set normalized_number = ? " +
+                                        "where _id = ?;",
+                                new String[]{
+                                        normalizedNumber,
+                                        String.valueOf(callId),
+                                }
+                        );
+                    }
+                }
+
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+        } finally {
+            c.close();
+        }
     }
 
     public String extractHandleFromEmailAddress(String email) {
