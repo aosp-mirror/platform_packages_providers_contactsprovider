@@ -202,8 +202,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
         values.put(Calls.COUNTRY_ISO, "us");
         values.put(Calls.GEOCODED_LOCATION, "usa");
-        values.put(Calls.ACCOUNT_COMPONENT_NAME, "com.android.telecomm/TelecommServiceImpl");
-        values.put(Calls.ACCOUNT_ID, "sub0");
+        values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, "com.android.telecomm/TelecommServiceImpl");
+        values.put(Calls.PHONE_ACCOUNT_ID, "sub0");
         assertStoredValues(uri, values);
     }
 

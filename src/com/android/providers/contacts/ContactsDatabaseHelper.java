@@ -1466,8 +1466,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.DATE + " INTEGER," +
                 Calls.DURATION + " INTEGER," +
                 Calls.TYPE + " INTEGER," +
-                Calls.ACCOUNT_COMPONENT_NAME + " TEXT," +
-                Calls.ACCOUNT_ID + " TEXT," +
+                Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
+                Calls.PHONE_ACCOUNT_ID + " TEXT," +
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
                 Calls.CACHED_NUMBER_TYPE + " INTEGER," +
@@ -4057,8 +4057,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     private void upgradeToVersion902(SQLiteDatabase db) {
         // adding account identifier to call log table
-        db.execSQL("ALTER TABLE calls ADD "+ Calls.ACCOUNT_COMPONENT_NAME + " TEXT;");
-        db.execSQL("ALTER TABLE calls ADD "+ Calls.ACCOUNT_ID + " TEXT;");
+        db.execSQL("ALTER TABLE calls ADD "+ Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT;");
+        db.execSQL("ALTER TABLE calls ADD "+ Calls.PHONE_ACCOUNT_ID + " TEXT;");
     }
 
     /**
