@@ -1109,8 +1109,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String DEFAULT_SNIPPET_ARG_START_MATCH = "[";
     private static final String DEFAULT_SNIPPET_ARG_END_MATCH = "]";
-    private static final String DEFAULT_SNIPPET_ARG_ELLIPSIS = "...";
-    private static final int DEFAULT_SNIPPET_ARG_MAX_TOKENS = -10;
+    private static final String DEFAULT_SNIPPET_ARG_ELLIPSIS = "\u2026";
+    private static final int DEFAULT_SNIPPET_ARG_MAX_TOKENS = 5;
 
     private final StringBuilder mSb = new StringBuilder();
     private final String[] mSelectionArgs1 = new String[1];

@@ -417,11 +417,8 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId, "john@doe.com");
         insertNote(rawContactId, "a hundred dollar note for doe@john.com and bob parr");
 
-        assertStoredValue(buildSearchUri("john@d", true), SearchSnippets.SNIPPET,
+        assertStoredValue(buildSearchUri("john@d"), SearchSnippets.SNIPPET,
                 "[john@doe.com]");
-        assertStoredValue(buildSearchUri("doe@j", true), SearchSnippets.SNIPPET,
-                "...note for [doe@john.com] and bob...");
-        assertStoredValue(buildSearchUri("bob@p", true), SearchSnippets.SNIPPET, null);
     }
 
     public void testSearchByPhoneNumber() {
@@ -436,11 +433,11 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         assertStoredValue(buildSearchUri("8004664"), SearchSnippets.SNIPPET,
                 "[(800)GOOG-123]");
         assertStoredValue(buildSearchUri("650-2"), SearchSnippets.SNIPPET,
-                "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
+                "\u2026of Seinfeld, [650]-[253]-0000");
 
         // for numbers outside of the real phone field, any order (and prefixing) is allowed
         assertStoredValue(buildSearchUri("25 650"), SearchSnippets.SNIPPET,
-                "...doe.com\nthe eighteenth episode of Seinfeld, [650]-[253]-0000");
+                "\u2026of Seinfeld, [650]-[253]-0000");
     }
 
     /**
@@ -450,26 +447,20 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         insertPhoneNumber(rawContactId, "505-123-4567");
 
-        // The bug happened with the old code only when we use \u0001 as the snippet marker.
-        // But note that the expected result has [ and ] instead of \u0001.  This is because when
-        // we differ snippetizing, the marker passe to the provider will be ignored; instead
-        // assertStoredValue internally do the client-side snippetizing, which done by
-        // getCursorStringValue(), which is hardcoded to use [ and ].
+        // If snippeting is deferred, the returned snippet will not contain any markers.
         assertStoredValue(buildSearchUri("505", "\u0001,\u0001,\u2026,5", true),
-                SearchSnippets.SNIPPET, "[505]-123-4567");
+                SearchSnippets.SNIPPET, "505-123-4567");
     }
 
     /**
-     * Equivalent to {@link #testSearchByPhoneNumber_diferSnippetting} for email addresses, although
-     * the original bug didn't happen with email addresses... (It *did* happen internally, but
-     * there's no visible breakage.)
+     * Equivalent to {@link #testSearchByPhoneNumber_diferSnippetting} for email addresses
      */
     public void testSearchByEmail_diferSnippetting() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         insertEmail(rawContactId, "john@doe.com");
 
         assertStoredValue(buildSearchUri("john", "\u0001,\u0001,\u2026,5", true),
-                SearchSnippets.SNIPPET, "[john@doe.com]");
+                SearchSnippets.SNIPPET, "john@doe.com");
     }
 
     public void testSplitIntoFtsTokens() {
