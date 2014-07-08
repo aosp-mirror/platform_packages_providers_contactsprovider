@@ -3402,7 +3402,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "deleteInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
-                    " CPID=" + Binder.getCallingPid());
+                    " CPID=" + Binder.getCallingPid() +
+                    " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -3812,7 +3813,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
-                    "  values=[" + values + "] CPID=" + Binder.getCallingPid());
+                    "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -4967,7 +4969,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
-                    "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid());
+                    "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
         waitForAccess(mReadAccessLatch);
@@ -7556,7 +7559,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } finally {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success +
-                        " CPID=" + Binder.getCallingPid());
+                        " CPID=" + Binder.getCallingPid() +
+                        " User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
         }
     }
