@@ -102,6 +102,7 @@ public class VoicemailPermissions {
 
     /** Determines if the calling process has the given permission. */
     private boolean callerHasPermission(String permission) {
-        return mContext.checkCallingPermission(permission) == PackageManager.PERMISSION_GRANTED;
+        return mContext.checkCallingOrSelfPermission(permission)
+                == PackageManager.PERMISSION_GRANTED;
     }
 }
