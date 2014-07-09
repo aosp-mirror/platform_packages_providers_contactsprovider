@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package com.android.providers.contacts;
+package com.android.providers.contacts.util;
+
+import com.android.providers.contacts.ContactsProvider2;
 
 import android.content.Context;
 import android.content.pm.UserInfo;
@@ -37,17 +39,19 @@ public final class UserUtils {
     }
 
     /**
-     * @return the user ID of the enterprise user that is linked to the current user, if any.
-     * If there's no such user, returns -1.
+     * @return the user ID of the corp user that is linked to the current user, if any.
+     * If there's no such user or cross-user contacts access is disallowed by policy, returns -1.
      *
      * STOPSHIP: Have amith look at it.
      */
-    public static int getEnterpriseUserId(Context context) {
+    public static int getCorpUserId(Context context) {
         final UserManager um = getUserManager(context);
         final int currentUser = um.getUserHandle();
 
+        // STOPSHIP Check the policy and make sure cross-user contacts lookup is allowed.
+
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "getEnterpriseUserId: current=" + currentUser);
+            Log.v(TAG, "getCorpUserId: current=" + currentUser);
         }
 
         // TODO: Skip if the current is not the primary user?

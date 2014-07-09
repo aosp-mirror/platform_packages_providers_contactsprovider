@@ -148,9 +148,11 @@ import com.android.providers.contacts.aggregation.ProfileAggregator;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
+import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
+import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
 
@@ -307,6 +309,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1024;
     private static final int CONTACTS_FREQUENT = 1025;
     private static final int CONTACTS_DELETE_USAGE = 1026;
+    private static final int CONTACTS_ID_PHOTO_CORP = 1027;
+    private static final int CONTACTS_ID_DISPLAY_PHOTO_CORP = 1028;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -334,6 +338,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CONTACTABLES_FILTER = 3015;
 
     private static final int PHONE_LOOKUP = 4000;
+    private static final int PHONE_LOOKUP_ENTERPRISE = 4001;
 
     private static final int AGGREGATION_EXCEPTIONS = 6000;
     private static final int AGGREGATION_EXCEPTION_ID = 6001;
@@ -1137,6 +1142,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/photo", CONTACTS_ID_PHOTO);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/display_photo",
                 CONTACTS_ID_DISPLAY_PHOTO);
+
+        // Special URIs that refer to contact pictures in the corp CP2.
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts_corp/#/photo", CONTACTS_ID_PHOTO_CORP);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts_corp/#/display_photo",
+                CONTACTS_ID_DISPLAY_PHOTO_CORP);
+
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/#/stream_items",
                 CONTACTS_ID_STREAM_ITEMS);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter", CONTACTS_FILTER);
@@ -1225,6 +1236,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 PROFILE_SYNCSTATE_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup/*", PHONE_LOOKUP);
+        matcher.addURI(ContactsContract.AUTHORITY, "phone_lookup_enterprise/*",
+                PHONE_LOOKUP_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
                 AGGREGATION_EXCEPTIONS);
         matcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions/*",
@@ -6122,6 +6135,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
+            case PHONE_LOOKUP_ENTERPRISE: {
+                if (uri.getPathSegments().size() != 2) {
+                    throw new IllegalArgumentException("Phone number missing in URI: " + uri);
+                }
+                final String phoneNumber = Uri.decode(uri.getLastPathSegment());
+                final boolean isSipAddress = uri.getBooleanQueryParameter(
+                        PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
+                return queryPhoneLookupEnterprise(phoneNumber, projection, isSipAddress);
+            }
             case PHONE_LOOKUP: {
                 // Phone lookup cannot be combined with a selection
                 selection = null;
@@ -6447,6 +6469,165 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
         return c;
+    }
+
+    /**
+     * Handles {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
+     */
+    // TODO Test
+    private Cursor queryPhoneLookupEnterprise(String phoneNumber, String[] projection,
+            boolean isSipAddress) {
+
+        final int corpUserId = UserUtils.getCorpUserId(getContext());
+
+        // Step 1. Look at the database on the current profile.
+        final Uri localUri = PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSipAddress))
+                .build();
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "queryPhoneLookupEnterprise: local query URI=" + localUri);
+        }
+        final Cursor local = queryLocal(localUri, projection,
+                /* selection */ null, /* args */ null, /* order */ null, /* directory */ 0,
+                /* cancellationsignal*/ null);
+        try {
+            if (VERBOSE_LOGGING) {
+                MoreDatabaseUtils.dumpCursor(TAG, "local", local);
+            }
+
+            // If we found a result or there's no corp profile, just return it as-is.
+            if (local.getCount() > 0 || corpUserId < 0) {
+                return local;
+            }
+        } catch (Throwable th) { // If something throws, close the cursor.
+            local.close();
+            throw th;
+        }
+
+        // Step 2.  No rows found in the local db, and there is a corp profile. Look at the corp
+        // DB.
+
+        // Add the user-id to the URI, like "content://USER@com.android.contacts/...".
+        final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "queryPhoneLookupEnterprise: corp query URI=" + localUri);
+        }
+        final Cursor corp = getContext().getContentResolver().query(remoteUri, projection,
+                /* selection */ null, /* args */ null, /* order */ null,
+                /* cancellationsignal*/ null);
+        try {
+            if (VERBOSE_LOGGING) {
+                MoreDatabaseUtils.dumpCursor(TAG, "corp raw", corp);
+            }
+            final Cursor rewritten = rewriteCorpPhoneLookup(corp);
+            if (VERBOSE_LOGGING) {
+                MoreDatabaseUtils.dumpCursor(TAG, "corp rewritten", rewritten);
+            }
+            return rewritten;
+        } finally {
+            // Always close the corp cursor; as we just return the rewritten one.
+            corp.close();
+        }
+    }
+
+    /**
+     * Rewrite a cursor from the corp profile for {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
+     */
+    // TODO Test
+    private static Cursor rewriteCorpPhoneLookup(Cursor original) {
+        final String[] columns = original.getColumnNames();
+        final MatrixCursor ret = new MatrixCursor(columns);
+
+        original.moveToPosition(-1);
+        while (original.moveToNext()) {
+            final int contactId = original.getInt(original.getColumnIndex(PhoneLookup._ID));
+
+            final MatrixCursor.RowBuilder builder = ret.newRow();
+
+            for (int i = 0; i < columns.length; i++) {
+                switch (columns[i]) {
+                    // Set artificial photo URLs using Contacts.CORP_CONTENT_URI.
+                    case PhoneLookup.PHOTO_THUMBNAIL_URI:
+                        builder.add(getCorpThumbnailUri(contactId, original));
+                        break;
+                    case PhoneLookup.PHOTO_URI:
+                        builder.add(getCorpDisplayPhotoUri(contactId, original));
+                        break;
+
+                    // These columns are set to null.
+                    // See the javadoc on PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI for the reasons.
+                    case PhoneLookup._ID:
+                    case PhoneLookup.PHOTO_FILE_ID:
+                    case PhoneLookup.PHOTO_ID:
+                    case PhoneLookup.LOOKUP_KEY:
+                    case PhoneLookup.CUSTOM_RINGTONE:
+                    case PhoneLookup.IN_VISIBLE_GROUP:
+                    case PhoneLookup.IN_DEFAULT_DIRECTORY:
+                        builder.add(null);
+                        break;
+                    default:
+                        // Copy the original value.
+                        switch (original.getType(i)) {
+                            case Cursor.FIELD_TYPE_NULL:
+                                builder.add(null);
+                                break;
+                            case Cursor.FIELD_TYPE_INTEGER:
+                                builder.add(original.getInt(i));
+                                break;
+                            case Cursor.FIELD_TYPE_FLOAT:
+                                builder.add(original.getFloat(i));
+                                break;
+                            case Cursor.FIELD_TYPE_STRING:
+                                builder.add(original.getString(i));
+                                break;
+                            case Cursor.FIELD_TYPE_BLOB:
+                                builder.add(original.getBlob(i));
+                                break;
+                        }
+                }
+            }
+        }
+        return ret;
+    }
+
+    /**
+     * Generate a photo URI for {@link PhoneLookup#PHOTO_THUMBNAIL_URI}.
+     *
+     * Example: "content://USER@com.android.contacts/contacts/ID/photo"
+     *
+     * {@link #openAssetFile} knows how to fetch from this URI.
+     */
+    // TODO Test
+    private static String getCorpThumbnailUri(long contactId, Cursor originalCursor) {
+        // First, check if the contact has a thumbnail.
+        if (originalCursor.isNull(
+                originalCursor.getColumnIndex(PhoneLookup.PHOTO_THUMBNAIL_URI))) {
+            // No thumbnail.  Just return null.
+            return null;
+        }
+        return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
+                .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
+    }
+
+    /**
+     * Generate a photo URI for {@link PhoneLookup#PHOTO_URI}.
+     *
+     * Example: "content://USER@com.android.contacts/contacts/ID/display_photo"
+     *
+     * {@link #openAssetFile} knows how to fetch from this URI.
+     */
+    // TODO Test
+    private static String getCorpDisplayPhotoUri(long contactId, Cursor originalCursor) {
+        // First, check if the contact has a display photo.
+        if (originalCursor.isNull(
+                originalCursor.getColumnIndex(PhoneLookup.PHOTO_FILE_ID))) {
+            // No display photo, fall-back to thumbnail.
+            return getCorpThumbnailUri(contactId, originalCursor);
+        }
+        return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
+                .appendPath(Contacts.Photo.DISPLAY_PHOTO).build().toString();
     }
 
     /**
@@ -7752,7 +7933,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 long photoMimetypeId = mDbHelper.get().getMimeTypeId(Photo.CONTENT_ITEM_TYPE);
                 return openPhotoAssetFile(db, uri, mode,
                         Data._ID + "=? AND " + DataColumns.MIMETYPE_ID + "=" + photoMimetypeId,
-                        new String[] {String.valueOf(dataId)});
+                        new String[]{String.valueOf(dataId)});
             }
 
             case PROFILE_AS_VCARD: {
@@ -7802,10 +7983,47 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return buildAssetFileDescriptor(localStream);
             }
 
+            case CONTACTS_ID_PHOTO_CORP: {
+                final long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                return openCorpContactPicture(contactId, uri, mode, /* displayPhoto =*/ false);
+            }
+
+            case CONTACTS_ID_DISPLAY_PHOTO_CORP: {
+                final long contactId = Long.parseLong(uri.getPathSegments().get(1));
+                return openCorpContactPicture(contactId, uri, mode, /* displayPhoto =*/ true);
+            }
+
             default:
                 throw new FileNotFoundException(
                         mDbHelper.get().exceptionMessage("File does not exist", uri));
         }
+    }
+
+    /**
+     * Handles "/contacts_corp/ID/{photo,display_photo}", which refer to contact picures in the corp
+     * CP2.
+     */
+    private AssetFileDescriptor openCorpContactPicture(long contactId, Uri uri, String mode,
+            boolean displayPhoto) throws FileNotFoundException {
+        if (!mode.equals("r")) {
+            throw new IllegalArgumentException(
+                    "Photos retrieved by contact ID can only be read.");
+        }
+        final int corpUserId = UserUtils.getCorpUserId(getContext());
+        if (corpUserId < 0) {
+            // No corp profile or the currrent profile is not the personal.
+            throw new FileNotFoundException(uri.toString());
+        }
+        // Convert the URI into:
+        // content://USER@com.android.contacts/contacts_corp/ID/{photo,display_photo}
+        final Uri corpUri = maybeAddUserId(
+                ContentUris.appendId(Contacts.CONTENT_URI.buildUpon(), contactId)
+                        .appendPath(displayPhoto ?
+                                Contacts.Photo.DISPLAY_PHOTO : Contacts.Photo.CONTENT_DIRECTORY)
+                        .build(), corpUserId);
+
+        // TODO Make sure it doesn't leak any FDs.
+        return getContext().getContentResolver().openAssetFileDescriptor(corpUri, mode);
     }
 
     private AssetFileDescriptor openPhotoAssetFile(
@@ -8079,6 +8297,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PHONES_ID:
                 return Phone.CONTENT_ITEM_TYPE;
             case PHONE_LOOKUP:
+            case PHONE_LOOKUP_ENTERPRISE:
                 return PhoneLookup.CONTENT_TYPE;
             case EMAILS:
                 return Email.CONTENT_TYPE;
@@ -8157,6 +8376,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return sDataProjectionMap.getColumnNames();
 
             case PHONE_LOOKUP:
+            case PHONE_LOOKUP_ENTERPRISE:
                 return sPhoneLookupProjectionMap.getColumnNames();
 
             case AGGREGATION_EXCEPTIONS:

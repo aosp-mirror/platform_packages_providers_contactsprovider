@@ -18,6 +18,9 @@ package com.android.providers.contacts.database;
 
 import com.android.providers.contacts.util.NeededForTesting;
 
+import android.database.Cursor;
+import android.util.Log;
+
 /**
  * Static methods for database operations.
  */
@@ -75,5 +78,34 @@ public class MoreDatabaseUtils {
             delimiter = ",";
         }
         return sb.toString();
+    }
+
+    /** Debug utility that dumps a cursor on logcat. */
+    public static final void dumpCursor(String logTag, String name, Cursor c) {
+        Log.d(logTag, "Dumping cursor " + name + " containing " + c.getCount() + " rows");
+
+        // Dump the column names.
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < c.getColumnCount(); i++) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(c.getColumnName(i));
+        }
+        Log.d(logTag, sb.toString());
+
+        // Dump the values.
+        c.moveToPosition(-1);
+        while (c.moveToNext()) {
+            sb.setLength(0);
+            sb.append("row#");
+            sb.append(c.getPosition());
+
+            for (int i = 0; i < c.getColumnCount(); i++) {
+                sb.append(" ");
+
+                String s = c.getString(i);
+                sb.append(s == null ? "{null}" : s.replaceAll("\\s", "{space}"));
+            }
+            Log.d(logTag, sb.toString());
+        }
     }
 }
