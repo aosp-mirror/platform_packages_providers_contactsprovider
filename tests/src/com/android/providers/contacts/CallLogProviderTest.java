@@ -51,11 +51,6 @@ import java.util.List;
  */
 @MediumTest
 public class CallLogProviderTest extends BaseContactsProvider2Test {
-    private static final String READ_WRITE_ALL_PERMISSION =
-            "com.android.voicemail.permission.READ_WRITE_ALL_VOICEMAIL";
-    private static final String ADD_VOICEMAIL_PERMISSION =
-            "com.android.voicemail.permission.ADD_VOICEMAIL";
-
     /** Fields specific to voicemail provider that should not be exposed by call_log*/
     private static final String[] VOICEMAIL_PROVIDER_SPECIFIC_COLUMNS = new String[] {
             Voicemails._DATA,
@@ -100,12 +95,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     private void setUpWithVoicemailPermissions() {
         mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
-        mActor.addPermissions(READ_WRITE_ALL_PERMISSION);
-    }
-
-    private void setUpWithNoVoicemailPermissions() {
-        mActor.removePermissions(ADD_VOICEMAIL_PERMISSION);
-        mActor.removePermissions(READ_WRITE_ALL_PERMISSION);
+        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
+        mActor.addPermissions(MANAGE_VOICEMAIL_PERMISSION);
     }
 
     public void testInsert_VoicemailCallRecord() {
@@ -348,7 +339,13 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                         null, null);
             }
         });
-        // Should now succeed with permissions granted.
+
+        // Should succeed with manage permission granted
+        mActor.addPermissions(MANAGE_VOICEMAIL_PERMISSION);
+        mResolver.update(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultCallValues(), null, null);
+        mActor.removePermissions(MANAGE_VOICEMAIL_PERMISSION);
+
+        // Should also succeed with full permissions granted.
         setUpWithVoicemailPermissions();
         mResolver.update(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultCallValues(), null, null);
     }
@@ -360,7 +357,13 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 mResolver.query(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null, null, null);
             }
         });
-        // Should now succeed with permissions granted.
+
+        // Should succeed with read_all permission granted
+        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
+        mResolver.query(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null, null, null);
+        mActor.removePermissions(READ_ALL_VOICEMAIL_PERMISSION);
+
+        // Should also succeed with full permissions granted.
         setUpWithVoicemailPermissions();
         mResolver.query(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null, null, null);
     }
@@ -372,6 +375,12 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
             }
         });
+
+        // Should succeed with manage permission granted
+        mActor.addPermissions(MANAGE_VOICEMAIL_PERMISSION);
+        mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
+        mActor.removePermissions(MANAGE_VOICEMAIL_PERMISSION);
+
         // Should now succeed with permissions granted.
         setUpWithVoicemailPermissions();
         mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);

@@ -195,6 +195,20 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
                 insertVoicemailForSourcePackage("another-package");
             }
         });
+
+        setUpForNoPermission();
+        mUseSourceUri = false;
+        // With the READ_ALL_VOICEMAIL permission, we should now be able to read all voicemails
+        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
+        assertEquals(2, getCount(voicemailUri(), null, null));
+
+        // An insert for another package should still fail
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                insertVoicemailForSourcePackage("another-package");
+            }
+        });
     }
 
     public void testPermissions_UpdateAndDelete() {
@@ -224,6 +238,25 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
                 mResolver.delete(anotherVoicemail, null, null);
             }
         });
+
+        // If we have the manage voicemail permission, we should be able to both update and delete
+        // voicemails from all packages
+        setUpForNoPermission();
+        mActor.addPermissions(MANAGE_VOICEMAIL_PERMISSION);
+        mResolver.update(anotherVoicemail, getTestVoicemailValues(), null, null);
+
+        // Now add the read voicemail permission temporarily to verify that the update actually
+        // worked
+        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
+        assertStoredValues(anotherVoicemail, getTestVoicemailValues());
+        mActor.removePermissions(READ_ALL_VOICEMAIL_PERMISSION);
+
+        mResolver.delete(anotherVoicemail, null, null);
+
+        // Now add the read voicemail permission temporarily to verify that the delete actually
+        // worked
+        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
+        assertEquals(0, getCount(anotherVoicemail, null, null));
     }
 
     private Uri withSourcePackageParam(Uri uri) {
@@ -248,6 +281,35 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
         // Cleanup.
         mActor.removeUriPermissions(uri1);
+    }
+
+    /*
+     * Checks that the READ_ALL_VOICEMAIL permission provides read access to a uri.
+     */
+    public void testUriPermissions_ReadAccess() {
+        setUpForFullPermission();
+        final Uri uri1 = insertVoicemail();
+        // Give away all permissions before querying. Access should be denied.
+        setUpForNoPermission();
+        mUseSourceUri = false;
+        checkHasNoAccessToUri(uri1);
+
+        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
+        checkHasReadAccessToUri(uri1);
+    }
+
+    /*
+     * Checks that the MANAGE_VOICEMAIL permission provides write access to a uri.
+     */
+    public void testUriPermissions_WriteAccess() {
+        setUpForFullPermission();
+        final Uri uri1 = insertVoicemail();
+        // Give away all permissions before querying. Access should be denied.
+        setUpForNoPermission();
+        checkHasNoAccessToUri(uri1);
+
+        mActor.addPermissions(MANAGE_VOICEMAIL_PERMISSION);
+        checkHasUpdateAndDeleteAccessToUri(uri1);
     }
 
     private void checkHasNoAccessToUri(final Uri uri) {
@@ -296,6 +358,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
                 }
             }
         });
+    }
+
+    private void checkHasUpdateAndDeleteAccessToUri(final Uri uri) {
+        mResolver.update(uri, getTestVoicemailValues(), null, null);
+        mResolver.delete(uri, null, null);
     }
 
     private void checkHasNoWriteAccessToUri(final Uri uri) {

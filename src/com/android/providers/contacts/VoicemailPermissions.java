@@ -36,16 +36,15 @@ public class VoicemailPermissions {
         return callerHasPermission(android.Manifest.permission.ADD_VOICEMAIL);
     }
 
-
     /** Determine if the calling process has full read access to all voicemails. */
     public boolean callerHasFullReadAccess() {
         return callerHasPermission(android.Manifest.permission.READ_ALL_VOICEMAIL);
     }
 
-    /** Determines if the calling process has access to all voicemails. */
-    public boolean callerHasFullAccess() {
-        return callerHasOwnVoicemailAccess() &&
-                callerHasPermission(Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
+    /** Determine if the calling process has the permission required to update and remove all
+     * voicemails */
+    public boolean callerHasManageAccess() {
+        return callerHasPermission(android.Manifest.permission.MANAGE_VOICEMAIL);
     }
 
     /**
@@ -72,16 +71,10 @@ public class VoicemailPermissions {
         }
     }
 
-     /**
-     * Checks that the caller has permissions to access ALL voicemails.
-     *
-     * @throws SecurityException if the caller does not have the voicemail source permission.
-     */
-    public void checkCallerHasFullAccess() {
-        if (!callerHasFullAccess()) {
-            throw new SecurityException(String.format("The caller must have permissions %s AND %s",
-                    android.Manifest.permission.ADD_VOICEMAIL,
-                    Manifest.permission.READ_WRITE_ALL_VOICEMAIL));
+    public void checkCallerHasManageAccess() {
+        if (!callerHasManageAccess()) {
+            throw new SecurityException(String.format("The caller must have %s permission: ",
+                    android.Manifest.permission.MANAGE_VOICEMAIL));
         }
     }
 
@@ -96,26 +89,19 @@ public class VoicemailPermissions {
         return packageHasPermission(packageName, android.Manifest.permission.READ_ALL_VOICEMAIL);
     }
 
-    /** Determines if the given package has full access. */
-    public boolean packageHasFullAccess(String packageName) {
-        return packageHasOwnVoicemailAccess(packageName) &&
-                packageHasPermission(packageName, Manifest.permission.READ_WRITE_ALL_VOICEMAIL);
+    /** Determines if the given package has manage access. */
+    public boolean packageHasManageAccess(String packageName) {
+        return packageHasPermission(packageName, android.Manifest.permission.MANAGE_VOICEMAIL);
     }
 
     /** Determines if the given package has the given permission. */
     private boolean packageHasPermission(String packageName, String permission) {
         return mContext.getPackageManager().checkPermission(permission, packageName)
-                == PackageManager.PERMISSION_GRANTED;
+               == PackageManager.PERMISSION_GRANTED;
     }
 
     /** Determines if the calling process has the given permission. */
     private boolean callerHasPermission(String permission) {
-        // We need to check against both the calling or self permission in order for the Contacts
-        // app to be allowed access.
-        // The reason is that the Contacts app shares its process with the ContactsProvider and
-        // therefore its requests are not considered to be IPCs, since they are coming from the same
-        // process, even if, technically, from a different package.
-        return mContext.checkCallingOrSelfPermission(permission)
-                == PackageManager.PERMISSION_GRANTED;
+        return mContext.checkCallingPermission(permission) == PackageManager.PERMISSION_GRANTED;
     }
 }
