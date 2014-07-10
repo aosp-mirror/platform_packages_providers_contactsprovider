@@ -114,7 +114,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 903;
+    static final int DATABASE_VERSION = 904;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1465,7 +1465,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         Calls.PRESENTATION_ALLOWED + "," +
                 Calls.DATE + " INTEGER," +
                 Calls.DURATION + " INTEGER," +
+                Calls.DATA_USAGE + " INTEGER," +
                 Calls.TYPE + " INTEGER," +
+                Calls.FEATURES + " INTEGER NOT NULL DEFAULT 0," +
                 Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
                 Calls.PHONE_ACCOUNT_ID + " TEXT," +
                 Calls.NEW + " INTEGER," +
@@ -2750,6 +2752,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 903) {
             upgradeToVersion903(db);
             oldVersion = 903;
+        }
+
+        if (oldVersion < 904) {
+            upgradeToVersion904(db);
+            oldVersion = 904;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4057,8 +4064,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     private void upgradeToVersion902(SQLiteDatabase db) {
         // adding account identifier to call log table
-        db.execSQL("ALTER TABLE calls ADD "+ Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT;");
-        db.execSQL("ALTER TABLE calls ADD "+ Calls.PHONE_ACCOUNT_ID + " TEXT;");
+        db.execSQL("ALTER TABLE calls ADD subscription_component_name TEXT;");
+        db.execSQL("ALTER TABLE calls ADD subscription_id TEXT;");
     }
 
     /**
@@ -4112,6 +4119,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } finally {
             c.close();
         }
+    }
+
+    /**
+     * Updates the calls table in the database to include the call_duration and features columns.
+     * @param db The database to update.
+     */
+    private void upgradeToVersion904(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD features INTEGER NOT NULL DEFAULT 0;");
+        db.execSQL("ALTER TABLE calls ADD data_usage INTEGER;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
