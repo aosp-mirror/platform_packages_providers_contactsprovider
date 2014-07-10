@@ -6555,16 +6555,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     case PhoneLookup.PHOTO_URI:
                         builder.add(getCorpDisplayPhotoUri(contactId, original));
                         break;
+                    case PhoneLookup._ID:
+                        builder.add(original.getLong(i) + Contacts.CORP_CONTACT_ID_BASE);
+                        break;
 
                     // These columns are set to null.
                     // See the javadoc on PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI for the reasons.
-                    case PhoneLookup._ID:
                     case PhoneLookup.PHOTO_FILE_ID:
                     case PhoneLookup.PHOTO_ID:
-                    case PhoneLookup.LOOKUP_KEY:
-                    case PhoneLookup.CUSTOM_RINGTONE:
-                    case PhoneLookup.IN_VISIBLE_GROUP:
-                    case PhoneLookup.IN_DEFAULT_DIRECTORY:
                         builder.add(null);
                         break;
                     default:
@@ -6574,7 +6572,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 builder.add(null);
                                 break;
                             case Cursor.FIELD_TYPE_INTEGER:
-                                builder.add(original.getInt(i));
+                                builder.add(original.getLong(i));
                                 break;
                             case Cursor.FIELD_TYPE_FLOAT:
                                 builder.add(original.getFloat(i));
