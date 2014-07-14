@@ -114,7 +114,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 904;
+    static final int DATABASE_VERSION = 905;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1488,6 +1488,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Voicemails.MIME_TYPE + " TEXT," +
                 Voicemails.SOURCE_DATA + " TEXT," +
                 Voicemails.SOURCE_PACKAGE + " TEXT," +
+                Voicemails.TRANSCRIPTION + " TEXT," +
                 Voicemails.STATE + " INTEGER" +
         ");");
 
@@ -2757,6 +2758,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 904) {
             upgradeToVersion904(db);
             oldVersion = 904;
+        }
+
+        if (oldVersion < 905) {
+            upgradeToVersion905(db);
+            oldVersion = 905;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4128,6 +4134,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void upgradeToVersion904(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD features INTEGER NOT NULL DEFAULT 0;");
         db.execSQL("ALTER TABLE calls ADD data_usage INTEGER;");
+    }
+
+    /**
+     * Adds the voicemail transcription to the Table.Calls
+     */
+    private void upgradeToVersion905(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD transcription TEXT;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
