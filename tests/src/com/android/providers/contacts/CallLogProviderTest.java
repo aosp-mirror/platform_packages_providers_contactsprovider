@@ -177,7 +177,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 "com.android.telecomm",
                 "TelecommServiceImpl");
         PhoneAccount subscription = new PhoneAccount(
-                sComponentName, "sub0", Uri.parse("tel:000-000-0000"), "", "", true, true);
+                sComponentName, "sub0", Uri.parse("tel:000-000-0000"), 0);
 
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, Calls.FEATURES_NONE,
