@@ -44,6 +44,11 @@ public final class UserUtils {
      */
     public static int getCorpUserId(Context context) {
         final UserManager um = getUserManager(context);
+        if (um == null) {
+            Log.w(TAG, "No user manager service found");
+            return -1;
+        }
+
         final int myUser = um.getUserHandle();
 
         // STOPSHIP Check the policy and make sure cross-user contacts lookup is allowed. b/16301261
