@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Сайжруулалтыг дуусгахын тулд хүрнэ үү."</string>
     <string name="default_directory" msgid="93961630309570294">"Харилцагчид"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Бусад"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Бүх дуут шууданд хандалт хийх"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Энэ төхөөрөмжийн хандалт хийх боломжтой бүх дуут шууданг хадгалах буюу татахыг апп-д зөвшөөрнө."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Дуут шуудан илгээгч "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Харилцагчдын мэдээллийн санг хуулах"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Та 1) бүх харилцагчидтай холбоотой мэдээллүүд болон ярианы жагсаалтыг агуулсан өөрийн өгөгдлийн сангийн хуулбарыг дотоод санд хадгалах, мөн 2) имэйлдэх гэж байна. Та үүнийг төхөөрөмжөөсөө амжилттай хуулж дуусах буюу имэйлээр хүлээж авсны дараа устгах хэрэгтэйг санаарай."</string>

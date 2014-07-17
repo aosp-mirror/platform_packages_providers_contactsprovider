@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Atingeţi pentru a finaliza actualizarea."</string>
     <string name="default_directory" msgid="93961630309570294">"Agendă"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altul"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Accesaţi toate mesajele vocale"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permite aplicaţiei să stocheze şi să preia toate mesajele vocale pe care acest dispozitiv le poate accesa."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mesaj vocal de la "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiaţi baza de date a agendei"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Sunteţi pe cale 1) să faceţi o copie, pe stocarea internă, a bazei dvs. de date care include toate informaţiile referitoare la agendă şi întregul jurnal de apeluri şi 2) să trimiteţi această copie prin e-mail. Nu uitaţi să ştergeţi această copie după ce aţi copiat-o de pe dispozitiv sau după ce a fost primit e-mailul."</string>
