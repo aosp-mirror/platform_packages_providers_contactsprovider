@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"ប៉ះ​ដើម្បី​បញ្ចប់​ការ​ធ្វើ​បច្ចុប្បន្នភាព។"</string>
     <string name="default_directory" msgid="93961630309570294">"ទំនាក់ទំនង"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ផ្សេងៗ"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"ដំណើរ​ការ​សារ​ជា​សំឡេង​ទាំងអស់"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"ឱ្យ​កម្មវិធី​ទុក និង​ទៅ​យក​សារ​ជា​សំឡេង​ទាំងអស់​ដែល​ឧបករណ៍​នេះ​អាច​ដំណើរ​ការ​បាន។"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"សារ​ជា​សំឡេង​ពី "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"ចម្លង​មូលដ្ឋាន​ទិន្នន័យ​ទំនាក់ទំនង"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"អ្នក​ហៀបនឹង ១) ចម្លង​មូលដ្ឋាន​ទិន្នន័យ​របស់​អ្នក​ដែល​រួម​មាន​ព័ត៌មាន​ទំនាក់ទំនង និង​កំណត់ហេតុ​ហៅ​ទាំងអស់​ទៅកាន់​ឧបករណ៍​ផ្ទុក​ខាងក្នុង ២) ផ្ញើ​អ៊ី​ម៉ែ​ល​វា​។ ចងចាំ​ថា​អ្នក​ត្រូវ​លុប​ច្បាប់​ចម្លង​ភ្លាមៗ បន្ទាប់ពី​បាន​ចម្លង​ចេញពី​ឧបករណ៍ ឬ​បាន​ទទួល​អ៊ីមែល។"</string>
