@@ -54,7 +54,7 @@ public class CallerInfoIntegrationTest extends BaseContactsProvider2Test {
         assertEquals("Hot Tamale", callerInfo.name);
         assertEquals("ring", String.valueOf(callerInfo.contactRingtoneUri));
         assertEquals(true, callerInfo.shouldSendToVoicemail);
-        assertEquals("content://com.android.contacts/phone_lookup/18004664411",
+        assertEquals("content://com.android.contacts/phone_lookup_enterprise/18004664411",
                 String.valueOf(callerInfo.contactRefUri));
     }
 }
