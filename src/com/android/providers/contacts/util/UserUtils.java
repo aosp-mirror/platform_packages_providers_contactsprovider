@@ -41,20 +41,16 @@ public final class UserUtils {
     /**
      * @return the user ID of the corp user that is linked to the current user, if any.
      * If there's no such user or cross-user contacts access is disallowed by policy, returns -1.
-     *
-     * STOPSHIP: Have amith look at it.
      */
     public static int getCorpUserId(Context context) {
         final UserManager um = getUserManager(context);
-        final int currentUser = um.getUserHandle();
+        final int myUser = um.getUserHandle();
 
-        // STOPSHIP Check the policy and make sure cross-user contacts lookup is allowed.
+        // STOPSHIP Check the policy and make sure cross-user contacts lookup is allowed. b/16301261
 
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "getCorpUserId: current=" + currentUser);
+            Log.v(TAG, "getCorpUserId: myUser=" + myUser);
         }
-
-        // TODO: Skip if the current is not the primary user?
 
         // Check each user.
         for (UserInfo ui : um.getUsers()) {
@@ -66,7 +62,7 @@ public final class UserUtils {
                 continue; // No parent.
             }
             // Check if it's linked to the current user.
-            if (um.getProfileParent(ui.id).id == currentUser) {
+            if (parent.id == myUser) {
                 if (VERBOSE_LOGGING) {
                     Log.v(TAG, "Corp user=" + ui.id);
                 }
