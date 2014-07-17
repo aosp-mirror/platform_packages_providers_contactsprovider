@@ -30,7 +30,7 @@ public final class UserUtils {
     private UserUtils() {
     }
 
-    private static UserManager getUserManager(Context context) {
+    public static UserManager getUserManager(Context context) {
         return (UserManager) context.getSystemService(Context.USER_SERVICE);
     }
 

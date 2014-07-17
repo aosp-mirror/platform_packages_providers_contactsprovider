@@ -93,4 +93,20 @@ public class CommonDatabaseUtils {
             Log.wtf(TAG, "Remote exception when performing batch operation.");
         }
     }
+
+    /**
+     * Returns an array of values extracted from a {@link ContentValues}, based on the order of
+     * the provided projection.
+     * @param values {@link ContentValues} object containing the values to convert into an array
+     * @param projection array of column names
+     *
+     * @return array of values, in the correct order as defined by the projection
+     */
+    public static Object[] getArrayFromContentValues(ContentValues values, String[] projection) {
+        final Object[] result = new Object[projection.length];
+        for (int i = 0; i < projection.length; i++) {
+            result[i] = values.get(projection[i]);
+        }
+        return result;
+    }
 }
