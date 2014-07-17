@@ -17,8 +17,10 @@ package com.android.providers.contacts.util;
 
 import com.android.providers.contacts.ContactsProvider2;
 
+import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.pm.UserInfo;
+import android.os.UserHandle;
 import android.os.UserManager;
 import android.util.Log;
 
@@ -34,6 +36,10 @@ public final class UserUtils {
         return (UserManager) context.getSystemService(Context.USER_SERVICE);
     }
 
+    private static DevicePolicyManager getDevicePolicyManager(Context context) {
+        return (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+    }
+
     public static int getCurrentUserHandle(Context context) {
         return getUserManager(context).getUserHandle();
     }
@@ -45,16 +51,24 @@ public final class UserUtils {
     public static int getCorpUserId(Context context) {
         final UserManager um = getUserManager(context);
         if (um == null) {
-            Log.w(TAG, "No user manager service found");
+            Log.e(TAG, "No user manager service found");
             return -1;
         }
 
         final int myUser = um.getUserHandle();
 
-        // STOPSHIP Check the policy and make sure cross-user contacts lookup is allowed. b/16301261
-
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "getCorpUserId: myUser=" + myUser);
+        }
+
+        // TODO DevicePolicyManager is not mockable -- the constructor is private.
+        // Test it somehow.
+        if (getDevicePolicyManager(context)
+                .getCrossProfileCallerIdDisabled(new UserHandle(myUser))) {
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "Enterprise caller-id disabled.");
+            }
+            return -1;
         }
 
         // Check each user.

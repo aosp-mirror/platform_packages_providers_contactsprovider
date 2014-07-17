@@ -23,6 +23,7 @@ import android.accounts.AccountManagerFuture;
 import android.accounts.AuthenticatorException;
 import android.accounts.OnAccountsUpdateListener;
 import android.accounts.OperationCanceledException;
+import android.app.admin.DevicePolicyManager;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -33,6 +34,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
+import android.content.pm.UserInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.Cursor;
@@ -40,8 +42,12 @@ import android.location.Country;
 import android.location.CountryDetector;
 import android.location.CountryListener;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
+import android.os.IUserManager;
 import android.os.Looper;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -62,7 +68,9 @@ import com.google.android.collect.Sets;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -135,6 +143,83 @@ public class ContactsActor {
         }
     }
 
+    public MockUserManager mockUserManager;
+
+    public static class MockUserManager extends UserManager {
+        public static UserInfo createUserInfo(String name, int id, int groupId, int flags) {
+            final UserInfo ui = new UserInfo();
+            ui.name = name;
+            ui.id = id;
+            ui.profileGroupId = groupId;
+            ui.flags = flags | UserInfo.FLAG_INITIALIZED;
+            return ui;
+        }
+
+        public static final UserInfo PRIMARY_USER = createUserInfo("primary", 0, 0,
+                UserInfo.FLAG_PRIMARY | UserInfo.FLAG_ADMIN);
+        public static final UserInfo CORP_USER = createUserInfo("corp", 10, 0,
+                UserInfo.FLAG_MANAGED_PROFILE);
+        public static final UserInfo SECONDARY_USER = createUserInfo("2nd", 11, 11, 0);
+
+        /** "My" user.  Set it to change the current user. */
+        public int myUser = 0;
+
+        private ArrayList<UserInfo> mUsers = new ArrayList<>();
+
+        public MockUserManager(Context context) {
+            super(context, /* IUserManager */ null);
+
+            mUsers.add(PRIMARY_USER); // Add the primary user.
+        }
+
+        /** Replaces users. */
+        public void setUsers(UserInfo... users) {
+            mUsers.clear();
+            for (UserInfo ui : users) {
+                mUsers.add(ui);
+            }
+        }
+
+        @Override
+        public int getUserHandle() {
+            return myUser;
+        }
+
+        @Override
+        public UserInfo getUserInfo(int userHandle) {
+            for (UserInfo ui : mUsers) {
+                if (ui.id == userHandle) {
+                    return ui;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public UserInfo getProfileParent(int userHandle) {
+            final UserInfo child = getUserInfo(userHandle);
+            if (child == null) {
+                return null;
+            }
+            for (UserInfo ui : mUsers) {
+                if (ui.id != userHandle && ui.id == child.profileGroupId) {
+                    return ui;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public List<UserInfo> getUsers() {
+            return mUsers;
+        }
+
+        @Override
+        public Bundle getUserRestrictions(UserHandle userHandle) {
+            return new Bundle();
+        }
+    }
+
     private IsolatedContext mProviderContext;
 
     /**
@@ -143,7 +228,7 @@ public class ContactsActor {
      * a new instance of {@link RestrictionMockContext}, which stubs out the
      * security infrastructure.
      */
-    public ContactsActor(Context overallContext, String packageName,
+    public ContactsActor(final Context overallContext, String packageName,
             Class<? extends ContentProvider> providerClass, String authority) throws Exception {
         resolver = new MockContentResolver();
         context = new RestrictionMockContext(overallContext, packageName, resolver,
@@ -177,7 +262,12 @@ public class ContactsActor {
                 if (Context.ACCOUNT_SERVICE.equals(name)) {
                     return mMockAccountManager;
                 }
-                return super.getSystemService(name);
+                if (Context.USER_SERVICE.equals(name)) {
+                    return mockUserManager;
+                }
+                // Use overallContext here; super.getSystemService() somehow won't return
+                // DevicePolicyManager.
+                return overallContext.getSystemService(name);
             }
 
             @Override
@@ -187,7 +277,12 @@ public class ContactsActor {
         };
 
         mMockAccountManager = new MockAccountManager(mProviderContext);
+        mockUserManager = new MockUserManager(mProviderContext);
         provider = addProvider(providerClass, authority);
+    }
+
+    public Context getProviderContext() {
+        return mProviderContext;
     }
 
     public void addAuthority(String authority) {
