@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"श्रेणीसुधारित करणे पूर्ण करण्‍यासाठी स्‍पर्श करा."</string>
     <string name="default_directory" msgid="93961630309570294">"संपर्क"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"इतर"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"सर्व व्हॉइसमेलमध्‍ये प्रवेश करा"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"अ‍ॅपला हे डिव्‍हाइस प्रवेश करू शकणार्‍या सर्व व्‍हॉइसमेलना संचयित करण्‍याची आणि पुनर्प्राप्त करण्‍याची अनुमती देते."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"कडून व्हॉईसमेल "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस कॉपी करा"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"आपण 1) आपल्‍या डेटाबेसची प्रत बनवणार आहात जिच्‍यामध्‍ये सर्व संपर्कांसंबंधी माहिती आणि अंतर्गत संचयनावरील कॉल लॉग समाविष्‍ट असतात आणि 2) ती ईमेल करणार आहात. आपण डिव्‍हाइसवरून यशस्‍वीरित्‍या प्रत कॉपी केल्‍यानंतर किंवा ईमेल प्राप्त केल्‍यानंतर लगेच ती हटविण्‍याचे लक्षात ठेवा."</string>

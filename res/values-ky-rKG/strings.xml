@@ -29,8 +29,6 @@
     <skip />
     <!-- no translation found for local_invisible_directory (705244318477396120) -->
     <skip />
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Бардык үнкаттарга кирүү"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Колдонмого бул түзмөк жете алган бардык үнкаттарды сактаганга жана калыбына келтиргенге уруксат берет."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Келген үнкат "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Байланыштар корун көчүрүү"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Сиз буларды кылайын деп жатасыз: 1) Ичинде бардык байланыштарга тийиштүү маалыматтар жана чалуу тизмелери бар берилиштер корун сырткы сактагычка  көчүрмөлөө, 2) жана аны эмейлге жөнөтүү. Көчүрмөнү, түзмөктөн ийгиликтүү көчүрүп же эмейлден алаарыңыз менен, жок кылууну унутпаңыз."</string>

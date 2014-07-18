@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"আপগ্রেড সম্পূর্ণ করতে স্পর্শ করুন৷"</string>
     <string name="default_directory" msgid="93961630309570294">"পরিচিতিগুলি"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"অন্যান্য"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"সব ভয়েসমেল অ্যাক্সেস করুন"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"অ্যাপ্লিকেশনটিকে এই ডিভাইসটি অ্যাক্সেস করতে পারে এমন সমস্ত ভয়েসমেল সঞ্চয় এবং পুনরুদ্ধার করার মঞ্জুরি দেয়৷"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"এর থেকে ভয়েসমেল "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"পরিচিতির ডেটাবেস অনুলিপি করুন"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"আপনি ১) আপনার ডেটাবেসের সমস্ত পরিচিতি সংক্রান্ত তথ্য এবং অভ্যন্তরীণ সংগ্রহস্থলের সমস্ত কল লগ রয়েছে এমন একটি অনুলিপি, এবং ২) এটিকে ইমেল করতে চলেছেন৷ আপনি ডিভাইস থেকে সফলভাবে অনুলিপি করে এবং ইমেলটি পেয়ে যাবার সাথে সাথে অনুলিপিটি মুছে ফেলতে ভুলবেন না৷"</string>
