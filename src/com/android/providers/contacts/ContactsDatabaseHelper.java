@@ -314,6 +314,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String ICU_VERSION = "icu_version";
         String LOCALE = "locale";
         String DATABASE_TIME_CREATED = "database_time_created";
+        String CALL_LOG_LAST_SYNCED = "call_log_last_synced";
     }
 
     public interface Clauses {
@@ -1456,8 +1457,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Contacts._ID + " INTEGER PRIMARY KEY" +
         ");");
 
-        // The table for recent calls is here so we can do table joins
-        // on people, phones, and calls all in one place.
+        // The table for recent calls is here so we can do table joins on people, phones, and
+        // calls all in one place.
+        // NOTE: When adding a new column to Tables.CALLS, make sure to also add it to
+        // CallLogProvider.CALL_LOG_SYNC_PROJECTION, if it is a column that should be copied to
+        // the call log of secondary users.
         db.execSQL("CREATE TABLE " + Tables.CALLS + " (" +
                 Calls._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 Calls.NUMBER + " TEXT," +
