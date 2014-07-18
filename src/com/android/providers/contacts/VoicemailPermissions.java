@@ -37,14 +37,14 @@ public class VoicemailPermissions {
     }
 
     /** Determine if the calling process has full read access to all voicemails. */
-    public boolean callerHasFullReadAccess() {
-        return callerHasPermission(android.Manifest.permission.READ_ALL_VOICEMAIL);
+    public boolean callerHasReadAccess() {
+        return callerHasPermission(android.Manifest.permission.READ_VOICEMAIL);
     }
 
     /** Determine if the calling process has the permission required to update and remove all
      * voicemails */
-    public boolean callerHasManageAccess() {
-        return callerHasPermission(android.Manifest.permission.MANAGE_VOICEMAIL);
+    public boolean callerHasWriteAccess() {
+        return callerHasPermission(android.Manifest.permission.WRITE_VOICEMAIL);
     }
 
     /**
@@ -64,17 +64,17 @@ public class VoicemailPermissions {
      *
      * @throws SecurityException if the caller does not have the voicemail source permission.
      */
-    public void checkCallerHasFullReadAccess() {
-        if (!callerHasFullReadAccess()) {
+    public void checkCallerHasReadAccess() {
+        if (!callerHasReadAccess()) {
             throw new SecurityException(String.format("The caller must have %s permission: ",
-                    android.Manifest.permission.READ_ALL_VOICEMAIL));
+                    android.Manifest.permission.READ_VOICEMAIL));
         }
     }
 
-    public void checkCallerHasManageAccess() {
-        if (!callerHasManageAccess()) {
+    public void checkCallerHasWriteAccess() {
+        if (!callerHasWriteAccess()) {
             throw new SecurityException(String.format("The caller must have %s permission: ",
-                    android.Manifest.permission.MANAGE_VOICEMAIL));
+                    android.Manifest.permission.WRITE_VOICEMAIL));
         }
     }
 
@@ -84,14 +84,14 @@ public class VoicemailPermissions {
                 android.Manifest.permission.ADD_VOICEMAIL);
     }
 
-    /** Determines if the given package has read full access. */
-    public boolean packageHasFullReadAccess(String packageName) {
-        return packageHasPermission(packageName, android.Manifest.permission.READ_ALL_VOICEMAIL);
+    /** Determines if the given package has read access. */
+    public boolean packageHasReadAccess(String packageName) {
+        return packageHasPermission(packageName, android.Manifest.permission.READ_VOICEMAIL);
     }
 
-    /** Determines if the given package has manage access. */
-    public boolean packageHasManageAccess(String packageName) {
-        return packageHasPermission(packageName, android.Manifest.permission.MANAGE_VOICEMAIL);
+    /** Determines if the given package has write access. */
+    public boolean packageHasWriteAccess(String packageName) {
+        return packageHasPermission(packageName, android.Manifest.permission.WRITE_VOICEMAIL);
     }
 
     /** Determines if the given package has the given permission. */

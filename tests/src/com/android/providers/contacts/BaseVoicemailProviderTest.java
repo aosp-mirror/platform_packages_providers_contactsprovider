@@ -62,23 +62,23 @@ public class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
     }
 
     protected void setUpForOwnPermission() {
-        mActor.removePermissions(READ_ALL_VOICEMAIL_PERMISSION);
-        mActor.removePermissions(MANAGE_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(READ_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(WRITE_VOICEMAIL_PERMISSION);
         mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
         mUseSourceUri = true;
     }
 
     protected void setUpForFullPermission() {
         mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
-        mActor.addPermissions(READ_ALL_VOICEMAIL_PERMISSION);
-        mActor.addPermissions(MANAGE_VOICEMAIL_PERMISSION);
+        mActor.addPermissions(READ_VOICEMAIL_PERMISSION);
+        mActor.addPermissions(WRITE_VOICEMAIL_PERMISSION);
         mUseSourceUri = false;
     }
 
     protected void setUpForNoPermission() {
         mActor.removePermissions(ADD_VOICEMAIL_PERMISSION);
-        mActor.removePermissions(READ_ALL_VOICEMAIL_PERMISSION);
-        mActor.removePermissions(MANAGE_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(READ_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(WRITE_VOICEMAIL_PERMISSION);
         mUseSourceUri = true;
     }
 
