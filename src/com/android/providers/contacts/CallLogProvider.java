@@ -31,13 +31,18 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
+import com.android.providers.contacts.util.UserUtils;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
@@ -47,9 +52,26 @@ import java.util.List;
  * Call log content provider.
  */
 public class CallLogProvider extends ContentProvider {
+    private static final String TAG = CallLogProvider.class.getSimpleName();
+
+    /** Selection clause for selecting all calls that were made after a certain time */
+    private static final String MORE_RECENT_THAN_SELECTION = Calls.DATE + "> ?";
     /** Selection clause to use to exclude voicemail records.  */
     private static final String EXCLUDE_VOICEMAIL_SELECTION = getInequalityClause(
             Calls.TYPE, Calls.VOICEMAIL_TYPE);
+
+    @VisibleForTesting
+    static final String[] CALL_LOG_SYNC_PROJECTION = new String[] {
+        Calls.NUMBER,
+        Calls.NUMBER_PRESENTATION,
+        Calls.TYPE,
+        Calls.FEATURES,
+        Calls.DATE,
+        Calls.DURATION,
+        Calls.DATA_USAGE,
+        Calls.PHONE_ACCOUNT_COMPONENT_NAME,
+        Calls.PHONE_ACCOUNT_ID
+    };
 
     private static final int CALLS = 1;
 
@@ -113,6 +135,12 @@ public class CallLogProvider extends ContentProvider {
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
         mVoicemailPermissions = new VoicemailPermissions(context);
         mCallLogInsertionHelper = createCallLogInsertionHelper(context);
+        final UserManager userManager = UserUtils.getUserManager(context);
+        if (userManager != null &&
+                !userManager.hasUserRestriction(UserManager.DISALLOW_OUTGOING_CALLS)) {
+            syncEntriesFromPrimaryUser(userManager);
+        }
+
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, "CallLogProvider.onCreate finish");
         }
@@ -377,5 +405,99 @@ public class CallLogProvider extends ContentProvider {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid call id in uri: " + uri, e);
         }
+    }
+
+    /**
+     * Syncs any unique call log entries that have been inserted into the primary user's call log
+     * since the last time the last sync occurred.
+     */
+    private void syncEntriesFromPrimaryUser(UserManager userManager) {
+        if (userManager.getUserHandle() == UserHandle.USER_OWNER) {
+            return;
+        }
+
+        final long lastSyncTime = getLastSyncTime();
+        final Uri uri = ContentProvider.maybeAddUserId(CallLog.Calls.CONTENT_URI,
+                UserHandle.USER_OWNER);
+        final Cursor cursor = getContext().getContentResolver().query(
+                uri,
+                CALL_LOG_SYNC_PROJECTION,
+                EXCLUDE_VOICEMAIL_SELECTION + " AND " + MORE_RECENT_THAN_SELECTION,
+                new String[] {String.valueOf(lastSyncTime)},
+                Calls.DATE + " DESC");
+        if (cursor == null) {
+            return;
+        }
+        try {
+            final long lastSyncedEntryTime = copyEntriesFromCursor(cursor);
+            if (lastSyncedEntryTime > lastSyncTime) {
+                setLastTimeSynced(lastSyncedEntryTime);
+            }
+        } finally {
+            cursor.close();
+        }
+    }
+
+    /**
+     * @param cursor to copy call log entries from
+     *
+     * @return the timestamp of the last synced entry.
+     */
+    @VisibleForTesting
+    long copyEntriesFromCursor(Cursor cursor) {
+        long lastSynced = 0;
+        final ContentValues values = new ContentValues();
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            final String[] args = new String[2];
+            cursor.moveToPosition(-1);
+            while (cursor.moveToNext()) {
+                values.clear();
+                DatabaseUtils.cursorRowToContentValues(cursor, values);
+                final String startTime = values.getAsString(Calls.DATE);
+                final String number = values.getAsString(Calls.NUMBER);
+
+                if (startTime == null || number == null) {
+                    continue;
+                }
+
+                if (cursor.isLast()) {
+                    try {
+                        lastSynced = Long.valueOf(startTime);
+                    } catch (NumberFormatException e) {
+                        Log.e(TAG, "Call log entry does not contain valid start time: "
+                                + startTime);
+                    }
+                }
+
+                // Avoid duplicating an already existing entry (which is uniquely identified by
+                // the number, and the start time)
+                args[0] = startTime;
+                args[1] = number;
+                if (DatabaseUtils.queryNumEntries(db, Tables.CALLS,
+                        Calls.DATE + " = ? AND " + Calls.NUMBER + " = ?", args) > 0) {
+                    continue;
+                }
+
+                db.insert(Tables.CALLS, null, values);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return lastSynced;
+    }
+
+    private long getLastSyncTime() {
+        try {
+            return Long.valueOf(mDbHelper.getProperty(DbProperties.CALL_LOG_LAST_SYNCED, "0"));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private void setLastTimeSynced(long time) {
+        mDbHelper.setProperty(DbProperties.CALL_LOG_LAST_SYNCED, String.valueOf(time));
     }
 }
