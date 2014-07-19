@@ -249,7 +249,7 @@ public class VoicemailContentProvider extends ContentProvider
         }
 
         // You must have access to the provider given in values.
-        if (!mVoicemailPermissions.callerHasManageAccess()) {
+        if (!mVoicemailPermissions.callerHasWriteAccess()) {
             checkPackagesMatch(getCallingPackage_(),
                     values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD),
                     uriData.getUri());
@@ -290,7 +290,7 @@ public class VoicemailContentProvider extends ContentProvider
             return UriData.createUriData(uri);
         }
 
-        if (mVoicemailPermissions.callerHasFullReadAccess()) {
+        if (mVoicemailPermissions.callerHasReadAccess()) {
             return UriData.createUriData(uri);
         }
 
@@ -333,7 +333,7 @@ public class VoicemailContentProvider extends ContentProvider
             String errorMsg = String.format("Permission denied for URI: %s\n. " +
                     "Package %s cannot perform this operation for %s. Requires %s permission.",
                     uri, callingPackage, voicemailSourcePackage,
-                    android.Manifest.permission.MANAGE_VOICEMAIL);
+                    android.Manifest.permission.WRITE_VOICEMAIL);
             throw new SecurityException(errorMsg);
         }
     }
@@ -347,13 +347,13 @@ public class VoicemailContentProvider extends ContentProvider
      * @throws SecurityException if the check fails.
      */
     private void checkPackagePermission(UriData uriData) {
-        if (!mVoicemailPermissions.callerHasManageAccess()) {
+        if (!mVoicemailPermissions.callerHasWriteAccess()) {
             if (!uriData.hasSourcePackage()) {
                 // You cannot have a match if this is not a provider URI.
                 throw new SecurityException(String.format(
                         "Provider %s does not have %s permission." +
                                 "\nPlease set query parameter '%s' in the URI.\nURI: %s",
-                        getCallingPackage_(), android.Manifest.permission.MANAGE_VOICEMAIL,
+                        getCallingPackage_(), android.Manifest.permission.WRITE_VOICEMAIL,
                         VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, uriData.getUri()));
             }
             checkPackagesMatch(getCallingPackage_(), uriData.getSourcePackage(), uriData.getUri());
@@ -385,7 +385,7 @@ public class VoicemailContentProvider extends ContentProvider
         // which one we return.
         String bestSoFar = callerPackages[0];
         for (String callerPackage : callerPackages) {
-            if (mVoicemailPermissions.packageHasManageAccess(callerPackage)) {
+            if (mVoicemailPermissions.packageHasWriteAccess(callerPackage)) {
                 // Full always wins, we can return early.
                 return callerPackage;
             }
@@ -415,7 +415,7 @@ public class VoicemailContentProvider extends ContentProvider
      * @return True if the package has the permission required to perform the read/write operation
      */
     private boolean hasReadWritePermission(boolean read) {
-        return read ? mVoicemailPermissions.callerHasFullReadAccess() :
-            mVoicemailPermissions.callerHasManageAccess();
+        return read ? mVoicemailPermissions.callerHasReadAccess() :
+            mVoicemailPermissions.callerHasWriteAccess();
     }
 }
