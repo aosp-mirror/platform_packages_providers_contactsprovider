@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"மேம்படுத்தலை முடிக்க தொடவும்."</string>
     <string name="default_directory" msgid="93961630309570294">"தொடர்புகள்"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"மற்றவை"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"எல்லா குரலஞ்சல்களையும் அணுகுதல்"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"சாதனம் அணுகக்கூடிய எல்லா குரலஞ்சல்களையும் சேமிக்கவும் மீட்டெடுக்கவும் பயன்பாட்டை அனுமதிக்கிறது."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"இவரிடமிருந்து குரலஞ்சல் "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"தொடர்புகளின் தரவுத்தளத்தை நகலெடு"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"நீங்கள் செய்யக்கூடியவை 1) தொடர்புகள் தொடர்பான எல்லா தகவலும், அழைப்பின் எல்லா பதிவையும் உள்ளடக்கும் உங்கள் தரவுத்தளத்தை அகச் சேமிப்பிடத்தில் நகலெடுக்கலாம், பின்னர் 2) அதை மின்னஞ்சல் செய்யலாம். அதைச் சாதனத்திலிருந்து வெற்றிகரமாக நகலெடுத்தவுடன் அல்லது மின்னஞ்சலைப் பெற்றவுடன் அதன் நகலை மறக்காமல் நீக்கிவிடவும் செய்யலாம்."</string>
