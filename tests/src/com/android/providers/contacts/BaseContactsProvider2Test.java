@@ -84,13 +84,13 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     /*
      * Permission to allow querying voicemails
      */
-    static final String READ_ALL_VOICEMAIL_PERMISSION =
-            "com.android.voicemail.permission.READ_ALL_VOICEMAIL";
+    static final String READ_VOICEMAIL_PERMISSION =
+            "com.android.voicemail.permission.READ_VOICEMAIL";
     /*
      * Permission to allow deleting and updating voicemails
      */
-    static final String MANAGE_VOICEMAIL_PERMISSION =
-            "com.android.voicemail.permission.MANAGE_VOICEMAIL";
+    static final String WRITE_VOICEMAIL_PERMISSION =
+            "com.android.voicemail.permission.WRITE_VOICEMAIL";
 
     protected static final String PACKAGE = "ContactsProvider2Test";
     public static final String READ_ONLY_ACCOUNT_TYPE =
