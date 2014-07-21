@@ -36,7 +36,7 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
-import android.telecomm.PhoneAccount;
+import android.telecomm.PhoneAccountHandle;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import java.util.Arrays;
@@ -181,7 +181,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         final ComponentName sComponentName = new ComponentName(
                 "com.android.telecomm",
                 "TelecommServiceImpl");
-        PhoneAccount subscription = new PhoneAccount(
+        PhoneAccountHandle subscription = new PhoneAccountHandle(
                 sComponentName, "sub0");
 
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
