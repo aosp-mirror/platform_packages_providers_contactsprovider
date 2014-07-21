@@ -28,6 +28,7 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
@@ -85,6 +86,7 @@ import com.android.providers.contacts.testutil.DeletedContactUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.tests.R;
+
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
 
@@ -8173,6 +8175,56 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         RawContacts.STARRED, 1),
                 cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED,
                         RawContacts.STARRED, 0)
+        );
+    }
+
+    /**
+     * Verifies that any existing pinned contacts have their pinned positions incremented by one
+     * after the upgrade step
+     */
+    public void testPinnedPositionsUpgradeTo906_PinnedContactsIncrementedByOne() {
+        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
+        final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
+        final DatabaseAsserts.ContactIdPair i3 = DatabaseAsserts.assertAndCreateContact(mResolver);
+        final ArrayList<ContentProviderOperation> operations =
+                new ArrayList<ContentProviderOperation>();
+        operations.add(newPinningOperation(i1.mContactId, 0, true));
+        operations.add(newPinningOperation(i2.mContactId, 5, true));
+        operations.add(newPinningOperation(i3.mContactId, Integer.MAX_VALUE - 2, true));
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
+
+        final ContactsDatabaseHelper helper =
+                ((ContactsDatabaseHelper) ((ContactsProvider2) getProvider()).getDatabaseHelper());
+        SQLiteDatabase db = helper.getWritableDatabase();
+        helper.upgradeToVersion906(db);
+        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1),
+                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, 6),
+                cv(Contacts._ID, i3.mContactId, Contacts.PINNED, Integer.MAX_VALUE - 1)
+        );
+    }
+
+    /**
+     * Verifies that any unpinned contacts (or those with pinned position Integer.MAX_VALUE - 1)
+     * have their pinned positions correctly set to 0 after the upgrade step.
+     */
+    public void testPinnedPositionsUpgradeTo906_UnpinnedValueCorrectlyUpdated() {
+        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
+        final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
+        final ArrayList<ContentProviderOperation> operations =
+                new ArrayList<ContentProviderOperation>();
+        operations.add(newPinningOperation(i1.mContactId, Integer.MAX_VALUE -1 , true));
+        operations.add(newPinningOperation(i2.mContactId, Integer.MAX_VALUE, true));
+        CommonDatabaseUtils.applyBatch(mResolver, operations);
+
+        final ContactsDatabaseHelper helper =
+                ((ContactsDatabaseHelper) ((ContactsProvider2) getProvider()).getDatabaseHelper());
+        SQLiteDatabase db = helper.getWritableDatabase();
+        helper.upgradeToVersion906(db);
+
+        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 0),
+                cv(Contacts._ID, i2.mContactId, Contacts.PINNED, 0)
         );
     }
 
