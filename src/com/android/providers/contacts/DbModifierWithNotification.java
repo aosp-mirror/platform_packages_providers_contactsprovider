@@ -18,7 +18,7 @@
 package com.android.providers.contacts;
 
 import static android.Manifest.permission.ADD_VOICEMAIL;
-import static android.Manifest.permission.READ_ALL_VOICEMAIL;
+import static android.Manifest.permission.READ_VOICEMAIL;
 
 import android.content.ComponentName;
 import android.content.ContentUris;
@@ -210,7 +210,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
                 // Ignore any package that is not affected by the change and don't have full access
                 // either.
                 if (!modifiedPackages.contains(component.getPackageName()) &&
-                        !mVoicemailPermissions.packageHasFullReadAccess(
+                        !mVoicemailPermissions.packageHasReadAccess(
                                 component.getPackageName())) {
                     continue;
                 }
@@ -222,7 +222,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
                             callingPackages.contains(component.getPackageName()));
                 }
                 String permissionNeeded = modifiedPackages.contains(component.getPackageName()) ?
-                        ADD_VOICEMAIL : READ_ALL_VOICEMAIL;
+                        ADD_VOICEMAIL : READ_VOICEMAIL;
                 mContext.sendBroadcast(intent, permissionNeeded);
                 Log.v(TAG, String.format("Sent intent. act:%s, url:%s, comp:%s, perm:%s," +
                         " self_change:%s", intent.getAction(), intent.getData(),
