@@ -33,7 +33,7 @@ import java.util.List;
 /**
  * Base class for all tests that require interacting with the voicemail content provider.
  */
-public class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
+public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Test {
 
     protected boolean mUseSourceUri = false;
     private File mTestDirectory;
