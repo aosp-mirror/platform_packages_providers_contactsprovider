@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"အဆင့်မြှင့်ခြင်း ပြီးဆုံးရန် ထိကိုင်ပါ"</string>
     <string name="default_directory" msgid="93961630309570294">"အဆက်အသွယ်များ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"တစ်ခြား"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"အသံစာများအား ရယူနိုင်ခြင်း"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"အပ်ပလီကေးရှင်းအား ဤစက်ထဲမှ ရယူနိုင်သော အသံစာများအား သိမ်းဆည်းခွင့်နှင့် ရယူခွင့် ပြုပါ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"မှ အသံစာ "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"လိပ်စာဒေတာဘေ့စ်ကို ကူးရန်"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"သင့်အနေဖြင့် ၁) လိပ်စာအားလုံးနဲ့ဆိုင်သော အချက်အလက်များ၊ ဖုန်းခေါ်မှု မှတ်တမ်းများ ပါဝင်သော ဒေတာဘေ့စ်ကို စက်အတွင်းသိမ်းဆည်းသော ကော်ပီတစ်ခု ပြုလုပ်ပြီး ၂) အီးမေးလ်ပို့ခြင်း လုပ်တော့မည် ဖြစ်ပါသည်။ ဒီကော်ပီကို စက်ထဲမှ ထုတ်ပြီးပြီးချင်း သို့မဟုတ် အီးမေးလ်ရောက်ရှိပြီးချင်းချင်း ဖျက်ပစ်ဖို့ မမေ့ပါနှင့်။"</string>

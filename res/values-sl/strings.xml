@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Dotaknite se, da končate nadgradnjo."</string>
     <string name="default_directory" msgid="93961630309570294">"Stiki"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Drugo"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Dostop do glasovne pošte"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Programu dovoli shranjevanje in prenos sporočil v odzivniku, do katerih lahko dostopa ta naprava."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta s številke "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiraj zbirko podatkov o stikih"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"V naslednjem koraku boste 1) naredili kopijo zbirke podatkov, ki vključuje vse informacije o stikih in celoten dnevnik klicev, v notranji pomnilnik ter 2) jo poslali. Ne pozabite izbrisati kopije iz naprave, ko jo boste uspešno kopirali oziroma ko jo boste prejeli po e-pošti."</string>

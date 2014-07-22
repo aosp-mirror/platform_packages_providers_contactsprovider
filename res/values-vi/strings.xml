@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Chạm để hoàn tất nâng cấp."</string>
     <string name="default_directory" msgid="93961630309570294">"Danh bạ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Khác"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Truy cập tất cả các thư thoại"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Cho phép ứng dụng lưu trữ và truy xuất tất cả thư thoại mà thiết bị này có thể truy cập."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Thư thoại từ "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Sao chép cơ sở dữ liệu người liên hệ"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Bạn sắp 1) thực hiện sao chép cơ sở dữ liệu của mình bao gồm tất cả thông tin liên quan đến địa chỉ liên hệ và tất cả nhật ký cuộc gọi sang bộ nhớ trong, và 2) gửi bản sao đó qua email. Hãy nhớ xóa bản sao khỏi thiết bị hoặc email nhận được ngay khi bạn đã sao chép thành công."</string>

@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Raak om die opgradering te voltooi."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Ander"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Kry toegang tot alle stemboodskappe"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Laat die program toe om alle stemboodskappe te stoor en op te haal wat hierdie toestel kan lees."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Stemboodskap van "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopieer kontaktedatabasis"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Jy is op die punt om 1) \'n afskrif van jou databasis te maak wat alle inligting insluit wat verband hou met kontakte en alle oproeploglêers na die interne berging, en 2) dit te e-pos. Onthou om die kopie uit te vee sodra jy dit suksesvol van die toestel af gekopieer het, of sodra die e-pos ontvang is."</string>
