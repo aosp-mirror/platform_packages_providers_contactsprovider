@@ -21,6 +21,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.test.mock.MockContentResolver;
 
 /**
@@ -43,13 +44,21 @@ public class DataUtil {
     public static Uri insertStructuredName(ContentResolver resolver, long rawContactId,
             ContentValues values) {
         values.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
-        values.put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
+        values.put(ContactsContract.Data.MIMETYPE,
+                ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE);
         Uri resultUri = resolver.insert(ContactsContract.Data.CONTENT_URI, values);
         return resultUri;
     }
 
     public static Uri insertStructuredName(ContentResolver resolver, long rawContactId,
             String givenName, String familyName) {
+        return insertStructuredName(resolver, rawContactId, givenName, familyName,
+                /* phonetic given =*/ null);
+    }
+
+    public static Uri insertStructuredName(
+            ContentResolver resolver, long rawContactId, String givenName, String familyName,
+            String phoneticGiven) {
         ContentValues values = new ContentValues();
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
@@ -61,9 +70,15 @@ public class DataUtil {
         if (familyName != null) {
             sb.append(familyName);
         }
-        values.put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, sb.toString());
-        values.put(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, givenName);
-        values.put(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME, familyName);
+        if (sb.length() == 0 && phoneticGiven != null) {
+            sb.append(phoneticGiven);
+        }
+        values.put(StructuredName.DISPLAY_NAME, sb.toString());
+        values.put(StructuredName.GIVEN_NAME, givenName);
+        values.put(StructuredName.FAMILY_NAME, familyName);
+        if (phoneticGiven != null) {
+            values.put(StructuredName.PHONETIC_GIVEN_NAME, phoneticGiven);
+        }
 
         return insertStructuredName(resolver, rawContactId, values);
     }
