@@ -82,7 +82,9 @@ import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
+
 import com.google.android.collect.Sets;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -114,7 +116,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 905;
+    static final int DATABASE_VERSION = 906;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2769,6 +2771,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 905;
         }
 
+        if (oldVersion < 906) {
+            upgradeToVersion906(db);
+            oldVersion = 906;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4145,6 +4152,25 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     private void upgradeToVersion905(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD transcription TEXT;");
+    }
+
+    /**
+     * Upgrades the database with the new value for {@link PinnedPositions#UNPINNED}. In this
+     * database version upgrade, the value is changed from 2147483647 (Integer.MAX_VALUE) to 0.
+     *
+     * The first pinned contact now starts from position 1.
+     */
+    @VisibleForTesting
+    public void upgradeToVersion906(SQLiteDatabase db) {
+        db.execSQL("UPDATE contacts SET pinned = pinned + 1"
+                + " WHERE pinned >= 0 AND pinned < 2147483647;");
+        db.execSQL("UPDATE raw_contacts SET pinned = pinned + 1"
+                + " WHERE pinned >= 0 AND pinned < 2147483647;");
+
+        db.execSQL("UPDATE contacts SET pinned = 0"
+                + " WHERE pinned = 2147483647;");
+        db.execSQL("UPDATE raw_contacts SET pinned = 0"
+                + " WHERE pinned = 2147483647;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
