@@ -56,7 +56,6 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                 fullNameStyle != null
                         ? mSplitter.getAdjustedFullNameStyle(fullNameStyle)
                         : FullNameStyle.UNDEFINED);
-        insertNameLookupForPhoneticName(rawContactId, dataId, values);
         fixRawContactDisplayName(db, txContext, rawContactId);
         triggerAggregation(txContext, rawContactId);
         return dataId;
@@ -76,10 +75,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
         fixStructuredNameComponents(augmented, values);
 
         super.update(db, txContext, values, c, callerIsSyncAdapter);
-        if (values.containsKey(StructuredName.DISPLAY_NAME) ||
-                values.containsKey(StructuredName.PHONETIC_FAMILY_NAME) ||
-                values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME) ||
-                values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)) {
+        if (values.containsKey(StructuredName.DISPLAY_NAME)) {
             augmented.putAll(values);
             String name = augmented.getAsString(StructuredName.DISPLAY_NAME);
             mDbHelper.deleteNameLookup(dataId);
@@ -88,7 +84,6 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                     fullNameStyle != null
                             ? mSplitter.getAdjustedFullNameStyle(fullNameStyle)
                             : FullNameStyle.UNDEFINED);
-            insertNameLookupForPhoneticName(rawContactId, dataId, augmented);
         }
         fixRawContactDisplayName(db, txContext, rawContactId);
         triggerAggregation(txContext, rawContactId);
@@ -163,18 +158,6 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
                 mSplitter.guessNameStyle(name);
                 update.put(StructuredName.PHONETIC_NAME_STYLE, name.phoneticNameStyle);
             }
-        }
-    }
-
-    public void insertNameLookupForPhoneticName(long rawContactId, long dataId,
-            ContentValues values) {
-        if (values.containsKey(StructuredName.PHONETIC_FAMILY_NAME)
-                || values.containsKey(StructuredName.PHONETIC_GIVEN_NAME)
-                || values.containsKey(StructuredName.PHONETIC_MIDDLE_NAME)) {
-            mDbHelper.insertNameLookupForPhoneticName(rawContactId, dataId,
-                    values.getAsString(StructuredName.PHONETIC_FAMILY_NAME),
-                    values.getAsString(StructuredName.PHONETIC_MIDDLE_NAME),
-                    values.getAsString(StructuredName.PHONETIC_GIVEN_NAME));
         }
     }
 
