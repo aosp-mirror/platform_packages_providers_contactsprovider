@@ -605,6 +605,43 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
+    public void testAggregation_notAggregateByPhoneticName() {
+        // Different names, but have the same phonetic name.  Shouldn't be aggregated.
+
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Sergey", null, "Yamada");
+
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Lawrence", null, "Yamada");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregation_notAggregateByPhoneticName_2() {
+        // Have the same phonetic name.  One has a regular name too.  Shouldn't be aggregated.
+
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, null, null, "Yamada");
+
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Lawrence", null, "Yamada");
+
+        assertNotAggregated(rawContactId1, rawContactId2);
+    }
+
+    public void testAggregation_PhoneticNameOnly() {
+        // If a contact has no name but a phonetic name, then its display will be set from the
+        // phonetic name.  In this case, we still aggregate by the display name.
+
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, null, null, "Yamada");
+
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, null, null, "Yamada");
+
+        assertAggregated(rawContactId1, rawContactId2, "Yamada");
+    }
+
     public void testReaggregationWhenBecomesInvisible() {
         Account account = new Account("accountName", "accountType");
         createAutoAddGroup(account);

@@ -116,7 +116,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 906;
+    static final int DATABASE_VERSION = 907;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2774,6 +2774,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 906) {
             upgradeToVersion906(db);
             oldVersion = 906;
+        }
+
+        if (oldVersion < 907) {
+            // Rebuild NAME_LOOKUP.
+            upgradeNameLookup = true;
+            oldVersion = 907;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -5650,25 +5656,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (!TextUtils.isEmpty(nickname)) {
             insertNameLookup(rawContactId, dataId,
                     NameLookupType.NICKNAME, NameNormalizer.normalize(nickname));
-        }
-    }
-
-    public void insertNameLookupForPhoneticName(long rawContactId, long dataId, String familyName,
-            String middleName, String givenName) {
-        mSb.setLength(0);
-        if (familyName != null) {
-            mSb.append(familyName.trim());
-        }
-        if (middleName != null) {
-            mSb.append(middleName.trim());
-        }
-        if (givenName != null) {
-            mSb.append(givenName.trim());
-        }
-
-        if (mSb.length() > 0) {
-            insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
-                    NameNormalizer.normalize(mSb.toString()));
         }
     }
 
