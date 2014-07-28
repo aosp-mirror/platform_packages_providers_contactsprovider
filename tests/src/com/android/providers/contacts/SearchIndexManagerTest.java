@@ -86,7 +86,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         values.put(StructuredName.PHONETIC_GIVEN_NAME, "taro");
         DataUtil.insertStructuredName(mResolver, rawContactId, values);
 
-        assertSearchIndex(zcontactId, null, "yamada taro", null);
+        assertSearchIndex(contactId, null, "yamada taro", null);
     }
 
     public void testSearchIndexForChineseName() {
