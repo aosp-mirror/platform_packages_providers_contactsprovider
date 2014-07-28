@@ -69,6 +69,26 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
                 contactId, null, "John Doe Bob I Parr Helen I Parr PhD par helen parhelen", null);
     }
 
+    public void testSearchIndexForStructuredName_phoneticOnly() {
+        long rawContactId = RawContactUtil.createRawContact(mResolver);
+        long contactId = queryContactId(rawContactId);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "John", "Doe");
+        ContentValues values = new ContentValues();
+        values.put(StructuredName.DISPLAY_NAME, "Bob I. Parr");
+        DataUtil.insertStructuredName(mResolver, rawContactId, values);
+        values.clear();
+        values.put(StructuredName.PREFIX, "Mrs.");
+        values.put(StructuredName.GIVEN_NAME, "Helen");
+        values.put(StructuredName.MIDDLE_NAME, "I.");
+        values.put(StructuredName.FAMILY_NAME, "Parr");
+        values.put(StructuredName.SUFFIX, "PhD");
+        values.put(StructuredName.PHONETIC_FAMILY_NAME, "yamada");
+        values.put(StructuredName.PHONETIC_GIVEN_NAME, "taro");
+        DataUtil.insertStructuredName(mResolver, rawContactId, values);
+
+        assertSearchIndex(zcontactId, null, "yamada taro", null);
+    }
+
     public void testSearchIndexForChineseName() {
         // Only run this test when Chinese collation is supported
         if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
