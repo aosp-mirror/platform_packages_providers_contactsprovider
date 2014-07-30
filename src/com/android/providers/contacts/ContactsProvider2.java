@@ -82,7 +82,6 @@ import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
@@ -6417,7 +6416,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 query(db, qb, projection, selection, selectionArgs, localizedSortOrder, groupBy,
                 having, limit, cancellationSignal);
 
-        if (readBooleanQueryParameter(uri, ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
+        if (readBooleanQueryParameter(uri, Contacts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
             bundleFastScrollingIndexExtras(cursor, uri, db, qb, selection,
                     selectionArgs, sortOrder, addressBookIndexerCountExpression,
                     cancellationSignal);

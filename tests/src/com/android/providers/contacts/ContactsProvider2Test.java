@@ -44,7 +44,6 @@ import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
-import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DataUsageFeedback;
@@ -6759,7 +6758,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testContactCounts() {
         Uri uri = Contacts.CONTENT_URI.buildUpon()
-                .appendQueryParameter(ContactCounts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
+                .appendQueryParameter(Contacts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
 
         RawContactUtil.createRawContact(mResolver);
         RawContactUtil.createRawContactWithName(mResolver, "James", "Sullivan");
@@ -6789,13 +6788,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private void assertFirstLetterValues(Cursor cursor, String... expected) {
         String[] actual = cursor.getExtras()
-                .getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES);
+                .getStringArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_TITLES);
         MoreAsserts.assertEquals(expected, actual);
     }
 
     private void assertFirstLetterCounts(Cursor cursor, int... expected) {
         int[] actual = cursor.getExtras()
-                .getIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS);
+                .getIntArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS);
         MoreAsserts.assertEquals(expected, actual);
     }
 
