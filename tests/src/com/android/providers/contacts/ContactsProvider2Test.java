@@ -8138,18 +8138,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Pin contact 1 and demote contact 2
         final ArrayList<ContentProviderOperation> operations =
                 new ArrayList<ContentProviderOperation>();
-        operations.add(newPinningOperation(i1.mContactId, 0, true));
+        operations.add(newPinningOperation(i1.mContactId, 1, true));
         operations.add(newPinningOperation(i2.mContactId, PinnedPositions.DEMOTED, false));
         CommonDatabaseUtils.applyBatch(mResolver, operations);
 
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 0, Contacts.STARRED, 1),
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 1),
                 cv(Contacts._ID, i2.mContactId, Contacts.PINNED, PinnedPositions.DEMOTED,
                         Contacts.STARRED, 0)
         );
 
         assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 0,
+                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 1,
                         RawContacts.STARRED, 1),
                 cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, PinnedPositions.DEMOTED,
                         RawContacts.STARRED, 0)
@@ -8164,13 +8164,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Contact 1 remains pinned at 0, while contact 2 becomes unpinned
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 0, Contacts.STARRED, 1),
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 1, Contacts.STARRED, 1),
                 cv(Contacts._ID, i2.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED,
                         Contacts.STARRED, 0)
         );
 
         assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 0,
+                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 1,
                         RawContacts.STARRED, 1),
                 cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED,
                         RawContacts.STARRED, 0)
