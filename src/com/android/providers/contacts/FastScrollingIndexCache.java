@@ -22,7 +22,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.provider.ContactsContract.ContactCounts;
+import android.provider.ContactsContract.Contacts;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -160,8 +160,8 @@ public class FastScrollingIndexCache {
      */
     public static final Bundle buildExtraBundle(String[] titles, int[] counts) {
         Bundle bundle = new Bundle();
-        bundle.putStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
-        bundle.putIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
+        bundle.putStringArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_TITLES, titles);
+        bundle.putIntArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS, counts);
         return bundle;
     }
 
@@ -234,8 +234,8 @@ public class FastScrollingIndexCache {
             final String key = buildCacheKey(queryUri, selection, selectionArgs, sortOrder,
                     countExpression);
             mCache.put(key, buildCacheValue(
-                    bundle.getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES),
-                    bundle.getIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS)));
+                    bundle.getStringArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_TITLES),
+                    bundle.getIntArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS)));
             save();
 
             if (Log.isLoggable(TAG, Log.VERBOSE)) {

@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.ContactsContract.ContactCounts;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
 import android.test.AndroidTestCase;
@@ -60,9 +59,9 @@ public class FastScrollingIndexCacheTest extends AndroidTestCase {
     private void assertBundle(String[] expectedTitles, int[] expectedCounts, Bundle actual) {
         assertNotNull(actual);
         MoreAsserts.assertEquals(expectedTitles,
-                actual.getStringArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_TITLES));
+                actual.getStringArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_TITLES));
         MoreAsserts.assertEquals(expectedCounts,
-                actual.getIntArray(ContactCounts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS));
+                actual.getIntArray(Contacts.EXTRA_ADDRESS_BOOK_INDEX_COUNTS));
     }
 
     /**
