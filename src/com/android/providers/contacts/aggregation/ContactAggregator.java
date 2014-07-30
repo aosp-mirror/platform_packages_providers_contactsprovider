@@ -337,10 +337,11 @@ public class ContactAggregator {
                 + RawContacts.STARRED + "=1)" + " WHERE " + Contacts._ID + "=?");
 
         mPinnedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
-                + Contacts.PINNED + "=(SELECT MIN(" + RawContacts.PINNED + ") FROM "
+                + Contacts.PINNED + " = IFNULL((SELECT MIN(" + RawContacts.PINNED + ") FROM "
                 + Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "="
                 + ContactsColumns.CONCRETE_ID + " AND " + RawContacts.PINNED + ">"
-                + PinnedPositions.DEMOTED + ") WHERE " + Contacts._ID + "=?");
+                + PinnedPositions.UNPINNED + ")," + PinnedPositions.UNPINNED + ") "
+                + "WHERE " + Contacts._ID + "=?");
 
         mContactIdAndMarkAggregatedUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
@@ -1857,7 +1858,7 @@ public class ContactAggregator {
         long contactLastTimeContacted = 0;
         int contactTimesContacted = 0;
         int contactStarred = 0;
-        int contactPinned = PinnedPositions.UNPINNED;
+        int contactPinned = Integer.MAX_VALUE;
         int hasPhoneNumber = 0;
         StringBuilder lookupKey = new StringBuilder();
 
@@ -1917,7 +1918,7 @@ public class ContactAggregator {
                     // contactPinned should be the lowest value of its constituent raw contacts,
                     // excluding negative integers
                     final int rawContactPinned = c.getInt(RawContactsQuery.PINNED);
-                    if (rawContactPinned >= 0) {
+                    if (rawContactPinned > PinnedPositions.UNPINNED) {
                         contactPinned = Math.min(contactPinned, rawContactPinned);
                     }
 
@@ -1959,6 +1960,10 @@ public class ContactAggregator {
             }
         } finally {
             c.close();
+        }
+
+        if (contactPinned == Integer.MAX_VALUE) {
+            contactPinned = PinnedPositions.UNPINNED;
         }
 
         statement.bindLong(ContactReplaceSqlStatement.NAME_RAW_CONTACT_ID,
