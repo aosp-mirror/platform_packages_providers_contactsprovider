@@ -2699,6 +2699,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
+        // Databases that were created prior to the 906 upgrade have a default of Int.MAX_VALUE
+        // for RawContacts.PINNED. Manually set the value to the correct default (0) if it is not
+        // set.
+        if (!values.containsKey(RawContacts.PINNED)) {
+            values.put(RawContacts.PINNED, PinnedPositions.UNPINNED);
+        }
+
         // Insert the new entry.
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         final long rawContactId = db.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, values);
