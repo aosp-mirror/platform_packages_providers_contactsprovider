@@ -116,7 +116,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 907;
+    static final int DATABASE_VERSION = 908;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2782,6 +2782,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 907;
         }
 
+        if (oldVersion < 908) {
+            upgradeToVersion908(db);
+            oldVersion = 908;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4177,6 +4182,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " WHERE pinned = 2147483647;");
         db.execSQL("UPDATE raw_contacts SET pinned = 0"
                 + " WHERE pinned = 2147483647;");
+    }
+
+    private void upgradeToVersion908(SQLiteDatabase db) {
+        db.execSQL("UPDATE contacts SET pinned = 0 WHERE pinned = 2147483647;");
+        db.execSQL("UPDATE raw_contacts SET pinned = 0 WHERE pinned = 2147483647;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
