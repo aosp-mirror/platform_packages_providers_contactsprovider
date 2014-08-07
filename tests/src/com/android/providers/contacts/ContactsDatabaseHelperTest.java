@@ -16,21 +16,27 @@
 
 package com.android.providers.contacts;
 
+import android.database.sqlite.SQLiteDatabase;
+import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.google.android.collect.Sets;
 
+import java.util.HashSet;
 import java.util.Set;
 
 @SmallTest
 public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
     private ContactsDatabaseHelper mDbHelper;
+    private SQLiteDatabase mDb;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
         mDbHelper = getContactsProvider().getDatabaseHelper(getContext());
+        mDb = mDbHelper.getWritableDatabase();
     }
 
     public void testGetOrCreateAccountId() {
@@ -103,5 +109,89 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         assertEquals(
                 mDbHelper.getOrCreateAccountIdInTransaction(a5),
                 mDbHelper.getOrCreateAccountIdInTransaction(a5b));
+    }
+
+    /**
+     * Test for {@link ContactsDatabaseHelper#queryIdWithOneArg} and
+     * {@link ContactsDatabaseHelper#insertWithOneArgAndReturnId}.
+     */
+    public void testQueryIdWithOneArg_insertWithOneArgAndReturnId() {
+        final String query =
+                "SELECT " + MimetypesColumns._ID +
+                        " FROM " + Tables.MIMETYPES +
+                        " WHERE " + MimetypesColumns.MIMETYPE + "=?";
+
+        final String insert =
+                "INSERT INTO " + Tables.MIMETYPES + "("
+                        + MimetypesColumns.MIMETYPE +
+                        ") VALUES (?)";
+
+        // First, the table is empty.
+        assertEquals(-1, ContactsDatabaseHelper.queryIdWithOneArg(mDb, query, "value1"));
+        assertEquals(-1, ContactsDatabaseHelper.queryIdWithOneArg(mDb, query, "value2"));
+
+        // Insert one value.
+        final long id1 = ContactsDatabaseHelper.insertWithOneArgAndReturnId(mDb, insert, "value1");
+        MoreAsserts.assertNotEqual(-1, id1);
+
+        assertEquals(id1, ContactsDatabaseHelper.queryIdWithOneArg(mDb, query, "value1"));
+        assertEquals(-1, ContactsDatabaseHelper.queryIdWithOneArg(mDb, query, "value2"));
+
+
+        // Insert one value.
+        final long id2 = ContactsDatabaseHelper.insertWithOneArgAndReturnId(mDb, insert, "value2");
+        MoreAsserts.assertNotEqual(-1, id2);
+
+        assertEquals(id1, ContactsDatabaseHelper.queryIdWithOneArg(mDb, query, "value1"));
+        assertEquals(id2, ContactsDatabaseHelper.queryIdWithOneArg(mDb, query, "value2"));
+
+        // Insert the same value and cause a conflict.
+        assertEquals(-1, ContactsDatabaseHelper.insertWithOneArgAndReturnId(mDb, insert, "value2"));
+    }
+
+    /**
+     * Test for {@link ContactsDatabaseHelper#getPackageId(String)} and
+     * {@link ContactsDatabaseHelper#getMimeTypeId(String)}.
+     *
+     * We test them at the same time here, to make sure they're not mixing up the caches.
+     */
+    public void testGetPackageId_getMimeTypeId() {
+
+        // Test for getPackageId.
+        final long packageId1 = mDbHelper.getPackageId("value1");
+        final long packageId2 = mDbHelper.getPackageId("value2");
+        final long packageId3 = mDbHelper.getPackageId("value3");
+
+        // Make sure they're all different.
+        final HashSet<Long> set = new HashSet<>();
+        set.add(packageId1);
+        set.add(packageId2);
+        set.add(packageId3);
+
+        assertEquals(3, set.size());
+
+        // Test for getMimeTypeId.
+        final long mimetypeId1 = mDbHelper.getMimeTypeId("value1");
+        final long mimetypeId2 = mDbHelper.getMimeTypeId("value2");
+        final long mimetypeId3 = mDbHelper.getMimeTypeId("value3");
+
+        // Make sure they're all different.
+        set.clear();
+        set.add(mimetypeId1);
+        set.add(mimetypeId2);
+        set.add(mimetypeId3);
+
+        assertEquals(3, set.size());
+
+        // Call with the same values and make sure they return the cached value.
+        final long packageId1b = mDbHelper.getPackageId("value1");
+        final long mimetypeId1b = mDbHelper.getMimeTypeId("value1");
+
+        assertEquals(packageId1, packageId1b);
+        assertEquals(mimetypeId1, mimetypeId1b);
+
+        // Make sure the caches are also updated.
+        assertEquals(packageId2, (long) mDbHelper.mPackageCache.get("value2"));
+        assertEquals(mimetypeId2, (long) mDbHelper.mMimetypeCache.get("value2"));
     }
 }

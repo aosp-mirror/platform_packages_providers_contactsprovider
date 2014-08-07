@@ -89,6 +89,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import libcore.icu.ICU;
 
@@ -921,10 +922,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static ContactsDatabaseHelper sSingleton = null;
 
     /** In-memory cache of previously found MIME-type mappings */
-    private final HashMap<String, Long> mMimetypeCache = new HashMap<String, Long>();
+    @VisibleForTesting
+    final ConcurrentHashMap<String, Long> mMimetypeCache = new ConcurrentHashMap<>();
 
     /** In-memory cache the packages table */
-    private final HashMap<String, Long> mPackageCache = new HashMap<String, Long>();
+    @VisibleForTesting
+    final ConcurrentHashMap<String, Long> mPackageCache = new ConcurrentHashMap<>();
 
     private final Context mContext;
     private final boolean mDatabaseOptimizationEnabled;
@@ -4454,6 +4457,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
         db.execSQL("DELETE FROM " + Tables.DELETED_CONTACTS + ";");
+        db.execSQL("DELETE FROM " + Tables.MIMETYPES + ";");
+        db.execSQL("DELETE FROM " + Tables.PACKAGES + ";");
 
         initializeCache(db);
 
@@ -4487,37 +4492,74 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Perform an internal string-to-integer lookup using the compiled
-     * {@link SQLiteStatement} provided. If a mapping isn't found in database, it will be
-     * created. All new, uncached answers are added to the cache automatically.
+     * Internal method used by {@link #getPackageId} and {@link #getMimeTypeId}.
      *
-     * @param query Compiled statement used to query for the mapping.
-     * @param insert Compiled statement used to insert a new mapping when no
-     *            existing one is found in cache or from query.
-     * @param value Value to find mapping for.
-     * @param cache In-memory cache of previous answers.
-     * @return An unique integer mapping for the given value.
+     * Note in the contacts provider we avoid using synchronization because it could risk deadlocks.
+     * So here, instead of using locks, we use ConcurrentHashMap + retry.
+     *
+     * Note we can't use a transaction here becuause this method is called from
+     * onCommitTransaction() too, unfortunately.
      */
-    private long lookupAndCacheId(SQLiteStatement query, SQLiteStatement insert,
-            String value, HashMap<String, Long> cache) {
-        long id = -1;
-        try {
-            // Try searching database for mapping
-            DatabaseUtils.bindObjectToProgram(query, 1, value);
-            id = query.simpleQueryForLong();
-        } catch (SQLiteDoneException e) {
-            // Nothing found, so try inserting new mapping
-            DatabaseUtils.bindObjectToProgram(insert, 1, value);
-            id = insert.executeInsert();
+    private static long getIdCached(SQLiteDatabase db, ConcurrentHashMap<String, Long> cache,
+            String querySql, String insertSql, String value) {
+        // First, try the in-memory cache.
+        if (cache.containsKey(value)) {
+            return cache.get(value);
         }
-        if (id != -1) {
-            // Cache and return the new answer
+
+        // Then, try the database.
+        long id = queryIdWithOneArg(db, querySql, value);
+        if (id >= 0) {
+            return id;
+        }
+
+        // Not found in the database.  Try inserting.
+        id = insertWithOneArgAndReturnId(db, insertSql, value);
+        if (id >= 0) {
             cache.put(value, id);
             return id;
         }
-        // Otherwise throw if no mapping found or created
-        throw new IllegalStateException("Couldn't find or create internal "
-                + "lookup table entry for value " + value);
+
+        // Insert failed, which means a race.  Let's retry...
+
+        // We log here to detect an infinity loop (which shouldn't happen).
+        // Conflicts should be pretty rare, so it shouldn't spam logcat.
+        Log.i(TAG, "Cache conflict detected: value=" + value);
+        try {
+            Thread.sleep(1); // Just wait a little bit before retry.
+        } catch (InterruptedException ignore) {
+        }
+        return getIdCached(db, cache, querySql, insertSql, value);
+    }
+
+    @VisibleForTesting
+    static long queryIdWithOneArg(SQLiteDatabase db, String sql, String sqlArgument) {
+        final SQLiteStatement query = db.compileStatement(sql);
+        try {
+            DatabaseUtils.bindObjectToProgram(query, 1, sqlArgument);
+            try {
+                return query.simpleQueryForLong();
+            } catch (SQLiteDoneException notFound) {
+                return -1;
+            }
+        } finally {
+            query.close();
+        }
+    }
+
+    @VisibleForTesting
+    static long insertWithOneArgAndReturnId(SQLiteDatabase db, String sql, String sqlArgument) {
+        final SQLiteStatement insert = db.compileStatement(sql);
+        try {
+            DatabaseUtils.bindObjectToProgram(insert, 1, sqlArgument);
+            try {
+                return insert.executeInsert();
+            } catch (SQLiteConstraintException conflict) {
+                return -1;
+            }
+        } finally {
+            insert.close();
+        }
     }
 
     /**
@@ -4525,26 +4567,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * lookups and possible allocation of new IDs as needed.
      */
     public long getPackageId(String packageName) {
-        // Try an in-memory cache lookup.
-        if (mPackageCache.containsKey(packageName)) {
-            return mPackageCache.get(packageName);
-        }
-
-        final SQLiteStatement packageQuery = getWritableDatabase().compileStatement(
+        final String query =
                 "SELECT " + PackagesColumns._ID +
                 " FROM " + Tables.PACKAGES +
-                " WHERE " + PackagesColumns.PACKAGE + "=?");
+                " WHERE " + PackagesColumns.PACKAGE + "=?";
 
-        final SQLiteStatement packageInsert = getWritableDatabase().compileStatement(
+        final String insert =
                 "INSERT INTO " + Tables.PACKAGES + "("
                         + PackagesColumns.PACKAGE +
-                ") VALUES (?)");
-        try {
-            return lookupAndCacheId(packageQuery, packageInsert, packageName, mPackageCache);
-        } finally {
-            packageQuery.close();
-            packageInsert.close();
-        }
+                ") VALUES (?)";
+        return getIdCached(getWritableDatabase(), mPackageCache, query, insert, packageName);
     }
 
     /**
@@ -4552,30 +4584,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * lookups and possible allocation of new IDs as needed.
      */
     public long getMimeTypeId(String mimetype) {
-        // Try an in-memory cache lookup.
-        if (mMimetypeCache.containsKey(mimetype)) {
-            return mMimetypeCache.get(mimetype);
-        }
         return lookupMimeTypeId(mimetype, getWritableDatabase());
     }
 
     private long lookupMimeTypeId(String mimetype, SQLiteDatabase db) {
-        final SQLiteStatement mimetypeQuery = db.compileStatement(
+        final String query =
                 "SELECT " + MimetypesColumns._ID +
                 " FROM " + Tables.MIMETYPES +
-                " WHERE " + MimetypesColumns.MIMETYPE + "=?");
+                " WHERE " + MimetypesColumns.MIMETYPE + "=?";
 
-        final SQLiteStatement mimetypeInsert = db.compileStatement(
+        final String insert =
                 "INSERT INTO " + Tables.MIMETYPES + "("
                         + MimetypesColumns.MIMETYPE +
-                ") VALUES (?)");
+                ") VALUES (?)";
 
-        try {
-            return lookupAndCacheId(mimetypeQuery, mimetypeInsert, mimetype, mMimetypeCache);
-        } finally {
-            mimetypeQuery.close();
-            mimetypeInsert.close();
-        }
+        return getIdCached(db, mMimetypeCache, query, insert, mimetype);
     }
 
     public long getMimeTypeIdForStructuredName() {
