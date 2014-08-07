@@ -2012,6 +2012,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mContactsPhotoStore.clear();
         mProfilePhotoStore.clear();
         mProviderStatus = ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS;
+        initForDefaultLocale();
     }
 
     /**
