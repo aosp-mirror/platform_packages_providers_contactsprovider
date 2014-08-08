@@ -914,6 +914,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(PhoneLookup.IN_DEFAULT_DIRECTORY, "contacts_view." + Contacts.IN_DEFAULT_DIRECTORY)
             .add(PhoneLookup.IN_VISIBLE_GROUP, "contacts_view." + Contacts.IN_VISIBLE_GROUP)
             .add(PhoneLookup.PHOTO_ID, "contacts_view." + Contacts.PHOTO_ID)
+            .add(PhoneLookup.PHOTO_FILE_ID, "contacts_view." + Contacts.PHOTO_FILE_ID)
             .add(PhoneLookup.PHOTO_URI, "contacts_view." + Contacts.PHOTO_URI)
             .add(PhoneLookup.PHOTO_THUMBNAIL_URI, "contacts_view." + Contacts.PHOTO_THUMBNAIL_URI)
             .add(PhoneLookup.CUSTOM_RINGTONE, "contacts_view." + Contacts.CUSTOM_RINGTONE)
@@ -6519,7 +6520,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
 
         if (VERBOSE_LOGGING) {
-            Log.v(TAG, "queryPhoneLookupEnterprise: corp query URI=" + localUri);
+            Log.v(TAG, "queryPhoneLookupEnterprise: corp query URI=" + remoteUri);
         }
         final Cursor corp = getContext().getContentResolver().query(remoteUri, projection,
                 /* selection */ null, /* args */ null, /* order */ null,
@@ -6542,8 +6543,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /**
      * Rewrite a cursor from the corp profile for {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
      */
-    // TODO Test
-    private static Cursor rewriteCorpPhoneLookup(Cursor original) {
+    @VisibleForTesting
+    static Cursor rewriteCorpPhoneLookup(Cursor original) {
         final String[] columns = original.getColumnNames();
         final MatrixCursor ret = new MatrixCursor(columns);
 
@@ -6570,6 +6571,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // See the javadoc on PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI for the reasons.
                     case PhoneLookup.PHOTO_FILE_ID:
                     case PhoneLookup.PHOTO_ID:
+                    case PhoneLookup.CUSTOM_RINGTONE:
                         builder.add(null);
                         break;
                     default:
@@ -6604,7 +6606,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
      *
      * {@link #openAssetFile} knows how to fetch from this URI.
      */
-    // TODO Test
     private static String getCorpThumbnailUri(long contactId, Cursor originalCursor) {
         // First, check if the contact has a thumbnail.
         if (originalCursor.isNull(
@@ -6623,7 +6624,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
      *
      * {@link #openAssetFile} knows how to fetch from this URI.
      */
-    // TODO Test
     private static String getCorpDisplayPhotoUri(long contactId, Cursor originalCursor) {
         // First, check if the contact has a display photo.
         if (originalCursor.isNull(

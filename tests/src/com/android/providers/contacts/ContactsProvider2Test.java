@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 
 import android.accounts.Account;
+import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -28,6 +29,7 @@ import android.content.Entity;
 import android.content.EntityIterator;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -67,9 +69,12 @@ import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
+import android.test.suitebuilder.annotation.Suppress;
 import android.text.TextUtils;
 
 import com.android.internal.util.ArrayUtils;
+import com.android.providers.contacts.ContactsActor.AlteringUserContext;
+import com.android.providers.contacts.ContactsActor.MockUserManager;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
@@ -647,6 +652,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.STARRED,
                 PhoneLookup.IN_DEFAULT_DIRECTORY,
                 PhoneLookup.IN_VISIBLE_GROUP,
+                PhoneLookup.PHOTO_FILE_ID,
                 PhoneLookup.PHOTO_ID,
                 PhoneLookup.PHOTO_URI,
                 PhoneLookup.PHOTO_THUMBNAIL_URI,
@@ -658,6 +664,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.LABEL,
                 PhoneLookup.NORMALIZED_NUMBER,
         });
+    }
+
+    public void testPhoneLookupEnterpriseProjection() {
+        assertProjection(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI
+                        .buildUpon().appendPath("123").build(),
+                new String[]{
+                        PhoneLookup._ID,
+                        PhoneLookup.LOOKUP_KEY,
+                        PhoneLookup.DISPLAY_NAME,
+                        PhoneLookup.LAST_TIME_CONTACTED,
+                        PhoneLookup.TIMES_CONTACTED,
+                        PhoneLookup.STARRED,
+                        PhoneLookup.IN_DEFAULT_DIRECTORY,
+                        PhoneLookup.IN_VISIBLE_GROUP,
+                        PhoneLookup.PHOTO_FILE_ID,
+                        PhoneLookup.PHOTO_ID,
+                        PhoneLookup.PHOTO_URI,
+                        PhoneLookup.PHOTO_THUMBNAIL_URI,
+                        PhoneLookup.CUSTOM_RINGTONE,
+                        PhoneLookup.HAS_PHONE_NUMBER,
+                        PhoneLookup.SEND_TO_VOICEMAIL,
+                        PhoneLookup.NUMBER,
+                        PhoneLookup.TYPE,
+                        PhoneLookup.LABEL,
+                        PhoneLookup.NORMALIZED_NUMBER,
+                });
     }
 
     public void testGroupsProjection() {
@@ -1462,7 +1494,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 "+123456789");
         final ContentValues values = new ContentValues();
         values.put(PhoneLookup.DISPLAY_NAME, "No star");
-        assertStoredValues(lookupUri1, null, null, new ContentValues[] {values});
+        assertStoredValues(lookupUri1, null, null, new ContentValues[]{values});
     }
 
     public void testPhoneLookupExplicitProjection() {
@@ -1687,6 +1719,266 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             // upon test completion or failure
             dbHelper.setUseStrictPhoneNumberComparisonForTest(oldUseStrict);
         }
+    }
+
+    /**
+     * Test for enterprise caller-id, but with no corp profile.
+     */
+    public void testPhoneLookupEnterprise_noCorpProfile() throws Exception {
+
+        Uri uri1 = Uri.withAppendedPath(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI, "408-111-1111");
+
+        // No contacts profile, no data.
+        assertEquals(0, getCount(uri1));
+
+        // Insert a contact into the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Doe");
+        insertPhoneNumber(rawContactId, "408-111-1111");
+
+        // Do the query again and check the result.
+        Cursor c = mResolver.query(uri1, null, null, null, null);
+        try {
+            assertEquals(1, c.getCount());
+            c.moveToPosition(0);
+            long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
+            assertFalse(Contacts.isCorpContactId(contactId)); // Make sure it's not rewritten.
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Set up the corp user / CP2 and returns the corp CP2 instance.
+     */
+    private SynchronousContactsProvider2 setUpCorpProvider() throws Exception {
+        mActor.mockUserManager.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.CORP_USER);
+
+        // Note here we use a standalone CP2 so it'll have its own db helper.
+        // Also use AlteringUserContext here to report the corp user id.
+        return mActor.addProvider(StandaloneContactsProvider2.class,
+                "" + MockUserManager.CORP_USER.id + "@com.android.contacts",
+                new AlteringUserContext(mActor.getProviderContext(), MockUserManager.CORP_USER.id));
+    }
+
+    /**
+     * Test for enterprise caller-id, with the corp profile.
+     *
+     * Note: in this test, we add one more provider instance for the authority
+     * "10@com.android.contacts" and use it as the corp cp2.
+     */
+    public void testPhoneLookupEnterprise_withCorpProfile() throws Exception {
+        final SynchronousContactsProvider2 corpCp2 = setUpCorpProvider();
+
+        Uri uri1 = Uri.withAppendedPath(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI, "408-111-1111");
+        Uri uri2 = Uri.withAppendedPath(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI, "408-222-2222");
+
+        // First, test with no contacts on either profile.
+        assertEquals(0, getCount(uri1));
+
+        // Insert a contact to the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Doe");
+        insertPhoneNumber(rawContactId, "408-111-1111");
+
+        // Insert a contact to the corp CP2, with the same phone number, but with a different name.
+        rawContactId = ContentUris.parseId(
+                corpCp2.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        // Insert a name
+        ContentValues cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE,
+                StructuredName.DISPLAY_NAME, "Contact2 Corp",
+                StructuredName.GIVEN_NAME, "Contact2",
+                StructuredName.FAMILY_NAME, "Corp");
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Insert a number
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE,
+                Phone.NUMBER, "408-111-1111",
+                Phone.TYPE, Phone.TYPE_HOME);
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Insert one more contact to the corp CP2, with a different number.
+        rawContactId = ContentUris.parseId(
+                corpCp2.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        // Insert a name
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE,
+                StructuredName.DISPLAY_NAME, "Contact3 Corp",
+                StructuredName.GIVEN_NAME, "Contact3",
+                StructuredName.FAMILY_NAME, "Corp");
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Insert a number
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE,
+                Phone.NUMBER, "408-222-2222",
+                Phone.TYPE, Phone.TYPE_HOME);
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Okay, now execute queries and check the result.
+
+        // The first URL hits the contact in the primary CP2.
+        // There's also a contact with this phone number in the corp CP2, but that will be ignored.
+        Cursor c = mResolver.query(uri1, null, null, null, null);
+        try {
+            assertEquals(1, c.getCount());
+            c.moveToPosition(0);
+            assertEquals("Contact1 Doe", c.getString(c.getColumnIndex(PhoneLookup.DISPLAY_NAME)));
+
+            // Make sure it has a personal contact ID.
+            long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
+            assertFalse(Contacts.isCorpContactId(contactId));
+        } finally {
+            c.close();
+        }
+
+        // Test for the second phone number, which only exists in the corp cp2.
+        c = mResolver.query(uri2, null, null, null, null);
+        try {
+            // This one actually returns 2 identical rows, probably because of the join
+            // in phone_lookup.  Callers only care the first row, so returning multiple identical
+            // rows should be fine.
+            assertTrue(c.getCount() > 0);
+            c.moveToPosition(0);
+            assertEquals("Contact3 Corp", c.getString(c.getColumnIndex(PhoneLookup.DISPLAY_NAME)));
+
+            // Make sure it has a corp contact ID.
+            long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
+            assertTrue(Contacts.isCorpContactId(contactId));
+        } finally {
+            c.close();
+        }
+    }
+
+    public void testRewriteCorpPhoneLookup() {
+        // 19 columns
+        final MatrixCursor c = new MatrixCursor(new String[] {
+                PhoneLookup._ID,
+                PhoneLookup.LOOKUP_KEY,
+                PhoneLookup.DISPLAY_NAME,
+                PhoneLookup.LAST_TIME_CONTACTED,
+                PhoneLookup.TIMES_CONTACTED,
+                PhoneLookup.STARRED,
+                PhoneLookup.IN_DEFAULT_DIRECTORY,
+                PhoneLookup.IN_VISIBLE_GROUP,
+                PhoneLookup.PHOTO_FILE_ID,
+                PhoneLookup.PHOTO_ID,
+                PhoneLookup.PHOTO_URI,
+                PhoneLookup.PHOTO_THUMBNAIL_URI,
+                PhoneLookup.CUSTOM_RINGTONE,
+                PhoneLookup.HAS_PHONE_NUMBER,
+                PhoneLookup.SEND_TO_VOICEMAIL,
+                PhoneLookup.NUMBER,
+                PhoneLookup.TYPE,
+                PhoneLookup.LABEL,
+                PhoneLookup.NORMALIZED_NUMBER
+        });
+
+        // First, convert and make sure it returns an empty cursor.
+        Cursor rewritten = ContactsProvider2.rewriteCorpPhoneLookup(c);
+        assertEquals(0, rewritten.getCount());
+        assertEquals(19, rewritten.getColumnCount());
+
+        c.addRow(new Object[] {
+                1L, // PhoneLookup._ID,
+                null, // PhoneLookup.LOOKUP_KEY,
+                null, // PhoneLookup.DISPLAY_NAME,
+                null, // PhoneLookup.LAST_TIME_CONTACTED,
+                null, // PhoneLookup.TIMES_CONTACTED,
+                null, // PhoneLookup.STARRED,
+                null, // PhoneLookup.IN_DEFAULT_DIRECTORY,
+                null, // PhoneLookup.IN_VISIBLE_GROUP,
+                null, // PhoneLookup.PHOTO_FILE_ID,
+                null, // PhoneLookup.PHOTO_ID,
+                null, // PhoneLookup.PHOTO_URI,
+                null, // PhoneLookup.PHOTO_THUMBNAIL_URI,
+                null, // PhoneLookup.CUSTOM_RINGTONE,
+                null, // PhoneLookup.HAS_PHONE_NUMBER,
+                null, // PhoneLookup.SEND_TO_VOICEMAIL,
+                null, // PhoneLookup.NUMBER,
+                null, // PhoneLookup.TYPE,
+                null, // PhoneLookup.LABEL,
+                null, // PhoneLookup.NORMALIZED_NUMBER
+        });
+
+        c.addRow(new Object[] {
+                10L, // PhoneLookup._ID,
+                "key", // PhoneLookup.LOOKUP_KEY,
+                "name", // PhoneLookup.DISPLAY_NAME,
+                123, // PhoneLookup.LAST_TIME_CONTACTED,
+                456, // PhoneLookup.TIMES_CONTACTED,
+                1, // PhoneLookup.STARRED,
+                1, // PhoneLookup.IN_DEFAULT_DIRECTORY,
+                1, // PhoneLookup.IN_VISIBLE_GROUP,
+                1001, // PhoneLookup.PHOTO_FILE_ID,
+                1002, // PhoneLookup.PHOTO_ID,
+                "content://a/a", // PhoneLookup.PHOTO_URI,
+                "content://a/b", // PhoneLookup.PHOTO_THUMBNAIL_URI,
+                "content://a/c", // PhoneLookup.CUSTOM_RINGTONE,
+                1, // PhoneLookup.HAS_PHONE_NUMBER,
+                1, // PhoneLookup.SEND_TO_VOICEMAIL,
+                "1234", // PhoneLookup.NUMBER,
+                1, // PhoneLookup.TYPE,
+                "label", // PhoneLookup.LABEL,
+                "+1234", // PhoneLookup.NORMALIZED_NUMBER
+        });
+        rewritten = ContactsProvider2.rewriteCorpPhoneLookup(c);
+        assertEquals(2, rewritten.getCount());
+
+        rewritten.moveToPosition(0);
+        int column = 0;
+        assertEquals(1000000001L, rewritten.getLong(column++)); // We offset ID for corp contacts.
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+
+
+        rewritten.moveToNext();
+        column = 0;
+        assertEquals(1000000010L, rewritten.getLong(column++)); // With offset.
+        assertEquals("key", rewritten.getString(column++));
+        assertEquals("name", rewritten.getString(column++));
+        assertEquals(123, rewritten.getInt(column++));
+        assertEquals(456, rewritten.getInt(column++));
+        assertEquals(1, rewritten.getInt(column++));
+        assertEquals(1, rewritten.getInt(column++));
+        assertEquals(1, rewritten.getInt(column++));
+        assertEquals(null, rewritten.getString(column++)); // photo file id
+        assertEquals(null, rewritten.getString(column++)); // photo id
+        assertEquals("content://com.android.contacts/contacts_corp/10/display_photo",
+                rewritten.getString(column++));
+        assertEquals("content://com.android.contacts/contacts_corp/10/photo",
+                rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++)); // ringtone
+        assertEquals(1, rewritten.getInt(column++));
+        assertEquals(1, rewritten.getInt(column++));
+        assertEquals("1234", rewritten.getString(column++));
+        assertEquals(1, rewritten.getInt(column++));
+        assertEquals("label", rewritten.getString(column++));
+        assertEquals("+1234", rewritten.getString(column++));
     }
 
     public void testPhoneUpdate() {
