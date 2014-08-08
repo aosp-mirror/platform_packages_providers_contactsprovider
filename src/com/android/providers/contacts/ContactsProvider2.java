@@ -1496,6 +1496,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         ProviderInfo profileInfo = new ProviderInfo();
         profileInfo.readPermission = "android.permission.READ_PROFILE";
         profileInfo.writePermission = "android.permission.WRITE_PROFILE";
+        profileInfo.authority = ContactsContract.AUTHORITY;
         mProfileProvider.attachInfo(getContext(), profileInfo);
         mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
 
