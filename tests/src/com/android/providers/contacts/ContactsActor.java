@@ -29,6 +29,7 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -62,6 +63,7 @@ import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
+import android.util.Log;
 
 import com.android.providers.contacts.util.MockSharedPreferences;
 import com.google.android.collect.Sets;
@@ -220,6 +222,26 @@ public class ContactsActor {
         }
     }
 
+    /**
+     * A context wrapper that reports a different user id.
+     *
+     * TODO This should override getSystemService() and returns a UserManager that returns the
+     * same, altered user ID too.
+     */
+    public static class AlteringUserContext extends ContextWrapper {
+        private final int mUserId;
+
+        public AlteringUserContext(Context base, int userId) {
+            super(base);
+            mUserId = userId;
+        }
+
+        @Override
+        public int getUserId() {
+            return mUserId;
+        }
+    }
+
     private IsolatedContext mProviderContext;
 
     /**
@@ -274,6 +296,11 @@ public class ContactsActor {
             public SharedPreferences getSharedPreferences(String name, int mode) {
                 return mPrefs;
             }
+
+            @Override
+            public int getUserId() {
+                return mockUserManager.getUserHandle();
+            }
         };
 
         mMockAccountManager = new MockAccountManager(mProviderContext);
@@ -289,12 +316,17 @@ public class ContactsActor {
         resolver.addProvider(authority, provider);
     }
 
-    public ContentProvider addProvider(Class<? extends ContentProvider> providerClass,
+    public <T extends ContentProvider> T addProvider(Class<T> providerClass,
             String authority) throws Exception {
-        ContentProvider provider = providerClass.newInstance();
+        return addProvider(providerClass, authority, mProviderContext);
+    }
+
+    public <T extends ContentProvider> T addProvider(Class<T> providerClass,
+            String authority, Context providerContext) throws Exception {
+        T provider = providerClass.newInstance();
         ProviderInfo info = new ProviderInfo();
         info.authority = authority;
-        provider.attachInfoForTesting(mProviderContext, info);
+        provider.attachInfoForTesting(providerContext, info);
         resolver.addProvider(authority, provider);
         return provider;
     }
