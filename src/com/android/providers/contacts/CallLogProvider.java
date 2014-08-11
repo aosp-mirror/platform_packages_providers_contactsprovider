@@ -413,7 +413,9 @@ public class CallLogProvider extends ContentProvider {
      * since the last time the last sync occurred.
      */
     private void syncEntriesFromPrimaryUser(UserManager userManager) {
-        if (userManager.getUserHandle() == UserHandle.USER_OWNER) {
+        final int userHandle = userManager.getUserHandle();
+        if (userHandle == UserHandle.USER_OWNER
+                || userManager.getUserInfo(userHandle).isManagedProfile()) {
             return;
         }
 
