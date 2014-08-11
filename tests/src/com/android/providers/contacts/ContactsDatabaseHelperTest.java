@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.database.sqlite.SQLiteDatabase;
 import android.test.MoreAsserts;
+import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
@@ -193,5 +194,60 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         // Make sure the caches are also updated.
         assertEquals(packageId2, (long) mDbHelper.mPackageCache.get("value2"));
         assertEquals(mimetypeId2, (long) mDbHelper.mMimetypeCache.get("value2"));
+
+        // Clear the cache, but they should still return the values, selecting from the database.
+        mDbHelper.mPackageCache.clear();
+        mDbHelper.mMimetypeCache.clear();
+        assertEquals(packageId1, mDbHelper.getPackageId("value1"));
+        assertEquals(mimetypeId1, mDbHelper.getMimeTypeId("value1"));
+
+        // Empty the table
+        mDb.execSQL("DELETE FROM " + Tables.MIMETYPES);
+
+        // We should still have the cached value.
+        assertEquals(mimetypeId1, mDbHelper.getMimeTypeId("value1"));
+    }
+
+    /**
+     * Try to cause conflicts in getMimeTypeId() by calling it from multiple threads with
+     * the current time as the argument and make sure it won't crash.
+     *
+     * We don't know from the test if there have actually been conflits, but if you look at
+     * logcat you'll see a lot of conflict warnings.
+     */
+    @LargeTest
+    public void testGetMimeTypeId_conflict() {
+
+        final int NUM_THREADS = 4;
+        final int DURATION_SECONDS = 5;
+
+        final long finishTime = System.currentTimeMillis() + DURATION_SECONDS * 1000;
+
+        final Runnable r = new Runnable() {
+            @Override
+            public void run() {
+                for (;;) {
+                    final long now = System.currentTimeMillis();
+                    if (now >= finishTime) {
+                        return;
+                    }
+                    assertTrue(mDbHelper.getMimeTypeId(String.valueOf(now)) > 0);
+                }
+            }
+        };
+        final Thread[] threads = new Thread[NUM_THREADS];
+        for (int i = 0; i < threads.length; i++) {
+            threads[i] = new Thread(r);
+            threads[i].setDaemon(true);
+        }
+        for (int i = 0; i < threads.length; i++) {
+            threads[i].start();
+        }
+        for (int i = 0; i < threads.length; i++) {
+            try {
+                threads[i].join();
+            } catch (InterruptedException ignore) {
+            }
+        }
     }
 }
