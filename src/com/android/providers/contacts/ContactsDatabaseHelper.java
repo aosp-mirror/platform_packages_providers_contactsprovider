@@ -4510,6 +4510,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // Then, try the database.
         long id = queryIdWithOneArg(db, querySql, value);
         if (id >= 0) {
+            cache.put(value, id);
             return id;
         }
 
