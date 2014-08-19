@@ -1024,6 +1024,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    public void testDataInsertPhoneNumberTooLongIsTrimmed() {
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
+
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 300; i++) {
+            sb.append("12345");
+        }
+        final String phoneNumber1500Chars = sb.toString();
+        values.put(Phone.NUMBER, phoneNumber1500Chars);
+
+        Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
+        final long dataId = ContentUris.parseId(dataUri);
+
+        sb.setLength(0);
+        for (int i = 0; i < 200; i++) {
+            sb.append("12345");
+        }
+        final String phoneNumber1000Chars = sb.toString();
+        final ContentValues expected = new ContentValues();
+        expected.put(Phone.NUMBER, phoneNumber1000Chars);
+        assertSelection(dataUri, expected, Data._ID, dataId);
+    }
+
     public void testRawContactDataQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
