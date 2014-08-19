@@ -242,6 +242,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /** Rate limit (in milliseconds) for photo cleanup.  Do it at most once per day. */
     private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
 
+    /** Maximum length of a phone number that can be inserted into the database */
+    private static final int PHONE_NUMBER_LENGTH_LIMIT = 1000;
+
     /**
      * Default expiration duration for pre-authorized URIs.  May be overridden from a secure
      * setting.
@@ -2805,6 +2808,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalArgumentException(Data.MIMETYPE + " is required");
         }
 
+        if (Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
+            maybeTrimLongPhoneNumber(inputValues);
+        }
+
         // The input seem valid, create a shallow copy.
         final ContentValues values = new ContentValues(inputValues);
 
@@ -4468,6 +4475,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return count;
     }
 
+    private void maybeTrimLongPhoneNumber(ContentValues values) {
+        final String data1 = values.getAsString(Data.DATA1);
+        if (data1 != null && data1.length() > PHONE_NUMBER_LENGTH_LIMIT) {
+            values.put(Data.DATA1, data1.substring(0, PHONE_NUMBER_LENGTH_LIMIT));
+        }
+    }
+
     private int updateData(ContentValues values, Cursor c, boolean callerIsSyncAdapter) {
         if (values.size() == 0) {
             return 0;
@@ -4476,6 +4490,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
 
         final String mimeType = c.getString(DataRowHandler.DataUpdateQuery.MIMETYPE);
+        if (Phone.CONTENT_ITEM_TYPE.equals(mimeType)) {
+            maybeTrimLongPhoneNumber(values);
+        }
+
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
         boolean updated =
                 rowHandler.update(db, mTransactionContext.get(), values, c,
