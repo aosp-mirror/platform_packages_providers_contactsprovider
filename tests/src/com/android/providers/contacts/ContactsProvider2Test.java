@@ -19,7 +19,6 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 
 import android.accounts.Account;
-import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -69,7 +68,6 @@ import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
-import android.test.suitebuilder.annotation.Suppress;
 import android.text.TextUtils;
 
 import com.android.internal.util.ArrayUtils;
@@ -1769,7 +1767,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             assertEquals(1, c.getCount());
             c.moveToPosition(0);
             long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
-            assertFalse(Contacts.isCorpContactId(contactId)); // Make sure it's not rewritten.
+            assertFalse(Contacts.isEnterpriseContactId(contactId)); // Make sure it's not rewritten.
         } finally {
             c.close();
         }
@@ -1861,7 +1859,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
             // Make sure it has a personal contact ID.
             long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
-            assertFalse(Contacts.isCorpContactId(contactId));
+            assertFalse(Contacts.isEnterpriseContactId(contactId));
         } finally {
             c.close();
         }
@@ -1878,7 +1876,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
             // Make sure it has a corp contact ID.
             long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
-            assertTrue(Contacts.isCorpContactId(contactId));
+            assertTrue(Contacts.isEnterpriseContactId(contactId));
         } finally {
             c.close();
         }

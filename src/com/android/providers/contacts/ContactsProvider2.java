@@ -6583,7 +6583,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         builder.add(getCorpDisplayPhotoUri(contactId, original));
                         break;
                     case PhoneLookup._ID:
-                        builder.add(original.getLong(i) + Contacts.CORP_CONTACT_ID_BASE);
+                        builder.add(original.getLong(i) + Contacts.ENTERPRISE_CONTACT_ID_BASE);
                         break;
 
                     // These columns are set to null.
