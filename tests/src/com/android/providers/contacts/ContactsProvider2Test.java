@@ -8545,6 +8545,30 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
     }
 
+    /**
+     * Tests the functionality of the
+     * {@link ContactsContract.PinnedPositions#pin(ContentResolver, long, int)} API.
+     */
+    public void testPinnedPositions_ContactsContractPinnedPositionsPin() {
+        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
+
+        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED)
+        );
+
+        ContactsContract.PinnedPositions.pin(mResolver,  i1.mContactId, 5);
+
+        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 5)
+        );
+
+        ContactsContract.PinnedPositions.pin(mResolver,  i1.mContactId, PinnedPositions.UNPINNED);
+
+        assertStoredValuesWithProjection(Contacts.CONTENT_URI,
+                cv(Contacts._ID, i1.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED)
+        );
+    }
+
     private ContentProviderOperation newPinningOperation(long id, int pinned, boolean star) {
         final Uri uri = Uri.withAppendedPath(Contacts.CONTENT_URI, String.valueOf(id));
         final ContentValues values = new ContentValues();
