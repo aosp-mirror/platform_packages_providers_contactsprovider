@@ -117,7 +117,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 908;
+    static final int DATABASE_VERSION = 909;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1479,6 +1479,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.FEATURES + " INTEGER NOT NULL DEFAULT 0," +
                 Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
                 Calls.PHONE_ACCOUNT_ID + " TEXT," +
+                Calls.SUB_ID + " INTEGER DEFAULT -1," +
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
                 Calls.CACHED_NUMBER_TYPE + " INTEGER," +
@@ -2788,6 +2789,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 908) {
             upgradeToVersion908(db);
             oldVersion = 908;
+        }
+
+        if (oldVersion < 909) {
+            upgradeToVersion909(db);
+            oldVersion = 909;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4190,6 +4196,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void upgradeToVersion908(SQLiteDatabase db) {
         db.execSQL("UPDATE contacts SET pinned = 0 WHERE pinned = 2147483647;");
         db.execSQL("UPDATE raw_contacts SET pinned = 0 WHERE pinned = 2147483647;");
+    }
+
+    private void upgradeToVersion909(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE calls ADD sub_id INTEGER DEFAULT -1;");
+        } catch (SQLiteException e) {
+            // The column already exists--copy over data
+            db.execSQL("UPDATE calls SET subscription_component_name='com.android.phone/"
+                    + "com.android.services.telephony.TelephonyConnectionService';");
+            db.execSQL("UPDATE calls SET subscription_id=sub_id;");
+        }
     }
 
     public String extractHandleFromEmailAddress(String email) {
