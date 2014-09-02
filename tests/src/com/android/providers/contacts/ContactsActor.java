@@ -325,10 +325,21 @@ public class ContactsActor {
             String authority, Context providerContext) throws Exception {
         T provider = providerClass.newInstance();
         ProviderInfo info = new ProviderInfo();
-        info.authority = authority;
+
+        // Here, authority can have "user-id@".  We want to use it for addProvider, but provider
+        // info shouldn't have it.
+        info.authority = stripOutUserIdFromAuthority(authority);
         provider.attachInfoForTesting(providerContext, info);
         resolver.addProvider(authority, provider);
         return provider;
+    }
+
+    /**
+     * Takes an provider authority. If it has "userid@", then remove it.
+     */
+    private String stripOutUserIdFromAuthority(String authority) {
+        final int pos = authority.indexOf('@');
+        return pos < 0 ? authority : authority.substring(pos + 1);
     }
 
     public void addPermissions(String... permissions) {
