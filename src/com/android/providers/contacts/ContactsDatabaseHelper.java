@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.UserInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Resources;
 import android.database.CharArrayBuffer;
@@ -39,6 +40,7 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.os.UserManager;
 import android.provider.BaseColumns;
 import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
@@ -117,7 +119,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 L
      * </pre>
      */
-    static final int DATABASE_VERSION = 909;
+    static final int DATABASE_VERSION = 910;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2796,6 +2798,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 909;
         }
 
+        if (oldVersion < 910) {
+            upgradeToVersion910(db);
+            oldVersion = 910;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4206,6 +4213,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL("UPDATE calls SET subscription_component_name='com.android.phone/"
                     + "com.android.services.telephony.TelephonyConnectionService';");
             db.execSQL("UPDATE calls SET subscription_id=sub_id;");
+        }
+    }
+
+    /**
+     * Delete any remaining rows in the calls table if the user is a profile of another user.
+     * b/17096027
+     */
+    @VisibleForTesting
+    public void upgradeToVersion910(SQLiteDatabase db) {
+        final UserManager userManager = (UserManager) mContext.getSystemService(
+                Context.USER_SERVICE);
+        final UserInfo user = userManager.getUserInfo(userManager.getUserHandle());
+        if (user.isManagedProfile()) {
+            db.execSQL("DELETE FROM calls;");
         }
     }
 
