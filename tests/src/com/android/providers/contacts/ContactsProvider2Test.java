@@ -1775,6 +1775,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     /**
      * Set up the corp user / CP2 and returns the corp CP2 instance.
+     *
+     * Create a second instance of CP2, and add it to the resolver, with the "user-id@" authority.
      */
     private SynchronousContactsProvider2 setUpCorpProvider() throws Exception {
         mActor.mockUserManager.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.CORP_USER);
