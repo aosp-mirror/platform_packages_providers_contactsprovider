@@ -19,6 +19,7 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 
 import android.accounts.Account;
+import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -26,12 +27,16 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.pm.UserInfo;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.UserManager;
+import android.provider.CallLog.Calls;
+import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Callable;
@@ -71,6 +76,7 @@ import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
 
 import com.android.internal.util.ArrayUtils;
+import com.android.providers.contacts.CallLogProviderTest.TestCallLogProvider;
 import com.android.providers.contacts.ContactsActor.AlteringUserContext;
 import com.android.providers.contacts.ContactsActor.MockUserManager;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
@@ -1880,6 +1886,37 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         } finally {
             c.close();
         }
+    }
+
+    public void testUpgradeToVersion910_CallsDeletedForCorpProfileOnly() throws Exception {
+        CallLogProvider provider =
+                (CallLogProvider) addProvider(TestCallLogProvider.class, CallLog.AUTHORITY);
+        final ContactsDatabaseHelper helper = provider.getDatabaseHelper(mContext);
+        final SQLiteDatabase db = helper.getWritableDatabase();
+
+        final ContentValues values = new ContentValues();
+        values.put(Calls.NUMBER, "123456789");
+        values.put(Calls.DATE, System.currentTimeMillis());
+        values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
+        values.put(Calls.DURATION, 10000);
+
+        mResolver.insert(Calls.CONTENT_URI, values);
+        assertEquals(1, getCount(Calls.CONTENT_URI));
+
+        helper.upgradeToVersion910(db);
+        assertEquals(1, getCount(Calls.CONTENT_URI));
+
+        mActor.mockUserManager.myUser = MockUserManager.CORP_USER.id;
+        mActor.mockUserManager.setUsers(MockUserManager.CORP_USER);
+
+        helper.upgradeToVersion910(db);
+
+        // Switch back to the primary user to ensure that the calls table was really cleared, and
+        // we are not getting an empty cursor just because of the call log read/write restriction
+        // on managed profiles.
+        mActor.mockUserManager.myUser = MockUserManager.PRIMARY_USER.id;
+        mActor.mockUserManager.setUsers(MockUserManager.PRIMARY_USER);
+        assertEquals(0, getCount(Calls.CONTENT_URI));
     }
 
     public void testRewriteCorpPhoneLookup() {
