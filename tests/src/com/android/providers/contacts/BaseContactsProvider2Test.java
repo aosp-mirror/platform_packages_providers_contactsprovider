@@ -232,15 +232,23 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     }
 
     protected Uri insertOrganization(long rawContactId, ContentValues values) {
-        return insertOrganization(rawContactId, values, false);
+        return insertOrganization(rawContactId, values, false, false);
     }
 
     protected Uri insertOrganization(long rawContactId, ContentValues values, boolean primary) {
+        return insertOrganization(rawContactId, values, primary, false);
+    }
+
+    protected Uri insertOrganization(long rawContactId, ContentValues values, boolean primary,
+            boolean superPrimary) {
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE);
         values.put(Organization.TYPE, Organization.TYPE_WORK);
         if (primary) {
             values.put(Data.IS_PRIMARY, 1);
+        }
+        if (superPrimary) {
+            values.put(Data.IS_SUPER_PRIMARY, 1);
         }
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
@@ -252,11 +260,21 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     }
 
     protected Uri insertPhoneNumber(long rawContactId, String phoneNumber, boolean primary) {
-        return insertPhoneNumber(rawContactId, phoneNumber, primary, Phone.TYPE_HOME);
+        return insertPhoneNumber(rawContactId, phoneNumber, primary, false, Phone.TYPE_HOME);
+    }
+
+    protected Uri insertPhoneNumber(long rawContactId, String phoneNumber, boolean primary,
+            boolean superPrimary) {
+        return insertPhoneNumber(rawContactId, phoneNumber, primary, superPrimary, Phone.TYPE_HOME);
     }
 
     protected Uri insertPhoneNumber(long rawContactId, String phoneNumber, boolean primary,
             int type) {
+        return insertPhoneNumber(rawContactId, phoneNumber, primary, false, type);
+    }
+
+    protected Uri insertPhoneNumber(long rawContactId, String phoneNumber, boolean primary,
+            boolean superPrimary, int type) {
         ContentValues values = new ContentValues();
         values.put(Data.RAW_CONTACT_ID, rawContactId);
         values.put(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE);
@@ -264,6 +282,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         values.put(Phone.TYPE, type);
         if (primary) {
             values.put(Data.IS_PRIMARY, 1);
+        }
+        if (superPrimary) {
+            values.put(Data.IS_SUPER_PRIMARY, 1);
         }
 
         Uri resultUri = mResolver.insert(Data.CONTENT_URI, values);
@@ -710,6 +731,20 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             if (value == null) assertTrue(c.isNull(c.getColumnIndexOrThrow(columnName)));
             else assertEquals(value, c.getString(c.getColumnIndexOrThrow(columnName)));
         }
+    }
+
+    protected void assertSuperPrimary(Long dataId, boolean isSuperPrimary) {
+        final String[] projection = new String[]{Data.MIMETYPE, Data._ID, Data.IS_SUPER_PRIMARY};
+        Cursor c = mResolver.query(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
+                projection, null, null, null);
+
+        c.moveToFirst();
+        if (isSuperPrimary) {
+            assertEquals(1, c.getInt(c.getColumnIndexOrThrow(Data.IS_SUPER_PRIMARY)));
+        } else {
+            assertEquals(0, c.getInt(c.getColumnIndexOrThrow(Data.IS_SUPER_PRIMARY)));
+        }
+
     }
 
     protected void assertDataRow(ContentValues actual, String expectedMimetype,

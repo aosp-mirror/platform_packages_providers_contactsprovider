@@ -1486,6 +1486,46 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    public void testAggregation_clearSuperPrimary() {
+        // Three types of mime-type super primary merging are tested here
+        // 1. both raw contacts have super primary phone numbers
+        // 2. both raw contacts have emails, but only one has super primary email
+        // 3. only raw contact1 has organizations and it has set the super primary organization
+        ContentValues values = new ContentValues();
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        Uri uri_phone1 = insertPhoneNumber(rawContactId1, "(222)222-2222", false, false);
+        Uri uri_email1 = insertEmail(rawContactId1, "one@gmail.com", true, true);
+        values.clear();
+        values.put(Organization.COMPANY, "Monsters Inc");
+        Uri uri_org1 = insertOrganization(rawContactId1, values, true, true);
+        values.clear();
+        values.put(Organization.TITLE, "CEO");
+        Uri uri_org2 = insertOrganization(rawContactId1, values, false, false);
+
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
+        Uri uri_phone2 = insertPhoneNumber(rawContactId2, "(333)333-3333", false, false);
+        Uri uri_email2 = insertEmail(rawContactId2, "two@gmail.com", false, false);
+
+        // Two raw contacts with same phone number will trigger the aggregation
+        Uri uri_phone3 = insertPhoneNumber(rawContactId1, "(111)111-1111", true, true);
+        Uri uri_phone4 = insertPhoneNumber(rawContactId2, "1(111)111-1111", true, true);
+
+        // After aggregation, the super primary flag should be cleared for both case 1 and case 2,
+        // i.e., phone and email mime-types. Only case 3, i.e. organization mime-type, has the
+        // super primary flag unchanged.
+        assertAggregated(rawContactId1, rawContactId2);
+        assertSuperPrimary(ContentUris.parseId(uri_phone1), false);
+        assertSuperPrimary(ContentUris.parseId(uri_phone2), false);
+        assertSuperPrimary(ContentUris.parseId(uri_phone3), false);
+        assertSuperPrimary(ContentUris.parseId(uri_phone4), false);
+
+        assertSuperPrimary(ContentUris.parseId(uri_email1), false);
+        assertSuperPrimary(ContentUris.parseId(uri_email2), false);
+
+        assertSuperPrimary(ContentUris.parseId(uri_org1), true);
+        assertSuperPrimary(ContentUris.parseId(uri_org2), false);
+    }
+
     private void assertSuggestions(long contactId, long... suggestions) {
         final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,

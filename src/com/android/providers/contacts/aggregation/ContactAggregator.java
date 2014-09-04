@@ -797,6 +797,7 @@ public class ContactAggregator {
                 mAggregatedPresenceDelete.execute();
             }
 
+            clearSuperPrimarySetting(db, contactId, rawContactId);
             setContactIdAndMarkAggregated(rawContactId, contactId);
             computeAggregateData(db, contactId, mContactUpdate);
             mContactUpdate.bindLong(ContactReplaceSqlStatement.CONTACT_ID, contactId);
@@ -812,6 +813,58 @@ public class ContactAggregator {
         if (contactIdToSplit != -1) {
             splitAutomaticallyAggregatedRawContacts(txContext, db, contactIdToSplit);
         }
+    }
+
+    /**
+     * Find out which mime-types are shared by raw contact of {@code rawContactId} and raw contacts
+     * of {@code contactId}. Clear the is_super_primary settings for these mime-types.
+     */
+    private void clearSuperPrimarySetting(SQLiteDatabase db, long contactId, long rawContactId) {
+        final String[] args = {String.valueOf(contactId), String.valueOf(rawContactId)};
+
+        // Find out which mime-types are shared by raw contact of rawContactId and raw contacts
+        // of contactId
+        int index = 0;
+        final StringBuilder mimeTypeCondition = new StringBuilder();
+        mimeTypeCondition.append(" AND " + DataColumns.MIMETYPE_ID + " IN (");
+
+        final Cursor c = db.rawQuery(
+                "SELECT DISTINCT(a." + DataColumns.MIMETYPE_ID + ")" +
+                " FROM (SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA + " WHERE " +
+                        Data.RAW_CONTACT_ID + " IN (SELECT " + RawContacts._ID + " FROM " +
+                        Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "=?1)) AS a" +
+                " JOIN  (SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA + " WHERE "
+                        + Data.RAW_CONTACT_ID + "=?2) AS b" +
+                " ON a." + DataColumns.MIMETYPE_ID + "=b." + DataColumns.MIMETYPE_ID,
+                args);
+        try {
+            c.moveToPosition(-1);
+            while (c.moveToNext()) {
+                if (index > 0) {
+                    mimeTypeCondition.append(',');
+                }
+                mimeTypeCondition.append(c.getLong((0)));
+                index++;
+            }
+        } finally {
+            c.close();
+        }
+
+        // Clear is_super_primary setting for all the mime-types exist in both raw contact
+        // of rawContactId and raw contacts of contactId
+        String superPrimaryUpdateSql = "UPDATE " + Tables.DATA +
+                " SET " + Data.IS_SUPER_PRIMARY + "=0" +
+                " WHERE (" +  Data.RAW_CONTACT_ID +
+                        " IN (SELECT " + RawContacts._ID +  " FROM " + Tables.RAW_CONTACTS +
+                        " WHERE " + RawContacts.CONTACT_ID + "=?1)" +
+                        " OR " +  Data.RAW_CONTACT_ID + "=?2)";
+
+        if (index > 0) {
+            mimeTypeCondition.append(')');
+            superPrimaryUpdateSql += mimeTypeCondition.toString();
+        }
+
+        db.execSQL(superPrimaryUpdateSql, args);
     }
 
     /**
