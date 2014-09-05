@@ -7113,7 +7113,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     public void testContactCounts() {
         Uri uri = Contacts.CONTENT_URI.buildUpon()
-                .appendQueryParameter(Contacts.ADDRESS_BOOK_INDEX_EXTRAS, "true").build();
+                .appendQueryParameter(Contacts.EXTRA_ADDRESS_BOOK_INDEX, "true").build();
 
         RawContactUtil.createRawContact(mResolver);
         RawContactUtil.createRawContactWithName(mResolver, "James", "Sullivan");
