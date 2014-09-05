@@ -6444,7 +6444,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 query(db, qb, projection, selection, selectionArgs, localizedSortOrder, groupBy,
                 having, limit, cancellationSignal);
 
-        if (readBooleanQueryParameter(uri, Contacts.ADDRESS_BOOK_INDEX_EXTRAS, false)) {
+        if (readBooleanQueryParameter(uri, Contacts.EXTRA_ADDRESS_BOOK_INDEX, false)) {
             bundleFastScrollingIndexExtras(cursor, uri, db, qb, selection,
                     selectionArgs, sortOrder, addressBookIndexerCountExpression,
                     cancellationSignal);
