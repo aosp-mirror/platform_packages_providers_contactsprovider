@@ -185,12 +185,12 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 sComponentName, "sub0");
 
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
-                PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, Calls.FEATURES_NONE,
-                subscription, 2000, 40, null);
+                PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
+                40, null);
 
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
-        values.put(Calls.FEATURES, Calls.FEATURES_NONE);
+        values.put(Calls.FEATURES, 0);
         values.put(Calls.NUMBER, "1-800-263-7643");
         values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
@@ -508,7 +508,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 values.put(Calls.NUMBER, "123456");
                 values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
                 values.put(Calls.TYPE, Calls.MISSED_TYPE);
-                values.put(Calls.FEATURES, Calls.FEATURES_NONE);
+                values.put(Calls.FEATURES, 0);
                 values.put(Calls.DATE, 10);
                 values.put(Calls.DURATION, 100);
                 values.put(Calls.DATA_USAGE, 1000);
@@ -519,7 +519,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 values.put(Calls.NUMBER, "654321");
                 values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
                 values.put(Calls.TYPE, Calls.INCOMING_TYPE);
-                values.put(Calls.FEATURES, Calls.FEATURES_NONE);
+                values.put(Calls.FEATURES, 0);
                 values.put(Calls.DATE, 5);
                 values.put(Calls.DURATION, 200);
                 values.put(Calls.DATA_USAGE, 0);
