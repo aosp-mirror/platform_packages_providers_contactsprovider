@@ -36,7 +36,7 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
-import android.telecomm.PhoneAccountHandle;
+import android.telecom.PhoneAccountHandle;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import java.util.Arrays;
@@ -179,8 +179,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ci.numberType = Phone.TYPE_CUSTOM;
         ci.numberLabel = "Directory";
         final ComponentName sComponentName = new ComponentName(
-                "com.android.telecomm",
-                "TelecommServiceImpl");
+                "com.android.server.telecom",
+                "TelecomServiceImpl");
         PhoneAccountHandle subscription = new PhoneAccountHandle(
                 sComponentName, "sub0");
 
@@ -200,7 +200,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
         values.put(Calls.COUNTRY_ISO, "us");
         values.put(Calls.GEOCODED_LOCATION, "usa");
-        values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, "com.android.telecomm/TelecommServiceImpl");
+        values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
+                "com.android.server.telecom/TelecomServiceImpl");
         values.put(Calls.PHONE_ACCOUNT_ID, "sub0");
         // Casting null to Long as there are many forms of "put" which have nullable second
         // parameters and the compiler needs a hint as to which form is correct.
