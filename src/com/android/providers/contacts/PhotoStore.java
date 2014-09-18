@@ -39,6 +39,8 @@ import java.util.Set;
  */
 public class PhotoStore {
 
+    private static final Object MKDIRS_LOCK = new Object();
+
     private final String TAG = PhotoStore.class.getSimpleName();
 
     // Directory name under the root directory for photo storage.
@@ -66,10 +68,12 @@ public class PhotoStore {
      */
     public PhotoStore(File rootDirectory, ContactsDatabaseHelper databaseHelper) {
         mStorePath = new File(rootDirectory, DIRECTORY);
-        if (!mStorePath.exists()) {
-            if(!mStorePath.mkdirs()) {
-                throw new RuntimeException("Unable to create photo storage directory "
-                        + mStorePath.getPath());
+        synchronized (MKDIRS_LOCK) {
+            if (!mStorePath.exists()) {
+                if (!mStorePath.mkdirs()) {
+                    throw new RuntimeException("Unable to create photo storage directory "
+                            + mStorePath.getPath());
+                }
             }
         }
         mDatabaseHelper = databaseHelper;
