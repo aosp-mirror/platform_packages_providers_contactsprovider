@@ -171,6 +171,6 @@ public class ProfileProvider extends AbstractContactsProvider {
 
     private void sendProfileChangedBroadcast() {
         final Intent intent = new Intent(Intents.ACTION_PROFILE_CHANGED);
-        getContext().sendBroadcast(intent, READ_PERMISSION);
+        mDelegate.getContext().sendBroadcast(intent, READ_PERMISSION);
     }
 }
