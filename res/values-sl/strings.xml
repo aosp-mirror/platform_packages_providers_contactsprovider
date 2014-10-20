@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"Osrednji programi sistema Android"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Osrednje aplikacije sistema Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Shramba za stike"</string>
     <string name="provider_label" msgid="6012150850819899907">"Stiki"</string>
     <string name="upgrade_msg" msgid="8640807392794309950">"Nadgradnja zbirke podatkov stikov."</string>
@@ -30,7 +30,7 @@
     <string name="debug_dump_database_message" msgid="406438635002392290">"V naslednjem koraku boste 1) naredili kopijo zbirke podatkov, ki vključuje vse informacije o stikih in celoten dnevnik klicev, v notranji pomnilnik ter 2) jo poslali. Ne pozabite izbrisati kopije iz naprave, ko jo boste uspešno kopirali oziroma ko jo boste prejeli po e-pošti."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Izbriši zdaj"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Začni"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izberite program za pošiljanje datoteke"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izberite aplikacijo za pošiljanje datoteke"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Priložena zbirka podatkov o stikih"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"Priložena je zbirka podatkov z vsemi informacijami o stikih. Z e-pošto ravnajte previdno."</string>
 </resources>
