@@ -260,7 +260,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String PREF_LOCALE = "locale";
 
-    private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 3;
+    private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 4;
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
