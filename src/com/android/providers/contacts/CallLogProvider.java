@@ -31,6 +31,10 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
+import android.os.Process;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.CallLog;
@@ -47,12 +51,15 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Call log content provider.
  */
 public class CallLogProvider extends ContentProvider {
     private static final String TAG = CallLogProvider.class.getSimpleName();
+
+    private static final int BACKGROUND_TASK_INITIALIZE = 0;
 
     /** Selection clause for selecting all calls that were made after a certain time */
     private static final String MORE_RECENT_THAN_SELECTION = Calls.DATE + "> ?";
@@ -117,6 +124,10 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_FORMATTED_NUMBER, Calls.CACHED_FORMATTED_NUMBER);
     }
 
+    private HandlerThread mBackgroundThread;
+    private Handler mBackgroundHandler;
+    private volatile CountDownLatch mReadAccessLatch;
+
     private ContactsDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
     private boolean mUseStrictPhoneNumberComparation;
@@ -136,11 +147,20 @@ public class CallLogProvider extends ContentProvider {
                     com.android.internal.R.bool.config_use_strict_phone_number_comparation);
         mVoicemailPermissions = new VoicemailPermissions(context);
         mCallLogInsertionHelper = createCallLogInsertionHelper(context);
-        final UserManager userManager = UserUtils.getUserManager(context);
-        if (userManager != null &&
-                !userManager.hasUserRestriction(UserManager.DISALLOW_OUTGOING_CALLS)) {
-            syncEntriesFromPrimaryUser(userManager);
-        }
+
+        mBackgroundThread = new HandlerThread("CallLogProviderWorker",
+                Process.THREAD_PRIORITY_BACKGROUND);
+        mBackgroundThread.start();
+        mBackgroundHandler = new Handler(mBackgroundThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                performBackgroundTask(msg.what);
+            }
+        };
+
+        mReadAccessLatch = new CountDownLatch(1);
+
+        scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
 
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, "CallLogProvider.onCreate finish");
@@ -161,6 +181,7 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+        waitForAccess(mReadAccessLatch);
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         qb.setTables(Tables.CALLS);
         qb.setProjectionMap(sCallsProjectionMap);
@@ -256,6 +277,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
+        waitForAccess(mReadAccessLatch);
         checkForSupportedColumns(sCallsProjectionMap, values);
         // Inserting a voicemail record through call_log requires the voicemail
         // permission and also requires the additional voicemail param set.
@@ -282,6 +304,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        waitForAccess(mReadAccessLatch);
         checkForSupportedColumns(sCallsProjectionMap, values);
         // Request that involves changing record type to voicemail requires the
         // voicemail param set in the uri.
@@ -312,6 +335,7 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
+        waitForAccess(mReadAccessLatch);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
 
@@ -502,5 +526,43 @@ public class CallLogProvider extends ContentProvider {
 
     private void setLastTimeSynced(long time) {
         mDbHelper.setProperty(DbProperties.CALL_LOG_LAST_SYNCED, String.valueOf(time));
+    }
+
+    private static void waitForAccess(CountDownLatch latch) {
+        if (latch == null) {
+            return;
+        }
+
+        while (true) {
+            try {
+                latch.await();
+                return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void scheduleBackgroundTask(int task) {
+        mBackgroundHandler.sendEmptyMessage(task);
+    }
+
+    private void performBackgroundTask(int task) {
+        if (task == BACKGROUND_TASK_INITIALIZE) {
+            try {
+                final Context context = getContext();
+                if (context != null) {
+                    final UserManager userManager = UserUtils.getUserManager(context);
+                    if (userManager != null &&
+                            !userManager.hasUserRestriction(UserManager.DISALLOW_OUTGOING_CALLS)) {
+                        syncEntriesFromPrimaryUser(userManager);
+                    }
+                }
+            } finally {
+                mReadAccessLatch.countDown();
+                mReadAccessLatch = null;
+            }
+        }
+
     }
 }
