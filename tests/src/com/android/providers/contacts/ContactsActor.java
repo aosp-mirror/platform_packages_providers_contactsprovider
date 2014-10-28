@@ -66,6 +66,7 @@ import android.test.mock.MockContext;
 import android.util.Log;
 
 import com.android.providers.contacts.util.MockSharedPreferences;
+
 import com.google.android.collect.Sets;
 
 import java.io.File;
@@ -219,6 +220,16 @@ public class ContactsActor {
         @Override
         public Bundle getUserRestrictions(UserHandle userHandle) {
             return new Bundle();
+        }
+
+        @Override
+        public boolean hasUserRestriction(String restrictionKey) {
+            return false;
+        }
+
+        @Override
+        public boolean hasUserRestriction(String restrictionKey, UserHandle userHandle) {
+            return false;
         }
     }
 
