@@ -6430,12 +6430,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
                 rawContactId1, rawContactId2);
 
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
         ContentValues values = new ContentValues();
         values.put(Data.IS_SUPER_PRIMARY, 1);
         mResolver.update(photoUri2, values, null, null);
 
-        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
-                rawContactId1, rawContactId2);
         contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI,
                 queryContactId(rawContactId1));
         assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId2);
