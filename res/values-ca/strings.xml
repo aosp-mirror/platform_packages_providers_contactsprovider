@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Toca-ho per completar l\'actualització."</string>
     <string name="default_directory" msgid="93961630309570294">"Contactes"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altres"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Accés a tots els missatges de veu"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permet que l\'aplicació emmagatzemi i recuperi totes les bústies de veu a les quals pot accedir aquest dispositiu."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Missatge de veu de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copia la base de dades de contactes"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Estàs a punt de: 1) fer una còpia de la teva base de dades, que inclou tota la informació relacionada amb els contactes i tots els registres de trucades de l\'emmagatzematge intern, i 2) d\'enviar-la per correu electrònic. Recorda suprimir la còpia de seguida que l\'hagis copiat correctament al dispositiu o quan hagis rebut el correu electrònic."</string>

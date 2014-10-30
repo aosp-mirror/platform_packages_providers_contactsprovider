@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Touch to complete the upgrade."</string>
     <string name="default_directory" msgid="93961630309570294">"Contacts"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Other"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Access all voicemails"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Allows the app to store and retrieve all voicemails that this device can access."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail from "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copy contacts database"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"You are about to 1) make a copy of your database which includes all contacts related information and all call log to the internal storage, and 2) email it. Remember to delete the copy as soon as you have successfully copied it off the device or the email is received."</string>

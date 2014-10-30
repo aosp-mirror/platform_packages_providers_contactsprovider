@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Sentuh untuk menyelesaikan peningkatan versi."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontak"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Lainnya"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Akses semua pesan suara"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Mengizinkan apl menyimpan dan mengambil semua pesan suara yang dapat diakses oleh perangkat ini."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Kotak pesan dari "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Salin basis data kontak"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Anda akan 1) membuat salinan basis data yang mencakup semua informasi terkait kontak dan semua log panggilan ke penyimpanan internal, dan 2) mengirimkannya sebagai email. Ingat untuk menghapus salinan secepatnya setelah Anda selesai menyalinnya dari perangkat atau saat email telah diterima."</string>
