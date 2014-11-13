@@ -766,7 +766,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertNotAggregated(rawContactId1, rawContactId2);
     }
 
-    public void testAggregationFromSameAccountEmailSame() {
+    public void testAggregationFromSameAccountEmailSame_IgnoreCase() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
                 ACCOUNT_1);
         insertEmail(rawContactId1, "lightning@android.com");
@@ -776,6 +776,16 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         insertEmail(rawContactId2, "lightning@android.com");
 
         assertAggregated(rawContactId1, rawContactId2);
+
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "Jane", "Doe",
+                ACCOUNT_1);
+        insertEmail(rawContactId3, "jane@android.com");
+
+        long rawContactId4 = RawContactUtil.createRawContactWithName(mResolver, "Jane", "Doe",
+                ACCOUNT_1);
+        insertEmail(rawContactId4, "JANE@ANDROID.COM");
+
+        assertAggregated(rawContactId3, rawContactId4);
     }
 
     public void testNonAggregationFromSameAccountEmailDifferent() {
@@ -905,7 +915,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
         long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         DataUtil.insertStructuredName(mResolver, rawContactId2, "Charles", "Muntz");
-        insertEmail(rawContactId2, "up@android.com");
+        insertEmail(rawContactId2, "Up@Android.com");
 
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
