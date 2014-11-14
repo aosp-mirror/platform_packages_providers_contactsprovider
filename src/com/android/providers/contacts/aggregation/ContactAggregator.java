@@ -930,7 +930,7 @@ public class ContactAggregator {
                 "SELECT count(*)" +
                 " FROM " + Tables.DATA + " AS d1" +
                 " JOIN " + Tables.DATA + " AS d2"
-                    + " ON (d1." + Email.ADDRESS + " = d2." + Email.ADDRESS + ")" +
+                    + " ON lower(d1." + Email.ADDRESS + ") = lower(d2." + Email.ADDRESS + ")" +
                 " WHERE d1." + DataColumns.MIMETYPE_ID + " = ?1" +
                 " AND d2." + DataColumns.MIMETYPE_ID + " = ?1" +
                 " AND d1." + Data.RAW_CONTACT_ID + " = ?2" +
@@ -1616,7 +1616,7 @@ public class ContactAggregator {
     private interface EmailLookupQuery {
         String TABLE = Tables.DATA + " dataA"
                 + " JOIN " + Tables.DATA + " dataB" +
-                " ON (" + "dataA." + Email.DATA + "=dataB." + Email.DATA + ")"
+                " ON lower(" + "dataA." + Email.DATA + ")=lower(dataB." + Email.DATA + ")"
                 + " JOIN " + Tables.RAW_CONTACTS +
                 " ON (dataB." + Data.RAW_CONTACT_ID + " = "
                         + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
