@@ -545,6 +545,16 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertEquals(1, mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null));
     }
 
+    protected void setRawContactCustomization(long rawContactId, int starred, int sendToVoiceMail) {
+        ContentValues values = new ContentValues();
+
+        values.put(RawContacts.STARRED, starred);
+        values.put(RawContacts.SEND_TO_VOICEMAIL, sendToVoiceMail);
+
+        assertEquals(1, mResolver.update(ContentUris.withAppendedId(
+                RawContacts.CONTENT_URI, rawContactId), values, null, null));
+    }
+
     protected void markInvisible(long contactId) {
         // There's no api for this, so we just tweak the DB directly.
         SQLiteDatabase db = ((ContactsProvider2) getProvider()).getDatabaseHelper()
