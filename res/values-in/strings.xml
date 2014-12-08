@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"Apl Inti Android"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Aplikasi Inti Android"</string>
     <string name="app_label" msgid="3389954322874982620">"Penyimpanan Kontak"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontak"</string>
     <string name="upgrade_msg" msgid="8640807392794309950">"Meningkatkan versi basis kontak."</string>
