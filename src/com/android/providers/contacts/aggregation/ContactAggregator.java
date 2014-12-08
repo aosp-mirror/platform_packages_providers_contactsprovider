@@ -136,6 +136,12 @@ public class ContactAggregator {
     private static final int SECONDARY_HIT_LIMIT = 20;
     private static final String SECONDARY_HIT_LIMIT_STRING = String.valueOf(SECONDARY_HIT_LIMIT);
 
+    // If we encounter no less than this many raw contacts in the best matching contact during
+    // aggregation, don't attempt to aggregate - this is likely an error or a shared corporate
+    // data element.
+    @VisibleForTesting
+    static final int AGGREGATION_CONTACT_SIZE_LIMIT = 50;
+
     // If we encounter more than this many contacts with matching name during aggregation
     // suggestion lookup, ignore the remaining results.
     private static final int FIRST_LETTER_SUGGESTION_HIT_LIMIT = 100;
@@ -789,8 +795,19 @@ public class ContactAggregator {
                     } finally {
                         rawContactsToAccountsCursor.close();
                     }
-                    final int actionCode = canJoinIntoContact(db, rawContactId,
-                            rawContactIdsInSameAccount, rawContactIdsInOtherAccount);
+                    final int actionCode;
+                    final int totalNumOfRawContactsInCandidate = rawContactIdsInSameAccount.size()
+                            + rawContactIdsInOtherAccount.size();
+                    if (totalNumOfRawContactsInCandidate >= AGGREGATION_CONTACT_SIZE_LIMIT) {
+                        if (VERBOSE_LOGGING) {
+                            Log.v(TAG, "Too many raw contacts (" + totalNumOfRawContactsInCandidate
+                                    + ") in the best matching contact, so skip aggregation");
+                        }
+                        actionCode = KEEP_SEPARATE;
+                    } else {
+                        actionCode = canJoinIntoContact(db, rawContactId,
+                                rawContactIdsInSameAccount, rawContactIdsInOtherAccount);
+                    }
                     if (actionCode == KEEP_SEPARATE) {
                         contactId = -1;
                     } else if (actionCode == RE_AGGREGATE) {
