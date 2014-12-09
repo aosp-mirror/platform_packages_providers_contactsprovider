@@ -19,9 +19,10 @@ package com.android.providers.contacts;
 import android.accounts.AccountManager;
 import android.accounts.AuthenticatorDescription;
 import android.content.Context;
-import android.content.pm.PackageInfo;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.res.XmlResourceParser;
 import android.util.Log;
@@ -34,6 +35,7 @@ import org.xmlpull.v1.XmlPullParserException;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Maintains a cache of photo priority per account type.  During contact aggregation
@@ -46,10 +48,21 @@ public class PhotoPriorityResolver  {
 
     public static final int DEFAULT_PRIORITY = 7;
 
+    private static final String SYNC_META_DATA = "android.content.SyncAdapter";
+
     /**
-     * Meta-data key for the contacts configuration associated with a sync service.
+     * The metadata name for so-called "contacts.xml".
+     *
+     * On LMP and later, we also accept the "alternate" name.
+     * This is to allow sync adapters to have a contacts.xml without making it visible on older
+     * platforms. If you modify this also update the matching list in
+     * ContactsCommon/ExternalAccountType.
      */
-    private static final String METADATA_CONTACTS = "android.provider.CONTACTS_STRUCTURE";
+    private static final String[] METADATA_CONTACTS_NAMES = new String[] {
+            "android.provider.ALTERNATE_CONTACTS_STRUCTURE",
+            "android.provider.CONTACTS_STRUCTURE"
+    };
+
 
     /**
      * The XML tag capturing the picture priority. The syntax is:
@@ -107,19 +120,24 @@ public class PhotoPriorityResolver  {
      */
     /* package */ int resolvePhotoPriorityFromMetaData(String packageName) {
         final PackageManager pm = mContext.getPackageManager();
-        try {
-            PackageInfo pi = pm.getPackageInfo(packageName, PackageManager.GET_SERVICES
-                    | PackageManager.GET_META_DATA);
-            if (pi != null && pi.services != null) {
-                for (ServiceInfo si : pi.services) {
-                    final XmlResourceParser parser = si.loadXmlMetaData(pm, METADATA_CONTACTS);
+        final Intent intent = new Intent(SYNC_META_DATA).setPackage(packageName);
+        final List<ResolveInfo> intentServices = pm.queryIntentServices(intent,
+                PackageManager.GET_SERVICES | PackageManager.GET_META_DATA);
+
+        if (intentServices != null) {
+            for (final ResolveInfo resolveInfo : intentServices) {
+                final ServiceInfo serviceInfo = resolveInfo.serviceInfo;
+                if (serviceInfo == null) {
+                    continue;
+                }
+                for (String metadataName : METADATA_CONTACTS_NAMES) {
+                    final XmlResourceParser parser = serviceInfo.loadXmlMetaData(
+                            pm, metadataName);
                     if (parser != null) {
                         return loadPhotoPriorityFromXml(mContext, parser);
                     }
                 }
             }
-        } catch (NameNotFoundException e) {
-            Log.w(TAG, "Problem loading photo priorities: " + e.toString());
         }
         return DEFAULT_PRIORITY;
     }
