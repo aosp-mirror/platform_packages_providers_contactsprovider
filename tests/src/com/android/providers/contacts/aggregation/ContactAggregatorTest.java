@@ -1620,6 +1620,25 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertSuperPrimary(ContentUris.parseId(uri_org2), false);
     }
 
+    public void testNotAggregate_TooManyRawContactsInCandidate() {
+        long preId= 0;
+        for (int i = 0; i < ContactAggregator.AGGREGATION_CONTACT_SIZE_LIMIT; i++) {
+            long id = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
+            if (i >  0) {
+                setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, preId, id);
+            }
+            preId = id;
+        }
+        // Although the newly added raw contact matches the names with other raw contacts,
+        // but the best matching contact has already meets the size limit, so keep the new raw
+        // contact separate from other raw contacts.
+        long newId = RawContactUtil.createRawContact(mResolver,
+                new Account("account_new", "new account type"));
+        DataUtil.insertStructuredName(mResolver, newId, "John", "Doe");
+        assertNotAggregated(preId, newId);
+        assertTrue(queryContactId(newId) > 0);
+    }
+
     public void testFindConnectedRawContacts() {
         Set<Long> rawContactIdSet = new HashSet<Long>();
         rawContactIdSet.addAll(Arrays.asList(1l, 2l, 3l, 4l, 5l, 6l, 7l, 8l, 9l));
