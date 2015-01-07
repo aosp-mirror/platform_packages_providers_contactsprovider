@@ -116,10 +116,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   600-699 Ice Cream Sandwich
      *   700-799 Jelly Bean
      *   800-899 Kitkat
-     *   900-999 L
+     *   900-999 Lollipop
+     *   1000-1100 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 910;
+    static final int DATABASE_VERSION = 1000;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1197,6 +1198,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 RawContactsColumns.ACCOUNT_ID + " INTEGER REFERENCES " +
                     Tables.ACCOUNTS + "(" + AccountsColumns._ID + ")," +
                 RawContacts.SOURCE_ID + " TEXT," +
+                RawContacts.BACKUP_ID + " TEXT," +
                 RawContacts.RAW_CONTACT_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
@@ -1242,6 +1244,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX raw_contacts_source_id_account_id_index ON " +
                 Tables.RAW_CONTACTS + " (" +
                 RawContacts.SOURCE_ID + ", " +
+                RawContactsColumns.ACCOUNT_ID +
+        ");");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS raw_contacts_backup_id_account_id_index ON " +
+                Tables.RAW_CONTACTS + " (" +
+                RawContacts.BACKUP_ID + ", " +
                 RawContactsColumns.ACCOUNT_ID +
         ");");
 
@@ -1307,6 +1315,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataColumns.PACKAGE_ID + " INTEGER REFERENCES package(_id)," +
                 DataColumns.MIMETYPE_ID + " INTEGER REFERENCES mimetype(_id) NOT NULL," +
                 Data.RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
+                Data.HASH_ID + " TEXT," +
                 Data.IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.IS_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
                 Data.IS_SUPER_PRIMARY + " INTEGER NOT NULL DEFAULT 0," +
@@ -1343,6 +1352,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataColumns.MIMETYPE_ID + "," +
                 Data.DATA1 +
         ");");
+
+        /**
+         * For contact backup restore queries.
+         */
+        db.execSQL("CREATE INDEX IF NOT EXISTS data_hash_id_index ON " + Tables.DATA + " (" +
+                Data.HASH_ID +
+        ");");
+
 
         // Private phone numbers table used for lookup
         db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
@@ -1883,6 +1900,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         String dataSelect = "SELECT "
                 + DataColumns.CONCRETE_ID + " AS " + Data._ID + ","
+                + Data.HASH_ID + ", "
                 + Data.RAW_CONTACT_ID + ", "
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
                 + syncColumns + ", "
@@ -1944,6 +1962,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE  + ", "
                 + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + rawContactOptionColumns + ", "
+                + RawContacts.BACKUP_ID + ", "
                 + syncColumns
                 + " FROM " + Tables.RAW_CONTACTS
                 + " JOIN " + Tables.ACCOUNTS + " ON ("
@@ -2801,6 +2820,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 910) {
             upgradeToVersion910(db);
             oldVersion = 910;
+        }
+        if (oldVersion < 1000) {
+            upgradeToVersion1000(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1000;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4228,6 +4252,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (user.isManagedProfile()) {
             db.execSQL("DELETE FROM calls;");
         }
+    }
+
+    /**
+     * Add backup_id column to raw_contacts table and hash_id column to data table.
+     */
+    private void upgradeToVersion1000(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE raw_contacts ADD backup_id TEXT;");
+        db.execSQL("ALTER TABLE data ADD hash_id TEXT;");
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS raw_contacts_backup_id_account_id_index ON " +
+                "raw_contacts (backup_id, account_id);");
+        db.execSQL("CREATE INDEX IF NOT EXISTS data_hash_id_index ON data (hash_id);");
     }
 
     public String extractHandleFromEmailAddress(String email) {
