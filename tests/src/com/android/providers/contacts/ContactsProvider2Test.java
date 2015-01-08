@@ -7252,10 +7252,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private void assertProviderStatus(int expectedProviderStatus) {
         Cursor cursor = mResolver.query(ProviderStatus.CONTENT_URI,
-                new String[]{ProviderStatus.DATA1, ProviderStatus.STATUS}, null, null, null);
+                new String[]{ProviderStatus.STATUS}, null, null,
+                null);
         assertTrue(cursor.moveToFirst());
-        assertEquals(0, cursor.getLong(0));
-        assertEquals(expectedProviderStatus, cursor.getInt(1));
+        assertEquals(expectedProviderStatus, cursor.getInt(0));
         cursor.close();
     }
 

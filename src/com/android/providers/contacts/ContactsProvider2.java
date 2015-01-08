@@ -1410,7 +1410,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
-    private long mEstimatedStorageRequirement = 0;
     private volatile CountDownLatch mReadAccessLatch;
     private volatile CountDownLatch mWriteAccessLatch;
     private boolean mAccountUpdateListenerRegistered;
@@ -2145,14 +2144,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        if (mWriteAccessLatch != null) {
-            // Update on PROVIDER_STATUS used to be used as a trigger to re-start legacy contact
-            // import.  Now that we no longer support it, we just ignore it.
-            int match = sUriMatcher.match(uri);
-            if (match == PROVIDER_STATUS) {
-                return 0;
-            }
-        }
         waitForAccess(mWriteAccessLatch);
 
         // Enforce stream items access check if applicable.
@@ -6393,8 +6384,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case PROVIDER_STATUS: {
                 return buildSingleRowResult(projection,
-                        new String[] {ProviderStatus.STATUS, ProviderStatus.DATA1},
-                        new Object[] {mProviderStatus, mEstimatedStorageRequirement});
+                        new String[] {ProviderStatus.STATUS},
+                        new Object[] {mProviderStatus});
             }
 
             case DIRECTORIES : {
