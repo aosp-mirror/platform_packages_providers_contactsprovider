@@ -56,7 +56,7 @@ import java.util.Set;
  * of then got affected by the change.
  */
 public class DbModifierWithNotification implements DatabaseModifier {
-    private static final String TAG = "DbModifierWithVmNotification";
+    private static final String TAG = "DbModifierWithNotify";
 
     private static final String[] PROJECTION = new String[] {
             VoicemailContract.SOURCE_PACKAGE_FIELD
