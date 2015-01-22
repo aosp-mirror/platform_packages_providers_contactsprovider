@@ -55,7 +55,8 @@ import java.util.Set;
  *
  * Run the test like this:
  * <code>
- * adb shell am instrument -e class com.android.providers.contacts.ContactAggregatorTest -w \
+ * adb shell am instrument -e \
+ *         class com.android.providers.contacts.aggregation.ContactAggregatorTest -w \
  *         com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
@@ -1514,22 +1515,14 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
 
     public void testAggregationSuggestionsQueryBuilderWithValues() throws Exception {
         Uri uri = AggregationSuggestions.builder()
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "name1")
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "name2")
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_EMAIL, "email1")
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_EMAIL, "email2")
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_PHONE, "phone1")
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NICKNAME, "nickname1")
+                .addNameParameter("name1")
+                .addNameParameter("name2")
                 .setLimit(7)
                 .build();
         assertEquals("content://com.android.contacts/contacts/0/suggestions?"
                 + "limit=7"
                 + "&query=name%3Aname1"
-                + "&query=name%3Aname2"
-                + "&query=email%3Aemail1"
-                + "&query=email%3Aemail2"
-                + "&query=phone%3Aphone1"
-                + "&query=nickname%3Anickname1", uri.toString());
+                + "&query=name%3Aname2", uri.toString());
     }
 
     public void testAggregatedStatusUpdate() {
@@ -1563,7 +1556,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "first2", "last2");
 
         Uri uri = AggregationSuggestions.builder()
-                .addParameter(AggregationSuggestions.PARAMETER_MATCH_NAME, "last1 first1")
+                .addNameParameter("last1 first1")
                 .build();
 
         Cursor cursor = mResolver.query(
