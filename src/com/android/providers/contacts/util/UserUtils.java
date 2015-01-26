@@ -61,16 +61,6 @@ public final class UserUtils {
             Log.v(TAG, "getCorpUserId: myUser=" + myUser);
         }
 
-        // TODO DevicePolicyManager is not mockable -- the constructor is private.
-        // Test it somehow.
-        if (getDevicePolicyManager(context)
-                .getCrossProfileCallerIdDisabled(new UserHandle(myUser))) {
-            if (VERBOSE_LOGGING) {
-                Log.v(TAG, "Enterprise caller-id disabled.");
-            }
-            return -1;
-        }
-
         // Check each user.
         for (UserInfo ui : um.getUsers()) {
             if (!ui.isManagedProfile()) {
@@ -82,10 +72,21 @@ public final class UserUtils {
             }
             // Check if it's linked to the current user.
             if (parent.id == myUser) {
-                if (VERBOSE_LOGGING) {
-                    Log.v(TAG, "Corp user=" + ui.id);
+                // Check if profile is blocking calling id.
+                // TODO DevicePolicyManager is not mockable -- the constructor is private.
+                // Test it somehow.
+                if (getDevicePolicyManager(context)
+                        .getCrossProfileCallerIdDisabled(ui.getUserHandle())) {
+                    if (VERBOSE_LOGGING) {
+                        Log.v(TAG, "Enterprise caller-id disabled for user " + ui.id);
+                    }
+                    return -1;
+                } else {
+                    if (VERBOSE_LOGGING) {
+                        Log.v(TAG, "Corp user=" + ui.id);
+                    }
+                    return ui.id;
                 }
-                return ui.id;
             }
         }
         if (VERBOSE_LOGGING) {
