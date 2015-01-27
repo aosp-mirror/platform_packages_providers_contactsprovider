@@ -1580,7 +1580,8 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         // 3. only raw contact1 has organizations and it has set the super primary organization
         ContentValues values = new ContentValues();
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        Uri uri_phone1 = insertPhoneNumber(rawContactId1, "(222)222-2222", false, false);
+        Uri uri_phone1a = insertPhoneNumber(rawContactId1, "(222)222-2222", true, true);
+        Uri uri_phone1b = insertPhoneNumber(rawContactId1, "(555)555-5555", false, false);
         Uri uri_email1 = insertEmail(rawContactId1, "one@gmail.com", true, true);
         values.clear();
         values.put(Organization.COMPANY, "Monsters Inc");
@@ -1590,23 +1591,24 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         Uri uri_org2 = insertOrganization(rawContactId1, values, false, false);
 
         long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
-        Uri uri_phone2 = insertPhoneNumber(rawContactId2, "(333)333-3333", false, false);
+        Uri uri_phone2 = insertPhoneNumber(rawContactId2, "(333)333-3333", true, true);
         Uri uri_email2 = insertEmail(rawContactId2, "two@gmail.com", false, false);
 
         // Two raw contacts with same phone number will trigger the aggregation
         Uri uri_phone3 = insertPhoneNumber(rawContactId1, "(111)111-1111", true, true);
         Uri uri_phone4 = insertPhoneNumber(rawContactId2, "1(111)111-1111", true, true);
 
-        // After aggregation, the super primary flag should be cleared for both case 1 and case 2,
-        // i.e., phone and email mime-types. Only case 3, i.e. organization mime-type, has the
-        // super primary flag unchanged.
+        // After aggregation, the super primary flag should only be cleared for case 1,
+        // i.e., phone mime-type. Both case 2 and 3, i.e. organization and email mime-types,
+        // have the super primary flag unchanged.
         assertAggregated(rawContactId1, rawContactId2);
-        assertSuperPrimary(ContentUris.parseId(uri_phone1), false);
+        assertSuperPrimary(ContentUris.parseId(uri_phone1a), false);
+        assertSuperPrimary(ContentUris.parseId(uri_phone1b), false);
         assertSuperPrimary(ContentUris.parseId(uri_phone2), false);
         assertSuperPrimary(ContentUris.parseId(uri_phone3), false);
         assertSuperPrimary(ContentUris.parseId(uri_phone4), false);
 
-        assertSuperPrimary(ContentUris.parseId(uri_email1), false);
+        assertSuperPrimary(ContentUris.parseId(uri_email1), true);
         assertSuperPrimary(ContentUris.parseId(uri_email2), false);
 
         assertSuperPrimary(ContentUris.parseId(uri_org1), true);

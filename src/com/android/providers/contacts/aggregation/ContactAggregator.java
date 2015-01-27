@@ -901,8 +901,8 @@ public class ContactAggregator {
     private void clearSuperPrimarySetting(SQLiteDatabase db, long contactId, long rawContactId) {
         final String[] args = {String.valueOf(contactId), String.valueOf(rawContactId)};
 
-        // Find out which mime-types are shared by raw contact of rawContactId and raw contacts
-        // of contactId
+        // Find out which mime-types exist with is_super_primary=true on both the raw contact of
+        // rawContactId and raw contacts of contactId
         int index = 0;
         final StringBuilder mimeTypeCondition = new StringBuilder();
         mimeTypeCondition.append(" AND " + DataColumns.MIMETYPE_ID + " IN (");
@@ -910,10 +910,12 @@ public class ContactAggregator {
         final Cursor c = db.rawQuery(
                 "SELECT DISTINCT(a." + DataColumns.MIMETYPE_ID + ")" +
                 " FROM (SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA + " WHERE " +
+                        Data.IS_SUPER_PRIMARY + " =1 AND " +
                         Data.RAW_CONTACT_ID + " IN (SELECT " + RawContacts._ID + " FROM " +
                         Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "=?1)) AS a" +
-                " JOIN  (SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA + " WHERE "
-                        + Data.RAW_CONTACT_ID + "=?2) AS b" +
+                " JOIN  (SELECT " + DataColumns.MIMETYPE_ID + " FROM " + Tables.DATA + " WHERE " +
+                        Data.IS_SUPER_PRIMARY + " =1 AND " +
+                        Data.RAW_CONTACT_ID + "=?2) AS b" +
                 " ON a." + DataColumns.MIMETYPE_ID + "=b." + DataColumns.MIMETYPE_ID,
                 args);
         try {
@@ -929,8 +931,8 @@ public class ContactAggregator {
             c.close();
         }
 
-        // Clear is_super_primary setting for all the mime-types exist in both raw contact
-        // of rawContactId and raw contacts of contactId
+        // Clear is_super_primary setting for all the mime-types with is_super_primary=true
+        // in both raw contact of rawContactId and raw contacts of contactId
         String superPrimaryUpdateSql = "UPDATE " + Tables.DATA +
                 " SET " + Data.IS_SUPER_PRIMARY + "=0" +
                 " WHERE (" +  Data.RAW_CONTACT_ID +
