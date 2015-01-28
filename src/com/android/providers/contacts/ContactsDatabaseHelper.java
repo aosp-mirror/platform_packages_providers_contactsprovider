@@ -445,8 +445,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Tables.RAW_CONTACTS + "." + DISPLAY_NAME;
         public static final String CONCRETE_CONTACT_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.CONTACT_ID;
-        public static final String CONCRETE_NAME_VERIFIED =
-            Tables.RAW_CONTACTS + "." + RawContacts.NAME_VERIFIED;
         public static final String PHONEBOOK_LABEL_PRIMARY =
             ContactsColumns.PHONEBOOK_LABEL_PRIMARY;
         public static final String PHONEBOOK_BUCKET_PRIMARY =
@@ -455,6 +453,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             ContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE;
         public static final String PHONEBOOK_BUCKET_ALTERNATIVE =
             ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE;
+
+        /**
+         * This column is no longer used, but we keep it in the table so an upgraded database
+         * will look the same as a new database. This reduces the chance of OEMs adding a second
+         * column with the same name.
+         */
+        public static final String NAME_VERIFIED_OBSOLETE = "name_verified";
     }
 
     public interface ViewRawContactsColumns {
@@ -1230,7 +1235,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         ContactsProvider2.PHONEBOOK_COLLATOR_NAME + "," +
                 RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + " TEXT," +
                 RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + " INTEGER," +
-                RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContactsColumns.NAME_VERIFIED_OBSOLETE + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.SYNC1 + " TEXT, " +
                 RawContacts.SYNC2 + " TEXT, " +
                 RawContacts.SYNC3 + " TEXT, " +
@@ -1838,8 +1843,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             + AccountsColumns.CONCRETE_DATA_SET + " END) AS "
                                 + RawContacts.ACCOUNT_TYPE_AND_DATA_SET + ","
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
-                + RawContactsColumns.CONCRETE_NAME_VERIFIED + " AS "
-                        + RawContacts.NAME_VERIFIED + ","
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ","
@@ -3180,7 +3183,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     private void upgrateToVersion206(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.NAME_VERIFIED + " INTEGER NOT NULL DEFAULT 0;");
+                + " ADD name_verified INTEGER NOT NULL DEFAULT 0;");
     }
 
     /**
@@ -5402,26 +5405,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             mStatusAttributionUpdate.bindLong(4, dataId);
             mStatusAttributionUpdate.execute();
         }
-    }
-
-    /**
-     * Resets the {@link RawContacts#NAME_VERIFIED} flag to 0 on all other raw
-     * contacts in the same aggregate
-     */
-    public void resetNameVerifiedForOtherRawContacts(long rawContactId) {
-        if (mResetNameVerifiedForOtherRawContacts == null) {
-            mResetNameVerifiedForOtherRawContacts = getWritableDatabase().compileStatement(
-                    "UPDATE " + Tables.RAW_CONTACTS +
-                    " SET " + RawContacts.NAME_VERIFIED + "=0" +
-                    " WHERE " + RawContacts.CONTACT_ID + "=(" +
-                            "SELECT " + RawContacts.CONTACT_ID +
-                            " FROM " + Tables.RAW_CONTACTS +
-                            " WHERE " + RawContacts._ID + "=?)" +
-                    " AND " + RawContacts._ID + "!=?");
-        }
-        mResetNameVerifiedForOtherRawContacts.bindLong(1, rawContactId);
-        mResetNameVerifiedForOtherRawContacts.bindLong(2, rawContactId);
-        mResetNameVerifiedForOtherRawContacts.execute();
     }
 
     /**

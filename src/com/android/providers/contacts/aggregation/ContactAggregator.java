@@ -260,7 +260,7 @@ public class ContactAggregator {
         long rawContactId;
         String displayName;
         int displayNameSource;
-        boolean verified;
+        boolean isNameSuperPrimary;
         boolean writableAccount;
 
         public DisplayNameCandidate() {
@@ -271,7 +271,7 @@ public class ContactAggregator {
             rawContactId = -1;
             displayName = null;
             displayNameSource = DisplayNameSources.UNDEFINED;
-            verified = false;
+            isNameSuperPrimary = false;
             writableAccount = false;
         }
     }
@@ -396,11 +396,11 @@ public class ContactAggregator {
         // Query used to retrieve data from raw contacts to populate the corresponding aggregate
         mRawContactsQueryByRawContactId = String.format(Locale.US,
                 RawContactsQuery.SQL_FORMAT_BY_RAW_CONTACT_ID,
-                mMimeTypeIdPhoto, mMimeTypeIdPhone);
+                mDbHelper.getMimeTypeIdForStructuredName(), mMimeTypeIdPhoto, mMimeTypeIdPhone);
 
         mRawContactsQueryByContactId = String.format(Locale.US,
                 RawContactsQuery.SQL_FORMAT_BY_CONTACT_ID,
-                mMimeTypeIdPhoto, mMimeTypeIdPhone);
+                mDbHelper.getMimeTypeIdForStructuredName(), mMimeTypeIdPhoto, mMimeTypeIdPhone);
     }
 
     public void setEnabled(boolean enabled) {
@@ -1981,6 +1981,13 @@ public class ContactAggregator {
     }
 
     private interface RawContactsQuery {
+        String SQL_FORMAT_HAS_SUPER_PRIMARY_NAME =
+                " EXISTS(SELECT 1 " +
+                        " FROM " + Tables.DATA + " d " +
+                        " WHERE d." + DataColumns.MIMETYPE_ID + "=%d " +
+                        " AND d." + Data.RAW_CONTACT_ID + "=" + RawContactsColumns.CONCRETE_ID +
+                        " AND d." + Data.IS_SUPER_PRIMARY + "=1)";
+
         String SQL_FORMAT =
                 "SELECT "
                         + RawContactsColumns.CONCRETE_ID + ","
@@ -1996,11 +2003,11 @@ public class ContactAggregator {
                         + RawContacts.TIMES_CONTACTED + ","
                         + RawContacts.STARRED + ","
                         + RawContacts.PINNED + ","
-                        + RawContacts.NAME_VERIFIED + ","
                         + DataColumns.CONCRETE_ID + ","
                         + DataColumns.CONCRETE_MIMETYPE_ID + ","
                         + Data.IS_SUPER_PRIMARY + ","
-                        + Photo.PHOTO_FILE_ID +
+                        + Photo.PHOTO_FILE_ID + ","
+                        + SQL_FORMAT_HAS_SUPER_PRIMARY_NAME +
                 " FROM " + Tables.RAW_CONTACTS +
                 " JOIN " + Tables.ACCOUNTS + " ON ("
                     + AccountsColumns.CONCRETE_ID + "=" + RawContactsColumns.CONCRETE_ACCOUNT_ID
@@ -2032,11 +2039,11 @@ public class ContactAggregator {
         int TIMES_CONTACTED = 10;
         int STARRED = 11;
         int PINNED = 12;
-        int NAME_VERIFIED = 13;
-        int DATA_ID = 14;
-        int MIMETYPE_ID = 15;
-        int IS_SUPER_PRIMARY = 16;
-        int PHOTO_FILE_ID = 17;
+        int DATA_ID = 13;
+        int MIMETYPE_ID = 14;
+        int IS_SUPER_PRIMARY = 15;
+        int PHOTO_FILE_ID = 16;
+        int HAS_SUPER_PRIMARY_NAME = 17;
     }
 
     private interface ContactReplaceSqlStatement {
@@ -2149,10 +2156,10 @@ public class ContactAggregator {
                     // Display name
                     String displayName = c.getString(RawContactsQuery.DISPLAY_NAME);
                     int displayNameSource = c.getInt(RawContactsQuery.DISPLAY_NAME_SOURCE);
-                    int nameVerified = c.getInt(RawContactsQuery.NAME_VERIFIED);
+                    int isNameSuperPrimary = c.getInt(RawContactsQuery.HAS_SUPER_PRIMARY_NAME);
                     processDisplayNameCandidate(rawContactId, displayName, displayNameSource,
                             mContactsProvider.isWritableAccountWithDataSet(accountWithDataSet),
-                            nameVerified != 0);
+                            isNameSuperPrimary != 0);
 
                     // Contact options
                     if (!c.isNull(RawContactsQuery.SEND_TO_VOICEMAIL)) {
@@ -2283,17 +2290,17 @@ public class ContactAggregator {
      * {@link #mDisplayNameCandidate} with the new values.
      */
     private void processDisplayNameCandidate(long rawContactId, String displayName,
-            int displayNameSource, boolean writableAccount, boolean verified) {
+            int displayNameSource, boolean writableAccount, boolean isNameSuperPrimary) {
 
         boolean replace = false;
         if (mDisplayNameCandidate.rawContactId == -1) {
             // No previous values available
             replace = true;
         } else if (!TextUtils.isEmpty(displayName)) {
-            if (!mDisplayNameCandidate.verified && verified) {
-                // A verified name is better than any other name
+            if (isNameSuperPrimary) {
+                // A super primary name is better than any other name
                 replace = true;
-            } else if (mDisplayNameCandidate.verified == verified) {
+            } else if (mDisplayNameCandidate.isNameSuperPrimary == isNameSuperPrimary) {
                 if (mDisplayNameCandidate.displayNameSource < displayNameSource) {
                     // New values come from an superior source, e.g. structured name vs phone number
                     replace = true;
@@ -2315,7 +2322,7 @@ public class ContactAggregator {
             mDisplayNameCandidate.rawContactId = rawContactId;
             mDisplayNameCandidate.displayName = displayName;
             mDisplayNameCandidate.displayNameSource = displayNameSource;
-            mDisplayNameCandidate.verified = verified;
+            mDisplayNameCandidate.isNameSuperPrimary = isNameSuperPrimary;
             mDisplayNameCandidate.writableAccount = writableAccount;
         }
     }
@@ -2463,19 +2470,29 @@ public class ContactAggregator {
     }
 
     private interface DisplayNameQuery {
-        String[] COLUMNS = new String[] {
-            RawContacts._ID,
-            RawContactsColumns.DISPLAY_NAME,
-            RawContactsColumns.DISPLAY_NAME_SOURCE,
-            RawContacts.NAME_VERIFIED,
-            RawContacts.SOURCE_ID,
-            RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
-        };
+        String SQL_HAS_SUPER_PRIMARY_NAME =
+                " EXISTS(SELECT 1 " +
+                        " FROM " + Tables.DATA + " d " +
+                        " WHERE d." + DataColumns.MIMETYPE_ID + "=? " +
+                        " AND d." + Data.RAW_CONTACT_ID + "=" + Views.RAW_CONTACTS
+                        + "." + RawContacts._ID +
+                        " AND d." + Data.IS_SUPER_PRIMARY + "=1)";
+
+        String SQL =
+                "SELECT "
+                        + RawContacts._ID + ","
+                        + RawContactsColumns.DISPLAY_NAME + ","
+                        + RawContactsColumns.DISPLAY_NAME_SOURCE + ","
+                        + SQL_HAS_SUPER_PRIMARY_NAME + ","
+                        + RawContacts.SOURCE_ID + ","
+                        + RawContacts.ACCOUNT_TYPE_AND_DATA_SET +
+                " FROM " + Views.RAW_CONTACTS +
+                " WHERE " + RawContacts.CONTACT_ID + "=? ";
 
         int _ID = 0;
         int DISPLAY_NAME = 1;
         int DISPLAY_NAME_SOURCE = 2;
-        int NAME_VERIFIED = 3;
+        int HAS_SUPER_PRIMARY_NAME = 3;
         int SOURCE_ID = 4;
         int ACCOUNT_TYPE_AND_DATA_SET = 5;
     }
@@ -2494,20 +2511,20 @@ public class ContactAggregator {
 
         mDisplayNameCandidate.clear();
 
-        mSelectionArgs1[0] = String.valueOf(contactId);
-        final Cursor c = db.query(Views.RAW_CONTACTS, DisplayNameQuery.COLUMNS,
-                RawContacts.CONTACT_ID + "=?", mSelectionArgs1, null, null, null);
+        mSelectionArgs2[0] = String.valueOf(mDbHelper.getMimeTypeIdForStructuredName());
+        mSelectionArgs2[1] = String.valueOf(contactId);
+        final Cursor c = db.rawQuery(DisplayNameQuery.SQL, mSelectionArgs2);
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(DisplayNameQuery._ID);
                 String displayName = c.getString(DisplayNameQuery.DISPLAY_NAME);
                 int displayNameSource = c.getInt(DisplayNameQuery.DISPLAY_NAME_SOURCE);
-                int nameVerified = c.getInt(DisplayNameQuery.NAME_VERIFIED);
+                int isNameSuperPrimary = c.getInt(DisplayNameQuery.HAS_SUPER_PRIMARY_NAME);
                 String accountTypeAndDataSet = c.getString(
                         DisplayNameQuery.ACCOUNT_TYPE_AND_DATA_SET);
                 processDisplayNameCandidate(rawContactId, displayName, displayNameSource,
                         mContactsProvider.isWritableAccountWithDataSet(accountTypeAndDataSet),
-                        nameVerified != 0);
+                        isNameSuperPrimary != 0);
 
                 // If the raw contact has no source id, the lookup key is based on the display
                 // name, so the lookup key needs to be updated.

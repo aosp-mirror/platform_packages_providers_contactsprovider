@@ -605,7 +605,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             RawContacts.DATA_SET,
             RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
             RawContacts.DIRTY,
-            RawContacts.NAME_VERIFIED,
             RawContacts.SOURCE_ID,
             RawContacts.VERSION,
     };
@@ -666,7 +665,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(RawContacts.DATA_SET)
             .add(RawContacts.ACCOUNT_TYPE_AND_DATA_SET)
             .add(RawContacts.DIRTY)
-            .add(RawContacts.NAME_VERIFIED)
             .add(RawContacts.SOURCE_ID)
             .add(RawContacts.VERSION)
             .build();
@@ -4409,14 +4407,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             if (values.containsKey(RawContacts.SOURCE_ID)) {
                 aggregator.updateLookupKeyForRawContact(db, rawContactId);
-            }
-            if (flagExists(values, RawContacts.NAME_VERIFIED)) {
-                // If setting NAME_VERIFIED for this raw contact, reset it for all
-                // other raw contacts in the same aggregate
-                if (flagIsSet(values, RawContacts.NAME_VERIFIED)) {
-                    mDbHelper.get().resetNameVerifiedForOtherRawContacts(rawContactId);
-                }
-                aggregator.updateDisplayNameForRawContact(db, rawContactId);
             }
             if (requestUndoDelete && previousDeleted == 1) {
                 // Note before the accounts refactoring, we used to use the *old* account here,

@@ -1315,34 +1315,79 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertEquals("Eclair Android", queryDisplayName(contactId));
     }
 
-    public void testVerifiedName() {
-        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "test1", "TEST1",
-                ACCOUNT_1);
-        storeValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.NAME_VERIFIED, "1");
-        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "test2", "TEST2",
-                ACCOUNT_2);
-        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "test3",
-                "TEST3 LONG", ACCOUNT_3);
+    public void testMergeSuperPrimaryName_rawContact1() {
+        // Setup: raw contact #1 has a super primary name. #2 doesn't.
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "name1", null, null,
+                /* isSuperPrimary = */ true);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "name2", null, null,
+                /* isSuperPrimary = */ false);
 
+        // Action: aggregate
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
                 rawContactId2);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
-                rawContactId3);
 
+        // Verify: the aggregate's name comes from raw contact #1
         long contactId = queryContactId(rawContactId1);
+        assertEquals("name1", queryDisplayName(contactId));
+    }
 
-        // Should be the verified name
-        assertEquals("test1 TEST1", queryDisplayName(contactId));
+    public void testMergeSuperPrimaryName_rawContact2AndEdit() {
+        // Setup: raw contact #2 has a super primary name. #1 doesn't.
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        final Uri nameUri1 = DataUtil.insertStructuredName(mResolver, rawContactId1, "name1",
+                null, null, /* isSuperPrimary = */ false);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        final Uri nameUri2 = DataUtil.insertStructuredName(mResolver, rawContactId2, "name2", null,
+                null, /* isSuperPrimary = */ true);
 
-        // Mark a different name as verified - this should reset the NAME_VERIFIED field
-        // for the other rawContacts
-        storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.NAME_VERIFIED, "1");
-        assertStoredValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.NAME_VERIFIED, 0);
-        assertEquals("test2 TEST2", queryDisplayName(contactId));
+        // Action: aggregate
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
 
-        // Reset the NAME_VERIFIED flag - now the most complex of the three names should win
-        storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.NAME_VERIFIED, "0");
-        assertEquals("test3 TEST3 LONG", queryDisplayName(contactId));
+        // Verify: the aggregate's name comes from raw contact #2. This is the opposite of the check
+        // inside testMergeSuperPrimaryName_rawContact1().
+        long contactId = queryContactId(rawContactId1);
+        assertEquals("name2", queryDisplayName(contactId));
+
+        // Action: edit the super primary name
+        final ContentValues values = new ContentValues();
+        values.put(StructuredName.GIVEN_NAME, "edited name");
+        mResolver.update(nameUri2, values, null, null);
+
+        // Verify: editing the super primary name affects aggregate name
+        assertEquals("edited name", queryDisplayName(contactId));
+
+        // Action: edit the non primary name
+        values.put(StructuredName.GIVEN_NAME, "edited name2");
+        mResolver.update(nameUri1, values, null, null);
+
+        // Verify: aggregate name is still based off the primary name
+        assertEquals("edited name", queryDisplayName(contactId));
+    }
+
+    public void testMergedSuperPrimaryName_changeSuperPrimary() {
+        // Setup: aggregated contact where raw contact #1 has a super primary name. #2 doesn't.
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        final Uri nameUri1 = DataUtil.insertStructuredName(mResolver, rawContactId1, "name1",
+                null, null, /* isSuperPrimary = */ true);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        final Uri nameUri2 = DataUtil.insertStructuredName(mResolver, rawContactId2, "name2", null,
+                null, /* isSuperPrimary = */ false);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+
+        // Action: make raw contact 2's name super primary
+        storeValue(nameUri2, Data.IS_SUPER_PRIMARY, 1);
+
+        // Sanity check.
+        assertStoredValue(nameUri1, Data.IS_SUPER_PRIMARY, 0);
+        assertStoredValue(nameUri2, Data.IS_SUPER_PRIMARY, 1);
+
+        // Verify: aggregate name is based off of the newly super primary name
+        long contactId = queryContactId(rawContactId1);
+        assertEquals("name2", queryDisplayName(contactId));
     }
 
     public void testAggregationModeSuspendedSeparateTransactions() {
