@@ -1615,6 +1615,28 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertSuperPrimary(ContentUris.parseId(uri_org2), false);
     }
 
+    public void testAggregation_clearSuperPrimarySingleMimetype() {
+        // Setup: two raw contacts, each has a single name. One of the names is super primary.
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        final Uri uri = DataUtil.insertStructuredName(mResolver, rawContactId1, "name1",
+                null, null, /* isSuperPrimary = */ true);
+        final Uri uri2 = DataUtil.insertStructuredName(mResolver, rawContactId2, "name2",
+                null, null, /* isSuperPrimary = */ false);
+
+        // Sanity check.
+        assertStoredValue(uri, Data.IS_SUPER_PRIMARY, 1);
+        assertStoredValue(uri2, Data.IS_SUPER_PRIMARY, 0);
+
+        // Action: aggregate
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+
+        // Verify: super primary values are unchanged
+        assertStoredValue(uri, Data.IS_SUPER_PRIMARY, 1);
+        assertStoredValue(uri2, Data.IS_SUPER_PRIMARY, 0);
+    }
+
     public void testNotAggregate_TooManyRawContactsInCandidate() {
         long preId= 0;
         for (int i = 0; i < ContactAggregator.AGGREGATION_CONTACT_SIZE_LIMIT; i++) {

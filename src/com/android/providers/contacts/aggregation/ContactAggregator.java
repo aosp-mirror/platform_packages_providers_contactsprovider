@@ -940,11 +940,8 @@ public class ContactAggregator {
                         " WHERE " + RawContacts.CONTACT_ID + "=?1)" +
                         " OR " +  Data.RAW_CONTACT_ID + "=?2)";
 
-        if (index > 0) {
-            mimeTypeCondition.append(')');
-            superPrimaryUpdateSql += mimeTypeCondition.toString();
-        }
-
+        mimeTypeCondition.append(')');
+        superPrimaryUpdateSql += mimeTypeCondition.toString();
         db.execSQL(superPrimaryUpdateSql, args);
     }
 
