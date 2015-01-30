@@ -75,11 +75,6 @@ public class ContactsUpgradeReceiver extends BroadcastReceiver {
                 ContactsDatabaseHelper helper = ContactsDatabaseHelper.getInstance(context);
                 ProfileDatabaseHelper profileHelper = ProfileDatabaseHelper.getInstance(context);
                 Log.i(TAG, "Creating or opening contacts database");
-                try {
-                    ActivityManagerNative.getDefault().showBootMessage(
-                            context.getText(R.string.upgrade_msg), true);
-                } catch (RemoteException e) {
-                }
 
                 helper.getWritableDatabase();
                 profileHelper.getWritableDatabase();
