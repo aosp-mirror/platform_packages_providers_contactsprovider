@@ -108,22 +108,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     /**
      * Contacts DB version ranges:
      * <pre>
-     *   0-98    Cupcake/Donut
-     *   100-199 Eclair
-     *   200-299 Eclair-MR1
-     *   300-349 Froyo
-     *   350-399 Gingerbread
-     *   400-499 Honeycomb
-     *   500-549 Honeycomb-MR1
-     *   550-599 Honeycomb-MR2
-     *   600-699 Ice Cream Sandwich
-     *   700-799 Jelly Bean
-     *   800-899 Kitkat
-     *   900-999 L
+     *   0-98      Cupcake/Donut
+     *   100-199   Eclair
+     *   200-299   Eclair-MR1
+     *   300-349   Froyo
+     *   350-399   Gingerbread
+     *   400-499   Honeycomb
+     *   500-549   Honeycomb-MR1
+     *   550-599   Honeycomb-MR2
+     *   600-699   Ice Cream Sandwich
+     *   700-799   Jelly Bean
+     *   800-899   Kitkat
+     *   900-999   Lollipop
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1000;
+    static final int DATABASE_VERSION = 1001;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1506,13 +1506,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Voicemails.SOURCE_DATA + " TEXT," +
                 Voicemails.SOURCE_PACKAGE + " TEXT," +
                 Voicemails.TRANSCRIPTION + " TEXT," +
-                Voicemails.STATE + " INTEGER" +
+                Voicemails.STATE + " INTEGER," +
+                Voicemails.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
+                Voicemails.DELETED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
         // Voicemail source status table.
         db.execSQL("CREATE TABLE " + Tables.VOICEMAIL_STATUS + " (" +
                 VoicemailContract.Status._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 VoicemailContract.Status.SOURCE_PACKAGE + " TEXT UNIQUE NOT NULL," +
+                VoicemailContract.Status.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
+                VoicemailContract.Status.PHONE_ACCOUNT_ID + " TEXT," +
                 VoicemailContract.Status.SETTINGS_URI + " TEXT," +
                 VoicemailContract.Status.VOICEMAIL_ACCESS_URI + " TEXT," +
                 VoicemailContract.Status.CONFIGURATION_STATE + " INTEGER," +
@@ -2811,6 +2815,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1000) {
             upgradeToVersion1000(db);
             oldVersion = 1000;
+        }
+
+        if (oldVersion < 1001) {
+            upgradeToVersion1001(db);
+            oldVersion = 1001;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4269,6 +4278,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 }
             }
         }
+    }
+
+    private void upgradeToVersion1001(SQLiteDatabase db) {
+        // Add multi-sim fields
+        db.execSQL("ALTER TABLE voicemail_status ADD phone_account_component_name TEXT;");
+        db.execSQL("ALTER TABLE voicemail_status ADD phone_account_id TEXT;");
+
+        // For use by the sync adapter
+        db.execSQL("ALTER TABLE calls ADD dirty INTEGER NOT NULL DEFAULT 0;");
+        db.execSQL("ALTER TABLE calls ADD deleted INTEGER NOT NULL DEFAULT 0;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

@@ -69,6 +69,8 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .add(Voicemails.SOURCE_PACKAGE)
             .add(Voicemails.HAS_CONTENT)
             .add(Voicemails.MIME_TYPE)
+            .add(Voicemails.DIRTY)
+            .add(Voicemails.DELETED)
             .add(OpenableColumns.DISPLAY_NAME)
             .add(OpenableColumns.SIZE)
             .build();
@@ -99,6 +101,8 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
                 .add(Voicemails.HAS_CONTENT)
                 .add(Voicemails.MIME_TYPE)
                 .add(Voicemails._DATA)
+                .add(Voicemails.DIRTY)
+                .add(Voicemails.DELETED)
                 .add(OpenableColumns.DISPLAY_NAME, createDisplayName(context))
                 .add(OpenableColumns.SIZE, "NULL")
                 .build();
