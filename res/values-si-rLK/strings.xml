@@ -19,7 +19,6 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android මධ්‍ය යෙදුම්"</string>
     <string name="app_label" msgid="3389954322874982620">"සම්බන්ධතා ආචයනය"</string>
     <string name="provider_label" msgid="6012150850819899907">"සම්බන්ධතා"</string>
-    <string name="upgrade_msg" msgid="8640807392794309950">"සම්බන්ධතා දත්ත සමුදාය උත්ශ්‍රේණි කරමින්."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"සම්බන්ධතා උත්ශ්‍රේණි කිරීමට තව මතකය අවශ්‍යයි."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"සම්බන්ධතා සඳහා ආචයනය උත්ශ්‍රේණි කරමින්"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"උත්ශ්‍රේණි කිරීම සම්පූර්ණ කිරීමට ස්පර්ශ කරන්න."</string>

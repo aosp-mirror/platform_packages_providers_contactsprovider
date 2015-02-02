@@ -19,7 +19,6 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core апликације"</string>
     <string name="app_label" msgid="3389954322874982620">"Складиште контаката"</string>
     <string name="provider_label" msgid="6012150850819899907">"Контакти"</string>
-    <string name="upgrade_msg" msgid="8640807392794309950">"Надограђивање базе података о контактима."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"За ажурирање контаката потребно је више меморије."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Надограђивање меморије за контакте"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Додирните да бисте довршили надоградњу."</string>
