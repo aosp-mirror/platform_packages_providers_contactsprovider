@@ -929,6 +929,10 @@ public class ContactAggregator {
             c.close();
         }
 
+        if (index == 0) {
+            return;
+        }
+
         // Clear is_super_primary setting for all the mime-types exist in both raw contact
         // of rawContactId and raw contacts of contactId
         String superPrimaryUpdateSql = "UPDATE " + Tables.DATA +
@@ -938,11 +942,8 @@ public class ContactAggregator {
                         " WHERE " + RawContacts.CONTACT_ID + "=?1)" +
                         " OR " +  Data.RAW_CONTACT_ID + "=?2)";
 
-        if (index > 0) {
-            mimeTypeCondition.append(')');
-            superPrimaryUpdateSql += mimeTypeCondition.toString();
-        }
-
+        mimeTypeCondition.append(')');
+        superPrimaryUpdateSql += mimeTypeCondition.toString();
         db.execSQL(superPrimaryUpdateSql, args);
     }
 

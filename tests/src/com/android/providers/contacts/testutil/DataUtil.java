@@ -22,6 +22,7 @@ import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.Data;
 import android.test.mock.MockContentResolver;
 
 /**
@@ -59,6 +60,13 @@ public class DataUtil {
     public static Uri insertStructuredName(
             ContentResolver resolver, long rawContactId, String givenName, String familyName,
             String phoneticGiven) {
+        return insertStructuredName(resolver, rawContactId, givenName, familyName, phoneticGiven,
+                /* isSuperPrimary = true */ false);
+    }
+
+    public static Uri insertStructuredName(
+            ContentResolver resolver, long rawContactId, String givenName, String familyName,
+            String phoneticGiven, boolean isSuperPrimary) {
         ContentValues values = new ContentValues();
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
@@ -78,6 +86,10 @@ public class DataUtil {
         values.put(StructuredName.FAMILY_NAME, familyName);
         if (phoneticGiven != null) {
             values.put(StructuredName.PHONETIC_GIVEN_NAME, phoneticGiven);
+        }
+        if (isSuperPrimary) {
+            values.put(Data.IS_PRIMARY, 1);
+            values.put(Data.IS_SUPER_PRIMARY, 1);
         }
 
         return insertStructuredName(resolver, rawContactId, values);
