@@ -120,7 +120,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1100 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1000;
+    static final int DATABASE_VERSION = 1001;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -149,6 +149,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String DEFAULT_DIRECTORY = "default_directory";
         public static final String SEARCH_INDEX = "search_index";
         public static final String VOICEMAIL_STATUS = "voicemail_status";
+        public static final String METADATA_SYNC = "metadata_sync";
 
         // This list of tables contains auto-incremented sequences.
         public static final String[] SEQUENCE_TABLES = new String[] {
@@ -719,6 +720,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final int USAGE_TYPE_INT_SHORT_TEXT = 2;
     }
 
+    public interface MetadataSyncColumns {
+        String _ID = BaseColumns._ID;
+        String RAW_CONTACT_BACKUP_ID = "raw_contact_backup_id";
+        String ACCOUNT_ID = "account_id";
+        String DATA = "data";
+    }
+
     private  interface EmailQuery {
         public static final String TABLE = Tables.DATA;
 
@@ -1097,7 +1105,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 StatusUpdates.PRESENCE + " INTEGER," +
                 StatusUpdates.CHAT_CAPABILITY + " INTEGER NOT NULL DEFAULT 0" +
         ");");
-
 
         db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_deleted"
                 + " BEFORE DELETE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
@@ -1563,6 +1570,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataUsageStatColumns.DATA_ID + ", " +
                 DataUsageStatColumns.USAGE_TYPE_INT +
         ");");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS "
+                + Tables.METADATA_SYNC + " (" +
+                MetadataSyncColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                MetadataSyncColumns.RAW_CONTACT_BACKUP_ID + " TEXT NOT NULL," +
+                MetadataSyncColumns.ACCOUNT_ID + " INTEGER NOT NULL," +
+                MetadataSyncColumns.DATA + " TEXT," +
+                "FOREIGN KEY(" + MetadataSyncColumns.ACCOUNT_ID + ") REFERENCES "
+                        + Tables.ACCOUNTS + "(" + AccountsColumns._ID + "));");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS metadata_sync_index ON " +
+                Tables.METADATA_SYNC + " (" +
+                MetadataSyncColumns.RAW_CONTACT_BACKUP_ID + ", " +
+                MetadataSyncColumns.ACCOUNT_ID +");");
 
         // When adding new tables, be sure to also add size-estimates in updateSqliteStats
         createContactsViews(db);
@@ -2828,6 +2849,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeToVersion1000(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 1000;
+        }
+        if (oldVersion < 1001) {
+            upgradeToVersion1001(db);
+            rebuildSqliteStats = true;
+            oldVersion = 1001;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4268,6 +4294,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS data_hash_id_index ON data (hash_id);");
     }
 
+    /**
+     * Add new metadata_sync table to cache the meta data on raw contacts level from server before
+     * they are merged into other CP2 tables. The data column is the blob column containing all
+     * the backed up metadata for this raw_contact. This table should only be used by metadata
+     * sync adapter.
+     */
+    private void upgradeToVersion1001(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE metadata_sync (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, raw_contact_backup_id TEXT NOT NULL, " +
+                "account_id INTEGER NOT NULL, data TEXT, " +
+                "FOREIGN KEY(account_id) REFERENCES accounts(_id));");
+        db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
+                "raw_contact_backup_id, account_id);");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -4394,7 +4435,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, Tables.RAW_CONTACTS,
                     "raw_contact_sort_key1_index", "10000 2");
             updateIndexStats(db, Tables.RAW_CONTACTS,
-                    "raw_contacts_source_id_account_id_index", "10000 1 1 1 1");
+                    "raw_contacts_source_id_account_id_index", "10000 1 1");
 
             updateIndexStats(db, Tables.NAME_LOOKUP,
                     "name_lookup_raw_contact_id_index", "35000 4");
@@ -4452,6 +4493,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
             updateIndexStats(db, Tables.DATA_USAGE_STAT,
                     "data_usage_stat_index", "20 2 1");
+
+            updateIndexStats(db, Tables.METADATA_SYNC,
+                    "metadata_sync_index", "10000 1 1");
 
             // Tiny tables
             updateIndexStats(db, Tables.AGGREGATION_EXCEPTIONS,
