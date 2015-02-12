@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -73,6 +74,8 @@ import android.provider.ContactsContract.StreamItems;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.telephony.PhoneNumberUtils;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
@@ -84,7 +87,6 @@ import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 
@@ -119,7 +121,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1100 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1002;
+    static final int DATABASE_VERSION = 1003;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1516,6 +1518,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.FEATURES + " INTEGER NOT NULL DEFAULT 0," +
                 Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
                 Calls.PHONE_ACCOUNT_ID + " TEXT," +
+                Calls.PHONE_ACCOUNT_ADDRESS + " TEXT," +
                 Calls.SUB_ID + " INTEGER DEFAULT -1," +
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
@@ -2871,6 +2874,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             rebuildSqliteStats = true;
             upgradeToVersion1002(db);
             oldVersion = 1002;
+        }
+
+        if (oldVersion < 1003) {
+            upgradeToVersion1003(db);
+            oldVersion = 1003;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4333,6 +4341,37 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "uri STRING NOT NULL, " +
                 "expiration INTEGER NOT NULL DEFAULT 0);");
+    }
+
+    public void upgradeToVersion1003(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD phone_account_address TEXT;");
+
+        // After version 1003, we are using the ICC ID as the phone-account ID. This code updates
+        // any existing telephony connection-service calllog entries to the ICC ID from the
+        // previously used subscription ID.
+        // TODO: This is inconsistent, depending on the initialization state of SubscriptionManager.
+        //       Sometimes it returns zero subscriptions. May want to move this upgrade to run after
+        //       ON_BOOT_COMPLETE instead of PRE_BOOT_COMPLETE.
+        SubscriptionManager sm = SubscriptionManager.from(mContext);
+        if (sm != null) {
+            Log.i(TAG, "count: " + sm.getAllSubscriptionInfoCount());
+            for (SubscriptionInfo info : sm.getAllSubscriptionInfoList()) {
+                String iccId = info.getIccId();
+                int subId = info.getSubscriptionId();
+                if (!TextUtils.isEmpty(iccId) &&
+                        subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("UPDATE calls SET subscription_id=");
+                    DatabaseUtils.appendEscapedSQLString(sb, iccId);
+                    sb.append(" WHERE subscription_id=");
+                    sb.append(subId);
+                    sb.append(" AND subscription_component_name='com.android.phone/"
+                            + "com.android.services.telephony.TelephonyConnectionService';");
+
+                    db.execSQL(sb.toString());
+                }
+            }
+        }
     }
 
     public String extractHandleFromEmailAddress(String email) {
