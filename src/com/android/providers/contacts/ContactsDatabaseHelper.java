@@ -16,6 +16,7 @@ T * Copyright (C) 2009 The Android Open Source Project
 
 package com.android.providers.contacts;
 
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -73,6 +74,8 @@ import android.provider.ContactsContract.StreamItems;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.telephony.PhoneNumberUtils;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
@@ -84,11 +87,11 @@ import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -117,9 +120,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      *   800-899 Kitkat
      *   900-999 L
+     *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 910;
+    static final int DATABASE_VERSION = 1000;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1481,6 +1485,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.FEATURES + " INTEGER NOT NULL DEFAULT 0," +
                 Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
                 Calls.PHONE_ACCOUNT_ID + " TEXT," +
+                Calls.PHONE_ACCOUNT_ADDRESS + " TEXT," +
                 Calls.SUB_ID + " INTEGER DEFAULT -1," +
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
@@ -2801,6 +2806,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 910) {
             upgradeToVersion910(db);
             oldVersion = 910;
+        }
+
+        if (oldVersion < 1000) {
+            upgradeToVersion1000(db);
+            oldVersion = 1000;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4227,6 +4237,37 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         final UserInfo user = userManager.getUserInfo(userManager.getUserHandle());
         if (user.isManagedProfile()) {
             db.execSQL("DELETE FROM calls;");
+        }
+    }
+
+    public void upgradeToVersion1000(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD phone_account_address TEXT;");
+
+        // After version 1000, we are using the ICC ID as the phone-account ID. This code updates
+        // any existing telephony connection-service calllog entries to the ICC ID from the
+        // previously used subscription ID.
+        // TODO: This is inconsistent, depending on the initialization state of SubscriptionManager.
+        //       Sometimes it returns zero subscriptions. May want to move this upgrade to run after
+        //       ON_BOOT_COMPLETE instead of PRE_BOOT_COMPLETE.
+        SubscriptionManager sm = SubscriptionManager.from(mContext);
+        if (sm != null) {
+            Log.i(TAG, "count: " + sm.getAllSubscriptionInfoCount());
+            for (SubscriptionInfo info : sm.getAllSubscriptionInfoList()) {
+                String iccId = info.getIccId();
+                int subId = info.getSubscriptionId();
+                if (!TextUtils.isEmpty(iccId) &&
+                        subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("UPDATE calls SET subscription_id=");
+                    DatabaseUtils.appendEscapedSQLString(sb, iccId);
+                    sb.append(" WHERE subscription_id=");
+                    sb.append(subId);
+                    sb.append(" AND subscription_component_name='com.android.phone/"
+                            + "com.android.services.telephony.TelephonyConnectionService';");
+
+                    db.execSQL(sb.toString());
+                }
+            }
         }
     }
 
