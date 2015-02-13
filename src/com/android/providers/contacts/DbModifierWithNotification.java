@@ -20,6 +20,7 @@ package com.android.providers.contacts;
 import static android.Manifest.permission.ADD_VOICEMAIL;
 import static android.Manifest.permission.READ_VOICEMAIL;
 
+import android.app.backup.BackupManager;
 import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -73,6 +74,8 @@ public class DbModifierWithNotification implements DatabaseModifier {
     private final boolean mIsCallsTable;
     private final VoicemailPermissions mVoicemailPermissions;
 
+    private BackupManager mBackupManager;
+
     public DbModifierWithNotification(String tableName, SQLiteDatabase db, Context context) {
         this(tableName, db, null, context);
     }
@@ -88,6 +91,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
         mDb = db;
         mInsertHelper = insertHelper;
         mContext = context;
+        mBackupManager = new BackupManager(context);
         mBaseUri = mTableName.equals(Tables.VOICEMAIL_STATUS) ?
                 Status.CONTENT_URI : Voicemails.CONTENT_URI;
         mIsCallsTable = mTableName.equals(Tables.CALLS);
@@ -124,6 +128,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
     private void notifyCallLogChange() {
         mContext.getContentResolver().notifyChange(Calls.CONTENT_URI, null, false);
+        mBackupManager.dataChanged();
     }
 
     private void notifyVoicemailChangeOnInsert(Uri notificationUri, Set<String> packagesModified) {
