@@ -199,6 +199,7 @@ public class ContactDirectoryManager {
 
     @VisibleForTesting
     static boolean isDirectoryProvider(ProviderInfo provider) {
+        if (provider == null) return false;
         Bundle metaData = provider.metaData;
         if (metaData == null) return false;
 
@@ -213,17 +214,26 @@ public class ContactDirectoryManager {
     static Set<String> getDirectoryProviderPackages(PackageManager pm) {
         final Set<String> ret = Sets.newHashSet();
 
-        // Note to 3rd party developers:
-        // queryContentProviders() is a public API but this method doesn't officially support
-        // the GET_META_DATA flag.  Don't use it in your app.
-        final List<ProviderInfo> providers = pm.queryContentProviders(null, 0,
-                PackageManager.GET_META_DATA);
-        if (providers == null) {
+        final List<PackageInfo> packages = pm.getInstalledPackages(PackageManager.GET_PROVIDERS
+                | PackageManager.GET_META_DATA);
+        if (packages == null) {
             return ret;
         }
-        for (ProviderInfo provider : providers) {
-            if (isDirectoryProvider(provider)) {
-                ret.add(provider.packageName);
+        for (PackageInfo packageInfo : packages) {
+            if (DEBUG) {
+                Log.d(TAG, "package=" + packageInfo.packageName);
+            }
+            if (packageInfo.providers == null) {
+                continue;
+            }
+            for (ProviderInfo provider : packageInfo.providers) {
+                if (DEBUG) {
+                    Log.d(TAG, "provider=" + provider.authority);
+                }
+                if (isDirectoryProvider(provider)) {
+                    Log.d(TAG, "Found " + provider.authority);
+                    ret.add(provider.packageName);
+                }
             }
         }
         if (DEBUG) {
