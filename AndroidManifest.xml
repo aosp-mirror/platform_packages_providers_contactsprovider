@@ -43,6 +43,9 @@
             <path-permission
                     android:pathPattern="/contacts/.*/photo"
                     android:readPermission="android.permission.GLOBAL_SEARCH" />
+            <path-permission
+                    android:pathPrefix="/data_enterprise"
+                    android:readPermission="android.permission.INTERACT_ACROSS_USERS" />
             <grant-uri-permission android:pathPattern=".*" />
         </provider>
 
