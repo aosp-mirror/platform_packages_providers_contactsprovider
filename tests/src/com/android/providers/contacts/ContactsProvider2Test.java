@@ -19,7 +19,6 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 
 import android.accounts.Account;
-import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -27,14 +26,13 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
-import android.content.pm.UserInfo;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.UserManager;
+import android.os.Bundle;
 import android.provider.CallLog.Calls;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
@@ -8612,6 +8610,102 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     /**
      * End pinning support tests
+     ******************************************************/
+
+    public void testAuthorization_authorize() throws Exception {
+        // Setup
+        ContentValues values = new ContentValues();
+        long id1 = createContact(values, "Noah", "Tever", "18004664411",
+                "email@email.com", StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, id1);
+
+        // Execute: pre authorize the contact
+        Uri authorizedUri = getPreAuthorizedUri(contactUri);
+
+        // Sanity check: URIs are different
+        assertNotSame(authorizedUri, contactUri);
+
+        // Verify: the URI is pre authorized
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        assertTrue(cp.isValidPreAuthorizedUri(authorizedUri));
+    }
+
+    public void testAuthorization_unauthorized() throws Exception {
+        // Setup
+        ContentValues values = new ContentValues();
+        long id1 = createContact(values, "Noah", "Tever", "18004664411",
+                "email@email.com", StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, id1);
+
+        // Verify: the URI is *not* pre authorized
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        assertFalse(cp.isValidPreAuthorizedUri(contactUri));
+    }
+
+    public void testAuthorization_invalidAuthorization() throws Exception {
+        // Setup
+        ContentValues values = new ContentValues();
+        long id1 = createContact(values, "Noah", "Tever", "18004664411",
+                "email@email.com", StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, id1);
+
+        // Execute: pre authorize the contact and then modify the resulting URI slightly
+        Uri authorizedUri = getPreAuthorizedUri(contactUri);
+        Uri almostAuthorizedUri = Uri.parse(authorizedUri.toString() + "2");
+
+        // Verify: the URI is not pre authorized
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        assertFalse(cp.isValidPreAuthorizedUri(almostAuthorizedUri));
+    }
+
+    public void testAuthorization_expired() throws Exception {
+        // Setup
+        ContentValues values = new ContentValues();
+        long id1 = createContact(values, "Noah", "Tever", "18004664411",
+                "email@email.com", StatusUpdates.OFFLINE, 0, 0, 0, 0);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, id1);
+        sMockClock.install();
+
+        // Execute: pre authorize the contact
+        Uri authorizedUri = getPreAuthorizedUri(contactUri);
+        sMockClock.setCurrentTimeMillis(sMockClock.currentTimeMillis() + 1000000);
+
+        // Verify: the authorization for the URI expired
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        assertFalse(cp.isValidPreAuthorizedUri(authorizedUri));
+    }
+
+    public void testAuthorization_contactUpgrade() throws Exception {
+        ContactsDatabaseHelper helper =
+                ((ContactsDatabaseHelper) ((ContactsProvider2) getProvider()).getDatabaseHelper());
+        SQLiteDatabase db = helper.getWritableDatabase();
+
+        // Perform the unit tests against an upgraded version of the database, instead of a freshly
+        // created version of the database.
+        helper.upgradeToVersion1002(db);
+        testAuthorization_authorize();
+        helper.upgradeToVersion1002(db);
+        testAuthorization_expired();
+        helper.upgradeToVersion1002(db);
+        testAuthorization_expired();
+        helper.upgradeToVersion1002(db);
+        testAuthorization_invalidAuthorization();
+    }
+
+    private Uri getPreAuthorizedUri(Uri uri) {
+        final Bundle uriBundle = new Bundle();
+        uriBundle.putParcelable(ContactsContract.Authorization.KEY_URI_TO_AUTHORIZE, uri);
+        final Bundle authResponse = mResolver.call(
+                ContactsContract.AUTHORITY_URI,
+                ContactsContract.Authorization.AUTHORIZATION_METHOD,
+                null,
+                uriBundle);
+        return (Uri) authResponse.getParcelable(
+                ContactsContract.Authorization.KEY_AUTHORIZED_URI);
+    }
+
+    /**
+     * End Authorization Tests
      ******************************************************/
 
     private Cursor queryGroupMemberships(Account account) {

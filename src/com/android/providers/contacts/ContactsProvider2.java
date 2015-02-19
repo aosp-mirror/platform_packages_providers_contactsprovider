@@ -129,6 +129,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.PreAuthorizedUris;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Projections;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
@@ -1345,9 +1346,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private final ThreadLocal<TransactionContext> mTransactionContext =
             new ThreadLocal<TransactionContext>();
 
-    // Map of single-use pre-authorized URIs to expiration times.
-    private final Map<Uri, Long> mPreAuthorizedUris = Maps.newHashMap();
-
     // Random number generator.
     private final SecureRandom mRandom = new SecureRandom();
 
@@ -2214,8 +2212,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Uri authUri = uri.buildUpon()
                 .appendQueryParameter(PREAUTHORIZED_URI_TOKEN, token)
                 .build();
-        long expiration = SystemClock.elapsedRealtime() + mPreAuthorizedUriDuration;
-        mPreAuthorizedUris.put(authUri, expiration);
+        long expiration = Clock.getInstance().currentTimeMillis() + mPreAuthorizedUriDuration;
+
+        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        final ContentValues values = new ContentValues();
+        values.put(PreAuthorizedUris.EXPIRATION, expiration);
+        values.put(PreAuthorizedUris.URI, authUri.toString());
+        db.insert(Tables.PRE_AUTHORIZED_URIS, null, values);
 
         return authUri;
     }
@@ -2229,22 +2232,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public boolean isValidPreAuthorizedUri(Uri uri) {
         // Only proceed if the URI has a permission token parameter.
         if (uri.getQueryParameter(PREAUTHORIZED_URI_TOKEN) != null) {
-            // First expire any pre-authorization URIs that are no longer valid.
-            long now = SystemClock.elapsedRealtime();
-            Set<Uri> expiredUris = Sets.newHashSet();
-            for (Uri preAuthUri : mPreAuthorizedUris.keySet()) {
-                if (mPreAuthorizedUris.get(preAuthUri) < now) {
-                    expiredUris.add(preAuthUri);
-                }
-            }
-            for (Uri expiredUri : expiredUris) {
-                mPreAuthorizedUris.remove(expiredUri);
-            }
+            final long now = Clock.getInstance().currentTimeMillis();
+            final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+            db.beginTransaction();
+            try {
+                // First delete any pre-authorization URIs that are no longer valid. Unfortunately,
+                // this operation will grab a write lock for readonly queries. Since this only
+                // affects readonly queries that use PREAUTHORIZED_URI_TOKEN, it isn't worth moving
+                // this deletion into a BACKGROUND_TASK.
+                db.delete(Tables.PRE_AUTHORIZED_URIS, PreAuthorizedUris.EXPIRATION + " < ?1",
+                        new String[]{String.valueOf(now)});
 
-            // Now check to see if the pre-authorized URI map contains the URI.
-            if (mPreAuthorizedUris.containsKey(uri)) {
-                // Unexpired token - skip the permission check.
-                return true;
+                // Now check to see if the pre-authorized URI map contains the URI.
+                final Cursor c = db.query(Tables.PRE_AUTHORIZED_URIS, null,
+                        PreAuthorizedUris.URI + "=?1",
+                        new String[]{uri.toString()}, null, null, null);
+                final boolean isValid = c.getCount() != 0;
+
+                db.setTransactionSuccessful();
+                return isValid;
+            } finally {
+                db.endTransaction();
             }
         }
         return false;

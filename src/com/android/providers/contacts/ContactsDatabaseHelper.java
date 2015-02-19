@@ -1,5 +1,5 @@
 /*
-T * Copyright (C) 2009 The Android Open Source Project
+ * Copyright (C) 2009 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,6 @@ import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -120,7 +119,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1100 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1001;
+    static final int DATABASE_VERSION = 1002;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -150,6 +149,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String SEARCH_INDEX = "search_index";
         public static final String VOICEMAIL_STATUS = "voicemail_status";
         public static final String METADATA_SYNC = "metadata_sync";
+        public static final String PRE_AUTHORIZED_URIS = "pre_authorized_uris";
 
         // This list of tables contains auto-incremented sequences.
         public static final String[] SEQUENCE_TABLES = new String[] {
@@ -681,6 +681,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONTENT = "content";
         public static final String NAME = "name";
         public static final String TOKENS = "tokens";
+    }
+
+    public interface PreAuthorizedUris {
+        public static final String _ID = BaseColumns._ID;
+        public static final String URI = "uri";
+        public static final String EXPIRATION = "expiration";
     }
 
     /**
@@ -1584,6 +1590,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Tables.METADATA_SYNC + " (" +
                 MetadataSyncColumns.RAW_CONTACT_BACKUP_ID + ", " +
                 MetadataSyncColumns.ACCOUNT_ID +");");
+
+        db.execSQL("CREATE TABLE " + Tables.PRE_AUTHORIZED_URIS + " ("+
+                PreAuthorizedUris._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                PreAuthorizedUris.URI + " STRING NOT NULL, " +
+                PreAuthorizedUris.EXPIRATION + " INTEGER NOT NULL DEFAULT 0);");
 
         // When adding new tables, be sure to also add size-estimates in updateSqliteStats
         createContactsViews(db);
@@ -2856,6 +2867,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1001;
         }
 
+        if (oldVersion < 1002) {
+            rebuildSqliteStats = true;
+            upgradeToVersion1002(db);
+            oldVersion = 1002;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -2961,12 +2978,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // For each Contact, find the RawContact that contributed the display name
         db.execSQL(
                 "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.NAME_RAW_CONTACT_ID + "=(" +
+                        " SET " + Contacts.NAME_RAW_CONTACT_ID + "=(" +
                         " SELECT " + RawContacts._ID +
                         " FROM " + Tables.RAW_CONTACTS +
                         " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
                         " AND " + RawContactsColumns.CONCRETE_DISPLAY_NAME + "=" +
-                                Tables.CONTACTS + "." + Contacts.DISPLAY_NAME +
+                        Tables.CONTACTS + "." + Contacts.DISPLAY_NAME +
                         " ORDER BY " + RawContacts._ID +
                         " LIMIT 1)"
         );
@@ -3077,11 +3094,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         SQLiteStatement structuredNameUpdate = db.compileStatement(
                 "UPDATE " + Tables.DATA +
-                " SET " +
+                        " SET " +
                         StructuredName.FULL_NAME_STYLE + "=?," +
                         StructuredName.DISPLAY_NAME + "=?," +
                         StructuredName.PHONETIC_NAME_STYLE + "=?" +
-                " WHERE " + Data._ID + "=?");
+                        " WHERE " + Data._ID + "=?");
 
         NameSplitter.Name name = new NameSplitter.Name();
         Cursor cursor = db.query(StructName205Query.TABLE,
@@ -3545,7 +3562,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void insertNicknameLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
         final long mimeTypeId = lookupMimeTypeId(db, Nickname.CONTENT_ITEM_TYPE);
         Cursor cursor = db.query(NicknameQuery.TABLE, NicknameQuery.COLUMNS,
-                NicknameQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
+                NicknameQuery.SELECTION, new String[]{String.valueOf(mimeTypeId)},
                 null, null, null);
         try {
             while (cursor.moveToNext()) {
@@ -4309,6 +4326,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "raw_contact_backup_id, account_id);");
     }
 
+    @VisibleForTesting
+    public void upgradeToVersion1002(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS pre_authorized_uris;");
+        db.execSQL("CREATE TABLE pre_authorized_uris ("+
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "uri STRING NOT NULL, " +
+                "expiration INTEGER NOT NULL DEFAULT 0);");
+    }
+
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
         if (tokens.length == 0) {
@@ -4478,6 +4504,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
             updateIndexStats(db, Tables.ACCOUNTS,
                     null, "3");
+
+            updateIndexStats(db, Tables.PRE_AUTHORIZED_URIS,
+                    null, "1");
 
             updateIndexStats(db, Tables.VISIBLE_CONTACTS,
                     null, "2000");
