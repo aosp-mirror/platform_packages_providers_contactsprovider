@@ -122,6 +122,9 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
     public void testIsDirectoryProvider() {
         ProviderInfo provider = new ProviderInfo();
 
+        // Null -- just return false.
+        assertFalse(ContactDirectoryManager.isDirectoryProvider(null));
+
         // No metadata
         assertFalse(ContactDirectoryManager.isDirectoryProvider(provider));
 
