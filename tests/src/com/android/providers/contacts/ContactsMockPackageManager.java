@@ -96,17 +96,4 @@ public class ContactsMockPackageManager extends MockPackageManager {
     public Resources getResourcesForApplication(String appPackageName) {
         return new ContactsMockResources();
     }
-
-    @Override
-    public List<ProviderInfo> queryContentProviders(String processName, int uid, int flags) {
-        final List<ProviderInfo> ret = Lists.newArrayList();
-        if (mPackages == null) return ret;
-        for (PackageInfo packageInfo : mPackages) {
-            if (packageInfo.providers == null) continue;
-            for (ProviderInfo providerInfo : packageInfo.providers) {
-                ret.add(providerInfo);
-            }
-        }
-        return ret;
-    }
 }
