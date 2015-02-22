@@ -25,8 +25,12 @@ import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.io.BufferedOutputStream;
+import java.io.DataInput;
 import java.io.DataInputStream;
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.FileInputStream;
@@ -40,7 +44,8 @@ import java.util.TreeSet;
  */
 public class CallLogBackupAgent extends BackupAgent {
 
-    private static class CallLogBackupState {
+    @VisibleForTesting
+    static class CallLogBackupState {
         int version;
         SortedSet<Integer> callIds;
     }
@@ -60,7 +65,8 @@ public class CallLogBackupAgent extends BackupAgent {
     /** Current version of CallLogBackup. Used to track the backup format. */
     private static final int VERSION = 1;
     /** Version indicating that there exists no previous backup entry. */
-    private static final int VERSION_NO_PREVIOUS_STATE = 0;
+    @VisibleForTesting
+    static final int VERSION_NO_PREVIOUS_STATE = 0;
 
     private static final String[] CALL_LOG_PROJECTION = new String[] {
         CallLog.Calls._ID,
@@ -82,7 +88,39 @@ public class CallLogBackupAgent extends BackupAgent {
             ParcelFileDescriptor newStateDescriptor) throws IOException {
 
         // Get the list of the previous calls IDs which were backed up.
-        CallLogBackupState state = readState(oldStateDescriptor);
+        DataInputStream dataInput = new DataInputStream(
+                new FileInputStream(oldStateDescriptor.getFileDescriptor()));
+        final CallLogBackupState state;
+        try {
+            state = readState(dataInput);
+        } finally {
+            dataInput.close();
+        }
+
+        // Run the actual backup of data
+        runBackup(state, data);
+
+        // Rewrite the backup state.
+        DataOutputStream dataOutput = new DataOutputStream(new BufferedOutputStream(
+                new FileOutputStream(newStateDescriptor.getFileDescriptor())));
+        try {
+            writeState(dataOutput, state);
+        } finally {
+            dataOutput.close();
+        }
+    }
+
+    /** ${inheritDoc} */
+    @Override
+    public void onRestore(BackupDataInput data, int appVersionCode, ParcelFileDescriptor newState)
+            throws IOException {
+        if (DEBUG) {
+            Log.d(TAG, "Performing Restore");
+        }
+    }
+
+    @VisibleForTesting
+    void runBackup(CallLogBackupState state, BackupDataOutput data) {
         SortedSet<Integer> callsToRemove = new TreeSet<>(state.callIds);
 
         // Get all the existing call log entries.
@@ -127,19 +165,8 @@ public class CallLogBackupAgent extends BackupAgent {
                 state.callIds.remove(i);
             }
 
-            // Rewrite the backup state.
-            writeState(newStateDescriptor, state);
         } finally {
             cursor.close();
-        }
-    }
-
-    /** ${inheritDoc} */
-    @Override
-    public void onRestore(BackupDataInput data, int appVersionCode, ParcelFileDescriptor newState)
-            throws IOException {
-        if (DEBUG) {
-            Log.d(TAG, "Performing Restore");
         }
     }
 
@@ -151,9 +178,8 @@ public class CallLogBackupAgent extends BackupAgent {
         return resolver.query(CallLog.Calls.CONTENT_URI, CALL_LOG_PROJECTION, null, null, null);
     }
 
-    private CallLogBackupState readState(ParcelFileDescriptor oldState) throws IOException {
-        DataInputStream dataInput = new DataInputStream(
-                new FileInputStream(oldState.getFileDescriptor()));
+    @VisibleForTesting
+    CallLogBackupState readState(DataInput dataInput) throws IOException {
         CallLogBackupState state = new CallLogBackupState();
         state.callIds = new TreeSet<>();
 
@@ -172,18 +198,14 @@ public class CallLogBackupAgent extends BackupAgent {
             }
         } catch (EOFException e) {
             state.version = VERSION_NO_PREVIOUS_STATE;
-        } finally {
-            dataInput.close();
         }
 
         return state;
     }
 
-    private void writeState(ParcelFileDescriptor descriptor, CallLogBackupState state)
+    @VisibleForTesting
+    void writeState(DataOutput dataOutput, CallLogBackupState state)
             throws IOException {
-        DataOutputStream dataOutput = new DataOutputStream(new BufferedOutputStream(
-                new FileOutputStream(descriptor.getFileDescriptor())));
-
         // Write version first of all
         dataOutput.writeInt(VERSION);
 
@@ -193,9 +215,6 @@ public class CallLogBackupAgent extends BackupAgent {
         for (Integer i : state.callIds) {
             dataOutput.writeInt(i);
         }
-
-        // Done!
-        dataOutput.close();
     }
 
     private Call readCallFromCursor(Cursor cursor) {
