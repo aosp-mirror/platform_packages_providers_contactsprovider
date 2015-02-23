@@ -19,15 +19,20 @@ package com.android.providers.contacts;
 import android.app.backup.BackupAgent;
 import android.app.backup.BackupDataInput;
 import android.app.backup.BackupDataOutput;
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.database.Cursor;
 import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
+import android.provider.CallLog.Calls;
+import android.telecom.PhoneAccountHandle;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -52,15 +57,29 @@ public class CallLogBackupAgent extends BackupAgent {
 
     private static class Call {
         int id;
+        long date;
+        long duration;
+        String number;
+        int type;
+        int numberPresentation;
+        String accountComponentName;
+        String accountId;
+        String accountAddress;
+        Long dataUsage;
+        int features;
 
         @Override
         public String toString() {
-            return "[" + id + "]";
+            if (isDebug()) {
+                return  "[" + id + ", account: [" + accountComponentName + " : " + accountId +
+                    "]," + number + ", " + date + "]";
+            } else {
+                return "[" + id + "]";
+            }
         }
     }
 
     private static final String TAG = "CallLogBackupAgent";
-    private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     /** Current version of CallLogBackup. Used to track the backup format. */
     private static final int VERSION = 1;
@@ -79,7 +98,9 @@ public class CallLogBackupAgent extends BackupAgent {
         CallLog.Calls.NUMBER_PRESENTATION,
         CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME,
         CallLog.Calls.PHONE_ACCOUNT_ID,
-        CallLog.Calls.PHONE_ACCOUNT_ADDRESS
+        CallLog.Calls.PHONE_ACCOUNT_ADDRESS,
+        CallLog.Calls.DATA_USAGE,
+        CallLog.Calls.FEATURES
     };
 
     /** ${inheritDoc} */
@@ -114,8 +135,18 @@ public class CallLogBackupAgent extends BackupAgent {
     @Override
     public void onRestore(BackupDataInput data, int appVersionCode, ParcelFileDescriptor newState)
             throws IOException {
-        if (DEBUG) {
+        if (isDebug()) {
             Log.d(TAG, "Performing Restore");
+        }
+
+        while (data.readNextHeader()) {
+            Call call = readCallFromData(data);
+            if (call != null) {
+                writeCallToProvider(call);
+                if (isDebug()) {
+                    Log.d(TAG, "Restored call: " + call);
+                }
+            }
         }
     }
 
@@ -125,9 +156,6 @@ public class CallLogBackupAgent extends BackupAgent {
 
         // Get all the existing call log entries.
         Cursor cursor = getAllCallLogEntries();
-        if (DEBUG) {
-            Log.d(TAG, "Starting debug - state: " + state + ", cursor: " + cursor);
-        }
         if (cursor == null) {
             return;
         }
@@ -141,7 +169,7 @@ public class CallLogBackupAgent extends BackupAgent {
 
                 if (!state.callIds.contains(call.id)) {
 
-                    if (DEBUG) {
+                    if (isDebug()) {
                         Log.d(TAG, "Adding call to backup: " + call);
                     }
 
@@ -157,7 +185,7 @@ public class CallLogBackupAgent extends BackupAgent {
 
             // Remove calls which no longer exist in the set.
             for (Integer i : callsToRemove) {
-                if (DEBUG) {
+                if (isDebug()) {
                     Log.d(TAG, "Removing call from backup: " + i);
                 }
 
@@ -176,6 +204,16 @@ public class CallLogBackupAgent extends BackupAgent {
         // gives us that for free.
         ContentResolver resolver = getContentResolver();
         return resolver.query(CallLog.Calls.CONTENT_URI, CALL_LOG_PROJECTION, null, null, null);
+    }
+
+    private void writeCallToProvider(Call call) {
+        Long dataUsage = call.dataUsage == 0 ? null : call.dataUsage;
+
+        PhoneAccountHandle handle = new PhoneAccountHandle(
+                ComponentName.unflattenFromString(call.accountComponentName), call.accountId);
+        Calls.addCall(null /* CallerInfo */, this, call.number, call.numberPresentation, call.type,
+                call.features, handle, call.date, (int) call.duration,
+                dataUsage, true /* addForAllUsers */);
     }
 
     @VisibleForTesting
@@ -217,18 +255,103 @@ public class CallLogBackupAgent extends BackupAgent {
         }
     }
 
+    @VisibleForTesting
+    Call readCallFromData(BackupDataInput data) {
+        final int callId;
+        try {
+            callId = Integer.parseInt(data.getKey());
+        } catch (NumberFormatException e) {
+            Log.e(TAG, "Unexpected key found in restore: " + data.getKey());
+            return null;
+        }
+
+        try {
+            byte [] byteArray = new byte[data.getDataSize()];
+            data.readEntityData(byteArray, 0, byteArray.length);
+            DataInputStream dataInput = new DataInputStream(new ByteArrayInputStream(byteArray));
+
+            Call call = new Call();
+            call.id = callId;
+
+            int version = dataInput.readInt();
+            if (version >= 1) {
+                call.date = dataInput.readLong();
+                call.duration = dataInput.readLong();
+                call.number = dataInput.readUTF();
+                call.type = dataInput.readInt();
+                call.numberPresentation = dataInput.readInt();
+                call.accountComponentName = dataInput.readUTF();
+                call.accountId = dataInput.readUTF();
+                call.accountAddress = dataInput.readUTF();
+                call.dataUsage = dataInput.readLong();
+                call.features = dataInput.readInt();
+            }
+
+            return call;
+        } catch (IOException e) {
+            Log.e(TAG, "Error reading call data for " + callId, e);
+            return null;
+        }
+    }
+
     private Call readCallFromCursor(Cursor cursor) {
         Call call = new Call();
         call.id = cursor.getInt(cursor.getColumnIndex(CallLog.Calls._ID));
-        // TODO: Rest of call data.
+        call.date = cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DATE));
+        call.duration = cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DURATION));
+        call.number = cursor.getString(cursor.getColumnIndex(CallLog.Calls.NUMBER));
+        call.type = cursor.getInt(cursor.getColumnIndex(CallLog.Calls.TYPE));
+        call.numberPresentation =
+                cursor.getInt(cursor.getColumnIndex(CallLog.Calls.NUMBER_PRESENTATION));
+        call.accountComponentName =
+                cursor.getString(cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME));
+        call.accountId =
+                cursor.getString(cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID));
+        call.accountAddress =
+                cursor.getString(cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ADDRESS));
+        call.dataUsage = cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DATA_USAGE));
+        call.features = cursor.getInt(cursor.getColumnIndex(CallLog.Calls.FEATURES));
         return call;
     }
 
     private void addCallToBackup(BackupDataOutput output, Call call) {
-        // TODO: Write the code
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(baos);
+
+        try {
+            data.writeInt(VERSION);
+            data.writeLong(call.date);
+            data.writeLong(call.duration);
+            data.writeUTF(call.number);
+            data.writeInt(call.type);
+            data.writeInt(call.numberPresentation);
+            data.writeUTF(call.accountComponentName);
+            data.writeUTF(call.accountId);
+            data.writeUTF(call.accountAddress);
+            data.writeLong(call.dataUsage);
+            data.writeInt(call.features);
+            data.flush();
+
+            output.writeEntityHeader(Integer.toString(call.id), baos.size());
+            output.writeEntityData(baos.toByteArray(), baos.size());
+
+            if (isDebug()) {
+                Log.d(TAG, "Wrote call to backup: " + call + " with byte array: " + baos);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to backup call: " + call, e);
+        }
     }
 
     private void removeCallFromBackup(BackupDataOutput output, int callId) {
-        // TODO: Write the code
+        try {
+            output.writeEntityHeader(Integer.toString(callId), -1);
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to remove call: " + callId, e);
+        }
+    }
+
+    private static boolean isDebug() {
+        return Log.isLoggable(TAG, Log.DEBUG);
     }
 }

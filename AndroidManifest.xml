@@ -24,6 +24,9 @@
         android:icon="@drawable/app_icon"
         android:backupAgent="CallLogBackupAgent">
 
+        <meta-data android:name="com.google.android.backup.api_key"
+                android:value="AEdPqrEAAAAI0N64ZsWbwY3WiVlfYvjLWRVpOrAOl9xKHkraxA" />
+
         <provider android:name="ContactsProvider2"
             android:authorities="contacts;com.android.contacts"
             android:label="@string/provider_label"
