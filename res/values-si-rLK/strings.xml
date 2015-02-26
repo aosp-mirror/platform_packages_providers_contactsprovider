@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"උත්ශ්‍රේණි කිරීම සම්පූර්ණ කිරීමට ස්පර්ශ කරන්න."</string>
     <string name="default_directory" msgid="93961630309570294">"සම්බන්ධතා"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"වෙනත්"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"සියලු හඬ තැපැල් ප්‍රවේශ කිරීම"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"උපාංගයට ප්‍රවේශ කළ හැකි සියලු හඬ තැපැල් ගබඩා කිරීම සහ ලබාගැනීමට යෙදුමට අවසර ලබාදේ."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"හඬ තැපෑල ලැබෙන්නේ "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"සම්බන්ධතා දත්ත සමුදාය පිටපත් කරන්න"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ඔබ සදන්නේ 1) සම්බන්ධතා ආශ්‍රිත තොරතුරු සහ සියලු ඇමතුම් ලොගයේ තිබෙන ඔබගේ දත්ත සමුදායේ පිටපතක් අභ්‍යන්තර ආචයනයට ගැනීමට, සහ 2) එය ඊ-තැපැල් කිරීමටයි. ඔබ සාර්ථකව උපාංගයෙන් පිටපත් කර විට හෝ ඊ-තැපෑල ලැබුණු විට පිටපත මකා දැමීමට මතක තබාගන්න."</string>

@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Toca para completar a actualización."</string>
     <string name="default_directory" msgid="93961630309570294">"Contactos"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Outro"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Acceder a todos os correos de voz"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Permite á aplicación almacenar e recuperar todos os correos de voz aos que pode acceder este dispositivo."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Correo de voz de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de datos dos contactos"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Estás a punto de 1) realizar unha copia da túa base de datos que inclúe toda a información relacionada cos contactos e todos os rexistros de chamadas no almacenamento interno, e de 2) envialo por correo electrónico. Non esquezas eliminar a copia en canto a copies correctamente fóra do dispositivo ou en canto se reciba o correo electrónico."</string>

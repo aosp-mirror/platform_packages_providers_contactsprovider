@@ -25,8 +25,6 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"برای تکمیل ارتقا لمس کنید."</string>
     <string name="default_directory" msgid="93961630309570294">"مخاطبین"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"سایر موارد"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"دسترسی به تمام پست‌های صوتی"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"به برنامه اجازه ذخیره و بازیابی تمام پست‌های صوتی قابل دسترس برای این دستگاه را می‌دهد."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"پست صوتی از "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"کپی پایگاه داده مخاطبین"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"شما در شرف ۱) ایجاد یک کپی از پایگاه داده‌ در حافظه داخلی هستید، این کپی حاوی همه اطلاعات مربوط به مخاطبین و همه گزارشات تماس است و همچنین می‌خواهید ۲) آنرا ایمیل کنید. به خاطر داشته باشید که به محض کپی کردن این نسخه در دستگاه یا دریافت ایمیل، آنرا حذف کنید."</string>
