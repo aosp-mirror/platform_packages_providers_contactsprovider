@@ -16,15 +16,14 @@
 
 package com.android.providers.contacts;
 
-import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.UserInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.pm.UserInfo;
 import android.content.res.Resources;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
@@ -90,11 +89,11 @@ import com.android.providers.contacts.util.NeededForTesting;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 
+import libcore.icu.ICU;
+
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import libcore.icu.ICU;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -121,7 +120,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1100 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1003;
+    static final int DATABASE_VERSION = 1004;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1519,6 +1518,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
                 Calls.PHONE_ACCOUNT_ID + " TEXT," +
                 Calls.PHONE_ACCOUNT_ADDRESS + " TEXT," +
+                Calls.PHONE_ACCOUNT_HIDDEN + " INTEGER NOT NULL DEFAULT 0," +
                 Calls.SUB_ID + " INTEGER DEFAULT -1," +
                 Calls.NEW + " INTEGER," +
                 Calls.CACHED_NAME + " TEXT," +
@@ -2879,6 +2879,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1003) {
             upgradeToVersion1003(db);
             oldVersion = 1003;
+        }
+
+        if (oldVersion < 1004) {
+            upgradeToVersion1004(db);
+            oldVersion = 1004;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4372,6 +4377,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 }
             }
         }
+    }
+
+    /**
+     * Add a "hidden" column for call log entries we want to hide after an upgrade until the user
+     * adds the right phone account to the device.
+     */
+    public void upgradeToVersion1004(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD phone_account_hidden INTEGER NOT NULL DEFAULT 0;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

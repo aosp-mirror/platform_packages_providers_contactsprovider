@@ -39,6 +39,7 @@ import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
+import android.telecom.PhoneAccountHandle;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -46,7 +47,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
-
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
@@ -60,12 +60,16 @@ public class CallLogProvider extends ContentProvider {
     private static final String TAG = CallLogProvider.class.getSimpleName();
 
     private static final int BACKGROUND_TASK_INITIALIZE = 0;
+    private static final int BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT = 1;
 
     /** Selection clause for selecting all calls that were made after a certain time */
     private static final String MORE_RECENT_THAN_SELECTION = Calls.DATE + "> ?";
     /** Selection clause to use to exclude voicemail records.  */
     private static final String EXCLUDE_VOICEMAIL_SELECTION = getInequalityClause(
             Calls.TYPE, Calls.VOICEMAIL_TYPE);
+    /** Selection clause to exclude hidden records. */
+    private static final String EXCLUDE_HIDDEN_SELECTION = getEqualityClause(
+            Calls.PHONE_ACCOUNT_HIDDEN, 0);
 
     @VisibleForTesting
     static final String[] CALL_LOG_SYNC_PROJECTION = new String[] {
@@ -85,6 +89,10 @@ public class CallLogProvider extends ContentProvider {
     private static final int CALLS_ID = 2;
 
     private static final int CALLS_FILTER = 3;
+
+    private static final String ADJUST_FOR_NEW_PHONE_ACCOUNT_QUERY =
+            "UPDATE " + Tables.CALLS + " SET " + Calls.PHONE_ACCOUNT_HIDDEN + "=0 WHERE " +
+            Calls.PHONE_ACCOUNT_COMPONENT_NAME + "=? AND " + Calls.PHONE_ACCOUNT_ID + "=?;";
 
     private static final UriMatcher sURIMatcher = new UriMatcher(UriMatcher.NO_MATCH);
     static {
@@ -109,6 +117,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, Calls.PHONE_ACCOUNT_COMPONENT_NAME);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_ID, Calls.PHONE_ACCOUNT_ID);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_ADDRESS, Calls.PHONE_ACCOUNT_ADDRESS);
+        sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_HIDDEN, Calls.PHONE_ACCOUNT_HIDDEN);
         sCallsProjectionMap.put(Calls.NEW, Calls.NEW);
         sCallsProjectionMap.put(Calls.VOICEMAIL_URI, Calls.VOICEMAIL_URI);
         sCallsProjectionMap.put(Calls.TRANSCRIPTION, Calls.TRANSCRIPTION);
@@ -155,13 +164,13 @@ public class CallLogProvider extends ContentProvider {
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper()) {
             @Override
             public void handleMessage(Message msg) {
-                performBackgroundTask(msg.what);
+                performBackgroundTask(msg.what, msg.obj);
             }
         };
 
         mReadAccessLatch = new CountDownLatch(1);
 
-        scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
+        scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE, null);
 
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, "CallLogProvider.onCreate finish");
@@ -190,6 +199,7 @@ public class CallLogProvider extends ContentProvider {
 
         final SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, true /*isQuery*/);
+        selectionBuilder.addClause(EXCLUDE_HIDDEN_SELECTION);
 
         final int match = sURIMatcher.match(uri);
         switch (match) {
@@ -357,6 +367,10 @@ public class CallLogProvider extends ContentProvider {
         return getContext();
     }
 
+    void adjustForNewPhoneAccount(PhoneAccountHandle handle) {
+        scheduleBackgroundTask(BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT, handle);
+    }
+
     /**
      * Returns a {@link DatabaseModifier} that takes care of sending necessary notifications
      * after the operation is performed.
@@ -467,6 +481,16 @@ public class CallLogProvider extends ContentProvider {
     }
 
     /**
+     * Un-hides any hidden call log entries that are associated with the specified handle.
+     *
+     * @param handle The handle to the newly registered {@link android.telecom.PhoneAccount}.
+     */
+    private void adjustForNewPhoneAccountInternal(PhoneAccountHandle handle) {
+        mDbHelper.getWritableDatabase().execSQL(ADJUST_FOR_NEW_PHONE_ACCOUNT_QUERY,
+                new String[] { handle.getComponentName().flattenToString(), handle.getId() });
+    }
+
+    /**
      * @param cursor to copy call log entries from
      *
      * @return the timestamp of the last synced entry.
@@ -544,11 +568,11 @@ public class CallLogProvider extends ContentProvider {
         }
     }
 
-    private void scheduleBackgroundTask(int task) {
-        mBackgroundHandler.sendEmptyMessage(task);
+    private void scheduleBackgroundTask(int task, Object arg) {
+        mBackgroundHandler.obtainMessage(task, arg).sendToTarget();
     }
 
-    private void performBackgroundTask(int task) {
+    private void performBackgroundTask(int task, Object arg) {
         if (task == BACKGROUND_TASK_INITIALIZE) {
             try {
                 final Context context = getContext();
@@ -563,6 +587,8 @@ public class CallLogProvider extends ContentProvider {
                 mReadAccessLatch.countDown();
                 mReadAccessLatch = null;
             }
+        } else if (task == BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT) {
+            adjustForNewPhoneAccountInternal((PhoneAccountHandle) arg);
         }
 
     }

@@ -289,8 +289,8 @@ public class CallLogBackupAgent extends BackupAgent {
                 call.type = dataInput.readInt();
                 call.numberPresentation = dataInput.readInt();
                 call.accountComponentName = readString(dataInput, version);
-                call.accountId = dataInput.readUTF();
-                call.accountAddress = dataInput.readUTF();
+                call.accountId = readString(dataInput, version);
+                call.accountAddress = readString(dataInput, version);
                 call.dataUsage = dataInput.readLong();
                 call.features = dataInput.readInt();
             }
