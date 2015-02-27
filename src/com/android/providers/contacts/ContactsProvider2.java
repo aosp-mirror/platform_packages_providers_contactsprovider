@@ -6530,14 +6530,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "queryPhoneLookupEnterprise: corp query URI=" + remoteUri);
         }
-        final Cursor corp = getContext().getContentResolver().query(remoteUri, projection,
+        // Note in order to re-write the cursor correctly, we need all columns from the corp cp2.
+        final Cursor corp = getContext().getContentResolver().query(remoteUri, null,
                 /* selection */ null, /* args */ null, /* order */ null,
                 /* cancellationsignal*/ null);
         try {
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "corp raw", corp);
             }
-            final Cursor rewritten = rewriteCorpPhoneLookup(corp);
+            final Cursor rewritten = rewriteCorpPhoneLookup(
+                    (projection != null ? projection : corp.getColumnNames()), corp);
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "corp rewritten", rewritten);
             }
@@ -6552,18 +6554,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Rewrite a cursor from the corp profile for {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
      */
     @VisibleForTesting
-    static Cursor rewriteCorpPhoneLookup(Cursor original) {
-        final String[] columns = original.getColumnNames();
-        final MatrixCursor ret = new MatrixCursor(columns);
+    static Cursor rewriteCorpPhoneLookup(String[] outputProjection, Cursor original) {
+        final MatrixCursor ret = new MatrixCursor(outputProjection);
 
         original.moveToPosition(-1);
         while (original.moveToNext()) {
+            // Note PhoneLookup._ID is a contact ID, not a data ID.
             final int contactId = original.getInt(original.getColumnIndex(PhoneLookup._ID));
 
             final MatrixCursor.RowBuilder builder = ret.newRow();
 
-            for (int i = 0; i < columns.length; i++) {
-                switch (columns[i]) {
+            for (int i = 0; i < outputProjection.length; i++) {
+                final String outputColumnName = outputProjection[i];
+                final int originalColumnIndex = original.getColumnIndex(outputColumnName);
+                switch (outputColumnName) {
                     // Set artificial photo URLs using Contacts.CORP_CONTENT_URI.
                     case PhoneLookup.PHOTO_THUMBNAIL_URI:
                         builder.add(getCorpThumbnailUri(contactId, original));
@@ -6572,7 +6576,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         builder.add(getCorpDisplayPhotoUri(contactId, original));
                         break;
                     case PhoneLookup._ID:
-                        builder.add(original.getLong(i) + Contacts.ENTERPRISE_CONTACT_ID_BASE);
+                        builder.add(original.getLong(originalColumnIndex)
+                                + Contacts.ENTERPRISE_CONTACT_ID_BASE);
                         break;
 
                     // These columns are set to null.
@@ -6584,21 +6589,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         break;
                     default:
                         // Copy the original value.
-                        switch (original.getType(i)) {
+                        switch (original.getType(originalColumnIndex)) {
                             case Cursor.FIELD_TYPE_NULL:
                                 builder.add(null);
                                 break;
                             case Cursor.FIELD_TYPE_INTEGER:
-                                builder.add(original.getLong(i));
+                                builder.add(original.getLong(originalColumnIndex));
                                 break;
                             case Cursor.FIELD_TYPE_FLOAT:
-                                builder.add(original.getFloat(i));
+                                builder.add(original.getFloat(originalColumnIndex));
                                 break;
                             case Cursor.FIELD_TYPE_STRING:
-                                builder.add(original.getString(i));
+                                builder.add(original.getString(originalColumnIndex));
                                 break;
                             case Cursor.FIELD_TYPE_BLOB:
-                                builder.add(original.getBlob(i));
+                                builder.add(original.getBlob(originalColumnIndex));
                                 break;
                         }
                 }

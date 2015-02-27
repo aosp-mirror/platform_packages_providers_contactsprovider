@@ -1940,7 +1940,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
 
         // First, convert and make sure it returns an empty cursor.
-        Cursor rewritten = ContactsProvider2.rewriteCorpPhoneLookup(c);
+        Cursor rewritten = ContactsProvider2.rewriteCorpPhoneLookup(c.getColumnNames(), c);
         assertEquals(0, rewritten.getCount());
         assertEquals(19, rewritten.getColumnCount());
 
@@ -1987,8 +1987,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 "label", // PhoneLookup.LABEL,
                 "+1234", // PhoneLookup.NORMALIZED_NUMBER
         });
-        rewritten = ContactsProvider2.rewriteCorpPhoneLookup(c);
+        rewritten = ContactsProvider2.rewriteCorpPhoneLookup(c.getColumnNames(), c);
         assertEquals(2, rewritten.getCount());
+        assertEquals(19, rewritten.getColumnCount());
 
         rewritten.moveToPosition(0);
         int column = 0;
@@ -2036,6 +2037,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, rewritten.getInt(column++));
         assertEquals("label", rewritten.getString(column++));
         assertEquals("+1234", rewritten.getString(column++));
+
+        // Use a narower projection.
+        rewritten = ContactsProvider2.rewriteCorpPhoneLookup(
+                new String[] {PhoneLookup.PHOTO_URI, PhoneLookup.PHOTO_THUMBNAIL_URI}, c);
+        assertEquals(2, rewritten.getCount());
+        assertEquals(2, rewritten.getColumnCount());
+
+        rewritten.moveToPosition(0);
+        column = 0;
+        assertEquals(null, rewritten.getString(column++));
+        assertEquals(null, rewritten.getString(column++));
+
+
+        rewritten.moveToNext();
+        column = 0;
+        assertEquals("content://com.android.contacts/contacts_corp/10/display_photo",
+                rewritten.getString(column++));
+        assertEquals("content://com.android.contacts/contacts_corp/10/photo",
+                rewritten.getString(column++));
     }
 
     public void testPhoneUpdate() {
