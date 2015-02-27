@@ -16,17 +16,20 @@
 
 package com.android.providers.contacts;
 
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.eq;
 
+import android.app.backup.BackupDataOutput;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import com.android.providers.contacts.CallLogBackupAgent.Call;
 import com.android.providers.contacts.CallLogBackupAgent.CallLogBackupState;
 
 import org.mockito.InOrder;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -34,6 +37,8 @@ import org.mockito.MockitoAnnotations;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.EOFException;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.TreeSet;
 
 /**
@@ -44,6 +49,7 @@ public class CallLogBackupAgentTest extends AndroidTestCase {
 
     @Mock DataInput mDataInput;
     @Mock DataOutput mDataOutput;
+    @Mock BackupDataOutput mBackupDataOutput;
 
     CallLogBackupAgent mCallLogBackupAgent;
 
@@ -107,32 +113,33 @@ public class CallLogBackupAgentTest extends AndroidTestCase {
 
     public void testWriteState_NoCalls() throws Exception {
         CallLogBackupState state = new CallLogBackupState();
-        state.version = 1;
+        state.version = CallLogBackupAgent.VERSION;
         state.callIds = new TreeSet<>();
 
         mCallLogBackupAgent.writeState(mDataOutput, state);
 
         InOrder inOrder = Mockito.inOrder(mDataOutput);
-        inOrder.verify(mDataOutput).writeInt(1 /* version */);
+        inOrder.verify(mDataOutput).writeInt(CallLogBackupAgent.VERSION);
         inOrder.verify(mDataOutput).writeInt(0 /* size */);
     }
 
     public void testWriteState_OneCall() throws Exception {
         CallLogBackupState state = new CallLogBackupState();
-        state.version = 1;
+        state.version = CallLogBackupAgent.VERSION;
         state.callIds = new TreeSet<>();
         state.callIds.add(101);
 
         mCallLogBackupAgent.writeState(mDataOutput, state);
 
         InOrder inOrder = Mockito.inOrder(mDataOutput);
-        inOrder.verify(mDataOutput, times(2)).writeInt(1);
+        inOrder.verify(mDataOutput).writeInt(CallLogBackupAgent.VERSION);
+        inOrder.verify(mDataOutput).writeInt(1);
         inOrder.verify(mDataOutput).writeInt(101 /* call-ID */);
     }
 
     public void testWriteState_MultipleCalls() throws Exception {
         CallLogBackupState state = new CallLogBackupState();
-        state.version = 1;
+        state.version = CallLogBackupAgent.VERSION;
         state.callIds = new TreeSet<>();
         state.callIds.add(101);
         state.callIds.add(102);
@@ -141,10 +148,83 @@ public class CallLogBackupAgentTest extends AndroidTestCase {
         mCallLogBackupAgent.writeState(mDataOutput, state);
 
         InOrder inOrder = Mockito.inOrder(mDataOutput);
-        inOrder.verify(mDataOutput).writeInt(1 /* version */);
+        inOrder.verify(mDataOutput).writeInt(CallLogBackupAgent.VERSION);
         inOrder.verify(mDataOutput).writeInt(3 /* size */);
         inOrder.verify(mDataOutput).writeInt(101 /* call-ID */);
         inOrder.verify(mDataOutput).writeInt(102 /* call-ID */);
         inOrder.verify(mDataOutput).writeInt(103 /* call-ID */);
     }
+
+    public void testRunBackup_NoCalls() throws Exception {
+        CallLogBackupState state = new CallLogBackupState();
+        state.version = CallLogBackupAgent.VERSION;
+        state.callIds = new TreeSet<>();
+        List<Call> calls = new LinkedList<>();
+
+        mCallLogBackupAgent.runBackup(state, mBackupDataOutput, calls);
+
+        Mockito.verifyNoMoreInteractions(mBackupDataOutput);
+    }
+
+    public void testRunBackup_OneNewCall() throws Exception {
+        CallLogBackupState state = new CallLogBackupState();
+        state.version = CallLogBackupAgent.VERSION;
+        state.callIds = new TreeSet<>();
+        List<Call> calls = new LinkedList<>();
+        calls.add(makeCall(101, 0L, 0L, "555-5555"));
+        mCallLogBackupAgent.runBackup(state, mBackupDataOutput, calls);
+
+        verify(mBackupDataOutput).writeEntityHeader(eq("101"), Matchers.anyInt());
+        verify(mBackupDataOutput).writeEntityData((byte[]) Matchers.any(), Matchers.anyInt());
+    }
+
+    public void testRunBackup_MultipleCall() throws Exception {
+        CallLogBackupState state = new CallLogBackupState();
+        state.version = CallLogBackupAgent.VERSION;
+        state.callIds = new TreeSet<>();
+        List<Call> calls = new LinkedList<>();
+        calls.add(makeCall(101, 0L, 0L, "555-1234"));
+        calls.add(makeCall(102, 0L, 0L, "555-5555"));
+
+        mCallLogBackupAgent.runBackup(state, mBackupDataOutput, calls);
+
+        InOrder inOrder = Mockito.inOrder(mBackupDataOutput);
+        inOrder.verify(mBackupDataOutput).writeEntityHeader(eq("101"), Matchers.anyInt());
+        inOrder.verify(mBackupDataOutput).
+                writeEntityData((byte[]) Matchers.any(), Matchers.anyInt());
+        inOrder.verify(mBackupDataOutput).writeEntityHeader(eq("102"), Matchers.anyInt());
+        inOrder.verify(mBackupDataOutput).
+                writeEntityData((byte[]) Matchers.any(), Matchers.anyInt());
+    }
+
+    public void testRunBackup_PartialMultipleCall() throws Exception {
+        CallLogBackupState state = new CallLogBackupState();
+
+        state.version = CallLogBackupAgent.VERSION;
+        state.callIds = new TreeSet<>();
+        state.callIds.add(101);
+
+        List<Call> calls = new LinkedList<>();
+        calls.add(makeCall(101, 0L, 0L, "555-1234"));
+        calls.add(makeCall(102, 0L, 0L, "555-5555"));
+
+        mCallLogBackupAgent.runBackup(state, mBackupDataOutput, calls);
+
+        InOrder inOrder = Mockito.inOrder(mBackupDataOutput);
+        inOrder.verify(mBackupDataOutput).writeEntityHeader(eq("102"), Matchers.anyInt());
+        inOrder.verify(mBackupDataOutput).
+                writeEntityData((byte[]) Matchers.any(), Matchers.anyInt());
+    }
+
+    private static Call makeCall(int id, long date, long duration, String number) {
+        Call c = new Call();
+        c.id = id;
+        c.date = date;
+        c.duration = duration;
+        c.number = number;
+        c.accountComponentName = "account-component";
+        c.accountId = "account-id";
+        return c;
+    }
+
 }

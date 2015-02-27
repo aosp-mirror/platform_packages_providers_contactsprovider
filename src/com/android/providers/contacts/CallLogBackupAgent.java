@@ -26,6 +26,7 @@ import android.os.ParcelFileDescriptor;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.telecom.PhoneAccountHandle;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -41,6 +42,8 @@ import java.io.EOFException;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -55,7 +58,8 @@ public class CallLogBackupAgent extends BackupAgent {
         SortedSet<Integer> callIds;
     }
 
-    private static class Call {
+    @VisibleForTesting
+    static class Call {
         int id;
         long date;
         long duration;
@@ -82,7 +86,8 @@ public class CallLogBackupAgent extends BackupAgent {
     private static final String TAG = "CallLogBackupAgent";
 
     /** Current version of CallLogBackup. Used to track the backup format. */
-    private static final int VERSION = 1;
+    @VisibleForTesting
+    static final int VERSION = 1002;
     /** Version indicating that there exists no previous backup entry. */
     @VisibleForTesting
     static final int VERSION_NO_PREVIOUS_STATE = 0;
@@ -119,7 +124,7 @@ public class CallLogBackupAgent extends BackupAgent {
         }
 
         // Run the actual backup of data
-        runBackup(state, data);
+        runBackup(state, data, getAllCallLogEntries());
 
         // Rewrite the backup state.
         DataOutputStream dataOutput = new DataOutputStream(new BufferedOutputStream(
@@ -151,59 +156,62 @@ public class CallLogBackupAgent extends BackupAgent {
     }
 
     @VisibleForTesting
-    void runBackup(CallLogBackupState state, BackupDataOutput data) {
+    void runBackup(CallLogBackupState state, BackupDataOutput data, Iterable<Call> calls) {
         SortedSet<Integer> callsToRemove = new TreeSet<>(state.callIds);
 
-        // Get all the existing call log entries.
-        Cursor cursor = getAllCallLogEntries();
-        if (cursor == null) {
-            return;
+        // Loop through all the call log entries to identify:
+        // (1) new calls
+        // (2) calls which have been deleted.
+        for (Call call : calls) {
+            if (!state.callIds.contains(call.id)) {
+
+                if (isDebug()) {
+                    Log.d(TAG, "Adding call to backup: " + call);
+                }
+
+                // This call new (not in our list from the last backup), lets back it up.
+                addCallToBackup(data, call);
+                state.callIds.add(call.id);
+            } else {
+                // This call still exists in the current call log so delete it from the
+                // "callsToRemove" set since we want to keep it.
+                callsToRemove.remove(call.id);
+            }
         }
 
-        try {
-            // Loop through all the call log entries to identify:
-            // (1) new calls
-            // (2) calls which have been deleted.
-            while (cursor.moveToNext()) {
-                Call call = readCallFromCursor(cursor);
-
-                if (!state.callIds.contains(call.id)) {
-
-                    if (isDebug()) {
-                        Log.d(TAG, "Adding call to backup: " + call);
-                    }
-
-                    // This call new (not in our list from the last backup), lets back it up.
-                    addCallToBackup(data, call);
-                    state.callIds.add(call.id);
-                } else {
-                    // This call still exists in the current call log so delete it from the
-                    // "callsToRemove" set since we want to keep it.
-                    callsToRemove.remove(call.id);
-                }
+        // Remove calls which no longer exist in the set.
+        for (Integer i : callsToRemove) {
+            if (isDebug()) {
+                Log.d(TAG, "Removing call from backup: " + i);
             }
 
-            // Remove calls which no longer exist in the set.
-            for (Integer i : callsToRemove) {
-                if (isDebug()) {
-                    Log.d(TAG, "Removing call from backup: " + i);
-                }
-
-                removeCallFromBackup(data, i);
-                state.callIds.remove(i);
-            }
-
-        } finally {
-            cursor.close();
+            removeCallFromBackup(data, i);
+            state.callIds.remove(i);
         }
     }
 
-    private Cursor getAllCallLogEntries() {
+    private Iterable<Call> getAllCallLogEntries() {
+        List<Call> calls = new LinkedList<>();
+
         // We use the API here instead of querying ContactsDatabaseHelper directly because
         // CallLogProvider has special locks in place for sychronizing when to read.  Using the APIs
         // gives us that for free.
         ContentResolver resolver = getContentResolver();
-        return resolver.query(CallLog.Calls.CONTENT_URI, CALL_LOG_PROJECTION, null, null, null);
+        Cursor cursor = resolver.query(CallLog.Calls.CONTENT_URI, CALL_LOG_PROJECTION, null, null, null);
+        if (cursor != null) {
+            try {
+                while (cursor.moveToNext()) {
+                    Call call = readCallFromCursor(cursor);
+                    if (call != null) {
+                        calls.add(call);
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+
+        return calls;
     }
 
     private void writeCallToProvider(Call call) {
@@ -277,10 +285,10 @@ public class CallLogBackupAgent extends BackupAgent {
             if (version >= 1) {
                 call.date = dataInput.readLong();
                 call.duration = dataInput.readLong();
-                call.number = dataInput.readUTF();
+                call.number = readString(dataInput, version);
                 call.type = dataInput.readInt();
                 call.numberPresentation = dataInput.readInt();
-                call.accountComponentName = dataInput.readUTF();
+                call.accountComponentName = readString(dataInput, version);
                 call.accountId = dataInput.readUTF();
                 call.accountAddress = dataInput.readUTF();
                 call.dataUsage = dataInput.readLong();
@@ -322,13 +330,13 @@ public class CallLogBackupAgent extends BackupAgent {
             data.writeInt(VERSION);
             data.writeLong(call.date);
             data.writeLong(call.duration);
-            data.writeUTF(call.number);
+            writeString(data, call.number);
             data.writeInt(call.type);
             data.writeInt(call.numberPresentation);
-            data.writeUTF(call.accountComponentName);
-            data.writeUTF(call.accountId);
-            data.writeUTF(call.accountAddress);
-            data.writeLong(call.dataUsage);
+            writeString(data, call.accountComponentName);
+            writeString(data, call.accountId);
+            writeString(data, call.accountAddress);
+            data.writeLong(call.dataUsage == null ? 0 : call.dataUsage);
             data.writeInt(call.features);
             data.flush();
 
@@ -340,6 +348,27 @@ public class CallLogBackupAgent extends BackupAgent {
             }
         } catch (IOException e) {
             Log.e(TAG, "Failed to backup call: " + call, e);
+        }
+    }
+
+    private void writeString(DataOutputStream data, String str) throws IOException {
+        if (str == null) {
+            data.writeBoolean(false);
+        } else {
+            data.writeBoolean(true);
+            data.writeUTF(str);
+        }
+    }
+
+    private String readString(DataInputStream data, int version) throws IOException {
+        if (version == 1) {
+            return data.readUTF();
+        } else {
+            if (data.readBoolean()) {
+                return data.readUTF();
+            } else {
+                return null;
+            }
         }
     }
 
