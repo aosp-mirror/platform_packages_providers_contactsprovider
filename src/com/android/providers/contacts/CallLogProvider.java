@@ -39,7 +39,9 @@ import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.CallLog;
 import android.provider.CallLog.Calls;
+import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
+import android.telecom.TelecomManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -84,15 +86,21 @@ public class CallLogProvider extends ContentProvider {
         Calls.PHONE_ACCOUNT_ID
     };
 
+    static final String[] MINIMAL_PROJECTION = new String[] { Calls._ID };
+
     private static final int CALLS = 1;
 
     private static final int CALLS_ID = 2;
 
     private static final int CALLS_FILTER = 3;
 
-    private static final String ADJUST_FOR_NEW_PHONE_ACCOUNT_QUERY =
+    private static final String UNHIDE_BY_PHONE_ACCOUNT_QUERY =
             "UPDATE " + Tables.CALLS + " SET " + Calls.PHONE_ACCOUNT_HIDDEN + "=0 WHERE " +
             Calls.PHONE_ACCOUNT_COMPONENT_NAME + "=? AND " + Calls.PHONE_ACCOUNT_ID + "=?;";
+
+    private static final String UNHIDE_BY_ADDRESS_QUERY =
+            "UPDATE " + Tables.CALLS + " SET " + Calls.PHONE_ACCOUNT_HIDDEN + "=0 WHERE " +
+            Calls.PHONE_ACCOUNT_ADDRESS + "=?;";
 
     private static final UriMatcher sURIMatcher = new UriMatcher(UriMatcher.NO_MATCH);
     static {
@@ -486,8 +494,40 @@ public class CallLogProvider extends ContentProvider {
      * @param handle The handle to the newly registered {@link android.telecom.PhoneAccount}.
      */
     private void adjustForNewPhoneAccountInternal(PhoneAccountHandle handle) {
-        mDbHelper.getWritableDatabase().execSQL(ADJUST_FOR_NEW_PHONE_ACCOUNT_QUERY,
-                new String[] { handle.getComponentName().flattenToString(), handle.getId() });
+        String[] handleArgs =
+                new String[] { handle.getComponentName().flattenToString(), handle.getId() };
+
+        // Check to see if any entries exist for this handle. If so (not empty), run the un-hiding
+        // update. If not, then try to identify the call from the phone number.
+        Cursor cursor = query(Calls.CONTENT_URI, MINIMAL_PROJECTION,
+                Calls.PHONE_ACCOUNT_COMPONENT_NAME + " =? AND " + Calls.PHONE_ACCOUNT_ID + " =?",
+                handleArgs, null);
+
+        if (cursor != null) {
+            try {
+                if (cursor.getCount() >= 1) {
+                    // run un-hiding process based on phone account
+                    mDbHelper.getWritableDatabase().execSQL(
+                            UNHIDE_BY_PHONE_ACCOUNT_QUERY, handleArgs);
+                } else {
+                    TelecomManager tm = TelecomManager.from(getContext());
+                    if (tm != null) {
+
+                        PhoneAccount account = tm.getPhoneAccount(handle);
+                        if (account != null) {
+                            // We did not find any items for the specific phone account, so run the
+                            // query based on the phone number instead.
+                            mDbHelper.getWritableDatabase().execSQL(UNHIDE_BY_ADDRESS_QUERY,
+                                    new String[] { account.getAddress().toString() });
+                        }
+
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+
     }
 
     /**
