@@ -1618,6 +1618,74 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    public void testAggregation_phoneticNamePriority1() {
+        // Setup: one raw contact has a complex phonetic name and the other a simple given name
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertPhoneticName(mResolver, rawContactId1, "name phonetic");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, null,
+                "name", ACCOUNT_1);
+
+        // Action: aggregate
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+
+        // Verify: given name is used instead of phonetic, contrary to results of
+        // testAggregation_nameComplexity
+        long contactId = queryContactId(rawContactId1);
+        assertEquals("name", queryDisplayName(contactId));
+    }
+
+    // Same as testAggregation_phoneticNamePriority1, but with setup order reversed
+    public void testAggregation_phoneticNamePriority2() {
+        // Setup: one raw contact has a complex phonetic name and the other a simple given name
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, null,
+                "name", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
+        DataUtil.insertPhoneticName(mResolver, rawContactId1, "name phonetic");
+
+        // Action: aggregate
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+
+        // Verify: given name is used instead of phonetic, contrary to results of
+        // testAggregation_nameComplexity
+        long contactId = queryContactId(rawContactId1);
+        assertEquals("name", queryDisplayName(contactId));
+    }
+
+    public void testAggregation_nameComplexity1() {
+        // Setup: two names, one of which is unambiguously more complex
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, null,
+                "name", ACCOUNT_1);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, null,
+                "name phonetic", ACCOUNT_1);
+
+        // Action: aggregate
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+
+        // Verify: more complex name is used
+        long contactId = queryContactId(rawContactId1);
+        assertEquals("name phonetic", queryDisplayName(contactId));
+    }
+
+    // Same as testAggregation_nameComplexity1, but with setup order reversed
+    public void testAggregation_nameComplexity2() {
+        // Setup: two names, one of which is unambiguously more complex
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, null,
+                "name phonetic", ACCOUNT_1);
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, null,
+                "name", ACCOUNT_1);
+
+        // Action: aggregate
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER, rawContactId1,
+                rawContactId2);
+
+        // Verify: more complex name is used
+        long contactId = queryContactId(rawContactId1);
+        assertEquals("name phonetic", queryDisplayName(contactId));
+    }
+
     public void testAggregation_clearSuperPrimary() {
         // Three types of mime-type super primary merging are tested here
         // 1. both raw contacts have super primary phone numbers

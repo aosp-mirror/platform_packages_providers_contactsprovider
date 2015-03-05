@@ -4818,7 +4818,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return mMimeTypeIdSip;
     }
 
-    public int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
+    /**
+     * Returns a {@link ContactsContract.DisplayNameSources} value based on {@param mimeTypeId}.
+     * This does not return {@link ContactsContract.DisplayNameSources#STRUCTURED_PHONETIC_NAME}.
+     * The calling client needs to inspect the structured name itself to distinguish between
+     * {@link ContactsContract.DisplayNameSources#STRUCTURED_NAME} and
+     * {@code STRUCTURED_PHONETIC_NAME}.
+     */
+    private int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
         if (mimeTypeId == mMimeTypeIdStructuredName) {
             return DisplayNameSources.STRUCTURED_NAME;
         }
@@ -5540,6 +5547,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             while (c.moveToNext()) {
                 int mimeType = c.getInt(RawContactNameQuery.MIMETYPE);
                 int source = getDisplayNameSourceForMimeTypeId(mimeType);
+
+                if (source == DisplayNameSources.STRUCTURED_NAME) {
+                    final String given = c.getString(RawContactNameQuery.GIVEN_NAME);
+                    final String middle = c.getString(RawContactNameQuery.MIDDLE_NAME);
+                    final String family = c.getString(RawContactNameQuery.FAMILY_NAME);
+                    final String suffix = c.getString(RawContactNameQuery.SUFFIX);
+                    final String prefix = c.getString(RawContactNameQuery.PREFIX);
+                    if (TextUtils.isEmpty(given) && TextUtils.isEmpty(middle)
+                            && TextUtils.isEmpty(family) && TextUtils.isEmpty(suffix)
+                            && TextUtils.isEmpty(prefix)) {
+                        // Every non-phonetic name component is empty. Therefore, lets lower the
+                        // source score to STRUCTURED_PHONETIC_NAME.
+                        source = DisplayNameSources.STRUCTURED_PHONETIC_NAME;
+                    }
+                }
+
                 if (source < bestDisplayNameSource || source == DisplayNameSources.UNDEFINED) {
                     continue;
                 }
@@ -5626,7 +5649,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String sortKeyAlternative = null;
         int displayNameStyle = FullNameStyle.UNDEFINED;
 
-        if (bestDisplayNameSource == DisplayNameSources.STRUCTURED_NAME) {
+        if (bestDisplayNameSource == DisplayNameSources.STRUCTURED_NAME
+                || bestDisplayNameSource == DisplayNameSources.STRUCTURED_PHONETIC_NAME) {
             displayNameStyle = bestName.fullNameStyle;
             if (displayNameStyle == FullNameStyle.CJK
                     || displayNameStyle == FullNameStyle.UNDEFINED) {
