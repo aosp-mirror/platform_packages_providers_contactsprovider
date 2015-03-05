@@ -59,14 +59,14 @@ public class DataUtil {
 
     public static Uri insertStructuredName(
             ContentResolver resolver, long rawContactId, String givenName, String familyName,
-            String phoneticGiven) {
-        return insertStructuredName(resolver, rawContactId, givenName, familyName, phoneticGiven,
+            String phoneticFamily) {
+        return insertStructuredName(resolver, rawContactId, givenName, familyName, phoneticFamily,
                 /* isSuperPrimary = true */ false);
     }
 
     public static Uri insertStructuredName(
             ContentResolver resolver, long rawContactId, String givenName, String familyName,
-            String phoneticGiven, boolean isSuperPrimary) {
+            String phoneticFamily, boolean isSuperPrimary) {
         ContentValues values = new ContentValues();
         StringBuilder sb = new StringBuilder();
         if (givenName != null) {
@@ -78,20 +78,31 @@ public class DataUtil {
         if (familyName != null) {
             sb.append(familyName);
         }
-        if (sb.length() == 0 && phoneticGiven != null) {
-            sb.append(phoneticGiven);
+        if (sb.length() == 0 && phoneticFamily != null) {
+            sb.append(phoneticFamily);
         }
         values.put(StructuredName.DISPLAY_NAME, sb.toString());
         values.put(StructuredName.GIVEN_NAME, givenName);
         values.put(StructuredName.FAMILY_NAME, familyName);
-        if (phoneticGiven != null) {
-            values.put(StructuredName.PHONETIC_GIVEN_NAME, phoneticGiven);
+        if (phoneticFamily != null) {
+            // When creating phonetic names, be careful to use PHONETIC_FAMILY_NAME instead of
+            // PHONETIC_GIVEN_NAME, to work around b/19612393.
+            values.put(StructuredName.PHONETIC_FAMILY_NAME, phoneticFamily);
         }
         if (isSuperPrimary) {
             values.put(Data.IS_PRIMARY, 1);
             values.put(Data.IS_SUPER_PRIMARY, 1);
         }
 
+        return insertStructuredName(resolver, rawContactId, values);
+    }
+
+    public static Uri insertPhoneticName(ContentResolver resolver, long rawContactId,
+            String phoneticFamilyName) {
+        ContentValues values = new ContentValues();
+        // When creating phonetic names, be careful to use PHONETIC_FAMILY_NAME instead of
+        // PHONETIC_GIVEN_NAME, to work around b/19612393.
+        values.put(StructuredName.PHONETIC_FAMILY_NAME, phoneticFamilyName);
         return insertStructuredName(resolver, rawContactId, values);
     }
 }
