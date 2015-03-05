@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_PROFILE" />
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.SEND_CALL_LOG_CHANGE" />
     <uses-permission android:name="android.permission.UPDATE_APP_OPS_STATS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_PROFILE" />
@@ -20,13 +21,15 @@
     <uses-permission android:name="com.android.voicemail.permission.WRITE_VOICEMAIL" />
     <uses-permission android:name="com.android.voicemail.permission.READ_VOICEMAIL" />
 
+    <permission
+            android:name="android.permission.SEND_CALL_LOG_CHANGE"
+            android:label="Broadcast that a change happened to the call log."
+            android:protectionLevel="signature|system"/>
+
     <application android:process="android.process.acore"
         android:label="@string/app_label"
         android:icon="@drawable/app_icon"
-        android:backupAgent="CallLogBackupAgent">
-
-        <meta-data android:name="com.google.android.backup.api_key"
-                android:value="AEdPqrEAAAAI0N64ZsWbwY3WiVlfYvjLWRVpOrAOl9xKHkraxA" />
+        android:allowBackup="false">
 
         <provider android:name="ContactsProvider2"
             android:authorities="contacts;com.android.contacts"
