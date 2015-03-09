@@ -120,7 +120,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1100 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1004;
+    static final int DATABASE_VERSION = 1005;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1532,6 +1532,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.CACHED_MATCHED_NUMBER + " TEXT," +
                 Calls.CACHED_NORMALIZED_NUMBER + " TEXT," +
                 Calls.CACHED_PHOTO_ID + " INTEGER NOT NULL DEFAULT 0," +
+                Calls.CACHED_PHOTO_URI + " TEXT," +
                 Calls.CACHED_FORMATTED_NUMBER + " TEXT," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
@@ -2884,6 +2885,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1004) {
             upgradeToVersion1004(db);
             oldVersion = 1004;
+        }
+
+        if (oldVersion < 1005) {
+            upgradeToVersion1005(db);
+            oldVersion = 1005;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4385,6 +4391,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     public void upgradeToVersion1004(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD phone_account_hidden INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    public void upgradeToVersion1005(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD photo_uri TEXT;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
