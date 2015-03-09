@@ -341,6 +341,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CONTACTABLES = 3014;
     private static final int CONTACTABLES_FILTER = 3015;
     private static final int PHONES_ENTERPRISE = 3016;
+    private static final int EMAILS_LOOKUP_ENTERPRISE = 3017;
 
     private static final int PHONE_LOOKUP = 4000;
     private static final int PHONE_LOOKUP_ENTERPRISE = 4001;
@@ -1217,6 +1218,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup/*", EMAILS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup_enterprise",
+                EMAILS_LOOKUP_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup_enterprise/*",
+                EMAILS_LOOKUP_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals", POSTALS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/postals/#", POSTALS_ID);
         /** "*" is in CSV form with data IDs ("123,456,789") */
@@ -5868,6 +5873,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
                 break;
             }
+            case EMAILS_LOOKUP_ENTERPRISE: {
+                return queryEmailsLookupEnterprise(uri, projection, selection, selectionArgs,
+                        sortOrder);
+            }
 
             case EMAILS_FILTER: {
                 String typeParam = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
@@ -6164,10 +6173,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (uri.getPathSegments().size() != 2) {
                     throw new IllegalArgumentException("Phone number missing in URI: " + uri);
                 }
-                final String phoneNumber = Uri.decode(uri.getLastPathSegment());
-                final boolean isSipAddress = uri.getBooleanQueryParameter(
-                        PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
-                return queryPhoneLookupEnterprise(phoneNumber, projection, isSipAddress);
+                return queryPhoneLookupEnterprise(uri, projection, selection, selectionArgs,
+                        sortOrder);
             }
             case PHONE_LOOKUP: {
                 // Phone lookup cannot be combined with a selection
@@ -6585,26 +6592,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    /**
-     * Handles {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
-     */
-    // TODO Test
-    private Cursor queryPhoneLookupEnterprise(String phoneNumber, String[] projection,
-            boolean isSipAddress) {
+    private Cursor queryEnterpriseIfNecessary(Uri localUri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, String contactIdColumnName) {
 
         final int corpUserId = UserUtils.getCorpUserId(getContext());
 
         // Step 1. Look at the database on the current profile.
-        final Uri localUri = PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath(phoneNumber)
-                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
-                        String.valueOf(isSipAddress))
-                .build();
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "queryPhoneLookupEnterprise: local query URI=" + localUri);
         }
-        final Cursor local = queryLocal(localUri, projection,
-                /* selection */ null, /* args */ null, /* order */ null, /* directory */ 0,
-                /* cancellationsignal*/ null);
+        final Cursor local = queryLocal(localUri, projection, selection, selectionArgs,
+                sortOrder, /* directory */ 0, /* cancellationsignal */null);
         try {
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "local", local);
@@ -6619,6 +6617,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw th;
         }
 
+        if (local != null) {
+            local.close();
+        }
+
         // Step 2.  No rows found in the local db, and there is a corp profile. Look at the corp
         // DB.
 
@@ -6630,14 +6632,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         // Note in order to re-write the cursor correctly, we need all columns from the corp cp2.
         final Cursor corp = getContext().getContentResolver().query(remoteUri, null,
-                /* selection */ null, /* args */ null, /* order */ null,
-                /* cancellationsignal*/ null);
+                selection, selectionArgs, sortOrder, /* cancellationsignal */null);
         try {
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "corp raw", corp);
             }
-            final Cursor rewritten = rewriteCorpPhoneLookup(
-                    (projection != null ? projection : corp.getColumnNames()), corp);
+            final Cursor rewritten = rewriteCorpLookup(
+                    (projection != null ? projection : corp.getColumnNames()), corp,
+                    contactIdColumnName);
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "corp rewritten", rewritten);
             }
@@ -6649,43 +6651,75 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Rewrite a cursor from the corp profile for {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
+     * Handles {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
+     */
+    // TODO Test
+    private Cursor queryPhoneLookupEnterprise(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder) {
+        final String phoneNumber = Uri.decode(uri.getLastPathSegment());
+        final boolean isSipAddress = uri.getBooleanQueryParameter(
+                PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
+        final Uri localUri = PhoneLookup.CONTENT_FILTER_URI
+                .buildUpon()
+                .appendPath(phoneNumber)
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSipAddress)).build();
+        return queryEnterpriseIfNecessary(localUri, projection, null, null, null, PhoneLookup._ID);
+    }
+
+    /**
+     * Handles {@link Email#ENTERPRISE_CONTENT_LOOKUP_URI}.
+     */
+    private Cursor queryEmailsLookupEnterprise(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder) {
+        final List<String> pathSegments = uri.getPathSegments();
+        final int pathSegmentsSize = pathSegments.size();
+        // Ignore the first 3 path segments: "/data/emails_enterprise/lookup"
+        final StringBuilder newPathBuilder = new StringBuilder(Email.CONTENT_LOOKUP_URI.getPath());
+        for (int i = 3; i < pathSegmentsSize; i++) {
+            newPathBuilder.append('/');
+            newPathBuilder.append(pathSegments.get(i));
+        }
+        final Uri localUri = uri.buildUpon().path(newPathBuilder.toString()).build();
+        return queryEnterpriseIfNecessary(localUri, projection, selection, selectionArgs,
+                sortOrder, Data.CONTACT_ID);
+    }
+
+    /**
+     * Rewrite a cursor from the corp profile data
      */
     @VisibleForTesting
-    static Cursor rewriteCorpPhoneLookup(String[] outputProjection, Cursor original) {
-        final MatrixCursor ret = new MatrixCursor(outputProjection);
-
+    static Cursor rewriteCorpLookup(String[] projection, Cursor original,
+            String contactIdColumnName) {
+        final MatrixCursor ret = new MatrixCursor(projection);
         original.moveToPosition(-1);
         while (original.moveToNext()) {
-            // Note PhoneLookup._ID is a contact ID, not a data ID.
-            final int contactId = original.getInt(original.getColumnIndex(PhoneLookup._ID));
-
+            final int contactId = original.getInt(original.getColumnIndex(contactIdColumnName));
             final MatrixCursor.RowBuilder builder = ret.newRow();
-
-            for (int i = 0; i < outputProjection.length; i++) {
-                final String outputColumnName = outputProjection[i];
+            for (int i = 0; i < projection.length; i++) {
+                final String outputColumnName = projection[i];
                 final int originalColumnIndex = original.getColumnIndex(outputColumnName);
                 switch (outputColumnName) {
                     // Set artificial photo URLs using Contacts.CORP_CONTENT_URI.
-                    case PhoneLookup.PHOTO_THUMBNAIL_URI:
+                    case Contacts.PHOTO_THUMBNAIL_URI:
                         builder.add(getCorpThumbnailUri(contactId, original));
                         break;
-                    case PhoneLookup.PHOTO_URI:
+                    case Contacts.PHOTO_URI:
                         builder.add(getCorpDisplayPhotoUri(contactId, original));
                         break;
-                    case PhoneLookup._ID:
-                        builder.add(original.getLong(originalColumnIndex)
-                                + Contacts.ENTERPRISE_CONTACT_ID_BASE);
-                        break;
-
-                    // These columns are set to null.
-                    // See the javadoc on PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI for the reasons.
-                    case PhoneLookup.PHOTO_FILE_ID:
-                    case PhoneLookup.PHOTO_ID:
-                    case PhoneLookup.CUSTOM_RINGTONE:
+                    case Data.PHOTO_FILE_ID:
+                    case Data.PHOTO_ID:
+                    case Data.CUSTOM_RINGTONE:
                         builder.add(null);
                         break;
                     default:
+                        if (outputColumnName.equals(contactIdColumnName)) {
+                            // This will be _id if it's PhoneLookup, contacts_id
+                            // if it's Data.CONTACT_ID
+                            builder.add(original.getLong(originalColumnIndex)
+                                    + Contacts.ENTERPRISE_CONTACT_ID_BASE);
+                            break;
+                        }
                         // Copy the original value.
                         switch (original.getType(originalColumnIndex)) {
                             case Cursor.FIELD_TYPE_NULL:
