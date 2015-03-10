@@ -40,9 +40,11 @@ import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.database.AbstractCursor;
 import android.database.Cursor;
+import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
+import android.database.MergeCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteQueryBuilder;
@@ -155,7 +157,6 @@ import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
-
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
@@ -339,6 +340,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CALLABLES_FILTER = 3013;
     private static final int CONTACTABLES = 3014;
     private static final int CONTACTABLES_FILTER = 3015;
+    private static final int PHONES_ENTERPRISE = 3016;
 
     private static final int PHONE_LOOKUP = 4000;
     private static final int PHONE_LOOKUP_ENTERPRISE = 4001;
@@ -1201,6 +1203,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones", PHONES);
+        matcher.addURI(ContactsContract.AUTHORITY, "data_enterprise/phones", PHONES_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/#", PHONES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
@@ -5650,7 +5653,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new String[] {DisplayPhoto.DISPLAY_MAX_DIM, DisplayPhoto.THUMBNAIL_MAX_DIM},
                         new Object[] {getMaxDisplayPhotoDim(), getMaxThumbnailDim()});
             }
-
+            case PHONES_ENTERPRISE: {
+                return queryMergedDataPhones(uri, projection, selection, selectionArgs, sortOrder);
+            }
             case PHONES:
             case CALLABLES: {
                 final String mimeTypeIsPhoneExpression =
@@ -6485,6 +6490,83 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
         return c;
+    }
+
+    private static class EnterprisePhoneCursorWrapper extends CursorWrapper {
+
+        public EnterprisePhoneCursorWrapper(Cursor cursor) {
+            super(cursor);
+        }
+
+        @Override
+        public int getInt(int column) {
+            return (int) getLong(column);
+        }
+
+        @Override
+        public long getLong(int column) {
+            long result = super.getLong(column);
+            String columnName = getColumnName(column);
+            // We change contactId only for now
+            switch (columnName) {
+                case Phone.CONTACT_ID:
+                    return result + Contacts.ENTERPRISE_CONTACT_ID_BASE;
+                default:
+                    return result;
+            }
+        }
+    }
+
+    /**
+     * Handles {@link Phone#ENTERPRISE_CONTENT_URI}.
+     */
+    // TODO test
+    private Cursor queryMergedDataPhones(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder) {
+        final List<String> pathSegments = uri.getPathSegments();
+        final int pathSegmentsSize = pathSegments.size();
+        // Ignore the first 2 path segments: "/data_enterprise/phones"
+        final StringBuilder newPathBuilder = new StringBuilder(Phone.CONTENT_URI.getPath());
+        for (int i = 2; i < pathSegmentsSize; i++) {
+            newPathBuilder.append('/');
+            newPathBuilder.append(pathSegments.get(i));
+        }
+        // Change /data_enterprise/phones/... to /data/phones/...
+        final Uri localUri = uri.buildUpon().path(newPathBuilder.toString()).build();
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        final long directoryId =
+                (directory == null ? -1 :
+                (directory.equals("0") ? Directory.DEFAULT :
+                (directory.equals("1") ? Directory.LOCAL_INVISIBLE : Long.MIN_VALUE)));
+        final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
+                sortOrder, directoryId, null);
+        try {
+            // TODO: Maybe we want to have a DPM policy for it
+            final int corpUserId = UserUtils.getCorpUserId(getContext());
+            if (corpUserId < 0) {
+                // No Corp user or policy not allowed
+                return primaryCursor;
+            }
+            final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+            final Cursor managedCursor = getContext().getContentResolver().query(remoteUri,
+                    projection, selection, selectionArgs, sortOrder, null);
+            final Cursor[] cursorArray = new Cursor[] {
+                    primaryCursor, new EnterprisePhoneCursorWrapper(managedCursor)
+            };
+            // Sort order is not supported yet, will be fixed in M when we have
+            // merged provider
+            // MergeCursor will copy all the contacts from two cursors, which may
+            // cause OOM if there's a lot of contacts. But it's only used by
+            // Bluetooth, and Bluetooth will loop through the Cursor and put all
+            // content in ArrayList anyway, so we ignore OOM issue here for now
+            final MergeCursor mergeCursor = new MergeCursor(cursorArray);
+            return mergeCursor;
+        } catch (Throwable th) {
+            if (primaryCursor != null) {
+                primaryCursor.close();
+            }
+            throw th;
+        }
     }
 
     /**
@@ -8311,6 +8393,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     return mContactsHelper.getDataMimeType(id);
                 }
             case PHONES:
+            case PHONES_ENTERPRISE:
                 return Phone.CONTENT_TYPE;
             case PHONES_ID:
                 return Phone.CONTENT_ITEM_TYPE;
@@ -8385,6 +8468,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DATA_ID:
             case PHONES:
+            case PHONES_ENTERPRISE:
             case PHONES_ID:
             case EMAILS:
             case EMAILS_ID:
