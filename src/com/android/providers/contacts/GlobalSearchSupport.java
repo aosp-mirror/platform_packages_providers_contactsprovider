@@ -244,8 +244,9 @@ public class GlobalSearchSupport {
                     String.valueOf(SNIPPET_START_MATCH), String.valueOf(SNIPPET_END_MATCH),
                     SNIPPET_ELLIPSIS, SNIPPET_MAX_TOKENS, false);
         }
+        sb.append(" WHERE " + Contacts.LOOKUP_KEY + " IS NOT NULL");
         if (selection != null) {
-            sb.append(" WHERE ").append(selection);
+            sb.append(" AND ").append(selection);
         }
         if (limit != null) {
             sb.append(" LIMIT " + limit);
