@@ -21,6 +21,7 @@ import static android.Manifest.permission.ADD_VOICEMAIL;
 import static android.Manifest.permission.READ_VOICEMAIL;
 
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -32,6 +33,7 @@ import android.database.DatabaseUtils.InsertHelper;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Bundle;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
@@ -42,6 +44,7 @@ import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.google.android.collect.Lists;
+import com.google.common.collect.Iterables;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -149,8 +152,20 @@ public class DbModifierWithNotification implements DatabaseModifier {
     public int update(String table, ContentValues values, String whereClause, String[] whereArgs) {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
         packagesModified.addAll(getModifiedPackages(values));
+
+        boolean isVoicemail = packagesModified.size() != 0;
+
+        if (mIsCallsTable && isVoicemail) {
+            // If a calling package is modifying its own entries, it means that the change came from
+            // the server and thus is synced or "clean". Otherwise, it means that a local change
+            // is being made to the database, so the entries should be marked as "dirty" so that
+            // the corresponding sync adapter knows they need to be synced.
+            final int isDirty = isSelfModifying(packagesModified) ? 0 : 1;
+            values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
+        }
+
         int count = mDb.update(table, values, whereClause, whereArgs);
-        if (count > 0 && packagesModified.size() != 0) {
+        if (count > 0 && isVoicemail) {
             notifyVoicemailChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
         }
         if (count > 0 && mIsCallsTable) {
@@ -162,8 +177,25 @@ public class DbModifierWithNotification implements DatabaseModifier {
     @Override
     public int delete(String table, String whereClause, String[] whereArgs) {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
-        int count = mDb.delete(table, whereClause, whereArgs);
-        if (count > 0 && packagesModified.size() != 0) {
+        boolean isVoicemail = packagesModified.size() != 0;
+
+        // If a deletion is made by a package that is not the package that inserted the voicemail,
+        // this means that the user deleted the voicemail. However, we do not want to delete it from
+        // the database until after the server has been notified of the deletion. To ensure this,
+        // mark the entry as "deleted"--deleted entries should be hidden from the user.
+        // Once the changes are synced to the server, delete will be called again, this time
+        // removing the rows from the table.
+        final int count;
+        if (mIsCallsTable && isVoicemail && !isSelfModifying(packagesModified)) {
+            ContentValues values = new ContentValues();
+            values.put(VoicemailContract.Voicemails.DIRTY, 1);
+            values.put(VoicemailContract.Voicemails.DELETED, 1);
+            count = mDb.update(table, values, whereClause, whereArgs);
+        } else {
+            count = mDb.delete(table, whereClause, whereArgs);
+        }
+
+        if (count > 0 && isVoicemail) {
             notifyVoicemailChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
         }
         if (count > 0 && mIsCallsTable) {
@@ -202,6 +234,11 @@ public class DbModifierWithNotification implements DatabaseModifier {
             impactedPackages.add(values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD));
         }
         return impactedPackages;
+    }
+
+    private boolean isSelfModifying(Set<String> packagesModified) {
+        return packagesModified.size() == 1 && getCallingPackages().contains(
+                Iterables.getOnlyElement(packagesModified));
     }
 
     private void notifyVoicemailChange(Uri notificationUri, Set<String> modifiedPackages,

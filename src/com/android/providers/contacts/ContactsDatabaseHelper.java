@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -117,7 +118,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   700-799 Jelly Bean
      *   800-899 Kitkat
      *   900-999 Lollipop
-     *   1000-1100 M
+     *   1000-1099 M
      * </pre>
      */
     static final int DATABASE_VERSION = 1005;
@@ -1540,13 +1541,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Voicemails.SOURCE_DATA + " TEXT," +
                 Voicemails.SOURCE_PACKAGE + " TEXT," +
                 Voicemails.TRANSCRIPTION + " TEXT," +
-                Voicemails.STATE + " INTEGER" +
+                Voicemails.STATE + " INTEGER," +
+                Voicemails.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
+                Voicemails.DELETED + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
         // Voicemail source status table.
         db.execSQL("CREATE TABLE " + Tables.VOICEMAIL_STATUS + " (" +
                 VoicemailContract.Status._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 VoicemailContract.Status.SOURCE_PACKAGE + " TEXT UNIQUE NOT NULL," +
+                VoicemailContract.Status.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
+                VoicemailContract.Status.PHONE_ACCOUNT_ID + " TEXT," +
                 VoicemailContract.Status.SETTINGS_URI + " TEXT," +
                 VoicemailContract.Status.VOICEMAIL_ACCESS_URI + " TEXT," +
                 VoicemailContract.Status.CONFIGURATION_STATE + " INTEGER," +
@@ -2890,6 +2895,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1005) {
             upgradeToVersion1005(db);
             oldVersion = 1005;
+        }
+
+        if (oldVersion < 1000) {
+            upgradeToVersion1000(db);
+            oldVersion = 1000;
+        }
+
+        if (oldVersion < 1001) {
+            upgradeToVersion1001(db);
+            oldVersion = 1001;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4395,6 +4410,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public void upgradeToVersion1005(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD photo_uri TEXT;");
+        // Add multi-sim fields
+        db.execSQL("ALTER TABLE voicemail_status ADD phone_account_component_name TEXT;");
+        db.execSQL("ALTER TABLE voicemail_status ADD phone_account_id TEXT;");
+
+        // For use by the sync adapter
+        db.execSQL("ALTER TABLE calls ADD dirty INTEGER NOT NULL DEFAULT 0;");
+        db.execSQL("ALTER TABLE calls ADD deleted INTEGER NOT NULL DEFAULT 0;");
     }
 
     public String extractHandleFromEmailAddress(String email) {

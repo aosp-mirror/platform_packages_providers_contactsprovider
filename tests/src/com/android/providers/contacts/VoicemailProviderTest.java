@@ -58,7 +58,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             Calls.COUNTRY_ISO
     };
     /** Total number of columns exposed by voicemail provider. */
-    private static final int NUM_VOICEMAIL_FIELDS = 14;
+    private static final int NUM_VOICEMAIL_FIELDS = 16;
 
     @Override
     protected void setUp() throws Exception {
@@ -118,6 +118,28 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
+    }
+
+    public void testUpdateOwnPackageVoicemail_NotDirty() {
+        final Uri uri = mResolver.insert(voicemailUri(), getTestVoicemailValues());
+        mResolver.update(uri, new ContentValues(), null, null);
+
+        // Updating a package's own voicemail should not make the voicemail dirty.
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "0");
+        assertStoredValues(uri, values);
+    }
+
+    public void testUpdateOwnPackageVoicemail_RemovesDirtyStatus() {
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "1");
+        final Uri uri = mResolver.insert(voicemailUri(), getTestVoicemailValues());
+
+        mResolver.update(uri, new ContentValues(), null, null);
+        // At this point, the voicemail should be set back to not dirty.
+        ContentValues newValues = getTestVoicemailValues();
+        newValues.put(Voicemails.DIRTY, "0");
+        assertStoredValues(uri, newValues);
     }
 
     public void testDelete() {
@@ -240,8 +262,10 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             }
         });
 
-        // If we have the manage voicemail permission, we should be able to both update and delete
-        // voicemails from all packages
+        // If we have the manage voicemail permission, we should be able to both update voicemails
+        // from all packages. However, when updating or deleting a voicemail from a different
+        // package, the "dirty" flag must be set on updates and "dirty" and "delete" flags must be
+        // set on deletion.
         setUpForNoPermission();
         mActor.addPermissions(WRITE_VOICEMAIL_PERMISSION);
         mResolver.update(anotherVoicemail, getTestVoicemailValues(), null, null);
@@ -254,10 +278,15 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
         mResolver.delete(anotherVoicemail, null, null);
 
-        // Now add the read voicemail permission temporarily to verify that the delete actually
-        // worked
+        // Now add the read voicemail permission temporarily to verify that the delete flag is set.
         mActor.addPermissions(READ_VOICEMAIL_PERMISSION);
-        assertEquals(0, getCount(anotherVoicemail, null, null));
+
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "1");
+        values.put(Voicemails.DELETED, "1");
+
+        assertEquals(1, getCount(anotherVoicemail, null, null));
+        assertStoredValues(anotherVoicemail, values);
     }
 
     private Uri withSourcePackageParam(Uri uri) {

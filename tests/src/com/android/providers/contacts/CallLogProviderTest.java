@@ -60,7 +60,9 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.MIME_TYPE,
             Voicemails.SOURCE_PACKAGE,
             Voicemails.SOURCE_DATA,
-            Voicemails.STATE};
+            Voicemails.STATE,
+            Voicemails.DIRTY,
+            Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
     private static final int NUM_CALLLOG_FIELDS = 25;
 

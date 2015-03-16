@@ -98,6 +98,11 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
             public File getDir(String name, int mode) {
                 return getTestDirectory();
             }
+
+            @Override
+            public PackageManager getPackageManager() {
+                return new MockPackageManager(mActor.getProviderContext().getPackageName());
+            }
         };
     }
 
@@ -145,6 +150,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
     private interface VvmProviderCalls {
         public void sendOrderedBroadcast(Intent intent, String receiverPermission);
         public File getDir(String name, int mode);
+        public PackageManager getPackageManager();
     }
 
     public static class TestVoicemailProvider extends VoicemailContentProvider {
@@ -171,7 +177,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
                 }
                 @Override
                 public PackageManager getPackageManager() {
-                    return new MockPackageManager("com.test.package1", "com.test.package2");
+                    return mDelegate.getPackageManager();
                 }
             };
         }
