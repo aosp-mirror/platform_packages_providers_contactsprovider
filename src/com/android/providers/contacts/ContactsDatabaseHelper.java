@@ -121,7 +121,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1005;
+    static final int DATABASE_VERSION = 1006;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -413,6 +413,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONCRETE_ACCOUNT_ID = Tables.RAW_CONTACTS + "." + ACCOUNT_ID;
         public static final String CONCRETE_SOURCE_ID =
                 Tables.RAW_CONTACTS + "." + RawContacts.SOURCE_ID;
+        public static final String CONCRETE_BACKUP_ID =
+                Tables.RAW_CONTACTS + "." + RawContacts.BACKUP_ID;
         public static final String CONCRETE_VERSION =
                 Tables.RAW_CONTACTS + "." + RawContacts.VERSION;
         public static final String CONCRETE_DIRTY =
@@ -1884,6 +1886,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             + AccountsColumns.CONCRETE_DATA_SET + " END) AS "
                                 + RawContacts.ACCOUNT_TYPE_AND_DATA_SET + ","
                 + RawContactsColumns.CONCRETE_SOURCE_ID + " AS " + RawContacts.SOURCE_ID + ","
+                + RawContactsColumns.CONCRETE_BACKUP_ID + " AS " + RawContacts.BACKUP_ID + ","
                 + RawContactsColumns.CONCRETE_VERSION + " AS " + RawContacts.VERSION + ","
                 + RawContactsColumns.CONCRETE_DIRTY + " AS " + RawContacts.DIRTY + ","
                 + RawContactsColumns.CONCRETE_SYNC1 + " AS " + RawContacts.SYNC1 + ","
@@ -2006,7 +2009,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE  + ", "
                 + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
                 + rawContactOptionColumns + ", "
-                + RawContacts.BACKUP_ID + ", "
                 + syncColumns
                 + " FROM " + Tables.RAW_CONTACTS
                 + " JOIN " + Tables.ACCOUNTS + " ON ("
@@ -2895,6 +2897,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1005) {
             upgradeToVersion1005(db);
             oldVersion = 1005;
+        }
+
+        if (oldVersion < 1006) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1006;
         }
 
         if (oldVersion < 1000) {

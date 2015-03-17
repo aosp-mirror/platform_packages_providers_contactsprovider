@@ -669,6 +669,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(RawContacts.ACCOUNT_TYPE_AND_DATA_SET)
             .add(RawContacts.DIRTY)
             .add(RawContacts.SOURCE_ID)
+            .add(RawContacts.BACKUP_ID)
             .add(RawContacts.VERSION)
             .build();
 
@@ -872,6 +873,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final ProjectionMap sDataProjectionMap = ProjectionMap.builder()
             .add(Data._ID)
             .add(Data.RAW_CONTACT_ID)
+            .add(Data.HASH_ID)
             .add(Data.CONTACT_ID)
             .add(Data.NAME_RAW_CONTACT_ID)
             .add(RawContacts.RAW_CONTACT_IS_USER_PROFILE)
