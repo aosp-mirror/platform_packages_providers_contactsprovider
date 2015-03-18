@@ -6712,6 +6712,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     case Data.CUSTOM_RINGTONE:
                         builder.add(null);
                         break;
+                    case Contacts.LOOKUP_KEY:
+                        final String lookupKey = original.getString(originalColumnIndex);
+                        if (TextUtils.isEmpty(lookupKey)) {
+                            builder.add(null);
+                        } else {
+                            builder.add(Contacts.ENTERPRISE_CONTACT_LOOKUP_PREFIX + lookupKey);
+                        }
+                        break;
                     default:
                         if (outputColumnName.equals(contactIdColumnName)) {
                             // This will be _id if it's PhoneLookup, contacts_id
