@@ -2024,7 +2024,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         rewritten.moveToNext();
         column = 0;
         assertEquals(1000000010L, rewritten.getLong(column++)); // With offset.
-        assertEquals("key", rewritten.getString(column++));
+        assertEquals("c-key", rewritten.getString(column++));
         assertEquals("name", rewritten.getString(column++));
         assertEquals(123, rewritten.getInt(column++));
         assertEquals(456, rewritten.getInt(column++));
