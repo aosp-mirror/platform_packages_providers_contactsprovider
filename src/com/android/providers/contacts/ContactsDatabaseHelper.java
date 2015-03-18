@@ -121,7 +121,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1006;
+    static final int DATABASE_VERSION = 1007;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2904,14 +2904,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1006;
         }
 
-        if (oldVersion < 1000) {
-            upgradeToVersion1000(db);
-            oldVersion = 1000;
-        }
-
-        if (oldVersion < 1001) {
-            upgradeToVersion1001(db);
-            oldVersion = 1001;
+        if (oldVersion < 1007) {
+            upgradeToVersion1007(db);
+            oldVersion = 1007;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4417,14 +4412,28 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public void upgradeToVersion1005(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD photo_uri TEXT;");
-        // Add multi-sim fields
-        db.execSQL("ALTER TABLE voicemail_status ADD phone_account_component_name TEXT;");
-        db.execSQL("ALTER TABLE voicemail_status ADD phone_account_id TEXT;");
-
-        // For use by the sync adapter
-        db.execSQL("ALTER TABLE calls ADD dirty INTEGER NOT NULL DEFAULT 0;");
-        db.execSQL("ALTER TABLE calls ADD deleted INTEGER NOT NULL DEFAULT 0;");
     }
+
+    /**
+     * The try/catch pattern exists because some devices have the upgrade and some do not. This is
+     * because the below updates were merged into version 1005 after some devices had already
+     * upgraded to version 1005 and hence did not receive the below upgrades.
+     */
+    public void upgradeToVersion1007(SQLiteDatabase db) {
+        try {
+            // Add multi-sim fields
+            db.execSQL("ALTER TABLE voicemail_status ADD phone_account_component_name TEXT;");
+            db.execSQL("ALTER TABLE voicemail_status ADD phone_account_id TEXT;");
+
+            // For use by the sync adapter
+            db.execSQL("ALTER TABLE calls ADD dirty INTEGER NOT NULL DEFAULT 0;");
+            db.execSQL("ALTER TABLE calls ADD deleted INTEGER NOT NULL DEFAULT 0;");
+        } catch (SQLiteException e) {
+            // These columns already exist. Do nothing.
+            // Log verbose because this should be the majority case.
+            Log.v(TAG, "Version 1007: Columns already exist, skipping upgrade steps.");
+        }
+  }
 
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
