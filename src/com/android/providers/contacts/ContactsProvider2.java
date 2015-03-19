@@ -368,6 +368,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int SEARCH_SHORTCUT = 12002;
 
     private static final int RAW_CONTACT_ENTITIES = 15001;
+    private static final int RAW_CONTACT_ENTITIES_CORP = 15002;
 
     private static final int PROVIDER_STATUS = 16001;
 
@@ -1201,6 +1202,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 RAW_CONTACTS_ID_STREAM_ITEMS_ID);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contact_entities", RAW_CONTACT_ENTITIES);
+        matcher.addURI(ContactsContract.AUTHORITY, "raw_contact_entities_corp", RAW_CONTACT_ENTITIES_CORP);
 
         matcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
         matcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
@@ -6377,6 +6379,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_RAW_CONTACT_ENTITIES: {
                 setTablesAndProjectionMapForRawEntities(qb, uri);
                 break;
+            }
+            case RAW_CONTACT_ENTITIES_CORP: {
+                final int corpUserId = UserUtils.getCorpUserId(getContext());
+                if (corpUserId < 0) {
+                    // No Corp user or policy not allowed, return empty cursor
+                    final String[] outputProjection = (projection != null) ? projection
+                            : sRawEntityProjectionMap.getColumnNames();
+                    return new MatrixCursor(outputProjection);
+                }
+                final Uri remoteUri = maybeAddUserId(RawContactsEntity.CONTENT_URI, corpUserId);
+                return getContext().getContentResolver().query(remoteUri, projection, selection,
+                        selectionArgs, sortOrder);
             }
 
             case RAW_CONTACT_ID_ENTITY: {

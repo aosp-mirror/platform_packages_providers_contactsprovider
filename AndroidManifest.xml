@@ -50,6 +50,9 @@
             <path-permission
                     android:pathPrefix="/data_enterprise"
                     android:readPermission="android.permission.INTERACT_ACROSS_USERS" />
+            <path-permission
+                android:pathPattern="/raw_contact_entities_corp"
+                android:readPermission="android.permission.INTERACT_ACROSS_USERS" />
             <grant-uri-permission android:pathPattern=".*" />
         </provider>
 
