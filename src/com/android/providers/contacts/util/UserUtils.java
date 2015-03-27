@@ -45,10 +45,13 @@ public final class UserUtils {
     }
 
     /**
-     * @return the user ID of the corp user that is linked to the current user, if any.
-     * If there's no such user or cross-user contacts access is disallowed by policy, returns -1.
+     * @param enforceCallerIdCheck True if we want to enforce cross profile
+     *            caller-id device policy.
+     * @return the user ID of the corp user that is linked to the current user,
+     *         if any. If there's no such user or cross-user contacts access is
+     *         disallowed by policy, returns -1.
      */
-    public static int getCorpUserId(Context context) {
+    public static int getCorpUserId(Context context, boolean enforceCallerIdCheck) {
         final UserManager um = getUserManager(context);
         if (um == null) {
             Log.e(TAG, "No user manager service found");
@@ -75,7 +78,8 @@ public final class UserUtils {
                 // Check if profile is blocking calling id.
                 // TODO DevicePolicyManager is not mockable -- the constructor is private.
                 // Test it somehow.
-                if (getDevicePolicyManager(context)
+                if (enforceCallerIdCheck
+                        && getDevicePolicyManager(context)
                         .getCrossProfileCallerIdDisabled(ui.getUserHandle())) {
                     if (VERBOSE_LOGGING) {
                         Log.v(TAG, "Enterprise caller-id disabled for user " + ui.id);
