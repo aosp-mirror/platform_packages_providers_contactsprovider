@@ -135,7 +135,8 @@ public class RawContactMatcher {
      * Populates the cells of the score matrix and score span matrix
      * corresponding to the {@code candidateNameType} and {@code nameType}.
      */
-    private static void setScoreRange(int candidateNameType, int nameType, int scoreFrom, int scoreTo) {
+    private static void setScoreRange(int candidateNameType, int nameType, int scoreFrom,
+            int scoreTo) {
         int index = nameType * NameLookupType.TYPE_COUNT + candidateNameType;
         sMinScore[index] = scoreFrom;
         sMaxScore[index] = scoreTo;
@@ -160,23 +161,29 @@ public class RawContactMatcher {
     }
 
     /**
-     * Captures the max score and match count for a specific contact.  Used in an
-     * contactId - MatchScore map.
+     * Captures the max score and match count for a specific raw contact. Used in an
+     * rawContactId - MatchScore map.
      */
     public static class MatchScore implements Comparable<MatchScore> {
+        private long mRawContactId;
         private long mContactId;
+        private long mAccountId;
         private boolean mKeepIn;
         private boolean mKeepOut;
         private int mPrimaryScore;
         private int mSecondaryScore;
         private int mMatchCount;
 
-        public MatchScore(long contactId) {
+        public MatchScore(long rawContactId, long contactId, long accountId) {
+            this.mRawContactId = rawContactId;
             this.mContactId = contactId;
+            this.mAccountId = accountId;
         }
 
-        public void reset(long contactId) {
+        public void reset(long rawContactId, long contactId, long accountId) {
+            this.mRawContactId = rawContactId;
             this.mContactId = contactId;
+            this.mAccountId = accountId;
             mKeepIn = false;
             mKeepOut = false;
             mPrimaryScore = 0;
@@ -184,8 +191,16 @@ public class RawContactMatcher {
             mMatchCount = 0;
         }
 
+        public long getRawContactId() {
+            return mRawContactId;
+        }
+
         public long getContactId() {
             return mContactId;
+        }
+
+        public long getAccountId() {
+            return mAccountId;
         }
 
         public void updatePrimaryScore(int score) {
@@ -236,8 +251,8 @@ public class RawContactMatcher {
 
         @Override
         public String toString() {
-            return mContactId + ": " + mPrimaryScore + "/" + mSecondaryScore + "(" + mMatchCount
-                    + ")";
+            return mRawContactId + "/" + mContactId + "/" + mAccountId + ": " + mPrimaryScore +
+                    "/" + mSecondaryScore + "(" + mMatchCount + ")";
         }
     }
 
@@ -248,18 +263,18 @@ public class RawContactMatcher {
     private final NameDistance mNameDistanceConservative = new NameDistance();
     private final NameDistance mNameDistanceApproximate = new NameDistance(MAX_MATCHED_NAME_LENGTH);
 
-    private MatchScore getMatchingScore(long contactId) {
-        MatchScore matchingScore = mScores.get(contactId);
+    private MatchScore getMatchingScore(long rawContactId, long contactId, long accountId) {
+        MatchScore matchingScore = mScores.get(rawContactId);
         if (matchingScore == null) {
             if (mScoreList.size() > mScoreCount) {
                 matchingScore = mScoreList.get(mScoreCount);
-                matchingScore.reset(contactId);
+                matchingScore.reset(rawContactId, contactId, accountId);
             } else {
-                matchingScore = new MatchScore(contactId);
+                matchingScore = new MatchScore(rawContactId, contactId, accountId);
                 mScoreList.add(matchingScore);
             }
             mScoreCount++;
-            mScores.put(contactId, matchingScore);
+            mScores.put(rawContactId, matchingScore);
         }
         return matchingScore;
     }
@@ -267,8 +282,8 @@ public class RawContactMatcher {
     /**
      * Marks the contact as a full match, because we found an Identity match
      */
-    public void matchIdentity(long contactId) {
-        updatePrimaryScore(contactId, MAX_SCORE);
+    public void matchIdentity(long rawContactId, long contactId, long accountId) {
+        updatePrimaryScore(rawContactId, contactId, accountId, MAX_SCORE);
     }
 
     /**
@@ -278,15 +293,15 @@ public class RawContactMatcher {
      * of name we found and, if the match is approximate, the distance between the candidate and
      * actual name.
      */
-    public void matchName(long contactId, int candidateNameType, String candidateName,
-            int nameType, String name, int algorithm) {
+    public void matchName(long rawContactId, long contactId, long accountId, int
+            candidateNameType, String candidateName, int nameType, String name, int algorithm) {
         int maxScore = getMaxScore(candidateNameType, nameType);
         if (maxScore == 0) {
             return;
         }
 
         if (candidateName.equals(name)) {
-            updatePrimaryScore(contactId, maxScore);
+            updatePrimaryScore(rawContactId, contactId, accountId, maxScore);
             return;
         }
 
@@ -326,107 +341,41 @@ public class RawContactMatcher {
             score = 0;
         }
 
-        updatePrimaryScore(contactId, score);
+        updatePrimaryScore(rawContactId, contactId, accountId, score);
     }
 
-    public void updateScoreWithPhoneNumberMatch(long contactId) {
-        updateSecondaryScore(contactId, PHONE_MATCH_SCORE);
+    public void updateScoreWithPhoneNumberMatch(long rawContactId, long contactId, long accountId) {
+        updateSecondaryScore(rawContactId, contactId, accountId, PHONE_MATCH_SCORE);
     }
 
-    public void updateScoreWithEmailMatch(long contactId) {
-        updateSecondaryScore(contactId, EMAIL_MATCH_SCORE);
+    public void updateScoreWithEmailMatch(long rawContactId, long contactId, long accountId) {
+        updateSecondaryScore(rawContactId, contactId, accountId, EMAIL_MATCH_SCORE);
     }
 
-    public void updateScoreWithNicknameMatch(long contactId) {
-        updateSecondaryScore(contactId, NICKNAME_MATCH_SCORE);
+    public void updateScoreWithNicknameMatch(long rawContactId, long contactId, long accountId) {
+        updateSecondaryScore(rawContactId, contactId, accountId, NICKNAME_MATCH_SCORE);
     }
 
-    private void updatePrimaryScore(long contactId, int score) {
-        getMatchingScore(contactId).updatePrimaryScore(score);
+    private void updatePrimaryScore(long rawContactId, long contactId, long accountId, int score) {
+        getMatchingScore(rawContactId, contactId, accountId).updatePrimaryScore(score);
     }
 
-    private void updateSecondaryScore(long contactId, int score) {
-        getMatchingScore(contactId).updateSecondaryScore(score);
+    private void updateSecondaryScore(long rawContactId, long contactId, long accountId,
+            int score) {
+        getMatchingScore(rawContactId, contactId, accountId).updateSecondaryScore(score);
     }
 
-    public void keepIn(long contactId) {
-        getMatchingScore(contactId).keepIn();
+    public void keepIn(long rawContactId, long contactId, long accountId) {
+        getMatchingScore(rawContactId, contactId, accountId).keepIn();
     }
 
-    public void keepOut(long contactId) {
-        getMatchingScore(contactId).keepOut();
+    public void keepOut(long rawContactId, long contactId, long accountId) {
+        getMatchingScore(rawContactId, contactId, accountId).keepOut();
     }
 
     public void clear() {
         mScores.clear();
         mScoreCount = 0;
-    }
-
-    /**
-     * Returns a list of IDs for contacts that are matched on secondary data elements
-     * (phone number, email address, nickname). We still need to obtain the approximate
-     * primary score for those contacts to determine if any of them should be aggregated.
-     * <p>
-     * May return null.
-     */
-    public List<Long> prepareSecondaryMatchCandidates(int threshold) {
-        ArrayList<Long> contactIds = null;
-
-        for (int i = 0; i < mScoreCount; i++) {
-            MatchScore score = mScoreList.get(i);
-            if (score.mKeepOut) {
-                continue;
-            }
-
-            int s = score.mSecondaryScore;
-            if (s >= threshold) {
-                if (contactIds == null) {
-                    contactIds = new ArrayList<Long>();
-                }
-                contactIds.add(score.mContactId);
-            }
-            score.mPrimaryScore = NO_DATA_SCORE;
-        }
-        return contactIds;
-    }
-
-    /**
-     * Returns the contactId with the best match score over the specified threshold or -1
-     * if no such contact is found.  If multiple contacts are found, and
-     * {@code allowMultipleMatches} is {@code true}, it returns the first one found, but if
-     * {@code allowMultipleMatches} is {@code false} it'll return {@link #MULTIPLE_MATCHES}.
-     */
-    public long pickBestMatch(int threshold, boolean allowMultipleMatches) {
-        long contactId = -1;
-        int maxScore = 0;
-        for (int i = 0; i < mScoreCount; i++) {
-            MatchScore score = mScoreList.get(i);
-            if (score.mKeepOut) {
-                continue;
-            }
-
-            if (score.mKeepIn) {
-                return score.mContactId;
-            }
-
-            int s = score.mPrimaryScore;
-            if (s == NO_DATA_SCORE) {
-                s = score.mSecondaryScore;
-            }
-
-            if (s >= threshold) {
-                if (contactId != -1 && !allowMultipleMatches) {
-                    return MULTIPLE_MATCHES;
-                }
-                // In order to make it stable, let's jut pick the one with the lowest ID
-                // if multiple candidates are found.
-                if ((s > maxScore) || ((s == maxScore) && (contactId > score.mContactId))) {
-                    contactId = score.mContactId;
-                    maxScore = s;
-                }
-            }
-        }
-        return contactId;
     }
 
     /**
