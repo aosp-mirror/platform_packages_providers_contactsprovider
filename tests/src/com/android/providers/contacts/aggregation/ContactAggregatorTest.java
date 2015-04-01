@@ -1765,44 +1765,6 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         assertTrue(queryContactId(newId) > 0);
     }
 
-    public void testFindConnectedRawContacts() {
-        Set<Long> rawContactIdSet = new HashSet<Long>();
-        rawContactIdSet.addAll(Arrays.asList(1l, 2l, 3l, 4l, 5l, 6l, 7l, 8l, 9l));
-
-        Multimap<Long, Long> matchingrawIdPairs = HashMultimap.create();
-        matchingrawIdPairs.put(1l, 2l);
-        matchingrawIdPairs.put(2l, 1l);
-
-        matchingrawIdPairs.put(1l, 7l);
-        matchingrawIdPairs.put(7l, 1l);
-
-        matchingrawIdPairs.put(2l, 3l);
-        matchingrawIdPairs.put(3l, 2l);
-
-        matchingrawIdPairs.put(2l, 8l);
-        matchingrawIdPairs.put(8l, 2l);
-
-        matchingrawIdPairs.put(8l, 9l);
-        matchingrawIdPairs.put(9l, 8l);
-
-        matchingrawIdPairs.put(4l, 5l);
-        matchingrawIdPairs.put(5l, 4l);
-
-        Set<Set<Long>> actual = ContactAggregator.findConnectedComponents(rawContactIdSet,
-                matchingrawIdPairs);
-
-        Set<Set<Long>> expected = new HashSet<Set<Long>>();
-        Set<Long> result1 = new HashSet<Long>();
-        result1.addAll(Arrays.asList(1l, 2l, 3l, 7l, 8l, 9l));
-        Set<Long> result2 = new HashSet<Long>();
-        result2.addAll(Arrays.asList(4l, 5l));
-        Set<Long> result3 = new HashSet<Long>();
-        result3.addAll(Arrays.asList(6l));
-        expected.addAll(Arrays.asList(result1, result2, result3));
-
-        assertEquals(expected, actual);
-    }
-
     private void assertSuggestions(long contactId, long... suggestions) {
         final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,

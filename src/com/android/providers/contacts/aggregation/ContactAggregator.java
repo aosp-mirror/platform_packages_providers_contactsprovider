@@ -63,6 +63,7 @@ import com.android.providers.contacts.PhotoPriorityResolver;
 import com.android.providers.contacts.ReorderingCursorWrapper;
 import com.android.providers.contacts.TransactionContext;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
+import com.android.providers.contacts.aggregation.util.ContactAggregatorHelper;
 import com.android.providers.contacts.aggregation.util.ContactMatcher;
 import com.android.providers.contacts.aggregation.util.ContactMatcher.MatchScore;
 import com.android.providers.contacts.database.ContactsTableUtil;
@@ -1206,37 +1207,7 @@ public class ContactAggregator {
         findIdPairs(db, buildPhoneMatchingSql(rawContactIds, rawContactIds,  /* countOnly =*/false),
                 matchingRawIdPairs);
 
-        return findConnectedComponents(rawContactIdSet, matchingRawIdPairs);
-    }
-
-    /**
-     * Given a set of raw contact ids {@code rawContactIdSet} and the connection among them
-     * {@code matchingRawIdPairs}, find the connected components.
-     */
-    @VisibleForTesting
-    static Set<Set<Long>> findConnectedComponents(Set<Long> rawContactIdSet, Multimap<Long,
-            Long> matchingRawIdPairs) {
-        Set<Set<Long>> connectedRawContactSets = new HashSet<Set<Long>>();
-        Set<Long> visited = new HashSet<Long>();
-        for (Long id : rawContactIdSet) {
-            if (!visited.contains(id)) {
-                Set<Long> set = new HashSet<Long>();
-                findConnectedComponentForRawContact(matchingRawIdPairs, visited, id, set);
-                connectedRawContactSets.add(set);
-            }
-        }
-        return connectedRawContactSets;
-    }
-
-    private static void findConnectedComponentForRawContact(Multimap<Long, Long> connections,
-            Set<Long> visited, Long rawContactId, Set<Long> results) {
-        visited.add(rawContactId);
-        results.add(rawContactId);
-        for (long match : connections.get(rawContactId)) {
-            if (!visited.contains(match)) {
-                findConnectedComponentForRawContact(connections, visited, match, results);
-            }
-        }
+        return ContactAggregatorHelper.findConnectedComponents(rawContactIdSet, matchingRawIdPairs);
     }
 
     /**

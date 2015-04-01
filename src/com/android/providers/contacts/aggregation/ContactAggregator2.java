@@ -67,6 +67,7 @@ import com.android.providers.contacts.PhotoPriorityResolver;
 import com.android.providers.contacts.ReorderingCursorWrapper;
 import com.android.providers.contacts.TransactionContext;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
+import com.android.providers.contacts.aggregation.util.ContactAggregatorHelper;
 import com.android.providers.contacts.aggregation.util.RawContactMatcher;
 import com.android.providers.contacts.aggregation.util.RawContactMatcher.MatchScore;
 import com.android.providers.contacts.aggregation.util.RawContactMatchingCandidates;
@@ -839,7 +840,7 @@ public class ContactAggregator2 {
         // Keep doing the following until no new raw contact candidate is found.
         // TODO: may need to cache the matching score to improve performance.
         while (!newIds.isEmpty()) {
-            final Set<Long> tmpIdSet = new HashSet<Long>();
+            final Set<Long> tmpIdSet = new HashSet<>();
             for (long rId : newIds) {
                 final RawContactMatcher rMatcher = new RawContactMatcher();
                 updateMatchScoresForSuggestionsBasedOnDataMatches(db, rId, new MatchCandidateList(),
@@ -974,15 +975,18 @@ public class ContactAggregator2 {
                 RawContactMatchingSelectionStatement.SELECT_ID + sql;
     }
 
-    private String buildExceptionMatchingSql(String rawContactIdSet1, String rawContactIdSet2) {
-        return "SELECT " + AggregationExceptions.RAW_CONTACT_ID1 + ", " +
-                AggregationExceptions.RAW_CONTACT_ID2 +
+    private String buildExceptionMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
+            int aggregationType, boolean countOnly) {
+        final String idPairSelection =  "SELECT " + AggregationExceptions.RAW_CONTACT_ID1 + ", " +
+                AggregationExceptions.RAW_CONTACT_ID2;
+        final String sql =
                 " FROM " + Tables.AGGREGATION_EXCEPTIONS +
                 " WHERE " + AggregationExceptions.RAW_CONTACT_ID1 + " IN (" +
                         rawContactIdSet1 + ")" +
                 " AND " + AggregationExceptions.RAW_CONTACT_ID2 + " IN (" + rawContactIdSet2 + ")" +
-                " AND " + AggregationExceptions.TYPE + "=" +
-                        AggregationExceptions.TYPE_KEEP_TOGETHER ;
+                " AND " + AggregationExceptions.TYPE + "=" + aggregationType;
+        return (countOnly) ? RawContactMatchingSelectionStatement.SELECT_COUNT + sql :
+                idPairSelection + sql;
     }
 
     private boolean isFirstColumnGreaterThanZero(SQLiteDatabase db, String query) {
@@ -1004,29 +1008,30 @@ public class ContactAggregator2 {
         // Find the connected component based on the aggregation exceptions or
         // identity/email/phone matching for all the raw contacts of [contactId] and the give
         // raw contact.
-        final Set<Long> allIds = new HashSet<Long>();
+        final Set<Long> allIds = new HashSet<>();
         allIds.add(rawContactId);
         allIds.addAll(matchingCandidates.getRawContactIdSet());
         final Set<Set<Long>> connectedRawContactSets = findConnectedRawContacts(db, allIds);
 
         final Map<Long, Long> rawContactsToAccounts = matchingCandidates.getRawContactToAccount();
         rawContactsToAccounts.put(rawContactId, accountId);
-        mergeComponentsWithDisjointAccounts(connectedRawContactSets, rawContactsToAccounts);
-        breakComponentsByExceptions(connectedRawContactSets, matchingCandidates);
+        ContactAggregatorHelper.mergeComponentsWithDisjointAccounts(connectedRawContactSets,
+                rawContactsToAccounts);
+        breakComponentsByExceptions(db, connectedRawContactSets);
 
         // Create new contact for each connected component. Use the first reusable contactId if
         // possible. If no reusable contactId found, create new contact for the connected component.
         // Update aggregate data for all the contactIds touched by this connected component,
         for (Set<Long> connectedRawContactIds : connectedRawContactSets) {
             Long contactId = null;
-            Set<Long> cidsNeedToBeUpdated = new HashSet<Long>();
+            Set<Long> cidsNeedToBeUpdated = new HashSet<>();
             if (connectedRawContactIds.contains(rawContactId)) {
                 // If there is no other raw contacts aggregated with the given raw contact currently
                 // or all the raw contacts in [currentCidForRawContact] are still in the same
                 // connected component, we might as well reuse it.
                 if (currentCidForRawContact != 0 &&
                         (currentContactContentsCount == 0) ||
-                        canBeReused(currentCidForRawContact,connectedRawContactIds)) {
+                        canBeReused(db, currentCidForRawContact, connectedRawContactIds)) {
                     contactId = currentCidForRawContact;
                 } else if (currentCidForRawContact != 0){
                     cidsNeedToBeUpdated.add(currentCidForRawContact);
@@ -1036,7 +1041,7 @@ public class ContactAggregator2 {
                 for (Long connectedRawContactId : connectedRawContactIds) {
                     Long currentContactId = matchingCandidates.getContactId(connectedRawContactId);
                     if (!foundContactId && currentContactId != null &&
-                            canBeReused(currentContactId, connectedRawContactIds)) {
+                            canBeReused(db, currentContactId, connectedRawContactIds)) {
                         contactId = currentContactId;
                         foundContactId = true;
                     } else {
@@ -1071,26 +1076,48 @@ public class ContactAggregator2 {
      * connectedRawContactIds. If connectedRawContactIds set contains all the raw contacts
      * currently aggregated under contactId, return true; Otherwise, return false.
      */
-    private boolean canBeReused(Long contactId, Set<Long> connectedRawContactIds) {
-        throw new UnsupportedOperationException();
+    private boolean canBeReused(SQLiteDatabase db, Long contactId,
+            Set<Long> connectedRawContactIds) {
+        final String sql = "SELECT " + RawContactsColumns.CONCRETE_ID + " FROM " +
+                Tables.RAW_CONTACTS + " WHERE " + RawContacts.CONTACT_ID + "=? AND " +
+                RawContacts.DELETED + "=0";
+        mSelectionArgs1[0] = String.valueOf(contactId);
+        final Cursor cursor = db.rawQuery(sql, mSelectionArgs1);
+        try {
+            cursor.moveToPosition(-1);
+            while (cursor.moveToNext()) {
+                if (!connectedRawContactIds.contains(cursor.getLong(0))) {
+                    return false;
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+        return true;
     }
 
     /**
      * Separate all the raw_contacts which has "SEPARATE" aggregation exception to another
      * raw_contacts in the same component.
      */
-    private void breakComponentsByExceptions(Set<Set<Long>> connectedRawContactSets,
-            RawContactMatchingCandidates matchingCandidates) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * If two connected components have disjoint accounts, merge them.
-     * If there is any uncertainty, keep them separate.
-     */
-    private void mergeComponentsWithDisjointAccounts(Set<Set<Long>> connectedRawContactSets,
-            Map<Long, Long> matchingCandidates) {
-        throw new UnsupportedOperationException();
+    private void breakComponentsByExceptions(SQLiteDatabase db,
+            Set<Set<Long>> connectedRawContacts) {
+        final Set<Set<Long>> tmpSets = new HashSet<>(connectedRawContacts);
+        for (Set<Long> component : tmpSets) {
+            final String rawContacts = TextUtils.join(",", component);
+            // If "SEPARATE" exception is found inside an connected component [component],
+            // remove the [component] from [connectedRawContacts], and create a new connected
+            // component for each raw contact of [component] and add to [connectedRawContacts].
+            if (isFirstColumnGreaterThanZero(db, buildExceptionMatchingSql(rawContacts, rawContacts,
+                    AggregationExceptions.TYPE_KEEP_SEPARATE, /* countOnly =*/true))) {
+                connectedRawContacts.remove(component);
+                for (Long rId : component) {
+                    final Set<Long> s= new HashSet<>();
+                    s.add(rId);
+                    connectedRawContacts.add(s);
+                }
+            }
+        }
     }
 
     /**
@@ -1101,7 +1128,8 @@ public class ContactAggregator2 {
         // Connections between two raw contacts
        final Multimap<Long, Long> matchingRawIdPairs = HashMultimap.create();
         String rawContactIds = TextUtils.join(",", rawContactIdSet);
-        findIdPairs(db, buildExceptionMatchingSql(rawContactIds, rawContactIds),
+        findIdPairs(db, buildExceptionMatchingSql(rawContactIds, rawContactIds,
+                AggregationExceptions.TYPE_KEEP_TOGETHER,  /* countOnly =*/false),
                 matchingRawIdPairs);
         findIdPairs(db, buildIdentityMatchingSql(rawContactIds, rawContactIds,
                 /* isIdentityMatching =*/ true, /* countOnly =*/false), matchingRawIdPairs);
@@ -1110,37 +1138,7 @@ public class ContactAggregator2 {
         findIdPairs(db, buildPhoneMatchingSql(rawContactIds, rawContactIds,  /* countOnly =*/false),
                 matchingRawIdPairs);
 
-        return findConnectedComponents(rawContactIdSet, matchingRawIdPairs);
-    }
-
-    /**
-     * Given a set of raw contact ids {@code rawContactIdSet} and the connection among them
-     * {@code matchingRawIdPairs}, find the connected components.
-     */
-    @VisibleForTesting
-    static Set<Set<Long>> findConnectedComponents(Set<Long> rawContactIdSet, Multimap<Long,
-            Long> matchingRawIdPairs) {
-        Set<Set<Long>> connectedRawContactSets = new HashSet<Set<Long>>();
-        Set<Long> visited = new HashSet<Long>();
-        for (Long id : rawContactIdSet) {
-            if (!visited.contains(id)) {
-                Set<Long> set = new HashSet<Long>();
-                findConnectedComponentForRawContact(matchingRawIdPairs, visited, id, set);
-                connectedRawContactSets.add(set);
-            }
-        }
-        return connectedRawContactSets;
-    }
-
-    private static void findConnectedComponentForRawContact(Multimap<Long, Long> connections,
-            Set<Long> visited, Long rawContactId, Set<Long> results) {
-        visited.add(rawContactId);
-        results.add(rawContactId);
-        for (long match : connections.get(rawContactId)) {
-            if (!visited.contains(match)) {
-                findConnectedComponentForRawContact(connections, visited, match, results);
-            }
-        }
+        return ContactAggregatorHelper.findConnectedComponents(rawContactIdSet, matchingRawIdPairs);
     }
 
     /**
@@ -1305,7 +1303,7 @@ public class ContactAggregator2 {
     }
 
     // A set of raw contact IDs for which there are aggregation exceptions
-    private final HashSet<Long> mAggregationExceptionIds = new HashSet<Long>();
+    private final HashSet<Long> mAggregationExceptionIds = new HashSet<>();
     private boolean mAggregationExceptionIdsValid;
 
     public void invalidateAggregationExceptionCache() {
@@ -1771,7 +1769,7 @@ public class ContactAggregator2 {
      */
     private void lookupApproximateNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
             RawContactMatcher matcher) {
-        HashSet<String> firstLetters = new HashSet<String>();
+        HashSet<String> firstLetters = new HashSet<>();
         for (int i = 0; i < candidates.mCount; i++) {
             final NameMatchCandidate candidate = candidates.mList.get(i);
             if (candidate.mName.length() >= 2) {
@@ -2572,7 +2570,7 @@ public class ContactAggregator2 {
         }
 
         // Run a query and find ids of best matching contacts satisfying the filter (if any)
-        HashSet<Long> foundIds = new HashSet<Long>();
+        HashSet<Long> foundIds = new HashSet<>();
         Cursor cursor = db.query(qb.getTables(), ContactIdQuery.COLUMNS, sb.toString(),
                 null, null, null, null);
         try {
