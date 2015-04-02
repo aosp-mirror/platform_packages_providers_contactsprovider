@@ -58,7 +58,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             Calls.COUNTRY_ISO
     };
     /** Total number of columns exposed by voicemail provider. */
-    private static final int NUM_VOICEMAIL_FIELDS = 16;
+    private static final int NUM_VOICEMAIL_FIELDS = 18;
 
     @Override
     protected void setUp() throws Exception {
@@ -115,6 +115,8 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Voicemails.STATE, 2);
         values.put(Voicemails.HAS_CONTENT, 1);
         values.put(Voicemails.SOURCE_DATA, "foo");
+        values.put(Voicemails.PHONE_ACCOUNT_COMPONENT_NAME, "dummy_name");
+        values.put(Voicemails.PHONE_ACCOUNT_ID, "dummy_account");
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
