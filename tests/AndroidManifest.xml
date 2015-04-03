@@ -20,10 +20,12 @@
 
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
 
     <application>
         <uses-library android:name="android.test.runner" />
-        
+
         <!-- Mock contacts sync adapter -->
         <service android:name=".MockSyncAdapter" android:exported="true">
             <meta-data android:name="android.provider.CONTACTS_STRUCTURE"
