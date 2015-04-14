@@ -6388,7 +6388,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
             case RAW_CONTACT_ENTITIES_CORP: {
-                final int corpUserId = UserUtils.getCorpUserId(getContext());
+                // As it's protected by android.permission.INTERACT_ACROSS_USERS
+                // already and it is used by Bluetooth application, we do not
+                // check caller-id policy
+                final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
                 if (corpUserId < 0) {
                     // No Corp user or policy not allowed, return empty cursor
                     final String[] outputProjection = (projection != null) ? projection
@@ -6564,8 +6567,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
                 sortOrder, directoryId, null);
         try {
-            // TODO: Maybe we want to have a DPM policy for it
-            final int corpUserId = UserUtils.getCorpUserId(getContext());
+            // As it's protected by android.permission.INTERACT_ACROSS_USERS
+            // already and it is used by Bluetooth application, we do not
+            // check caller-id policy
+            final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
             if (corpUserId < 0) {
                 // No Corp user or policy not allowed
                 return primaryCursor;
@@ -6595,7 +6600,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private Cursor queryEnterpriseIfNecessary(Uri localUri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String contactIdColumnName) {
 
-        final int corpUserId = UserUtils.getCorpUserId(getContext());
+        final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
 
         // Step 1. Look at the database on the current profile.
         if (VERBOSE_LOGGING) {
@@ -8167,7 +8172,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalArgumentException(
                     "Photos retrieved by contact ID can only be read.");
         }
-        final int corpUserId = UserUtils.getCorpUserId(getContext());
+        final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
         if (corpUserId < 0) {
             // No corp profile or the currrent profile is not the personal.
             throw new FileNotFoundException(uri.toString());
