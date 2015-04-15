@@ -23,7 +23,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
-
 import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
@@ -31,7 +30,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Projections;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsProvider2.GroupIdCacheEntry;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -66,7 +65,7 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
     private final HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache;
 
     public DataRowHandlerForGroupMembership(Context context, ContactsDatabaseHelper dbHelper,
-            ContactAggregator aggregator,
+            AbstractContactAggregator aggregator,
             HashMap<String, ArrayList<GroupIdCacheEntry>> groupIdCache) {
         super(context, dbHelper, aggregator, GroupMembership.CONTENT_ITEM_TYPE);
         mGroupIdCache = groupIdCache;

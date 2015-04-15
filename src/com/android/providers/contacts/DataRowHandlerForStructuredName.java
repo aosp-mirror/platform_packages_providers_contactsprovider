@@ -25,7 +25,7 @@ import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
 
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for email address data rows.
@@ -36,7 +36,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
     private final StringBuilder mSb = new StringBuilder();
 
     public DataRowHandlerForStructuredName(Context context, ContactsDatabaseHelper dbHelper,
-            ContactAggregator aggregator, NameSplitter splitter,
+            AbstractContactAggregator aggregator, NameSplitter splitter,
             NameLookupBuilder nameLookupBuilder) {
         super(context, dbHelper, aggregator, StructuredName.CONTENT_ITEM_TYPE);
         mSplitter = splitter;

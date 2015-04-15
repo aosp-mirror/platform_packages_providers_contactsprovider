@@ -15,10 +15,9 @@
  */
 package com.android.providers.contacts.aggregation.util;
 
+import android.util.Log;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.util.Hex;
-
-import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -158,102 +157,6 @@ public class RawContactMatcher {
     private static int getMaxScore(int candidateNameType, int nameType) {
         int index = nameType * NameLookupType.TYPE_COUNT + candidateNameType;
         return sMaxScore[index];
-    }
-
-    /**
-     * Captures the max score and match count for a specific raw contact. Used in an
-     * rawContactId - MatchScore map.
-     */
-    public static class MatchScore implements Comparable<MatchScore> {
-        private long mRawContactId;
-        private long mContactId;
-        private long mAccountId;
-        private boolean mKeepIn;
-        private boolean mKeepOut;
-        private int mPrimaryScore;
-        private int mSecondaryScore;
-        private int mMatchCount;
-
-        public MatchScore(long rawContactId, long contactId, long accountId) {
-            this.mRawContactId = rawContactId;
-            this.mContactId = contactId;
-            this.mAccountId = accountId;
-        }
-
-        public void reset(long rawContactId, long contactId, long accountId) {
-            this.mRawContactId = rawContactId;
-            this.mContactId = contactId;
-            this.mAccountId = accountId;
-            mKeepIn = false;
-            mKeepOut = false;
-            mPrimaryScore = 0;
-            mSecondaryScore = 0;
-            mMatchCount = 0;
-        }
-
-        public long getRawContactId() {
-            return mRawContactId;
-        }
-
-        public long getContactId() {
-            return mContactId;
-        }
-
-        public long getAccountId() {
-            return mAccountId;
-        }
-
-        public void updatePrimaryScore(int score) {
-            if (score > mPrimaryScore) {
-                mPrimaryScore = score;
-            }
-            mMatchCount++;
-        }
-
-        public void updateSecondaryScore(int score) {
-            if (score > mSecondaryScore) {
-                mSecondaryScore = score;
-            }
-            mMatchCount++;
-        }
-
-        public void keepIn() {
-            mKeepIn = true;
-        }
-
-        public void keepOut() {
-            mKeepOut = true;
-        }
-
-        public int getScore() {
-            if (mKeepOut) {
-                return 0;
-            }
-
-            if (mKeepIn) {
-                return MAX_SCORE;
-            }
-
-            int score = (mPrimaryScore > mSecondaryScore ? mPrimaryScore : mSecondaryScore);
-
-            // Ensure that of two contacts with the same match score the one with more matching
-            // data elements wins.
-            return score * SCORE_SCALE + mMatchCount;
-        }
-
-        /**
-         * Descending order of match score.
-         */
-        @Override
-        public int compareTo(MatchScore another) {
-            return another.getScore() - getScore();
-        }
-
-        @Override
-        public String toString() {
-            return mRawContactId + "/" + mContactId + "/" + mAccountId + ": " + mPrimaryScore +
-                    "/" + mSecondaryScore + "(" + mMatchCount + ")";
-        }
     }
 
     private final HashMap<Long, MatchScore> mScores = new HashMap<Long, MatchScore>();

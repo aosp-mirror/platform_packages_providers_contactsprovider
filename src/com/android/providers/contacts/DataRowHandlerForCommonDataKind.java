@@ -21,8 +21,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.BaseTypes;
 import android.text.TextUtils;
-
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Superclass for data row handlers that deal with types (e.g. Home, Work, Other) and
@@ -34,7 +33,8 @@ public class DataRowHandlerForCommonDataKind extends DataRowHandler {
     private final String mLabelColumn;
 
     public DataRowHandlerForCommonDataKind(Context context, ContactsDatabaseHelper dbHelper,
-            ContactAggregator aggregator, String mimetype, String typeColumn, String labelColumn) {
+            AbstractContactAggregator aggregator, String mimetype, String typeColumn,
+            String labelColumn) {
         super(context, dbHelper, aggregator, mimetype);
         mTypeColumn = typeColumn;
         mLabelColumn = labelColumn;

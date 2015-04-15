@@ -18,17 +18,16 @@ package com.android.providers.contacts;
 import android.content.ContentValues;
 import android.content.Context;
 import android.provider.ContactsContract.CommonDataKinds.Note;
-
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for note data rows.
  */
 public class DataRowHandlerForNote extends DataRowHandler {
 
-    public DataRowHandlerForNote(
-            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+    public DataRowHandlerForNote(Context context, ContactsDatabaseHelper dbHelper,
+            AbstractContactAggregator aggregator) {
         super(context, dbHelper, aggregator, Note.CONTENT_ITEM_TYPE);
     }
 

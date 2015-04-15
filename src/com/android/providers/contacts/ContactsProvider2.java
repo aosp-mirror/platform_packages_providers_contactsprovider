@@ -105,12 +105,12 @@ import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
+import android.provider.Settings.Global;
 import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
-
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
@@ -144,8 +144,10 @@ import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.ViewGroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator.AggregationSuggestionParameter;
 import com.android.providers.contacts.aggregation.ContactAggregator;
-import com.android.providers.contacts.aggregation.ContactAggregator.AggregationSuggestionParameter;
+import com.android.providers.contacts.aggregation.ContactAggregator2;
 import com.android.providers.contacts.aggregation.ProfileAggregator;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
@@ -162,7 +164,6 @@ import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-
 import libcore.io.IoUtils;
 
 import java.io.BufferedWriter;
@@ -1344,7 +1345,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     // Depending on whether the action being performed is for the profile or not, we will use one of
     // two aggregator instances.
-    private final ThreadLocal<ContactAggregator> mAggregator = new ThreadLocal<ContactAggregator>();
+    private final ThreadLocal<AbstractContactAggregator> mAggregator =
+            new ThreadLocal<AbstractContactAggregator>();
 
     // Depending on whether the action being performed is for the profile or not, we will use one of
     // two photo store instances (with their files stored in separate sub-directories).
@@ -1405,7 +1407,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private Account mAccount;
 
-    private ContactAggregator mContactAggregator;
+    private AbstractContactAggregator mContactAggregator;
     private ContactAggregator mProfileAggregator;
 
     // Duration in milliseconds that pre-authorized URIs will remain valid.
@@ -1573,8 +1575,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mPostalSplitter = new PostalSplitter(mCurrentLocales.getPrimaryLocale());
         mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
         ContactLocaleUtils.setLocales(mCurrentLocales);
-        mContactAggregator = new ContactAggregator(this, mContactsHelper,
-                createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+
+        int value = android.provider.Settings.Global.getInt(context.getContentResolver(),
+                    Global.NEW_CONTACT_AGGREGATOR, 0);
+        mContactAggregator = (value == 0)
+                ? new ContactAggregator(this, mContactsHelper,
+                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache)
+                : new ContactAggregator2(this, mContactsHelper,
+                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+
         mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
         mProfileAggregator = new ProfileAggregator(this, mProfileHelper,
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
@@ -1596,7 +1605,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private void initDataRowHandlers(Map<String, DataRowHandler> handlerMap,
-            ContactsDatabaseHelper dbHelper, ContactAggregator contactAggregator,
+            ContactsDatabaseHelper dbHelper, AbstractContactAggregator contactAggregator,
             PhotoStore photoStore) {
         Context context = getContext();
         handlerMap.put(Email.CONTENT_ITEM_TYPE,
@@ -4391,7 +4400,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         int count = db.update(Tables.RAW_CONTACTS, values, selection, mSelectionArgs1);
         if (count != 0) {
-            final ContactAggregator aggregator = mAggregator.get();
+            final AbstractContactAggregator aggregator = mAggregator.get();
             int aggregationMode = getIntValue(
                     values, RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DEFAULT);
 
@@ -4646,7 +4655,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             db.replace(Tables.AGGREGATION_EXCEPTIONS, AggregationExceptions._ID, exceptionValues);
         }
 
-        final ContactAggregator aggregator = mAggregator.get();
+        final AbstractContactAggregator aggregator = mAggregator.get();
         aggregator.invalidateAggregationExceptionCache();
         aggregator.markForAggregation(rawContactId1, RawContacts.AGGREGATION_MODE_DEFAULT, true);
         aggregator.markForAggregation(rawContactId2, RawContacts.AGGREGATION_MODE_DEFAULT, true);

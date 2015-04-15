@@ -18,17 +18,16 @@ package com.android.providers.contacts;
 import android.content.ContentValues;
 import android.content.Context;
 import android.provider.ContactsContract.CommonDataKinds.Im;
-
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for IM address data rows.
  */
 public class DataRowHandlerForIm extends DataRowHandlerForCommonDataKind {
 
-    public DataRowHandlerForIm(
-            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+    public DataRowHandlerForIm(Context context, ContactsDatabaseHelper dbHelper,
+            AbstractContactAggregator aggregator) {
         super(context, dbHelper, aggregator, Im.CONTENT_ITEM_TYPE, Im.TYPE, Im.LABEL);
     }
 

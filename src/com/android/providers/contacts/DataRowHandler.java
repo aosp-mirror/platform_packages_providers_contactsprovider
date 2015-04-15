@@ -26,12 +26,11 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Data;
 import android.text.TextUtils;
-
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handles inserts and update for a specific Data type.
@@ -74,14 +73,14 @@ public abstract class DataRowHandler {
 
     protected final Context mContext;
     protected final ContactsDatabaseHelper mDbHelper;
-    protected final ContactAggregator mContactAggregator;
+    protected final AbstractContactAggregator mContactAggregator;
     protected String[] mSelectionArgs1 = new String[1];
     protected final String mMimetype;
     protected long mMimetypeId;
 
     @SuppressWarnings("all")
     public DataRowHandler(Context context, ContactsDatabaseHelper dbHelper,
-            ContactAggregator aggregator, String mimetype) {
+            AbstractContactAggregator aggregator, String mimetype) {
         mContext = context;
         mDbHelper = dbHelper;
         mContactAggregator = aggregator;

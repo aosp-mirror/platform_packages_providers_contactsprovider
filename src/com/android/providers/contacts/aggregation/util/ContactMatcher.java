@@ -31,9 +31,6 @@ import java.util.List;
 public class ContactMatcher {
     private static final String TAG = "ContactMatcher";
 
-    // Best possible match score
-    public static final int MAX_SCORE = 100;
-
     // Suggest to aggregate contacts if their match score is equal or greater than this threshold
     public static final int SCORE_THRESHOLD_SUGGEST = 50;
 
@@ -58,9 +55,6 @@ public class ContactMatcher {
 
     // Maximum number of characters in a name to be considered by the matching algorithm.
     private static final int MAX_MATCHED_NAME_LENGTH = 30;
-
-    // Scores a multiplied by this number to allow room for "fractional" scores
-    private static final int SCORE_SCALE = 1000;
 
     public static final int MATCHING_ALGORITHM_EXACT = 0;
     public static final int MATCHING_ALGORITHM_CONSERVATIVE = 1;
@@ -159,88 +153,6 @@ public class ContactMatcher {
         return sMaxScore[index];
     }
 
-    /**
-     * Captures the max score and match count for a specific contact.  Used in an
-     * contactId - MatchScore map.
-     */
-    public static class MatchScore implements Comparable<MatchScore> {
-        private long mContactId;
-        private boolean mKeepIn;
-        private boolean mKeepOut;
-        private int mPrimaryScore;
-        private int mSecondaryScore;
-        private int mMatchCount;
-
-        public MatchScore(long contactId) {
-            this.mContactId = contactId;
-        }
-
-        public void reset(long contactId) {
-            this.mContactId = contactId;
-            mKeepIn = false;
-            mKeepOut = false;
-            mPrimaryScore = 0;
-            mSecondaryScore = 0;
-            mMatchCount = 0;
-        }
-
-        public long getContactId() {
-            return mContactId;
-        }
-
-        public void updatePrimaryScore(int score) {
-            if (score > mPrimaryScore) {
-                mPrimaryScore = score;
-            }
-            mMatchCount++;
-        }
-
-        public void updateSecondaryScore(int score) {
-            if (score > mSecondaryScore) {
-                mSecondaryScore = score;
-            }
-            mMatchCount++;
-        }
-
-        public void keepIn() {
-            mKeepIn = true;
-        }
-
-        public void keepOut() {
-            mKeepOut = true;
-        }
-
-        public int getScore() {
-            if (mKeepOut) {
-                return 0;
-            }
-
-            if (mKeepIn) {
-                return MAX_SCORE;
-            }
-
-            int score = (mPrimaryScore > mSecondaryScore ? mPrimaryScore : mSecondaryScore);
-
-            // Ensure that of two contacts with the same match score the one with more matching
-            // data elements wins.
-            return score * SCORE_SCALE + mMatchCount;
-        }
-
-        /**
-         * Descending order of match score.
-         */
-        @Override
-        public int compareTo(MatchScore another) {
-            return another.getScore() - getScore();
-        }
-
-        @Override
-        public String toString() {
-            return mContactId + ": " + mPrimaryScore + "/" + mSecondaryScore + "(" + mMatchCount
-                    + ")";
-        }
-    }
-
     private final HashMap<Long, MatchScore> mScores = new HashMap<Long, MatchScore>();
     private final ArrayList<MatchScore> mScoreList = new ArrayList<MatchScore>();
     private int mScoreCount = 0;
@@ -268,7 +180,7 @@ public class ContactMatcher {
      * Marks the contact as a full match, because we found an Identity match
      */
     public void matchIdentity(long contactId) {
-        updatePrimaryScore(contactId, MAX_SCORE);
+        updatePrimaryScore(contactId, MatchScore.MAX_SCORE);
     }
 
     /**
@@ -374,18 +286,18 @@ public class ContactMatcher {
 
         for (int i = 0; i < mScoreCount; i++) {
             MatchScore score = mScoreList.get(i);
-            if (score.mKeepOut) {
+            if (score.isKeepOut()) {
                 continue;
             }
 
-            int s = score.mSecondaryScore;
+            int s = score.getSecondaryScore();
             if (s >= threshold) {
                 if (contactIds == null) {
                     contactIds = new ArrayList<Long>();
                 }
-                contactIds.add(score.mContactId);
+                contactIds.add(score.getContactId());
             }
-            score.mPrimaryScore = NO_DATA_SCORE;
+            score.setPrimaryScore(NO_DATA_SCORE);
         }
         return contactIds;
     }
@@ -401,17 +313,17 @@ public class ContactMatcher {
         int maxScore = 0;
         for (int i = 0; i < mScoreCount; i++) {
             MatchScore score = mScoreList.get(i);
-            if (score.mKeepOut) {
+            if (score.isKeepOut()) {
                 continue;
             }
 
-            if (score.mKeepIn) {
-                return score.mContactId;
+            if (score.isKeepIn()) {
+                return score.getContactId();
             }
 
-            int s = score.mPrimaryScore;
+            int s = score.getPrimaryScore();
             if (s == NO_DATA_SCORE) {
-                s = score.mSecondaryScore;
+                s = score.getSecondaryScore();
             }
 
             if (s >= threshold) {
@@ -420,8 +332,8 @@ public class ContactMatcher {
                 }
                 // In order to make it stable, let's jut pick the one with the lowest ID
                 // if multiple candidates are found.
-                if ((s > maxScore) || ((s == maxScore) && (contactId > score.mContactId))) {
-                    contactId = score.mContactId;
+                if ((s > maxScore) || ((s == maxScore) && (contactId > score.getContactId()))) {
+                    contactId = score.getContactId();
                     maxScore = s;
                 }
             }
@@ -433,7 +345,7 @@ public class ContactMatcher {
      * Returns matches in the order of descending score.
      */
     public List<MatchScore> pickBestMatches(int threshold) {
-        int scaledThreshold = threshold * SCORE_SCALE;
+        int scaledThreshold = threshold * MatchScore.SCORE_SCALE;
         List<MatchScore> matches = mScoreList.subList(0, mScoreCount);
         Collections.sort(matches);
         int count = 0;
