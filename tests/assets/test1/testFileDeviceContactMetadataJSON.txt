@@ -3,7 +3,8 @@
     "account_type": "CUSTOM_ACCOUNT",
     "custom_account_type": "facebook",
     "account_name": "android-test",
-    "contact_id": "1111111"
+    "contact_id": "1111111",
+    "data_set": "FOCUS"
   },
   "contact_prefs": {
     "send_to_voicemail": true,
@@ -15,10 +16,17 @@
       "type": "TOGETHER",
       "contact_ids": [
         {
-          "contact_id": "2222222"
+          "account_type": "GOOGLE_ACCOUNT",
+          "account_name": "android-test2",
+          "contact_id": "2222222",
+          "data_set": "GOOGLE_PLUS"
         },
         {
-          "contact_id": "3333333"
+          "account_type": "GOOGLE_ACCOUNT",
+          "account_name": "android-test3",
+          "contact_id": "3333333",
+          "data_set": "CUSTOM",
+          "custom_data_set": "custom type"
         }
       ]
     }

@@ -22,6 +22,7 @@ import android.test.suitebuilder.annotation.SmallTest;
 import com.android.providers.contacts.MetadataEntryParser.AggregationData;
 import com.android.providers.contacts.MetadataEntryParser.FieldData;
 import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
+import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
 import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import org.json.JSONException;
 
@@ -51,28 +52,41 @@ public class MetadataEntryParserTest extends AndroidTestCase {
     }
 
     public void testParseDataToMetadataEntry() throws IOException {
-        long rawContactId = 1111111;
+        String contactBackupId = "1111111";
         String accountType = "facebook";
         String accountName = "android-test";
+        String dataSet = null;
         int sendToVoicemail = 1;
         int starred = 0;
         int pinned = 2;
-        long fieldDataId1 = 1001;
+        String dataHashId1 = "1001";
         String usageType1_1 = "CALL";
         long lastTimeUsed1_1 = 10000001;
         int timesUsed1_1 = 10;
         String usageType1_2 = "SHORT_TEXT";
         long lastTimeUsed1_2 = 20000002;
         int timesUsed1_2 = 20;
-        long fieldDataId2 = 1002;
+        String dataHashId2 = "1002";
         String usageType2 = "LONG_TEXT";
         long lastTimeUsed2 = 30000003;
         int timesUsed2 = 30;
-        long aggregationContact1 = 2222222;
-        long aggregationContact2 = 3333333;
+        String aggregationContactBackupId1 = "2222222";
+        String aggregationAccountType1 = "com.google";
+        String aggregationAccountName1 = "android-test2";
+        String aggregationDataSet1 = "plus";
+        String aggregationContactBackupId2 = "3333333";
+        String aggregationAccountType2 = "com.google";
+        String aggregationAccountName2 = "android-test3";
+        String aggregationDataSet2 = "custom type";
         String type = "TOGETHER";
         String inputFile = "test1/testFileDeviceContactMetadataJSON.txt";
 
+        RawContactInfo rawContactInfo = new RawContactInfo(
+                contactBackupId, accountType, accountName, dataSet);
+        RawContactInfo aggregationContact1 = new RawContactInfo(aggregationContactBackupId1,
+                aggregationAccountType1, aggregationAccountName1, aggregationDataSet1);
+        RawContactInfo aggregationContact2 = new RawContactInfo(aggregationContactBackupId2,
+                aggregationAccountType2, aggregationAccountName2, aggregationDataSet2);
         AggregationData aggregationData = new AggregationData(
                 aggregationContact1, aggregationContact2, type);
         ArrayList<AggregationData> aggregationDataList = new ArrayList<>();
@@ -85,17 +99,17 @@ public class MetadataEntryParserTest extends AndroidTestCase {
         ArrayList<UsageStats> usageStats1List = new ArrayList<>();
         usageStats1List.add(usageStats1_1);
         usageStats1List.add(usageStats1_2);
-        FieldData fieldData1 = new FieldData(fieldDataId1, true, true, usageStats1List);
+        FieldData fieldData1 = new FieldData(dataHashId1, true, true, usageStats1List);
 
         ArrayList<UsageStats> usageStats2List = new ArrayList<>();
         usageStats2List.add(usageStats2);
-        FieldData fieldData2 = new FieldData(fieldDataId2, false, false, usageStats2List);
+        FieldData fieldData2 = new FieldData(dataHashId2, false, false, usageStats2List);
 
         ArrayList<FieldData> fieldDataList = new ArrayList<>();
         fieldDataList.add(fieldData1);
         fieldDataList.add(fieldData2);
 
-        MetadataEntry expectedResult = new MetadataEntry(rawContactId, accountType, accountName,
+        MetadataEntry expectedResult = new MetadataEntry(rawContactInfo,
                 sendToVoicemail, starred, pinned, fieldDataList, aggregationDataList);
 
         String inputJson = readAssetAsString(inputFile);
@@ -228,14 +242,19 @@ public class MetadataEntryParserTest extends AndroidTestCase {
     }
 
     private void assertMetaDataEntry(MetadataEntry entry1, MetadataEntry entry2) {
-        assertEquals(entry1.mRawContactId, entry2.mRawContactId);
-        assertEquals(entry1.mAccountType, entry2.mAccountType);
-        assertEquals(entry1.mAccountName, entry2.mAccountName);
+        assertRawContactInfoEquals(entry1.mRawContactInfo, entry2.mRawContactInfo);
         assertEquals(entry1.mSendToVoicemail, entry2.mSendToVoicemail);
         assertEquals(entry1.mStarred, entry2.mStarred);
         assertEquals(entry1.mPinned, entry2.mPinned);
         assertAggregationDataListEquals(entry1.mAggregationDatas, entry2.mAggregationDatas);
         assertFieldDataListEquals(entry1.mFieldDatas, entry2.mFieldDatas);
+    }
+
+    private void assertRawContactInfoEquals(RawContactInfo contact1, RawContactInfo contact2) {
+        assertEquals(contact1.mBackupId, contact2.mBackupId);
+        assertEquals(contact1.mAccountType, contact2.mAccountType);
+        assertEquals(contact1.mAccountName, contact2.mAccountName);
+        assertEquals(contact1.mDataSet, contact2.mDataSet);
     }
 
     private void assertAggregationDataListEquals(ArrayList<AggregationData> aggregationList1,
@@ -248,8 +267,10 @@ public class MetadataEntryParserTest extends AndroidTestCase {
 
     private void assertAggregationDataEquals(AggregationData aggregationData1,
             AggregationData aggregationData2) {
-        assertEquals(aggregationData1.mRawContactId1, aggregationData2.mRawContactId1);
-        assertEquals(aggregationData1.mRawContactId2, aggregationData2.mRawContactId2);
+        assertRawContactInfoEquals(aggregationData1.mRawContactInfo1,
+                aggregationData2.mRawContactInfo1);
+        assertRawContactInfoEquals(aggregationData1.mRawContactInfo2,
+                aggregationData2.mRawContactInfo2);
         assertEquals(aggregationData1.mType, aggregationData2.mType);
     }
 
@@ -262,7 +283,7 @@ public class MetadataEntryParserTest extends AndroidTestCase {
     }
 
     private void assertFieldDataEquals(FieldData fieldData1, FieldData fieldData2) {
-        assertEquals(fieldData1.mFieldDataId, fieldData2.mFieldDataId);
+        assertEquals(fieldData1.mDataHashId, fieldData2.mDataHashId);
         assertEquals(fieldData1.mIsPrimary, fieldData2.mIsPrimary);
         assertEquals(fieldData1.mIsSuperPrimary, fieldData2.mIsSuperPrimary);
         assertUsageStatsListEquals(fieldData1.mUsageStatsList, fieldData2.mUsageStatsList);

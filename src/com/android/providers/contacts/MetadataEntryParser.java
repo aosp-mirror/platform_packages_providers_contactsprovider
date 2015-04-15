@@ -31,8 +31,15 @@ public class MetadataEntryParser {
     private final static String UNIQUE_CONTACT_ID = "unique_contact_id";
     private final static String ACCOUNT_TYPE = "account_type";
     private final static String CUSTOM_ACCOUNT_TYPE = "custom_account_type";
+    private final static String ENUM_VALUE_FOR_GOOGLE_ACCOUNT = "GOOGLE_ACCOUNT";
+    private final static String GOOGLE_ACCOUNT_TYPE = "com.google";
     private final static String ENUM_VALUE_FOR_CUSTOM_ACCOUNT = "CUSTOM_ACCOUNT";
     private final static String ACCOUNT_NAME = "account_name";
+    private final static String DATA_SET = "data_set";
+    private final static String ENUM_FOR_PLUS_DATA_SET = "GOOGLE_PLUS";
+    private final static String ENUM_FOR_CUSTOM_DATA_SET = "CUSTOM";
+    private final static String PLUS_DATA_SET_TYPE = "plus";
+    private final static String CUSTOM_DATA_SET = "custom_data_set";
     private final static String CONTACT_ID = "contact_id";
     private final static String CONTACT_PREFS = "contact_prefs";
     private final static String SEND_TO_VOICEMAIL = "send_to_voicemail";
@@ -67,15 +74,15 @@ public class MetadataEntryParser {
 
     @NeededForTesting
     public static class FieldData {
-        final long mFieldDataId;
+        final String mDataHashId;
         final boolean mIsPrimary;
         final boolean mIsSuperPrimary;
         final ArrayList<UsageStats> mUsageStatsList;
 
         @NeededForTesting
-        public FieldData(long fieldDataId, boolean isPrimary, boolean isSuperPrimary,
+        public FieldData(String dataHashId, boolean isPrimary, boolean isSuperPrimary,
                 ArrayList<UsageStats> usageStatsList) {
-            this.mFieldDataId = fieldDataId;
+            this.mDataHashId = dataHashId;
             this.mIsPrimary = isPrimary;
             this.mIsSuperPrimary = isSuperPrimary;
             this.mUsageStatsList = usageStatsList;
@@ -83,24 +90,40 @@ public class MetadataEntryParser {
     }
 
     @NeededForTesting
+    public static class RawContactInfo {
+        final String mBackupId;
+        final String mAccountType;
+        final String mAccountName;
+        final String mDataSet;
+
+        @NeededForTesting
+        public RawContactInfo(String backupId, String accountType, String accountName,
+                String dataSet) {
+            this.mBackupId = backupId;
+            this.mAccountType = accountType;
+            this.mAccountName = accountName;
+            mDataSet = dataSet;
+        }
+    }
+
+    @NeededForTesting
     public static class AggregationData {
-        final long mRawContactId1;
-        final long mRawContactId2;
+        final RawContactInfo mRawContactInfo1;
+        final RawContactInfo mRawContactInfo2;
         final String mType;
 
         @NeededForTesting
-        public AggregationData(long rawContactId1, long rawContactId2, String type) {
-            this.mRawContactId1 = rawContactId1;
-            this.mRawContactId2 = rawContactId2;
+        public AggregationData(RawContactInfo rawContactInfo1, RawContactInfo rawContactInfo2,
+                String type) {
+            this.mRawContactInfo1 = rawContactInfo1;
+            this.mRawContactInfo2 = rawContactInfo2;
             this.mType = type;
         }
     }
 
     @NeededForTesting
     public static class MetadataEntry {
-        final long mRawContactId;
-        final String mAccountType;
-        final String mAccountName;
+        final RawContactInfo mRawContactInfo;
         final int mSendToVoicemail;
         final int mStarred;
         final int mPinned;
@@ -108,13 +131,11 @@ public class MetadataEntryParser {
         final ArrayList<AggregationData> mAggregationDatas;
 
         @NeededForTesting
-        public MetadataEntry(long rawContactId, String accountType, String accountName,
+        public MetadataEntry(RawContactInfo rawContactInfo,
                 int sendToVoicemail, int starred, int pinned,
-            ArrayList<FieldData> fieldDatas,
-            ArrayList<AggregationData> aggregationDatas) {
-            this.mRawContactId = rawContactId;
-            this.mAccountType = accountType;
-            this.mAccountName = accountName;
+                ArrayList<FieldData> fieldDatas,
+                ArrayList<AggregationData> aggregationDatas) {
+            this.mRawContactInfo = rawContactInfo;
             this.mSendToVoicemail = sendToVoicemail;
             this.mStarred = starred;
             this.mPinned = pinned;
@@ -132,18 +153,8 @@ public class MetadataEntryParser {
         try {
             final JSONObject root = new JSONObject(inputData);
             // Parse to get rawContactId and account info.
-            final JSONObject uniqueContact = root.getJSONObject(UNIQUE_CONTACT_ID);
-            final String rawContactId = uniqueContact.getString(CONTACT_ID);
-            String accountType = uniqueContact.getString(ACCOUNT_TYPE);
-            if (ENUM_VALUE_FOR_CUSTOM_ACCOUNT.equals(accountType)) {
-                accountType = uniqueContact.getString(CUSTOM_ACCOUNT_TYPE);
-            }
-            final String accountName = uniqueContact.getString(ACCOUNT_NAME);
-            if (TextUtils.isEmpty(rawContactId) || TextUtils.isEmpty(accountType)
-                    || TextUtils.isEmpty(accountName)) {
-                throw new IllegalArgumentException(
-                        "contact_id, account_type, account_name cannot be empty.");
-            }
+            final JSONObject uniqueContactJSON = root.getJSONObject(UNIQUE_CONTACT_ID);
+            final RawContactInfo rawContactInfo = parseUniqueContact(uniqueContactJSON);
 
             // Parse contactPrefs to get sendToVoicemail, starred, pinned.
             final JSONObject contactPrefs = root.getJSONObject(CONTACT_PREFS);
@@ -165,16 +176,16 @@ public class MetadataEntryParser {
                                 "There should be two contacts for each aggregation.");
                     }
                     final JSONObject rawContact1 = contacts.getJSONObject(0);
-                    final long rawContactId1 = rawContact1.getLong(CONTACT_ID);
+                    final RawContactInfo aggregationContact1 = parseUniqueContact(rawContact1);
                     final JSONObject rawContact2 = contacts.getJSONObject(1);
-                    final long rawContactId2 = rawContact2.getLong(CONTACT_ID);
+                    final RawContactInfo aggregationContact2 = parseUniqueContact(rawContact2);
                     final String type = aggregationData.getString(TYPE);
                     if (TextUtils.isEmpty(type)) {
                         throw new IllegalArgumentException("Aggregation type cannot be empty.");
                     }
 
                     final AggregationData aggregation = new AggregationData(
-                            rawContactId1, rawContactId2, type);
+                            aggregationContact1, aggregationContact2, type);
                     aggregationsList.add(aggregation);
                 }
             }
@@ -186,7 +197,10 @@ public class MetadataEntryParser {
 
                 for (int i = 0; i < fieldDatas.length(); i++) {
                     final JSONObject fieldData = fieldDatas.getJSONObject(i);
-                    final long fieldDataId = fieldData.getLong(FIELD_DATA_ID);
+                    final String dataHashId = fieldData.getString(FIELD_DATA_ID);
+                    if (TextUtils.isEmpty(dataHashId)) {
+                        throw new IllegalArgumentException("Field data hash id cannot be empty.");
+                    }
                     final JSONObject fieldDataPrefs = fieldData.getJSONObject(FIELD_DATA_PREFS);
                     final boolean isPrimary = fieldDataPrefs.getBoolean(IS_PRIMARY);
                     final boolean isSuperPrimary = fieldDataPrefs.getBoolean(IS_SUPER_PRIMARY);
@@ -209,15 +223,50 @@ public class MetadataEntryParser {
                         }
                     }
 
-                    final FieldData fieldDataParse = new FieldData(fieldDataId, isPrimary,
+                    final FieldData fieldDataParse = new FieldData(dataHashId, isPrimary,
                             isSuperPrimary, usageStatsList);
                     fieldDatasList.add(fieldDataParse);
                 }
             }
-            final MetadataEntry metaDataEntry = new MetadataEntry(Long.parseLong(rawContactId),
-                    accountType, accountName, sendToVoicemail ? 1 : 0, starred ? 1 : 0, pinned,
+            final MetadataEntry metaDataEntry = new MetadataEntry(rawContactInfo,
+                    sendToVoicemail ? 1 : 0, starred ? 1 : 0, pinned,
                     fieldDatasList, aggregationsList);
             return metaDataEntry;
+        } catch (JSONException e) {
+            throw new IllegalArgumentException("JSON Exception.", e);
+        }
+    }
+
+    private static RawContactInfo parseUniqueContact(JSONObject uniqueContactJSON) {
+        try {
+            final String backupId = uniqueContactJSON.getString(CONTACT_ID);
+            final String accountName = uniqueContactJSON.getString(ACCOUNT_NAME);
+            String accountType = uniqueContactJSON.getString(ACCOUNT_TYPE);
+            if (ENUM_VALUE_FOR_GOOGLE_ACCOUNT.equals(accountType)) {
+                accountType = GOOGLE_ACCOUNT_TYPE;
+            } else if (ENUM_VALUE_FOR_CUSTOM_ACCOUNT.equals(accountType)) {
+                accountType = uniqueContactJSON.getString(CUSTOM_ACCOUNT_TYPE);
+            } else {
+                throw new IllegalArgumentException("Unknown account type.");
+            }
+
+            String dataSet = null;
+            switch (uniqueContactJSON.getString(DATA_SET)) {
+                case ENUM_FOR_PLUS_DATA_SET:
+                    dataSet = PLUS_DATA_SET_TYPE;
+                    break;
+                case ENUM_FOR_CUSTOM_DATA_SET:
+                    dataSet = uniqueContactJSON.getString(CUSTOM_DATA_SET);
+                    break;
+            }
+            if (TextUtils.isEmpty(backupId) || TextUtils.isEmpty(accountType)
+                    || TextUtils.isEmpty(accountName)) {
+                throw new IllegalArgumentException(
+                        "Contact backup id, account type, account name cannot be empty.");
+            }
+            final RawContactInfo rawContactInfo = new RawContactInfo(
+                    backupId, accountType, accountName, dataSet);
+            return rawContactInfo;
         } catch (JSONException e) {
             throw new IllegalArgumentException("JSON Exception.", e);
         }
