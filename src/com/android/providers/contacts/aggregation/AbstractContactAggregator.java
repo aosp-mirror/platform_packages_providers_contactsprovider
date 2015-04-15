@@ -280,7 +280,7 @@ public class AbstractContactAggregator {
     /**
      * Constructor.
      */
-    public ContactAggregator(ContactsProvider2 contactsProvider,
+    public AbstractContactAggregator(ContactsProvider2 contactsProvider,
             ContactsDatabaseHelper contactsDatabaseHelper,
             PhotoPriorityResolver photoPriorityResolver, NameSplitter nameSplitter,
             CommonNicknameCache commonNicknameCache) {
