@@ -20,9 +20,8 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Email;
-
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for email address data rows.
@@ -30,7 +29,7 @@ import com.android.providers.contacts.aggregation.ContactAggregator;
 public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
 
     public DataRowHandlerForEmail(
-            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+            Context context, ContactsDatabaseHelper dbHelper, AbstractContactAggregator aggregator) {
         super(context, dbHelper, aggregator, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
     }
 

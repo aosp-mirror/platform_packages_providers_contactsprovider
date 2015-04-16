@@ -21,17 +21,16 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.text.TextUtils;
-
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for nickname data rows.
  */
 public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
 
-    public DataRowHandlerForNickname(
-            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+    public DataRowHandlerForNickname(Context context, ContactsDatabaseHelper dbHelper,
+            AbstractContactAggregator aggregator) {
         super(context, dbHelper, aggregator, Nickname.CONTENT_ITEM_TYPE, Nickname.TYPE,
                 Nickname.LABEL);
     }

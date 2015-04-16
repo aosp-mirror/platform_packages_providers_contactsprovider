@@ -26,7 +26,7 @@ import android.text.TextUtils;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for phone number data rows.
@@ -34,7 +34,7 @@ import com.android.providers.contacts.aggregation.ContactAggregator;
 public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKind {
 
     public DataRowHandlerForPhoneNumber(Context context,
-            ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+            ContactsDatabaseHelper dbHelper, AbstractContactAggregator aggregator) {
         super(context, dbHelper, aggregator, Phone.CONTENT_ITEM_TYPE, Phone.TYPE, Phone.LABEL);
     }
 

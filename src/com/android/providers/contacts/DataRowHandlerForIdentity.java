@@ -20,15 +20,14 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Identity;
-
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for Identity data rows.
  */
 public class DataRowHandlerForIdentity extends DataRowHandler {
-    public DataRowHandlerForIdentity(
-            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator) {
+    public DataRowHandlerForIdentity(Context context, ContactsDatabaseHelper dbHelper,
+            AbstractContactAggregator aggregator) {
         super(context, dbHelper, aggregator, Identity.CONTENT_ITEM_TYPE);
     }
 

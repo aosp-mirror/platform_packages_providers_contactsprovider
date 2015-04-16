@@ -22,7 +22,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Photo;
 import android.util.Log;
 
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 import java.io.IOException;
 
@@ -46,7 +46,7 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
     /* package */ static final String SKIP_PROCESSING_KEY = "skip_processing";
 
     public DataRowHandlerForPhoto(
-            Context context, ContactsDatabaseHelper dbHelper, ContactAggregator aggregator,
+            Context context, ContactsDatabaseHelper dbHelper, AbstractContactAggregator aggregator,
             PhotoStore photoStore, int maxDisplayPhotoDim, int maxThumbnailPhotoDim) {
         super(context, dbHelper, aggregator, Photo.CONTENT_ITEM_TYPE);
         mPhotoStore = photoStore;

@@ -23,7 +23,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.text.TextUtils;
 
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 /**
  * Handler for postal address data rows.
@@ -46,7 +46,7 @@ public class DataRowHandlerForStructuredPostal extends DataRowHandler {
     private final PostalSplitter mSplitter;
 
     public DataRowHandlerForStructuredPostal(Context context, ContactsDatabaseHelper dbHelper,
-            ContactAggregator aggregator, PostalSplitter splitter) {
+            AbstractContactAggregator aggregator, PostalSplitter splitter) {
         super(context, dbHelper, aggregator, StructuredPostal.CONTENT_ITEM_TYPE);
         mSplitter = splitter;
     }

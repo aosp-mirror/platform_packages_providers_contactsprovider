@@ -29,25 +29,25 @@ import static com.android.internal.util.Preconditions.checkNotNull;
  * Matching candidates for a raw contact, used in the contact aggregator.
  */
 public class RawContactMatchingCandidates {
-    private List<RawContactMatcher.MatchScore> mBestMatches;
+    private List<MatchScore> mBestMatches;
     private Set<Long> mRawContactIds = null;
     private Map<Long, Long> mRawContactToContact = null;
     private Map<Long, Long> mRawContactToAccount = null;
 
-    public RawContactMatchingCandidates(List<RawContactMatcher.MatchScore> mBestMatches) {
+    public RawContactMatchingCandidates(List<MatchScore> mBestMatches) {
         checkNotNull(mBestMatches);
         this.mBestMatches = mBestMatches;
     }
 
     public RawContactMatchingCandidates() {
-        mBestMatches = new ArrayList<RawContactMatcher.MatchScore>();
+        mBestMatches = new ArrayList<MatchScore>();
     }
 
     public int getCount() {
         return mBestMatches.size();
     }
 
-    public void add(RawContactMatcher.MatchScore score) {
+    public void add(MatchScore score) {
         mBestMatches.add(score);
         if (mRawContactIds != null) {
             mRawContactIds.add(score.getRawContactId());

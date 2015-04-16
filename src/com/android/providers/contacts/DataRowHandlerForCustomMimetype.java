@@ -16,13 +16,12 @@
 package com.android.providers.contacts;
 
 import android.content.Context;
-
-import com.android.providers.contacts.aggregation.ContactAggregator;
+import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 public class DataRowHandlerForCustomMimetype extends DataRowHandler {
 
-    public DataRowHandlerForCustomMimetype(Context context,
-            ContactsDatabaseHelper dbHelper, ContactAggregator aggregator, String mimetype) {
+    public DataRowHandlerForCustomMimetype(Context context, ContactsDatabaseHelper dbHelper,
+            AbstractContactAggregator aggregator, String mimetype) {
         super(context, dbHelper, aggregator, mimetype);
     }
 }
