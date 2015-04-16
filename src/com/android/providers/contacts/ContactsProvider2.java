@@ -9202,6 +9202,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        if (mContactAggregator != null) {
+            pw.print("Contact aggregator type: " + mContactAggregator.getClass() + "\n");
+        }
         pw.print("FastScrollingIndex stats:\n");
         pw.printf("request=%d  miss=%d (%d%%)  avg time=%dms\n",
                 mFastScrollingIndexCacheRequestCount,
