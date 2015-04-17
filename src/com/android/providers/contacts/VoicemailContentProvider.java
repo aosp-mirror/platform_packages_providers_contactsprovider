@@ -19,6 +19,7 @@ import static android.provider.VoicemailContract.SOURCE_PACKAGE_FIELD;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
+import android.app.AppOpsManager;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
@@ -59,6 +60,11 @@ public class VoicemailContentProvider extends ContentProvider
             Log.d(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate start");
         }
         Context context = context();
+
+        // ADD_VOICEMAIL permission guards read and write. We do the same with app ops.
+        // The permission name doesn't reflect its function but we cannot rename it.
+        setAppOps(AppOpsManager.OP_ADD_VOICEMAIL, AppOpsManager.OP_ADD_VOICEMAIL);
+
         mVoicemailPermissions = new VoicemailPermissions(context);
         mVoicemailContentTable = new VoicemailContentTable(Tables.CALLS, context,
                 getDatabaseHelper(context), this, createCallLogInsertionHelper(context));
