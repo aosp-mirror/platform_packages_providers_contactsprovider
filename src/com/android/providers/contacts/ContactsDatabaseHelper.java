@@ -63,6 +63,7 @@ import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.MetadataSync;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
@@ -121,7 +122,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1007;
+    static final int DATABASE_VERSION = 1008;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -305,6 +306,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String GROUPS = "view_groups";
         public static final String DATA_USAGE_STAT = "view_data_usage_stat";
         public static final String STREAM_ITEMS = "view_stream_items";
+        public static final String METADATA_SYNC = "view_metadata_sync";
     }
 
     public interface Projections {
@@ -731,10 +733,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public interface MetadataSyncColumns {
-        String _ID = BaseColumns._ID;
-        String RAW_CONTACT_BACKUP_ID = "raw_contact_backup_id";
-        String ACCOUNT_ID = "account_id";
-        String DATA = "data";
+        static final String CONCRETE_ID = Tables.METADATA_SYNC + "._id";
+        static final String ACCOUNT_ID = "account_id";
+        static final String CONCRETE_ACCOUNT_ID = Tables.METADATA_SYNC + "." + ACCOUNT_ID;
     }
 
     private  interface EmailQuery {
@@ -1590,16 +1591,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         db.execSQL("CREATE TABLE IF NOT EXISTS "
                 + Tables.METADATA_SYNC + " (" +
-                MetadataSyncColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-                MetadataSyncColumns.RAW_CONTACT_BACKUP_ID + " TEXT NOT NULL," +
+                MetadataSync._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                MetadataSync.RAW_CONTACT_BACKUP_ID + " TEXT NOT NULL," +
                 MetadataSyncColumns.ACCOUNT_ID + " INTEGER NOT NULL," +
-                MetadataSyncColumns.DATA + " TEXT," +
-                "FOREIGN KEY(" + MetadataSyncColumns.ACCOUNT_ID + ") REFERENCES "
-                        + Tables.ACCOUNTS + "(" + AccountsColumns._ID + "));");
+                MetadataSync.DATA + " TEXT," +
+                MetadataSync.DELETED + " INTEGER NOT NULL DEFAULT 0);");
 
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS metadata_sync_index ON " +
                 Tables.METADATA_SYNC + " (" +
-                MetadataSyncColumns.RAW_CONTACT_BACKUP_ID + ", " +
+                MetadataSync.RAW_CONTACT_BACKUP_ID + ", " +
                 MetadataSyncColumns.ACCOUNT_ID +");");
 
         db.execSQL("CREATE TABLE " + Tables.PRE_AUTHORIZED_URIS + " ("+
@@ -1845,6 +1845,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.STREAM_ITEMS + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.METADATA_SYNC + ";");
 
         String dataColumns =
                 Data.IS_PRIMARY + ", "
@@ -2171,6 +2172,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.STREAM_ITEMS + " AS " + streamItemSelect);
+
+        String metadataSyncSelect = "SELECT " +
+                MetadataSyncColumns.CONCRETE_ID + ", " +
+                MetadataSync.RAW_CONTACT_BACKUP_ID + ", " +
+                AccountsColumns.ACCOUNT_NAME + ", " +
+                AccountsColumns.ACCOUNT_TYPE + ", " +
+                AccountsColumns.DATA_SET + ", " +
+                MetadataSync.DATA + ", " +
+                MetadataSync.DELETED +
+                " FROM " + Tables.METADATA_SYNC
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   MetadataSyncColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                + ")";
+
+        db.execSQL("CREATE VIEW " + Views.METADATA_SYNC + " AS " + metadataSyncSelect);
     }
 
     private static String buildDisplayPhotoUriAlias(String contactIdColumn, String alias) {
@@ -2907,6 +2923,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1007) {
             upgradeToVersion1007(db);
             oldVersion = 1007;
+        }
+
+        if (oldVersion < 1008) {
+            upgradeToVersion1008(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1008;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4434,6 +4456,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             Log.v(TAG, "Version 1007: Columns already exist, skipping upgrade steps.");
         }
   }
+
+    /**
+     * The metadata_sync APIs were not in-use by anyone in the time
+     * between their initial creation (in v1001) and this update.  So we're just dropping
+     * and re-creating it to get appropriate columns. The delta is as follows:
+     * - drop foreign key constraint on account_id
+     * - add deleted column
+     */
+    public void upgradeToVersion1008(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS metadata_sync");
+        db.execSQL("CREATE TABLE metadata_sync (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, raw_contact_backup_id TEXT NOT NULL, " +
+                "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
+        db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
+                "raw_contact_backup_id, account_id);");
+    }
 
     public String extractHandleFromEmailAddress(String email) {
         Rfc822Token[] tokens = Rfc822Tokenizer.tokenize(email);
