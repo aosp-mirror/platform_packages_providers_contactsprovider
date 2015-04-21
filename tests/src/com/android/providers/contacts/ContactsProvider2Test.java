@@ -1794,6 +1794,84 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
+     * Test for query of merged primary and work contacts.
+     * <p/>
+     * Note: in this test, we add one more provider instance for the authority
+     * "10@com.android.contacts" and use it as the corp cp2.
+     */
+    public void testQueryMergedDataPhones() throws Exception {
+        // Insert a contact to the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Primary");
+
+        insertPhoneNumber(rawContactId, "111-111-1111", false, false, Phone.TYPE_MOBILE);
+
+        // Insert a contact to the corp CP2, with different name and phone number.
+        final SynchronousContactsProvider2 corpCp2 = setUpCorpProvider();
+        rawContactId = ContentUris.parseId(
+                corpCp2.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        // Insert a name.
+        ContentValues cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE,
+                StructuredName.DISPLAY_NAME, "Contact2 Corp",
+                StructuredName.GIVEN_NAME, "Contact2",
+                StructuredName.FAMILY_NAME, "Corp");
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+        // Insert a number.
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE,
+                Phone.NUMBER, "222-222-2222",
+                Phone.TYPE, Phone.TYPE_MOBILE);
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Insert another contact to to corp CP2, with different name phone number and phone type
+        rawContactId = ContentUris.parseId(
+                corpCp2.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        // Insert a name.
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE,
+                StructuredName.DISPLAY_NAME, "Contact3 Corp",
+                StructuredName.GIVEN_NAME, "Contact3",
+                StructuredName.FAMILY_NAME, "Corp");
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+        // Insert a number
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE,
+                Phone.NUMBER, "333-333-3333",
+                Phone.TYPE, Phone.TYPE_HOME);
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Execute the query to get the merged result.
+        Cursor c = mResolver.query(Phone.ENTERPRISE_CONTENT_URI, new String[]{Phone.CONTACT_ID,
+                Phone.DISPLAY_NAME, Phone.NUMBER}, Phone.TYPE + " = ?",
+                new String[]{String.valueOf(Phone.TYPE_MOBILE)}, null);
+        try {
+            // Verify the primary contact.
+            assertEquals(2, c.getCount());
+            assertEquals(3, c.getColumnCount());
+            c.moveToPosition(0);
+            assertEquals("Contact1 Primary", c.getString(c.getColumnIndex(Phone.DISPLAY_NAME)));
+            assertEquals("111-111-1111", c.getString(c.getColumnIndex(Phone.NUMBER)));
+            long contactId = c.getLong(c.getColumnIndex(Phone.CONTACT_ID));
+            assertFalse(Contacts.isEnterpriseContactId(contactId));
+
+            // Verify the enterprise contact.
+            c.moveToPosition(1);
+            assertEquals("Contact2 Corp", c.getString(c.getColumnIndex(Phone.DISPLAY_NAME)));
+            assertEquals("222-222-2222", c.getString(c.getColumnIndex(Phone.NUMBER)));
+            contactId = c.getLong(c.getColumnIndex(Phone.CONTACT_ID));
+            assertTrue(Contacts.isEnterpriseContactId(contactId));
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
      * Test for enterprise caller-id, with the corp profile.
      *
      * Note: in this test, we add one more provider instance for the authority

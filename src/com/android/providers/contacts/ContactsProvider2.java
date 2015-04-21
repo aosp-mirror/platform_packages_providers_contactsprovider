@@ -6546,7 +6546,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /**
      * Handles {@link Phone#ENTERPRISE_CONTENT_URI}.
      */
-    // TODO test
     private Cursor queryMergedDataPhones(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder) {
         final List<String> pathSegments = uri.getPathSegments();
