@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core ਐਪਸ"</string>
+    <string name="app_label" msgid="3389954322874982620">"ਸੰਪਰਕ ਸਟੋਰੇਜ"</string>
+    <string name="provider_label" msgid="6012150850819899907">"ਸੰਪਰਕ"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"ਸੰਪਰਕ ਅਪਗ੍ਰੇਡ ਲਈ ਵੱਧ ਮੈਮਰੀ ਦੀ ਲੋੜ ਹੈ।"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ਸੰਪਰਕਾਂ ਲਈ ਸਟੋਰੇਜ ਅਪਗ੍ਰੇਡ ਕਰ ਰਿਹਾ ਹੈ"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"ਅਪਗ੍ਰੇਡ ਪੂਰਾ ਕਰਨ ਲਈ ਛੋਹਵੋ।"</string>
+    <string name="default_directory" msgid="93961630309570294">"ਸੰਪਰਕ"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"ਹੋਰ"</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"ਇਸ ਤੋਂ ਵੌਇਸਮੇਲ "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"ਸੰਪਰਕ ਡਾਟਾਬੇਸ ਕਾਪੀ ਕਰੋ"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"ਤੁਸੀਂ ਇਹ ਕਰਨ ਵਾਲੇ ਹੋ 1) ਆਪਣੇ ਡਾਟਾਬੇਸ ਦੀ ਇੱਕ ਕਾਪੀ ਬਣਾਓ ਜਿਸ ਵਿੱਚ ਸਾਰੀ ਸੰਪਰਕ ਸੰਬੰਧਿਤ ਜਾਣਕਾਰੀ ਅਤੇ ਅੰਦਰੂਨੀ ਸਟੋਰੇਜ ਵਿੱਚ ਸਾਰਾ ਕਾਲ ਲੌਗ ਸ਼ਾਮਲ ਹੋਵੇ ਅਤੇ 2) ਇਸਨੂੰ ਈਮੇਲ ਕਰੋ। ਜਿਵੇਂ ਹੀ ਤੁਸੀਂ ਇਸਨੂੰ ਸਫਲਤਾਪੂਰਵਕ ਕਾਪੀ ਕਰ ਲਓ ਜਾਂ ਈਮੇਲ ਪ੍ਰਾਪਤ ਕਰ ਲਓ, ਕਾਪੀ ਮਿਟਾਉਣਾ ਯਾਦ ਰੱਖੋ।"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"ਹੁਣ ਮਿਟਾਓ"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"ਚਾਲੂ ਕਰੋ"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"ਆਪਣੀ ਫਾਈਲ ਭੇਜਣ ਲਈ ਇੱਕ ਪ੍ਰੋਗਰਾਮ ਚੁਣੋ"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"ਸੰਪਰ Db ਅਟੈਚ ਕੀਤਾ"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"ਅਟੈਚ ਕੀਤਾ ਮੇਰੀ ਸਾਰੀ ਸੰਪਰਕ ਜਾਣਕਾਰੀ ਵਾਲਾ ਮੇਰਾ ਸੰਪਰਕ ਡਾਟਾਬੇਸ ਹੈ। ਸਾਵਧਾਨੀ ਨਾਲ ਵਰਤੋ।"</string>
+</resources>
