@@ -303,7 +303,7 @@ public class CallLogProvider extends ContentProvider {
         // permission and also requires the additional voicemail param set.
         if (hasVoicemailValue(values)) {
             checkIsAllowVoicemailRequest(uri);
-            mVoicemailPermissions.checkCallerHasWriteAccess();
+            mVoicemailPermissions.checkCallerHasWriteAccess(getCallingPackage());
         }
         if (mCallsInserter == null) {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
@@ -411,9 +411,9 @@ public class CallLogProvider extends ContentProvider {
             SelectionBuilder selectionBuilder, boolean isQuery) {
         if (isAllowVoicemailRequest(uri)) {
             if (isQuery) {
-                mVoicemailPermissions.checkCallerHasReadAccess();
+                mVoicemailPermissions.checkCallerHasReadAccess(getCallingPackage());
             } else {
-                mVoicemailPermissions.checkCallerHasWriteAccess();
+                mVoicemailPermissions.checkCallerHasWriteAccess(getCallingPackage());
             }
         } else {
             selectionBuilder.addClause(EXCLUDE_VOICEMAIL_SELECTION);

@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.telecom.DefaultDialerManager;
 
 /**
  * Provides method related to check various voicemail permissions under the
@@ -37,13 +38,19 @@ public class VoicemailPermissions {
     }
 
     /** Determine if the calling process has full read access to all voicemails. */
-    public boolean callerHasReadAccess() {
+    public boolean callerHasReadAccess(String callingPackage) {
+        if (DefaultDialerManager.isDefaultOrSystemDialer(mContext, callingPackage)) {
+            return true;
+        }
         return callerHasPermission(android.Manifest.permission.READ_VOICEMAIL);
     }
 
     /** Determine if the calling process has the permission required to update and remove all
      * voicemails */
-    public boolean callerHasWriteAccess() {
+    public boolean callerHasWriteAccess(String callingPackage) {
+        if (DefaultDialerManager.isDefaultOrSystemDialer(mContext, callingPackage)) {
+            return true;
+        }
         return callerHasPermission(android.Manifest.permission.WRITE_VOICEMAIL);
     }
 
@@ -64,17 +71,19 @@ public class VoicemailPermissions {
      *
      * @throws SecurityException if the caller does not have the voicemail source permission.
      */
-    public void checkCallerHasReadAccess() {
-        if (!callerHasReadAccess()) {
-            throw new SecurityException(String.format("The caller must have %s permission: ",
-                    android.Manifest.permission.READ_VOICEMAIL));
+    public void checkCallerHasReadAccess(String callingPackage) {
+        if (!callerHasReadAccess(callingPackage)) {
+            throw new SecurityException(String.format("The caller must be the default or system "
+                    + "dialer, or have the system-only %s permission: ",
+                            android.Manifest.permission.READ_VOICEMAIL));
         }
     }
 
-    public void checkCallerHasWriteAccess() {
-        if (!callerHasWriteAccess()) {
-            throw new SecurityException(String.format("The caller must have %s permission: ",
-                    android.Manifest.permission.WRITE_VOICEMAIL));
+    public void checkCallerHasWriteAccess(String callingPackage) {
+        if (!callerHasWriteAccess(callingPackage)) {
+            throw new SecurityException(String.format("The caller must be the default or system "
+                    + "dialer, or have the system-only %s permission: ",
+                            android.Manifest.permission.WRITE_VOICEMAIL));
         }
     }
 

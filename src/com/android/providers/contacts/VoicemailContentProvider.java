@@ -255,7 +255,7 @@ public class VoicemailContentProvider extends ContentProvider
         }
 
         // You must have access to the provider given in values.
-        if (!mVoicemailPermissions.callerHasWriteAccess()) {
+        if (!mVoicemailPermissions.callerHasWriteAccess(getCallingPackage())) {
             checkPackagesMatch(getCallingPackage_(),
                     values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD),
                     uriData.getUri());
@@ -296,7 +296,7 @@ public class VoicemailContentProvider extends ContentProvider
             return UriData.createUriData(uri);
         }
 
-        if (mVoicemailPermissions.callerHasReadAccess()) {
+        if (mVoicemailPermissions.callerHasReadAccess(getCallingPackage())) {
             return UriData.createUriData(uri);
         }
 
@@ -353,7 +353,7 @@ public class VoicemailContentProvider extends ContentProvider
      * @throws SecurityException if the check fails.
      */
     private void checkPackagePermission(UriData uriData) {
-        if (!mVoicemailPermissions.callerHasWriteAccess()) {
+        if (!mVoicemailPermissions.callerHasWriteAccess(getCallingPackage())) {
             if (!uriData.hasSourcePackage()) {
                 // You cannot have a match if this is not a provider URI.
                 throw new SecurityException(String.format(
@@ -414,14 +414,16 @@ public class VoicemailContentProvider extends ContentProvider
     }
 
     /**
-     * Whether or not the calling package has the appropriate read/write permission
+     * Whether or not the calling package has the appropriate read/write permission. The user
+     * selected default and/or system dialers are always allowed to read and write to the
+     * VoicemailContentProvider.
      *
      * @param read Whether or not this operation is a read
      *
      * @return True if the package has the permission required to perform the read/write operation
      */
     private boolean hasReadWritePermission(boolean read) {
-        return read ? mVoicemailPermissions.callerHasReadAccess() :
-            mVoicemailPermissions.callerHasWriteAccess();
+        return read ? mVoicemailPermissions.callerHasReadAccess(getCallingPackage()) :
+            mVoicemailPermissions.callerHasWriteAccess(getCallingPackage());
     }
 }
