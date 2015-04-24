@@ -1021,7 +1021,8 @@ public abstract class AbstractContactAggregator {
                 + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
 
         final String[] COLUMNS = new String[] {
-                RawContacts._ID, RawContacts.CONTACT_ID, RawContactsColumns.ACCOUNT_ID
+                RawContactsColumns.CONCRETE_ID, RawContacts.CONTACT_ID,
+                RawContactsColumns.ACCOUNT_ID
         };
 
         int RAW_CONTACT_ID = 0;

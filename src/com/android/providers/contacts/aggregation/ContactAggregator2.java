@@ -228,7 +228,8 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         final RawContactMatchingCandidates matchingCandidates = new RawContactMatchingCandidates(
                 matcher.pickBestMatches(SCORE_THRESHOLD_SUGGEST));
 
-        Set<Long> newIds = matchingCandidates.getRawContactIdSet();
+        Set<Long> newIds = new HashSet<>();
+        newIds.addAll(matchingCandidates.getRawContactIdSet());
         // Keep doing the following until no new raw contact candidate is found.
         // TODO: may need to cache the matching score to improve performance.
         while (!newIds.isEmpty()) {
@@ -246,7 +247,8 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                     }
                 }
             }
-            newIds = tmpIdSet;
+            newIds.clear();
+            newIds.addAll(tmpIdSet);
         }
         return matchingCandidates;
     }
