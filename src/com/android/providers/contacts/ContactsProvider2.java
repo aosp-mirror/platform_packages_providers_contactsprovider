@@ -6838,7 +6838,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .appendPath(phoneNumber)
                 .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
                         String.valueOf(isSipAddress)).build();
-        return queryEnterpriseIfNecessary(localUri, projection, null, null, null, PhoneLookup._ID);
+        return queryEnterpriseIfNecessary(localUri, projection, null, null, null,
+                isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
     }
 
     /**
