@@ -1972,6 +1972,58 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testQueryRawContactEntitiesCorp_noCorpProfile() {
+        // Insert a contact into the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Doe");
+        insertPhoneNumber(rawContactId, "408-111-1111");
+
+        // No corp profile, no data.
+        assertEquals(0, getCount(RawContactsEntity.CORP_CONTENT_URI));
+    }
+
+    public void testQueryRawContactEntitiesCorp_withCorpProfile() throws Exception {
+        // Insert a contact into the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Doe");
+        insertPhoneNumber(rawContactId, "408-111-1111");
+
+        // Insert a contact into corp CP2.
+        final SynchronousContactsProvider2 corpCp2 = setUpCorpProvider();
+        rawContactId = ContentUris.parseId(
+                corpCp2.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        // Insert a name.
+        ContentValues cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE,
+                StructuredName.DISPLAY_NAME, "Contact2 Corp");
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+        // Insert a number.
+        cv = cv(
+                Data.RAW_CONTACT_ID, rawContactId,
+                Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE,
+                Phone.NUMBER, "222-222-2222",
+                Phone.TYPE, Phone.TYPE_MOBILE);
+        corpCp2.insert(ContactsContract.Data.CONTENT_URI, cv);
+
+        // Do the query
+        Cursor c = mResolver.query(RawContactsEntity.CORP_CONTENT_URI,
+                new String[]{RawContactsEntity._ID, RawContactsEntity.DATA1},
+                RawContactsEntity.MIMETYPE + "=?", new String[]{
+                        StructuredName.CONTENT_ITEM_TYPE}, null);
+        // The result should only contains corp data.
+        assertEquals(1, c.getCount());
+        assertEquals(2, c.getColumnCount());
+        c.moveToPosition(0);
+        long id = c.getLong(c.getColumnIndex(RawContactsEntity._ID));
+        String data1 = c.getString(c.getColumnIndex(RawContactsEntity.DATA1));
+        assertEquals("Contact2 Corp", data1);
+        assertEquals(rawContactId, id);
+        c.close();
+    }
+
     public void testUpgradeToVersion910_CallsDeletedForCorpProfileOnly() throws Exception {
         CallLogProvider provider =
                 (CallLogProvider) addProvider(TestCallLogProvider.class, CallLog.AUTHORITY);
