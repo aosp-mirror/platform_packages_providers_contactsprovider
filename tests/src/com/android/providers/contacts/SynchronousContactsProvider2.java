@@ -41,7 +41,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private boolean mIsVoiceCapable = true;
 
     @Override
-    protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         if (sDbHelper == null) {
             sDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
         }

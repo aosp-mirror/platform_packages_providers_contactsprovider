@@ -993,6 +993,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private SQLiteStatement mStatusUpdateDelete;
     private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
     private SQLiteStatement mContactInDefaultDirectoryQuery;
+    private SQLiteStatement mMetadataSyncReplace;
 
     private StringBuilder mSb = new StringBuilder();
 
@@ -6033,5 +6034,23 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 " FROM " + Tables.SEARCH_INDEX +
                 " WHERE " + SearchIndexColumns.CONTACT_ID + "=CAST(? AS int)",
                 new String[] {String.valueOf(contactId)});
+    }
+
+    public long replaceMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
+        if (mMetadataSyncReplace == null) {
+            mMetadataSyncReplace = getWritableDatabase().compileStatement(
+                    "INSERT OR REPLACE INTO " + Tables.METADATA_SYNC + "("
+                            + MetadataSync.RAW_CONTACT_BACKUP_ID + ", "
+                            + MetadataSyncColumns.ACCOUNT_ID + ", "
+                            + MetadataSync.DATA + ","
+                            + MetadataSync.DELETED + ")" +
+                            " VALUES (?,?,?,?)");
+        }
+        mMetadataSyncReplace.bindString(1, backupId);
+        mMetadataSyncReplace.bindLong(2, accountId);
+        data = (data == null) ? "" : data;
+        mMetadataSyncReplace.bindString(3, data);
+        mMetadataSyncReplace.bindLong(4, deleted);
+        return mMetadataSyncReplace.executeInsert();
     }
 }

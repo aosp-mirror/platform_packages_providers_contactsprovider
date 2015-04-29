@@ -55,7 +55,7 @@ import android.provider.ContactsContract.StreamItems;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
-
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.testutil.DataUtil;
@@ -133,6 +133,8 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         mActor.addPermissions(
                 "android.permission.READ_CONTACTS",
                 "android.permission.WRITE_CONTACTS",
+                "android.permission.READ_CONTACT_METADATA",
+                "android.permission.WRITE_CONTACT_METADATA",
                 "android.permission.READ_SOCIAL_STREAM",
                 "android.permission.WRITE_SOCIAL_STREAM",
                 "android.permission.READ_PROFILE",
@@ -561,6 +563,18 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
                 .getWritableDatabase();
         db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY +
                 " WHERE " + BaseColumns._ID + "=" + contactId);
+    }
+
+    protected long createAccount(String accountName, String accountType, String dataSet) {
+        // There's no api for this, so we just tweak the DB directly.
+        SQLiteDatabase db = ((ContactsProvider2) getProvider()).getDatabaseHelper()
+                .getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(AccountsColumns.ACCOUNT_NAME, accountName);
+        values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
+        values.put(AccountsColumns.DATA_SET, dataSet);
+        return db.insert(Tables.ACCOUNTS, null, values);
     }
 
     protected Cursor queryRawContact(long rawContactId) {

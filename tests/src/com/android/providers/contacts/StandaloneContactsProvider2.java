@@ -29,7 +29,7 @@ public class StandaloneContactsProvider2 extends SynchronousContactsProvider2 {
     }
 
     @Override
-    protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         if (mDbHelper == null) {
             mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
         }

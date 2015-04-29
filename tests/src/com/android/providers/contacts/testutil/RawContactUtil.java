@@ -24,6 +24,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.test.mock.MockContentResolver;
+import com.android.providers.contacts.AccountWithDataSet;
 
 import java.util.List;
 
@@ -90,7 +91,18 @@ public class RawContactUtil {
             String... extras) {
         ContentValues values = new ContentValues();
         CommonDatabaseUtils.extrasVarArgsToValues(values, extras);
-        final Uri uri = TestUtil.maybeAddAccountQueryParameters(ContactsContract.RawContacts.CONTENT_URI, account);
+        final Uri uri = TestUtil.maybeAddAccountQueryParameters(
+                ContactsContract.RawContacts.CONTENT_URI, account);
+        Uri contactUri = resolver.insert(uri, values);
+        return ContentUris.parseId(contactUri);
+    }
+
+    public static long createRawContactWithAccountDataSet(ContentResolver resolver,
+            AccountWithDataSet accountWithDataSet, String... extras) {
+        ContentValues values = new ContentValues();
+        CommonDatabaseUtils.extrasVarArgsToValues(values, extras);
+        final Uri uri = TestUtil.maybeAddAccountWithDataSetQueryParameters(
+                ContactsContract.RawContacts.CONTENT_URI, accountWithDataSet);
         Uri contactUri = resolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
     }

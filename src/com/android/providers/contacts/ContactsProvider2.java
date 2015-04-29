@@ -1973,7 +1973,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     @Override
-    protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
     }
 
@@ -8034,7 +8034,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return A string containing a non-negative integer, or <code>null</code> if
      *         the parameter is not set, or is set to an invalid value.
      */
-    private String getLimit(Uri uri) {
+     static String getLimit(Uri uri) {
         String limitParam = getQueryParameter(uri, ContactsContract.LIMIT_PARAM_KEY);
         if (limitParam == null) {
             return null;

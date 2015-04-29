@@ -18,8 +18,9 @@ package com.android.providers.contacts.testutil;
 
 import android.accounts.Account;
 import android.net.Uri;
-import android.provider.ContactsContract;
+import android.provider.ContactsContract.RawContacts;
 import android.util.Log;
+import com.android.providers.contacts.AccountWithDataSet;
 
 /**
  * Common methods used for testing.
@@ -46,8 +47,20 @@ public class TestUtil {
             return uri;
         }
         return uri.buildUpon()
-                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, account.name)
-                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, account.type)
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
+                .build();
+    }
+
+    public static Uri maybeAddAccountWithDataSetQueryParameters(Uri uri,
+            AccountWithDataSet account) {
+        if (account == null) {
+            return uri;
+        }
+        return uri.buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.getAccountName())
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.getAccountType())
+                .appendQueryParameter(RawContacts.DATA_SET, account.getDataSet())
                 .build();
     }
 }
