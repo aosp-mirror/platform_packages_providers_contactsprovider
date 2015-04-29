@@ -71,7 +71,7 @@ public class ContactLocaleUtils {
         protected final ImmutableIndex mAlphabeticIndex;
         private final int mAlphabeticIndexBucketCount;
         private final int mNumberBucketIndex;
-        private final boolean mEnableSecondaryLocalePinyin;
+        private final boolean mUsePinyinTransliterator;
 
         public ContactLocaleUtilsBase(LocaleSet locales) {
             // AlphabeticIndex.getBucketLabel() uses a binary search across
@@ -87,7 +87,8 @@ public class ContactLocaleUtils {
             // Cyrillic because their alphabets are complementary supersets
             // of Russian.
             final Locale secondaryLocale = locales.getSecondaryLocale();
-            mEnableSecondaryLocalePinyin = locales.isSecondaryLocaleSimplifiedChinese();
+            mUsePinyinTransliterator = locales.isPrimaryLocaleSimplifiedChinese() ||
+                locales.isSecondaryLocaleSimplifiedChinese();
             AlphabeticIndex ai = new AlphabeticIndex(locales.getPrimaryLocale())
                 .setMaxLabelCount(300);
             if (secondaryLocale != null) {
@@ -144,10 +145,13 @@ public class ContactLocaleUtils {
             }
 
             /**
-             * TODO: ICU 52 AlphabeticIndex doesn't support Simplified Chinese
-             * as a secondary locale. Remove the following if that is added.
+             * ICU 55 AlphabeticIndex doesn't support Simplified Chinese
+             * as a secondary locale so it is necessary to use the
+             * Pinyin transliterator. We also use this for a Simplified
+             * Chinese primary locale because it gives more accurate letter
+             * buckets. b/19835686
              */
-            if (mEnableSecondaryLocalePinyin) {
+            if (mUsePinyinTransliterator) {
                 name = HanziToPinyin.getInstance().transliterate(name);
             }
             final int bucket = mAlphabeticIndex.getBucketIndex(name);
