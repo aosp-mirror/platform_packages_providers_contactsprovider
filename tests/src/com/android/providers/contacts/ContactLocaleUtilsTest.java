@@ -41,8 +41,9 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String ARABIC_NAME = "\u0646\u0648\u0631"; /* Noor */
     private static final String CHINESE_NAME = "\u675C\u9D51";
     private static final String SERBIAN_NAME = "\u0408\u0435\u043B\u0435\u043D\u0430";
-    private static final String UKRAINIAN_NAME = "\u0407";
-    private static final String UKRAINIAN_NAME_2 = "\u0490";
+    private static final String UKRAINIAN_NAME = "\u0406";
+    private static final String UKRAINIAN_NAME_2 = "\u0407";
+    private static final String UKRAINIAN_NAME_3 = "\u0490";
     private static final String CHINESE_LATIN_MIX_NAME_1 = "D\u675C\u9D51";
     private static final String CHINESE_LATIN_MIX_NAME_2 = "MARY \u675C\u9D51";
     private static final String[] CHINESE_NAME_KEY = {"\u9D51", "\u675C\u9D51", "JUAN", "DUJUAN",
@@ -88,7 +89,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "\u0635", "\u0636", "\u0637", "\u0638", "\u0639", "\u063a", "\u0641",
         "\u0642", "\u0643", "\u0644", "\u0645", "\u0646", "\u0647", "\u0648",
         "\u064a",
-        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
 
@@ -163,7 +164,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
             assertEquals("\u0408", getLabel(SERBIAN_NAME));
         }
         if (hasUkrainianCollator) {
-            assertEquals("\u0407", getLabel(UKRAINIAN_NAME));
+            assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
         }
 
         assertNull(getNameLookupKeys(LATIN_NAME, FullNameStyle.UNDEFINED));
@@ -334,11 +335,12 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         }
 
         ContactLocaleUtils.setLocale(LOCALE_UKRAINIAN);
-        assertEquals("\u0407", getLabel(UKRAINIAN_NAME));
-        // ICU 52 has a bug whereby this letter has a bucket created only if
-        // Ukrainian is the primary language. Once this is fixed also test this
-        // label when in English locale.
-        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_2));
+        assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
+        // ICU 55 has a bug whereby these letters have buckets created only if
+        // Ukrainian is the primary language. Once this is fixed also test
+        // these labels when in English locale.
+        assertEquals("\u0407", getLabel(UKRAINIAN_NAME_2));
+        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_3));
         assertEquals("B", getLabel("Bob Smith"));
     }
 
