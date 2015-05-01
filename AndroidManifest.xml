@@ -75,8 +75,7 @@
                   android:authorities="com.android.contacts.metadata"
                   android:multiprocess="false"
                   android:exported="true"
-                  android:readPermission="android.permission.READ_CONTACT_METADATA"
-                  android:writePermission="android.permission.WRITE_CONTACT_METADATA">
+                  android:permission="android.permission.READ_WRITE_CONTACT_METADATA">
         </provider>
 
         <!-- Handles database upgrades after OTAs, then disables itself -->

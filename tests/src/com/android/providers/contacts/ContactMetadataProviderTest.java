@@ -360,22 +360,30 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         assertStoredValue(metadataUri, MetadataSync.DATA, newData);
     }
 
+    public void testDeleteMetadata() {
+        //insert another metadata for TEST_ACCOUNT
+        insertMetadata(TEST_ACCOUNT_NAME, TEST_ACCOUNT_TYPE, TEST_DATA_SET, "2", TEST_DATA, 0);
+        Cursor c = mResolver.query(MetadataSync.CONTENT_URI, null, SELECTION_BY_TEST_ACCOUNT,
+                null, null);
+        assertEquals(2, c.getCount());
+        int numOfDeletion = mResolver.delete(MetadataSync.CONTENT_URI, SELECTION_BY_TEST_ACCOUNT,
+                null);
+        assertEquals(2, numOfDeletion);
+        c = mResolver.query(MetadataSync.CONTENT_URI, null, SELECTION_BY_TEST_ACCOUNT,
+                null, null);
+        assertEquals(0, c.getCount());
+    }
+
     private void setupData() {
         mTestAccount = new AccountWithDataSet(TEST_ACCOUNT_NAME, TEST_ACCOUNT_TYPE, TEST_DATA_SET);
         long rawContactId1 = RawContactUtil.createRawContactWithAccountDataSet(
                 mResolver, mTestAccount);
         createAccount(TEST_ACCOUNT_NAME, TEST_ACCOUNT_TYPE, TEST_DATA_SET);
-        mResolver.insert(MetadataSync.CONTENT_URI, getDefaultValues());
+        insertMetadata(getDefaultValues());
 
         // Insert another entry for another account
         createAccount("John", "account2", null);
-        ContentValues values = new ContentValues();
-        values.put(MetadataSync.ACCOUNT_NAME, "John");
-        values.put(MetadataSync.ACCOUNT_TYPE, "account2");
-        values.put(MetadataSync.RAW_CONTACT_BACKUP_ID, "1");
-        values.put(MetadataSync.DATA, TEST_DATA);
-        values.put(MetadataSync.DELETED, 0);
-        mResolver.insert(MetadataSync.CONTENT_URI, values);
+        insertMetadata("John", "account2", null, "1", TEST_DATA, 0);
     }
 
     private ContentValues getDefaultValues() {
@@ -387,5 +395,21 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         defaultValues.put(MetadataSync.DATA, TEST_DATA);
         defaultValues.put(MetadataSync.DELETED, 0);
         return defaultValues;
+    }
+
+    private long insertMetadata(String accountName, String accountType, String dataSet, String
+            backupId, String data, int deleted) {
+        ContentValues values = new ContentValues();
+        values.put(MetadataSync.ACCOUNT_NAME, accountName);
+        values.put(MetadataSync.ACCOUNT_TYPE, accountType);
+        values.put(MetadataSync.DATA_SET, dataSet);
+        values.put(MetadataSync.RAW_CONTACT_BACKUP_ID, backupId);
+        values.put(MetadataSync.DATA, data);
+        values.put(MetadataSync.DELETED, deleted);
+        return insertMetadata(values);
+    }
+
+    private long insertMetadata(ContentValues values) {
+        return ContentUris.parseId(mResolver.insert(MetadataSync.CONTENT_URI, values));
     }
 }

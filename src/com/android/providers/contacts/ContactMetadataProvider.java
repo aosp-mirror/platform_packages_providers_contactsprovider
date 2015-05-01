@@ -23,7 +23,6 @@ import android.content.Context;
 import android.content.IContentProvider;
 import android.content.UriMatcher;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
@@ -45,7 +44,6 @@ import java.util.Arrays;
 import java.util.Map;
 
 import static com.android.providers.contacts.ContactsProvider2.getLimit;
-import static com.android.providers.contacts.ContactsProvider2.getQueryParameter;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
 /**
@@ -157,9 +155,31 @@ public class ContactMetadataProvider extends ContentProvider {
         return ContentUris.withAppendedId(uri, metadataSyncId);
     }
 
+    // TODO: Wrap insert/upate/delete operations in transaction.
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        return 0;
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+
+        final int matchedUriId = sURIMatcher.match(uri);
+        switch (matchedUriId) {
+            case METADATA_SYNC:
+                int numDeletes = 0;
+                Cursor c = db.query(Views.METADATA_SYNC, new String[]{MetadataSync._ID},
+                        selection, selectionArgs, null, null, null);
+                try {
+                    while (c.moveToNext()) {
+                        final long contactMetadataId = c.getLong(0);
+                        numDeletes += db.delete(Tables.METADATA_SYNC,
+                                MetadataSync._ID + "=" + contactMetadataId, null);
+                    }
+                } finally {
+                    c.close();
+                }
+                return numDeletes;
+            default:
+                throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                        "Calling contact metadata delete on an unknown/invalid URI", uri));
+        }
     }
 
     @Override
