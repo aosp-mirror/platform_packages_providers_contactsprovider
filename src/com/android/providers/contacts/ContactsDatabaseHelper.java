@@ -993,7 +993,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private SQLiteStatement mStatusUpdateDelete;
     private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
     private SQLiteStatement mContactInDefaultDirectoryQuery;
-    private SQLiteStatement mMetadataSyncReplace;
+    private SQLiteStatement mMetadataSyncInsert;
+    private SQLiteStatement mMetadataSyncUpdate;
 
     private StringBuilder mSb = new StringBuilder();
 
@@ -3668,7 +3669,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void upgradeToVersion401(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE " + Tables.VISIBLE_CONTACTS + " (" +
                 Contacts._ID + " INTEGER PRIMARY KEY" +
-        ");");
+                ");");
         db.execSQL("INSERT INTO " + Tables.VISIBLE_CONTACTS +
                 " SELECT " + Contacts._ID +
                 " FROM " + Tables.CONTACTS +
@@ -3823,8 +3824,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 " ADD " + Groups.GROUP_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0");
         db.execSQL(
                 "UPDATE " + Tables.GROUPS +
-                "   SET " + Groups.GROUP_IS_READ_ONLY + "=1" +
-                " WHERE " + Groups.SYSTEM_ID + " NOT NULL");
+                        "   SET " + Groups.GROUP_IS_READ_ONLY + "=1" +
+                        " WHERE " + Groups.SYSTEM_ID + " NOT NULL");
     }
 
     private void upgradeToVersion416(SQLiteDatabase db) {
@@ -5000,14 +5001,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
         final SQLiteStatement select = getWritableDatabase().compileStatement(
                 "SELECT " + AccountsColumns._ID +
-                " FROM " + Tables.ACCOUNTS +
-                " WHERE " +
-                "((?1 IS NULL AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL) OR " +
-                "(" + AccountsColumns.ACCOUNT_NAME + "=?1)) AND " +
-                "((?2 IS NULL AND " + AccountsColumns.ACCOUNT_TYPE + " IS NULL) OR " +
-                "(" + AccountsColumns.ACCOUNT_TYPE + "=?2)) AND " +
-                "((?3 IS NULL AND " + AccountsColumns.DATA_SET + " IS NULL) OR " +
-                "(" + AccountsColumns.DATA_SET + "=?3))");
+                        " FROM " + Tables.ACCOUNTS +
+                        " WHERE " +
+                        "((?1 IS NULL AND " + AccountsColumns.ACCOUNT_NAME + " IS NULL) OR " +
+                        "(" + AccountsColumns.ACCOUNT_NAME + "=?1)) AND " +
+                        "((?2 IS NULL AND " + AccountsColumns.ACCOUNT_TYPE + " IS NULL) OR " +
+                        "(" + AccountsColumns.ACCOUNT_TYPE + "=?2)) AND " +
+                        "((?3 IS NULL AND " + AccountsColumns.DATA_SET + " IS NULL) OR " +
+                        "(" + AccountsColumns.DATA_SET + "=?3))");
         try {
             DatabaseUtils.bindObjectToProgram(select, 1, accountWithDataSet.getAccountName());
             DatabaseUtils.bindObjectToProgram(select, 2, accountWithDataSet.getAccountType());
@@ -6036,21 +6037,39 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 new String[] {String.valueOf(contactId)});
     }
 
-    public long replaceMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
-        if (mMetadataSyncReplace == null) {
-            mMetadataSyncReplace = getWritableDatabase().compileStatement(
-                    "INSERT OR REPLACE INTO " + Tables.METADATA_SYNC + "("
+    public long insertMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
+        if (mMetadataSyncInsert == null) {
+            mMetadataSyncInsert = getWritableDatabase().compileStatement(
+                    "INSERT INTO " + Tables.METADATA_SYNC + "("
                             + MetadataSync.RAW_CONTACT_BACKUP_ID + ", "
                             + MetadataSyncColumns.ACCOUNT_ID + ", "
                             + MetadataSync.DATA + ","
                             + MetadataSync.DELETED + ")" +
                             " VALUES (?,?,?,?)");
         }
-        mMetadataSyncReplace.bindString(1, backupId);
-        mMetadataSyncReplace.bindLong(2, accountId);
+        mMetadataSyncInsert.bindString(1, backupId);
+        mMetadataSyncInsert.bindLong(2, accountId);
         data = (data == null) ? "" : data;
-        mMetadataSyncReplace.bindString(3, data);
-        mMetadataSyncReplace.bindLong(4, deleted);
-        return mMetadataSyncReplace.executeInsert();
+        mMetadataSyncInsert.bindString(3, data);
+        mMetadataSyncInsert.bindLong(4, deleted);
+        return mMetadataSyncInsert.executeInsert();
+    }
+
+    public void updateMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
+        if (mMetadataSyncUpdate == null) {
+            mMetadataSyncUpdate = getWritableDatabase().compileStatement(
+                    "UPDATE " + Tables.METADATA_SYNC
+                            + " SET " + MetadataSync.DATA + "=?,"
+                            + MetadataSync.DELETED + "=?"
+                            + " WHERE " + MetadataSync.RAW_CONTACT_BACKUP_ID + "=? AND "
+                            + MetadataSyncColumns.ACCOUNT_ID + "=?");
+        }
+
+        data = (data == null) ? "" : data;
+        mMetadataSyncUpdate.bindString(1, data);
+        mMetadataSyncUpdate.bindLong(2, deleted);
+        mMetadataSyncUpdate.bindString(3, backupId);
+        mMetadataSyncUpdate.bindLong(4, accountId);
+        mMetadataSyncUpdate.execute();
     }
 }
