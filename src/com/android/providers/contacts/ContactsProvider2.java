@@ -92,6 +92,7 @@ import android.provider.ContactsContract.DeletedContacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.MetadataSync;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
@@ -127,6 +128,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumn
 import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
@@ -528,6 +530,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
             "UPDATE " + Tables.RAW_CONTACTS +
             " SET " + RawContacts.DIRTY + "=1" +
             " WHERE " + RawContacts._ID + " IN (";
+
+    // Sql for updating MetadataSync.DELETED flag on multiple raw contacts.
+    // When using this sql, add comma separated raw contacts ids and "))".
+    private static final String UPDATE_METADATASYNC_SET_DELETED_SQL =
+            "UPDATE " + Tables.METADATA_SYNC
+                    + " SET " + MetadataSync.DELETED + "=1"
+                    + " WHERE " + MetadataSync._ID + " IN "
+                            + "(SELECT " + MetadataSyncColumns.CONCRETE_ID
+                            + " FROM " + Tables.RAW_CONTACTS_JOIN_METADATA_SYNC
+                            + " WHERE " + RawContactsColumns.CONCRETE_DELETED + "=1 AND "
+                            + RawContactsColumns.CONCRETE_ID + " IN (";
 
     /** Sql for updating VERSION on multiple raw contacts */
     private static final String UPDATE_RAW_CONTACT_SET_VERSION_SQL =
@@ -1449,6 +1462,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private int mFastScrollingIndexCacheMissCount;
     private long mTotalTimeFastScrollingIndexGenerate;
 
+    // MetadataSync flag.
+    private boolean mMetadataSyncEnabled;
+
     @Override
     public boolean onCreate() {
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
@@ -1483,6 +1499,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
 
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
+
+        mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
+                getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC, 0) == 1;
 
         mContactsHelper = getDatabaseHelper(getContext());
         mDbHelper.set(mContactsHelper);
@@ -2408,6 +2427,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         for (long rawContactId : mTransactionContext.get().getInsertedRawContactIds()) {
             mDbHelper.get().updateRawContactDisplayName(db, rawContactId);
             mAggregator.get().onRawContactInsert(mTransactionContext.get(), db, rawContactId);
+            if (mMetadataSyncEnabled) {
+                updateMetadataOnRawContactInsert(db, rawContactId);
+            }
         }
 
         Set<Long> dirtyRawContacts = mTransactionContext.get().getDirtyRawContactIds();
@@ -2430,6 +2452,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         final Set<Long> changedRawContacts = mTransactionContext.get().getChangedRawContactIds();
         ContactsTableUtil.updateContactLastUpdateByRawContactId(db, changedRawContacts);
+        if (!changedRawContacts.isEmpty() && mMetadataSyncEnabled) {
+            // For the deleted raw contact, set related metadata as deleted
+            // if metadata flag is enabled.
+            mSb.setLength(0);
+            mSb.append(UPDATE_METADATASYNC_SET_DELETED_SQL);
+            appendIds(mSb, changedRawContacts);
+            mSb.append("))");
+            db.execSQL(mSb.toString());
+        }
 
         // Update sync states.
         for (Map.Entry<Long, Object> entry : mTransactionContext.get().getUpdatedSyncStates()) {
@@ -2441,6 +2472,54 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         mTransactionContext.get().clearExceptSearchIndexUpdates();
+    }
+
+    @VisibleForTesting
+    void setMetadataSyncForTest(boolean enabled) {
+        mMetadataSyncEnabled = enabled;
+    }
+
+    interface MetadataSyncQuery {
+        String TABLE = Tables.RAW_CONTACTS_JOIN_METADATA_SYNC;
+        String[] COLUMNS = new String[] {
+                MetadataSyncColumns.CONCRETE_ID,
+                MetadataSync.DATA
+        };
+        int METADATA_SYNC_ID = 0;
+        int METADATA_SYNC_DATA = 1;
+        String SELECTION = MetadataSyncColumns.CONCRETE_DELETED + "=0 AND " +
+                RawContactsColumns.CONCRETE_ID + "=?";
+    }
+
+    /**
+     * Fetch the related metadataSync data column for the raw contact id.
+     * Returns null if there's no metadata for the raw contact.
+     */
+    private String queryMetadataSyncData(SQLiteDatabase db, long rawContactId) {
+        String metadataSyncData = null;
+        mSelectionArgs1[0] = String.valueOf(rawContactId);
+        final Cursor cursor = db.query(MetadataSyncQuery.TABLE,
+                MetadataSyncQuery.COLUMNS, MetadataSyncQuery.SELECTION,
+                mSelectionArgs1, null, null, null);
+        try {
+            if (cursor.moveToFirst()) {
+                metadataSyncData = cursor.getString(MetadataSyncQuery.METADATA_SYNC_DATA);
+            }
+        } finally {
+            cursor.close();
+        }
+        return metadataSyncData;
+    }
+
+    private void updateMetadataOnRawContactInsert(SQLiteDatabase db, long rawContactId) {
+        // Read metadata from MetadataSync table for the raw contact, and update.
+        final String metadataSyncData = queryMetadataSyncData(db, rawContactId);
+        if (TextUtils.isEmpty(metadataSyncData)) {
+            return;
+        }
+        final MetadataEntry metadataEntry = MetadataEntryParser.parseDataToMetaDataEntry(
+                metadataSyncData);
+        updateFromMetaDataEntry(db, metadataEntry);
     }
 
     /**

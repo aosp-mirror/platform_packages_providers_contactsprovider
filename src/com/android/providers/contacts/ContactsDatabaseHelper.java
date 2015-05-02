@@ -275,6 +275,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " JOIN " + Tables.ACCOUNTS + " ON ("
                 + AccountsColumns.CONCRETE_ID + "=" + RawContactsColumns.CONCRETE_ACCOUNT_ID
                 + ")";
+
+        public static final String RAW_CONTACTS_JOIN_METADATA_SYNC = Tables.RAW_CONTACTS
+                + " JOIN " + Tables.METADATA_SYNC + " ON ("
+                + RawContactsColumns.CONCRETE_BACKUP_ID + "="
+                + MetadataSyncColumns.CONCRETE_BACKUP_ID
+                + " AND "
+                + RawContactsColumns.CONCRETE_ACCOUNT_ID + "="
+                + MetadataSyncColumns.CONCRETE_ACCOUNT_ID
+                + ")";
     }
 
     public interface Joins {
@@ -735,7 +744,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     public interface MetadataSyncColumns {
         static final String CONCRETE_ID = Tables.METADATA_SYNC + "._id";
         static final String ACCOUNT_ID = "account_id";
+        static final String CONCRETE_BACKUP_ID = Tables.METADATA_SYNC + "." +
+                MetadataSync.RAW_CONTACT_BACKUP_ID;
         static final String CONCRETE_ACCOUNT_ID = Tables.METADATA_SYNC + "." + ACCOUNT_ID;
+        static final String CONCRETE_DELETED = Tables.METADATA_SYNC + "." +
+                MetadataSync.DELETED;
     }
 
     private  interface EmailQuery {

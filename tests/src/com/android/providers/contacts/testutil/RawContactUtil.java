@@ -130,4 +130,19 @@ public class RawContactUtil {
     public static long createRawContact(ContentResolver resolver) {
         return createRawContact(resolver, null);
     }
+
+    public static long createRawContactWithBackupId(ContentResolver resolver, String backupId,
+            Account account) {
+        ContentValues values = new ContentValues();
+        values.put(ContactsContract.RawContacts.BACKUP_ID, backupId);
+        final Uri uri = ContactsContract.RawContacts.CONTENT_URI
+                .buildUpon()
+                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME,
+                        account.name)
+                .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE,
+                        account.type)
+                .build();
+        Uri contactUri = resolver.insert(uri, values);
+        return ContentUris.parseId(contactUri);
+    }
 }
