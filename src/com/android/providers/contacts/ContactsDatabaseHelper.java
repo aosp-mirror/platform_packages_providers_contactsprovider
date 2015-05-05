@@ -120,9 +120,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   800-899 Kitkat
      *   900-999 Lollipop
      *   1000-1099 M
+     *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1008;
+    static final int DATABASE_VERSION = 1100;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -453,6 +454,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONCRETE_PINNED =
                 Tables.RAW_CONTACTS + "." + RawContacts.PINNED;
 
+        public static final String CONCRETE_METADATA_DIRTY =
+                Tables.RAW_CONTACTS + "." + RawContacts.METADATA_DIRTY;
         public static final String DISPLAY_NAME = RawContacts.DISPLAY_NAME_PRIMARY;
         public static final String DISPLAY_NAME_SOURCE = RawContacts.DISPLAY_NAME_SOURCE;
         public static final String AGGREGATION_NEEDED = "aggregation_needed";
@@ -1241,6 +1244,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 RawContacts.VERSION + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.DELETED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.METADATA_DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.CONTACT_ID + " INTEGER REFERENCES contacts(_id)," +
                 RawContacts.AGGREGATION_MODE + " INTEGER NOT NULL DEFAULT " +
                         RawContacts.AGGREGATION_MODE_DEFAULT + "," +
@@ -2012,6 +2016,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContacts.AGGREGATION_MODE + ", "
                 + RawContacts.RAW_CONTACT_IS_READ_ONLY + ", "
                 + RawContacts.DELETED + ", "
+                + RawContactsColumns.CONCRETE_METADATA_DIRTY + ", "
                 + RawContacts.DISPLAY_NAME_SOURCE  + ", "
                 + RawContacts.DISPLAY_NAME_PRIMARY  + ", "
                 + RawContacts.DISPLAY_NAME_ALTERNATIVE  + ", "
@@ -2065,6 +2070,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String rawEntitiesSelect = "SELECT "
                 + RawContacts.CONTACT_ID + ", "
                 + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
+                + RawContactsColumns.CONCRETE_METADATA_DIRTY + ", "
                 + dataColumns + ", "
                 + syncColumns + ", "
                 + Data.SYNC1 + ", "
@@ -2098,6 +2104,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + Contacts._ID + ", "
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
                 + RawContactsColumns.CONCRETE_DELETED + " AS " + RawContacts.DELETED + ","
+                + RawContactsColumns.CONCRETE_METADATA_DIRTY + ", "
                 + dataColumns + ", "
                 + syncColumns + ", "
                 + contactsColumns + ", "
@@ -2944,6 +2951,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeToVersion1008(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 1008;
+        }
+
+        if (oldVersion < 1100) {
+            upgradeToVersion1100(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1100;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4486,6 +4499,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
         db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
                 "raw_contact_backup_id, account_id);");
+    }
+
+    private void upgradeToVersion1100(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE raw_contacts ADD metadata_dirty INTEGER NOT NULL DEFAULT 0;");
     }
 
     public String extractHandleFromEmailAddress(String email) {
