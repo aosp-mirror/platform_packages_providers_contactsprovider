@@ -317,6 +317,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.VERSION,
                 RawContacts.RAW_CONTACT_IS_USER_PROFILE,
                 RawContacts.DIRTY,
+                RawContacts.METADATA_DIRTY,
                 RawContacts.DELETED,
                 RawContacts.DISPLAY_NAME_PRIMARY,
                 RawContacts.DISPLAY_NAME_ALTERNATIVE,
@@ -6674,6 +6675,107 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
         version++;
         assertEquals(version, getVersion(uri));
+    }
+
+    public void testMarkAsMetadataDirtyForRawContactMetadataChange() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+
+        Uri uri = DataUtil.insertStructuredName(mResolver, rawContactId, "John", "Doe");
+        clearMetadataDirty(rawContactUri);
+
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
+        mResolver.update(rawContactUri, values, null, null);
+        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, 1);
+        assertMetadataDirty(rawContactUri, true);
+        assertMetadataNetworkNotified(true);
+    }
+
+    public void testMarkAsMetadataDirtyForAggregationExceptionChange() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, new Account("b", "b"));
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1),
+                true);
+        assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2),
+                true);
+        assertMetadataNetworkNotified(true);
+    }
+
+    public void testMarkAsMetadataDirtyForUsageStatsChange() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        final long rid1 = RawContactUtil.createRawContactWithName(mResolver, "contact", "a");
+        final long did1a = ContentUris.parseId(insertEmail(rid1, "email_1_a@email.com"));
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, did1a);
+
+        assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rid1),
+                true);
+        assertMetadataNetworkNotified(true);
+    }
+
+    public void testMarkAsMetadataDirtyForDataPrimarySettingInsert() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
+        Uri mailUri11 = insertEmail(rawContactId1, "test1@domain1.com", true, true);
+
+        assertStoredValue(mailUri11, Data.IS_PRIMARY, 1);
+        assertStoredValue(mailUri11, Data.IS_SUPER_PRIMARY, 1);
+        assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1),
+                true);
+        assertMetadataNetworkNotified(true);
+    }
+
+    public void testMarkAsMetadataDirtyForDataPrimarySettingUpdate() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        long rawContactId = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
+        Uri mailUri1 = insertEmail(rawContactId, "test1@domain1.com");
+
+        assertStoredValue(mailUri1, Data.IS_PRIMARY, 0);
+        assertStoredValue(mailUri1, Data.IS_SUPER_PRIMARY, 0);
+
+        ContentValues values = new ContentValues();
+        values.put(Data.IS_SUPER_PRIMARY, 1);
+        mResolver.update(mailUri1, values, null, null);
+
+        assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                true);
+        assertMetadataNetworkNotified(true);
+    }
+
+    public void testMarkAsMetadataDirtyForDataDelete() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        long rawContactId = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
+        Uri mailUri1 = insertEmail(rawContactId, "test1@domain1.com", true, true);
+
+        mResolver.delete(mailUri1, null, null);
+
+        assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                true);
+        assertMetadataNetworkNotified(true);
     }
 
     public void testDeleteContactWithoutName() {

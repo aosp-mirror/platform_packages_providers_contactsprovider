@@ -836,6 +836,14 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         c.close();
     }
 
+    protected void assertMetadataDirty(Uri uri, boolean state) {
+        Cursor c = mResolver.query(uri, new String[]{"metadata_dirty"}, null, null, null);
+        assertTrue(c.moveToNext());
+        assertEquals(state, c.getLong(0) != 0);
+        assertFalse(c.moveToNext());
+        c.close();
+    }
+
     protected long getVersion(Uri uri) {
         Cursor c = mResolver.query(uri, new String[]{"version"}, null, null, null);
         assertTrue(c.moveToNext());
@@ -848,6 +856,12 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected void clearDirty(Uri uri) {
         ContentValues values = new ContentValues();
         values.put("dirty", 0);
+        mResolver.update(uri, values, null, null);
+    }
+
+    protected void clearMetadataDirty(Uri uri) {
+        ContentValues values = new ContentValues();
+        values.put("metadata_dirty", 0);
         mResolver.update(uri, values, null, null);
     }
 
@@ -1307,6 +1321,10 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     protected void assertNetworkNotified(boolean expected) {
         assertEquals(expected, (getContactsProvider()).isNetworkNotified());
+    }
+
+    protected void assertMetadataNetworkNotified(boolean expected) {
+        assertEquals(expected, (getContactsProvider()).isMetadataNetworkNotified());
     }
 
     protected void assertProjection(Uri uri, String[] expectedProjection) {
