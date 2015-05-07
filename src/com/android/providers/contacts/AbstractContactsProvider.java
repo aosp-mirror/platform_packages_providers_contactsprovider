@@ -278,11 +278,15 @@ public abstract class AbstractContactsProvider extends ContentProvider
         }
         ContactsTransaction transaction = mTransactionHolder.get();
         if (transaction != null && (!transaction.isBatch() || callerIsBatch)) {
+            boolean notify = false;
             try {
                 if (transaction.isDirty()) {
-                    notifyChange();
+                    notify = true;
                 }
                 transaction.finish(callerIsBatch);
+                if (notify) {
+                    notifyChange();
+                }
             } finally {
                 // No matter what, make sure we clear out the thread-local transaction reference.
                 mTransactionHolder.set(null);
