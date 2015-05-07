@@ -149,44 +149,62 @@ public class ContactMetadataProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        // Insert the new entry, and also parse the data column to update related tables.
-        final long metadataSyncId = updateOrInsertDataToMetadataSync(
-                uri, values, /* isInsert = */ true);
-        return ContentUris.withAppendedId(uri, metadataSyncId);
-    }
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            // Insert the new entry, and also parse the data column to update related tables.
+            final long metadataSyncId = updateOrInsertDataToMetadataSync(
+                    db, uri, values, /* isInsert = */ true);
+            db.setTransactionSuccessful();
+            return ContentUris.withAppendedId(uri, metadataSyncId);
+        } finally {
+            db.endTransaction();
+        }
+}
 
-    // TODO: Wrap insert/upate/delete operations in transaction.
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-
-        final int matchedUriId = sURIMatcher.match(uri);
-        switch (matchedUriId) {
-            case METADATA_SYNC:
-                int numDeletes = 0;
-                Cursor c = db.query(Views.METADATA_SYNC, new String[]{MetadataSync._ID},
-                        selection, selectionArgs, null, null, null);
-                try {
-                    while (c.moveToNext()) {
-                        final long contactMetadataId = c.getLong(0);
-                        numDeletes += db.delete(Tables.METADATA_SYNC,
-                                MetadataSync._ID + "=" + contactMetadataId, null);
+        db.beginTransaction();
+        try {
+            final int matchedUriId = sURIMatcher.match(uri);
+            int numDeletes = 0;
+            switch (matchedUriId) {
+                case METADATA_SYNC:
+                    Cursor c = db.query(Views.METADATA_SYNC, new String[]{MetadataSync._ID},
+                            selection, selectionArgs, null, null, null);
+                    try {
+                        while (c.moveToNext()) {
+                            final long contactMetadataId = c.getLong(0);
+                            numDeletes += db.delete(Tables.METADATA_SYNC,
+                                    MetadataSync._ID + "=" + contactMetadataId, null);
+                        }
+                    } finally {
+                        c.close();
                     }
-                } finally {
-                    c.close();
-                }
-                return numDeletes;
-            default:
-                throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                        "Calling contact metadata delete on an unknown/invalid URI", uri));
+                    db.setTransactionSuccessful();
+                    return numDeletes;
+                default:
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Calling contact metadata delete on an unknown/invalid URI", uri));
+            }
+        } finally {
+            db.endTransaction();
         }
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        // Update the metadata entry and parse the data column to update related tables.
-        updateOrInsertDataToMetadataSync(uri, values, /* isInsert = */ false);
-        return 1;
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            // Update the metadata entry and parse the data column to update related tables.
+            updateOrInsertDataToMetadataSync(db, uri, values, /* isInsert = */ false);
+            db.setTransactionSuccessful();
+            return 1;
+        } finally {
+            db.endTransaction();
+        }
     }
 
     /**
@@ -195,7 +213,8 @@ public class ContactMetadataProvider extends ContentProvider {
      * Set 'isInsert' as true if it's insert and false if update.
      * Returns new inserted metadataSyncId if it's insert, and returns 1 if it's update.
      */
-    private long updateOrInsertDataToMetadataSync(Uri uri, ContentValues values, boolean isInsert) {
+    private long updateOrInsertDataToMetadataSync(SQLiteDatabase db, Uri uri, ContentValues values,
+            boolean isInsert) {
         final int matchUri = sURIMatcher.match(uri);
         if ((isInsert && matchUri != METADATA_SYNC) ||
                 (!isInsert && matchUri != METADATA_SYNC && matchUri != METADATA_SYNC_ID)) {
@@ -218,7 +237,6 @@ public class ContactMetadataProvider extends ContentProvider {
         }
 
         long result = 0;
-        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         if (matchUri == METADATA_SYNC_ID) {
             // Update for the metadataSyncId.
             final long metadataSyncId = ContentUris.parseId(uri);
