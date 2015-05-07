@@ -34,6 +34,7 @@ public class TransactionContext  {
     /** Map from raw contact id to account Id */
     private HashMap<Long, Long> mInsertedRawContactsAccounts;
     private HashSet<Long> mUpdatedRawContacts;
+    private HashSet<Long> mMetadataDirtyRawContacts;
     private HashSet<Long> mDirtyRawContacts;
     // Set used to track what has been changed and deleted. This is needed so we can update the
     // contact last touch timestamp.  Dirty set above is only set when sync adapter is false.
@@ -75,6 +76,15 @@ public class TransactionContext  {
         markRawContactChangedOrDeletedOrInserted(rawContactId);
     }
 
+    public void markRawContactMetadataDirty(long rawContactId, boolean isMetadataSyncAdapter) {
+        if (!isMetadataSyncAdapter) {
+            if (mMetadataDirtyRawContacts == null) {
+                mMetadataDirtyRawContacts = Sets.newHashSet();
+            }
+            mMetadataDirtyRawContacts.add(rawContactId);
+        }
+    }
+
     public void markRawContactChangedOrDeletedOrInserted(long rawContactId) {
         if (mChangedRawContacts == null) {
             mChangedRawContacts = Sets.newHashSet();
@@ -112,6 +122,11 @@ public class TransactionContext  {
         return mDirtyRawContacts;
     }
 
+    public Set<Long> getMetadataDirtyRawContactIds() {
+        if (mMetadataDirtyRawContacts == null) mMetadataDirtyRawContacts = Sets.newHashSet();
+        return mMetadataDirtyRawContacts;
+    }
+
     public Set<Long> getChangedRawContactIds() {
         if (mChangedRawContacts == null) mChangedRawContacts = Sets.newHashSet();
         return mChangedRawContacts;
@@ -147,6 +162,7 @@ public class TransactionContext  {
         mUpdatedRawContacts = null;
         mUpdatedSyncStates = null;
         mDirtyRawContacts = null;
+        mMetadataDirtyRawContacts = null;
         mChangedRawContacts = null;
     }
 
