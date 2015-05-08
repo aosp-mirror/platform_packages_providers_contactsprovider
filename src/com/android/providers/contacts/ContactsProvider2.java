@@ -2480,6 +2480,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             appendIds(mSb, changedRawContacts);
             mSb.append("))");
             db.execSQL(mSb.toString());
+            mSyncToMetadataNetWork = true;
         }
 
         // Update sync states.

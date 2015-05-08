@@ -2854,6 +2854,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(rawContactUri, null, null);
         // Check if the metadata is deleted.
         assertStoredValue(metadataUri, MetadataSync.DELETED, "1");
+        // check raw contact metadata_dirty column is not changed on raw contact deletion
+        assertMetadataDirty(rawContactUri, false);
+        // Notify metadata network on raw contact deletion
+        assertMetadataNetworkNotified(true);
 
         // Add another rawcontact and metadata, and don't delete them.
         // Insert a raw contact.
@@ -2875,7 +2879,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.STARRED, "1");
         mResolver.update(rawContactUri2, values, null, null);
 
+        // Check if the metadata is not marked as deleted.
         assertStoredValue(metadataUri2, MetadataSync.DELETED, "0");
+        // check raw contact metadata_dirty column is changed on raw contact update
+        assertMetadataDirty(rawContactUri2, true);
+        // Notify metadata network on raw contact update
+        assertMetadataNetworkNotified(true);
     }
 
     public void testPostalsQuery() {
