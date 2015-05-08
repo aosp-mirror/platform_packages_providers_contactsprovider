@@ -17,10 +17,13 @@ package com.android.providers.contacts;
 
 
 import android.content.ContentProvider;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.IContentProvider;
+import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -40,6 +43,7 @@ import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
 import com.google.common.annotations.VisibleForTesting;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -202,6 +206,39 @@ public class ContactMetadataProvider extends ContentProvider {
             updateOrInsertDataToMetadataSync(db, uri, values, /* isInsert = */ false);
             db.setTransactionSuccessful();
             return 1;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    @Override
+    public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
+            throws OperationApplicationException {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "applyBatch: " + operations.size() + " ops");
+        }
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            ContentProviderResult[] results = super.applyBatch(operations);
+            db.setTransactionSuccessful();
+            return results;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    @Override
+    public int bulkInsert(Uri uri, ContentValues[] values) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "bulkInsert: " + values.length + " inserts");
+        }
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            final int numValues = super.bulkInsert(uri, values);
+            db.setTransactionSuccessful();
+            return numValues;
         } finally {
             db.endTransaction();
         }
