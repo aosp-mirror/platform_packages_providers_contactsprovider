@@ -111,6 +111,7 @@ import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
@@ -182,7 +183,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -924,6 +928,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Data._ID, "MIN(" + Data._ID + ")")
             .add(RawContacts.CONTACT_ID)
             .add(RawContacts.RAW_CONTACT_IS_USER_PROFILE)
+            .add(Data.HASH_ID)
             .addAll(sDataColumns)
             .addAll(sDataPresenceColumns)
             .addAll(sContactsColumns)
@@ -2911,6 +2916,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mDbHelper.get().getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE));
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        // Generate hash_id from data1 and data2 column, since group data stores in data1 field.
+        getDataRowHandler(GroupMembership.CONTENT_ITEM_TYPE).handleHashIdForInsert(
+                groupMembershipValues);
         db.insert(Tables.DATA, null, groupMembershipValues);
     }
 
@@ -4857,22 +4865,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Data._ID,
         };
         int DATA_ID = 0;
-        String SELECTION = Data.HASH_ID + "=?";
+        String SELECTION = Data.RAW_CONTACT_ID + "=? AND " + Data.HASH_ID + "=?";
     }
 
     /**
      * Fetch a list of dataId related to the given hashId.
      * Return empty list if there's no such data.
      */
-    private ArrayList<Long> queryDataId(SQLiteDatabase db, String hashId) {
-        if (TextUtils.isEmpty(hashId)) {
+    private ArrayList<Long> queryDataId(SQLiteDatabase db, long rawContactId, String hashId) {
+        if (rawContactId == 0 || TextUtils.isEmpty(hashId)) {
             return new ArrayList<>();
         }
-        mSelectionArgs1[0] = hashId;
+        mSelectionArgs2[0] = String.valueOf(rawContactId);
+        mSelectionArgs2[1] = hashId;
         ArrayList<Long> result = new ArrayList<>();
         long dataId = 0;
         final Cursor c = db.query(DataHashQuery.TABLE, DataHashQuery.COLUMNS,
-                DataHashQuery.SELECTION, mSelectionArgs1, null, null, null);
+                DataHashQuery.SELECTION, mSelectionArgs2, null, null, null);
         try {
             while (c.moveToNext()) {
                 dataId = c.getLong(DataHashQuery.DATA_ID);
@@ -4927,13 +4936,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         for (int i = 0; i < metadataEntry.mFieldDatas.size(); i++) {
             final FieldData fieldData = metadataEntry.mFieldDatas.get(i);
             final String dataHashId = fieldData.mDataHashId;
-            final ArrayList<Long> dataIds = queryDataId(db, dataHashId);
+            final ArrayList<Long> dataIds = queryDataId(db, rawContactId, dataHashId);
 
             for (long dataId : dataIds) {
                 // Update is_primary and is_super_primary.
                 ContentValues dataValues = new ContentValues();
-                dataValues.put(Data.IS_PRIMARY, fieldData.mIsPrimary);
-                dataValues.put(Data.IS_SUPER_PRIMARY, fieldData.mIsSuperPrimary);
+                dataValues.put(Data.IS_PRIMARY, fieldData.mIsPrimary ? 1 : 0);
+                dataValues.put(Data.IS_SUPER_PRIMARY, fieldData.mIsSuperPrimary ? 1 : 0);
                 updateData(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
                         dataValues, null, null, /* callerIsSyncAdapter =*/true,
                         /* callerIsMetadataSyncAdapter =*/true);

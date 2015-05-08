@@ -80,6 +80,7 @@ import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
+import android.util.Base64;
 import android.util.Log;
 
 import com.android.common.content.SyncStateContentProviderHelper;
@@ -93,6 +94,9 @@ import com.google.common.annotations.VisibleForTesting;
 
 import libcore.icu.ICU;
 
+import java.io.UnsupportedEncodingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -123,7 +127,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1100;
+    static final int DATABASE_VERSION = 1101;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1013,6 +1017,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private SQLiteStatement mMetadataSyncUpdate;
 
     private StringBuilder mSb = new StringBuilder();
+
+    private MessageDigest mMessageDigest;
+    {
+        try {
+            mMessageDigest = MessageDigest.getInstance("SHA-1");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("No such algorithm.", e);
+        }
+    }
 
     private boolean mUseStrictPhoneNumberComparison;
 
@@ -2959,6 +2972,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1100;
         }
 
+        if (oldVersion < 1101) {
+            upgradeToVersion1101(db);
+            oldVersion = 1101;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4503,6 +4521,70 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     private void upgradeToVersion1100(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE raw_contacts ADD metadata_dirty INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    // Data.hash_id column is used for metadata backup, and this upgrade is to generate
+    // hash_id column. Usually data1 and data2 are two main columns to store data info.
+    // But for photo, we don't use data1 and data2, instead, use data15 to store photo blob.
+    // So this upgrade generates hash_id from (data1 + data2) or (data15) using sha-1.
+    private void upgradeToVersion1101(SQLiteDatabase db) {
+        final SQLiteStatement update = db.compileStatement(
+                "UPDATE " + Tables.DATA +
+                " SET " + Data.HASH_ID + "=?" +
+                " WHERE " + Data._ID + "=?"
+        );
+        final String selection = Data.HASH_ID + " IS NULL";
+        final Cursor c = db.query(Tables.DATA, new String[] {Data._ID, Data.DATA1, Data.DATA2,
+                        Data.DATA15},
+                selection, null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                final long dataId = c.getLong(0);
+                final String data1 = c.getString(1);
+                final String data2 = c.getString(2);
+                final byte[] data15 = c.getBlob(3);
+                final String hashId = generateHashId(data1, data2, data15);
+                if (!TextUtils.isEmpty(hashId)) {
+                    update.bindString(1, hashId);
+                    update.bindLong(2, dataId);
+                    update.execute();
+                }
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Generate hash_id from data1, data2 and data15 columns.
+     * If one of data1 and data2 is not null, using data1 and data2 to get hash_id,
+     * otherwise, using data15 to generate.
+     */
+    public String generateHashId(String data1, String data2, byte[] data15) {
+        final StringBuilder sb = new StringBuilder();
+        byte[] hashInput = null;
+        if (!TextUtils.isEmpty(data1) || !TextUtils.isEmpty(data2)) {
+            sb.append(data1);
+            sb.append(data2);
+            hashInput = sb.toString().getBytes();
+        } else if (data15 != null) {
+            hashInput = data15;
+        }
+        if (hashInput != null) {
+            final String hashId = generateHashIdForData(hashInput);
+            return hashId;
+        } else {
+            return null;
+        }
+    }
+
+    // Use SHA-1 hash method to generate hash string for the input.
+    @VisibleForTesting
+    String generateHashIdForData(byte[] input) {
+        synchronized (mMessageDigest) {
+            final byte[] hashResult = mMessageDigest.digest(input);
+            return Base64.encodeToString(hashResult, Base64.DEFAULT);
+        }
     }
 
     public String extractHandleFromEmailAddress(String email) {

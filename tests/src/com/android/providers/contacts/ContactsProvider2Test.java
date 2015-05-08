@@ -435,6 +435,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertProjection(Phone.CONTENT_FILTER_URI.buildUpon().appendPath("123").build(),
             new String[]{
                 Data._ID,
+                Data.HASH_ID,
                 Data.DATA_VERSION,
                 Data.IS_PRIMARY,
                 Data.IS_SUPER_PRIMARY,
@@ -1019,6 +1020,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.CONTACT_ID, contactId);
         assertStoredValues(dataUri, values);
 
+        values.remove(Photo.PHOTO);// Remove byte[] value.
         assertSelection(Data.CONTENT_URI, values, Data._ID, dataId);
 
         // Access the same data through the directory under RawContacts
@@ -1032,6 +1034,62 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactDataUri = Uri.withAppendedPath(contactUri, Contacts.Data.CONTENT_DIRECTORY);
         assertSelection(contactDataUri, values, Data._ID, dataId);
         assertNetworkNotified(true);
+    }
+
+    public void testDataInsertAndUpdate_WithHashId() {
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
+
+        // Insert a data.
+        ContentValues values = new ContentValues();
+        putDataValues(values, rawContactId);
+        Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
+
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        final ContactsDatabaseHelper helper = cp.getDatabaseHelper(mContext);
+        String data1 = values.getAsString(Data.DATA1);
+        String data2 = values.getAsString(Data.DATA2);
+        String combineString = data1+data2;
+        String hashId = helper.generateHashIdForData(combineString.getBytes());
+        assertStoredValue(dataUri, Data.HASH_ID, hashId);
+
+        // Update the data with new data1.
+        String newData1 = "Newone";
+        values.put(Data.DATA1, newData1);
+        mResolver.update(dataUri, values, null, null);
+        combineString = newData1+data2;
+        String newHashId = helper.generateHashIdForData(combineString.getBytes());
+        assertStoredValue(dataUri, Data.HASH_ID, newHashId);
+
+        // Update the data with a new Data2.
+        values.remove(Data.DATA1);
+        values.put(Data.DATA2, "Newtwo");
+        combineString = "NewoneNewtwo";
+        String testHashId = helper.generateHashIdForData(combineString.getBytes());
+        mResolver.update(dataUri, values, null, null);
+        assertStoredValue(dataUri, Data.HASH_ID, testHashId);
+
+        // Update the data with a new data1 + data2.
+        values.put(Data.DATA1, "one");
+        combineString = "oneNewtwo";
+        testHashId = helper.generateHashIdForData(combineString.getBytes());
+        mResolver.update(dataUri, values, null, null);
+        assertStoredValue(dataUri, Data.HASH_ID, testHashId);
+
+        // Update the data with null data1 and null data2.
+        values.putNull(Data.DATA1);
+        values.putNull(Data.DATA2);
+        byte[] data15 = values.getAsByteArray(Data.DATA15);
+        testHashId = helper.generateHashIdForData(data15);
+        mResolver.update(dataUri, values, null, null);
+        assertStoredValue(dataUri, Data.HASH_ID, testHashId);
+
+        // Insert a data with null data1, null data2 and null data15, should insert null hash_id.
+        putDataValues(values, rawContactId);
+        values.remove(Data.DATA1);
+        values.remove(Data.DATA2);
+        values.remove(Data.DATA15);
+        Uri dataUri2 = mResolver.insert(Data.CONTENT_URI, values);
+        assertStoredValue(dataUri2, Data.HASH_ID, null);
     }
 
     public void testDataInsertPhoneNumberTooLongIsTrimmed() {
@@ -2662,18 +2720,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         String emailAddress = "address@email.com";
         Uri dataUri = insertEmail(rawContactId, emailAddress);
-        String hashId = "hashId100002";
-        ContentValues dataValues = new ContentValues();
-        dataValues.put(Data.HASH_ID, hashId);
-        assertEquals(1, mResolver.update(dataUri, dataValues, null, null));
+        String hashId = getStoredValue(dataUri, Data.HASH_ID);
 
         // Another data that should not be updated.
         String phoneNumber = "111-111-1111";
         Uri dataUri2 = insertPhoneNumber(rawContactId, phoneNumber);
-        String hashId2 = "hashId100004";
-        ContentValues dataValues2 = new ContentValues();
-        dataValues.put(Data.HASH_ID, hashId2);
-        mResolver.update(dataUri2, dataValues2, null, null);
 
         String accountType2 = "accountType2";
         String accountName2 = "accountName2";
@@ -2728,6 +2779,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
         assertStoredValue(dataUri, Data.IS_PRIMARY, 1);
         assertStoredValue(dataUri, Data.IS_SUPER_PRIMARY, 1);
+        assertStoredValue(dataUri2, Data.IS_PRIMARY, 0);
+        assertStoredValue(dataUri2, Data.IS_SUPER_PRIMARY, 0);
         final Uri dataUriWithUsageType = Data.CONTENT_URI.buildUpon().appendQueryParameter(
                 DataUsageFeedback.USAGE_TYPE, usageTypeString).build();
         assertDataUsageCursorContains(dataUriWithUsageType, emailAddress, timesUsed, lastTimeUsed);
@@ -9368,7 +9421,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA12, "twelve");
         values.put(Data.DATA13, "thirteen");
         values.put(Data.DATA14, "fourteen");
-        values.put(Data.DATA15, "fifteen");
+        values.put(Data.DATA15, "fifteen".getBytes());
         values.put(Data.SYNC1, "sync1");
         values.put(Data.SYNC2, "sync2");
         values.put(Data.SYNC3, "sync3");

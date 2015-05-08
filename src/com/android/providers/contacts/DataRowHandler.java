@@ -37,6 +37,9 @@ import com.android.providers.contacts.aggregation.AbstractContactAggregator;
  */
 public abstract class DataRowHandler {
 
+    private static final String[] HASH_INPUT_COLUMNS = new String[] {
+            Data.DATA1, Data.DATA2, Data.DATA15 };
+
     public interface DataDeleteQuery {
         public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
 
@@ -107,6 +110,9 @@ public abstract class DataRowHandler {
      */
     public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
             ContentValues values) {
+        // Generate hash_id from data1 and data2 columns.
+        // For photo, use data15 column instead of data1 and data2 to generate hash_id.
+        handleHashIdForInsert(values);
         final long dataId = db.insert(Tables.DATA, null, values);
 
         final Integer primary = values.getAsInteger(Data.IS_PRIMARY);
@@ -154,6 +160,7 @@ public abstract class DataRowHandler {
 
         handlePrimaryAndSuperPrimary(txContext, values, dataId, rawContactId,
                 callerIsMetadataSyncAdapter);
+        handleHashIdForUpdate(values, dataId);
 
         if (values.size() > 0) {
             mSelectionArgs1[0] = String.valueOf(dataId);
@@ -178,6 +185,57 @@ public abstract class DataRowHandler {
     }
 
     public void appendSearchableData(SearchIndexManager.IndexBuilder builder) {
+    }
+
+    /**
+     * Fetch data1, data2, and data15 from values if they exist, and generate hash_id
+     * if one of data1 and data2 columns is set, otherwise using data15 instead.
+     * hash_id is null if all of these three field is null.
+     * Add hash_id key to values.
+     */
+    public void handleHashIdForInsert(ContentValues values) {
+        final String data1 = values.getAsString(Data.DATA1);
+        final String data2 = values.getAsString(Data.DATA2);
+        final byte[] data15 = values.getAsByteArray(Data.DATA15);
+        final String hashId = mDbHelper.generateHashId(data1, data2, data15);
+        if (TextUtils.isEmpty(hashId)) {
+            values.putNull(Data.HASH_ID);
+        } else {
+            values.put(Data.HASH_ID, hashId);
+        }
+    }
+
+    /**
+     * Compute hash_id column and add it to values.
+     * If both of data1 and data2 changed, using new values to compute hash_id.
+     * If one of data1 and data2 changed, read another one from DB and compute hash_id.
+     * If both data1 and data2 are null, use data15 to compute hash_id.
+     */
+    private void handleHashIdForUpdate(ContentValues values, long dataId) {
+        String data1 = values.getAsString(Data.DATA1);
+        String data2 = values.getAsString(Data.DATA2);
+        byte[] data15 = values.getAsByteArray(Data.DATA15);
+        if (values.containsKey(Data.DATA1) || values.containsKey(Data.DATA2)
+                || values.containsKey(Data.DATA15)) {
+            mSelectionArgs1[0] = String.valueOf(dataId);
+            final Cursor c = mDbHelper.getReadableDatabase().query(Tables.DATA,
+                    HASH_INPUT_COLUMNS, Data._ID + "=?", mSelectionArgs1, null, null, null);
+            try {
+                if (c.moveToFirst()) {
+                    data1 = values.containsKey(Data.DATA1) ? data1 : c.getString(0);
+                    data2 = values.containsKey(Data.DATA2) ? data2 : c.getString(1);
+                    data15 = values.containsKey(Data.DATA15) ? data15 : c.getBlob(2);
+                }
+            } finally {
+                c.close();
+            }
+        }
+        final String hashId = mDbHelper.generateHashId(data1, data2, data15);
+        if (TextUtils.isEmpty(hashId)) {
+            values.putNull(Data.HASH_ID);
+        } else {
+            values.put(Data.HASH_ID, hashId);
+        }
     }
 
     /**
