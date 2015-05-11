@@ -212,11 +212,11 @@ public abstract class DataRowHandler {
      * If both data1 and data2 are null, use data15 to compute hash_id.
      */
     private void handleHashIdForUpdate(ContentValues values, long dataId) {
-        String data1 = values.getAsString(Data.DATA1);
-        String data2 = values.getAsString(Data.DATA2);
-        byte[] data15 = values.getAsByteArray(Data.DATA15);
         if (values.containsKey(Data.DATA1) || values.containsKey(Data.DATA2)
                 || values.containsKey(Data.DATA15)) {
+            String data1 = values.getAsString(Data.DATA1);
+            String data2 = values.getAsString(Data.DATA2);
+            byte[] data15 = values.getAsByteArray(Data.DATA15);
             mSelectionArgs1[0] = String.valueOf(dataId);
             final Cursor c = mDbHelper.getReadableDatabase().query(Tables.DATA,
                     HASH_INPUT_COLUMNS, Data._ID + "=?", mSelectionArgs1, null, null, null);
@@ -229,12 +229,12 @@ public abstract class DataRowHandler {
             } finally {
                 c.close();
             }
-        }
-        final String hashId = mDbHelper.generateHashId(data1, data2, data15);
-        if (TextUtils.isEmpty(hashId)) {
-            values.putNull(Data.HASH_ID);
-        } else {
-            values.put(Data.HASH_ID, hashId);
+            final String hashId = mDbHelper.generateHashId(data1, data2, data15);
+            if (TextUtils.isEmpty(hashId)) {
+                values.putNull(Data.HASH_ID);
+            } else {
+                values.put(Data.HASH_ID, hashId);
+            }
         }
     }
 

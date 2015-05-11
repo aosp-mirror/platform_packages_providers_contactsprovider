@@ -1052,7 +1052,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         String hashId = helper.generateHashIdForData(combineString.getBytes());
         assertStoredValue(dataUri, Data.HASH_ID, hashId);
 
+        // Update the data with primary, and check if hash_id is not changed.
+        values.remove(Data.DATA1);
+        values.remove(Data.DATA2);
+        values.remove(Data.DATA15);
+        values.put(Data.IS_PRIMARY, "1");
+        mResolver.update(dataUri, values, null, null);
+        assertStoredValue(dataUri, Data.IS_PRIMARY, "1");
+        assertStoredValue(dataUri, Data.HASH_ID, hashId);
+
         // Update the data with new data1.
+        values = new ContentValues();
+        putDataValues(values, rawContactId);
         String newData1 = "Newone";
         values.put(Data.DATA1, newData1);
         mResolver.update(dataUri, values, null, null);
