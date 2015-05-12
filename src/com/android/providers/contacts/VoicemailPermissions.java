@@ -16,8 +16,9 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.util.ContactsPermissions;
+
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.telecom.DefaultDialerManager;
 
 /**
@@ -105,13 +106,11 @@ public class VoicemailPermissions {
 
     /** Determines if the given package has the given permission. */
     private boolean packageHasPermission(String packageName, String permission) {
-        return mContext.getPackageManager().checkPermission(permission, packageName)
-               == PackageManager.PERMISSION_GRANTED;
+        return ContactsPermissions.hasPackagePermission(mContext, permission, packageName);
     }
 
     /** Determines if the calling process has the given permission. */
     private boolean callerHasPermission(String permission) {
-        return mContext.checkCallingOrSelfPermission(permission)
-                == PackageManager.PERMISSION_GRANTED;
+        return ContactsPermissions.hasCallerOrSelfPermission(mContext, permission);
     }
 }
