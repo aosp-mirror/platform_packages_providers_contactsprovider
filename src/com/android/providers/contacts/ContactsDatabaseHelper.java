@@ -127,7 +127,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1101;
+    static final int DATABASE_VERSION = 1102;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1393,7 +1393,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Data.SYNC1 + " TEXT, " +
                 Data.SYNC2 + " TEXT, " +
                 Data.SYNC3 + " TEXT, " +
-                Data.SYNC4 + " TEXT " +
+                Data.SYNC4 + " TEXT, " +
+                Data.CARRIER_PRESENCE + " INTEGER NOT NULL DEFAULT 0 " +
         ");");
 
         db.execSQL("CREATE INDEX data_raw_contact_id ON " + Tables.DATA + " (" +
@@ -2966,6 +2967,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1008;
         }
 
+        if (oldVersion < 1009) {
+            upgradeToVersion1009(db);
+            oldVersion = 1009;
+        }
+
         if (oldVersion < 1100) {
             upgradeToVersion1100(db);
             upgradeViewsAndTriggers = true;
@@ -2975,6 +2981,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1101) {
             upgradeToVersion1101(db);
             oldVersion = 1101;
+        }
+
+        if (oldVersion < 1102) {
+            // Version 1009 was added *after* 1100/1101.  For master devices
+            // that have already been updated to 1101, we do it again.
+            upgradeToVersion1009(db);
+            oldVersion = 1102;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4517,6 +4530,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
         db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
                 "raw_contact_backup_id, account_id);");
+    }
+
+    public void upgradeToVersion1009(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE data ADD carrier_presence INTEGER NOT NULL DEFAULT 0");
+        } catch (SQLiteException ignore) {
+        }
     }
 
     private void upgradeToVersion1100(SQLiteDatabase db) {
