@@ -515,7 +515,7 @@ public class CallLogProvider extends ContentProvider {
                     if (tm != null) {
 
                         PhoneAccount account = tm.getPhoneAccount(handle);
-                        if (account != null) {
+                        if (account != null && account.getAddress() != null) {
                             // We did not find any items for the specific phone account, so run the
                             // query based on the phone number instead.
                             mDbHelper.getWritableDatabase().execSQL(UNHIDE_BY_ADDRESS_QUERY,
