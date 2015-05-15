@@ -35,6 +35,7 @@ import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
 import com.google.common.annotations.VisibleForTesting;
@@ -291,8 +292,8 @@ public class VoicemailContentProvider extends ContentProvider
     private UriData checkPermissionsAndCreateUriDataForRead(Uri uri) {
         // If the caller has been explicitly granted read permission to this URI then no need to
         // check further.
-        if (context().checkCallingUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                == PackageManager.PERMISSION_GRANTED) {
+        if (ContactsPermissions.hasCallerUriPermission(
+                getContext(), uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)) {
             return UriData.createUriData(uri);
         }
 

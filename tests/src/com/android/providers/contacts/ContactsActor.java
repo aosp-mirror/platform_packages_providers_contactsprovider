@@ -65,6 +65,7 @@ import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
 import android.util.Log;
 
+import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.MockSharedPreferences;
 
 import com.google.android.collect.Sets;
@@ -263,6 +264,10 @@ public class ContactsActor {
      */
     public ContactsActor(final Context overallContext, String packageName,
             Class<? extends ContentProvider> providerClass, String authority) throws Exception {
+
+        // Force permission check even when called by self.
+        ContactsPermissions.ALLOW_SELF_CALL = false;
+
         resolver = new MockContentResolver();
         context = new RestrictionMockContext(overallContext, packageName, resolver,
                 mGrantedPermissions, mGrantedUriPermissions);
