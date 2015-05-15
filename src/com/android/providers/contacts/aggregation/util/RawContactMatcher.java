@@ -43,9 +43,6 @@ public class RawContactMatcher {
     // and there is a secondary match (phone number, email etc).
     public static final int SCORE_THRESHOLD_SECONDARY = 50;
 
-    // Score for missing data (as opposed to present data but a bad match)
-    private static final int NO_DATA_SCORE = -1;
-
     // Score for matching phone numbers
     private static final int PHONE_MATCH_SCORE = 71;
 
@@ -279,6 +276,55 @@ public class RawContactMatcher {
     public void clear() {
         mScores.clear();
         mScoreCount = 0;
+    }
+    /**
+     * Returns a list of IDs for raw contacts that are matched on secondary data elements
+     * (phone number, email address, nickname). We still need to obtain the approximate
+     * primary score for those contacts to determine if any of them should be aggregated.
+     * <p>
+     * May return null.
+     */
+    public List<Long> prepareSecondaryMatchCandidates() {
+        ArrayList<Long> rawContactIds = null;
+
+        for (int i = 0; i < mScoreCount; i++) {
+            MatchScore score = mScoreList.get(i);
+            if (score.isKeepOut() ||  score.getPrimaryScore() > SCORE_THRESHOLD_PRIMARY){
+                continue;
+            }
+
+            if (score.getSecondaryScore() >= SCORE_THRESHOLD_PRIMARY) {
+                if (rawContactIds == null) {
+                    rawContactIds = new ArrayList<Long>();
+                }
+                rawContactIds.add(score.getRawContactId());
+            }
+            score.setPrimaryScore(0);
+        }
+        return rawContactIds;
+    }
+
+    /**
+     * Returns the list of raw contact Ids with the match score over threshold.
+     */
+    public List<MatchScore> pickBestMatches() {
+        final List<MatchScore> matches = new ArrayList<>();
+        for (int i = 0; i < mScoreCount; i++) {
+            MatchScore score = mScoreList.get(i);
+            if (score.isKeepOut()) {
+                continue;
+            }
+
+            if (score.isKeepIn()) {
+                matches.add(score);
+                continue;
+            }
+
+            if (score.getPrimaryScore() >= SCORE_THRESHOLD_SECONDARY) {
+                matches.add(score);
+            }
+        }
+        return matches;
     }
 
     /**
