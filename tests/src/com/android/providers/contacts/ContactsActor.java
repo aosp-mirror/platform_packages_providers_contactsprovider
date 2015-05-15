@@ -328,10 +328,6 @@ public class ContactsActor {
         return mProviderContext;
     }
 
-    public void addAuthority(String authority) {
-        resolver.addProvider(authority, provider);
-    }
-
     public <T extends ContentProvider> T addProvider(Class<T> providerClass,
             String authority) throws Exception {
         return addProvider(providerClass, authority, mProviderContext);
@@ -347,6 +343,12 @@ public class ContactsActor {
         info.authority = stripOutUserIdFromAuthority(authority);
         provider.attachInfoForTesting(providerContext, info);
         resolver.addProvider(authority, provider);
+
+        // In case of LegacyTest, "authority" here is actually multiple authorities.
+        // Register all authority here.
+        for (String a : authority.split(";")) {
+            resolver.addProvider(a, provider);
+        }
         return provider;
     }
 

@@ -61,7 +61,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
     @Override
     protected String getAuthority() {
-        return Contacts.AUTHORITY;
+        return Contacts.AUTHORITY + ";" + ContactsContract.AUTHORITY;
     }
 
     public void testPeopleInsert() {
@@ -857,8 +857,6 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
     }
 
     public void testSettings() throws Exception {
-        mActor.addAuthority(ContactsContract.AUTHORITY);
-
         ContentValues values = new ContentValues();
         values.put(Settings._SYNC_ACCOUNT, "foo");
         values.put(Settings._SYNC_ACCOUNT_TYPE, "bar");

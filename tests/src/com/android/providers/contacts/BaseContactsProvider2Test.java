@@ -154,10 +154,6 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return mActor.context;
     }
 
-    public void addAuthority(String authority) {
-        mActor.addAuthority(authority);
-    }
-
     public ContentProvider addProvider(Class<? extends ContentProvider> providerClass,
             String authority) throws Exception {
         return mActor.addProvider(providerClass, authority);

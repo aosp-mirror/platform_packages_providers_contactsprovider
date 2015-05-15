@@ -27,6 +27,9 @@ public class MockSyncAdapter extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
+        // Looks like returning null is okay here, probably because the account type doesn't exist.
+        // If the system complains about it, we need to return a real sync adapter class here,
+        // and in the syncMethod -1 to isSyncable.
         return null;
     }
 }
