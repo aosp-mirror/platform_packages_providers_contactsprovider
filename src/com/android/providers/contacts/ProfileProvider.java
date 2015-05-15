@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.util.ContactsPermissions;
+
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -51,7 +53,7 @@ public class ProfileProvider extends AbstractContactsProvider {
      */
     public void enforceReadPermission(Uri uri) {
         if (!mDelegate.isValidPreAuthorizedUri(uri)) {
-            mDelegate.getContext().enforceCallingOrSelfPermission(READ_PERMISSION, null);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
         }
     }
 
@@ -59,7 +61,7 @@ public class ProfileProvider extends AbstractContactsProvider {
      * Performs a permission check on the write profile permission.
      */
     public void enforceWritePermission() {
-        mDelegate.getContext().enforceCallingOrSelfPermission(WRITE_PERMISSION, null);
+        ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
     }
 
     @Override

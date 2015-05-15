@@ -162,6 +162,7 @@ import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
 import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
 import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import com.android.providers.contacts.util.Clock;
+import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.UserUtils;
@@ -2247,7 +2248,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             response.putParcelable(Authorization.KEY_AUTHORIZED_URI, authUri);
             return response;
         } else if (PinnedPositions.UNDEMOTE_METHOD.equals(method)) {
-            getContext().enforceCallingOrSelfPermission(WRITE_PERMISSION, null);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
             final long id;
             try {
                 id = Long.valueOf(arg);
@@ -3088,8 +3089,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private void enforceSocialStreamReadPermission(Uri uri) {
         if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))
                 && !isValidPreAuthorizedUri(uri)) {
-            getContext().enforceCallingOrSelfPermission(
-                    "android.permission.READ_SOCIAL_STREAM", null);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    "android.permission.READ_SOCIAL_STREAM");
         }
     }
 
@@ -3100,8 +3101,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private void enforceSocialStreamWritePermission(Uri uri) {
         if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))) {
-            getContext().enforceCallingOrSelfPermission(
-                    "android.permission.WRITE_SOCIAL_STREAM", null);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    "android.permission.WRITE_SOCIAL_STREAM");
         }
     }
 
