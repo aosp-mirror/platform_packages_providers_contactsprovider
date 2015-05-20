@@ -1864,9 +1864,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Note here we use a standalone CP2 so it'll have its own db helper.
         // Also use AlteringUserContext here to report the corp user id.
-        return mActor.addProvider(StandaloneContactsProvider2.class,
+        SynchronousContactsProvider2 provider = mActor.addProvider(
+                StandaloneContactsProvider2.class,
                 "" + MockUserManager.CORP_USER.id + "@com.android.contacts",
                 new AlteringUserContext(mActor.getProviderContext(), MockUserManager.CORP_USER.id));
+        provider.wipeData();
+        return provider;
     }
 
     /**
