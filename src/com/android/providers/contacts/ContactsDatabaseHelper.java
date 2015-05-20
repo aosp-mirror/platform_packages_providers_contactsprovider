@@ -122,7 +122,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1008;
+    static final int DATABASE_VERSION = 1009;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1361,7 +1361,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Data.SYNC1 + " TEXT, " +
                 Data.SYNC2 + " TEXT, " +
                 Data.SYNC3 + " TEXT, " +
-                Data.SYNC4 + " TEXT " +
+                Data.SYNC4 + " TEXT, " +
+                Data.CARRIER_PRESENCE + " INTEGER NOT NULL DEFAULT 0 " +
         ");");
 
         db.execSQL("CREATE INDEX data_raw_contact_id ON " + Tables.DATA + " (" +
@@ -2931,6 +2932,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1008;
         }
 
+        if (oldVersion < 1009) {
+            upgradeToVersion1009(db);
+            oldVersion = 1009;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4471,6 +4477,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
         db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
                 "raw_contact_backup_id, account_id);");
+    }
+
+    public void upgradeToVersion1009(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE data ADD carrier_presence INTEGER NOT NULL DEFAULT 0");
     }
 
     public String extractHandleFromEmailAddress(String email) {
