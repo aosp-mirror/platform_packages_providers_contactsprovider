@@ -125,7 +125,6 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, Calls.PHONE_ACCOUNT_COMPONENT_NAME);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_ID, Calls.PHONE_ACCOUNT_ID);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_ADDRESS, Calls.PHONE_ACCOUNT_ADDRESS);
-        sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_HIDDEN, Calls.PHONE_ACCOUNT_HIDDEN);
         sCallsProjectionMap.put(Calls.NEW, Calls.NEW);
         sCallsProjectionMap.put(Calls.VOICEMAIL_URI, Calls.VOICEMAIL_URI);
         sCallsProjectionMap.put(Calls.TRANSCRIPTION, Calls.TRANSCRIPTION);
