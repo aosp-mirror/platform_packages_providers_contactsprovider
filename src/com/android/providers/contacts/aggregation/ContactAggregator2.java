@@ -147,9 +147,14 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         RawContactMatcher matcher = new RawContactMatcher();
         RawContactMatchingCandidates matchingCandidates = new RawContactMatchingCandidates();
         if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {
-            // Find the set of matching candidates
-            matchingCandidates = findRawContactMatchingCandidates(db, rawContactId, candidates,
-                    matcher);
+            // If this is a newly inserted contact or a visible contact, look for
+            // data matches.
+            if (currentContactId == 0
+                    || mDbHelper.isContactInDefaultDirectory(db, currentContactId)) {
+                // Find the set of matching candidates
+                matchingCandidates = findRawContactMatchingCandidates(db, rawContactId, candidates,
+                        matcher);
+            }
         } else if (aggregationMode == RawContacts.AGGREGATION_MODE_DISABLED) {
             return;
         }
@@ -223,11 +228,10 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      */
     private RawContactMatchingCandidates findRawContactMatchingCandidates(SQLiteDatabase db, long
             rawContactId, MatchCandidateList candidates, RawContactMatcher matcher) {
-        updateMatchScoresForSuggestionsBasedOnDataMatches(db, rawContactId, candidates,
+        updateMatchScores(db, rawContactId, candidates,
                 matcher);
         final RawContactMatchingCandidates matchingCandidates = new RawContactMatchingCandidates(
-                matcher.pickBestMatches(SCORE_THRESHOLD_SUGGEST));
-
+                matcher.pickBestMatches());
         Set<Long> newIds = new HashSet<>();
         newIds.addAll(matchingCandidates.getRawContactIdSet());
         // Keep doing the following until no new raw contact candidate is found.
@@ -236,9 +240,9 @@ public class ContactAggregator2 extends AbstractContactAggregator {
             final Set<Long> tmpIdSet = new HashSet<>();
             for (long rId : newIds) {
                 final RawContactMatcher rMatcher = new RawContactMatcher();
-                updateMatchScoresForSuggestionsBasedOnDataMatches(db, rId, new MatchCandidateList(),
+                updateMatchScores(db, rId, new MatchCandidateList(),
                         rMatcher);
-                List<MatchScore> newMatches = rMatcher.pickBestMatches(SCORE_THRESHOLD_SUGGEST);
+                List<MatchScore> newMatches = rMatcher.pickBestMatches();
                 for (MatchScore newMatch : newMatches) {
                     final long newRawContactId = newMatch.getRawContactId();
                     if (!matchingCandidates.getRawContactIdSet().contains(newRawContactId)) {
@@ -260,12 +264,10 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      */
      private void clearSuperPrimarySetting(SQLiteDatabase db, String rawContactIds) {
         final String sql =
-                "SELECT d." + DataColumns.MIMETYPE_ID + ", count(DISTINCT r." +
-                        RawContacts.CONTACT_ID + ") c  FROM " + Tables.DATA + " d JOIN " +
-                        Tables.RAW_CONTACTS + " r on d." + Data.RAW_CONTACT_ID + " = r." +
-                        RawContacts._ID +" WHERE d." + Data.IS_SUPER_PRIMARY + " = 1 AND d." +
-                        Data.RAW_CONTACT_ID + " IN (" + rawContactIds + ") group by d." +
-                        DataColumns.MIMETYPE_ID + " having c > 1";
+                "SELECT " + DataColumns.MIMETYPE_ID + ", count(1) c  FROM " +
+                        Tables.DATA +" WHERE " + Data.IS_SUPER_PRIMARY + " = 1 AND " +
+                        Data.RAW_CONTACT_ID + " IN (" + rawContactIds + ") group by " +
+                        DataColumns.MIMETYPE_ID + " HAVING c > 1";
 
         // Find out which mime-types exist with is_super_primary=true on more then one contacts.
         int index = 0;
@@ -294,13 +296,12 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         // in both raw contact of rawContactId and raw contacts of contactId
         String superPrimaryUpdateSql = "UPDATE " + Tables.DATA +
                 " SET " + Data.IS_SUPER_PRIMARY + "=0" +
-                " WHERE (" +  Data.RAW_CONTACT_ID +
-                " IN (SELECT " + RawContacts._ID +  " FROM " + Tables.RAW_CONTACTS +
-                " WHERE " + Data.RAW_CONTACT_ID + " IN (" + rawContactIds + ")";
+                " WHERE " +  Data.RAW_CONTACT_ID +
+                " IN (" + rawContactIds + ")";
 
         mimeTypeCondition.append(')');
         superPrimaryUpdateSql += mimeTypeCondition.toString();
-        db.execSQL(superPrimaryUpdateSql, null);
+        db.execSQL(superPrimaryUpdateSql);
     }
 
     private String buildExceptionMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
@@ -357,6 +358,12 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                         (currentContactContentsCount == 0) ||
                         canBeReused(db, currentCidForRawContact, connectedRawContactIds)) {
                     contactId = currentCidForRawContact;
+                    for (Long connectedRawContactId : connectedRawContactIds) {
+                        Long cid = matchingCandidates.getContactId(connectedRawContactId);
+                        if (cid != null && cid != contactId) {
+                            cidsNeedToBeUpdated.add(cid);
+                        }
+                    }
                 } else if (currentCidForRawContact != 0){
                     cidsNeedToBeUpdated.add(currentCidForRawContact);
                 }
@@ -373,8 +380,9 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                     }
                 }
             }
-            createContactForRawContacts(db, txContext, connectedRawContactIds, contactId);
             clearSuperPrimarySetting(db, TextUtils.join(",", connectedRawContactIds));
+            createContactForRawContacts(db, txContext, connectedRawContactIds, contactId);
+
             for (Long cid : cidsNeedToBeUpdated) {
                 long currentRcCount = 0;
                 if (cid != 0) {
@@ -850,18 +858,32 @@ public class ContactAggregator2 extends AbstractContactAggregator {
     }
 
     /**
-     * Computes scores for contacts that have matching data rows.
+     * Computes suggestion scores for contacts that have matching data rows.
+     * Aggregation suggestion doesn't consider aggregation exceptions, but is purely based on the
+     * raw contacts information.
      */
     private void updateMatchScoresForSuggestionsBasedOnDataMatches(SQLiteDatabase db,
             long rawContactId, MatchCandidateList candidates, RawContactMatcher matcher) {
 
-        updateMatchScoresBasedOnExceptions(db, rawContactId, matcher);
         updateMatchScoresBasedOnIdentityMatch(db, rawContactId, matcher);
         updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
         updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
         updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
         loadNameMatchCandidates(db, rawContactId, candidates, false);
         lookupApproximateNameMatches(db, candidates, matcher);
+    }
+
+    /**
+     * Computes scores for contacts that have matching data rows.
+     */
+    private void updateMatchScores(SQLiteDatabase db, long rawContactId,
+            MatchCandidateList candidates, RawContactMatcher matcher) {
+        updateMatchScoresBasedOnExceptions(db, rawContactId, matcher);
+        updateMatchScoresBasedOnIdentityMatch(db, rawContactId, matcher);
+        updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
+        updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
+        updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
+        updateMatchScoresBasedOnSecondaryData(db, rawContactId, candidates, matcher);
     }
 
     private void updateMatchScoresForSuggestionsBasedOnDataMatches(SQLiteDatabase db,
@@ -874,5 +896,36 @@ public class ContactAggregator2 extends AbstractContactAggregator {
 
             // TODO: add support for other parameter kinds
         }
+    }
+
+    /**
+     * Update scores for matches with secondary data matching but insufficient primary scores.
+     * This method loads structured names for all candidate contacts and recomputes match scores
+     * using approximate matching.
+     */
+    private void updateMatchScoresBasedOnSecondaryData(SQLiteDatabase db,
+            long rawContactId, MatchCandidateList candidates, RawContactMatcher matcher) {
+        final List<Long> secondaryRawContactIds = matcher.prepareSecondaryMatchCandidates();
+        if (secondaryRawContactIds == null || secondaryRawContactIds.size() > SECONDARY_HIT_LIMIT) {
+            return;
+        }
+
+        loadNameMatchCandidates(db, rawContactId, candidates, true);
+
+        mSb.setLength(0);
+        mSb.append(RawContacts._ID).append(" IN (");
+        for (int i = 0; i < secondaryRawContactIds.size(); i++) {
+            if (i != 0) {
+                mSb.append(',');
+            }
+            mSb.append(secondaryRawContactIds.get(i));
+        }
+
+        // We only want to compare structured names to structured names
+        // at this stage, we need to ignore all other sources of name lookup data.
+        mSb.append(") AND " + STRUCTURED_NAME_BASED_LOOKUP_SQL);
+
+        matchAllCandidates(db, mSb.toString(), candidates, matcher,
+                RawContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE, null);
     }
 }
