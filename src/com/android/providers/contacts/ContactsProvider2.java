@@ -1566,6 +1566,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return true;
     }
 
+    @VisibleForTesting
+    public void setNewAggregatorForTest(boolean enabled) {
+        mContactAggregator = (enabled)
+                ? new ContactAggregator2(this, mContactsHelper,
+                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache)
+                : new ContactAggregator(this, mContactsHelper,
+                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
+        mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+        initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
+                mContactsPhotoStore);
+    }
+
     // Updates the locale set to reflect a new system locale.
     private static LocaleSet updateLocaleSet(LocaleSet oldLocales, Locale newLocale) {
         final Locale prevLocale = oldLocales.getPrimaryLocale();
