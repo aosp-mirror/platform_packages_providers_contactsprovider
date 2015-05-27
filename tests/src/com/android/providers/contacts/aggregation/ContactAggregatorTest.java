@@ -43,12 +43,6 @@ import com.android.providers.contacts.testutil.DataUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 
 import com.google.android.collect.Lists;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Unit tests for {@link ContactAggregator}.

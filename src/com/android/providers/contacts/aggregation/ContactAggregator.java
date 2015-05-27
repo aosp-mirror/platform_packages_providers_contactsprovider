@@ -59,7 +59,7 @@ public class ContactAggregator extends AbstractContactAggregator {
     private static final int KEEP_SEPARATE = 0;
     private static final int RE_AGGREGATE = -1;
 
-    private ContactMatcher mMatcher = new ContactMatcher();
+    private final ContactMatcher mMatcher = new ContactMatcher();
 
     /**
      * Constructor.
@@ -511,29 +511,12 @@ public class ContactAggregator extends AbstractContactAggregator {
     }
 
     /**
-     * Updates the contact ID for the specified contact.
-     */
-    protected void setContactId(long rawContactId, long contactId) {
-        mContactIdUpdate.bindLong(1, contactId);
-        mContactIdUpdate.bindLong(2, rawContactId);
-        mContactIdUpdate.execute();
-    }
-
-    /**
      * Updates the contact ID for the specified contact and marks the raw contact as aggregated.
      */
     private void setContactIdAndMarkAggregated(long rawContactId, long contactId) {
         mContactIdAndMarkAggregatedUpdate.bindLong(1, contactId);
         mContactIdAndMarkAggregatedUpdate.bindLong(2, rawContactId);
         mContactIdAndMarkAggregatedUpdate.execute();
-    }
-
-
-    // A set of raw contact IDs for which there are aggregation exceptions
-    private boolean mAggregationExceptionIdsValid;
-
-    public void invalidateAggregationExceptionCache() {
-        mAggregationExceptionIdsValid = false;
     }
 
     interface AggregateExceptionQuery {
