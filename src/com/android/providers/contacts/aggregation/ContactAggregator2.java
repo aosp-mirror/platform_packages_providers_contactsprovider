@@ -82,38 +82,6 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                 commonNicknameCache);
     }
 
-    @SuppressWarnings("deprecation")
-    public void triggerAggregation(TransactionContext txContext, long rawContactId) {
-        if (!mEnabled) {
-            return;
-        }
-
-        int aggregationMode = mDbHelper.getAggregationMode(rawContactId);
-        switch (aggregationMode) {
-            case RawContacts.AGGREGATION_MODE_DISABLED:
-                break;
-
-            case RawContacts.AGGREGATION_MODE_DEFAULT: {
-                markForAggregation(rawContactId, aggregationMode, false);
-                break;
-            }
-
-            case RawContacts.AGGREGATION_MODE_SUSPENDED: {
-                long contactId = mDbHelper.getContactId(rawContactId);
-
-                if (contactId != 0) {
-                    updateAggregateData(txContext, contactId);
-                }
-                break;
-            }
-
-            case RawContacts.AGGREGATION_MODE_IMMEDIATE: {
-                aggregateContact(txContext, mDbHelper.getWritableDatabase(), rawContactId);
-                break;
-            }
-        }
-    }
-
     private static class RawContactIdAndAggregationModeQuery {
         public static final String TABLE = Tables.RAW_CONTACTS;
 

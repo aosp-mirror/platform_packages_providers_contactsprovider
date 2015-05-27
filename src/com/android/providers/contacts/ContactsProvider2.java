@@ -1439,7 +1439,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private Account mAccount;
 
     private AbstractContactAggregator mContactAggregator;
-    private ContactAggregator mProfileAggregator;
+    private AbstractContactAggregator mProfileAggregator;
 
     // Duration in milliseconds that pre-authorized URIs will remain valid.
     private long mPreAuthorizedUriDuration;

@@ -23,7 +23,6 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Identity;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
@@ -120,7 +119,7 @@ public abstract class AbstractContactAggregator {
     // From system/core/logcat/event-log-tags
     // aggregator [time, count] will be logged for each aggregator cycle.
     // For the query (as opposed to the merge), count will be negative
-    public static final int LOG_SYNC_CONTACTS_AGGREGATION = 2747;
+    static final int LOG_SYNC_CONTACTS_AGGREGATION = 2747;
 
     // If we encounter more than this many contacts with matching names, aggregate only this many
     protected static final int PRIMARY_HIT_LIMIT = 15;
@@ -394,11 +393,11 @@ public abstract class AbstractContactAggregator {
                 mDbHelper.getMimeTypeIdForStructuredName(), mMimeTypeIdPhoto, mMimeTypeIdPhone);
     }
 
-    public void setEnabled(boolean enabled) {
+    public final void setEnabled(boolean enabled) {
         mEnabled = enabled;
     }
 
-    public boolean isEnabled() {
+    public final boolean isEnabled() {
         return mEnabled;
     }
 
@@ -418,6 +417,7 @@ public abstract class AbstractContactAggregator {
      * Aggregate all raw contacts that were marked for aggregation in the current transaction.
      * Call just before committing the transaction.
      */
+    // Overridden by ProfileAggregator.
     public void aggregateInTransaction(TransactionContext txContext, SQLiteDatabase db) {
         final int markedCount = mRawContactsMarkedForAggregation.size();
         if (markedCount == 0) {
@@ -492,7 +492,7 @@ public abstract class AbstractContactAggregator {
     }
 
     @SuppressWarnings("deprecation")
-    public void triggerAggregation(TransactionContext txContext, long rawContactId) {
+    public final void triggerAggregation(TransactionContext txContext, long rawContactId) {
         if (!mEnabled) {
             return;
         }
@@ -523,17 +523,17 @@ public abstract class AbstractContactAggregator {
         }
     }
 
-    public void clearPendingAggregations() {
+    public final void clearPendingAggregations() {
         // HashMap woulnd't shrink the internal table once expands it, so let's just re-create
         // a new one instead of clear()ing it.
         mRawContactsMarkedForAggregation = Maps.newHashMap();
     }
 
-    public void markNewForAggregation(long rawContactId, int aggregationMode) {
+    public final void markNewForAggregation(long rawContactId, int aggregationMode) {
         mRawContactsMarkedForAggregation.put(rawContactId, aggregationMode);
     }
 
-    public void markForAggregation(long rawContactId, int aggregationMode, boolean force) {
+    public final void markForAggregation(long rawContactId, int aggregationMode, boolean force) {
         final int effectiveAggregationMode;
         if (!force && mRawContactsMarkedForAggregation.containsKey(rawContactId)) {
             // As per ContactsContract documentation, default aggregation mode
@@ -566,7 +566,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Marks all constituent raw contacts of an aggregated contact for re-aggregation.
      */
-    protected void markContactForAggregation(SQLiteDatabase db, long contactId) {
+    protected final void markContactForAggregation(SQLiteDatabase db, long contactId) {
         mSelectionArgs1[0] = String.valueOf(contactId);
         Cursor cursor = db.query(RawContactIdAndAggregationModeQuery.TABLE,
                 RawContactIdAndAggregationModeQuery.COLUMNS,
@@ -594,7 +594,7 @@ public abstract class AbstractContactAggregator {
      *   {@link RawContacts#AGGREGATION_MODE_DEFAULT}.
      * - Also put them into {@link #mRawContactsMarkedForAggregation}.
      */
-    public int markAllVisibleForAggregation(SQLiteDatabase db) {
+    public final int markAllVisibleForAggregation(SQLiteDatabase db) {
         final long start = System.currentTimeMillis();
 
         // Set AGGREGATION_NEEDED for all visible raw_cotnacts with AGGREGATION_MODE_DEFAULT.
@@ -631,6 +631,7 @@ public abstract class AbstractContactAggregator {
      * Creates a new contact based on the given raw contact.  Does not perform aggregation.  Returns
      * the ID of the contact that was created.
      */
+    // Overridden by ProfileAggregator.
     public long onRawContactInsert(
             TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
         long contactId = insertContact(db, rawContactId);
@@ -639,7 +640,7 @@ public abstract class AbstractContactAggregator {
         return contactId;
     }
 
-    protected long insertContact(SQLiteDatabase db, long rawContactId) {
+    protected final long insertContact(SQLiteDatabase db, long rawContactId) {
         mSelectionArgs1[0] = String.valueOf(rawContactId);
         computeAggregateData(db, mRawContactsQueryByRawContactId, mSelectionArgs1, mContactInsert);
         return mContactInsert.executeInsert();
@@ -659,6 +660,7 @@ public abstract class AbstractContactAggregator {
         public static final int ACCOUNT_ID = 1;
     }
 
+    // Overridden by ProfileAggregator.
     public void aggregateContact(
             TransactionContext txContext, SQLiteDatabase db, long rawContactId) {
         if (!mEnabled) {
@@ -700,7 +702,7 @@ public abstract class AbstractContactAggregator {
         updateAggregatedStatusUpdate(contactId);
     }
 
-    protected void updateAggregatedStatusUpdate(long contactId) {
+    protected final void updateAggregatedStatusUpdate(long contactId) {
         mAggregatedPresenceReplace.bindLong(1, contactId);
         mAggregatedPresenceReplace.bindLong(2, contactId);
         mAggregatedPresenceReplace.execute();
@@ -710,7 +712,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Adjusts the reference to the latest status update for the specified contact.
      */
-    public void updateLastStatusUpdateId(long contactId) {
+    public final void updateLastStatusUpdateId(long contactId) {
         String contactIdString = String.valueOf(contactId);
         mDbHelper.getWritableDatabase().execSQL(UPDATE_LAST_STATUS_UPDATE_ID_SQL,
                 new String[]{contactIdString, contactIdString});
@@ -734,8 +736,8 @@ public abstract class AbstractContactAggregator {
      * Build sql to check if there is any identity match/mis-match between two sets of raw contact
      * ids on the same namespace.
      */
-    protected String buildIdentityMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
-            boolean isIdentityMatching, boolean countOnly) {
+    protected final String buildIdentityMatchingSql(String rawContactIdSet1,
+            String rawContactIdSet2, boolean isIdentityMatching, boolean countOnly) {
         final String identityType = String.valueOf(mMimeTypeIdIdentity);
         final String matchingOperator = (isIdentityMatching) ? "=" : "!=";
         final String sql =
@@ -752,7 +754,7 @@ public abstract class AbstractContactAggregator {
                 RawContactMatchingSelectionStatement.SELECT_ID + sql;
     }
 
-    protected String buildEmailMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
+    protected final String buildEmailMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
             boolean countOnly) {
         final String emailType = String.valueOf(mMimeTypeIdEmail);
         final String sql =
@@ -767,7 +769,7 @@ public abstract class AbstractContactAggregator {
                 RawContactMatchingSelectionStatement.SELECT_ID + sql;
     }
 
-    protected String buildPhoneMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
+    protected final String buildPhoneMatchingSql(String rawContactIdSet1, String rawContactIdSet2,
             boolean countOnly) {
         // It's a bit tricker because it has to be consistent with
         // updateMatchScoresBasedOnPhoneMatches().
@@ -791,7 +793,8 @@ public abstract class AbstractContactAggregator {
                 RawContactMatchingSelectionStatement.SELECT_ID + sql;
     }
 
-    protected String buildExceptionMatchingSql(String rawContactIdSet1, String rawContactIdSet2) {
+    protected final String buildExceptionMatchingSql(String rawContactIdSet1,
+            String rawContactIdSet2) {
         return "SELECT " + AggregationExceptions.RAW_CONTACT_ID1 + ", " +
                 AggregationExceptions.RAW_CONTACT_ID2 +
                 " FROM " + Tables.AGGREGATION_EXCEPTIONS +
@@ -802,7 +805,7 @@ public abstract class AbstractContactAggregator {
                 AggregationExceptions.TYPE_KEEP_TOGETHER ;
     }
 
-    protected boolean isFirstColumnGreaterThanZero(SQLiteDatabase db, String query) {
+    protected final boolean isFirstColumnGreaterThanZero(SQLiteDatabase db, String query) {
         return DatabaseUtils.longForQuery(db, query, null) > 0;
     }
 
@@ -810,7 +813,7 @@ public abstract class AbstractContactAggregator {
      * Partition the given raw contact Ids to connected component based on aggregation exception,
      * identity matching, email matching or phone matching.
      */
-    protected Set<Set<Long>> findConnectedRawContacts(SQLiteDatabase db, Set<Long>
+    protected final Set<Set<Long>> findConnectedRawContacts(SQLiteDatabase db, Set<Long>
             rawContactIdSet) {
         // Connections between two raw contacts
         final Multimap<Long, Long> matchingRawIdPairs = HashMultimap.create();
@@ -832,7 +835,8 @@ public abstract class AbstractContactAggregator {
      * method will put two entries into the given result map for each pair of different IDs, one
      * keyed by each ID.
      */
-    protected void findIdPairs(SQLiteDatabase db, String query, Multimap<Long, Long> results) {
+    protected final void findIdPairs(SQLiteDatabase db, String query,
+            Multimap<Long, Long> results) {
         Cursor cursor = db.rawQuery(query, null);
         try {
             cursor.moveToPosition(-1);
@@ -853,8 +857,8 @@ public abstract class AbstractContactAggregator {
      * Creates a new Contact for a given set of the raw contacts of {@code rawContactIds} if the
      * given contactId is null. Otherwise, regroup them into contact with {@code contactId}.
      */
-    protected void createContactForRawContacts(SQLiteDatabase db, TransactionContext txContext,
-            Set<Long> rawContactIds, Long contactId) {
+    protected final void createContactForRawContacts(SQLiteDatabase db,
+            TransactionContext txContext, Set<Long> rawContactIds, Long contactId) {
         if (rawContactIds.isEmpty()) {
             // No raw contact id is provided.
             return;
@@ -887,7 +891,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Updates the contact ID for the specified contact.
      */
-    protected void setContactId(long rawContactId, long contactId) {
+    protected final void setContactId(long rawContactId, long contactId) {
         mContactIdUpdate.bindLong(1, contactId);
         mContactIdUpdate.bindLong(2, rawContactId);
         mContactIdUpdate.execute();
@@ -896,7 +900,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Marks the specified raw contact ID as aggregated
      */
-    protected void markAggregated(long rawContactId) {
+    protected final void markAggregated(long rawContactId) {
         mMarkAggregatedUpdate.bindLong(1, rawContactId);
         mMarkAggregatedUpdate.execute();
     }
@@ -937,7 +941,7 @@ public abstract class AbstractContactAggregator {
     protected final HashSet<Long> mAggregationExceptionIds = new HashSet<Long>();
     protected boolean mAggregationExceptionIdsValid;
 
-    public void invalidateAggregationExceptionCache() {
+    public final void invalidateAggregationExceptionCache() {
         mAggregationExceptionIdsValid = false;
     }
 
@@ -947,7 +951,7 @@ public abstract class AbstractContactAggregator {
      * the agg_exceptions table if it is known that there are no records there for a given
      * raw contact ID.
      */
-    protected void prefetchAggregationExceptionIds(SQLiteDatabase db) {
+    protected final void prefetchAggregationExceptionIds(SQLiteDatabase db) {
         mAggregationExceptionIds.clear();
         final Cursor c = db.query(AggregateExceptionPrefetchQuery.TABLE,
                 AggregateExceptionPrefetchQuery.COLUMNS,
@@ -983,7 +987,7 @@ public abstract class AbstractContactAggregator {
         int NAME_TYPE = 1;
     }
 
-    protected void loadNameMatchCandidates(SQLiteDatabase db, long rawContactId,
+    protected final void loadNameMatchCandidates(SQLiteDatabase db, long rawContactId,
             MatchCandidateList candidates, boolean structuredNameBased) {
         candidates.clear();
         mSelectionArgs1[0] = String.valueOf(rawContactId);
@@ -1160,7 +1164,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Finds contacts with names matching the specified name.
      */
-    protected void updateMatchScoresBasedOnNameMatches(SQLiteDatabase db, String query,
+    protected final void updateMatchScoresBasedOnNameMatches(SQLiteDatabase db, String query,
             MatchCandidateList candidates, ContactMatcher matcher) {
         candidates.clear();
         NameLookupSelectionBuilder builder = new NameLookupSelectionBuilder(
@@ -1427,7 +1431,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Computes aggregate-level data from constituent raw contacts.
      */
-    protected void computeAggregateData(final SQLiteDatabase db, String sql, String[] sqlArgs,
+    protected final void computeAggregateData(final SQLiteDatabase db, String sql, String[] sqlArgs,
             SQLiteStatement statement) {
         long currentRawContactId = -1;
         long bestPhotoId = -1;
@@ -1587,6 +1591,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Builds a lookup key using the given data.
      */
+    // Overridden by ProfileAggregator.
     protected void appendLookupKey(StringBuilder sb, String accountTypeWithDataSet,
             String accountName, long rawContactId, String sourceId, String displayName) {
         ContactLookupKey.appendToLookupKey(sb, accountTypeWithDataSet, accountName, rawContactId,
@@ -1650,7 +1655,7 @@ public abstract class AbstractContactAggregator {
         int PHOTO_FILE_ID = 3;
     }
 
-    public void updatePhotoId(SQLiteDatabase db, long rawContactId) {
+    public final void updatePhotoId(SQLiteDatabase db, long rawContactId) {
 
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
@@ -1806,7 +1811,7 @@ public abstract class AbstractContactAggregator {
         int ACCOUNT_TYPE_AND_DATA_SET = 5;
     }
 
-    public void updateDisplayNameForRawContact(SQLiteDatabase db, long rawContactId) {
+    public final void updateDisplayNameForRawContact(SQLiteDatabase db, long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
@@ -1815,7 +1820,7 @@ public abstract class AbstractContactAggregator {
         updateDisplayNameForContact(db, contactId);
     }
 
-    public void updateDisplayNameForContact(SQLiteDatabase db, long contactId) {
+    public final void updateDisplayNameForContact(SQLiteDatabase db, long contactId) {
         boolean lookupKeyUpdateNeeded = false;
 
         mDisplayNameCandidate.clear();
@@ -1859,7 +1864,7 @@ public abstract class AbstractContactAggregator {
      * Updates the {@link Contacts#HAS_PHONE_NUMBER} flag for the aggregate contact containing the
      * specified raw contact.
      */
-    public void updateHasPhoneNumber(SQLiteDatabase db, long rawContactId) {
+    public final void updateHasPhoneNumber(SQLiteDatabase db, long rawContactId) {
 
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
@@ -1902,7 +1907,7 @@ public abstract class AbstractContactAggregator {
         int SOURCE_ID = 4;
     }
 
-    public void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
+    public final void updateLookupKeyForRawContact(SQLiteDatabase db, long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
@@ -1924,6 +1929,7 @@ public abstract class AbstractContactAggregator {
         mLookupKeyUpdate.execute();
     }
 
+    // Overridden by ProfileAggregator.
     protected String computeLookupKeyForContact(SQLiteDatabase db, long contactId) {
         StringBuilder sb = new StringBuilder();
         mSelectionArgs1[0] = String.valueOf(contactId);
@@ -1948,7 +1954,7 @@ public abstract class AbstractContactAggregator {
      * Execute {@link SQLiteStatement} that will update the
      * {@link Contacts#STARRED} flag for the given {@link RawContacts#_ID}.
      */
-    public void updateStarred(long rawContactId) {
+    public final void updateStarred(long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
@@ -1962,7 +1968,7 @@ public abstract class AbstractContactAggregator {
      * Execute {@link SQLiteStatement} that will update the
      * {@link Contacts#PINNED} flag for the given {@link RawContacts#_ID}.
      */
-    public void updatePinned(long rawContactId) {
+    public final void updatePinned(long rawContactId) {
         long contactId = mDbHelper.getContactId(rawContactId);
         if (contactId == 0) {
             return;
@@ -1974,7 +1980,7 @@ public abstract class AbstractContactAggregator {
     /**
      * Finds matching contacts and returns a cursor on those.
      */
-    public Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb,
+    public final Cursor queryAggregationSuggestions(SQLiteQueryBuilder qb,
             String[] projection, long contactId, int maxSuggestions, String filter,
             ArrayList<AggregationSuggestionParameter> parameters) {
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();

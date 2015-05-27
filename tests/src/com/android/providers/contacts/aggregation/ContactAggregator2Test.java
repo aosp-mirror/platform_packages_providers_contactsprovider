@@ -37,7 +37,6 @@ import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
-import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.TestUtils;
 import com.android.providers.contacts.tests.R;
@@ -45,12 +44,6 @@ import com.android.providers.contacts.testutil.DataUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 
 import com.google.android.collect.Lists;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Unit tests for {@link ContactAggregator2}.
