@@ -35,8 +35,7 @@ import java.util.Locale;
  * database from the rest of contacts.
  */
 public class ProfileProvider extends AbstractContactsProvider {
-    private static final String READ_PERMISSION = "android.permission.READ_PROFILE";
-    private static final String WRITE_PERMISSION = "android.permission.WRITE_PROFILE";
+    private static final String READ_CONTACTS_PERMISSION = "android.permission.READ_CONTACTS";
 
     // The Contacts provider handles most of the logic - this provider is only invoked when the
     // URI belongs to a profile action, setting up the proper database.
@@ -44,24 +43,6 @@ public class ProfileProvider extends AbstractContactsProvider {
 
     public ProfileProvider(ContactsProvider2 delegate) {
         mDelegate = delegate;
-    }
-
-    /**
-     * Performs a permission check on the read profile permission.  Checks the delegate contacts
-     * provider to see whether this is an authorized one-time-use URI.
-     * @param uri The URI being accessed.
-     */
-    public void enforceReadPermission(Uri uri) {
-        if (!mDelegate.isValidPreAuthorizedUri(uri)) {
-            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
-        }
-    }
-
-    /**
-     * Performs a permission check on the write profile permission.
-     */
-    public void enforceWritePermission() {
-        ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
     }
 
     @Override
@@ -83,14 +64,12 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
-        enforceReadPermission(uri);
         return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
                 cancellationSignal);
     }
 
     @Override
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
-        enforceWritePermission();
         useProfileDbForTransaction();
         return mDelegate.insertInTransaction(uri, values);
     }
@@ -98,25 +77,18 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     protected int updateInTransaction(Uri uri, ContentValues values, String selection,
             String[] selectionArgs) {
-        enforceWritePermission();
         useProfileDbForTransaction();
         return mDelegate.updateInTransaction(uri, values, selection, selectionArgs);
     }
 
     @Override
     protected int deleteInTransaction(Uri uri, String selection, String[] selectionArgs) {
-        enforceWritePermission();
         useProfileDbForTransaction();
         return mDelegate.deleteInTransaction(uri, selection, selectionArgs);
     }
 
     @Override
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
-        if (mode != null && mode.contains("w")) {
-            enforceWritePermission();
-        } else {
-            enforceReadPermission(uri);
-        }
         return mDelegate.openAssetFileLocal(uri, mode);
     }
 
@@ -173,6 +145,6 @@ public class ProfileProvider extends AbstractContactsProvider {
 
     private void sendProfileChangedBroadcast() {
         final Intent intent = new Intent(Intents.ACTION_PROFILE_CHANGED);
-        mDelegate.getContext().sendBroadcast(intent, READ_PERMISSION);
+        mDelegate.getContext().sendBroadcast(intent, READ_CONTACTS_PERMISSION);
     }
 }

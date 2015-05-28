@@ -203,6 +203,7 @@ import java.util.concurrent.CountDownLatch;
 public class ContactsProvider2 extends AbstractContactsProvider
         implements OnAccountsUpdateListener {
 
+    private static final String READ_PERMISSION = "android.permission.READ_CONTACTS";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
@@ -1512,8 +1513,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProfileProvider = newProfileProvider();
         mProfileProvider.setDbHelperToSerializeOn(mContactsHelper, CONTACTS_DB_TAG, this);
         ProviderInfo profileInfo = new ProviderInfo();
-        profileInfo.readPermission = "android.permission.READ_PROFILE";
-        profileInfo.writePermission = "android.permission.WRITE_PROFILE";
         profileInfo.authority = ContactsContract.AUTHORITY;
         mProfileProvider.attachInfo(getContext(), profileInfo);
         mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
@@ -2200,14 +2199,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         waitForAccess(mReadAccessLatch);
         switchToContactMode();
         if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
-            Uri uri = (Uri) extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
+            Uri uri = extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
 
             // Check permissions on the caller.  The URI can only be pre-authorized if the caller
-            // already has the necessary permissions.
+            // already has the necessary permissions. And, we can't rely on the ContentResolver to
+            // enforce permissions for the ContentProvider#call() method.
             enforceSocialStreamReadPermission(uri);
-            if (mapsToProfileDb(uri)) {
-                mProfileProvider.enforceReadPermission(uri);
-            }
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
 
             // If there hasn't been a security violation yet, we're clear to pre-authorize the URI.
             Uri authUri = preAuthorizeUri(uri);
