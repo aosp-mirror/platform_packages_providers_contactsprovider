@@ -29,6 +29,7 @@
             android:label="@string/provider_label"
             android:multiprocess="false"
             android:exported="true"
+            android:grantUriPermissions="true"
             android:readPermission="android.permission.READ_CONTACTS"
             android:writePermission="android.permission.WRITE_CONTACTS">
             <path-permission
@@ -40,12 +41,6 @@
             <path-permission
                     android:pathPattern="/contacts/.*/photo"
                     android:readPermission="android.permission.GLOBAL_SEARCH" />
-            <path-permission
-                    android:pathPrefix="/data_enterprise"
-                    android:readPermission="android.permission.INTERACT_ACROSS_USERS" />
-            <path-permission
-                android:pathPattern="/raw_contact_entities_corp"
-                android:readPermission="android.permission.INTERACT_ACROSS_USERS" />
             <grant-uri-permission android:pathPattern=".*" />
         </provider>
 
