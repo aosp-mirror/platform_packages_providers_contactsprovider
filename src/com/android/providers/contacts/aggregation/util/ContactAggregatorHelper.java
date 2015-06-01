@@ -58,21 +58,27 @@ public class ContactAggregatorHelper {
             }
             index++;
         }
-        final Set<Long> mergedSet = new HashSet<>();
+
         connectedRawContactSets.clear();
         for (Long accountId : accounts.keySet()) {
             final Set<Integer> s = accounts.get(accountId);
             if (s.size() > 1) {
                 for (Integer i : s) {
                     final Set<Long> rIdSet = rawContactIds.get(i);
-                    if (rIdSet != null) {
+                    if (rIdSet != null && !rIdSet.isEmpty()) {
                         connectedRawContactSets.add(rawContactIds.get(i));
                         rawContactIds.remove(i);
                     }
                 }
-            } else {
+            }
+        }
+
+        final Set<Long> mergedSet = new HashSet<>();
+        for (Long accountId : accounts.keySet()) {
+            final Set<Integer> s = accounts.get(accountId);
+            if (s.size() == 1) {
                 Set<Long> ids = rawContactIds.get(Iterables.getOnlyElement(s));
-                if (ids != null) {
+                if (ids != null && !ids.isEmpty()) {
                     mergedSet.addAll(ids);
                 }
             }

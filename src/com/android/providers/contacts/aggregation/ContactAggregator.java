@@ -187,7 +187,7 @@ public class ContactAggregator extends AbstractContactAggregator {
 
         if (contactId == currentContactId) {
             // Aggregation unchanged
-            markAggregated(rawContactId);
+            markAggregated(db, String.valueOf(rawContactId));
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "Aggregation unchanged");
             }

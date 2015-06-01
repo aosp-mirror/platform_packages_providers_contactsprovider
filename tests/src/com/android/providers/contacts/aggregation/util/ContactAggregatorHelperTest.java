@@ -53,9 +53,6 @@ public class ContactAggregatorHelperTest extends TestCase {
             connectedRawContactSets.add(rawContactSet);
         }
 
-        for (long i = 100; i < 103; i++) {
-            rawContactsToAccounts.put(i, ACCOUNT_1);
-        }
         rawContactsToAccounts.put(100l, ACCOUNT_1);
         rawContactsToAccounts.put(101l, ACCOUNT_1);
         rawContactsToAccounts.put(102l, ACCOUNT_1);
@@ -76,6 +73,36 @@ public class ContactAggregatorHelperTest extends TestCase {
 
         MoreAsserts.assertContentsInAnyOrder(connectedRawContactSets, Sets.newHashSet(100l,
                 101l), Sets.newHashSet(102l, 103l), Sets.newHashSet(104l, 105l, 106l, 107l));
+    }
+
+    public void testMergeComponentsWithDisjointAccounts2() {
+        Set<Set<Long>> connectedRawContactSets = new HashSet<>();
+        Map<Long, Long> rawContactsToAccounts = new HashMap<>();
+
+        Set<Long> rawContactSet1 = new HashSet<>();
+        rawContactSet1.add(102l);
+        connectedRawContactSets.add(rawContactSet1);
+        Set<Long> rawContactSet2 = new HashSet<>();
+        rawContactSet2.add(100l);
+        rawContactSet2.add(101l);
+        connectedRawContactSets.add(rawContactSet2);
+        Set<Long> rawContactSet3 = new HashSet<>();
+        rawContactSet3.add(103l);;
+        connectedRawContactSets.add(rawContactSet3);
+
+        rawContactsToAccounts.put(100l, ACCOUNT_1);
+        rawContactsToAccounts.put(101l, ACCOUNT_2);
+        rawContactsToAccounts.put(102l, ACCOUNT_3);
+        rawContactsToAccounts.put(103l, ACCOUNT_1);
+        // Component1: [rawContactId=100, accountId=1; raw_contactId=101, accountId=2]
+        // Component2: [rawContactId=102, accountId=3]
+        // Component3: [rawContactId=103, accountId=1]
+        // None of them can be merged
+        ContactAggregatorHelper.mergeComponentsWithDisjointAccounts(connectedRawContactSets,
+                rawContactsToAccounts);
+
+        MoreAsserts.assertContentsInAnyOrder(connectedRawContactSets, Sets.newHashSet(100l,
+                101l), Sets.newHashSet(102l), Sets.newHashSet(103l));
     }
 
     public void testFindConnectedRawContacts() {
