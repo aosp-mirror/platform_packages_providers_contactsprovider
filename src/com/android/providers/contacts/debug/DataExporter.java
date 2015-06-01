@@ -17,7 +17,6 @@
 package com.android.providers.contacts.debug;
 
 import com.android.providers.contacts.util.Hex;
-import com.google.common.io.Closeables;
 
 import android.content.Context;
 import android.net.Uri;
@@ -62,12 +61,10 @@ public class DataExporter {
         Log.i(TAG, "Dump started...");
 
         ensureOutputDirectory(context);
-        final ZipOutputStream os = new ZipOutputStream(new FileOutputStream(outFile));
-        os.setLevel(Deflater.BEST_COMPRESSION);
-        try {
+        
+        try (ZipOutputStream os = new ZipOutputStream(new FileOutputStream(outFile))) {
+            os.setLevel(Deflater.BEST_COMPRESSION);
             addDirectory(context, os, context.getFilesDir().getParentFile(), "contacts-files");
-        } finally {
-            Closeables.closeQuietly(os);
         }
         Log.i(TAG, "Dump finished.");
         return DumpFileProvider.AUTHORITY_URI.buildUpon().appendPath(fileName).build();
