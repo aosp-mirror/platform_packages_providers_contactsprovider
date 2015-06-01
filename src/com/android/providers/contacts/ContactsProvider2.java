@@ -211,6 +211,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String READ_PERMISSION = "android.permission.READ_CONTACTS";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
+    private static final String INTERACT_ACROSS_USERS = "android.permission.INTERACT_ACROSS_USERS";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
           "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
@@ -5993,6 +5994,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new Object[] {getMaxDisplayPhotoDim(), getMaxThumbnailDim()});
             }
             case PHONES_ENTERPRISE: {
+                ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                        INTERACT_ACROSS_USERS);
                 return queryMergedDataPhones(uri, projection, selection, selectionArgs, sortOrder);
             }
             case PHONES:
@@ -6718,9 +6721,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
             case RAW_CONTACT_ENTITIES_CORP: {
-                // As it's protected by android.permission.INTERACT_ACROSS_USERS
-                // already and it is used by Bluetooth application, we do not
-                // check caller-id policy
+                ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                        INTERACT_ACROSS_USERS);
                 final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
                 if (corpUserId < 0) {
                     // No Corp user or policy not allowed, return empty cursor
@@ -6896,9 +6898,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
                 sortOrder, directoryId, null);
         try {
-            // As it's protected by android.permission.INTERACT_ACROSS_USERS
-            // already and it is used by Bluetooth application, we do not
-            // check caller-id policy
             final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
             if (corpUserId < 0) {
                 // No Corp user or policy not allowed
