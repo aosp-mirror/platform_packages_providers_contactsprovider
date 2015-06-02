@@ -250,6 +250,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
     private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
 
+    protected static final int STATUS_NORMAL = 0;
+    protected static final int STATUS_UPGRADING = 1;
+    protected static final int STATUS_CHANGING_LOCALE = 2;
+    protected static final int STATUS_NO_ACCOUNTS_NO_CONTACTS = 3;
+
     /** Default for the maximum number of returned aggregation suggestions. */
     private static final int DEFAULT_MAX_SUGGESTIONS = 5;
 
@@ -1451,7 +1456,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private CommonNicknameCache mCommonNicknameCache;
     private SearchIndexManager mSearchIndexManager;
 
-    private int mProviderStatus = ProviderStatus.STATUS_NORMAL;
+    private int mProviderStatus = STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
     private volatile CountDownLatch mReadAccessLatch;
     private volatile CountDownLatch mWriteAccessLatch;
@@ -1800,8 +1805,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     public void onLocaleChanged() {
-        if (mProviderStatus != ProviderStatus.STATUS_NORMAL
-                && mProviderStatus != ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS) {
+        if (mProviderStatus != STATUS_NORMAL
+                && mProviderStatus != STATUS_NO_ACCOUNTS_NO_CONTACTS) {
             return;
         }
 
@@ -1838,7 +1843,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected void updateLocaleInBackground() {
 
         // The process is already running - postpone the change
-        if (mProviderStatus == ProviderStatus.STATUS_CHANGING_LOCALE) {
+        if (mProviderStatus == STATUS_CHANGING_LOCALE) {
             return;
         }
 
@@ -1849,7 +1854,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         int providerStatus = mProviderStatus;
-        setProviderStatus(ProviderStatus.STATUS_CHANGING_LOCALE);
+        setProviderStatus(STATUS_CHANGING_LOCALE);
         mContactsHelper.setLocale(currentLocales);
         mProfileHelper.setLocale(currentLocales);
         mSearchIndexManager.updateIndex(true);
@@ -1910,8 +1915,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private void updateProviderStatus() {
-        if (mProviderStatus != ProviderStatus.STATUS_NORMAL
-                && mProviderStatus != ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS) {
+        if (mProviderStatus != STATUS_NORMAL
+                && mProviderStatus != STATUS_NO_ACCOUNTS_NO_CONTACTS) {
             return;
         }
 
@@ -1924,12 +1929,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             // TODO: Different status if there is a profile but no contacts?
             if (isContactsEmpty && profileNum <= 1) {
-                setProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+                setProviderStatus(STATUS_NO_ACCOUNTS_NO_CONTACTS);
             } else {
-                setProviderStatus(ProviderStatus.STATUS_NORMAL);
+                setProviderStatus(STATUS_NORMAL);
             }
         } else {
-            setProviderStatus(ProviderStatus.STATUS_NORMAL);
+            setProviderStatus(STATUS_NORMAL);
         }
     }
 
@@ -2083,7 +2088,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProfileHelper.wipeData();
         mContactsPhotoStore.clear();
         mProfilePhotoStore.clear();
-        mProviderStatus = ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS;
+        mProviderStatus = STATUS_NO_ACCOUNTS_NO_CONTACTS;
         initForDefaultLocale();
     }
 
@@ -6744,9 +6749,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PROVIDER_STATUS: {
+                final int providerStatus;
+                if (mProviderStatus == STATUS_UPGRADING
+                        || mProviderStatus == STATUS_CHANGING_LOCALE) {
+                    providerStatus = ProviderStatus.STATUS_BUSY;
+                } else if (mProviderStatus == STATUS_NORMAL) {
+                    providerStatus = ProviderStatus.STATUS_NORMAL;
+                } else {
+                    providerStatus = ProviderStatus.STATUS_EMPTY;
+                }
                 return buildSingleRowResult(projection,
                         new String[] {ProviderStatus.STATUS},
-                        new Object[] {mProviderStatus});
+                        new Object[] {providerStatus});
             }
 
             case DIRECTORIES : {
@@ -9169,7 +9183,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Log.i(TAG, "Upgrading aggregation algorithm");
 
         final long start = SystemClock.elapsedRealtime();
-        setProviderStatus(ProviderStatus.STATUS_UPGRADING);
+        setProviderStatus(STATUS_UPGRADING);
 
         // Re-aggregate all visible raw contacts.
         try {
@@ -9226,7 +9240,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Log.e(TAG, "Failed to bump aggregation algorithm version; continuing anyway.", e2);
             }
         } finally { // Need one more finally because endTransaction() may fail.
-            setProviderStatus(ProviderStatus.STATUS_NORMAL);
+            setProviderStatus(STATUS_NORMAL);
         }
     }
 
