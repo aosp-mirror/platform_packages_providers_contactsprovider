@@ -271,14 +271,14 @@ public class SearchIndexManager {
     }
 
     private void rebuildIndex(SQLiteDatabase db) {
-        mContactsProvider.setProviderStatus(ProviderStatus.STATUS_UPGRADING);
+        mContactsProvider.setProviderStatus(ContactsProvider2.STATUS_UPGRADING);
         final long start = SystemClock.elapsedRealtime();
         int count = 0;
         try {
             mDbHelper.createSearchIndexTable(db, true);
             count = buildAndInsertIndex(db, null);
         } finally {
-            mContactsProvider.setProviderStatus(ProviderStatus.STATUS_NORMAL);
+            mContactsProvider.setProviderStatus(ContactsProvider2.STATUS_NORMAL);
 
             final long end = SystemClock.elapsedRealtime();
             Log.i(TAG, "Rebuild contact search index in " + (end - start) + "ms, "

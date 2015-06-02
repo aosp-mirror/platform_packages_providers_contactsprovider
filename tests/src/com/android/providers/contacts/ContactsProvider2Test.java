@@ -7493,7 +7493,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testProviderStatusNoContactsNoAccounts() throws Exception {
-        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        assertProviderStatus(ProviderStatus.STATUS_EMPTY);
     }
 
     public void testProviderStatusOnlyLocalContacts() throws Exception {
@@ -7501,17 +7501,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertProviderStatus(ProviderStatus.STATUS_NORMAL);
         mResolver.delete(
                 ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), null, null);
-        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        assertProviderStatus(ProviderStatus.STATUS_EMPTY);
     }
 
     public void testProviderStatusWithAccounts() throws Exception {
-        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        assertProviderStatus(ProviderStatus.STATUS_EMPTY);
         mActor.setAccounts(new Account[]{TestUtil.ACCOUNT_1});
         ((ContactsProvider2)getProvider()).onAccountsUpdated(new Account[]{TestUtil.ACCOUNT_1});
         assertProviderStatus(ProviderStatus.STATUS_NORMAL);
         mActor.setAccounts(new Account[0]);
         ((ContactsProvider2)getProvider()).onAccountsUpdated(new Account[0]);
-        assertProviderStatus(ProviderStatus.STATUS_NO_ACCOUNTS_NO_CONTACTS);
+        assertProviderStatus(ProviderStatus.STATUS_EMPTY);
     }
 
     private void assertProviderStatus(int expectedProviderStatus) {
