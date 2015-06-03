@@ -3658,6 +3658,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    private void expectNoSecurityException(String failureMessage, Uri uri, String[] projection,
+            String selection, String[] selectionArgs, String sortOrder) {
+        Cursor c = null;
+        try {
+            c = mResolver.query(uri, projection, selection, selectionArgs, sortOrder);
+        } catch (SecurityException expected) {
+            fail(failureMessage);
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+    }
+
     private void expectSecurityException(String failureMessage, Uri uri, String[] projection,
             String selection, String[] selectionArgs, String sortOrder) {
         Cursor c = null;
@@ -3673,80 +3687,71 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
-    public void testQueryProfileRequiresReadPermission() {
-        mActor.removePermissions("android.permission.READ_PROFILE");
-
+    public void testQueryProfileWithoutPermission() {
         createBasicProfileContact(new ContentValues());
 
         // Case 1: Retrieving profile contact.
-        expectSecurityException(
-                "Querying for the profile without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the profile without READ_PROFILE access should succeed.",
                 Profile.CONTENT_URI, null, null, null, Contacts._ID);
 
         // Case 2: Retrieving profile data.
-        expectSecurityException(
-                "Querying for the profile data without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the profile data without READ_PROFILE access should succeed.",
                 Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
                 null, null, null, Contacts._ID);
 
         // Case 3: Retrieving profile entities.
-        expectSecurityException(
-                "Querying for the profile entities without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the profile entities without READ_PROFILE access should succeed.",
                 Profile.CONTENT_URI.buildUpon()
                         .appendPath("entities").build(), null, null, null, Contacts._ID);
     }
 
-    public void testQueryProfileByContactIdRequiresReadPermission() {
+    public void testQueryProfileByContactIdWithoutReadPermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
         long profileContactId = queryContactId(profileRawContactId);
 
-        mActor.removePermissions("android.permission.READ_PROFILE");
-
-        // A query for the profile contact by ID should fail.
-        expectSecurityException(
-                "Querying for the profile by contact ID without READ_PROFILE access should fail.",
+        // A query for the profile contact by ID should not require READ_PROFILE.
+        expectNoSecurityException(
+                "Querying for the profile by contact ID without READ_PROFILE access should succeed",
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, profileContactId),
                 null, null, null, Contacts._ID);
     }
 
-    public void testQueryProfileByRawContactIdRequiresReadPermission() {
+    public void testQueryProfileByRawContactIdWithoutReadPermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
-        // Remove profile read permission and attempt to retrieve the raw contact.
-        mActor.removePermissions("android.permission.READ_PROFILE");
-        expectSecurityException(
-                "Querying for the raw contact profile without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the raw contact profile without READ_PROFILE access should succeed.",
                 ContentUris.withAppendedId(RawContacts.CONTENT_URI,
                         profileRawContactId), null, null, null, RawContacts._ID);
     }
 
-    public void testQueryProfileRawContactRequiresReadPermission() {
+    public void testQueryProfileRawContactWithoutReadPermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
-        // Remove profile read permission and attempt to retrieve the profile's raw contact data.
-        mActor.removePermissions("android.permission.READ_PROFILE");
-
         // Case 1: Retrieve the overall raw contact set for the profile.
-        expectSecurityException(
-                "Querying for the raw contact profile without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the raw contact profile without READ_PROFILE access should succeed.",
                 Profile.CONTENT_RAW_CONTACTS_URI, null, null, null, null);
 
         // Case 2: Retrieve the raw contact profile data for the inserted raw contact ID.
-        expectSecurityException(
-                "Querying for the raw profile data without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the raw profile data without READ_PROFILE access should succeed.",
                 ContentUris.withAppendedId(
                         Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
                         .appendPath("data").build(), null, null, null, null);
 
         // Case 3: Retrieve the raw contact profile entity for the inserted raw contact ID.
-        expectSecurityException(
-                "Querying for the raw profile entities without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the raw profile entities without READ_PROFILE access should succeed.",
                 ContentUris.withAppendedId(
                         Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId).buildUpon()
                         .appendPath("entity").build(), null, null, null, null);
     }
 
-    public void testQueryProfileDataByDataIdRequiresReadPermission() {
+    public void testQueryProfileDataByDataIdWithoutReadPermission() {
         createBasicProfileContact(new ContentValues());
         Cursor c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
                 new String[]{Data._ID, Data.MIMETYPE}, null, null, null);
@@ -3755,54 +3760,43 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long profileDataId = c.getLong(0);
         c.close();
 
-        // Remove profile read permission and attempt to retrieve the data
-        mActor.removePermissions("android.permission.READ_PROFILE");
-        expectSecurityException(
-                "Querying for the data in the profile without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the data in the profile without READ_PROFILE access should succeed.",
                 ContentUris.withAppendedId(Data.CONTENT_URI, profileDataId),
                 null, null, null, null);
     }
 
-    public void testQueryProfileDataRequiresReadPermission() {
+    public void testQueryProfileDataWithoutReadPermission() {
         createBasicProfileContact(new ContentValues());
 
-        // Remove profile read permission and attempt to retrieve all profile data.
-        mActor.removePermissions("android.permission.READ_PROFILE");
-        expectSecurityException(
-                "Querying for the data in the profile without READ_PROFILE access should fail.",
+        expectNoSecurityException(
+                "Querying for the data in the profile without READ_PROFILE access should succeed.",
                 Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
                 null, null, null, null);
     }
 
-    public void testInsertProfileRequiresWritePermission() {
-        mActor.removePermissions("android.permission.WRITE_PROFILE");
-
+    public void testInsertProfileWithoutWritePermission() {
         // Creating a non-profile contact should be fine.
         createBasicNonProfileContact(new ContentValues());
 
-        // Creating a profile contact should throw an exception.
         try {
             createBasicProfileContact(new ContentValues());
-            fail("Creating a profile contact should fail without WRITE_PROFILE access.");
         } catch (SecurityException expected) {
+            fail("Creating a profile contact should not require WRITE_PROFILE access.");
         }
     }
 
-    public void testInsertProfileDataRequiresWritePermission() {
+    public void testInsertProfileDataWithoutWritePermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
-        mActor.removePermissions("android.permission.WRITE_PROFILE");
         try {
             insertEmail(profileRawContactId, "foo@bar.net", false);
-            fail("Inserting data into a profile contact should fail without WRITE_PROFILE access.");
         } catch (SecurityException expected) {
+            fail("Inserting data into a profile contact should not require WRITE_PROFILE access.");
         }
     }
 
     public void testUpdateDataDoesNotRequireProfilePermission() {
-        mActor.removePermissions("android.permission.READ_PROFILE");
-        mActor.removePermissions("android.permission.WRITE_PROFILE");
-
         // Create a non-profile contact.
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Domo", "Arigato");
         long dataId = getStoredLongValue(Data.CONTENT_URI,
@@ -5469,21 +5463,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     public void testInsertStreamItemInProfileRequiresWriteProfileAccess() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
-        // With our (default) write profile permission, we should be able to insert a stream item.
+        // Try inserting a stream item. It should still succeed even without the profile permission.
         ContentValues values = buildGenericStreamItemValues();
         insertStreamItem(profileRawContactId, values, null);
-
-        // Now take away write profile permission.
-        mActor.removePermissions("android.permission.WRITE_PROFILE");
-
-        // Try inserting another stream item.
-        try {
-            insertStreamItem(profileRawContactId, values, null);
-            fail("Should require WRITE_PROFILE access to insert a stream item in the profile.");
-        } catch (SecurityException expected) {
-            // Trying to insert a stream item in the profile without WRITE_PROFILE permission
-            // should fail.
-        }
     }
 
     public void testInsertStreamItemWithContentValues() {
