@@ -19,6 +19,9 @@ package com.android.providers.contacts.aggregation;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.FullNameStyle;
@@ -30,6 +33,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
+import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsProvider2;
@@ -82,17 +86,6 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                 commonNicknameCache);
     }
 
-    private static class RawContactIdAndAggregationModeQuery {
-        public static final String TABLE = Tables.RAW_CONTACTS;
-
-        public static final String[] COLUMNS = { RawContacts._ID, RawContacts.AGGREGATION_MODE };
-
-        public static final String SELECTION = RawContacts.CONTACT_ID + "=?";
-
-        public static final int _ID = 0;
-        public static final int AGGREGATION_MODE = 1;
-    }
-
     /**
      * Given a specific raw contact, finds all matching raw contacts and re-aggregate them
      * based on the matching connectivity.
@@ -100,6 +93,13 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      synchronized void aggregateContact(TransactionContext txContext, SQLiteDatabase db,
              long rawContactId, long accountId, long currentContactId,
              MatchCandidateList candidates) {
+
+         if (!needAggregate(db, rawContactId)) {
+             if (VERBOSE_LOGGING) {
+                 Log.v(TAG, "Skip rid=" + rawContactId + " which has already been aggregated.");
+             }
+             return;
+         }
 
          if (VERBOSE_LOGGING) {
             Log.v(TAG, "aggregateContact: rid=" + rawContactId + " cid=" + currentContactId);
@@ -168,7 +168,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "Aggregation unchanged");
             }
-            markAggregated(rawContactId);
+            markAggregated(db, String.valueOf(rawContactId));
         } else if (operation == CREATE_NEW_CONTACT) {
             // create new contact for [rawContactId]
             if (VERBOSE_LOGGING) {
@@ -178,6 +178,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
             if (currentContactContentsCount > 0) {
                 updateAggregateData(txContext, currentContactId);
             }
+            markAggregated(db, String.valueOf(rawContactId));
         } else {
             // re-aggregate
             if (VERBOSE_LOGGING) {
@@ -189,6 +190,20 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         }
     }
 
+    private boolean needAggregate(SQLiteDatabase db, long rawContactId) {
+        final String sql = "SELECT " + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS +
+                " WHERE " + RawContactsColumns.AGGREGATION_NEEDED + "=1" +
+                " AND " + RawContacts._ID + "=?";
+
+        mSelectionArgs1[0] = String.valueOf(rawContactId);
+        final Cursor cursor = db.rawQuery(sql, mSelectionArgs1);
+
+        try {
+            return cursor.getCount() != 0;
+        } finally {
+            cursor.close();
+        }
+    }
     /**
      * Find the set of matching raw contacts for given rawContactId. Add all the raw contact
      * candidates with matching scores > threshold to RawContactMatchingCandidates. Keep doing
@@ -196,15 +211,16 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      */
     private RawContactMatchingCandidates findRawContactMatchingCandidates(SQLiteDatabase db, long
             rawContactId, MatchCandidateList candidates, RawContactMatcher matcher) {
-        updateMatchScores(db, rawContactId, candidates,
-                matcher);
+        updateMatchScores(db, rawContactId, candidates, matcher);
         final RawContactMatchingCandidates matchingCandidates = new RawContactMatchingCandidates(
                 matcher.pickBestMatches());
         Set<Long> newIds = new HashSet<>();
         newIds.addAll(matchingCandidates.getRawContactIdSet());
         // Keep doing the following until no new raw contact candidate is found.
-        // TODO: may need to cache the matching score to improve performance.
         while (!newIds.isEmpty()) {
+            if (matchingCandidates.getCount() >= AGGREGATION_CONTACT_SIZE_LIMIT) {
+                return matchingCandidates;
+            }
             final Set<Long> tmpIdSet = new HashSet<>();
             for (long rId : newIds) {
                 final RawContactMatcher rMatcher = new RawContactMatcher();
@@ -348,8 +364,14 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                     }
                 }
             }
-            clearSuperPrimarySetting(db, TextUtils.join(",", connectedRawContactIds));
+            final String connectedRids = TextUtils.join(",", connectedRawContactIds);
+            clearSuperPrimarySetting(db, connectedRids);
             createContactForRawContacts(db, txContext, connectedRawContactIds, contactId);
+            // re-aggregate
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "Aggregating rids=" + connectedRawContactIds);
+            }
+            markAggregated(db, connectedRids);
 
             for (Long cid : cidsNeedToBeUpdated) {
                 long currentRcCount = 0;
@@ -504,15 +526,13 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                 long rId = -1;
                 long accountId = -1;
                 if (rawContactId == rawContactId1) {
-                    if (c.getInt(AggregateExceptionQuery.AGGREGATION_NEEDED_2) == 0
-                            && !c.isNull(AggregateExceptionQuery.RAW_CONTACT_ID2)) {
+                    if (!c.isNull(AggregateExceptionQuery.RAW_CONTACT_ID2)) {
                         rId = c.getLong(AggregateExceptionQuery.RAW_CONTACT_ID2);
                         contactId = c.getLong(AggregateExceptionQuery.CONTACT_ID2);
                         accountId = c.getLong(AggregateExceptionQuery.ACCOUNT_ID2);
                     }
                 } else {
-                    if (c.getInt(AggregateExceptionQuery.AGGREGATION_NEEDED_1) == 0
-                            && !c.isNull(AggregateExceptionQuery.RAW_CONTACT_ID1)) {
+                    if (!c.isNull(AggregateExceptionQuery.RAW_CONTACT_ID1)) {
                         rId = c.getLong(AggregateExceptionQuery.RAW_CONTACT_ID1);
                         contactId = c.getLong(AggregateExceptionQuery.CONTACT_ID1);
                         accountId = c.getLong(AggregateExceptionQuery.ACCOUNT_ID1);
@@ -896,4 +916,114 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         matchAllCandidates(db, mSb.toString(), candidates, matcher,
                 RawContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE, null);
     }
+
+    protected interface IdentityLookupMatchQuery {
+        final String TABLE = Tables.DATA + " dataA"
+                + " JOIN " + Tables.DATA + " dataB" +
+                " ON (dataA." + Identity.NAMESPACE + "=dataB." + Identity.NAMESPACE +
+                " AND dataA." + Identity.IDENTITY + "=dataB." + Identity.IDENTITY + ")"
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (dataB." + Data.RAW_CONTACT_ID + " = "
+                + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        final String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?1"
+                + " AND dataA." + DataColumns.MIMETYPE_ID + "=?2"
+                + " AND dataA." + Identity.NAMESPACE + " NOT NULL"
+                + " AND dataA." + Identity.IDENTITY + " NOT NULL"
+                + " AND dataB." + DataColumns.MIMETYPE_ID + "=?2"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
+
+        final String[] COLUMNS = new String[] {
+                RawContactsColumns.CONCRETE_ID, RawContacts.CONTACT_ID,
+                RawContactsColumns.ACCOUNT_ID
+        };
+
+        int RAW_CONTACT_ID = 0;
+        int CONTACT_ID = 1;
+        int ACCOUNT_ID = 2;
+    }
+
+    protected interface NameLookupMatchQuery {
+        String TABLE = Tables.NAME_LOOKUP + " nameA"
+                + " JOIN " + Tables.NAME_LOOKUP + " nameB" +
+                " ON (" + "nameA." + NameLookupColumns.NORMALIZED_NAME + "="
+                + "nameB." + NameLookupColumns.NORMALIZED_NAME + ")"
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (nameB." + NameLookupColumns.RAW_CONTACT_ID + " = "
+                + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        String SELECTION = "nameA." + NameLookupColumns.RAW_CONTACT_ID + "=?"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
+
+        String[] COLUMNS = new String[] {
+                RawContacts._ID,
+                RawContacts.CONTACT_ID,
+                RawContactsColumns.ACCOUNT_ID,
+                "nameA." + NameLookupColumns.NORMALIZED_NAME,
+                "nameA." + NameLookupColumns.NAME_TYPE,
+                "nameB." + NameLookupColumns.NAME_TYPE,
+        };
+
+        int RAW_CONTACT_ID = 0;
+        int CONTACT_ID = 1;
+        int ACCOUNT_ID = 2;
+        int NAME = 3;
+        int NAME_TYPE_A = 4;
+        int NAME_TYPE_B = 5;
+    }
+
+    protected interface EmailLookupQuery {
+        String TABLE = Tables.DATA + " dataA"
+                + " JOIN " + Tables.DATA + " dataB" +
+                " ON dataA." + Email.DATA + "= dataB." + Email.DATA
+                + " JOIN " + Tables.RAW_CONTACTS +
+                " ON (dataB." + Data.RAW_CONTACT_ID + " = "
+                + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?1"
+                + " AND dataA." + DataColumns.MIMETYPE_ID + "=?2"
+                + " AND dataA." + Email.DATA + " NOT NULL"
+                + " AND dataB." + DataColumns.MIMETYPE_ID + "=?2"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
+
+        String[] COLUMNS = new String[] {
+                Tables.RAW_CONTACTS + "." + RawContacts._ID,
+                RawContacts.CONTACT_ID,
+                RawContactsColumns.ACCOUNT_ID
+        };
+
+        int RAW_CONTACT_ID = 0;
+        int CONTACT_ID = 1;
+        int ACCOUNT_ID = 2;
+    }
+
+    protected interface PhoneLookupQuery {
+        String TABLE = Tables.PHONE_LOOKUP + " phoneA"
+                + " JOIN " + Tables.DATA + " dataA"
+                + " ON (dataA." + Data._ID + "=phoneA." + PhoneLookupColumns.DATA_ID + ")"
+                + " JOIN " + Tables.PHONE_LOOKUP + " phoneB"
+                + " ON (phoneA." + PhoneLookupColumns.MIN_MATCH + "="
+                + "phoneB." + PhoneLookupColumns.MIN_MATCH + ")"
+                + " JOIN " + Tables.DATA + " dataB"
+                + " ON (dataB." + Data._ID + "=phoneB." + PhoneLookupColumns.DATA_ID + ")"
+                + " JOIN " + Tables.RAW_CONTACTS
+                + " ON (dataB." + Data.RAW_CONTACT_ID + " = "
+                + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
+
+        String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
+                + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
+                + "dataB." + Phone.NUMBER + ",?)"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
+
+        String[] COLUMNS = new String[] {
+                Tables.RAW_CONTACTS + "." + RawContacts._ID,
+                RawContacts.CONTACT_ID,
+                RawContactsColumns.ACCOUNT_ID
+        };
+
+        int RAW_CONTACT_ID = 0;
+        int CONTACT_ID = 1;
+        int ACCOUNT_ID = 2;
+    }
+
 }
