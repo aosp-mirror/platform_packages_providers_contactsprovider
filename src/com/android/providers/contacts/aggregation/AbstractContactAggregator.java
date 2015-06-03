@@ -163,7 +163,6 @@ public abstract class AbstractContactAggregator {
     protected SQLiteStatement mPinnedUpdate;
     protected SQLiteStatement mContactIdAndMarkAggregatedUpdate;
     protected SQLiteStatement mContactIdUpdate;
-    protected SQLiteStatement mMarkAggregatedUpdate;
     protected SQLiteStatement mContactUpdate;
     protected SQLiteStatement mContactInsert;
     protected SQLiteStatement mResetPinnedForRawContact;
@@ -358,11 +357,6 @@ public abstract class AbstractContactAggregator {
         mContactIdUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
                 " SET " + RawContacts.CONTACT_ID + "=?" +
-                " WHERE " + RawContacts._ID + "=?");
-
-        mMarkAggregatedUpdate = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
                 " WHERE " + RawContacts._ID + "=?");
 
         mPresenceContactIdUpdate = db.compileStatement(
@@ -760,7 +754,7 @@ public abstract class AbstractContactAggregator {
         final String sql =
                 " FROM " + Tables.DATA + " AS d1" +
                 " JOIN " + Tables.DATA + " AS d2" +
-                        " ON lower(d1." + Email.ADDRESS + ")= lower(d2." + Email.ADDRESS + ")" +
+                        " ON d1." + Email.ADDRESS + "= d2." + Email.ADDRESS +
                 " WHERE d1." + DataColumns.MIMETYPE_ID + " = " + emailType +
                 " AND d2." + DataColumns.MIMETYPE_ID + " = " + emailType +
                 " AND d1." + Data.RAW_CONTACT_ID + " IN (" + rawContactIdSet1 + ")" +
@@ -898,11 +892,15 @@ public abstract class AbstractContactAggregator {
     }
 
     /**
-     * Marks the specified raw contact ID as aggregated
+     * Marks the list of raw contact IDs as aggregated.
+     *
+     * @param rawContactIds comma separated raw contact ids
      */
-    protected final void markAggregated(long rawContactId) {
-        mMarkAggregatedUpdate.bindLong(1, rawContactId);
-        mMarkAggregatedUpdate.execute();
+    protected final void markAggregated(SQLiteDatabase db, String rawContactIds) {
+        final String sql = "UPDATE " + Tables.RAW_CONTACTS +
+                " SET " + RawContactsColumns.AGGREGATION_NEEDED + "=0" +
+                " WHERE " + RawContacts._ID + " in (" + rawContactIds + ")";
+        db.execSQL(sql);
     }
 
     /**
@@ -1007,33 +1005,6 @@ public abstract class AbstractContactAggregator {
         }
     }
 
-    protected interface IdentityLookupMatchQuery {
-        final String TABLE = Tables.DATA + " dataA"
-                + " JOIN " + Tables.DATA + " dataB" +
-                " ON (dataA." + Identity.NAMESPACE + "=dataB." + Identity.NAMESPACE +
-                " AND dataA." + Identity.IDENTITY + "=dataB." + Identity.IDENTITY + ")"
-                + " JOIN " + Tables.RAW_CONTACTS +
-                " ON (dataB." + Data.RAW_CONTACT_ID + " = "
-                + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
-
-        final String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?1"
-                + " AND dataA." + DataColumns.MIMETYPE_ID + "=?2"
-                + " AND dataA." + Identity.NAMESPACE + " NOT NULL"
-                + " AND dataA." + Identity.IDENTITY + " NOT NULL"
-                + " AND dataB." + DataColumns.MIMETYPE_ID + "=?2"
-                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
-                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
-
-        final String[] COLUMNS = new String[] {
-                RawContactsColumns.CONCRETE_ID, RawContacts.CONTACT_ID,
-                RawContactsColumns.ACCOUNT_ID
-        };
-
-        int RAW_CONTACT_ID = 0;
-        int CONTACT_ID = 1;
-        int ACCOUNT_ID = 2;
-    }
-
     interface AggregateExceptionQuery {
         String TABLE = Tables.AGGREGATION_EXCEPTIONS
                 + " JOIN raw_contacts raw_contacts1 "
@@ -1062,36 +1033,6 @@ public abstract class AbstractContactAggregator {
         int CONTACT_ID2 = 6;
         int ACCOUNT_ID2 = 7;
         int AGGREGATION_NEEDED_2 = 8;
-    }
-
-    protected interface NameLookupMatchQuery {
-        String TABLE = Tables.NAME_LOOKUP + " nameA"
-                + " JOIN " + Tables.NAME_LOOKUP + " nameB" +
-                " ON (" + "nameA." + NameLookupColumns.NORMALIZED_NAME + "="
-                        + "nameB." + NameLookupColumns.NORMALIZED_NAME + ")"
-                + " JOIN " + Tables.RAW_CONTACTS +
-                " ON (nameB." + NameLookupColumns.RAW_CONTACT_ID + " = "
-                        + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
-
-        String SELECTION = "nameA." + NameLookupColumns.RAW_CONTACT_ID + "=?"
-                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
-                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
-
-        String[] COLUMNS = new String[] {
-                RawContacts._ID,
-                RawContacts.CONTACT_ID,
-                RawContactsColumns.ACCOUNT_ID,
-                "nameA." + NameLookupColumns.NORMALIZED_NAME,
-                "nameA." + NameLookupColumns.NAME_TYPE,
-                "nameB." + NameLookupColumns.NAME_TYPE,
-        };
-
-        int RAW_CONTACT_ID = 0;
-        int CONTACT_ID = 1;
-        int ACCOUNT_ID = 2;
-        int NAME = 3;
-        int NAME_TYPE_A = 4;
-        int NAME_TYPE_B = 5;
     }
 
     protected interface NameLookupMatchQueryWithParameter {
@@ -1197,7 +1138,7 @@ public abstract class AbstractContactAggregator {
     protected interface EmailLookupQuery {
         String TABLE = Tables.DATA + " dataA"
                 + " JOIN " + Tables.DATA + " dataB" +
-                " ON lower(" + "dataA." + Email.DATA + ")=lower(dataB." + Email.DATA + ")"
+                " ON dataA." + Email.DATA + "= dataB." + Email.DATA
                 + " JOIN " + Tables.RAW_CONTACTS +
                 " ON (dataB." + Data.RAW_CONTACT_ID + " = "
                         + Tables.RAW_CONTACTS + "." + RawContacts._ID + ")";
