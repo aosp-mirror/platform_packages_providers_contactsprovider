@@ -64,7 +64,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 25;
+    private static final int NUM_CALLLOG_FIELDS = 26;
 
     private CallLogProvider mCallLogProvider;
 
@@ -481,7 +481,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             return new ContextWrapper(super.context()) {
                 @Override
                 public PackageManager getPackageManager() {
-                    return new MockPackageManager("com.test.package1", "com.test.package2");
+                    return super.getPackageManager();
                 }
 
                 @Override

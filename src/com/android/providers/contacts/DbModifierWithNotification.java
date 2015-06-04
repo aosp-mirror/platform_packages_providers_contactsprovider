@@ -160,7 +160,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             // the server and thus is synced or "clean". Otherwise, it means that a local change
             // is being made to the database, so the entries should be marked as "dirty" so that
             // the corresponding sync adapter knows they need to be synced.
-            final int isDirty = isSelfModifying(packagesModified) ? 0 : 1;
+            final int isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
             values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
         }
 
@@ -185,8 +185,10 @@ public class DbModifierWithNotification implements DatabaseModifier {
         // mark the entry as "deleted"--deleted entries should be hidden from the user.
         // Once the changes are synced to the server, delete will be called again, this time
         // removing the rows from the table.
+        // If the deletion is being made by the package that inserted the voicemail or by
+        // CP2 (cleanup after uninstall), then we don't need to wait for sync, so just delete it.
         final int count;
-        if (mIsCallsTable && isVoicemail && !isSelfModifying(packagesModified)) {
+        if (mIsCallsTable && isVoicemail && !isSelfModifyingOrInternal(packagesModified)) {
             ContentValues values = new ContentValues();
             values.put(VoicemailContract.Voicemails.DIRTY, 1);
             values.put(VoicemailContract.Voicemails.DELETED, 1);
@@ -236,9 +238,21 @@ public class DbModifierWithNotification implements DatabaseModifier {
         return impactedPackages;
     }
 
-    private boolean isSelfModifying(Set<String> packagesModified) {
-        return packagesModified.size() == 1 && getCallingPackages().contains(
-                Iterables.getOnlyElement(packagesModified));
+    /**
+     * @param packagesModified source packages that inserted the voicemail that is being modified
+     * @return {@code true} if the caller is modifying its own voicemail, or this is an internal
+     *         transaction, {@code false} otherwise.
+     */
+    private boolean isSelfModifyingOrInternal(Set<String> packagesModified) {
+        final Collection<String> callingPackages = getCallingPackages();
+        if (callingPackages == null) {
+            return false;
+        }
+        // The last clause has the same effect as doing Process.myUid() == Binder.getCallingUid(),
+        // but allows us to mock the results for testing.
+        return packagesModified.size() == 1 && (callingPackages.contains(
+                Iterables.getOnlyElement(packagesModified))
+                        || callingPackages.contains(mContext.getPackageName()));
     }
 
     private void notifyVoicemailChange(Uri notificationUri, Set<String> modifiedPackages,
