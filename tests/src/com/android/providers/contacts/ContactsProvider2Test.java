@@ -97,6 +97,7 @@ import com.android.providers.contacts.testutil.DeletedContactUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.tests.R;
+import com.android.providers.contacts.util.NullContentProvider;
 
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
@@ -1784,6 +1785,35 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
+     * Test for enterprise caller-id.  Corp profile exists, but it returns a null cursor.
+     */
+    public void testPhoneLookupEnterprise_withCorpProfile_nullResult() throws Exception {
+        setUpNullCorpProvider();
+
+        Uri uri1 = Uri.withAppendedPath(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI, "408-111-1111");
+
+        // No contacts profile, no data.
+        assertEquals(0, getCount(uri1));
+
+        // Insert a contact into the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Doe");
+        insertPhoneNumber(rawContactId, "408-111-1111");
+
+        // Do the query again and check the result.
+        Cursor c = mResolver.query(uri1, null, null, null, null);
+        try {
+            assertEquals(1, c.getCount());
+            c.moveToPosition(0);
+            long contactId = c.getLong(c.getColumnIndex(PhoneLookup._ID));
+            assertFalse(Contacts.isEnterpriseContactId(contactId)); // Make sure it's not rewritten.
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
      * Set up the corp user / CP2 and returns the corp CP2 instance.
      *
      * Create a second instance of CP2, and add it to the resolver, with the "user-id@" authority.
@@ -1802,12 +1832,27 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
+     * Similar to {@link setUpCorpProvider}, but the corp CP2 set up with this will always return
+     * null from query().
+     */
+    private void setUpNullCorpProvider() throws Exception {
+        mActor.mockUserManager.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.CORP_USER);
+
+        mActor.addProvider(
+                NullContentProvider.class,
+                "" + MockUserManager.CORP_USER.id + "@com.android.contacts",
+                new AlteringUserContext(mActor.getProviderContext(), MockUserManager.CORP_USER.id));
+    }
+
+    /**
      * Test for query of merged primary and work contacts.
      * <p/>
      * Note: in this test, we add one more provider instance for the authority
      * "10@com.android.contacts" and use it as the corp cp2.
      */
     public void testQueryMergedDataPhones() throws Exception {
+        mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
+
         // Insert a contact to the primary CP2.
         long rawContactId = ContentUris.parseId(
                 mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
@@ -1874,6 +1919,43 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             assertEquals("222-222-2222", c.getString(c.getColumnIndex(Phone.NUMBER)));
             contactId = c.getLong(c.getColumnIndex(Phone.CONTACT_ID));
             assertTrue(Contacts.isEnterpriseContactId(contactId));
+        } finally {
+            c.close();
+        }
+    }
+
+    /**
+     * Test for query of merged primary and work contacts.
+     * <p/>
+     * Note: in this test, we add one more provider instance for the authority
+     * "10@com.android.contacts" and use it as the corp cp2.
+     */
+    public void testQueryMergedDataPhones_nullCorp() throws Exception {
+        mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
+
+        // Insert a contact to the primary CP2.
+        long rawContactId = ContentUris.parseId(
+                mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Contact1", "Primary");
+
+        insertPhoneNumber(rawContactId, "111-111-1111", false, false, Phone.TYPE_MOBILE);
+
+        // Insert a contact to the corp CP2, with different name and phone number.
+        setUpNullCorpProvider();
+
+        // Execute the query to get the merged result.
+        Cursor c = mResolver.query(Phone.ENTERPRISE_CONTENT_URI, new String[]{Phone.CONTACT_ID,
+                        Phone.DISPLAY_NAME, Phone.NUMBER}, Phone.TYPE + " = ?",
+                new String[]{String.valueOf(Phone.TYPE_MOBILE)}, null);
+        try {
+            // Verify the primary contact.
+            assertEquals(1, c.getCount());
+            assertEquals(3, c.getColumnCount());
+            c.moveToPosition(0);
+            assertEquals("Contact1 Primary", c.getString(c.getColumnIndex(Phone.DISPLAY_NAME)));
+            assertEquals("111-111-1111", c.getString(c.getColumnIndex(Phone.NUMBER)));
+            long contactId = c.getLong(c.getColumnIndex(Phone.CONTACT_ID));
+            assertFalse(Contacts.isEnterpriseContactId(contactId));
         } finally {
             c.close();
         }
@@ -1976,6 +2058,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testQueryRawContactEntitiesCorp_noCorpProfile() {
+        mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
+
         // Insert a contact into the primary CP2.
         long rawContactId = ContentUris.parseId(
                 mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
@@ -1987,6 +2071,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testQueryRawContactEntitiesCorp_withCorpProfile() throws Exception {
+        mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
+
         // Insert a contact into the primary CP2.
         long rawContactId = ContentUris.parseId(
                 mResolver.insert(RawContacts.CONTENT_URI, new ContentValues()));
