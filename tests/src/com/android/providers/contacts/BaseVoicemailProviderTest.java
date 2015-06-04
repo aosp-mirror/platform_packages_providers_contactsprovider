@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Process;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 
@@ -37,12 +38,17 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
 
     protected boolean mUseSourceUri = false;
     private File mTestDirectory;
+    ContactsMockPackageManager mPackageManager;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
         addProvider(TestVoicemailProvider.class, VoicemailContract.AUTHORITY);
         TestVoicemailProvider.setVvmProviderCallDelegate(createMockProviderCalls());
+
+        mPackageManager = (ContactsMockPackageManager) getProvider()
+                .getContext().getPackageManager();
+        mPackageManager.addPackage(Process.myUid(), mActor.packageName);
     }
 
     @Override
@@ -101,7 +107,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
 
             @Override
             public PackageManager getPackageManager() {
-                return new MockPackageManager(mActor.getProviderContext().getPackageName());
+                return mActor.getProviderContext().getPackageManager();
             }
         };
     }
