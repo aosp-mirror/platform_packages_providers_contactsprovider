@@ -6771,6 +6771,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
             final Cursor managedCursor = getContext().getContentResolver().query(remoteUri,
                     projection, selection, selectionArgs, sortOrder, null);
+            if (managedCursor == null) {
+                // No corp results.  Just return the local result.
+                return primaryCursor;
+            }
             final Cursor[] cursorArray = new Cursor[] {
                     primaryCursor, new EnterprisePhoneCursorWrapper(managedCursor)
             };
@@ -6814,10 +6818,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             local.close();
             throw th;
         }
-
-        if (local != null) {
-            local.close();
-        }
+        // "local" is still open.  If we fail the managed CP2 query, we'll still return it.
 
         // Step 2.  No rows found in the local db, and there is a corp profile. Look at the corp
         // DB.
@@ -6831,7 +6832,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Note in order to re-write the cursor correctly, we need all columns from the corp cp2.
         final Cursor corp = getContext().getContentResolver().query(remoteUri, null,
                 selection, selectionArgs, sortOrder, /* cancellationsignal */null);
+        if (corp == null) {
+            return local;
+        }
         try {
+            local.close();
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "corp raw", corp);
             }
