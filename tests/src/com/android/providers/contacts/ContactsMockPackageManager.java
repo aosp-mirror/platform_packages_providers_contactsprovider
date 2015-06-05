@@ -16,16 +16,16 @@
 package com.android.providers.contacts;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ProviderInfo;
+import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.os.Binder;
 import android.test.mock.MockPackageManager;
 
-import com.google.android.collect.Lists;
-
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -51,6 +51,13 @@ public class ContactsMockPackageManager extends MockPackageManager {
         mReverse.put(packageName, packageUid);
     }
 
+    public void removePackage(int packageUid) {
+        final String packageName = mForward.remove(packageUid);
+        if (packageName != null) {
+            mReverse.remove(packageName);
+        }
+    }
+
     @Override
     public String getNameForUid(int uid) {
         return "name-for-uid";
@@ -58,10 +65,13 @@ public class ContactsMockPackageManager extends MockPackageManager {
 
     @Override
     public String[] getPackagesForUid(int uid) {
-        if (mPackages != null) {
+        final String packageName = mForward.get(uid);
+        if (packageName != null) {
+            return new String[] {packageName};
+        } else if (mPackages != null) {
             return new String[] { mPackages.get(0).packageName };
         } else {
-            return new String[] { ContactsActor.sCallingPackage };
+            return new String[] {};
         }
     }
 
@@ -90,6 +100,11 @@ public class ContactsMockPackageManager extends MockPackageManager {
             }
         }
         throw new NameNotFoundException();
+    }
+
+    @Override
+    public List<ResolveInfo> queryBroadcastReceivers(Intent intent, int flags) {
+        return new ArrayList<ResolveInfo>();
     }
 
     @Override

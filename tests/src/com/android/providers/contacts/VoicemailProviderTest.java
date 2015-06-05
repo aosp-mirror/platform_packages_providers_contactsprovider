@@ -21,6 +21,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+import android.os.Process;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
@@ -144,6 +145,33 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         assertStoredValues(uri, newValues);
     }
 
+    public void testDeleteOwnPackageVoicemail_DeletesRow() {
+        setUpForFullPermission();
+        final Uri ownVoicemail = insertVoicemail();
+        assertEquals(1, getCount(voicemailUri(), null, null));
+
+        mResolver.delete(ownVoicemail, null, null);
+
+        assertEquals(0, getCount(ownVoicemail, null, null));
+    }
+
+    public void testDeleteOtherPackageVoicemail_SetsDirtyStatus() {
+        setUpForFullPermission();
+        final Uri anotherVoicemail = insertVoicemailForSourcePackage("another-package");
+        assertEquals(1, getCount(voicemailUri(), null, null));
+
+        // Clear the mapping for our own UID so that this doesn't look like an internal transaction.
+        mPackageManager.removePackage(Process.myUid());
+        mResolver.delete(anotherVoicemail, null, null);
+
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "1");
+        values.put(Voicemails.DELETED, "1");
+
+        assertEquals(1, getCount(anotherVoicemail, null, null));
+        assertStoredValues(anotherVoicemail, values);
+    }
+
     public void testDelete() {
         Uri uri = insertVoicemail();
         int count = mResolver.delete(voicemailUri(), Voicemails._ID + "="
@@ -265,9 +293,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         });
 
         // If we have the manage voicemail permission, we should be able to both update voicemails
-        // from all packages. However, when updating or deleting a voicemail from a different
-        // package, the "dirty" flag must be set on updates and "dirty" and "delete" flags must be
-        // set on deletion.
+        // from all packages.
         setUpForNoPermission();
         mActor.addPermissions(WRITE_VOICEMAIL_PERMISSION);
         mResolver.update(anotherVoicemail, getTestVoicemailValues(), null, null);
@@ -280,15 +306,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
         mResolver.delete(anotherVoicemail, null, null);
 
-        // Now add the read voicemail permission temporarily to verify that the delete flag is set.
+        // Now add the read voicemail permission temporarily to verify that the voicemail is
+        // deleted.
         mActor.addPermissions(READ_VOICEMAIL_PERMISSION);
 
-        ContentValues values = getTestVoicemailValues();
-        values.put(Voicemails.DIRTY, "1");
-        values.put(Voicemails.DELETED, "1");
-
-        assertEquals(1, getCount(anotherVoicemail, null, null));
-        assertStoredValues(anotherVoicemail, values);
+        assertEquals(0, getCount(anotherVoicemail, null, null));
     }
 
     private Uri withSourcePackageParam(Uri uri) {
