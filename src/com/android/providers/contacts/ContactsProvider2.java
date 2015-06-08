@@ -712,6 +712,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Data.DATA13)
             .add(Data.DATA14)
             .add(Data.DATA15)
+            .add(Data.CARRIER_PRESENCE)
             .add(Data.DATA_VERSION)
             .add(Data.IS_PRIMARY)
             .add(Data.IS_SUPER_PRIMARY)

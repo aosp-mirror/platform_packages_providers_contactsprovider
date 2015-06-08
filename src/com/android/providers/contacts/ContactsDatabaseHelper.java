@@ -122,7 +122,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1009;
+    static final int DATABASE_VERSION = 1010;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1872,6 +1872,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Data.DATA13 + ", "
                 + Data.DATA14 + ", "
                 + Data.DATA15 + ", "
+                + Data.CARRIER_PRESENCE + ", "
                 + Data.SYNC1 + ", "
                 + Data.SYNC2 + ", "
                 + Data.SYNC3 + ", "
@@ -2935,6 +2936,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1009) {
             upgradeToVersion1009(db);
             oldVersion = 1009;
+        }
+
+        if (oldVersion < 1010) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1010;
         }
 
         if (upgradeViewsAndTriggers) {
