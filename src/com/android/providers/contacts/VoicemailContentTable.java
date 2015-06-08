@@ -140,9 +140,11 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
 
         // call type is always voicemail.
         copiedValues.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
-        // By default marked as new, unless explicitly overridden.
+        // A voicemail is marked as new unless it is marked as read or explicitly overridden.
+        boolean isRead = values.containsKey(Calls.IS_READ) ?
+                values.get(Calls.IS_READ).equals(1) : false;
         if (!values.containsKey(Calls.NEW)) {
-            copiedValues.put(Calls.NEW, 1);
+            copiedValues.put(Calls.NEW, !isRead);
         }
 
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
