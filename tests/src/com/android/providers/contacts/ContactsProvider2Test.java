@@ -370,6 +370,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA13,
                 Data.DATA14,
                 Data.DATA15,
+                Data.CARRIER_PRESENCE,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -457,6 +458,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA13,
                 Data.DATA14,
                 Data.DATA15,
+                Data.CARRIER_PRESENCE,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -538,6 +540,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA13,
                 Data.DATA14,
                 Data.DATA15,
+                Data.CARRIER_PRESENCE,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -645,6 +648,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA13,
                 Data.DATA14,
                 Data.DATA15,
+                Data.CARRIER_PRESENCE,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -6345,6 +6349,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA13, "old13");
         values.put(Data.DATA14, "old14");
         values.put(Data.DATA15, "old15");
+        values.put(Data.CARRIER_PRESENCE, 0);
         Uri uri = mResolver.insert(Data.CONTENT_URI, values);
         assertStoredValues(uri, values);
         assertNetworkNotified(true);
@@ -6368,6 +6373,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA13, "new13");
         values.put(Data.DATA14, "new14");
         values.put(Data.DATA15, "new15");
+        values.put(Data.CARRIER_PRESENCE, Data.CARRIER_PRESENCE_VT_CAPABLE);
         mResolver.update(Data.CONTENT_URI, values, Data.RAW_CONTACT_ID + "=" + rawContactId +
                 " AND " + Data.MIMETYPE + "='testmimetype'", null);
         assertNetworkNotified(true);
@@ -9504,6 +9510,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA13, "thirteen");
         values.put(Data.DATA14, "fourteen");
         values.put(Data.DATA15, "fifteen".getBytes());
+        values.put(Data.CARRIER_PRESENCE, Data.CARRIER_PRESENCE_VT_CAPABLE);
         values.put(Data.SYNC1, "sync1");
         values.put(Data.SYNC2, "sync2");
         values.put(Data.SYNC3, "sync3");
