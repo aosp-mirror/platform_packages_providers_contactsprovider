@@ -37,6 +37,7 @@ import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
+import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.TestUtils;
 import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.testutil.DataUtil;
@@ -66,6 +67,13 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
             AggregationExceptions.RAW_CONTACT_ID1,
             AggregationExceptions.RAW_CONTACT_ID2
     };
+
+    protected void setUp() throws Exception {
+        super.setUp();
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        // Make sure to use ContactAggregator.java class
+        cp.setNewAggregatorForTest(false);
+    }
 
     public void testCrudAggregationExceptions() throws Exception {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "zz", "top");
