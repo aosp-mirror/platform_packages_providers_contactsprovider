@@ -282,7 +282,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String PREF_LOCALE = "locale";
 
-    private static final int PROPERTY_AGGREGATION_ALGORITHM_VERSION = 4;
+    private static int PROPERTY_AGGREGATION_ALGORITHM_VERSION;
+
+    private static final int AGGREGATION_ALGORITHM_OLD_VERSION = 4;
+
+    private static final int AGGREGATION_ALGORITHM_NEW_VERSION = 5;
 
     private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
 
@@ -1634,6 +1638,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         int value = android.provider.Settings.Global.getInt(context.getContentResolver(),
                     Global.NEW_CONTACT_AGGREGATOR, 0);
+
+        // Turn on aggregation algorithm updating process if new aggregator is enabled.
+        PROPERTY_AGGREGATION_ALGORITHM_VERSION = (value == 0)
+                ? AGGREGATION_ALGORITHM_OLD_VERSION
+                : AGGREGATION_ALGORITHM_NEW_VERSION;
         mContactAggregator = (value == 0)
                 ? new ContactAggregator(this, mContactsHelper,
                         createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache)
