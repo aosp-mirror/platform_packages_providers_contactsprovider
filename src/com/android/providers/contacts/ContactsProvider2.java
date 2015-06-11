@@ -153,11 +153,6 @@ import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
-import com.android.providers.contacts.MetadataEntryParser.AggregationData;
-import com.android.providers.contacts.MetadataEntryParser.FieldData;
-import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
-import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
-import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.DbQueryUtils;
@@ -4705,162 +4700,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
     }
 
-    interface RawContactsBackupQuery {
-        String TABLE = Tables.RAW_CONTACTS;
-        String[] COLUMNS = new String[] {
-                RawContacts._ID,
-        };
-        int RAW_CONTACT_ID = 0;
-        String SELECTION = RawContacts.DELETED + "=0 AND " +
-                RawContacts.BACKUP_ID + "=? AND " +
-                RawContactsColumns.ACCOUNT_ID + "=?";
-    }
-
-    /**
-     * Fetch rawContactId related to the given backupId.
-     * Return 0 if there's no such rawContact or it's deleted.
-     */
-    private long queryRawContactId(SQLiteDatabase db, String backupId, long accountId) {
-        if (TextUtils.isEmpty(backupId)) {
-            return 0;
-        }
-        mSelectionArgs2[0] = backupId;
-        mSelectionArgs2[1] = String.valueOf(accountId);
-        long rawContactId = 0;
-        final Cursor cursor = db.query(RawContactsBackupQuery.TABLE,
-                RawContactsBackupQuery.COLUMNS, RawContactsBackupQuery.SELECTION,
-                mSelectionArgs2, null, null, null);
-        try {
-            if (cursor.moveToFirst()) {
-                rawContactId = cursor.getLong(RawContactsBackupQuery.RAW_CONTACT_ID);
-            }
-        } finally {
-            cursor.close();
-        }
-        return rawContactId;
-    }
-
-    interface DataHashQuery {
-        String TABLE = Tables.DATA;
-        String[] COLUMNS = new String[] {
-                Data._ID,
-        };
-        int DATA_ID = 0;
-        String SELECTION = Data.HASH_ID + "=?";
-    }
-
-    /**
-     * Fetch a list of dataId related to the given hashId.
-     * Return empty list if there's no such data.
-     */
-    private ArrayList<Long> queryDataId(SQLiteDatabase db, String hashId) {
-        if (TextUtils.isEmpty(hashId)) {
-            return new ArrayList<>();
-        }
-        mSelectionArgs1[0] = hashId;
-        ArrayList<Long> result = new ArrayList<>();
-        long dataId = 0;
-        final Cursor c = db.query(DataHashQuery.TABLE, DataHashQuery.COLUMNS,
-                DataHashQuery.SELECTION, mSelectionArgs1, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                dataId = c.getLong(DataHashQuery.DATA_ID);
-                result.add(dataId);
-            }
-        } finally {
-            c.close();
-        }
-        return result;
-    }
-
-    private long searchRawContactIdForRawContactInfo(SQLiteDatabase db,
-            RawContactInfo rawContactInfo) {
-        if (rawContactInfo == null) {
-            return 0;
-        }
-        final String backupId = rawContactInfo.mBackupId;
-        final String accountType = rawContactInfo.mAccountType;
-        final String accountName = rawContactInfo.mAccountName;
-        final String dataSet = rawContactInfo.mDataSet;
-        ContentValues values = new ContentValues();
-        values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
-        values.put(AccountsColumns.ACCOUNT_NAME, accountName);
-        if (dataSet != null) {
-            values.put(AccountsColumns.DATA_SET, dataSet);
-        }
-
-        final long accountId = replaceAccountInfoByAccountId(RawContacts.CONTENT_URI, values);
-        final long rawContactId = queryRawContactId(db, backupId, accountId);
-        return rawContactId;
-    }
-
-    /**
-     * Update RawContact, Data, DataUsageStats, AggregationException tables from MetadataEntry.
-     */
-    @NeededForTesting
-    void updateFromMetaDataEntry(SQLiteDatabase db, MetadataEntry metadataEntry) {
-        final RawContactInfo rawContactInfo =  metadataEntry.mRawContactInfo;
-        final long rawContactId = searchRawContactIdForRawContactInfo(db, rawContactInfo);
-        if (rawContactId == 0) {
-            return;
-        }
-
-        ContentValues rawContactValues = new ContentValues();
-        rawContactValues.put(RawContacts.SEND_TO_VOICEMAIL, metadataEntry.mSendToVoicemail);
-        rawContactValues.put(RawContacts.STARRED, metadataEntry.mStarred);
-        rawContactValues.put(RawContacts.PINNED, metadataEntry.mPinned);
-        updateRawContact(db, rawContactId, rawContactValues, true);
-
-        // Update Data and DataUsageStats table.
-        for (int i = 0; i < metadataEntry.mFieldDatas.size(); i++) {
-            final FieldData fieldData = metadataEntry.mFieldDatas.get(i);
-            final String dataHashId = fieldData.mDataHashId;
-            final ArrayList<Long> dataIds = queryDataId(db, dataHashId);
-
-            for (long dataId : dataIds) {
-                // Update is_primary and is_super_primary.
-                ContentValues dataValues = new ContentValues();
-                dataValues.put(Data.IS_PRIMARY, fieldData.mIsPrimary);
-                dataValues.put(Data.IS_SUPER_PRIMARY, fieldData.mIsSuperPrimary);
-                updateData(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
-                        dataValues, null, null, true);
-
-                // Update UsageStats.
-                for (int j = 0; j < fieldData.mUsageStatsList.size(); j++) {
-                    final UsageStats usageStats = fieldData.mUsageStatsList.get(j);
-                    final String usageType = usageStats.mUsageType;
-                    final int typeInt = getDataUsageFeedbackType(usageType.toLowerCase(), null);
-                    final long lastTimeUsed = usageStats.mLastTimeUsed;
-                    final int timesUsed = usageStats.mTimesUsed;
-                    ContentValues usageStatsValues = new ContentValues();
-                    usageStatsValues.put(DataUsageStatColumns.DATA_ID, dataId);
-                    usageStatsValues.put(DataUsageStatColumns.USAGE_TYPE_INT, typeInt);
-                    usageStatsValues.put(DataUsageStatColumns.LAST_TIME_USED, lastTimeUsed);
-                    usageStatsValues.put(DataUsageStatColumns.TIMES_USED, timesUsed);
-                    updateDataUsageStats(db, usageStatsValues);
-                }
-            }
-        }
-
-        // Update AggregationException table.
-        for (int i = 0; i < metadataEntry.mAggregationDatas.size(); i++) {
-            final AggregationData aggregationData = metadataEntry.mAggregationDatas.get(i);
-            final int typeInt = getAggregationType(aggregationData.mType, null);
-            final RawContactInfo aggregationContact1 = aggregationData.mRawContactInfo1;
-            final RawContactInfo aggregationContact2 = aggregationData.mRawContactInfo2;
-            final long rawContactId1 = searchRawContactIdForRawContactInfo(db, aggregationContact1);
-            final long rawContactId2 = searchRawContactIdForRawContactInfo(db, aggregationContact2);
-            if (rawContactId1 == 0 || rawContactId2 == 0) {
-                continue;
-            }
-            ContentValues values = new ContentValues();
-            values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
-            values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
-            values.put(AggregationExceptions.TYPE, typeInt);
-            updateAggregationException(db, values);
-        }
-    }
-
     /** return serialized version of {@code accounts} */
     @VisibleForTesting
     static String accountsToString(Set<Account> accounts) {
@@ -9261,52 +9100,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Update {@link Tables#DATA_USAGE_STAT}.
-     * Update or insert usageType, lastTimeUsed, and timesUsed for specific dataId.
-     */
-    private void updateDataUsageStats(SQLiteDatabase db, ContentValues values) {
-        final String dataId = values.getAsString(DataUsageStatColumns.DATA_ID);
-        final String type = values.getAsString(DataUsageStatColumns.USAGE_TYPE_INT);
-        final String lastTimeUsed = values.getAsString(DataUsageStatColumns.LAST_TIME_USED);
-        final String timesUsed = values.getAsString(DataUsageStatColumns.TIMES_USED);
-
-        mSelectionArgs2[0] = dataId;
-        mSelectionArgs2[1] = type;
-        final Cursor cursor = db.query(DataUsageStatQuery.TABLE,
-                DataUsageStatQuery.COLUMNS, DataUsageStatQuery.SELECTION,
-                mSelectionArgs2, null, null, null);
-
-        try {
-            if (cursor.moveToFirst()) {
-                final long id = cursor.getLong(DataUsageStatQuery.ID);
-
-                mSelectionArgs3[0] = lastTimeUsed;
-                mSelectionArgs3[1] = timesUsed;
-                mSelectionArgs3[2] = String.valueOf(id);
-                db.execSQL("UPDATE " + Tables.DATA_USAGE_STAT +
-                        " SET " + DataUsageStatColumns.LAST_TIME_USED + "=?" +
-                        "," + DataUsageStatColumns.TIMES_USED + "=?" +
-                        " WHERE " + DataUsageStatColumns._ID + "=?",
-                        mSelectionArgs3);
-            } else {
-                mSelectionArgs4[0] = dataId;
-                mSelectionArgs4[1] = type;
-                mSelectionArgs4[2] = timesUsed;
-                mSelectionArgs4[3] = lastTimeUsed;
-                db.execSQL("INSERT INTO " + Tables.DATA_USAGE_STAT +
-                        "(" + DataUsageStatColumns.DATA_ID +
-                        "," + DataUsageStatColumns.USAGE_TYPE_INT +
-                        "," + DataUsageStatColumns.TIMES_USED +
-                        "," + DataUsageStatColumns.LAST_TIME_USED +
-                        ") VALUES (?,?,?,?)",
-                        mSelectionArgs4);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    /**
      * Returns a sort order String for promoting data rows (email addresses, phone numbers, etc.)
      * associated with a primary account. The primary account should be supplied from applications
      * with {@link ContactsContract#PRIMARY_ACCOUNT_NAME} and
@@ -9478,22 +9271,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return defaultType;
         }
         throw new IllegalArgumentException("Invalid usage type " + type);
-    }
-
-    private static final int getAggregationType(String type, Integer defaultType) {
-        if ("TOGETHER".equalsIgnoreCase(type)) {
-            return AggregationExceptions.TYPE_KEEP_TOGETHER; // 1
-        }
-        if ("SEPARATE".equalsIgnoreCase(type)) {
-            return AggregationExceptions.TYPE_KEEP_SEPARATE; // 2
-        }
-        if ("UNSET".equalsIgnoreCase(type)) {
-            return AggregationExceptions.TYPE_AUTOMATIC; // 0
-        }
-        if (defaultType != null) {
-            return defaultType;
-        }
-        throw new IllegalArgumentException("Invalid aggregation type " + type);
     }
 
     /** Use only for debug logging */
