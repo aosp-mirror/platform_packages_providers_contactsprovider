@@ -84,11 +84,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.MetadataEntryParser.AggregationData;
-import com.android.providers.contacts.MetadataEntryParser.FieldData;
-import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
-import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
-import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.testutil.ContactUtil;
 import com.android.providers.contacts.testutil.DataUtil;
@@ -2736,110 +2731,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // address2 is preferred to address1 as address2 is used 4 times in total
         assertStoredValuesOrderly(filterUri1, new ContentValues[] { v2, v1, v4, v3 });
-    }
-
-    public void testUpdateFromMetadataEntry() {
-        String accountType1 = "accountType1";
-        String accountName1 = "accountName1";
-        String dataSet1 = "plus";
-        Account account1 = new Account(accountName1, accountType1);
-        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, account1);
-        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
-        // Add backup_id for the raw contact.
-        String backupId = "backupId100001";
-        ContentValues values = new ContentValues();
-        values.put(RawContacts.BACKUP_ID, backupId);
-        assertEquals(1, mResolver.update(rawContactUri, values, null, null));
-
-        String emailAddress = "address@email.com";
-        Uri dataUri = insertEmail(rawContactId, emailAddress);
-        String hashId = "hashId100002";
-        ContentValues dataValues = new ContentValues();
-        dataValues.put(Data.HASH_ID, hashId);
-        assertEquals(1, mResolver.update(dataUri, dataValues, null, null));
-
-        // Another data that should not be updated.
-        String phoneNumber = "111-111-1111";
-        Uri dataUri2 = insertPhoneNumber(rawContactId, phoneNumber);
-        String hashId2 = "hashId100004";
-        ContentValues dataValues2 = new ContentValues();
-        dataValues.put(Data.HASH_ID, hashId2);
-        mResolver.update(dataUri2, dataValues2, null, null);
-
-        String accountType2 = "accountType2";
-        String accountName2 = "accountName2";
-        Account account2 = new Account(accountName2, accountType2);
-        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, account2);
-        Uri rawContactUri2 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2);
-        String backupId2 = "backupId100003";
-        ContentValues values2 = new ContentValues();
-        values2.put(RawContacts.BACKUP_ID, backupId2);
-        assertEquals(1, mResolver.update(rawContactUri2, values2, null, null));
-
-        String usageTypeString = "CALL";
-        int lastTimeUsed = 1111111;
-        int timesUsed = 5;
-        String aggregationTypeString = "SEPARATE";
-        int aggregationType = AggregationExceptions.TYPE_KEEP_SEPARATE;
-
-        RawContactInfo rawContactInfo = new RawContactInfo(
-                backupId, accountType1, accountName1, null);
-        UsageStats usageStats = new UsageStats(usageTypeString, lastTimeUsed, timesUsed);
-        ArrayList<UsageStats> usageStatsList = new ArrayList<>();
-        usageStatsList.add(usageStats);
-        FieldData fieldData = new FieldData(hashId, true, true, usageStatsList);
-        ArrayList<FieldData> fieldDataList = new ArrayList<>();
-        fieldDataList.add(fieldData);
-        ArrayList<AggregationData> aggregationDataList = new ArrayList<>();
-        MetadataEntry metadataEntry = new MetadataEntry(rawContactInfo,
-                1, 1, 1, fieldDataList, aggregationDataList);
-
-        ContactsProvider2 provider = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper helper =
-                ((ContactsDatabaseHelper) provider.getDatabaseHelper());
-        SQLiteDatabase db = helper.getWritableDatabase();
-
-        // Before updating tables from MetadataEntry.
-        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, accountType1);
-        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, accountName1);
-        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "0");
-        assertStoredValue(rawContactUri, RawContacts.STARRED, "0");
-        assertStoredValue(rawContactUri, RawContacts.PINNED, "0");
-        assertStoredValue(dataUri, Data.IS_PRIMARY, 0);
-        assertStoredValue(dataUri, Data.IS_SUPER_PRIMARY, 0);
-
-        // Update tables without aggregation first, since aggregator will affect pinned value.
-        provider.updateFromMetaDataEntry(db, metadataEntry);
-
-        // After updating tables from MetadataEntry.
-        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, accountType1);
-        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, accountName1);
-        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "1");
-        assertStoredValue(rawContactUri, RawContacts.STARRED, "1");
-        assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
-        assertStoredValue(dataUri, Data.IS_PRIMARY, 1);
-        assertStoredValue(dataUri, Data.IS_SUPER_PRIMARY, 1);
-        final Uri dataUriWithUsageType = Data.CONTENT_URI.buildUpon().appendQueryParameter(
-                DataUsageFeedback.USAGE_TYPE, usageTypeString).build();
-        assertDataUsageCursorContains(dataUriWithUsageType, emailAddress, timesUsed, lastTimeUsed);
-
-        // Update AggregationException table.
-        RawContactInfo aggregationContact = new RawContactInfo(
-                backupId2, accountType2, accountName2, null);
-        AggregationData aggregationData = new AggregationData(
-                rawContactInfo, aggregationContact, aggregationTypeString);
-        aggregationDataList.add(aggregationData);
-        metadataEntry = new MetadataEntry(rawContactInfo,
-                1, 1, 1, fieldDataList, aggregationDataList);
-        provider.updateFromMetaDataEntry(db, metadataEntry);
-
-        // Check if AggregationException table is updated.
-        assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.RAW_CONTACT_ID1,
-                rawContactId);
-        assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.RAW_CONTACT_ID2,
-                rawContactId2);
-        assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.TYPE,
-                aggregationType);
     }
 
     public void testPostalsQuery() {
