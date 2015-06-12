@@ -127,7 +127,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1103;
+    static final int DATABASE_VERSION = 1104;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2925,11 +2925,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeViewsAndTriggers = true;
             oldVersion = 1000;
         }
-        if (oldVersion < 1001) {
-            upgradeToVersion1001(db);
-            rebuildSqliteStats = true;
-            oldVersion = 1001;
-        }
 
         if (oldVersion < 1002) {
             rebuildSqliteStats = true;
@@ -2962,12 +2957,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1007;
         }
 
-        if (oldVersion < 1008) {
-            upgradeToVersion1008(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 1008;
-        }
-
         if (oldVersion < 1009) {
             upgradeToVersion1009(db);
             oldVersion = 1009;
@@ -2994,6 +2983,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1103) {
             upgradeViewsAndTriggers = true;
             oldVersion = 1103;
+        }
+
+        if (oldVersion < 1104) {
+            upgradeToVersion1104(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1104;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4434,21 +4429,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS data_hash_id_index ON data (hash_id);");
     }
 
-    /**
-     * Add new metadata_sync table to cache the meta data on raw contacts level from server before
-     * they are merged into other CP2 tables. The data column is the blob column containing all
-     * the backed up metadata for this raw_contact. This table should only be used by metadata
-     * sync adapter.
-     */
-    private void upgradeToVersion1001(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE metadata_sync (" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, raw_contact_backup_id TEXT NOT NULL, " +
-                "account_id INTEGER NOT NULL, data TEXT, " +
-                "FOREIGN KEY(account_id) REFERENCES accounts(_id));");
-        db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
-                "raw_contact_backup_id, account_id);");
-    }
-
     @VisibleForTesting
     public void upgradeToVersion1002(SQLiteDatabase db) {
         db.execSQL("DROP TABLE IF EXISTS pre_authorized_uris;");
@@ -4522,21 +4502,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
   }
 
-    /**
-     * The metadata_sync APIs were not in-use by anyone in the time
-     * between their initial creation (in v1001) and this update.  So we're just dropping
-     * and re-creating it to get appropriate columns. The delta is as follows:
-     * - drop foreign key constraint on account_id
-     * - add deleted column
-     */
-    public void upgradeToVersion1008(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS metadata_sync");
-        db.execSQL("CREATE TABLE metadata_sync (" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, raw_contact_backup_id TEXT NOT NULL, " +
-                "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
-        db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
-                "raw_contact_backup_id, account_id);");
-    }
 
     public void upgradeToVersion1009(SQLiteDatabase db) {
         try {
@@ -4579,6 +4544,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } finally {
             c.close();
         }
+    }
+
+    /**
+     * Add new metadata_sync table to cache the meta data on raw contacts level from server before
+     * they are merged into other CP2 tables. The data column is the blob column containing all
+     * the backed up metadata for this raw_contact. This table should only be used by metadata
+     * sync adapter.
+     */
+    public void upgradeToVersion1104(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS metadata_sync;");
+        db.execSQL("CREATE TABLE metadata_sync (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, raw_contact_backup_id TEXT NOT NULL, " +
+                "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
+        db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
+                "raw_contact_backup_id, account_id);");
     }
 
     /**
