@@ -3671,7 +3671,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 args[0] = String.valueOf(contactId);
                 args[1] = Uri.encode(lookupKey);
                 lookupQb.appendWhere(Contacts._ID + "=? AND " + Contacts.LOOKUP_KEY + "=?");
-                Cursor c = query(db, lookupQb, null, selection, args, null, null, null, null, null);
+                Cursor c = doQuery(db, lookupQb, null, selection, args, null, null, null, null,
+                        null);
                 try {
                     if (c.getCount() == 1) {
                         // Contact was unmodified so go ahead and delete it.
@@ -5415,9 +5416,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             projection = getDefaultProjection(uri);
         }
 
-        Cursor cursor = getContext().getContentResolver().query(
-                directoryUri, projection, selection, selectionArgs, sortOrder);
-        if (cursor == null) {
+        Cursor cursor;
+        try {
+            cursor = getContext().getContentResolver().query(
+                    directoryUri, projection, selection, selectionArgs, sortOrder);
+            if (cursor == null) {
+                return null;
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Directory query failed: uri=" + uri, e);
             return null;
         }
 
@@ -6573,7 +6580,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // phone_number_compare_loose.
                     qb.setStrict(true);
                     boolean foundResult = false;
-                    Cursor cursor = query(db, qb, projectionWithNumber, selection, selectionArgs,
+                    Cursor cursor = doQuery(db, qb, projectionWithNumber, selection, selectionArgs,
                             sortOrder, groupBy, null, limit, cancellationSignal);
                     try {
                         if (cursor.getCount() > 0) {
@@ -6592,7 +6599,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         // numbers
                         mDbHelper.get().buildFallbackPhoneLookupAndContactQuery(qb, number);
 
-                        final Cursor fallbackCursor = query(db, qb, projectionWithNumber,
+                        final Cursor fallbackCursor = doQuery(db, qb, projectionWithNumber,
                                 selection, selectionArgs, sortOrder, groupBy, having, limit,
                                 cancellationSignal);
                         return PhoneLookupWithStarPrefix.removeNonStarMatchesFromCursor(
@@ -6817,8 +6824,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Auto-rewrite SORT_KEY_{PRIMARY, ALTERNATIVE} sort orders.
         String localizedSortOrder = getLocalizedSortOrder(sortOrder);
         Cursor cursor =
-                query(db, qb, projection, selection, selectionArgs, localizedSortOrder, groupBy,
-                having, limit, cancellationSignal);
+                doQuery(db, qb, projection, selection, selectionArgs, localizedSortOrder, groupBy,
+                        having, limit, cancellationSignal);
 
         if (readBooleanQueryParameter(uri, Contacts.EXTRA_ADDRESS_BOOK_INDEX, false)) {
             bundleFastScrollingIndexExtras(cursor, uri, db, qb, selection,
@@ -6859,7 +6866,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return localizedSortOrder;
     }
 
-    private Cursor query(final SQLiteDatabase db, SQLiteQueryBuilder qb, String[] projection,
+    private Cursor doQuery(final SQLiteDatabase db, SQLiteQueryBuilder qb, String[] projection,
             String selection, String[] selectionArgs, String sortOrder, String groupBy,
             String having, String limit, CancellationSignal cancellationSignal) {
         if (projection != null && projection.length == 1
@@ -7174,7 +7181,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         args[0] = String.valueOf(contactId);
         args[1] = Uri.encode(lookupKey);
         lookupQb.appendWhere(contactIdColumn + "=? AND " + lookupKeyColumn + "=?");
-        Cursor c = query(db, lookupQb, projection, selection, args, sortOrder,
+        Cursor c = doQuery(db, lookupQb, projection, selection, args, sortOrder,
                 groupBy, null, limit, cancellationSignal);
         if (c.getCount() != 0) {
             return c;
