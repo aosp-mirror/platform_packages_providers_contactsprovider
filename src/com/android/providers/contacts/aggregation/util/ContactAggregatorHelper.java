@@ -66,7 +66,7 @@ public class ContactAggregatorHelper {
                 for (Integer i : s) {
                     final Set<Long> rIdSet = rawContactIds.get(i);
                     if (rIdSet != null && !rIdSet.isEmpty()) {
-                        connectedRawContactSets.add(rawContactIds.get(i));
+                        connectedRawContactSets.add(rIdSet);
                         rawContactIds.remove(i);
                     }
                 }
