@@ -2176,9 +2176,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
 
-        // Enforce stream items access check if applicable.
-        enforceSocialStreamWritePermission(uri);
-
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
             switchToProfileMode();
             return mProfileProvider.insert(uri, values);
@@ -2191,9 +2188,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
 
-        // Enforce stream items access check if applicable.
-        enforceSocialStreamWritePermission(uri);
-
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
             return mProfileProvider.update(uri, values, selection, selectionArgs);
@@ -2205,9 +2199,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
-
-        // Enforce stream items access check if applicable.
-        enforceSocialStreamWritePermission(uri);
 
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -2224,10 +2215,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
             Uri uri = extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
 
-            // Check permissions on the caller.  The URI can only be pre-authorized if the caller
-            // already has the necessary permissions. And, we can't rely on the ContentResolver to
-            // enforce permissions for the ContentProvider#call() method.
-            enforceSocialStreamReadPermission(uri);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
 
             // If there hasn't been a security violation yet, we're clear to pre-authorize the URI.
@@ -2982,31 +2969,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Log.e(TAG, "Could not process stream item photo for insert", exception);
         return false;
-    }
-
-    /**
-     * If the given URI is reading stream items or stream photos, this will run a permission check
-     * for the android.permission.READ_SOCIAL_STREAM permission - otherwise it will do nothing.
-     * @param uri The URI to check.
-     */
-    private void enforceSocialStreamReadPermission(Uri uri) {
-        if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))
-                && !isValidPreAuthorizedUri(uri)) {
-            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
-                    "android.permission.READ_SOCIAL_STREAM");
-        }
-    }
-
-    /**
-     * If the given URI is modifying stream items or stream photos, this will run a permission check
-     * for the android.permission.WRITE_SOCIAL_STREAM permission - otherwise it will do nothing.
-     * @param uri The URI to check.
-     */
-    private void enforceSocialStreamWritePermission(Uri uri) {
-        if (SOCIAL_STREAM_URIS.contains(sUriMatcher.match(uri))) {
-            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
-                    "android.permission.WRITE_SOCIAL_STREAM");
-        }
     }
 
     /**
@@ -5052,9 +5014,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         waitForAccess(mReadAccessLatch);
-
-        // Enforce stream items access check if applicable.
-        enforceSocialStreamReadPermission(uri);
 
         // Query the profile DB if appropriate.
         if (mapsToProfileDb(uri)) {
