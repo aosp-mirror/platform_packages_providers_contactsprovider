@@ -121,7 +121,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      * </pre>
      */
-    static final int DATABASE_VERSION = 1010;
+    static final int DATABASE_VERSION = 1011;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2895,9 +2895,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1010;
         }
 
-        if (oldVersion < 1010) {
+        if (oldVersion < 1011) {
+            // There was a merge error, so do step1010 again, and also re-crete views.
+            // upgradeToVersion1010() is safe to re-run.
+            upgradeToVersion1010(db);
+            rebuildSqliteStats = true;
             upgradeViewsAndTriggers = true;
-            oldVersion = 1010;
+            oldVersion = 1011;
         }
 
         if (upgradeViewsAndTriggers) {
