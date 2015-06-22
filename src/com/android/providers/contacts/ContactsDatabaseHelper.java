@@ -1646,16 +1646,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void createSearchIndexTable(SQLiteDatabase db, boolean rebuildSqliteStats) {
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
-        db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
-                + " USING FTS4 ("
+        db.beginTransaction();
+        try {
+            db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
+            db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
+                    + " USING FTS4 ("
                     + SearchIndexColumns.CONTACT_ID + " INTEGER REFERENCES contacts(_id) NOT NULL,"
                     + SearchIndexColumns.CONTENT + " TEXT, "
                     + SearchIndexColumns.NAME + " TEXT, "
                     + SearchIndexColumns.TOKENS + " TEXT"
-                + ")");
-        if (rebuildSqliteStats) {
-            updateSqliteStats(db);
+                    + ")");
+            if (rebuildSqliteStats) {
+                updateSqliteStats(db);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
     }
 
