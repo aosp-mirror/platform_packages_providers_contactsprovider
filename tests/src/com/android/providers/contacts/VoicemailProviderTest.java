@@ -88,6 +88,28 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         assertEquals(1, countFilesInTestDirectory());
     }
 
+    public void testInsertReadMessageIsNotNew() throws Exception {
+        ContentValues values = getTestReadVoicemailValues();
+        Uri uri = mResolver.insert(voicemailUri(), values);
+        String[] projection = {Voicemails.NUMBER, Voicemails.DATE, Voicemails.DURATION,
+                Voicemails.TRANSCRIPTION, Voicemails.IS_READ, Voicemails.HAS_CONTENT,
+                Voicemails.SOURCE_DATA, Voicemails.STATE,
+        };
+        Cursor c = mResolver.query(uri, projection, Calls.NEW + "=0", null,
+                null);
+        try {
+            assertEquals("Record count", 1, c.getCount());
+            c.moveToFirst();
+            assertEquals(1, countFilesInTestDirectory());
+            assertCursorValues(c, values);
+        } catch (Error e) {
+            TestUtils.dumpCursor(c);
+            throw e;
+        } finally {
+            c.close();
+        }
+    }
+
     // Test to ensure that media content can be written and read back.
     public void testFileContent() throws Exception {
         Uri uri = insertVoicemail();
@@ -670,6 +692,12 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Voicemails.HAS_CONTENT, 0);
         values.put(Voicemails.SOURCE_DATA, "1234");
         values.put(Voicemails.STATE, Voicemails.STATE_INBOX);
+        return values;
+    }
+
+    private ContentValues getTestReadVoicemailValues() {
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.IS_READ, 1);
         return values;
     }
 
