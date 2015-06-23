@@ -142,7 +142,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         copiedValues.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
         // A voicemail is marked as new unless it is marked as read or explicitly overridden.
         boolean isRead = values.containsKey(Calls.IS_READ) ?
-                values.get(Calls.IS_READ).equals(1) : false;
+                values.getAsBoolean(Calls.IS_READ) : false;
         if (!values.containsKey(Calls.NEW)) {
             copiedValues.put(Calls.NEW, !isRead);
         }
