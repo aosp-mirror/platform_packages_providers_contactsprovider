@@ -104,6 +104,8 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
+import android.provider.MediaStore;
+import android.provider.MediaStore.Audio.Media;
 import android.provider.OpenableColumns;
 import android.provider.Settings.Global;
 import android.provider.SyncStateContract;
@@ -6728,8 +6730,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         break;
                     case Data.PHOTO_FILE_ID:
                     case Data.PHOTO_ID:
-                    case Data.CUSTOM_RINGTONE:
                         builder.add(null);
+                        break;
+                    case Data.CUSTOM_RINGTONE:
+                        String ringtoneUri = original.getString(originalColumnIndex);
+                        // TODO: Remove this conditional block once accessing sounds in corp
+                        // profile becomes possible.
+                        if (ringtoneUri != null
+                                    && !Uri.parse(ringtoneUri).isPathPrefixMatch(
+                                            MediaStore.Audio.Media.INTERNAL_CONTENT_URI)) {
+                            ringtoneUri = null;
+                        }
+                        builder.add(ringtoneUri);
                         break;
                     case Contacts.LOOKUP_KEY:
                         final String lookupKey = original.getString(originalColumnIndex);
