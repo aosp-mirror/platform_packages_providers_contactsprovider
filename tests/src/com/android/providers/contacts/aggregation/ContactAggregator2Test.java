@@ -916,14 +916,15 @@ public class ContactAggregator2Test extends BaseContactsProvider2Test {
     }
 
     public void testAggregationSuggestionsBasedOnName() {
+        // Exact name match contact with two raw contacts
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         DataUtil.insertStructuredName(mResolver, rawContactId1, "Duane", null);
+        insertPhoneNumber(rawContactId1, "(888)555-1236");
 
-        // Exact name match
+        // Exact name match contact with two raw contacts
         long rawContactId2 = RawContactUtil.createRawContact(mResolver);
         DataUtil.insertStructuredName(mResolver, rawContactId2, "Duane", null);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
-                rawContactId1, rawContactId2);
+        insertPhoneNumber(rawContactId2, "(888)555-1236");
 
         // Edit distance == 0.84
         long rawContactId3 = RawContactUtil.createRawContact(mResolver);
@@ -933,11 +934,15 @@ public class ContactAggregator2Test extends BaseContactsProvider2Test {
         long rawContactId4 = RawContactUtil.createRawContact(mResolver);
         DataUtil.insertStructuredName(mResolver, rawContactId4, "Donny", null);
 
+        long rawContactId5 = RawContactUtil.createRawContact(mResolver);
+        DataUtil.insertStructuredName(mResolver, rawContactId5, "Duane", null);
+
         long contactId1 = queryContactId(rawContactId1);
         long contactId2 = queryContactId(rawContactId2);
         long contactId3 = queryContactId(rawContactId3);
 
-        assertSuggestions(contactId1, contactId2, contactId3);
+        assertEquals(contactId1, contactId2);
+        assertSuggestions(queryContactId(rawContactId5), contactId1, contactId3);
     }
 
     public void testAggregationSuggestionsBasedOnPhoneNumber() {
