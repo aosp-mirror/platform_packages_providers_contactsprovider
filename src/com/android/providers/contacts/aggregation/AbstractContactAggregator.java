@@ -1928,7 +1928,17 @@ public abstract class AbstractContactAggregator {
         db.beginTransaction();
         try {
             List<MatchScore> bestMatches = findMatchingContacts(db, contactId, parameters);
-            return queryMatchingContacts(qb, db, projection, bestMatches, maxSuggestions, filter);
+            List<MatchScore> bestMatchesWithoutDuplicateContactIds = new ArrayList<>();
+            Set<Long> contactIds = new HashSet<>();
+            for (MatchScore bestMatch : bestMatches) {
+                long cid = bestMatch.getContactId();
+                if (!contactIds.contains(cid)) {
+                    bestMatchesWithoutDuplicateContactIds.add(bestMatch);
+                    contactIds.add(cid);
+                }
+            }
+            return queryMatchingContacts(qb, db, projection, bestMatchesWithoutDuplicateContactIds,
+                    maxSuggestions, filter);
         } finally {
             db.endTransaction();
         }
