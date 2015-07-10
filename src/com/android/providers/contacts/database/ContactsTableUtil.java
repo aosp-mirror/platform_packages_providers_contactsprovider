@@ -118,7 +118,7 @@ public class ContactsTableUtil {
      * Delete the aggregate contact if it has no constituent raw contacts other than the supplied
      * one.
      */
-    public static void deleteContactIfSingleton(SQLiteDatabase db, long rawContactId) {
+    public static int deleteContactIfSingleton(SQLiteDatabase db, long rawContactId) {
         // This query will find a contact id if the contact has a raw contacts other than the one
         // passed in.
         final String sql = "select " + ContactsContract.RawContacts.CONTACT_ID + ", count(1)"
@@ -136,11 +136,12 @@ public class ContactsTableUtil {
 
                 if (numRawContacts == 1) {
                     // Only one raw contact, we can delete the parent.
-                    deleteContact(db, contactId);
+                    return deleteContact(db, contactId);
                 }
             }
         } finally {
             MoreCloseables.closeQuietly(cursor);
         }
+        return 0;
     }
 }
