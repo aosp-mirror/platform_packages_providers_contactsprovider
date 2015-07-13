@@ -602,7 +602,8 @@ public abstract class AbstractContactAggregator {
         final int count;
         final Cursor cursor = db.rawQuery("SELECT " + RawContacts._ID +
                 " FROM " + Tables.RAW_CONTACTS +
-                " WHERE " + RawContactsColumns.AGGREGATION_NEEDED + "=1", null);
+                " WHERE " + RawContactsColumns.AGGREGATION_NEEDED + "=1 AND " +
+                RawContacts.DELETED + "=0", null);
         try {
             count = cursor.getCount();
             cursor.moveToPosition(-1);
