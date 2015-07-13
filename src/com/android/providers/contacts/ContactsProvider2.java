@@ -3739,17 +3739,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // because it's in a trigger.  Consider removing trigger and replacing with java code.
             // This has to happen before the raw contact is deleted since it relies on the number
             // of raw contacts.
-            ContactsTableUtil.deleteContactIfSingleton(db, rawContactId);
+            if (ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 0) {
+                mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
+            }
 
             db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
             int count = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
 
-            mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
             mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
             return count;
         }
 
-        ContactsTableUtil.deleteContactIfSingleton(db, rawContactId);
+        if (ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 0) {
+            mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
+        }
         return markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
     }
 
