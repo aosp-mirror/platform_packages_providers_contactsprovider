@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core એપ્લિકેશન્સ"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core એપ્લિકેશનો"</string>
     <string name="app_label" msgid="3389954322874982620">"સંપર્કો સ્ટોરેજ"</string>
     <string name="provider_label" msgid="6012150850819899907">"સંપર્કો"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"સંપર્કો અપગ્રેડને વધુ મેમરીની જરૂર છે."</string>
