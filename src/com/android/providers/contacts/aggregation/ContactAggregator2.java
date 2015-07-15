@@ -16,6 +16,9 @@
 
 package com.android.providers.contacts.aggregation;
 
+import static com.android.providers.contacts.aggregation.util.RawContactMatcher.SCORE_THRESHOLD_PRIMARY;
+import static com.android.providers.contacts.aggregation.util.RawContactMatcher.SCORE_THRESHOLD_SECONDARY;
+import static com.android.providers.contacts.aggregation.util.RawContactMatcher.SCORE_THRESHOLD_SUGGEST;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -53,13 +56,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static com.android.providers.contacts.aggregation.util.RawContactMatcher
-        .SCORE_THRESHOLD_PRIMARY;
-import static com.android.providers.contacts.aggregation.util.RawContactMatcher
-        .SCORE_THRESHOLD_SECONDARY;
-import static com.android.providers.contacts.aggregation.util.RawContactMatcher
-        .SCORE_THRESHOLD_SUGGEST;
 
 /**
  * ContactAggregator2 deals with aggregating contact information with sufficient matching data
@@ -564,6 +560,9 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         try {
             while (c.moveToNext()) {
                 final long rId = c.getLong(IdentityLookupMatchQuery.RAW_CONTACT_ID);
+                if (rId == rawContactId) {
+                    continue;
+                }
                 final long contactId = c.getLong(IdentityLookupMatchQuery.CONTACT_ID);
                 final long accountId = c.getLong(IdentityLookupMatchQuery.ACCOUNT_ID);
                 matcher.matchIdentity(rId, contactId, accountId);
@@ -585,6 +584,9 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         try {
             while (c.moveToNext()) {
                 long rId =  c.getLong(NameLookupMatchQuery.RAW_CONTACT_ID);
+                if (rId == rawContactId) {
+                    continue;
+                }
                 long contactId = c.getLong(NameLookupMatchQuery.CONTACT_ID);
                 long accountId = c.getLong(NameLookupMatchQuery.ACCOUNT_ID);
                 String name = c.getString(NameLookupMatchQuery.NAME);
@@ -612,6 +614,9 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         try {
             while (c.moveToNext()) {
                 long rId = c.getLong(EmailLookupQuery.RAW_CONTACT_ID);
+                if (rId == rawContactId) {
+                    continue;
+                }
                 long contactId = c.getLong(EmailLookupQuery.CONTACT_ID);
                 long accountId = c.getLong(EmailLookupQuery.ACCOUNT_ID);
                 matcher.updateScoreWithEmailMatch(rId, contactId, accountId);
@@ -666,6 +671,9 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         try {
             while (c.moveToNext()) {
                 long rId = c.getLong(PhoneLookupQuery.RAW_CONTACT_ID);
+                if (rId == rawContactId) {
+                    continue;
+                }
                 long contactId = c.getLong(PhoneLookupQuery.CONTACT_ID);
                 long accountId = c.getLong(PhoneLookupQuery.ACCOUNT_ID);
                 matcher.updateScoreWithPhoneNumberMatch(rId, contactId, accountId);
@@ -789,28 +797,6 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         }
     }
 
-    private PhotoEntry getPhotoMetadata(SQLiteDatabase db, long photoFileId) {
-        if (photoFileId == 0) {
-            // Assume standard thumbnail size.  Don't bother getting a file size for priority;
-            // we should fall back to photo priority resolver if all we have are thumbnails.
-            int thumbDim = mContactsProvider.getMaxThumbnailDim();
-            return new PhotoEntry(thumbDim * thumbDim, 0);
-        } else {
-            Cursor c = db.query(Tables.PHOTO_FILES, PhotoFileQuery.COLUMNS, PhotoFiles._ID + "=?",
-                    new String[]{String.valueOf(photoFileId)}, null, null, null);
-            try {
-                if (c.getCount() == 1) {
-                    c.moveToFirst();
-                    int pixelCount =
-                            c.getInt(PhotoFileQuery.HEIGHT) * c.getInt(PhotoFileQuery.WIDTH);
-                    return new PhotoEntry(pixelCount, c.getInt(PhotoFileQuery.FILESIZE));
-                }
-            } finally {
-                c.close();
-            }
-        }
-        return new PhotoEntry(0, 0);
-    }
     /**
      * Finds contacts with data matches and returns a list of {@link MatchScore}'s in the
      * descending order of match score.
@@ -866,12 +852,20 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      */
     private void updateMatchScores(SQLiteDatabase db, long rawContactId,
             MatchCandidateList candidates, RawContactMatcher matcher) {
+        //update primary score
         updateMatchScoresBasedOnExceptions(db, rawContactId, matcher);
-        updateMatchScoresBasedOnIdentityMatch(db, rawContactId, matcher);
         updateMatchScoresBasedOnNameMatches(db, rawContactId, matcher);
-        updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
-        updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
-        updateMatchScoresBasedOnSecondaryData(db, rawContactId, candidates, matcher);
+        // update scores only if the raw contact doesn't have structured name
+        if (rawContactWithoutName(db, rawContactId)) {
+            updateMatchScoresBasedOnIdentityMatch(db, rawContactId, matcher);
+            updateMatchScoresBasedOnEmailMatches(db, rawContactId, matcher);
+            updateMatchScoresBasedOnPhoneMatches(db, rawContactId, matcher);
+            final List<Long> secondaryRawContactIds = matcher.prepareSecondaryMatchCandidates();
+            if (secondaryRawContactIds != null
+                    && secondaryRawContactIds.size() <= SECONDARY_HIT_LIMIT) {
+                updateScoreForCandidatesWithoutName(db, secondaryRawContactIds, matcher);
+            }
+        }
     }
 
     private void updateMatchScoresForSuggestionsBasedOnDataMatches(SQLiteDatabase db,
@@ -886,35 +880,53 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         }
     }
 
-    /**
-     * Update scores for matches with secondary data matching but insufficient primary scores.
-     * This method loads structured names for all candidate contacts and recomputes match scores
-     * using approximate matching.
-     */
-    private void updateMatchScoresBasedOnSecondaryData(SQLiteDatabase db,
-            long rawContactId, MatchCandidateList candidates, RawContactMatcher matcher) {
-        final List<Long> secondaryRawContactIds = matcher.prepareSecondaryMatchCandidates();
-        if (secondaryRawContactIds == null || secondaryRawContactIds.size() > SECONDARY_HIT_LIMIT) {
-            return;
-        }
+    private boolean rawContactWithoutName(SQLiteDatabase db, long rawContactId) {
+        String selection = RawContacts._ID + " =" + rawContactId;
+        final Cursor c = db.query(NullNameRawContactsIdsQuery.TABLE,
+                NullNameRawContactsIdsQuery.COLUMNS, selection, null, null, null, null);
 
-        loadNameMatchCandidates(db, rawContactId, candidates, true);
+        try {
+            if (c.moveToFirst()) {
+                return TextUtils.isEmpty(c.getString(NullNameRawContactsIdsQuery.NAME));
+            }
+        } finally {
+            c.close();
+        }
+        return false;
+    }
+
+    /**
+     * Update scores for matches with secondary data matching but no structured name.
+     */
+    private void updateScoreForCandidatesWithoutName(SQLiteDatabase db,
+            List<Long> secondaryRawContactIds, RawContactMatcher matcher) {
 
         mSb.setLength(0);
+
         mSb.append(RawContacts._ID).append(" IN (");
         for (int i = 0; i < secondaryRawContactIds.size(); i++) {
             if (i != 0) {
-                mSb.append(',');
+                mSb.append(",");
             }
             mSb.append(secondaryRawContactIds.get(i));
         }
+        mSb.append( ")");
+        final Cursor c = db.query(NullNameRawContactsIdsQuery.TABLE,
+                NullNameRawContactsIdsQuery.COLUMNS, mSb.toString(), null, null, null, null);
 
-        // We only want to compare structured names to structured names
-        // at this stage, we need to ignore all other sources of name lookup data.
-        mSb.append(") AND " + STRUCTURED_NAME_BASED_LOOKUP_SQL);
-
-        matchAllCandidates(db, mSb.toString(), candidates, matcher,
-                RawContactMatcher.MATCHING_ALGORITHM_CONSERVATIVE, null);
+        try {
+            while (c.moveToNext()) {
+                Long rId = c.getLong(NullNameRawContactsIdsQuery.RAW_CONTACT_ID);
+                Long contactId = c.getLong(NullNameRawContactsIdsQuery.CONTACT_ID);
+                Long accountId = c.getLong(NullNameRawContactsIdsQuery.ACCOUNT_ID);
+                String name = c.getString(NullNameRawContactsIdsQuery.NAME);
+                if (TextUtils.isEmpty(name)) {
+                    matcher.matchNoName(rId, contactId, accountId);
+                }
+            }
+        } finally {
+            c.close();
+        }
     }
 
     protected interface IdentityLookupMatchQuery {
@@ -1026,4 +1038,18 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         int ACCOUNT_ID = 2;
     }
 
+    protected interface NullNameRawContactsIdsQuery {
+        final String TABLE =  Tables.RAW_CONTACTS + " LEFT OUTER JOIN " +  Tables.NAME_LOOKUP
+                + " ON "+ RawContacts._ID + " = " + NameLookupColumns.RAW_CONTACT_ID
+                + " AND " + NameLookupColumns.NAME_TYPE + " = " + NameLookupType.NAME_EXACT;
+
+        final String[] COLUMNS = new String[] {
+                RawContacts._ID, RawContacts.CONTACT_ID, RawContactsColumns.ACCOUNT_ID,
+                NameLookupColumns.NORMALIZED_NAME};
+
+        int RAW_CONTACT_ID = 0;
+        int CONTACT_ID = 1;
+        int ACCOUNT_ID = 2;
+        int NAME = 3;
+    }
 }
