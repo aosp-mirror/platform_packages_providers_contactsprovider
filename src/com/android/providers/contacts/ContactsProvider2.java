@@ -4776,7 +4776,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             if (!accountsWithDataSetsToDelete.isEmpty()) {
                 for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
-                    Log.d(TAG, "removing data for removed account " + accountWithDataSet);
                     final Long accountIdOrNull = dbHelper.getAccountIdOrNull(accountWithDataSet);
 
                     // getAccountIdOrNull() really shouldn't return null here, but just in case...
@@ -4964,7 +4963,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         try {
             return cs.getIsSyncable(account, ContactsContract.AUTHORITY) > 0;
         } catch (RemoteException e) {
-            Log.e(TAG, "Cannot obtain sync flag for account: " + account, e);
+            Log.e(TAG, "Cannot obtain sync flag for account", e);
             return false;
         }
     }
