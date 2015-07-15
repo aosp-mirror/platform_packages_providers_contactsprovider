@@ -30,11 +30,10 @@ import java.util.List;
 public class RawContactMatcher {
     private static final String TAG = "ContactMatcher";
 
-    // Best possible match score
-    public static final int MAX_SCORE = 100;
-
     // Suggest to aggregate contacts if their match score is equal or greater than this threshold
     public static final int SCORE_THRESHOLD_SUGGEST = 50;
+
+    public static final int SCORE_THRESHOLD_NO_NAME = 50;
 
     // Automatically aggregate contacts if their match score is equal or greater than this threshold
     public static final int SCORE_THRESHOLD_PRIMARY = 70;
@@ -48,6 +47,9 @@ public class RawContactMatcher {
 
     // Score for matching email addresses
     private static final int EMAIL_MATCH_SCORE = 71;
+
+    // Score for matching identity
+    private static final int IDENTITY_MATCH_SCORE = 71;
 
     // Score for matching nickname
     private static final int NICKNAME_MATCH_SCORE = 71;
@@ -180,13 +182,6 @@ public class RawContactMatcher {
     }
 
     /**
-     * Marks the contact as a full match, because we found an Identity match
-     */
-    public void matchIdentity(long rawContactId, long contactId, long accountId) {
-        updatePrimaryScore(rawContactId, contactId, accountId, MAX_SCORE);
-    }
-
-    /**
      * Checks if there is a match and updates the overall score for the
      * specified contact for a discovered match. The new score is determined
      * by the prior score, by the type of name we were looking for, the type
@@ -244,6 +239,10 @@ public class RawContactMatcher {
         updatePrimaryScore(rawContactId, contactId, accountId, score);
     }
 
+    public void matchIdentity(long rawContactId, long contactId, long accountId) {
+        updateSecondaryScore(rawContactId, contactId, accountId, IDENTITY_MATCH_SCORE);
+    }
+
     public void updateScoreWithPhoneNumberMatch(long rawContactId, long contactId, long accountId) {
         updateSecondaryScore(rawContactId, contactId, accountId, PHONE_MATCH_SCORE);
     }
@@ -278,9 +277,9 @@ public class RawContactMatcher {
         mScoreCount = 0;
     }
     /**
-     * Returns a list of IDs for raw contacts that are matched on secondary data elements
-     * (phone number, email address, nickname). We still need to obtain the approximate
-     * primary score for those contacts to determine if any of them should be aggregated.
+     * Returns a list of IDs for raw contacts that are only matched on secondary data elements
+     * (phone number, email address, nickname, identity). We need to check if they are missing
+     * structured name or not to decide if they should be aggregated.
      * <p>
      * May return null.
      */
@@ -295,7 +294,7 @@ public class RawContactMatcher {
 
             if (score.getSecondaryScore() >= SCORE_THRESHOLD_PRIMARY) {
                 if (rawContactIds == null) {
-                    rawContactIds = new ArrayList<Long>();
+                    rawContactIds = new ArrayList<>();
                 }
                 rawContactIds.add(score.getRawContactId());
             }
@@ -320,7 +319,9 @@ public class RawContactMatcher {
                 continue;
             }
 
-            if (score.getPrimaryScore() >= SCORE_THRESHOLD_SECONDARY) {
+            if (score.getPrimaryScore() >= SCORE_THRESHOLD_PRIMARY ||
+                    (score.getPrimaryScore() == SCORE_THRESHOLD_NO_NAME &&
+                            score.getSecondaryScore() > SCORE_THRESHOLD_SECONDARY)) {
                 matches.add(score);
             }
         }
@@ -350,5 +351,9 @@ public class RawContactMatcher {
     @Override
     public String toString() {
         return mScoreList.subList(0, mScoreCount).toString();
+    }
+
+    public void matchNoName(Long rawContactId, Long contactId, Long accountId) {
+        updatePrimaryScore(rawContactId, contactId, accountId, SCORE_THRESHOLD_NO_NAME);
     }
 }
