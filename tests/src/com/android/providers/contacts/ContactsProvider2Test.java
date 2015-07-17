@@ -8568,12 +8568,18 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testPinnedPositionsAfterJoinAndSplit() {
-        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i3 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i4 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i5 = DatabaseAsserts.assertAndCreateContact(mResolver);
-        final DatabaseAsserts.ContactIdPair i6 = DatabaseAsserts.assertAndCreateContact(mResolver);
+        final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContactWithName(
+                mResolver, "A", "Smith");
+        final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContactWithName(
+                mResolver, "B", "Smith");
+        final DatabaseAsserts.ContactIdPair i3 = DatabaseAsserts.assertAndCreateContactWithName(
+                mResolver, "C", "Smith");
+        final DatabaseAsserts.ContactIdPair i4 = DatabaseAsserts.assertAndCreateContactWithName(
+                mResolver, "D", "Smith");
+        final DatabaseAsserts.ContactIdPair i5 = DatabaseAsserts.assertAndCreateContactWithName(
+                mResolver, "E", "Smith");
+        final DatabaseAsserts.ContactIdPair i6 = DatabaseAsserts.assertAndCreateContactWithName(
+                mResolver, "F", "Smith");
 
         final ArrayList<ContentProviderOperation> operations =
                 new ArrayList<ContentProviderOperation>();
@@ -8643,7 +8649,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // raw contacts should be unpinned after being split, but still starred
         assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
-                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, PinnedPositions.UNPINNED,
+                cv(RawContacts._ID, i1.mRawContactId, RawContacts.PINNED, 1,
                         RawContacts.STARRED, 1),
                 cv(RawContacts._ID, i2.mRawContactId, RawContacts.PINNED, 2,
                         RawContacts.STARRED, 1),
@@ -8668,7 +8674,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         final long cId4 = RawContactUtil.queryContactIdByRawContactId(mResolver, i4.mRawContactId);
 
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, cId1, Contacts.PINNED, PinnedPositions.UNPINNED),
+                cv(Contacts._ID, cId1, Contacts.PINNED, 1),
                 cv(Contacts._ID, i2.mContactId, Contacts.PINNED, 2),
                 cv(Contacts._ID, cId4, Contacts.PINNED, PinnedPositions.UNPINNED),
                 cv(Contacts._ID, i5.mContactId, Contacts.PINNED, PinnedPositions.DEMOTED),
@@ -8681,7 +8687,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // The resulting contact should have a pinned value of 6
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
-                cv(Contacts._ID, cId1, Contacts.PINNED, PinnedPositions.UNPINNED),
+                cv(Contacts._ID, cId1, Contacts.PINNED, 1),
                 cv(Contacts._ID, i2.mContactId, Contacts.PINNED, 2),
                 cv(Contacts._ID, cId4, Contacts.PINNED, PinnedPositions.UNPINNED),
                 cv(Contacts._ID, i5.mContactId, Contacts.PINNED, 6)

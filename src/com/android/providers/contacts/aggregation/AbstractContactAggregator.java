@@ -867,8 +867,6 @@ public abstract class AbstractContactAggregator {
             contactId = mContactInsert.executeInsert();
         }
         for (Long rawContactId : rawContactIds) {
-            // Regrouped contacts should automatically be unpinned.
-            unpinRawContact(rawContactId);
             setContactIdAndMarkAggregated(rawContactId, contactId);
             setPresenceContactId(rawContactId, contactId);
         }
