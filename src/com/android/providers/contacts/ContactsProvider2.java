@@ -3733,27 +3733,26 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.close();
         }
 
+        final boolean contactIsSingleton =
+                ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 1;
+        final int count;
+
         if (callerIsSyncAdapter || rawContactIsLocal(rawContactId)) {
             // When a raw contact is deleted, a SQLite trigger deletes the parent contact.
             // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
             // because it's in a trigger.  Consider removing trigger and replacing with java code.
             // This has to happen before the raw contact is deleted since it relies on the number
             // of raw contacts.
-            if (ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 0) {
-                mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
-            }
-
             db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
-            int count = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
-
+            count = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
             mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
-            return count;
+        } else {
+            count = markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
         }
-
-        if (ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 0) {
+        if (!contactIsSingleton) {
             mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
         }
-        return markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
+        return count;
     }
 
     /**
