@@ -340,7 +340,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                     contactId = currentCidForRawContact;
                     for (Long connectedRawContactId : connectedRawContactIds) {
                         Long cid = matchingCandidates.getContactId(connectedRawContactId);
-                        if (cid != null && cid != contactId) {
+                        if (cid != null && !cid.equals(contactId)) {
                             cidsNeedToBeUpdated.add(cid);
                         }
                     }
