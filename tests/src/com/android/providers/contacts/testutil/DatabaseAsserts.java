@@ -64,6 +64,21 @@ public class DatabaseAsserts {
     }
 
     /**
+     * Create a contact with name and assert that the record exists.
+     *
+     * @return The created contact id pair.
+     */
+    public static ContactIdPair assertAndCreateContactWithName(ContentResolver resolver,
+            String firstName, String lastName) {
+        long rawContactId = RawContactUtil.createRawContactWithName(resolver, firstName, lastName);
+
+        long contactId = RawContactUtil.queryContactIdByRawContactId(resolver, rawContactId);
+        MoreAsserts.assertNotEqual(CommonDatabaseUtils.NOT_FOUND, contactId);
+
+        return new ContactIdPair(contactId, rawContactId);
+    }
+
+    /**
      * Asserts that a contact id was deleted, has a delete log, and that log has a timestamp greater
      * than the given timestamp.
      *
