@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import android.icu.text.AlphabeticIndex;
+import android.icu.text.AlphabeticIndex.ImmutableIndex;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
@@ -36,8 +38,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import libcore.icu.AlphabeticIndex;
-import libcore.icu.AlphabeticIndex.ImmutableIndex;
+
 import libcore.icu.Transliterator;
 
 /**
@@ -102,7 +103,7 @@ public class ContactLocaleUtils {
                 .addLabels(LOCALE_GREEK)
                 .addLabels(LOCALE_UKRAINIAN)
                 .addLabels(LOCALE_SERBIAN)
-                .getImmutableIndex();
+                .buildImmutableIndex();
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
         }
@@ -181,7 +182,7 @@ public class ContactLocaleUtils {
             } else if (bucketIndex > mNumberBucketIndex) {
                 --bucketIndex;
             }
-            return mAlphabeticIndex.getBucketLabel(bucketIndex);
+            return mAlphabeticIndex.getBucket(bucketIndex).getLabel();
         }
 
         @SuppressWarnings("unused")
