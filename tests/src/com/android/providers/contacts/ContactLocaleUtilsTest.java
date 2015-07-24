@@ -56,7 +56,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String[] LATIN_NAME_KEY_2 = {
         "John Paul Jones", "Paul Jones", "Jones", "JPJ", "PJ", "J"};
     private static final String[] LABELS_EN_US = {
-        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "\u2026", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_JA_JP = {
@@ -84,7 +84,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_AR = {
-        "", "\u0627", "\u0628", "\u062a", "\u062b", "\u062c", "\u062d",
+        "\u2026", "\u0627", "\u0628", "\u062a", "\u062b", "\u062c", "\u062d",
         "\u062e", "\u062f", "\u0630", "\u0631", "\u0632", "\u0633", "\u0634",
         "\u0635", "\u0636", "\u0637", "\u0638", "\u0639", "\u063a", "\u0641",
         "\u0642", "\u0643", "\u0644", "\u0645", "\u0646", "\u0647", "\u0648",
@@ -153,7 +153,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
-        assertEquals("", getLabel(CHINESE_NAME));
+        assertEquals("\u2026", getLabel(CHINESE_NAME));
         assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
         assertEquals("B", getLabel("Bob Smith"));
 
@@ -164,6 +164,8 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
             assertEquals("\u0408", getLabel(SERBIAN_NAME));
         }
         if (hasUkrainianCollator) {
+            // Updated in CLDR 27/ICU 55:
+            // http://cldr.unicode.org/index/downloads/cldr-27#TOC-Changes-to-Collation
             assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
         }
 
@@ -335,12 +337,8 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         }
 
         ContactLocaleUtils.setLocale(LOCALE_UKRAINIAN);
-        assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
-        // ICU 55 has a bug whereby these letters have buckets created only if
-        // Ukrainian is the primary language. Once this is fixed also test
-        // these labels when in English locale.
-        assertEquals("\u0407", getLabel(UKRAINIAN_NAME_2));
-        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_3));
+        assertEquals("\u0407", getLabel(UKRAINIAN_NAME));
+        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_2));
         assertEquals("B", getLabel("Bob Smith"));
     }
 
