@@ -1639,7 +1639,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         ContactLocaleUtils.setLocales(mCurrentLocales);
 
         int value = android.provider.Settings.Global.getInt(context.getContentResolver(),
-                    Global.NEW_CONTACT_AGGREGATOR, 0);
+                    Global.NEW_CONTACT_AGGREGATOR, 1);
 
         // Turn on aggregation algorithm updating process if new aggregator is enabled.
         PROPERTY_AGGREGATION_ALGORITHM_VERSION = (value == 0)
