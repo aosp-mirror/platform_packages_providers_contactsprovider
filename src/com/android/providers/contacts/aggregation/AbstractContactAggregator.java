@@ -16,28 +16,6 @@
 
 package com.android.providers.contacts.aggregation;
 
-import android.database.Cursor;
-import android.database.DatabaseUtils;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteQueryBuilder;
-import android.database.sqlite.SQLiteStatement;
-import android.net.Uri;
-import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.CommonDataKinds.Email;
-import android.provider.ContactsContract.CommonDataKinds.Identity;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
-import android.provider.ContactsContract.CommonDataKinds.Photo;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.DisplayNameSources;
-import android.provider.ContactsContract.FullNameStyle;
-import android.provider.ContactsContract.PhotoFiles;
-import android.provider.ContactsContract.PinnedPositions;
-import android.provider.ContactsContract.RawContacts;
-import android.provider.ContactsContract.StatusUpdates;
-import android.text.TextUtils;
-import android.util.EventLog;
-import android.util.Log;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.ContactLookupKey;
 import com.android.providers.contacts.ContactsDatabaseHelper;
@@ -68,6 +46,29 @@ import com.android.providers.contacts.util.Clock;
 import com.google.android.collect.Maps;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+
+import android.database.Cursor;
+import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteStatement;
+import android.net.Uri;
+import android.provider.ContactsContract.AggregationExceptions;
+import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
+import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Photo;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.DisplayNameSources;
+import android.provider.ContactsContract.FullNameStyle;
+import android.provider.ContactsContract.PhotoFiles;
+import android.provider.ContactsContract.PinnedPositions;
+import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.StatusUpdates;
+import android.text.TextUtils;
+import android.util.EventLog;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -1931,7 +1932,7 @@ public abstract class AbstractContactAggregator {
             Set<Long> contactIds = new HashSet<>();
             for (MatchScore bestMatch : bestMatches) {
                 long cid = bestMatch.getContactId();
-                if (!contactIds.contains(cid)) {
+                if (!contactIds.contains(cid) && cid != contactId) {
                     bestMatchesWithoutDuplicateContactIds.add(bestMatch);
                     contactIds.add(cid);
                 }
