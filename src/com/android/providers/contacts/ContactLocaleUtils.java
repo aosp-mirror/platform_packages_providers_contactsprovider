@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.icu.text.AlphabeticIndex;
 import android.icu.text.AlphabeticIndex.ImmutableIndex;
+import android.icu.text.Transliterator;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
@@ -38,8 +39,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-
-import libcore.icu.Transliterator;
 
 /**
  * This utility class provides specialized handling for locale specific
@@ -319,9 +318,9 @@ public class ContactLocaleUtils {
                     mInitializedTransliterator = true;
                     Transliterator t = null;
                     try {
-                        t = new Transliterator("Hiragana-Latin; Katakana-Latin;"
+                        t = Transliterator.getInstance("Hiragana-Latin; Katakana-Latin;"
                                 + " Latin-Ascii");
-                    } catch (RuntimeException e) {
+                    } catch (IllegalArgumentException e) {
                         Log.w(TAG, "Hiragana/Katakana-Latin transliterator data"
                                 + " is missing");
                     }
