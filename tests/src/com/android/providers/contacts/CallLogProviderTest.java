@@ -197,9 +197,10 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
-        values.put(Calls.CACHED_NAME, "1-800-GOOG-411");
-        values.put(Calls.CACHED_NUMBER_TYPE, Phone.TYPE_CUSTOM);
-        values.put(Calls.CACHED_NUMBER_LABEL, "Directory");
+        // Cached values should not be updated immediately by the framework when inserting the call.
+        values.put(Calls.CACHED_NAME, (String) null);
+        values.put(Calls.CACHED_NUMBER_TYPE, (String) null);
+        values.put(Calls.CACHED_NUMBER_LABEL, (String) null);
         values.put(Calls.COUNTRY_ISO, "us");
         values.put(Calls.GEOCODED_LOCATION, "usa");
         values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
