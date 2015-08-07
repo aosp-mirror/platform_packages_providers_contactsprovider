@@ -60,7 +60,7 @@
         </provider>
 
         <provider android:name="ContactMetadataProvider"
-                  android:authorities="com.android.contacts.metadata"
+                  android:authorities="com.android.contacts;com.android.contacts.metadata"
                   android:multiprocess="false"
                   android:exported="true"
                   android:permission="android.permission.READ_WRITE_CONTACT_METADATA">
