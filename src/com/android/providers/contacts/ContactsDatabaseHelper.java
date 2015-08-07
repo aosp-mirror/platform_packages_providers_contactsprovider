@@ -64,6 +64,7 @@ import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.MetadataSync;
+import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
@@ -127,7 +128,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1104;
+    static final int DATABASE_VERSION = 1105;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -157,6 +158,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String SEARCH_INDEX = "search_index";
         public static final String VOICEMAIL_STATUS = "voicemail_status";
         public static final String METADATA_SYNC = "metadata_sync";
+        public static final String METADATA_SYNC_STATE = "metadata_sync_state";
         public static final String PRE_AUTHORIZED_URIS = "pre_authorized_uris";
 
         // This list of tables contains auto-incremented sequences.
@@ -321,6 +323,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String DATA_USAGE_STAT = "view_data_usage_stat";
         public static final String STREAM_ITEMS = "view_stream_items";
         public static final String METADATA_SYNC = "view_metadata_sync";
+        public static final String METADATA_SYNC_STATE = "view_metadata_sync_state";
     }
 
     public interface Projections {
@@ -756,6 +759,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         static final String CONCRETE_ACCOUNT_ID = Tables.METADATA_SYNC + "." + ACCOUNT_ID;
         static final String CONCRETE_DELETED = Tables.METADATA_SYNC + "." +
                 MetadataSync.DELETED;
+    }
+
+    public interface MetadataSyncStateColumns {
+        static final String CONCRETE_ID = Tables.METADATA_SYNC_STATE + "._id";
+        static final String ACCOUNT_ID = "account_id";
+        static final String CONCRETE_ACCOUNT_ID = Tables.METADATA_SYNC_STATE + "." + ACCOUNT_ID;
     }
 
     private  interface EmailQuery {
@@ -1640,6 +1649,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 PreAuthorizedUris.URI + " STRING NOT NULL, " +
                 PreAuthorizedUris.EXPIRATION + " INTEGER NOT NULL DEFAULT 0);");
 
+        db.execSQL("CREATE TABLE IF NOT EXISTS "
+                + Tables.METADATA_SYNC_STATE + " (" +
+                MetadataSyncState._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                MetadataSyncStateColumns.ACCOUNT_ID + " INTEGER NOT NULL," +
+                MetadataSyncState.STATE + " BLOB);");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS metadata_sync_state_index ON " +
+                Tables.METADATA_SYNC_STATE + " (" +
+                MetadataSyncColumns.ACCOUNT_ID +");");
+
         // When adding new tables, be sure to also add size-estimates in updateSqliteStats
         createContactsViews(db);
         createGroupsView(db);
@@ -2230,6 +2249,19 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + ")";
 
         db.execSQL("CREATE VIEW " + Views.METADATA_SYNC + " AS " + metadataSyncSelect);
+
+        String metadataSyncStateSelect = "SELECT " +
+                MetadataSyncStateColumns.CONCRETE_ID + ", " +
+                AccountsColumns.ACCOUNT_NAME + ", " +
+                AccountsColumns.ACCOUNT_TYPE + ", " +
+                AccountsColumns.DATA_SET + ", " +
+                MetadataSyncState.STATE +
+                " FROM " + Tables.METADATA_SYNC_STATE
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   MetadataSyncStateColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                + ")";
+
+        db.execSQL("CREATE VIEW " + Views.METADATA_SYNC_STATE + " AS " + metadataSyncStateSelect);
     }
 
     private static String buildDisplayPhotoUriAlias(String contactIdColumn, String alias) {
@@ -2995,6 +3027,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeToVersion1104(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 1104;
+        }
+
+        if (oldVersion < 1105) {
+            upgradeToVersion1105(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1105;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4568,6 +4606,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Add new metadata_sync_state table to store the metadata sync state for a set of accounts.
+     */
+    public void upgradeToVersion1105(SQLiteDatabase db) {
+        db.execSQL("DROP TABLE IF EXISTS metadata_sync_state;");
+        db.execSQL("CREATE TABLE metadata_sync_state (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "account_id INTEGER NOT NULL, state BLOB);");
+        db.execSQL("CREATE UNIQUE INDEX metadata_sync_state_index ON metadata_sync_state (" +
+                "account_id);");
+    }
+
+    /**
      * Generate hash_id from data1, data2 and data15 columns.
      * If one of data1 and data2 is not null, using data1 and data2 to get hash_id,
      * otherwise, using data15 to generate.
@@ -4809,6 +4859,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     null, "1");
             updateIndexStats(db, "properties",
                     "sqlite_autoindex_properties_1", "4 1");
+
+            updateIndexStats(db, Tables.METADATA_SYNC_STATE,
+                    "metadata_sync_state_index", "2 1 1");
 
             // Search index
             updateIndexStats(db, "search_index_docsize",
