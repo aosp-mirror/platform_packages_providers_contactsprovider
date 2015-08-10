@@ -58,12 +58,23 @@ public class ContactMetadataProvider extends ContentProvider {
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
     private static final int METADATA_SYNC = 1;
     private static final int METADATA_SYNC_ID = 2;
+    private static final int RAW_CONTACTS = 3;
+    private static final int RAW_CONTACTS_ID = 4;
+    private static final int DATA = 5;
+    private static final int DATA_ID = 6;
+    private static final int AGGREGATION_EXCEPTIONS = 7;
 
     private static final UriMatcher sURIMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
     static {
         sURIMatcher.addURI(MetadataSync.METADATA_AUTHORITY, "metadata_sync", METADATA_SYNC);
         sURIMatcher.addURI(MetadataSync.METADATA_AUTHORITY, "metadata_sync/#", METADATA_SYNC_ID);
+        sURIMatcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
+        sURIMatcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
+        sURIMatcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
+        sURIMatcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
+        sURIMatcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
+                AGGREGATION_EXCEPTIONS);
     }
 
     private static final Map<String, String> sMetadataProjectionMap = ProjectionMap.builder()
@@ -129,6 +140,15 @@ public class ContactMetadataProvider extends ContentProvider {
                         ContentUris.parseId(uri)));
                 break;
             }
+
+            case RAW_CONTACTS:
+            case RAW_CONTACTS_ID:
+            case DATA: // Includes data usage stats query.
+            case DATA_ID:
+            case AGGREGATION_EXCEPTIONS:
+                return mContactsProvider.query(
+                        uri, projection, selection, selectionArgs, sortOrder);
+
             default:
                 throw new IllegalArgumentException("Unknown URL " + uri);
         }
@@ -146,6 +166,16 @@ public class ContactMetadataProvider extends ContentProvider {
                 return MetadataSync.CONTENT_TYPE;
             case METADATA_SYNC_ID:
                 return MetadataSync.CONTENT_ITEM_TYPE;
+            case RAW_CONTACTS:
+                return ContactsContract.RawContacts.CONTENT_TYPE;
+            case RAW_CONTACTS_ID:
+                return ContactsContract.RawContacts.CONTENT_ITEM_TYPE;
+            case DATA:
+                return ContactsContract.Data.CONTENT_TYPE;
+            case DATA_ID:
+                return mContactsProvider.getType(uri);
+            case AGGREGATION_EXCEPTIONS:
+                return ContactsContract.AggregationExceptions.CONTENT_TYPE;
             default:
                 throw new IllegalArgumentException("Unknown URI: " + uri);
         }
