@@ -16,6 +16,18 @@
 package com.android.providers.contacts;
 
 
+import static com.android.providers.contacts.ContactsProvider2.getLimit;
+import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
+import com.android.common.content.ProjectionMap;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncStateColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
+import com.android.providers.contacts.util.SelectionBuilder;
+import com.android.providers.contacts.util.UserUtils;
+import com.google.common.annotations.VisibleForTesting;
+
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -32,23 +44,13 @@ import android.net.Uri;
 import android.os.Binder;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.MetadataSync;
+import android.provider.ContactsContract.MetadataSyncState;
 import android.text.TextUtils;
 import android.util.Log;
-import com.android.common.content.ProjectionMap;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsDatabaseHelper.Views;
-import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
-import com.android.providers.contacts.util.SelectionBuilder;
-import com.android.providers.contacts.util.UserUtils;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
-
-import static com.android.providers.contacts.ContactsProvider2.getLimit;
-import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
 /**
  * Simple content provider to handle directing contact metadata specific calls.
@@ -63,6 +65,7 @@ public class ContactMetadataProvider extends ContentProvider {
     private static final int DATA = 5;
     private static final int DATA_ID = 6;
     private static final int AGGREGATION_EXCEPTIONS = 7;
+    private static final int SYNC_STATE = 8;
 
     private static final UriMatcher sURIMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
@@ -75,6 +78,7 @@ public class ContactMetadataProvider extends ContentProvider {
         sURIMatcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
         sURIMatcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
                 AGGREGATION_EXCEPTIONS);
+        sURIMatcher.addURI(MetadataSync.METADATA_AUTHORITY, "metadata_sync_state", SYNC_STATE);
     }
 
     private static final Map<String, String> sMetadataProjectionMap = ProjectionMap.builder()
@@ -85,6 +89,14 @@ public class ContactMetadataProvider extends ContentProvider {
             .add(MetadataSync.DATA_SET)
             .add(MetadataSync.DATA)
             .add(MetadataSync.DELETED)
+            .build();
+
+    private static final Map<String, String> sSyncStateProjectionMap =ProjectionMap.builder()
+            .add(MetadataSyncState._ID)
+            .add(MetadataSyncState.ACCOUNT_TYPE)
+            .add(MetadataSyncState.ACCOUNT_NAME)
+            .add(MetadataSyncState.DATA_SET)
+            .add(MetadataSyncState.STATE)
             .build();
 
     private ContactsDatabaseHelper mDbHelper;
@@ -124,18 +136,17 @@ public class ContactMetadataProvider extends ContentProvider {
 
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String limit = getLimit(uri);
-        qb.setTables(Views.METADATA_SYNC);
-        qb.setProjectionMap(sMetadataProjectionMap);
-        qb.setStrict(true);
 
         final SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
 
         final int match = sURIMatcher.match(uri);
         switch (match) {
             case METADATA_SYNC:
+                setTablesAndProjectionMapForMetadata(qb);
                 break;
 
             case METADATA_SYNC_ID: {
+                setTablesAndProjectionMapForMetadata(qb);
                 selectionBuilder.addClause(getEqualityClause(MetadataSync._ID,
                         ContentUris.parseId(uri)));
                 break;
@@ -149,6 +160,9 @@ public class ContactMetadataProvider extends ContentProvider {
                 return mContactsProvider.query(
                         uri, projection, selection, selectionArgs, sortOrder);
 
+            case SYNC_STATE:
+                setTablesAndProjectionMapForSyncState(qb);
+                break;
             default:
                 throw new IllegalArgumentException("Unknown URL " + uri);
         }
@@ -176,6 +190,8 @@ public class ContactMetadataProvider extends ContentProvider {
                 return mContactsProvider.getType(uri);
             case AGGREGATION_EXCEPTIONS:
                 return ContactsContract.AggregationExceptions.CONTENT_TYPE;
+            case SYNC_STATE:
+                return MetadataSyncState.CONTENT_TYPE;
             default:
                 throw new IllegalArgumentException("Unknown URI: " + uri);
         }
@@ -186,15 +202,29 @@ public class ContactMetadataProvider extends ContentProvider {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
-            // Insert the new entry, and also parse the data column to update related tables.
-            final long metadataSyncId = updateOrInsertDataToMetadataSync(
-                    db, uri, values, /* isInsert = */ true);
-            db.setTransactionSuccessful();
-            return ContentUris.withAppendedId(uri, metadataSyncId);
+            final int matchedUriId = sURIMatcher.match(uri);
+            switch (matchedUriId) {
+                case METADATA_SYNC:
+                    // Insert the new entry, and also parse the data column to update related
+                    // tables.
+                    final long metadataSyncId = updateOrInsertDataToMetadataSync(
+                            db, uri, values, /* isInsert = */ true);
+                    db.setTransactionSuccessful();
+                    return ContentUris.withAppendedId(uri, metadataSyncId);
+                case SYNC_STATE:
+                    replaceAccountInfoByAccountId(uri, values);
+                    final Long syncStateId = db.replace(
+                            Tables.METADATA_SYNC_STATE, MetadataSyncColumns.ACCOUNT_ID, values);
+                    db.setTransactionSuccessful();
+                    return ContentUris.withAppendedId(uri, syncStateId);
+                default:
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Calling contact metadata insert on an unknown/invalid URI", uri));
+            }
         } finally {
             db.endTransaction();
         }
-}
+    }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -218,6 +248,20 @@ public class ContactMetadataProvider extends ContentProvider {
                     }
                     db.setTransactionSuccessful();
                     return numDeletes;
+                case SYNC_STATE:
+                    c = db.query(Views.METADATA_SYNC_STATE, new String[]{MetadataSyncState._ID},
+                            selection, selectionArgs, null, null, null);
+                    try {
+                        while (c.moveToNext()) {
+                            final long stateId = c.getLong(0);
+                            numDeletes += db.delete(Tables.METADATA_SYNC_STATE,
+                                    MetadataSyncState._ID + "=" + stateId, null);
+                        }
+                    } finally {
+                        c.close();
+                    }
+                    db.setTransactionSuccessful();
+                    return numDeletes;
                 default:
                     throw new IllegalArgumentException(mDbHelper.exceptionMessage(
                             "Calling contact metadata delete on an unknown/invalid URI", uri));
@@ -232,10 +276,28 @@ public class ContactMetadataProvider extends ContentProvider {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
-            // Update the metadata entry and parse the data column to update related tables.
-            updateOrInsertDataToMetadataSync(db, uri, values, /* isInsert = */ false);
-            db.setTransactionSuccessful();
-            return 1;
+            final int matchedUriId = sURIMatcher.match(uri);
+            switch (matchedUriId) {
+                case METADATA_SYNC:
+                case METADATA_SYNC_ID:
+                    // Update the metadata entry and parse the data column to update related tables.
+                    updateOrInsertDataToMetadataSync(db, uri, values, /* isInsert = */ false);
+                    db.setTransactionSuccessful();
+                    return 1;
+                case SYNC_STATE:
+                    // Only support update by account
+                    final long accountId = replaceAccountInfoByAccountId(uri, values);
+                    values.remove(MetadataSyncColumns.ACCOUNT_ID);
+                    final String selectionByAccountId = MetadataSyncStateColumns.ACCOUNT_ID + "=?";
+                    final String[] args = new String[1];
+                    args[0] = String.valueOf(accountId);
+                    db.update(Tables.METADATA_SYNC_STATE, values, selectionByAccountId, args);
+                    db.setTransactionSuccessful();
+                    return 1;
+                default:
+                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                            "Calling contact metadata update on an unknown/invalid URI", uri));
+            }
         } finally {
             db.endTransaction();
         }
@@ -272,6 +334,18 @@ public class ContactMetadataProvider extends ContentProvider {
         } finally {
             db.endTransaction();
         }
+    }
+
+    private void setTablesAndProjectionMapForMetadata(SQLiteQueryBuilder qb){
+        qb.setTables(Views.METADATA_SYNC);
+        qb.setProjectionMap(sMetadataProjectionMap);
+        qb.setStrict(true);
+    }
+
+    private void setTablesAndProjectionMapForSyncState(SQLiteQueryBuilder qb){
+        qb.setTables(Views.METADATA_SYNC_STATE);
+        qb.setProjectionMap(sSyncStateProjectionMap);
+        qb.setStrict(true);
     }
 
     /**

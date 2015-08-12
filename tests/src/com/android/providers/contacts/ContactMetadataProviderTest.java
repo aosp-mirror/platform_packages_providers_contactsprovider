@@ -16,6 +16,10 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
+import com.android.providers.contacts.testutil.RawContactUtil;
+import com.google.android.collect.Lists;
+
 import android.content.ContentProviderOperation;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -26,14 +30,13 @@ import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.MetadataSync;
+import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.RawContacts;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
-import com.android.providers.contacts.testutil.RawContactUtil;
-import com.google.android.collect.Lists;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -66,7 +69,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
             "    \"pinned\": 2\n" +
             "  }\n" +
             "  }";
-
+    private static byte[] TEST_SYNC_STATE1 = "sync state1".getBytes();
     private static String TEST_ACCOUNT_TYPE2 = "test_account_type2";
     private static String TEST_ACCOUNT_NAME2 = "test_account_name2";
     private static String TEST_DATA_SET2 = null;
@@ -85,7 +88,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
             "    \"pinned\": 2\n" +
             "  }\n" +
             "  }";
-
+    private static byte[] TEST_SYNC_STATE2 = "sync state2".getBytes();
     private static String SELECTION_BY_TEST_ACCOUNT1 = MetadataSync.ACCOUNT_NAME + "='" +
             TEST_ACCOUNT_NAME1 + "' AND " + MetadataSync.ACCOUNT_TYPE + "='" + TEST_ACCOUNT_TYPE1 +
             "' AND " + MetadataSync.DATA_SET + "='" + TEST_DATA_SET1 + "'";
@@ -229,9 +232,9 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
                         DataUsageFeedback.USAGE_TYPE_CALL)
                 .build();
         Cursor c1 = mContactMetadataProvider.query(uri1,
-                new String[] {Data.HASH_ID, Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY,
+                new String[]{Data.HASH_ID, Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY,
                         Data.LAST_TIME_USED, Data.TIMES_USED}, Data._ID + "=?",
-                new String[] {String.valueOf(dataId)}, null);
+                new String[]{String.valueOf(dataId)}, null);
         assertEquals(1, c1.getCount());
         c1.moveToNext();
         assertEquals(1, c1.getInt(4)); // times_used
@@ -241,9 +244,9 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
                         DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
                 .build();
         Cursor c2 = mContactMetadataProvider.query(uri2,
-                new String[] {Data.HASH_ID, Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY,
+                new String[]{Data.HASH_ID, Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY,
                         Data.LAST_TIME_USED, Data.TIMES_USED}, Data._ID + "=?",
-                new String[] {String.valueOf(dataId)}, null);
+                new String[]{String.valueOf(dataId)}, null);
         assertEquals(1, c2.getCount());
         // Check if times used for "long text" type is still 0.
         c2.moveToNext();
@@ -262,7 +265,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
 
         Cursor c = mContactMetadataProvider.query(AggregationExceptions.CONTENT_URI,
-                new String[] {ContactsContract.AggregationExceptions.TYPE}, null, null, null);
+                new String[]{ContactsContract.AggregationExceptions.TYPE}, null, null, null);
         assertEquals(1, c.getCount());
     }
 
@@ -455,7 +458,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
     }
 
     public void testUpdateForMetadataSyncId() {
-        Cursor c = mResolver.query(MetadataSync.CONTENT_URI, new String[] {MetadataSync._ID},
+        Cursor c = mResolver.query(MetadataSync.CONTENT_URI, new String[]{MetadataSync._ID},
                 SELECTION_BY_TEST_ACCOUNT1, null, null);
         assertEquals(1, c.getCount());
         c.moveToNext();
@@ -499,7 +502,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
     }
 
     public void testBulkInsert() {
-        Cursor c = mResolver.query(MetadataSync.CONTENT_URI, new String[] {MetadataSync._ID},
+        Cursor c = mResolver.query(MetadataSync.CONTENT_URI, new String[]{MetadataSync._ID},
                 SELECTION_BY_TEST_ACCOUNT1, null, null);
         assertEquals(1, c.getCount());
 
@@ -598,6 +601,52 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         assertEquals(0, c.getCount());
     }
 
+    public void testQueryMetadataSyncState() {
+        String selection = MetadataSyncState.ACCOUNT_NAME + "=?1 AND " +
+                MetadataSyncState.ACCOUNT_TYPE + "=?2 AND " + MetadataSyncState.DATA_SET + "=?3";
+        final String[] args = new String[]{TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1};
+        final String[] projection = new String[]{MetadataSyncState.STATE};
+        Cursor c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+        assertEquals(1, c.getCount());
+        c.moveToFirst();
+        assertTrue(Arrays.equals(TEST_SYNC_STATE1, c.getBlob(0)));
+        c.close();
+    }
+
+    public void testUpdateMetadataSyncState() {
+        mResolver.update(MetadataSyncState.CONTENT_URI, getSyncStateValues(TEST_ACCOUNT_NAME1,
+                TEST_ACCOUNT_TYPE1, TEST_DATA_SET1, TEST_SYNC_STATE2), null, null);
+        String selection = MetadataSyncState.ACCOUNT_NAME + "=?1 AND " +
+                MetadataSyncState.ACCOUNT_TYPE + "=?2 AND " + MetadataSyncState.DATA_SET + "=?3";
+        final String[] args = new String[]{TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1};
+        final String[] projection =  new String[] {MetadataSyncState.STATE};
+        Cursor c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+
+        assertEquals(1, c.getCount());
+        c.moveToFirst();
+        assertTrue(Arrays.equals(TEST_SYNC_STATE2, c.getBlob(0)));
+        c.close();
+    }
+
+    public void testDeleteMetadataSyncState() {
+        String selection = MetadataSyncState.ACCOUNT_NAME + "=?1 AND " +
+                MetadataSyncState.ACCOUNT_TYPE + "=?2 AND " + MetadataSyncState.DATA_SET + "=?3";
+        final String[] args = new String[]{TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1};
+        final String[] projection = new String[]{MetadataSyncState.STATE};
+        Cursor c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+        assertEquals(1, c.getCount());
+        c.close();
+
+        mResolver.delete(MetadataSyncState.CONTENT_URI, selection, args);
+        c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+        assertEquals(0, c.getCount());
+        c.close();
+    }
+
     private void setupData() {
         mTestAccount = new AccountWithDataSet(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1,
                 TEST_DATA_SET1);
@@ -605,11 +654,15 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
                 mResolver, mTestAccount);
         createAccount(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1);
         insertMetadata(getDefaultValues());
+        insertMetadataSyncState(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1,
+                TEST_SYNC_STATE1);
 
         // Insert another entry for another account
         createAccount(TEST_ACCOUNT_NAME2, TEST_ACCOUNT_TYPE2, TEST_DATA_SET2);
         insertMetadata(TEST_ACCOUNT_NAME2, TEST_ACCOUNT_TYPE2, TEST_DATA_SET2, TEST_BACKUP_ID2,
                 TEST_DATA2, 0);
+        insertMetadataSyncState(TEST_ACCOUNT_NAME2, TEST_ACCOUNT_TYPE2, TEST_DATA_SET2,
+                TEST_SYNC_STATE2);
     }
 
     private ContentValues getDefaultValues() {
@@ -643,5 +696,21 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
 
     private long insertMetadata(ContentValues values) {
         return ContentUris.parseId(mResolver.insert(MetadataSync.CONTENT_URI, values));
+    }
+
+    private long insertMetadataSyncState(String accountName, String accountType,
+            String dataSet, byte[] state) {
+        return ContentUris.parseId(mResolver.insert(MetadataSyncState.CONTENT_URI,
+                getSyncStateValues(accountName, accountType, dataSet, state)));
+    }
+
+    private ContentValues getSyncStateValues(String accountName, String accountType,
+            String dataSet, byte[] state) {
+        ContentValues values = new ContentValues();
+        values.put(MetadataSyncState.ACCOUNT_NAME, accountName);
+        values.put(MetadataSyncState.ACCOUNT_TYPE, accountType);
+        values.put(MetadataSyncState.DATA_SET, dataSet);
+        values.put(MetadataSyncState.STATE, state);
+        return values;
     }
 }
