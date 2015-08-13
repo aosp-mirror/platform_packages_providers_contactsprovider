@@ -119,7 +119,7 @@ public class ContactLookupKey {
             return list;
         }
 
-        String string = Uri.decode(lookupKey);
+        String string = lookupKey;
         int offset = 0;
         int length = string.length();
         int hashCode = 0;
