@@ -2304,6 +2304,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @param uri The URI being accessed.
      * @return Whether the URI is a pre-authorized URI that is still valid.
      */
+    @VisibleForTesting
     public boolean isValidPreAuthorizedUri(Uri uri) {
         // Only proceed if the URI has a permission token parameter.
         if (uri.getQueryParameter(PREAUTHORIZED_URI_TOKEN) != null) {
