@@ -337,8 +337,9 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         }
 
         ContactLocaleUtils.setLocale(LOCALE_UKRAINIAN);
-        assertEquals("\u0407", getLabel(UKRAINIAN_NAME));
-        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_2));
+        assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
+        assertEquals("\u0407", getLabel(UKRAINIAN_NAME_2));
+        assertEquals("\u0490", getLabel(UKRAINIAN_NAME_3));
         assertEquals("B", getLabel("Bob Smith"));
     }
 
