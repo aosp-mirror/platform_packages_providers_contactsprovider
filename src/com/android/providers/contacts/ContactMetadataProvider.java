@@ -15,19 +15,6 @@
  */
 package com.android.providers.contacts;
 
-
-import static com.android.providers.contacts.ContactsProvider2.getLimit;
-import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
-import com.android.common.content.ProjectionMap;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncStateColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsDatabaseHelper.Views;
-import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
-import com.android.providers.contacts.util.SelectionBuilder;
-import com.android.providers.contacts.util.UserUtils;
-import com.google.common.annotations.VisibleForTesting;
-
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -47,10 +34,22 @@ import android.provider.ContactsContract.MetadataSync;
 import android.provider.ContactsContract.MetadataSyncState;
 import android.text.TextUtils;
 import android.util.Log;
+import com.android.common.content.ProjectionMap;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncStateColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
+import com.android.providers.contacts.util.SelectionBuilder;
+import com.android.providers.contacts.util.UserUtils;
+import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
+
+import static com.android.providers.contacts.ContactsProvider2.getLimit;
+import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
 /**
  * Simple content provider to handle directing contact metadata specific calls.
@@ -60,24 +59,13 @@ public class ContactMetadataProvider extends ContentProvider {
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
     private static final int METADATA_SYNC = 1;
     private static final int METADATA_SYNC_ID = 2;
-    private static final int RAW_CONTACTS = 3;
-    private static final int RAW_CONTACTS_ID = 4;
-    private static final int DATA = 5;
-    private static final int DATA_ID = 6;
-    private static final int AGGREGATION_EXCEPTIONS = 7;
-    private static final int SYNC_STATE = 8;
+    private static final int SYNC_STATE = 3;
 
     private static final UriMatcher sURIMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
     static {
         sURIMatcher.addURI(MetadataSync.METADATA_AUTHORITY, "metadata_sync", METADATA_SYNC);
         sURIMatcher.addURI(MetadataSync.METADATA_AUTHORITY, "metadata_sync/#", METADATA_SYNC_ID);
-        sURIMatcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
-        sURIMatcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
-        sURIMatcher.addURI(ContactsContract.AUTHORITY, "data", DATA);
-        sURIMatcher.addURI(ContactsContract.AUTHORITY, "data/#", DATA_ID);
-        sURIMatcher.addURI(ContactsContract.AUTHORITY, "aggregation_exceptions",
-                AGGREGATION_EXCEPTIONS);
         sURIMatcher.addURI(MetadataSync.METADATA_AUTHORITY, "metadata_sync_state", SYNC_STATE);
     }
 
@@ -152,14 +140,6 @@ public class ContactMetadataProvider extends ContentProvider {
                 break;
             }
 
-            case RAW_CONTACTS:
-            case RAW_CONTACTS_ID:
-            case DATA: // Includes data usage stats query.
-            case DATA_ID:
-            case AGGREGATION_EXCEPTIONS:
-                return mContactsProvider.query(
-                        uri, projection, selection, selectionArgs, sortOrder);
-
             case SYNC_STATE:
                 setTablesAndProjectionMapForSyncState(qb);
                 break;
@@ -180,16 +160,6 @@ public class ContactMetadataProvider extends ContentProvider {
                 return MetadataSync.CONTENT_TYPE;
             case METADATA_SYNC_ID:
                 return MetadataSync.CONTENT_ITEM_TYPE;
-            case RAW_CONTACTS:
-                return ContactsContract.RawContacts.CONTENT_TYPE;
-            case RAW_CONTACTS_ID:
-                return ContactsContract.RawContacts.CONTENT_ITEM_TYPE;
-            case DATA:
-                return ContactsContract.Data.CONTENT_TYPE;
-            case DATA_ID:
-                return mContactsProvider.getType(uri);
-            case AGGREGATION_EXCEPTIONS:
-                return ContactsContract.AggregationExceptions.CONTENT_TYPE;
             case SYNC_STATE:
                 return MetadataSyncState.CONTENT_TYPE;
             default:
