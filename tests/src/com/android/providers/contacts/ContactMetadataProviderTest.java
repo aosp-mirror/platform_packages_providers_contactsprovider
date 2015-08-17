@@ -16,24 +16,19 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
-import com.android.providers.contacts.testutil.RawContactUtil;
-import com.google.android.collect.Lists;
-
 import android.content.ContentProviderOperation;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
-import android.provider.ContactsContract;
-import android.provider.ContactsContract.AggregationExceptions;
-import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.DataUsageFeedback;
 import android.provider.ContactsContract.MetadataSync;
 import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.RawContacts;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
+import com.android.providers.contacts.testutil.RawContactUtil;
+import com.google.android.collect.Lists;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -174,99 +169,6 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         } catch (Exception e) {
             // Expected.
         }
-    }
-
-    public void testQueryRawContact() {
-        // Create a raw contact.
-        long rawContactId = RawContactUtil.createRawContactWithAccountDataSet(
-                mResolver, mTestAccount);
-        Cursor c = mContactMetadataProvider.query(RawContacts.CONTENT_URI,
-                new String[]{RawContacts._ID}, RawContacts._ID + "=?",
-                new String[]{String.valueOf(rawContactId)}, null);
-        assertEquals(1, c.getCount());
-    }
-
-    public void testQueryData() {
-        // Create a raw contact.
-        long rawContactId = RawContactUtil.createRawContactWithAccountDataSet(
-                mResolver, mTestAccount);
-        // Create a data for the raw contact.
-        ContentValues values = new ContentValues();
-        values.put(Data.RAW_CONTACT_ID, rawContactId);
-        values.put(Data.MIMETYPE, "testmimetype");
-        values.put(Data.RES_PACKAGE, "oldpackage");
-        values.put(Data.IS_PRIMARY, 1);
-        values.put(Data.IS_SUPER_PRIMARY, 1);
-        values.put(Data.DATA1, "one");
-        values.put(Data.DATA2, "two");
-        values.put(Data.DATA3, "three");
-        values.put(Data.DATA4, "four");
-        values.put(Data.DATA5, "five");
-        values.put(Data.DATA6, "six");
-        values.put(Data.DATA7, "seven");
-        values.put(Data.DATA8, "eight");
-        values.put(Data.DATA9, "nine");
-        values.put(Data.DATA10, "ten");
-        values.put(Data.DATA11, "eleven");
-        values.put(Data.DATA12, "twelve");
-        values.put(Data.DATA13, "thirteen");
-        values.put(Data.DATA14, "fourteen");
-        values.put(Data.DATA15, "fifteen".getBytes());
-        values.put(Data.CARRIER_PRESENCE, ContactsContract.Data.CARRIER_PRESENCE_VT_CAPABLE);
-        values.put(Data.SYNC1, "sync1");
-        values.put(Data.SYNC2, "sync2");
-        values.put(Data.SYNC3, "sync3");
-        values.put(Data.SYNC4, "sync4");
-        Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
-        long dataId = ContentUris.parseId(dataUri);
-        Uri dataUsageUri = ContactsContract.DataUsageFeedback.FEEDBACK_URI.buildUpon()
-                .appendPath(String.valueOf(dataId))
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
-                        DataUsageFeedback.USAGE_TYPE_CALL)
-                .build();
-        assertEquals(1, mResolver.update(dataUsageUri, new ContentValues(), null, null));
-
-        // Update data usage for dataId, times used changes from 0 to 1 for "CALL" type.
-        Uri uri1 = Data.CONTENT_URI.buildUpon()
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
-                        DataUsageFeedback.USAGE_TYPE_CALL)
-                .build();
-        Cursor c1 = mContactMetadataProvider.query(uri1,
-                new String[]{Data.HASH_ID, Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY,
-                        Data.LAST_TIME_USED, Data.TIMES_USED}, Data._ID + "=?",
-                new String[]{String.valueOf(dataId)}, null);
-        assertEquals(1, c1.getCount());
-        c1.moveToNext();
-        assertEquals(1, c1.getInt(4)); // times_used
-
-        Uri uri2 = Data.CONTENT_URI.buildUpon()
-                .appendQueryParameter(DataUsageFeedback.USAGE_TYPE,
-                        DataUsageFeedback.USAGE_TYPE_LONG_TEXT)
-                .build();
-        Cursor c2 = mContactMetadataProvider.query(uri2,
-                new String[]{Data.HASH_ID, Data.IS_PRIMARY, Data.IS_SUPER_PRIMARY,
-                        Data.LAST_TIME_USED, Data.TIMES_USED}, Data._ID + "=?",
-                new String[]{String.valueOf(dataId)}, null);
-        assertEquals(1, c2.getCount());
-        // Check if times used for "long text" type is still 0.
-        c2.moveToNext();
-        assertEquals(0, c2.getInt(4)); // times_used
-    }
-
-    public void testQueryAggregationExceptions() {
-        long rawContactId1 = RawContactUtil.createRawContactWithAccountDataSet(
-                mResolver, mTestAccount);
-        long rawContactId2 = RawContactUtil.createRawContactWithAccountDataSet(
-                mResolver, mTestAccount);
-        ContentValues values = new ContentValues();
-        values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
-        values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
-        values.put(AggregationExceptions.TYPE, 1/*TOGETHER*/);
-        mResolver.update(AggregationExceptions.CONTENT_URI, values, null, null);
-
-        Cursor c = mContactMetadataProvider.query(AggregationExceptions.CONTENT_URI,
-                new String[]{ContactsContract.AggregationExceptions.TYPE}, null, null, null);
-        assertEquals(1, c.getCount());
     }
 
     public void testInsertAndUpdateMetadataSync() {
