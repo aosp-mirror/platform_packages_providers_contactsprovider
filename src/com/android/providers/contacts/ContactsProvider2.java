@@ -132,6 +132,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
 import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncStateColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
@@ -5121,6 +5122,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                         " FROM " + Tables.RAW_CONTACTS +
                                         " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
                                         accountIdParams);
+                        db.execSQL(
+                                "DELETE FROM " + Tables.METADATA_SYNC +
+                                        " WHERE " + MetadataSyncColumns.ACCOUNT_ID + " = ?",
+                                accountIdParams);
+                        db.execSQL(
+                                "DELETE FROM " + Tables.METADATA_SYNC_STATE +
+                                        " WHERE " + MetadataSyncStateColumns.ACCOUNT_ID + " = ?",
+                                accountIdParams);
 
                         // Delta API is only needed for regular contacts.
                         if (!inProfileMode()) {
