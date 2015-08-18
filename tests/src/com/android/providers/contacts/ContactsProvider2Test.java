@@ -57,6 +57,7 @@ import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.MetadataSync;
+import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.PinnedPositions;
@@ -6224,7 +6225,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 + " AND " + Data.MIMETYPE + "='testmimetype'", null);
         assertEquals(1, count);
         assertEquals(0, getCount(Data.CONTENT_URI, Data.RAW_CONTACT_ID + "=" + rawContactId
-                        + " AND " + Data.MIMETYPE + "='testmimetype'", null));
+                + " AND " + Data.MIMETYPE + "='testmimetype'", null));
         assertNetworkNotified(true);
     }
 
@@ -6561,6 +6562,98 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 safeRawContactId);
         assertStoredValue(safeStreamItemUri, StreamItems._ID, safeStreamItemId);
         assertStoredValue(safeStreamItemPhotoUri, StreamItemPhotos._ID, safeStreamItemPhotoId);
+    }
+
+    public void testMetadataSyncCleanedUpOnAccountRemoval() throws Exception {
+        Account doomedAccount = new Account("doom", "doom");
+        createAccount(doomedAccount.name, doomedAccount.type, null);
+        Account safeAccount = new Account("safe", "safe");
+        createAccount(safeAccount.name, safeAccount.type, null);
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        mActor.setAccounts(new Account[]{doomedAccount, safeAccount});
+        cp.onAccountsUpdated(new Account[]{doomedAccount, safeAccount});
+
+        ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
+                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
+        // are using different dbHelpers.
+        contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
+                mActor.provider).getDatabaseHelper(getContext()));
+
+        // Create a doomed metadata.
+        String backupId = "backupIdForDoomed";
+        ContentValues metadataValues = new ContentValues();
+        metadataValues.put(MetadataSync.RAW_CONTACT_BACKUP_ID, backupId);
+        metadataValues.put(MetadataSync.ACCOUNT_TYPE, doomedAccount.type);
+        metadataValues.put(MetadataSync.ACCOUNT_NAME, doomedAccount.name);
+        metadataValues.put(MetadataSync.DATA,
+                getDefaultMetadataJSONString(doomedAccount.type, doomedAccount.name, backupId));
+        Uri doomedMetadataUri = mResolver.insert(MetadataSync.CONTENT_URI, metadataValues);
+        // Create a doomed metadata sync state.
+        ContentValues syncStateValues = new ContentValues();
+        syncStateValues.put(MetadataSyncState.ACCOUNT_TYPE, doomedAccount.type);
+        syncStateValues.put(MetadataSyncState.ACCOUNT_NAME, doomedAccount.name);
+        syncStateValues.put(MetadataSyncState.STATE, "syncState");
+        mResolver.insert(MetadataSyncState.CONTENT_URI, syncStateValues);
+
+        // Create a safe metadata.
+        String backupId2 = "backupIdForSafe";
+        ContentValues insertedValues2 = new ContentValues();
+        insertedValues2.put(MetadataSync.RAW_CONTACT_BACKUP_ID, backupId2);
+        insertedValues2.put(MetadataSync.ACCOUNT_TYPE, safeAccount.type);
+        insertedValues2.put(MetadataSync.ACCOUNT_NAME, safeAccount.name);
+        insertedValues2.put(MetadataSync.DATA,
+                getDefaultMetadataJSONString(safeAccount.type, safeAccount.name, backupId2));
+        Uri safeMetadataUri = mResolver.insert(MetadataSync.CONTENT_URI, insertedValues2);
+        // Create a safe metadata sync state.
+        ContentValues syncStateValues2 = new ContentValues();
+        syncStateValues2.put(MetadataSyncState.ACCOUNT_TYPE, safeAccount.type);
+        syncStateValues2.put(MetadataSyncState.ACCOUNT_NAME, safeAccount.name);
+        syncStateValues2.put(MetadataSyncState.STATE, "syncState2");
+        mResolver.insert(MetadataSyncState.CONTENT_URI, syncStateValues2);
+
+        // Remove the doomed account.
+        mActor.setAccounts(new Account[]{safeAccount});
+        cp.onAccountsUpdated(new Account[]{safeAccount});
+
+        // Check that the doomed stuff has all been nuked.
+        ContentValues[] noValues = new ContentValues[0];
+        assertStoredValues(doomedMetadataUri, noValues);
+        String selection = MetadataSyncState.ACCOUNT_NAME + "=?1 AND "
+                + MetadataSyncState.ACCOUNT_TYPE + "=?2";
+        String[] args = new String[]{doomedAccount.name, doomedAccount.type};
+        final String[] projection = new String[]{MetadataSyncState.STATE};
+        Cursor c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+        assertEquals(0, c.getCount());
+
+        // Check that the safe stuff lives on.
+        assertStoredValue(safeMetadataUri, MetadataSync.RAW_CONTACT_BACKUP_ID, backupId2);
+        args = new String[]{safeAccount.name, safeAccount.type};
+        c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+        assertEquals(1, c.getCount());
+        c.moveToNext();
+        assertEquals("syncState2", c.getString(0));
+        c.close();
+    }
+
+    private String getDefaultMetadataJSONString(
+            String accountType, String accountName, String backupId) {
+        return "{\n" +
+                "  \"unique_contact_id\": {\n" +
+                "    \"account_type\": \"CUSTOM_ACCOUNT\",\n" +
+                "    \"custom_account_type\": " + accountType + ",\n" +
+                "    \"account_name\": " + accountName + ",\n" +
+                "    \"contact_id\": " + backupId + ",\n" +
+                "    \"data_set\": \"FOCUS\"\n" +
+                "  },\n" +
+                "  \"contact_prefs\": {\n" +
+                "    \"send_to_voicemail\": true,\n" +
+                "    \"starred\": true,\n" +
+                "    \"pinned\": 1\n" +
+                "  }\n" +
+                "  }";
     }
 
     public void testContactDeletion() {
