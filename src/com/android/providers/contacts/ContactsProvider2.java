@@ -5323,7 +5323,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_AS_VCARD: {
-                final String lookupKey = Uri.encode(uri.getPathSegments().get(2));
+                final String lookupKey = uri.getPathSegments().get(2);
                 long contactId = lookupContactIdByLookupKey(db, lookupKey);
                 qb.setTables(Views.CONTACTS);
                 qb.setProjectionMap(sContactsVCardProjectionMap);
@@ -8153,7 +8153,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // SQLite has limits on how many parameters can be used
                 // so the IDs are concatenated to a query string here instead
                 int index = 0;
-                for (String lookupKey : lookupKeyList) {
+                for (final String encodedLookupKey : lookupKeyList) {
+                    final String lookupKey = Uri.decode(encodedLookupKey);
                     inBuilder.append(index == 0 ? "(" : ",");
 
                     // TODO: Figure out what to do if the profile contact is in the list.
