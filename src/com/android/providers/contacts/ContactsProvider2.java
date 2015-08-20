@@ -2871,6 +2871,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mTransactionContext.get().markRawContactMetadataDirty(rawContactId,
                     /* isMetadataSyncAdapter =*/false);
         }
+        // If the new raw contact is inserted by a sync adapter, mark mSyncToMetadataNetWork as true
+        // so that it can trigger the metadata syncing from the server.
+        mSyncToMetadataNetWork |= callerIsSyncAdapter;
 
         final int aggregationMode = getIntValue(values, RawContacts.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_DEFAULT);

@@ -2961,6 +2961,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "1");
         assertStoredValue(rawContactUri, RawContacts.STARRED, "1");
         assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
+        // Notify metadata network on raw contact insertion
+        assertMetadataNetworkNotified(true);
     }
 
     public void testDeleteMetadataOnRawContactDelete() throws Exception {
@@ -6758,6 +6760,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
         version++;
         assertEquals(version, getVersion(uri));
+    }
+
+    public void testNotifyMetadataChangeForRawContactInsertBySyncAdapter() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        Uri uri = RawContacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, mAccount.name)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, mAccount.type)
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, true + "")
+                .build();
+
+        long rawContactId = ContentUris.parseId(mResolver.insert(uri, new ContentValues()));
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertMetadataDirty(rawContactUri, false);
+        // If the raw contact is inserted by sync adapter, it will notify metadata change no matter
+        // if there is any metadata change.
+        assertMetadataNetworkNotified(true);
     }
 
     public void testMarkAsMetadataDirtyForRawContactMetadataChange() {
