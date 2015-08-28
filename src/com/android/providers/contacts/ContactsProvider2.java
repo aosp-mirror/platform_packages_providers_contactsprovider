@@ -4913,6 +4913,42 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return rawContactId;
     }
 
+    interface AggregationExceptionQuery {
+        String TABLE = Tables.AGGREGATION_EXCEPTIONS;
+        String[] COLUMNS = new String[] {
+                AggregationExceptions.RAW_CONTACT_ID1,
+                AggregationExceptions.RAW_CONTACT_ID2
+        };
+        int RAW_CONTACT_ID1 = 0;
+        int RAW_CONTACT_ID2 = 1;
+        String SELECTION = AggregationExceptions.RAW_CONTACT_ID1 + "=? OR "
+                + AggregationExceptions.RAW_CONTACT_ID2 + "=?";
+    }
+
+    private Set<Long> queryAggregationRawContactIds(SQLiteDatabase db, long rawContactId) {
+        mSelectionArgs2[0] = String.valueOf(rawContactId);
+        mSelectionArgs2[1] = String.valueOf(rawContactId);
+        Set<Long> aggregationRawContactIds = new HashSet<>();
+        final Cursor c = db.query(AggregationExceptionQuery.TABLE,
+                AggregationExceptionQuery.COLUMNS, AggregationExceptionQuery.SELECTION,
+                mSelectionArgs2, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                final long rawContactId1 = c.getLong(AggregationExceptionQuery.RAW_CONTACT_ID1);
+                final long rawContactId2 = c.getLong(AggregationExceptionQuery.RAW_CONTACT_ID2);
+                if (rawContactId1 != rawContactId) {
+                    aggregationRawContactIds.add(rawContactId1);
+                }
+                if (rawContactId2 != rawContactId) {
+                    aggregationRawContactIds.add(rawContactId2);
+                }
+            }
+        } finally {
+            c.close();
+        }
+        return aggregationRawContactIds;
+    }
+
     /**
      * Update RawContact, Data, DataUsageStats, AggregationException tables from MetadataEntry.
      */
@@ -4964,6 +5000,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         // Update AggregationException table.
+        final Set<Long> aggregationRawContactIdsInServer = new HashSet<>();
         for (int i = 0; i < metadataEntry.mAggregationDatas.size(); i++) {
             final AggregationData aggregationData = metadataEntry.mAggregationDatas.get(i);
             final int typeInt = getAggregationType(aggregationData.mType, null);
@@ -4978,6 +5015,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
             values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
             values.put(AggregationExceptions.TYPE, typeInt);
+            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
+            if (rawContactId1 != rawContactId) {
+                aggregationRawContactIdsInServer.add(rawContactId1);
+            }
+            if (rawContactId2 != rawContactId) {
+                aggregationRawContactIdsInServer.add(rawContactId2);
+            }
+        }
+
+        // Delete AggregationExceptions from CP2 if it doesn't exist in server side.
+        Set<Long> aggregationRawContactIdsInLocal = queryAggregationRawContactIds(db, rawContactId);
+        Set<Long> rawContactIdsToBeDeleted = com.google.common.collect.Sets.difference(
+                aggregationRawContactIdsInLocal, aggregationRawContactIdsInServer);
+        for (Long deleteRawContactId : rawContactIdsToBeDeleted) {
+            ContentValues values = new ContentValues();
+            values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId);
+            values.put(AggregationExceptions.RAW_CONTACT_ID2, deleteRawContactId);
+            values.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE_AUTOMATIC);
             updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
         }
     }

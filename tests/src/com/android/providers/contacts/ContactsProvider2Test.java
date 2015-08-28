@@ -2831,6 +2831,20 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         String phoneNumber = "111-111-1111";
         Uri dataUri2 = insertPhoneNumber(rawContactId, phoneNumber);
 
+        // Aggregation should be deleted from local since it doesn't exist in server.
+        long toBeDeletedAggRawContactId = RawContactUtil.createRawContactWithName(
+                mResolver, account1);
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId, toBeDeletedAggRawContactId);
+
+        // Check if AggregationException table has one value.
+        assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.RAW_CONTACT_ID1,
+                rawContactId);
+        assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.RAW_CONTACT_ID2,
+                toBeDeletedAggRawContactId);
+        assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.TYPE,
+                AggregationExceptions.TYPE_KEEP_SEPARATE);
+
         String accountType2 = "accountType2";
         String accountName2 = "accountName2";
         Account account2 = new Account(accountName2, accountType2);
