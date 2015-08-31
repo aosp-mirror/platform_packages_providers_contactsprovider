@@ -17,7 +17,7 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android’ga asoslangan ilovalar"</string>
-    <string name="app_label" msgid="3389954322874982620">"Kontaktlar xotirasi"</string>
+    <string name="app_label" msgid="3389954322874982620">"Kontaktlar ombori"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontaktlar"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Kontaktlarni yangilash uchun ko‘proq xotira kerak."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Kontaktlar uchun xotirani yangilash"</string>
