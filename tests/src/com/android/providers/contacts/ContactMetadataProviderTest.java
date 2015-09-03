@@ -247,9 +247,9 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         updatedValues.put(MetadataSync.DATA_SET, TEST_DATA_SET1);
         updatedValues.put(MetadataSync.DATA, updatedJson);
         updatedValues.put(MetadataSync.DELETED, deleted);
-        assertEquals(1, mResolver.update(MetadataSync.CONTENT_URI, updatedValues, null, null));
+        mResolver.insert(MetadataSync.CONTENT_URI, updatedValues);
 
-        // Check if the update is correct.
+        // Check if the insert (actually update) is correct.
         assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, TEST_ACCOUNT_TYPE1);
         assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, TEST_ACCOUNT_NAME1);
         assertStoredValue(rawContactUri, RawContacts.DATA_SET, TEST_DATA_SET1);
@@ -258,8 +258,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
     }
 
-    public void testInsertMetadataWithoutUpdateTables() {
-        // If raw contact doesn't exist, don't update raw contact tables.
+    public void testInsertMetadata() {
         String backupId = "newBackupId";
         String deleted = "0";
         String insertJson = "{\n" +
@@ -342,53 +341,6 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         }
     }
 
-    public void testUpdateWithNullData() {
-        ContentValues  newValues =  new ContentValues();
-        String data = null;
-        newValues.put(MetadataSync.ACCOUNT_NAME, TEST_ACCOUNT_NAME1);
-        newValues.put(MetadataSync.ACCOUNT_TYPE, TEST_ACCOUNT_TYPE1);
-        newValues.put(MetadataSync.DATA_SET, TEST_DATA_SET1);
-        newValues.put(MetadataSync.RAW_CONTACT_BACKUP_ID, TEST_BACKUP_ID1);
-        newValues.put(MetadataSync.DATA, data);
-        newValues.put(MetadataSync.DELETED, 0);
-
-        try {
-            mResolver.update(MetadataSync.CONTENT_URI, newValues, null, null);
-        } catch (IllegalArgumentException e) {
-            // Expected.
-        }
-    }
-
-    public void testUpdateForMetadataSyncId() {
-        Cursor c = mResolver.query(MetadataSync.CONTENT_URI, new String[]{MetadataSync._ID},
-                SELECTION_BY_TEST_ACCOUNT1, null, null);
-        assertEquals(1, c.getCount());
-        c.moveToNext();
-        long metadataSyncId = c.getLong(0);
-        c.close();
-
-        Uri metadataUri = ContentUris.withAppendedId(MetadataSync.CONTENT_URI, metadataSyncId);
-        ContentValues  newValues =  new ContentValues();
-        String newData = "{\n" +
-                "  \"unique_contact_id\": {\n" +
-                "    \"account_type\": \"CUSTOM_ACCOUNT\",\n" +
-                "    \"custom_account_type\": " + TEST_ACCOUNT_TYPE1 + ",\n" +
-                "    \"account_name\": " + TEST_ACCOUNT_NAME1 + ",\n" +
-                "    \"contact_id\": " + TEST_BACKUP_ID1 + ",\n" +
-                "    \"data_set\": \"GOOGLE_PLUS\"\n" +
-                "  },\n" +
-                "  \"contact_prefs\": {\n" +
-                "    \"send_to_voicemail\": false,\n" +
-                "    \"starred\": false,\n" +
-                "    \"pinned\": 1\n" +
-                "  }\n" +
-                "  }";
-        newValues.put(MetadataSync.DATA, newData);
-        newValues.put(MetadataSync.DELETED, 0);
-        assertEquals(1, mResolver.update(metadataUri, newValues, null, null));
-        assertStoredValue(metadataUri, MetadataSync.DATA, newData);
-    }
-
     public void testDeleteMetadata() {
         //insert another metadata for TEST_ACCOUNT
         insertMetadata(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1, "2", TEST_DATA1, 0);
@@ -459,8 +411,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
                 "  }";
 
         ArrayList<ContentProviderOperation> ops = Lists.newArrayList();
-        ops.add(ContentProviderOperation.newUpdate(MetadataSync.CONTENT_URI)
-                .withSelection(SELECTION_BY_TEST_ACCOUNT1, null)
+        ops.add(ContentProviderOperation.newInsert(MetadataSync.CONTENT_URI)
                 .withValue(MetadataSync.ACCOUNT_NAME, TEST_ACCOUNT_NAME1)
                 .withValue(MetadataSync.ACCOUNT_TYPE, TEST_ACCOUNT_TYPE1)
                 .withValue(MetadataSync.DATA_SET, TEST_DATA_SET1)

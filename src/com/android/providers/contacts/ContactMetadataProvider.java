@@ -168,6 +168,9 @@ public class ContactMetadataProvider extends ContentProvider {
     }
 
     @Override
+    /**
+     * Insert or update if the raw is already existing.
+     */
     public Uri insert(Uri uri, ContentValues values) {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
@@ -177,8 +180,7 @@ public class ContactMetadataProvider extends ContentProvider {
                 case METADATA_SYNC:
                     // Insert the new entry, and also parse the data column to update related
                     // tables.
-                    final long metadataSyncId = updateOrInsertDataToMetadataSync(
-                            db, uri, values, /* isInsert = */ true);
+                    final long metadataSyncId = updateOrInsertDataToMetadataSync(db, uri, values);
                     db.setTransactionSuccessful();
                     return ContentUris.withAppendedId(uri, metadataSyncId);
                 case SYNC_STATE:
@@ -248,12 +250,7 @@ public class ContactMetadataProvider extends ContentProvider {
         try {
             final int matchedUriId = sURIMatcher.match(uri);
             switch (matchedUriId) {
-                case METADATA_SYNC:
-                case METADATA_SYNC_ID:
-                    // Update the metadata entry and parse the data column to update related tables.
-                    updateOrInsertDataToMetadataSync(db, uri, values, /* isInsert = */ false);
-                    db.setTransactionSuccessful();
-                    return 1;
+                // Do not support update metadata sync by update() method. Please use insert().
                 case SYNC_STATE:
                     // Only support update by account
                     final long accountId = replaceAccountInfoByAccountId(uri, values);
@@ -321,14 +318,11 @@ public class ContactMetadataProvider extends ContentProvider {
     /**
      * Insert or update a non-deleted entry to MetadataSync table, and also parse the data column
      * to update related tables for the raw contact.
-     * Set 'isInsert' as true if it's insert and false if update.
-     * Returns new inserted metadataSyncId if it's insert, and returns 1 if it's update.
+     * Returns new upserted metadataSyncId.
      */
-    private long updateOrInsertDataToMetadataSync(SQLiteDatabase db, Uri uri, ContentValues values,
-            boolean isInsert) {
+    private long updateOrInsertDataToMetadataSync(SQLiteDatabase db, Uri uri, ContentValues values) {
         final int matchUri = sURIMatcher.match(uri);
-        if ((isInsert && matchUri != METADATA_SYNC) ||
-                (!isInsert && matchUri != METADATA_SYNC && matchUri != METADATA_SYNC_ID)) {
+        if (matchUri != METADATA_SYNC) {
             throw new IllegalArgumentException(mDbHelper.exceptionMessage(
                     "Calling contact metadata insert or update on an unknown/invalid URI", uri));
         }
@@ -347,36 +341,27 @@ public class ContactMetadataProvider extends ContentProvider {
                     "Data column cannot be empty.", uri));
         }
 
-        long result = 0;
-        if (matchUri == METADATA_SYNC_ID) {
-            // Update for the metadataSyncId.
-            final long metadataSyncId = ContentUris.parseId(uri);
-            final String selection = MetadataSync._ID + "=?";
-            final String[] selectionArgs = new String[1];
-            selectionArgs[0] = String.valueOf(metadataSyncId);
-            db.update(Tables.METADATA_SYNC, values, selection, selectionArgs);
-            result = 1;
-        } else {
-            // Update or insert for backupId and account info.
-            final Long accountId = replaceAccountInfoByAccountId(uri, values);
-            final String rawContactBackupId = values.getAsString(MetadataSync.RAW_CONTACT_BACKUP_ID);
-            deleted = 0; //Only insert or update non-deleted metadata
-            if (accountId == null || rawContactBackupId == null) {
-                throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                        "Invalid identifier is found: accountId=" + accountId + "; " +
-                                "rawContactBackupId=" + rawContactBackupId, uri));
-            }
+        // Update or insert for backupId and account info.
+        final Long accountId = replaceAccountInfoByAccountId(uri, values);
+        final String rawContactBackupId = values.getAsString(
+                MetadataSync.RAW_CONTACT_BACKUP_ID);
+        // TODO (tingtingw): Consider a corner case: if there's raw with the same accountId and
+        // backupId, but deleted=1, (Deleted should be synced up to server and hard-deleted, but
+        // may be delayed.) In this case, should we not override it with delete=0? or should this
+        // be prevented by sync adapter side?.
+        deleted = 0; // Only insert or update non-deleted metadata
+        if (accountId == null || rawContactBackupId == null) {
+            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    "Invalid identifier is found: accountId=" + accountId + "; " +
+                            "rawContactBackupId=" + rawContactBackupId, uri));
+        }
 
-            if (isInsert) {
-                result = mDbHelper.insertMetadataSync(rawContactBackupId, accountId, data, deleted);
-                if (result <= 0) {
-                    throw new IllegalArgumentException(mDbHelper.exceptionMessage(
-                            "Metadata insertion failed. Values= " + values.toString(), uri));
-                }
-            } else {
-                mDbHelper.updateMetadataSync(rawContactBackupId, accountId, data, deleted);
-                result = 1;
-            }
+        // Update if it exists, otherwise insert.
+        final long metadataSyncId = mDbHelper.upsertMetadataSync(
+                rawContactBackupId, accountId, data, deleted);
+        if (metadataSyncId <= 0) {
+            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                    "Metadata upsertion failed. Values= " + values.toString(), uri));
         }
 
         // Parse the data column and update other tables.
@@ -385,7 +370,7 @@ public class ContactMetadataProvider extends ContentProvider {
         final MetadataEntry metadataEntry = MetadataEntryParser.parseDataToMetaDataEntry(data);
         mContactsProvider.updateFromMetaDataEntry(db, metadataEntry);
 
-        return result;
+        return metadataSyncId;
     }
 
     /**

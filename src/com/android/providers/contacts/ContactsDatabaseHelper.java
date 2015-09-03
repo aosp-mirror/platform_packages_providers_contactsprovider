@@ -6214,10 +6214,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 new String[] {String.valueOf(contactId)});
     }
 
-    public long insertMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
+    public long upsertMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
         if (mMetadataSyncInsert == null) {
             mMetadataSyncInsert = getWritableDatabase().compileStatement(
-                    "INSERT INTO " + Tables.METADATA_SYNC + "("
+                    "INSERT OR REPLACE INTO " + Tables.METADATA_SYNC + "("
                             + MetadataSync.RAW_CONTACT_BACKUP_ID + ", "
                             + MetadataSyncColumns.ACCOUNT_ID + ", "
                             + MetadataSync.DATA + ","
@@ -6230,23 +6230,5 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         mMetadataSyncInsert.bindString(3, data);
         mMetadataSyncInsert.bindLong(4, deleted);
         return mMetadataSyncInsert.executeInsert();
-    }
-
-    public void updateMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
-        if (mMetadataSyncUpdate == null) {
-            mMetadataSyncUpdate = getWritableDatabase().compileStatement(
-                    "UPDATE " + Tables.METADATA_SYNC
-                            + " SET " + MetadataSync.DATA + "=?,"
-                            + MetadataSync.DELETED + "=?"
-                            + " WHERE " + MetadataSync.RAW_CONTACT_BACKUP_ID + "=? AND "
-                            + MetadataSyncColumns.ACCOUNT_ID + "=?");
-        }
-
-        data = (data == null) ? "" : data;
-        mMetadataSyncUpdate.bindString(1, data);
-        mMetadataSyncUpdate.bindLong(2, deleted);
-        mMetadataSyncUpdate.bindString(3, backupId);
-        mMetadataSyncUpdate.bindLong(4, accountId);
-        mMetadataSyncUpdate.execute();
     }
 }
