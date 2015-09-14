@@ -16,7 +16,10 @@
 
 package com.android.providers.contacts;
 
+import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.provider.ContactsContract;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.SmallTest;
@@ -248,6 +251,44 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
                 threads[i].join();
             } catch (InterruptedException ignore) {
             }
+        }
+    }
+
+    public void testUpgradeHashId() {
+        // Create an account.
+        final long accountId = mDbHelper.getOrCreateAccountIdInTransaction(
+                AccountWithDataSet.LOCAL);
+        // Create a raw contact.
+        ContentValues rawContactValues = new ContentValues();
+        rawContactValues.put(ContactsDatabaseHelper.RawContactsColumns.ACCOUNT_ID, accountId);
+        final long rawContactId = mDb.insert(Tables.RAW_CONTACTS,null, rawContactValues);
+        assertTrue(rawContactId > 0);
+        // Create data for the raw contact Id.
+        final StringBuilder data1 = new StringBuilder();
+        for (int i = 0; i < 2048; i++) {
+            data1.append("L");
+        }
+        final String dataString = data1.toString();
+        final String hashId = mDbHelper.generateHashId(dataString, null, null);
+        final int mimeType = 1;
+        final ContentValues values = new ContentValues();
+        values.put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId);
+        values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, mimeType);
+        values.put(ContactsContract.Data.DATA1, dataString);
+        for (int i = 0; i < 2048; i++) {
+            assertTrue(mDb.insert(Tables.DATA, null, values) > 0);
+        }
+        mDbHelper.upgradeToVersion1101(mDb);
+        final Cursor c = mDb.query(Tables.DATA, new String[]{ContactsContract.Data.HASH_ID},
+                null, null, null, null, null);
+        try {
+            assertEquals(2048, c.getCount());
+            while (c.moveToNext()) {
+                final String expectedHashId = c.getString(0);
+                assertEquals(expectedHashId, hashId);
+            }
+        } finally {
+            c.close();
         }
     }
 }
