@@ -4562,16 +4562,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     // hash_id column. Usually data1 and data2 are two main columns to store data info.
     // But for photo, we don't use data1 and data2, instead, use data15 to store photo blob.
     // So this upgrade generates hash_id from (data1 + data2) or (data15) using sha-1.
-    private void upgradeToVersion1101(SQLiteDatabase db) {
+    public void upgradeToVersion1101(SQLiteDatabase db) {
         final SQLiteStatement update = db.compileStatement(
                 "UPDATE " + Tables.DATA +
                 " SET " + Data.HASH_ID + "=?" +
                 " WHERE " + Data._ID + "=?"
         );
-        final String selection = Data.HASH_ID + " IS NULL";
-        final Cursor c = db.query(Tables.DATA, new String[] {Data._ID, Data.DATA1, Data.DATA2,
-                        Data.DATA15},
-                selection, null, null, null, null);
+        final Cursor c = db.query(Tables.DATA,
+                new String[] {Data._ID, Data.DATA1, Data.DATA2, Data.DATA15},
+                null, null, null, null, Data._ID);
         try {
             while (c.moveToNext()) {
                 final long dataId = c.getLong(0);
