@@ -483,6 +483,26 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         c.close();
     }
 
+    public void testUpdateMetadataSyncState_NonExisting() {
+        // Delete the existing one first.
+        String selection = MetadataSyncState.ACCOUNT_NAME + "=?1 AND " +
+                MetadataSyncState.ACCOUNT_TYPE + "=?2 AND " + MetadataSyncState.DATA_SET + "=?3";
+        final String[] args = new String[]{TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1};
+
+        mResolver.delete(MetadataSyncState.CONTENT_URI, selection, args);
+
+        mResolver.update(MetadataSyncState.CONTENT_URI, getSyncStateValues(TEST_ACCOUNT_NAME1,
+                TEST_ACCOUNT_TYPE1, TEST_DATA_SET1, TEST_SYNC_STATE2), null, null);
+        final String[] projection =  new String[] {MetadataSyncState.STATE};
+        Cursor c = mResolver.query(MetadataSyncState.CONTENT_URI, projection, selection, args,
+                null);
+
+        assertEquals(1, c.getCount());
+        c.moveToFirst();
+        assertTrue(Arrays.equals(TEST_SYNC_STATE2, c.getBlob(0)));
+        c.close();
+    }
+
     public void testDeleteMetadataSyncState() {
         String selection = MetadataSyncState.ACCOUNT_NAME + "=?1 AND " +
                 MetadataSyncState.ACCOUNT_TYPE + "=?2 AND " + MetadataSyncState.DATA_SET + "=?3";

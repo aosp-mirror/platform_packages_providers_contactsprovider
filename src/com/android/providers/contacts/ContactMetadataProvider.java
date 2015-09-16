@@ -252,13 +252,15 @@ public class ContactMetadataProvider extends ContentProvider {
             switch (matchedUriId) {
                 // Do not support update metadata sync by update() method. Please use insert().
                 case SYNC_STATE:
-                    // Only support update by account
-                    final long accountId = replaceAccountInfoByAccountId(uri, values);
-                    values.remove(MetadataSyncColumns.ACCOUNT_ID);
-                    final String selectionByAccountId = MetadataSyncStateColumns.ACCOUNT_ID + "=?";
-                    final String[] args = new String[1];
-                    args[0] = String.valueOf(accountId);
-                    db.update(Tables.METADATA_SYNC_STATE, values, selectionByAccountId, args);
+                    // Only support update by account.
+                    final Long accountId = replaceAccountInfoByAccountId(uri, values);
+                    if (accountId == null) {
+                        throw new IllegalArgumentException(mDbHelper.exceptionMessage(
+                                "Invalid identifier is found for accountId", uri));
+                    }
+                    values.put(MetadataSyncColumns.ACCOUNT_ID, accountId);
+                    // Insert a new row if it doesn't exist.
+                    db.replace(Tables.METADATA_SYNC_STATE, null, values);
                     db.setTransactionSuccessful();
                     return 1;
                 default:
@@ -350,7 +352,11 @@ public class ContactMetadataProvider extends ContentProvider {
         // may be delayed.) In this case, should we not override it with delete=0? or should this
         // be prevented by sync adapter side?.
         deleted = 0; // Only insert or update non-deleted metadata
-        if (accountId == null || rawContactBackupId == null) {
+        if (accountId == null) {
+            // Do nothing, just return.
+            return 0;
+        }
+        if (rawContactBackupId == null) {
             throw new IllegalArgumentException(mDbHelper.exceptionMessage(
                     "Invalid identifier is found: accountId=" + accountId + "; " +
                             "rawContactBackupId=" + rawContactBackupId, uri));
