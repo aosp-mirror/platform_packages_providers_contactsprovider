@@ -9699,7 +9699,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if ("SEPARATE".equalsIgnoreCase(type)) {
             return AggregationExceptions.TYPE_KEEP_SEPARATE; // 2
         }
-        if ("UNSET".equalsIgnoreCase(type)) {
+        if ("AUTOMATIC".equalsIgnoreCase(type)) {
             return AggregationExceptions.TYPE_AUTOMATIC; // 0
         }
         if (defaultType != null) {
