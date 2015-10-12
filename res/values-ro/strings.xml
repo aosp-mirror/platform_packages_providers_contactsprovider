@@ -25,7 +25,7 @@
     <string name="default_directory" msgid="93961630309570294">"Agendă"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altul"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mesaj vocal de la "</string>
-    <string name="debug_dump_title" msgid="4916885724165570279">"Copiaţi baza de date a agendei"</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Copiați baza de date a agendei"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Sunteți pe cale 1) să faceţi o copie, pe stocarea internă, a bazei dvs. de date care include toate informaţiile referitoare la agendă și întregul jurnal de apeluri și 2) să trimiteți această copie prin e-mail. Nu uitați să ştergeţi această copie după ce aţi copiat-o de pe dispozitiv sau după ce a fost primit e-mailul."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ștergeţi acum"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Porniţi"</string>
