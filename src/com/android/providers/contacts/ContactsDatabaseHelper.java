@@ -128,7 +128,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1105;
+    static final int DATABASE_VERSION = 1106;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -3035,6 +3035,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1105;
         }
 
+        if (oldVersion < 1106) {
+            upgradeToVersion1106(db);
+            oldVersion = 1106;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4614,6 +4619,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "account_id INTEGER NOT NULL, state BLOB);");
         db.execSQL("CREATE UNIQUE INDEX metadata_sync_state_index ON metadata_sync_state (" +
                 "account_id);");
+    }
+
+    public void upgradeToVersion1106(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD post_dial_digits TEXT NOT NULL DEFAULT ''");
     }
 
     /**

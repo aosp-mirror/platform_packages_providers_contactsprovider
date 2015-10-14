@@ -116,6 +116,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap = new HashMap<String, String>();
         sCallsProjectionMap.put(Calls._ID, Calls._ID);
         sCallsProjectionMap.put(Calls.NUMBER, Calls.NUMBER);
+        sCallsProjectionMap.put(Calls.POST_DIAL_DIGITS, Calls.POST_DIAL_DIGITS);
         sCallsProjectionMap.put(Calls.NUMBER_PRESENTATION, Calls.NUMBER_PRESENTATION);
         sCallsProjectionMap.put(Calls.DATE, Calls.DATE);
         sCallsProjectionMap.put(Calls.DURATION, Calls.DURATION);
