@@ -130,8 +130,8 @@ public class DbModifierWithNotification implements DatabaseModifier {
         mContext.getContentResolver().notifyChange(Calls.CONTENT_URI, null, false);
 
         Intent intent = new Intent("android.intent.action.CALL_LOG_CHANGE");
-        intent.setComponent(new ComponentName("com.android.providers.calllogbackup",
-                "com.android.providers.calllogbackup.CallLogChangeReceiver"));
+        intent.setComponent(new ComponentName("com.android.calllogbackup",
+                "com.android.calllogbackup.CallLogChangeReceiver"));
 
         if (!mContext.getPackageManager().queryBroadcastReceivers(intent, 0).isEmpty()) {
             mContext.sendBroadcast(intent);
