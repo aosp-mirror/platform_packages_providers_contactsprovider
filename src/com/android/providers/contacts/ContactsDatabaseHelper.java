@@ -3042,7 +3042,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
 
         if (oldVersion < 1107) {
-            upgradeToVersion1106(db);
+            upgradeToVersion1107(db);
             oldVersion = 1107;
         }
 
