@@ -128,7 +128,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1106;
+    static final int DATABASE_VERSION = 1107;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1556,6 +1556,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.NUMBER + " TEXT," +
                 Calls.NUMBER_PRESENTATION + " INTEGER NOT NULL DEFAULT " +
                         Calls.PRESENTATION_ALLOWED + "," +
+                Calls.POST_DIAL_DIGITS + " TEXT NOT NULL DEFAULT ''," +
                 Calls.DATE + " INTEGER," +
                 Calls.DURATION + " INTEGER," +
                 Calls.DATA_USAGE + " INTEGER," +
@@ -3038,6 +3039,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1106) {
             upgradeToVersion1106(db);
             oldVersion = 1106;
+        }
+
+        if (oldVersion < 1107) {
+            upgradeToVersion1106(db);
+            oldVersion = 1107;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4623,6 +4629,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public void upgradeToVersion1106(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD post_dial_digits TEXT NOT NULL DEFAULT ''");
+    }
+
+    public void upgradeToVersion1107(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE calls ADD post_dial_digits TEXT NOT NULL DEFAULT ''");
+        } catch (SQLiteException ignore) {
+            // This is for devices which got initialized without a post_dial_digits
+            // column from version 1106. The exception indicates that the column is
+            // already present, so nothing needs to be done.
+        }
     }
 
     /**
