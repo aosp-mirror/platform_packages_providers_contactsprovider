@@ -462,14 +462,14 @@ public class CallLogProvider extends ContentProvider {
      */
     private void syncEntriesFromPrimaryUser(UserManager userManager) {
         final int userHandle = userManager.getUserHandle();
-        if (userHandle == UserHandle.USER_OWNER
-                || userManager.getUserInfo(userHandle).isManagedProfile()) {
+        // TODO: http://b/24944959
+        if (userManager.isSameProfileGroup(UserHandle.USER_SYSTEM, userHandle)) {
             return;
         }
 
         final long lastSyncTime = getLastSyncTime();
         final Uri uri = ContentProvider.maybeAddUserId(CallLog.Calls.CONTENT_URI,
-                UserHandle.USER_OWNER);
+                UserHandle.USER_SYSTEM);
         final Cursor cursor = getContext().getContentResolver().query(
                 uri,
                 CALL_LOG_SYNC_PROJECTION,
