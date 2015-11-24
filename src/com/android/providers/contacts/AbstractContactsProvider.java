@@ -16,18 +16,34 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.OperationApplicationException;
+import android.database.Cursor;
+import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteStatement;
 import android.database.sqlite.SQLiteTransactionListener;
 import android.net.Uri;
+import android.provider.BaseColumns;
+import android.provider.BrowserContract.Accounts;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.RawContacts;
 import android.util.Log;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * A common base class for the contacts and profile providers.  This handles much of the same
@@ -316,4 +332,190 @@ public abstract class AbstractContactsProvider extends ContentProvider
     protected abstract boolean yield(ContactsTransaction transaction);
 
     protected abstract void notifyChange();
+
+    private static final String ACCOUNTS_QUERY =
+            "SELECT * FROM " + Tables.ACCOUNTS + " ORDER BY " + BaseColumns._ID;
+
+    private static final String NUM_INVISIBLE_CONTACTS_QUERY =
+            "SELECT count(*) FROM " + Tables.CONTACTS;
+
+    private static final String NUM_VISIBLE_CONTACTS_QUERY =
+            "SELECT count(*) FROM " + Tables.DEFAULT_DIRECTORY;
+
+    private static final String NUM_RAW_CONTACTS_PER_CONTACT =
+            "SELECT _id, count(*) as c FROM " + Tables.RAW_CONTACTS
+                    + " GROUP BY " + RawContacts.CONTACT_ID;
+
+    private static final String MAX_RAW_CONTACTS_PER_CONTACT =
+            "SELECT max(c) FROM (" + NUM_RAW_CONTACTS_PER_CONTACT + ")";
+
+    private static final String AVG_RAW_CONTACTS_PER_CONTACT =
+            "SELECT avg(c) FROM (" + NUM_RAW_CONTACTS_PER_CONTACT + ")";
+
+    private static final String NUM_RAW_CONTACT_PER_ACCOUNT_PER_CONTACT =
+            "SELECT " + RawContactsColumns.ACCOUNT_ID + " AS aid"
+                    + ", " + RawContacts.CONTACT_ID + " AS cid"
+                    + ", count(*) AS c"
+                    + " FROM " + Tables.RAW_CONTACTS
+                    + " GROUP BY aid, cid";
+
+    private static final String RAW_CONTACTS_PER_ACCOUNT_PER_CONTACT =
+            "SELECT aid, sum(c) AS s, max(c) AS m, avg(c) AS a"
+                    + " FROM (" + NUM_RAW_CONTACT_PER_ACCOUNT_PER_CONTACT + ")"
+                    + " GROUP BY aid";
+
+    private static final String DATA_WITH_ACCOUNT =
+            "SELECT d._id AS did"
+            + ", d." + Data.RAW_CONTACT_ID + " AS rid"
+            + ", r." + RawContactsColumns.ACCOUNT_ID + " AS aid"
+            + " FROM " + Tables.DATA + " AS d JOIN " + Tables.RAW_CONTACTS + " AS r"
+            + " ON d." + Data.RAW_CONTACT_ID + "=r._id";
+
+    private static final String NUM_DATA_PER_ACCOUNT_PER_RAW_CONTACT =
+            "SELECT aid, rid, count(*) AS c"
+                    + " FROM (" + DATA_WITH_ACCOUNT + ")"
+                    + " GROUP BY aid, rid";
+
+    private static final String DATA_PER_ACCOUNT_PER_RAW_CONTACT =
+            "SELECT aid, sum(c) AS s, max(c) AS m, avg(c) AS a"
+                    + " FROM (" + NUM_DATA_PER_ACCOUNT_PER_RAW_CONTACT + ")"
+                    + " GROUP BY aid";
+
+    protected void dump(PrintWriter pw, String dbName) {
+        pw.print("Database: ");
+        pw.println(dbName);
+
+        if (mDbHelper == null) {
+            pw.println("mDbHelper is null");
+            return;
+        }
+        try {
+            pw.println("  Accounts:");
+            final SQLiteDatabase db = mDbHelper.getReadableDatabase();
+
+            try (Cursor c = db.rawQuery(ACCOUNTS_QUERY, null)) {
+                c.moveToPosition(-1);
+                while (c.moveToNext()) {
+                    pw.print("    ");
+                    dumpLongColumn(pw, c, BaseColumns._ID);
+                    pw.print(" ");
+                    dumpStringColumn(pw, c, AccountsColumns.ACCOUNT_NAME);
+                    pw.print(" ");
+                    dumpStringColumn(pw, c, AccountsColumns.ACCOUNT_TYPE);
+                    pw.print(" ");
+                    dumpStringColumn(pw, c, AccountsColumns.DATA_SET);
+                    pw.println();
+                }
+            }
+
+            pw.println();
+            pw.println("  Contacts:");
+            pw.print("    # of visible: ");
+            pw.print(longForQuery(db, NUM_VISIBLE_CONTACTS_QUERY));
+            pw.println();
+
+            pw.print("    # of invisible: ");
+            pw.print(longForQuery(db, NUM_INVISIBLE_CONTACTS_QUERY));
+            pw.println();
+
+            pw.print("    Max # of raw contacts: ");
+            pw.print(longForQuery(db, MAX_RAW_CONTACTS_PER_CONTACT));
+            pw.println();
+
+            pw.print("    Avg # of raw contacts: ");
+            pw.print(doubleForQuery(db, AVG_RAW_CONTACTS_PER_CONTACT));
+            pw.println();
+
+            pw.println();
+            pw.println("  Raw contacts (per account):");
+            try (Cursor c = db.rawQuery(RAW_CONTACTS_PER_ACCOUNT_PER_CONTACT, null)) {
+                c.moveToPosition(-1);
+                while (c.moveToNext()) {
+                    pw.print("    ");
+                    dumpLongColumn(pw, c, "aid");
+                    pw.print(" total # of raw contacts: ");
+                    dumpStringColumn(pw, c, "s");
+                    pw.print(", max # per contact: ");
+                    dumpLongColumn(pw, c, "m");
+                    pw.print(", avg # per contact: ");
+                    dumpDoubleColumn(pw, c, "a");
+                    pw.println();
+                }
+            }
+
+            pw.println();
+            pw.println("  Data (per account):");
+            try (Cursor c = db.rawQuery(DATA_PER_ACCOUNT_PER_RAW_CONTACT, null)) {
+                c.moveToPosition(-1);
+                while (c.moveToNext()) {
+                    pw.print("    ");
+                    dumpLongColumn(pw, c, "aid");
+                    pw.print(" total # of data:");
+                    dumpLongColumn(pw, c, "s");
+                    pw.print(", max # per raw contact: ");
+                    dumpLongColumn(pw, c, "m");
+                    pw.print(", avg # per raw contact: ");
+                    dumpDoubleColumn(pw, c, "a");
+                    pw.println();
+                }
+            }
+        } catch (Exception e) {
+            pw.println("Error: " + e);
+        }
+    }
+
+    private static void dumpStringColumn(PrintWriter pw, Cursor c, String column) {
+        final int index = c.getColumnIndex(column);
+        if (index == -1) {
+            pw.println("Column not found: " + column);
+            return;
+        }
+        final String value = c.getString(index);
+        if (value == null) {
+            pw.print("(null)");
+        } else if (value.length() == 0) {
+            pw.print("\"\"");
+        } else {
+            pw.print(value);
+        }
+    }
+
+    private static void dumpLongColumn(PrintWriter pw, Cursor c, String column) {
+        final int index = c.getColumnIndex(column);
+        if (index == -1) {
+            pw.println("Column not found: " + column);
+            return;
+        }
+        if (c.isNull(index)) {
+            pw.print("(null)");
+        } else {
+            pw.print(c.getLong(index));
+        }
+    }
+
+    private static void dumpDoubleColumn(PrintWriter pw, Cursor c, String column) {
+        final int index = c.getColumnIndex(column);
+        if (index == -1) {
+            pw.println("Column not found: " + column);
+            return;
+        }
+        if (c.isNull(index)) {
+            pw.print("(null)");
+        } else {
+            pw.print(c.getDouble(index));
+        }
+    }
+
+    private static long longForQuery(SQLiteDatabase db, String query) {
+        return DatabaseUtils.longForQuery(db, query, null);
+    }
+
+    private static double doubleForQuery(SQLiteDatabase db, String query) {
+        try (final Cursor c = db.rawQuery(query, null)) {
+            if (!c.moveToFirst()) {
+                return -1;
+            }
+            return c.getDouble(0);
+        }
+    }
 }

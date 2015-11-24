@@ -27,7 +27,9 @@ import android.net.Uri;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract.Intents;
 
+import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.Locale;
 
 /**
@@ -146,5 +148,10 @@ public class ProfileProvider extends AbstractContactsProvider {
     private void sendProfileChangedBroadcast() {
         final Intent intent = new Intent(Intents.ACTION_PROFILE_CHANGED);
         mDelegate.getContext().sendBroadcast(intent, READ_CONTACTS_PERMISSION);
+    }
+
+    @Override
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        dump(pw, "Profile");
     }
 }

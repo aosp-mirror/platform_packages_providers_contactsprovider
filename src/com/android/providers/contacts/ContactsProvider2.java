@@ -9661,15 +9661,28 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         if (mContactAggregator != null) {
+            pw.println();
             pw.print("Contact aggregator type: " + mContactAggregator.getClass() + "\n");
         }
+        pw.println();
         pw.print("FastScrollingIndex stats:\n");
-        pw.printf("request=%d  miss=%d (%d%%)  avg time=%dms\n",
+        pw.printf("  request=%d  miss=%d (%d%%)  avg time=%dms\n",
                 mFastScrollingIndexCacheRequestCount,
                 mFastScrollingIndexCacheMissCount,
                 safeDiv(mFastScrollingIndexCacheMissCount * 100,
                         mFastScrollingIndexCacheRequestCount),
                 safeDiv(mTotalTimeFastScrollingIndexGenerate, mFastScrollingIndexCacheMissCount));
+        pw.println();
+        pw.println();
+
+        // DB queries may be blocked and timed out, so do it at the end.
+
+        pw.println("Contacts stats:");
+        dump(pw, "Contacts");
+
+        pw.println();
+
+        mProfileProvider.dump(fd, pw, args);
     }
 
     private static final long safeDiv(long dividend, long divisor) {
