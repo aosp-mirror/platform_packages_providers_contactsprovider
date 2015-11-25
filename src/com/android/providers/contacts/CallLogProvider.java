@@ -83,7 +83,8 @@ public class CallLogProvider extends ContentProvider {
         Calls.DURATION,
         Calls.DATA_USAGE,
         Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-        Calls.PHONE_ACCOUNT_ID
+        Calls.PHONE_ACCOUNT_ID,
+        Calls.ADD_FOR_ALL_USERS
     };
 
     static final String[] MINIMAL_PROJECTION = new String[] { Calls._ID };
@@ -141,6 +142,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_PHOTO_ID, Calls.CACHED_PHOTO_ID);
         sCallsProjectionMap.put(Calls.CACHED_PHOTO_URI, Calls.CACHED_PHOTO_URI);
         sCallsProjectionMap.put(Calls.CACHED_FORMATTED_NUMBER, Calls.CACHED_FORMATTED_NUMBER);
+        sCallsProjectionMap.put(Calls.ADD_FOR_ALL_USERS, Calls.ADD_FOR_ALL_USERS);
     }
 
     private HandlerThread mBackgroundThread;
@@ -548,6 +550,12 @@ public class CallLogProvider extends ContentProvider {
             while (cursor.moveToNext()) {
                 values.clear();
                 DatabaseUtils.cursorRowToContentValues(cursor, values);
+
+                final boolean addForAllUsers = values.getAsInteger(Calls.ADD_FOR_ALL_USERS) == 1;
+                if (!addForAllUsers) {
+                    continue;
+                }
+
                 final String startTime = values.getAsString(Calls.DATE);
                 final String number = values.getAsString(Calls.NUMBER);
 
