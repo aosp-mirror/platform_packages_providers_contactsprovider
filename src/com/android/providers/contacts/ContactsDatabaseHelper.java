@@ -128,7 +128,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1107;
+    static final int DATABASE_VERSION = 1108;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1581,6 +1581,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.CACHED_PHOTO_ID + " INTEGER NOT NULL DEFAULT 0," +
                 Calls.CACHED_PHOTO_URI + " TEXT," +
                 Calls.CACHED_FORMATTED_NUMBER + " TEXT," +
+                Calls.ADD_FOR_ALL_USERS + " INTEGER NOT NULL DEFAULT 1," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
                 Voicemails.MIME_TYPE + " TEXT," +
@@ -3044,6 +3045,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1107) {
             upgradeToVersion1107(db);
             oldVersion = 1107;
+        }
+
+        if (oldVersion < 1108) {
+            upgradeToVersion1108(db);
+            oldVersion = 1108;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4639,6 +4645,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // column from version 1106. The exception indicates that the column is
             // already present, so nothing needs to be done.
         }
+    }
+
+    public void upgradeToVersion1108(SQLiteDatabase db) {
+        db.execSQL(
+                "ALTER TABLE calls ADD add_for_all_users INTEGER NOT NULL DEFAULT 1");
     }
 
     /**
