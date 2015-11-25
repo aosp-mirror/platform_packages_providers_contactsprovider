@@ -5393,7 +5393,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
-
         waitForAccess(mReadAccessLatch);
 
         // Query the profile DB if appropriate.
@@ -5402,6 +5401,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return mProfileProvider.query(uri, projection, selection, selectionArgs, sortOrder,
                     cancellationSignal);
         }
+        incrementStats(mQueryStats);
 
         // Otherwise proceed with a normal query against the contacts DB.
         switchToContactMode();
@@ -9677,7 +9677,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // DB queries may be blocked and timed out, so do it at the end.
 
-        pw.println("Contacts stats:");
         dump(pw, "Contacts");
 
         pw.println();

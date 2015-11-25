@@ -31,19 +31,19 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.database.sqlite.SQLiteStatement;
 import android.database.sqlite.SQLiteTransactionListener;
 import android.net.Uri;
+import android.os.Binder;
+import android.os.SystemClock;
 import android.provider.BaseColumns;
-import android.provider.BrowserContract.Accounts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.util.Log;
+import android.util.SparseBooleanArray;
+import android.util.SparseLongArray;
 
-import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
 
 /**
  * A common base class for the contacts and profile providers.  This handles much of the same
@@ -117,6 +117,19 @@ public abstract class AbstractContactsProvider extends ContentProvider
      */
     private SQLiteTransactionListener mSerializedDbTransactionListener;
 
+    private final long mStartTime = SystemClock.elapsedRealtime();
+
+    private final Object mStatsLock = new Object();
+    protected final SparseBooleanArray mAllCallingUids = new SparseBooleanArray();
+    protected final SparseLongArray mQueryStats = new SparseLongArray();
+    protected final SparseLongArray mBatchStats = new SparseLongArray();
+    protected final SparseLongArray mInsertStats = new SparseLongArray();
+    protected final SparseLongArray mUpdateStats = new SparseLongArray();
+    protected final SparseLongArray mDeleteStats = new SparseLongArray();
+    protected final SparseLongArray mInsertInBatchStats = new SparseLongArray();
+    protected final SparseLongArray mUpdateInBatchStats = new SparseLongArray();
+    protected final SparseLongArray mDeleteInBatchStats = new SparseLongArray();
+
     @Override
     public boolean onCreate() {
         Context context = getContext();
@@ -141,12 +154,28 @@ public abstract class AbstractContactsProvider extends ContentProvider
         mSerializedDbTransactionListener = listener;
     }
 
+    protected final void incrementStats(SparseLongArray stats) {
+        final int callingUid = Binder.getCallingUid();
+        synchronized (mStatsLock) {
+            stats.put(callingUid, stats.get(callingUid) + 1);
+            mAllCallingUids.put(callingUid, true);
+        }
+    }
+
+    protected final void incrementStats(SparseLongArray statsNonBatch,
+            SparseLongArray statsInBatch) {
+        final ContactsTransaction t = mTransactionHolder.get();
+        final boolean inBatch = t != null && t.isBatch();
+        incrementStats(inBatch ? statsInBatch : statsNonBatch);
+    }
+
     public ContactsTransaction getCurrentTransaction() {
         return mTransactionHolder.get();
     }
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
+        incrementStats(mInsertStats, mInsertInBatchStats);
         ContactsTransaction transaction = startTransaction(false);
         try {
             Uri result = insertInTransaction(uri, values);
@@ -162,6 +191,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
+        incrementStats(mDeleteStats, mDeleteInBatchStats);
         ContactsTransaction transaction = startTransaction(false);
         try {
             int deleted = deleteInTransaction(uri, selection, selectionArgs);
@@ -177,6 +207,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        incrementStats(mUpdateStats, mUpdateInBatchStats);
         ContactsTransaction transaction = startTransaction(false);
         try {
             int updated = updateInTransaction(uri, values, selection, selectionArgs);
@@ -192,6 +223,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
+        incrementStats(mBatchStats);
         ContactsTransaction transaction = startTransaction(true);
         int numValues = values.length;
         int opCount = 0;
@@ -218,6 +250,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
+        incrementStats(mBatchStats);
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "applyBatch: " + operations.size() + " ops");
         }
@@ -385,11 +418,37 @@ public abstract class AbstractContactsProvider extends ContentProvider
         pw.print("Database: ");
         pw.println(dbName);
 
+        pw.print("  Uptime: ");
+        pw.print((SystemClock.elapsedRealtime() - mStartTime) / (60 * 1000));
+        pw.println(" minutes");
+
+        synchronized (mStatsLock) {
+            pw.println();
+            pw.println("  Client activities:");
+            pw.println("    UID        Query  Insert Update Delete   Batch Insert Update Delete:");
+            for (int i = 0; i < mAllCallingUids.size(); i++) {
+                final int pid = mAllCallingUids.keyAt(i);
+                pw.println(String.format(
+                        "    %-9d %6d  %6d %6d %6d  %6d %6d %6d %6d",
+                        pid,
+                        mQueryStats.get(pid),
+                        mInsertStats.get(pid),
+                        mUpdateStats.get(pid),
+                        mDeleteStats.get(pid),
+                        mBatchStats.get(pid),
+                        mInsertInBatchStats.get(pid),
+                        mUpdateInBatchStats.get(pid),
+                        mDeleteInBatchStats.get(pid)
+                ));
+            }
+        }
+
         if (mDbHelper == null) {
             pw.println("mDbHelper is null");
             return;
         }
         try {
+            pw.println();
             pw.println("  Accounts:");
             final SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
