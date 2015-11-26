@@ -7389,7 +7389,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // TODO Test
     private Cursor queryPhoneLookupEnterprise(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
-        final String phoneNumber = Uri.decode(uri.getLastPathSegment());
+        // Unlike PHONE_LOOKUP, only decode once here even for SIP address. See bug 25900607.
+        final String phoneNumber = uri.getLastPathSegment();
         final boolean isSipAddress = uri.getBooleanQueryParameter(
                 PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
         final Uri.Builder builder = PhoneLookup.CONTENT_FILTER_URI
