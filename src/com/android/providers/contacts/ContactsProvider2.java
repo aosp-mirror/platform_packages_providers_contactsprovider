@@ -71,6 +71,7 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Authorization;
+import android.provider.ContactsContract.CommonDataKinds.Callable;
 import android.provider.ContactsContract.CommonDataKinds.Contactables;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
@@ -113,6 +114,7 @@ import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Base64;
 import android.util.Log;
 import com.android.common.content.ProjectionMap;
@@ -371,6 +373,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CONTACTABLES_FILTER = 3015;
     private static final int PHONES_ENTERPRISE = 3016;
     private static final int EMAILS_LOOKUP_ENTERPRISE = 3017;
+    private static final int PHONES_FILTER_ENTERPRISE = 3018;
+    private static final int CALLABLES_FILTER_ENTERPRISE = 3019;
 
     private static final int PHONE_LOOKUP = 4000;
     private static final int PHONE_LOOKUP_ENTERPRISE = 4001;
@@ -1268,6 +1272,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/#", PHONES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter_enterprise/", PHONES_FILTER_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter_enterprise/*", PHONES_FILTER_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails", EMAILS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/#", EMAILS_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup", EMAILS_LOOKUP);
@@ -1286,6 +1292,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/#", CALLABLES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter", CALLABLES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter/*", CALLABLES_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter_enterprise/", CALLABLES_FILTER_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter_enterprise/*", CALLABLES_FILTER_ENTERPRISE);
 
         matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/", CONTACTABLES);
         matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/filter", CONTACTABLES_FILTER);
@@ -6275,7 +6283,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
                 break;
             }
-
+            case PHONES_FILTER_ENTERPRISE:
+            case CALLABLES_FILTER_ENTERPRISE: {
+                return queryCallableEnterprise(uri, projection, selection, selectionArgs,
+                        sortOrder, match == CALLABLES_FILTER_ENTERPRISE);
+            }
             case EMAILS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
                 qb.appendWhere(" AND " + DataColumns.MIMETYPE_ID + " = "
@@ -7376,6 +7388,61 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         return queryCorpLookupIfNecessary(builder.build(), projection, null, null, null,
                 isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+    }
+
+    private static final Set<String> MODIFIED_KEY_SET_FOR_ENTERPRISE_CALLABLE_FILTER =
+            new ArraySet<String>(Arrays.asList(new String[] {
+                ContactsContract.DIRECTORY_PARAM_KEY
+            }));
+
+
+    /**
+     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE into
+     * personal/work ContactsProvider2
+     */
+    private Cursor queryCallableEnterprise(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, boolean isCallable) {
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        if (directory == null) {
+            throw new IllegalArgumentException("Directory id missing in URI: " + uri);
+        }
+
+        final String filterParam = uri.getPathSegments().size() > 3 ? uri.getLastPathSegment() : "";
+        final long directoryId = Long.parseLong(directory);
+        final String columnIdString = isCallable ? Callable._ID : Phone._ID;
+        final Uri initialUri = isCallable ? Callable.CONTENT_FILTER_URI :
+                Phone.CONTENT_FILTER_URI;
+        final Uri.Builder builder = initialUri.buildUpon()
+                .appendPath(filterParam);
+        addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_CALLABLE_FILTER);
+        // If the query contains remote directory id, it should query work CP2 or directory
+        // provider directory.
+        if (Directory.isEnterpriseDirectoryId(directoryId)) {
+            builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
+                    String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+
+            return queryCorpContacts(builder.build(), projection, selection, selectionArgs,
+                    sortOrder, columnIdString);
+        } else {
+            builder.appendQueryParameter(
+                    ContactsContract.DIRECTORY_PARAM_KEY,
+                    String.valueOf(directoryId));
+            return queryLocal(builder.build(), projection, selection,
+                    selectionArgs, sortOrder, directoryId, null);
+        }
+    }
+
+    private static final Uri.Builder addQueryParametersFromUri(Uri.Builder builder, Uri uri,
+            Set<String> ignoredKeys) {
+        Set<String> keys = uri.getQueryParameterNames();
+
+        for (String key : keys) {
+            if(ignoredKeys == null || !ignoredKeys.contains(key)) {
+                builder.appendQueryParameter(key, getQueryParameter(uri, key));
+            }
+        }
+
+        return builder;
     }
 
     /**
