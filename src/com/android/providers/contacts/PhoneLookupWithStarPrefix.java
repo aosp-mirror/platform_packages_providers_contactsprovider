@@ -124,7 +124,7 @@ import android.util.Log;
         while (cursor.moveToNext()) {
             final int numberIndex = cursor.getColumnIndex(PhoneLookup.NUMBER);
             final String phoneNumber = normalizeNumberWithStar(cursor.getString(numberIndex));
-            if (phoneNumber.startsWith("*")) {
+            if (phoneNumber != null && phoneNumber.startsWith("*")) {
                 return true;
             }
         }
