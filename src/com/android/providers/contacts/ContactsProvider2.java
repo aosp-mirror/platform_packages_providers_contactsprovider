@@ -402,6 +402,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int DIRECTORIES = 17001;
     private static final int DIRECTORIES_ID = 17002;
+    private static final int DIRECTORIES_ENTERPRISE = 17003;
+    private static final int DIRECTORIES_ID_ENTERPRISE = 17004;
 
     private static final int COMPLETE_NAME = 18000;
 
@@ -1320,6 +1322,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "directories", DIRECTORIES);
         matcher.addURI(ContactsContract.AUTHORITY, "directories/#", DIRECTORIES_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "directories_enterprise",
+                DIRECTORIES_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "directories_enterprise/#",
+                DIRECTORIES_ID_ENTERPRISE);
 
         matcher.addURI(ContactsContract.AUTHORITY, "complete_name", COMPLETE_NAME);
 
@@ -5407,17 +5414,30 @@ public class ContactsProvider2 extends AbstractContactsProvider
         switchToContactMode();
 
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+
         final long directoryId =
                 (directory == null ? -1 :
                 (directory.equals("0") ? Directory.DEFAULT :
-                (directory.equals("1") ? Directory.LOCAL_INVISIBLE : Long.MIN_VALUE)));
+                (directory.equals("1") ? Directory.LOCAL_INVISIBLE :
+                // Enterprise directory should uses queryLocal directly, as queryLocal will forward
+                // the call to work profile CP2 and query work directory providers.
+                (Directory.isEnterpriseDirectoryId(Long.parseLong(directory)) ?
+                        Directory.ENTERPRISE_DEFAULT : Long.MIN_VALUE))));
 
         if (directoryId > Long.MIN_VALUE) {
             final Cursor cursor = queryLocal(uri, projection, selection, selectionArgs, sortOrder,
                     directoryId, cancellationSignal);
-            return addSnippetExtrasToCursor(uri, cursor);
+            // Add snippet if it is not a corp directory call
+            return (directoryId == Directory.ENTERPRISE_DEFAULT) ? cursor
+                    : addSnippetExtrasToCursor(uri, cursor);
         }
+        return queryDirectoryAuthority(uri, projection, selection, selectionArgs, sortOrder,
+                directory, cancellationSignal);
+    }
 
+    private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, String directory,
+            final CancellationSignal cancellationSignal) {
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
         if (directoryInfo == null) {
             Log.e(TAG, "Invalid directory ID: " + uri);
@@ -6825,6 +6845,38 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
+            case DIRECTORIES_ENTERPRISE: {
+                return queryMergedDirectories(uri, projection, selection, selectionArgs,
+                        sortOrder);
+            }
+
+            case DIRECTORIES_ID_ENTERPRISE: {
+                // This method will return either primary directory or enterprise directory
+                final long inputDirectoryId = ContentUris.parseId(uri);
+                if (Directory.isEnterpriseDirectoryId(inputDirectoryId)) {
+                    final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
+                    if (corpUserId < 0) {
+                        // No Corp user or policy not allowed, return empty cursor
+                        final String[] outputProjection = (projection != null) ? projection
+                                : sDirectoryProjectionMap.getColumnNames();
+                        return new MatrixCursor(outputProjection);
+                    }
+                    final Uri remoteUri = maybeAddUserId(
+                            ContentUris.withAppendedId(Directory.CONTENT_URI,
+                                    inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
+                            corpUserId);
+                    final Cursor cursor = getContext().getContentResolver().query(remoteUri,
+                            projection, selection, selectionArgs, sortOrder);
+                    return rewriteCorpDirectories(cursor);
+                } else {
+                    // As it is not an enterprise directory id, fall back to original API
+                    final Uri localUri = ContentUris.withAppendedId(Directory.CONTENT_URI,
+                            inputDirectoryId);
+                    return queryLocal(localUri, projection, selection, selectionArgs,
+                            sortOrder, directoryId, cancellationSignal);
+                }
+            }
+
             case COMPLETE_NAME: {
                 return completeName(uri, projection);
             }
@@ -6937,6 +6989,45 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
+     * Handles {@link Directory#ENTERPRISE_CONTENT_URI}.
+     */
+    private Cursor queryMergedDirectories(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder) {
+        final Uri localUri = Directory.CONTENT_URI;
+        final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
+                sortOrder, Directory.DEFAULT, null);
+        Cursor corpCursor = null;
+        try {
+            final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
+            if (corpUserId < 0) {
+                // No Corp user or policy not allowed
+                return primaryCursor;
+            }
+            final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+            corpCursor = getContext().getContentResolver().query(remoteUri,
+                    projection, selection, selectionArgs, sortOrder, null);
+            if (corpCursor == null) {
+                // No corp results. Just return the local result.
+                return primaryCursor;
+            }
+            final Cursor[] cursorArray = new Cursor[] {
+                    primaryCursor, rewriteCorpDirectories(corpCursor)
+            };
+            final MergeCursor mergeCursor = new MergeCursor(cursorArray);
+            return mergeCursor;
+        } catch (Throwable th) {
+            if (primaryCursor != null) {
+                primaryCursor.close();
+            }
+            throw th;
+        } finally {
+            if (corpCursor != null) {
+                corpCursor.close();
+            }
+        }
+    }
+
+    /**
      * Handles {@link Phone#ENTERPRISE_CONTENT_URI}.
      */
     private Cursor queryMergedDataPhones(Uri uri, String[] projection, String selection,
@@ -6990,49 +7081,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private Cursor queryEnterpriseIfNecessary(Uri localUri, String[] projection, String selection,
+    /**
+     * Query corp CP2 lookup API directly.
+     */
+    private Cursor queryCorpLookup(Uri localUri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String contactIdColumnName) {
-
         final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
-
-        // Step 1. Look at the database on the current profile.
-        if (VERBOSE_LOGGING) {
-            Log.v(TAG, "queryPhoneLookupEnterprise: local query URI=" + localUri);
+        if (corpUserId < 0) {
+            return null;
         }
-        final Cursor local = queryLocal(localUri, projection, selection, selectionArgs,
-                sortOrder, /* directory */ 0, /* cancellationsignal */null);
-        try {
-            if (VERBOSE_LOGGING) {
-                MoreDatabaseUtils.dumpCursor(TAG, "local", local);
-            }
-
-            // If we found a result or there's no corp profile, just return it as-is.
-            if (local.getCount() > 0 || corpUserId < 0) {
-                return local;
-            }
-        } catch (Throwable th) { // If something throws, close the cursor.
-            local.close();
-            throw th;
-        }
-        // "local" is still open.  If we fail the managed CP2 query, we'll still return it.
-
-        // Step 2.  No rows found in the local db, and there is a corp profile. Look at the corp
-        // DB.
-
-        // Add the user-id to the URI, like "content://USER@com.android.contacts/...".
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
-
-        if (VERBOSE_LOGGING) {
-            Log.v(TAG, "queryPhoneLookupEnterprise: corp query URI=" + remoteUri);
-        }
-        // Note in order to re-write the cursor correctly, we need all columns from the corp cp2.
-        final Cursor corp = getContext().getContentResolver().query(remoteUri, null,
-                selection, selectionArgs, sortOrder, /* cancellationsignal */null);
+        // Note in order to re-write the cursor correctly, we need all columns from the corp
+        // cp2.
+        final Cursor corp = getContext().getContentResolver().query(remoteUri, null, selection,
+                selectionArgs, sortOrder, /* cancellationsignal */null);
         if (corp == null) {
-            return local;
+            return null;
         }
         try {
-            local.close();
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "corp raw", corp);
             }
@@ -7044,9 +7110,67 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
             return rewritten;
         } finally {
-            // Always close the corp cursor; as we just return the rewritten one.
             corp.close();
         }
+    }
+
+    /**
+     * Return local or corp lookup cursor. If it contains directory id, it must be a local directory
+     * id.
+     */
+    private Cursor queryCorpLookupIfNecessary(Uri localUri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, String contactIdColumnName) {
+
+        final String directory = getQueryParameter(localUri, ContactsContract.DIRECTORY_PARAM_KEY);
+        final long directoryId = (directory != null) ? Long.parseLong(directory)
+                : Directory.DEFAULT;
+
+        if (Directory.isEnterpriseDirectoryId(directoryId)) {
+            throw new IllegalArgumentException("Directory id must be a current profile id");
+        }
+        if (Directory.isRemoteDirectory(directoryId)) {
+            throw new IllegalArgumentException("Directory id must be a local directory id");
+        }
+
+        final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
+        // Step 1. Look at the database on the current profile.
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "queryCorpLookupIfNecessary: local query URI=" + localUri);
+        }
+        final Cursor local = queryLocal(localUri, projection, selection, selectionArgs,
+                sortOrder, /* directory */ directoryId, /* cancellationsignal */null);
+        try {
+            if (VERBOSE_LOGGING) {
+                MoreDatabaseUtils.dumpCursor(TAG, "local", local);
+            }
+            // If we found a result or there's no corp profile, just return it as-is.
+            if (local.getCount() > 0 || corpUserId < 0) {
+                return local;
+            }
+        } catch (Throwable th) { // If something throws, close the cursor.
+            local.close();
+            throw th;
+        }
+        // "local" is still open. If we fail the managed CP2 query, we'll still return it.
+
+        // Step 2.  No rows found in the local db, and there is a corp profile. Look at the corp
+        // DB.
+        Cursor rewrittenCorpCursor = null;
+        try {
+            rewrittenCorpCursor = queryCorpLookup(localUri, projection, selection,
+                    selectionArgs, sortOrder, contactIdColumnName);
+            if (rewrittenCorpCursor != null) {
+                local.close();
+                return rewrittenCorpCursor;
+            }
+        } catch (Throwable th) {
+            if (rewrittenCorpCursor != null) {
+                rewrittenCorpCursor.close();
+            }
+            local.close();
+            throw th;
+        }
+        return local;
     }
 
     /**
@@ -7058,12 +7182,33 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final String phoneNumber = Uri.decode(uri.getLastPathSegment());
         final boolean isSipAddress = uri.getBooleanQueryParameter(
                 PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
-        final Uri localUri = PhoneLookup.CONTENT_FILTER_URI
+        final Uri.Builder builder = PhoneLookup.CONTENT_FILTER_URI
                 .buildUpon()
                 .appendPath(phoneNumber)
                 .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
-                        String.valueOf(isSipAddress)).build();
-        return queryEnterpriseIfNecessary(localUri, projection, null, null, null,
+                        String.valueOf(isSipAddress));
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        if (directory != null) {
+            final long directoryId = Long.parseLong(directory);
+            // If the query contains remote directory id, it should query work CP2 or directory
+            // provider directory.
+            if (Directory.isRemoteDirectory(directoryId)) {
+                if (Directory.isEnterpriseDirectoryId(directoryId)) {
+                    builder.appendQueryParameter(
+                            ContactsContract.DIRECTORY_PARAM_KEY,
+                            String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+                    return queryCorpLookup(builder.build(), projection, null, null, null,
+                            isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+                } else {
+                    builder.appendQueryParameter(
+                            ContactsContract.DIRECTORY_PARAM_KEY,
+                            String.valueOf(directoryId));
+                    return queryDirectoryAuthority(builder.build(), projection, selection,
+                            selectionArgs, sortOrder, directory, null);
+                }
+            }
+        }
+        return queryCorpLookupIfNecessary(builder.build(), projection, null, null, null,
                 isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
     }
 
@@ -7081,8 +7226,47 @@ public class ContactsProvider2 extends AbstractContactsProvider
             newPathBuilder.append(pathSegments.get(i));
         }
         final Uri localUri = uri.buildUpon().path(newPathBuilder.toString()).build();
-        return queryEnterpriseIfNecessary(localUri, projection, selection, selectionArgs,
+        // TODO: Handle directory lookup
+        return queryCorpLookupIfNecessary(localUri, projection, selection, selectionArgs,
                 sortOrder, Data.CONTACT_ID);
+    }
+
+    // TODO: Add test case for this
+    static Cursor rewriteCorpDirectories(Cursor original) {
+        final String[] projection = original.getColumnNames();
+        final MatrixCursor ret = new MatrixCursor(projection);
+        original.moveToPosition(-1);
+        while (original.moveToNext()) {
+            final MatrixCursor.RowBuilder builder = ret.newRow();
+            for (int i = 0; i < projection.length; i++) {
+                final String outputColumnName = projection[i];
+                final int originalColumnIndex = original.getColumnIndex(outputColumnName);
+                if (outputColumnName.equals(Directory._ID)) {
+                    builder.add(original.getLong(originalColumnIndex)
+                            + Directory.ENTERPRISE_DIRECTORY_ID_BASE);
+                } else {
+                    // Copy the original value.
+                    switch (original.getType(originalColumnIndex)) {
+                        case Cursor.FIELD_TYPE_NULL:
+                            builder.add(null);
+                            break;
+                        case Cursor.FIELD_TYPE_INTEGER:
+                            builder.add(original.getLong(originalColumnIndex));
+                            break;
+                        case Cursor.FIELD_TYPE_FLOAT:
+                            builder.add(original.getFloat(originalColumnIndex));
+                            break;
+                        case Cursor.FIELD_TYPE_STRING:
+                            builder.add(original.getString(originalColumnIndex));
+                            break;
+                        case Cursor.FIELD_TYPE_BLOB:
+                            builder.add(original.getBlob(originalColumnIndex));
+                            break;
+                    }
+                }
+            }
+        }
+        return ret;
     }
 
     /**
@@ -8890,8 +9074,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case SEARCH_SHORTCUT:
                 return SearchManager.SHORTCUT_MIME_TYPE;
             case DIRECTORIES:
+            case DIRECTORIES_ENTERPRISE:
                 return Directory.CONTENT_TYPE;
             case DIRECTORIES_ID:
+            case DIRECTORIES_ID_ENTERPRISE:
                 return Directory.CONTENT_ITEM_TYPE;
             case STREAM_ITEMS:
                 return StreamItems.CONTENT_TYPE;
@@ -8959,6 +9145,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DIRECTORIES:
             case DIRECTORIES_ID:
+            case DIRECTORIES_ENTERPRISE:
+            case DIRECTORIES_ID_ENTERPRISE:
                 return sDirectoryProjectionMap.getColumnNames();
 
             default:
