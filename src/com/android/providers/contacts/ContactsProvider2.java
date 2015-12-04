@@ -189,6 +189,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
+import java.lang.reflect.Array;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -342,6 +343,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int CONTACTS_DELETE_USAGE = 1026;
     private static final int CONTACTS_ID_PHOTO_CORP = 1027;
     private static final int CONTACTS_ID_DISPLAY_PHOTO_CORP = 1028;
+    private static final int CONTACTS_FILTER_ENTERPRISE = 1029;
 
     private static final int RAW_CONTACTS = 2002;
     private static final int RAW_CONTACTS_ID = 2003;
@@ -1239,6 +1241,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/group/*", CONTACTS_GROUP);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/frequent", CONTACTS_FREQUENT);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/delete_usage", CONTACTS_DELETE_USAGE);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_enterprise",
+                CONTACTS_FILTER_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_enterprise/*",
+                CONTACTS_FILTER_ENTERPRISE);
 
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts", RAW_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "raw_contacts/#", RAW_CONTACTS_ID);
@@ -5749,13 +5756,47 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
 
                 // If the query consists of a single word, we can do snippetizing after-the-fact for
-                // a performance boost.  Otherwise, we can't defer.
+                // a performance boost. Otherwise, we can't defer.
                 snippetDeferred = isSingleWordQuery(filterParam)
-                    && deferredSnipRequested && snippetNeeded(projection);
+                        && deferredSnipRequested && snippetNeeded(projection);
                 setTablesAndProjectionMapForContactsWithSnippet(
                         qb, uri, projection, filterParam, directoryId,
                         snippetDeferred);
                 break;
+            }
+
+            case CONTACTS_FILTER_ENTERPRISE: {
+                String filterParam = "";
+                if (uri.getPathSegments().size() > 2) {
+                    filterParam = uri.getLastPathSegment();
+                }
+                final String directory = getQueryParameter(uri,
+                        ContactsContract.DIRECTORY_PARAM_KEY);
+                if (TextUtils.isEmpty(directory)) {
+                    throw new IllegalArgumentException("Directory id cannot be null");
+                }
+                final boolean isCorpDirectory =
+                        Directory.isEnterpriseDirectoryId(Long.parseLong(directory));
+                final Uri localUri = rewriteQueryParameters(
+                        Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filterParam)),
+                        uri, isCorpDirectory);
+                // Redirect query to corp CP2 if it uses corp directory, otherwise just call
+                // queryLocal directly.
+                if (isCorpDirectory) {
+                    final String[] outputProjection = (projection != null) ? projection
+                            : sContactsProjectionWithSnippetMap.getColumnNames();
+                    final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
+                    if (corpUserId < 0) {
+                        // No Corp user or policy not allowed, return empty cursor
+                        return new MatrixCursor(outputProjection);
+                    }
+                    final Cursor cursor = queryCorpContacts(localUri, projection, selection,
+                            selectionArgs, sortOrder, Contacts._ID);
+                    return (cursor != null) ? cursor : new MatrixCursor(outputProjection);
+                } else {
+                    return queryLocal(localUri, projection, selection, selectionArgs, sortOrder,
+                            directoryId, null);
+                }
             }
 
             case CONTACTS_STREQUENT_FILTER:
@@ -6963,10 +7004,109 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return c;
     }
 
-    private static class EnterprisePhoneCursorWrapper extends CursorWrapper {
+    /**
+     * A helper function to rewrites all parameters from source uri to target uri.
+     * It also helps you to rebase work directory id to regular directory id.
+     * This function also checks if parameters in source uri is valid.
+     * If isCorpDirectory is true, it cannot accept regular directory id in source parameters.
+     * If isCorpDirectory is false, it cannot accept work directory id in source parameters.
+     * @param targetUri A target uri that the parameters from source uri is to be copied.
+     * @param sourceUri A source uri that parameters in URI will be copied to target uri.
+     * @param isCorpDirectory Indicate if sourceUri contains work directory id.
+     * @return An target uri that contains all parameters in source uri.
+     */
+    private static Uri rewriteQueryParameters(Uri targetUri, Uri sourceUri,
+            boolean isCorpDirectory) {
+        final Uri.Builder builder = targetUri.buildUpon();
+        // Copy all parameters to new uri
+        final Set<String> names = sourceUri.getQueryParameterNames();
+        for(String name : names) {
+            final List<String> values = sourceUri.getQueryParameters(name);
+            for (String value : values) {
+                if (name.equals(ContactsContract.DIRECTORY_PARAM_KEY)) {
+                    final long workDirectoryId = Long.parseLong(value);
+                    if (isCorpDirectory != Directory.isEnterpriseDirectoryId(workDirectoryId)) {
+                        throw new IllegalArgumentException("Invalid directory Id");
+                    }
+                    if (isCorpDirectory) {
+                        // Change it back to regular directory id
+                        value = String.valueOf(workDirectoryId
+                                - Directory.ENTERPRISE_DIRECTORY_ID_BASE);
+                    }
+                }
+                builder.appendQueryParameter(name, value);
+            }
+        }
+        return builder.build();
+    }
 
-        public EnterprisePhoneCursorWrapper(Cursor cursor) {
+    private static class EnterpriseContactsCursorWrapper extends CursorWrapper {
+
+        // As some of the columns like PHOTO_URI requires contact id, but original project may not
+        // have it, so caller may use a work projection instead of original project to make the
+        // query. Hence, we need also to restore the cursor to the origianl projection.
+        private final int contactIdIndex;
+        private final boolean isContactIdAppended;
+        private final String[] originalColumnNames;
+
+        public EnterpriseContactsCursorWrapper(Cursor cursor, int contactIdIndex,
+                boolean isContactIdAppended) {
             super(cursor);
+            this.contactIdIndex = contactIdIndex;
+            this.isContactIdAppended = isContactIdAppended;
+            this.originalColumnNames = isContactIdAppended
+                    ? removeLastColumn(super.getColumnNames()) : super.getColumnNames();
+        }
+
+        private static String[] removeLastColumn(String[] projection) {
+            final String[] newProjection = new String[projection.length - 1];
+            System.arraycopy(projection, 0, newProjection, 0, newProjection.length);
+            return newProjection;
+        }
+
+        @Override
+        public int getColumnCount() {
+            return originalColumnNames.length;
+        }
+
+        @Override
+        public String[] getColumnNames() {
+            return originalColumnNames;
+        }
+
+        @Override
+        public String getString(int columnIndex) {
+            final String result = super.getString(columnIndex);
+            final String columnName = super.getColumnName(columnIndex);
+            final long contactId = super.getLong(contactIdIndex);
+            switch (columnName) {
+                case Contacts.PHOTO_THUMBNAIL_URI:
+                    return getCorpThumbnailUri(contactId, getWrappedCursor());
+                case Contacts.PHOTO_URI:
+                    return getCorpDisplayPhotoUri(contactId, getWrappedCursor());
+                case Data.PHOTO_FILE_ID:
+                case Data.PHOTO_ID:
+                    return null;
+                case Data.CUSTOM_RINGTONE:
+                    String ringtoneUri = super.getString(columnIndex);
+                    // TODO: Remove this conditional block once accessing sounds in corp
+                    // profile becomes possible.
+                    if (ringtoneUri != null
+                            && !Uri.parse(ringtoneUri).isPathPrefixMatch(
+                                    MediaStore.Audio.Media.INTERNAL_CONTENT_URI)) {
+                        ringtoneUri = null;
+                    }
+                    return ringtoneUri;
+                case Contacts.LOOKUP_KEY:
+                    final String lookupKey = super.getString(columnIndex);
+                    if (TextUtils.isEmpty(lookupKey)) {
+                        return null;
+                    } else {
+                        return Contacts.ENTERPRISE_CONTACT_LOOKUP_PREFIX + lookupKey;
+                    }
+                default:
+                    return result;
+            }
         }
 
         @Override
@@ -6977,13 +7117,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         @Override
         public long getLong(int column) {
             long result = super.getLong(column);
-            String columnName = getColumnName(column);
-            // We change contactId only for now
-            switch (columnName) {
-                case Phone.CONTACT_ID:
-                    return result + Contacts.ENTERPRISE_CONTACT_ID_BASE;
-                default:
-                    return result;
+            if (column == contactIdIndex) {
+                return result + Contacts.ENTERPRISE_CONTACT_ID_BASE;
+            } else {
+                final String columnName = getColumnName(column);
+                switch (columnName) {
+                    case Data.PHOTO_FILE_ID:
+                    case Data.PHOTO_ID:
+                        return 0;
+                    default:
+                        return result;
+                }
             }
         }
     }
@@ -7055,15 +7199,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // No Corp user or policy not allowed
                 return primaryCursor;
             }
-            final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
-            final Cursor managedCursor = getContext().getContentResolver().query(remoteUri,
-                    projection, selection, selectionArgs, sortOrder, null);
+
+            final Cursor managedCursor = queryCorpContacts(localUri, projection, selection,
+                    selectionArgs, sortOrder, RawContacts.CONTACT_ID);
             if (managedCursor == null) {
                 // No corp results.  Just return the local result.
                 return primaryCursor;
             }
             final Cursor[] cursorArray = new Cursor[] {
-                    primaryCursor, new EnterprisePhoneCursorWrapper(managedCursor)
+                    primaryCursor, managedCursor
             };
             // Sort order is not supported yet, will be fixed in M when we have
             // merged provider
@@ -7081,37 +7225,57 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private static String[] addColumnIfNotPresent(String[] projection, String columnName) {
+        if (projection == null) {
+            return null;
+        }
+        final int projectionLength = projection.length;
+        for (int i = 0; i < projectionLength; i++) {
+            if (columnName.equals(projection[i])) {
+                return projection;
+            }
+        }
+        String[] newProjection = new String[projectionLength + 1];
+        System.arraycopy(projection, 0, newProjection, 0, projectionLength);
+        newProjection[projection.length] = columnName;
+        return newProjection;
+    }
+
     /**
      * Query corp CP2 lookup API directly.
      */
-    private Cursor queryCorpLookup(Uri localUri, String[] projection, String selection,
+    private Cursor queryCorpContacts(Uri localUri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String contactIdColumnName) {
         final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
         if (corpUserId < 0) {
             return null;
         }
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
-        // Note in order to re-write the cursor correctly, we need all columns from the corp
-        // cp2.
-        final Cursor corp = getContext().getContentResolver().query(remoteUri, null, selection,
-                selectionArgs, sortOrder, /* cancellationsignal */null);
-        if (corp == null) {
+        // We need contactId in projection, if it doesn't have, we add it in projection as
+        // workProjection, and we restore the actual projection in
+        // EnterpriseContactsCursorWrapper
+        String[] workProjection = addColumnIfNotPresent(projection, contactIdColumnName);
+        // Projection is changed only when projection is non-null and does not have contact id
+        final boolean isContactIdAdded = (projection == null) ? false
+                : (workProjection.length != projection.length);
+        int columnIdIndex = getContactIdColumnIndex(workProjection, contactIdColumnName);
+        final Cursor managedCursor = getContext().getContentResolver().query(remoteUri,
+                workProjection, selection, selectionArgs, sortOrder);
+        if (managedCursor == null) {
             return null;
         }
-        try {
-            if (VERBOSE_LOGGING) {
-                MoreDatabaseUtils.dumpCursor(TAG, "corp raw", corp);
+        if (projection == null) {
+            // As projection is null and we didn't append contact id in projection, we need to fix
+            // contact id column index.
+            try {
+                columnIdIndex = managedCursor.getColumnIndex(contactIdColumnName);
+            } catch (Throwable th) {
+                managedCursor.close();
+                throw th;
             }
-            final Cursor rewritten = rewriteCorpLookup(
-                    (projection != null ? projection : corp.getColumnNames()), corp,
-                    contactIdColumnName);
-            if (VERBOSE_LOGGING) {
-                MoreDatabaseUtils.dumpCursor(TAG, "corp rewritten", rewritten);
-            }
-            return rewritten;
-        } finally {
-            corp.close();
         }
+        return new EnterpriseContactsCursorWrapper(managedCursor, columnIdIndex,
+                isContactIdAdded);
     }
 
     /**
@@ -7155,18 +7319,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // Step 2.  No rows found in the local db, and there is a corp profile. Look at the corp
         // DB.
-        Cursor rewrittenCorpCursor = null;
         try {
-            rewrittenCorpCursor = queryCorpLookup(localUri, projection, selection,
+            final Cursor rewrittenCorpCursor = queryCorpContacts(localUri, projection, selection,
                     selectionArgs, sortOrder, contactIdColumnName);
             if (rewrittenCorpCursor != null) {
                 local.close();
                 return rewrittenCorpCursor;
             }
         } catch (Throwable th) {
-            if (rewrittenCorpCursor != null) {
-                rewrittenCorpCursor.close();
-            }
             local.close();
             throw th;
         }
@@ -7197,8 +7357,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     builder.appendQueryParameter(
                             ContactsContract.DIRECTORY_PARAM_KEY,
                             String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-                    return queryCorpLookup(builder.build(), projection, null, null, null,
-                            isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+                    final Cursor cursor = queryCorpContacts(builder.build(), projection, null, null,
+                            null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+                    if (cursor == null) {
+                        final String[] outputProjection = (projection != null) ? projection
+                                : sPhoneLookupProjectionMap.getColumnNames();
+                        return new MatrixCursor(outputProjection);
+                    }
+                    return cursor;
                 } else {
                     builder.appendQueryParameter(
                             ContactsContract.DIRECTORY_PARAM_KEY,
@@ -7269,81 +7435,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return ret;
     }
 
-    /**
-     * Rewrite a cursor from the corp profile data
-     */
-    @VisibleForTesting
-    static Cursor rewriteCorpLookup(String[] projection, Cursor original,
-            String contactIdColumnName) {
-        final MatrixCursor ret = new MatrixCursor(projection);
-        original.moveToPosition(-1);
-        while (original.moveToNext()) {
-            final int contactId = original.getInt(original.getColumnIndex(contactIdColumnName));
-            final MatrixCursor.RowBuilder builder = ret.newRow();
-            for (int i = 0; i < projection.length; i++) {
-                final String outputColumnName = projection[i];
-                final int originalColumnIndex = original.getColumnIndex(outputColumnName);
-                switch (outputColumnName) {
-                    // Set artificial photo URLs using Contacts.CORP_CONTENT_URI.
-                    case Contacts.PHOTO_THUMBNAIL_URI:
-                        builder.add(getCorpThumbnailUri(contactId, original));
-                        break;
-                    case Contacts.PHOTO_URI:
-                        builder.add(getCorpDisplayPhotoUri(contactId, original));
-                        break;
-                    case Data.PHOTO_FILE_ID:
-                    case Data.PHOTO_ID:
-                        builder.add(null);
-                        break;
-                    case Data.CUSTOM_RINGTONE:
-                        String ringtoneUri = original.getString(originalColumnIndex);
-                        // TODO: Remove this conditional block once accessing sounds in corp
-                        // profile becomes possible.
-                        if (ringtoneUri != null
-                                    && !Uri.parse(ringtoneUri).isPathPrefixMatch(
-                                            MediaStore.Audio.Media.INTERNAL_CONTENT_URI)) {
-                            ringtoneUri = null;
-                        }
-                        builder.add(ringtoneUri);
-                        break;
-                    case Contacts.LOOKUP_KEY:
-                        final String lookupKey = original.getString(originalColumnIndex);
-                        if (TextUtils.isEmpty(lookupKey)) {
-                            builder.add(null);
-                        } else {
-                            builder.add(Contacts.ENTERPRISE_CONTACT_LOOKUP_PREFIX + lookupKey);
-                        }
-                        break;
-                    default:
-                        if (outputColumnName.equals(contactIdColumnName)) {
-                            // This will be _id if it's PhoneLookup, contacts_id
-                            // if it's Data.CONTACT_ID
-                            builder.add(original.getLong(originalColumnIndex)
-                                    + Contacts.ENTERPRISE_CONTACT_ID_BASE);
-                            break;
-                        }
-                        // Copy the original value.
-                        switch (original.getType(originalColumnIndex)) {
-                            case Cursor.FIELD_TYPE_NULL:
-                                builder.add(null);
-                                break;
-                            case Cursor.FIELD_TYPE_INTEGER:
-                                builder.add(original.getLong(originalColumnIndex));
-                                break;
-                            case Cursor.FIELD_TYPE_FLOAT:
-                                builder.add(original.getFloat(originalColumnIndex));
-                                break;
-                            case Cursor.FIELD_TYPE_STRING:
-                                builder.add(original.getString(originalColumnIndex));
-                                break;
-                            case Cursor.FIELD_TYPE_BLOB:
-                                builder.add(original.getBlob(originalColumnIndex));
-                                break;
-                        }
-                }
+    private static int getContactIdColumnIndex(String projection[], String columnIdName) {
+        if (projection == null) {
+            return -1;
+        }
+        for (int i = 0; i < projection.length; i++) {
+            if (columnIdName.equals(projection[i])) {
+                return i;
             }
         }
-        return ret;
+        return -1;
     }
 
     /**
