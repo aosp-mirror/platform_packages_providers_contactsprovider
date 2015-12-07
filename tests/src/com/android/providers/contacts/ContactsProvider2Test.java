@@ -2245,8 +2245,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
 
         // First, convert and make sure it returns an empty cursor.
-        Cursor rewritten = ContactsProvider2.rewriteCorpLookup(c.getColumnNames(), c,
-                PhoneLookup._ID);
+        // TODO: Use EnterpriseContactsCursorWrapper instead of rewriteCorpLookup.
+        Cursor rewritten = null;
+
         assertEquals(0, rewritten.getCount());
         assertEquals(19, rewritten.getColumnCount());
 
@@ -2293,8 +2294,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 "label", // PhoneLookup.LABEL,
                 "+1234", // PhoneLookup.NORMALIZED_NUMBER
         });
-        rewritten = ContactsProvider2.rewriteCorpLookup(c.getColumnNames(), c,
-                PhoneLookup._ID);
+        // TODO: Use EnterpriseContactsCursorWrapper instead of rewriteCorpLookup
+        // rewritten = ContactsProvider2.rewriteCorpLookup(c.getColumnNames(), c,
+        //         PhoneLookup._ID);
         assertEquals(2, rewritten.getCount());
         assertEquals(19, rewritten.getColumnCount());
 
@@ -2346,9 +2348,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals("+1234", rewritten.getString(column++));
 
         // Use a narower projection.
-        rewritten = ContactsProvider2.rewriteCorpLookup(
-                new String[] {PhoneLookup.PHOTO_URI, PhoneLookup.PHOTO_THUMBNAIL_URI}, c,
-                        PhoneLookup._ID);
+        // TODO: Use EnterpriseContactsCursorWrapper instead of rewriteCorpLookup
+        // rewritten = ContactsProvider2.rewriteCorpLookup(
+        //         new String[] {PhoneLookup.PHOTO_URI, PhoneLookup.PHOTO_THUMBNAIL_URI}, c,
+        //                 PhoneLookup._ID);
         assertEquals(2, rewritten.getCount());
         assertEquals(2, rewritten.getColumnCount());
 
