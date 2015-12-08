@@ -375,6 +375,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int EMAILS_LOOKUP_ENTERPRISE = 3017;
     private static final int PHONES_FILTER_ENTERPRISE = 3018;
     private static final int CALLABLES_FILTER_ENTERPRISE = 3019;
+    private static final int EMAILS_FILTER_ENTERPRISE = 3020;
 
     private static final int PHONE_LOOKUP = 4000;
     private static final int PHONE_LOOKUP_ENTERPRISE = 4001;
@@ -1280,6 +1281,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup/*", EMAILS_LOOKUP);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter", EMAILS_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter/*", EMAILS_FILTER);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter_enterprise", EMAILS_FILTER_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/emails/filter_enterprise/*", EMAILS_FILTER_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup_enterprise",
                 EMAILS_LOOKUP_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/lookup_enterprise/*",
@@ -3139,7 +3142,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         long postCleanupInsertedStreamId = insertedStreamItemId;
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         Cursor c = db.query(Tables.STREAM_ITEMS, new String[] {StreamItems._ID},
-                StreamItems.RAW_CONTACT_ID + "=?", new String[] {String.valueOf(rawContactId)},
+                StreamItems.RAW_CONTACT_ID + "=?", new String[]{String.valueOf(rawContactId)},
                 null, null, StreamItems.TIMESTAMP + " DESC, " + StreamItems._ID + " DESC");
         try {
             int streamItemCount = c.getCount();
@@ -3914,7 +3917,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Cursor c = db.query(Tables.RAW_CONTACTS, Projections.LITERAL_ONE,
                 RawContactsColumns.CONCRETE_ID + "=? AND " +
                 RawContactsColumns.ACCOUNT_ID + "=" + Clauses.LOCAL_ACCOUNT_ID,
-                new String[] {String.valueOf(rawContactId)}, null, null, null);
+                new String[]{String.valueOf(rawContactId)}, null, null, null);
         try {
             return c.getCount() > 0;
         } finally {
@@ -6285,9 +6288,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
             case PHONES_FILTER_ENTERPRISE:
-            case CALLABLES_FILTER_ENTERPRISE: {
+            case CALLABLES_FILTER_ENTERPRISE:
+            case EMAILS_FILTER_ENTERPRISE: {
+                Uri initialUri = null;
+                String columnIdString = null;
+                if (match == PHONES_FILTER_ENTERPRISE) {
+                    initialUri = Phone.CONTENT_FILTER_URI;
+                    columnIdString = Phone._ID;
+                } else if (match == CALLABLES_FILTER_ENTERPRISE) {
+                    initialUri = Callable.CONTENT_FILTER_URI;
+                    columnIdString = Callable._ID;
+                } else if (match == EMAILS_FILTER_ENTERPRISE) {
+                    initialUri = Email.CONTENT_FILTER_URI;
+                    columnIdString = Email._ID;
+                }
                 return queryCallableEnterprise(uri, projection, selection, selectionArgs,
-                        sortOrder, match == CALLABLES_FILTER_ENTERPRISE);
+                        sortOrder, initialUri, columnIdString);
             }
             case EMAILS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
@@ -7398,11 +7414,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
 
     /**
-     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE into
-     * personal/work ContactsProvider2
+     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE / EMAIL_FILTER_ENTERPRISE 
+       into personal/work ContactsProvider2.
      */
     private Cursor queryCallableEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, boolean isCallable) {
+            String[] selectionArgs, String sortOrder, Uri initialUri, String columnIdString) {
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
             throw new IllegalArgumentException("Directory id missing in URI: " + uri);
@@ -7410,9 +7426,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         final String filterParam = uri.getPathSegments().size() > 3 ? uri.getLastPathSegment() : "";
         final long directoryId = Long.parseLong(directory);
-        final String columnIdString = isCallable ? Callable._ID : Phone._ID;
-        final Uri initialUri = isCallable ? Callable.CONTENT_FILTER_URI :
-                Phone.CONTENT_FILTER_URI;
         final Uri.Builder builder = initialUri.buildUpon()
                 .appendPath(filterParam);
         addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_CALLABLE_FILTER);
