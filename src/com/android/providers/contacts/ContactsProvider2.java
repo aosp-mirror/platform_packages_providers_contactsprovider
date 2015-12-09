@@ -5432,23 +5432,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Otherwise proceed with a normal query against the contacts DB.
         switchToContactMode();
 
+        return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
+                cancellationSignal);
+    }
+
+    private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
 
         final long directoryId =
                 (directory == null ? -1 :
                 (directory.equals("0") ? Directory.DEFAULT :
-                (directory.equals("1") ? Directory.LOCAL_INVISIBLE :
-                // Enterprise directory should uses queryLocal directly, as queryLocal will forward
-                // the call to work profile CP2 and query work directory providers.
-                (Directory.isEnterpriseDirectoryId(Long.parseLong(directory)) ?
-                        Directory.ENTERPRISE_DEFAULT : Long.MIN_VALUE))));
+                (directory.equals("1") ? Directory.LOCAL_INVISIBLE : Long.MIN_VALUE)));
 
-        if (directoryId > Long.MIN_VALUE) {
+        if (isEnterpriseUri(uri) || directoryId > Long.MIN_VALUE) {
             final Cursor cursor = queryLocal(uri, projection, selection, selectionArgs, sortOrder,
                     directoryId, cancellationSignal);
-            // Add snippet if it is not a corp directory call
-            return (directoryId == Directory.ENTERPRISE_DEFAULT) ? cursor
-                    : addSnippetExtrasToCursor(uri, cursor);
+            // Add snippet if it is not an enterprise call
+            return (isEnterpriseUri(uri)) ? cursor : addSnippetExtrasToCursor(uri, cursor);
         }
         return queryDirectoryAuthority(uri, projection, selection, selectionArgs, sortOrder,
                 directory, cancellationSignal);
@@ -5793,7 +5794,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filterParam)),
                         uri, isCorpDirectory);
                 // Redirect query to corp CP2 if it uses corp directory, otherwise just call
-                // queryLocal directly.
+                // queryDirectoryIfNecessary directly.
                 if (isCorpDirectory) {
                     final String[] outputProjection = (projection != null) ? projection
                             : sContactsProjectionWithSnippetMap.getColumnNames();
@@ -5806,8 +5807,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             selectionArgs, sortOrder, Contacts._ID);
                     return (cursor != null) ? cursor : new MatrixCursor(outputProjection);
                 } else {
-                    return queryLocal(localUri, projection, selection, selectionArgs, sortOrder,
-                            directoryId, null);
+                    return queryDirectoryIfNecessary(localUri, projection, selection, selectionArgs,
+                            sortOrder, cancellationSignal);
                 }
             }
 
@@ -6303,7 +6304,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     columnIdString = Email._ID;
                 }
                 return queryCallableEnterprise(uri, projection, selection, selectionArgs,
-                        sortOrder, initialUri, columnIdString);
+                        sortOrder, initialUri, columnIdString, cancellationSignal);
             }
             case EMAILS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
@@ -6649,7 +6650,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     throw new IllegalArgumentException("Phone number missing in URI: " + uri);
                 }
                 return queryPhoneLookupEnterprise(uri, projection, selection, selectionArgs,
-                        sortOrder);
+                        sortOrder, cancellationSignal);
             }
             case PHONE_LOOKUP: {
                 // Phone lookup cannot be combined with a selection
@@ -7271,6 +7272,26 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
+     * Check if uri is an enterprise query.
+     *
+     * @param uri Uri that we want to check.
+     * @return True if it is an enterprise uri.
+     */
+    private static boolean isEnterpriseUri(final Uri uri) {
+        final int match = sUriMatcher.match(uri);
+        switch (match) {
+            case CONTACTS_FILTER_ENTERPRISE:
+            case EMAILS_LOOKUP_ENTERPRISE:
+            case PHONES_FILTER_ENTERPRISE:
+            case CALLABLES_FILTER_ENTERPRISE:
+            case PHONE_LOOKUP_ENTERPRISE:
+            case EMAILS_FILTER_ENTERPRISE:
+                return true;
+        }
+        return false;
+    }
+
+    /**
      * Query corp CP2 lookup API directly.
      */
     private Cursor queryCorpContacts(Uri localUri, String[] projection, String selection,
@@ -7367,7 +7388,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     // TODO Test
     private Cursor queryPhoneLookupEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder) {
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         final String phoneNumber = Uri.decode(uri.getLastPathSegment());
         final boolean isSipAddress = uri.getBooleanQueryParameter(
                 PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
@@ -7377,32 +7398,31 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
                         String.valueOf(isSipAddress));
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
-        if (directory != null) {
+        if (TextUtils.isEmpty(directory)) {
             final long directoryId = Long.parseLong(directory);
-            // If the query contains remote directory id, it should query work CP2 or directory
-            // provider directory.
-            if (Directory.isRemoteDirectory(directoryId)) {
-                if (Directory.isEnterpriseDirectoryId(directoryId)) {
-                    builder.appendQueryParameter(
-                            ContactsContract.DIRECTORY_PARAM_KEY,
-                            String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-                    final Cursor cursor = queryCorpContacts(builder.build(), projection, null, null,
-                            null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
-                    if (cursor == null) {
-                        final String[] outputProjection = (projection != null) ? projection
-                                : sPhoneLookupProjectionMap.getColumnNames();
-                        return new MatrixCursor(outputProjection);
-                    }
-                    return cursor;
-                } else {
-                    builder.appendQueryParameter(
-                            ContactsContract.DIRECTORY_PARAM_KEY,
-                            String.valueOf(directoryId));
-                    return queryDirectoryAuthority(builder.build(), projection, selection,
-                            selectionArgs, sortOrder, directory, null);
+            if (Directory.isEnterpriseDirectoryId(directoryId)) {
+                // If it has enterprise directory, then query queryCorpContacts directory with
+                // regular directory id.
+                builder.appendQueryParameter(
+                        ContactsContract.DIRECTORY_PARAM_KEY,
+                        String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+                final Cursor cursor = queryCorpContacts(builder.build(), projection, null, null,
+                        null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+                if (cursor == null) {
+                    final String[] outputProjection = (projection != null) ? projection
+                            : sPhoneLookupProjectionMap.getColumnNames();
+                    return new MatrixCursor(outputProjection);
                 }
+                return cursor;
             }
+            // Regular directory id
+            builder.appendQueryParameter(
+                    ContactsContract.DIRECTORY_PARAM_KEY,
+                    String.valueOf(directoryId));
+            return queryDirectoryIfNecessary(builder.build(), projection, selection,
+                    selectionArgs, sortOrder, cancellationSignal);
         }
+        // No directory
         return queryCorpLookupIfNecessary(builder.build(), projection, null, null, null,
                 isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
     }
@@ -7418,7 +7438,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
        into personal/work ContactsProvider2.
      */
     private Cursor queryCallableEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, Uri initialUri, String columnIdString) {
+            String[] selectionArgs, String sortOrder, Uri initialUri, String columnIdString,
+            CancellationSignal cancellationSignal) {
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
             throw new IllegalArgumentException("Directory id missing in URI: " + uri);
@@ -7434,15 +7455,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
             builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-
             return queryCorpContacts(builder.build(), projection, selection, selectionArgs,
                     sortOrder, columnIdString);
         } else {
             builder.appendQueryParameter(
                     ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId));
-            return queryLocal(builder.build(), projection, selection,
-                    selectionArgs, sortOrder, directoryId, null);
+            return queryDirectoryIfNecessary(builder.build(), projection, selection, selectionArgs,
+                    sortOrder, cancellationSignal);
         }
     }
 
