@@ -1272,7 +1272,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/#", PHONES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter", PHONES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter/*", PHONES_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter_enterprise/", PHONES_FILTER_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter_enterprise", PHONES_FILTER_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/phones/filter_enterprise/*", PHONES_FILTER_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails", EMAILS);
         matcher.addURI(ContactsContract.AUTHORITY, "data/emails/#", EMAILS_ID);
@@ -1292,7 +1292,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/#", CALLABLES_ID);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter", CALLABLES_FILTER);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter/*", CALLABLES_FILTER);
-        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter_enterprise/", CALLABLES_FILTER_ENTERPRISE);
+        matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter_enterprise", CALLABLES_FILTER_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "data/callables/filter_enterprise/*", CALLABLES_FILTER_ENTERPRISE);
 
         matcher.addURI(ContactsContract.AUTHORITY, "data/contactables/", CONTACTABLES);
