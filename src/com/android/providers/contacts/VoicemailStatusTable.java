@@ -36,6 +36,7 @@ import com.android.providers.contacts.VoicemailContentProvider.UriData;
  * Implementation of {@link VoicemailTable.Delegate} for the voicemail status table.
  */
 public class VoicemailStatusTable implements VoicemailTable.Delegate {
+
     private static final ProjectionMap sStatusProjectionMap = new ProjectionMap.Builder()
             .add(Status._ID)
             .add(Status.CONFIGURATION_STATE)
@@ -44,6 +45,8 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             .add(Status.SETTINGS_URI)
             .add(Status.SOURCE_PACKAGE)
             .add(Status.VOICEMAIL_ACCESS_URI)
+            .add(Status.QUOTA_OCCUPIED)
+            .add(Status.QUOTA_TOTAL)
             .build();
 
     private final String mTableName;

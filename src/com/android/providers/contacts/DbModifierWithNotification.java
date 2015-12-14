@@ -20,8 +20,10 @@ package com.android.providers.contacts;
 import static android.Manifest.permission.ADD_VOICEMAIL;
 import static android.Manifest.permission.READ_VOICEMAIL;
 
+import com.google.android.collect.Lists;
+import com.google.common.collect.Iterables;
+
 import android.content.ComponentName;
-import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -33,7 +35,7 @@ import android.database.DatabaseUtils.InsertHelper;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Bundle;
+import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
@@ -43,8 +45,6 @@ import android.util.Log;
 import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
-import com.google.android.collect.Lists;
-import com.google.common.collect.Iterables;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -101,6 +101,9 @@ public class DbModifierWithNotification implements DatabaseModifier {
     @Override
     public long insert(String table, String nullColumnHack, ContentValues values) {
         Set<String> packagesModified = getModifiedPackages(values);
+        if (mIsCallsTable) {
+            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+        }
         long rowId = mDb.insert(table, nullColumnHack, values);
         if (rowId > 0 && packagesModified.size() != 0) {
             notifyVoicemailChangeOnInsert(ContentUris.withAppendedId(mBaseUri, rowId),
@@ -115,6 +118,9 @@ public class DbModifierWithNotification implements DatabaseModifier {
     @Override
     public long insert(ContentValues values) {
         Set<String> packagesModified = getModifiedPackages(values);
+        if (mIsCallsTable) {
+            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+        }
         long rowId = mInsertHelper.insert(values);
         if (rowId > 0 && packagesModified.size() != 0) {
             notifyVoicemailChangeOnInsert(
@@ -155,13 +161,17 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
         boolean isVoicemail = packagesModified.size() != 0;
 
-        if (mIsCallsTable && isVoicemail) {
-            // If a calling package is modifying its own entries, it means that the change came from
-            // the server and thus is synced or "clean". Otherwise, it means that a local change
-            // is being made to the database, so the entries should be marked as "dirty" so that
-            // the corresponding sync adapter knows they need to be synced.
-            final int isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
-            values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
+        if (mIsCallsTable) {
+            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+
+            if (isVoicemail) {
+                // If a calling package is modifying its own entries, it means that the change came
+                // from the server and thus is synced or "clean". Otherwise, it means that a local
+                // change is being made to the database, so the entries should be marked as "dirty"
+                // so that the corresponding sync adapter knows they need to be synced.
+                final int isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
+                values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
+            }
         }
 
         int count = mDb.update(table, values, whereClause, whereArgs);
@@ -192,6 +202,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             ContentValues values = new ContentValues();
             values.put(VoicemailContract.Voicemails.DIRTY, 1);
             values.put(VoicemailContract.Voicemails.DELETED, 1);
+            values.put(VoicemailContract.Voicemails.LAST_MODIFIED, System.currentTimeMillis());
             count = mDb.update(table, values, whereClause, whereArgs);
         } else {
             count = mDb.delete(table, whereClause, whereArgs);
