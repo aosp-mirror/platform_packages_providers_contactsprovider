@@ -7398,7 +7398,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
                         String.valueOf(isSipAddress));
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
-        if (TextUtils.isEmpty(directory)) {
+        if (!TextUtils.isEmpty(directory)) {
             final long directoryId = Long.parseLong(directory);
             if (Directory.isEnterpriseDirectoryId(directoryId)) {
                 // If it has enterprise directory, then query queryCorpContacts directory with
