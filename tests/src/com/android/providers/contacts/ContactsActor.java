@@ -232,6 +232,11 @@ public class ContactsActor {
         public boolean hasUserRestriction(String restrictionKey, UserHandle userHandle) {
             return false;
         }
+
+        @Override
+        public boolean isSameProfileGroup(int userId, int otherUserId) {
+            return getUserInfo(userId).profileGroupId == getUserInfo(otherUserId).profileGroupId;
+        }
     }
 
     /**
