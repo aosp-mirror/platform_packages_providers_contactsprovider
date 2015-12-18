@@ -143,6 +143,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_PHOTO_URI, Calls.CACHED_PHOTO_URI);
         sCallsProjectionMap.put(Calls.CACHED_FORMATTED_NUMBER, Calls.CACHED_FORMATTED_NUMBER);
         sCallsProjectionMap.put(Calls.ADD_FOR_ALL_USERS, Calls.ADD_FOR_ALL_USERS);
+        sCallsProjectionMap.put(Calls.LAST_MODIFIED, Calls.LAST_MODIFIED);
     }
 
     private HandlerThread mBackgroundThread;

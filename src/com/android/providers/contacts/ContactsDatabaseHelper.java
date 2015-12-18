@@ -16,7 +16,9 @@
 
 package com.android.providers.contacts;
 
-import android.content.ComponentName;
+import com.google.android.collect.Sets;
+import com.google.common.annotations.VisibleForTesting;
+
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -90,12 +92,9 @@ import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-import com.google.android.collect.Sets;
-import com.google.common.annotations.VisibleForTesting;
 
 import libcore.icu.ICU;
 
-import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
@@ -128,7 +127,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1108;
+    static final int DATABASE_VERSION = 1109;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1582,6 +1581,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Calls.CACHED_PHOTO_URI + " TEXT," +
                 Calls.CACHED_FORMATTED_NUMBER + " TEXT," +
                 Calls.ADD_FOR_ALL_USERS + " INTEGER NOT NULL DEFAULT 1," +
+                Calls.LAST_MODIFIED + " INTEGER DEFAULT 0," +
                 Voicemails._DATA + " TEXT," +
                 Voicemails.HAS_CONTENT + " INTEGER," +
                 Voicemails.MIME_TYPE + " TEXT," +
@@ -1603,7 +1603,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 VoicemailContract.Status.VOICEMAIL_ACCESS_URI + " TEXT," +
                 VoicemailContract.Status.CONFIGURATION_STATE + " INTEGER," +
                 VoicemailContract.Status.DATA_CHANNEL_STATE + " INTEGER," +
-                VoicemailContract.Status.NOTIFICATION_CHANNEL_STATE + " INTEGER" +
+                VoicemailContract.Status.NOTIFICATION_CHANNEL_STATE + " INTEGER," +
+                VoicemailContract.Status.QUOTA_OCCUPIED + " INTEGER DEFAULT -1," +
+                VoicemailContract.Status.QUOTA_TOTAL + " INTEGER DEFAULT -1" +
         ");");
 
         db.execSQL("CREATE TABLE " + Tables.STATUS_UPDATES + " (" +
@@ -3050,6 +3052,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 1108) {
             upgradeToVersion1108(db);
             oldVersion = 1108;
+        }
+
+        if (oldVersion < 1109) {
+            upgradeToVersion1109(db);
+            oldVersion = 1109;
         }
 
         if (upgradeViewsAndTriggers) {
@@ -4650,6 +4657,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     public void upgradeToVersion1108(SQLiteDatabase db) {
         db.execSQL(
                 "ALTER TABLE calls ADD add_for_all_users INTEGER NOT NULL DEFAULT 1");
+    }
+
+    public void upgradeToVersion1109(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE voicemail_status ADD quota_occupied INTEGER DEFAULT -1;");
+        db.execSQL("ALTER TABLE voicemail_status ADD quota_total INTEGER DEFAULT -1;");
+        db.execSQL("ALTER TABLE calls ADD last_modified INTEGER DEFAULT 0;");
     }
 
     /**

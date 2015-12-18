@@ -59,7 +59,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             Calls.COUNTRY_ISO
     };
     /** Total number of columns exposed by voicemail provider. */
-    private static final int NUM_VOICEMAIL_FIELDS = 18;
+    private static final int NUM_VOICEMAIL_FIELDS = 19;
 
     @Override
     protected void setUp() throws Exception {
@@ -86,6 +86,8 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         assertStoredValues(uri, getTestVoicemailValues());
         assertSelection(uri, getTestVoicemailValues(), Voicemails._ID, ContentUris.parseId(uri));
         assertEquals(1, countFilesInTestDirectory());
+
+        assertLastModified(uri);
     }
 
     public void testInsertReadMessageIsNotNew() throws Exception {
@@ -143,6 +145,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
+        assertLastModified(uri);
     }
 
     public void testUpdateOwnPackageVoicemail_NotDirty() {
@@ -192,6 +195,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
         assertEquals(1, getCount(anotherVoicemail, null, null));
         assertStoredValues(anotherVoicemail, values);
+        assertLastModified(anotherVoicemail);
     }
 
     public void testDelete() {
@@ -421,7 +425,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
-                mResolver.query(uri, null, null ,null, null);
+                mResolver.query(uri, null, null, null, null);
             }
         });
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
@@ -598,6 +602,31 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         assertEquals(0, getCount(uri, null, null));
     }
 
+    public void testStatusQuotaInsert() {
+        ContentValues values = new ContentValues();
+        values.put(Status.SOURCE_PACKAGE, mActor.packageName);
+        values.put(Status.QUOTA_OCCUPIED, 2);
+        values.put(Status.QUOTA_TOTAL, 13);
+        Uri uri = mResolver.insert(statusUri(), values);
+        assertStoredValues(uri, values);
+        assertSelection(uri, values, Status._ID, ContentUris.parseId(uri));
+    }
+
+    public void testStatusQuotaUpdate() {
+        Uri uri = insertTestStatusEntry();
+        ContentValues values = new ContentValues();
+        values.put(Status.SOURCE_PACKAGE, mActor.packageName);
+        values.put(Status.QUOTA_OCCUPIED, 2);
+        values.put(Status.QUOTA_TOTAL, 13);
+        int count = mResolver.update(uri, values, null, null);
+        assertEquals(1, count);
+
+        ContentValues refValues = getTestStatusValues();
+        refValues.put(Status.QUOTA_OCCUPIED, 2);
+        refValues.put(Status.QUOTA_TOTAL, 13);
+        assertStoredValues(uri, refValues);
+    }
+
     public void testStatusGetType() throws Exception {
         // Item URI.
         Uri uri = insertTestStatusEntry();
@@ -714,5 +743,17 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Status.DATA_CHANNEL_STATE, Status.DATA_CHANNEL_STATE_OK);
         values.put(Status.NOTIFICATION_CHANNEL_STATE, Status.NOTIFICATION_CHANNEL_STATE_OK);
         return values;
+    }
+
+    private void assertLastModified(Uri uri) {
+        assertLastModified(uri, System.currentTimeMillis(), 1000);
+    }
+
+    private void assertLastModified(Uri uri, long time, long tolerance) {
+        Cursor c = mResolver.query(uri, null, null, null, null);
+        c.moveToFirst();
+        int index = c.getColumnIndex(VoicemailContract.Voicemails.LAST_MODIFIED);
+        long timeStamp = c.getLong(index);
+        assertTrue(Math.abs(time - timeStamp) < tolerance);
     }
 }
