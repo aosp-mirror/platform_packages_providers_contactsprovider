@@ -30,6 +30,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.provider.BaseColumns;
+import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -52,6 +53,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
+import android.provider.VoicemailContract;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
@@ -1342,6 +1344,17 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
+    protected void assertLastModified(Uri uri) {
+        assertLastModified(uri, System.currentTimeMillis(), 1000);
+    }
+
+    protected void assertLastModified(Uri uri, long time, long tolerance) {
+        Cursor c = mResolver.query(uri, null, null, null, null);
+        c.moveToFirst();
+        int index = c.getColumnIndex(CallLog.Calls.LAST_MODIFIED);
+        long timeStamp = c.getLong(index);
+        assertTrue(Math.abs(time - timeStamp) < tolerance);
+    }
     /**
      * A contact in the database, and the attributes used to create it.  Construct using
      * {@link GoldenContactBuilder#build()}.
