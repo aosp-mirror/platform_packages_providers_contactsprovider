@@ -745,15 +745,4 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         return values;
     }
 
-    private void assertLastModified(Uri uri) {
-        assertLastModified(uri, System.currentTimeMillis(), 1000);
-    }
-
-    private void assertLastModified(Uri uri, long time, long tolerance) {
-        Cursor c = mResolver.query(uri, null, null, null, null);
-        c.moveToFirst();
-        int index = c.getColumnIndex(VoicemailContract.Voicemails.LAST_MODIFIED);
-        long timeStamp = c.getLong(index);
-        assertTrue(Math.abs(time - timeStamp) < tolerance);
-    }
 }

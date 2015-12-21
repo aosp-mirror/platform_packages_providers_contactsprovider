@@ -20,6 +20,8 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import android.app.AppOpsManager;
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -49,7 +51,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
 import java.util.List;
@@ -466,7 +467,8 @@ public class CallLogProvider extends ContentProvider {
     private void syncEntriesFromPrimaryUser(UserManager userManager) {
         final int userHandle = userManager.getUserHandle();
         // TODO: http://b/24944959
-        if (userManager.isSameProfileGroup(UserHandle.USER_SYSTEM, userHandle)) {
+        if (userHandle == UserHandle.USER_SYSTEM
+            || userManager.getUserInfo(userHandle).isManagedProfile()) {
             return;
         }
 

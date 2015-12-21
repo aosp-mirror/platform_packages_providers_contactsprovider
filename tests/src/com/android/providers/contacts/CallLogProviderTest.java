@@ -64,7 +64,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 26;
+    private static final int NUM_CALLLOG_FIELDS = 29;
 
     private CallLogProvider mCallLogProvider;
 
@@ -98,6 +98,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.COUNTRY_ISO, "us");
         assertStoredValues(uri, values);
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
+        assertLastModified(uri);
     }
 
     private void setUpWithVoicemailPermissions() {
@@ -124,6 +125,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         Uri uri  = mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, values);
         assertStoredValues(uri, values);
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
+        assertLastModified(uri);
     }
 
     public void testUpdate() {
@@ -141,6 +143,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
+        assertLastModified(uri);
     }
 
     public void testDelete() {
@@ -507,6 +510,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
      */
     private ContentValues getTestCallLogValues(int i) {
         ContentValues values = new ContentValues();
+        values.put(Calls.ADD_FOR_ALL_USERS,1);
         switch (i) {
             case 0:
                 values.put(Calls.NUMBER, "123456");
