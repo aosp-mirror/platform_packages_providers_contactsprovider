@@ -127,7 +127,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1109;
+    static final int DATABASE_VERSION = 1110;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -3059,6 +3059,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1109;
         }
 
+        if (oldVersion < 1110) {
+            upgradeToVersion1110(db);
+            oldVersion = 1110;
+        }
+
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
@@ -4601,7 +4606,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 final String data1 = c.getString(1);
                 final String data2 = c.getString(2);
                 final byte[] data15 = c.getBlob(3);
-                final String hashId = generateHashId(data1, data2, data15);
+                final String hashId = legacyGenerateHashId(data1, data2, data15);
                 if (!TextUtils.isEmpty(hashId)) {
                     update.bindString(1, hashId);
                     update.bindLong(2, dataId);
@@ -4666,11 +4671,31 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Update hash_id for photo data. Generates the same value for all photo mimetype data, since
+     * there's only one photo for each raw_contact.
+     */
+    public void upgradeToVersion1110(SQLiteDatabase db) {
+        final long mimeTypeId = lookupMimeTypeId(db,
+                ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE);
+        final ContentValues values = new ContentValues();
+        values.put(Data.HASH_ID, getPhotoHashId());
+        db.update(Tables.DATA, values, DataColumns.MIMETYPE_ID + " = " + mimeTypeId, null);
+    }
+
+    public String getPhotoHashId() {
+        return generateHashId(ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE, null);
+    }
+
+    /**
+     * This method is only used in upgradeToVersion1101 method, and should not be used in other
+     * places now. Because data15 is not used to generate hash_id for photo, and the new generating
+     * method for photos should be getPhotoHashId().
+     *
      * Generate hash_id from data1, data2 and data15 columns.
      * If one of data1 and data2 is not null, using data1 and data2 to get hash_id,
      * otherwise, using data15 to generate.
      */
-    public String generateHashId(String data1, String data2, byte[] data15) {
+    public String legacyGenerateHashId(String data1, String data2, byte[] data15) {
         final StringBuilder sb = new StringBuilder();
         byte[] hashInput = null;
         if (!TextUtils.isEmpty(data1) || !TextUtils.isEmpty(data2)) {
@@ -4679,6 +4704,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             hashInput = sb.toString().getBytes();
         } else if (data15 != null) {
             hashInput = data15;
+        }
+        if (hashInput != null) {
+            final String hashId = generateHashIdForData(hashInput);
+            return hashId;
+        } else {
+            return null;
+        }
+    }
+
+    public String generateHashId(String data1, String data2) {
+        final StringBuilder sb = new StringBuilder();
+        byte[] hashInput = null;
+        if (!TextUtils.isEmpty(data1) || !TextUtils.isEmpty(data2)) {
+            sb.append(data1);
+            sb.append(data2);
+            hashInput = sb.toString().getBytes();
         }
         if (hashInput != null) {
             final String hashId = generateHashIdForData(hashInput);

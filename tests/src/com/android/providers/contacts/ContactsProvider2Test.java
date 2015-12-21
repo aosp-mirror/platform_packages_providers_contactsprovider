@@ -1042,10 +1042,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
-    public void testDataInsertAndUpdate_WithHashId() {
+    public void testDataInsertAndUpdateHashId() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
 
-        // Insert a data.
+        // Insert a data with non-photo mimetype.
         ContentValues values = new ContentValues();
         putDataValues(values, rawContactId);
         Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
@@ -1095,18 +1095,32 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Update the data with null data1 and null data2.
         values.putNull(Data.DATA1);
         values.putNull(Data.DATA2);
-        byte[] data15 = values.getAsByteArray(Data.DATA15);
-        testHashId = helper.generateHashIdForData(data15);
         mResolver.update(dataUri, values, null, null);
-        assertStoredValue(dataUri, Data.HASH_ID, testHashId);
+        assertStoredValue(dataUri, Data.HASH_ID, null);
+    }
 
-        // Insert a data with null data1, null data2 and null data15, should insert null hash_id.
-        putDataValues(values, rawContactId);
-        values.remove(Data.DATA1);
-        values.remove(Data.DATA2);
-        values.remove(Data.DATA15);
-        Uri dataUri2 = mResolver.insert(Data.CONTENT_URI, values);
-        assertStoredValue(dataUri2, Data.HASH_ID, null);
+    public void testDataInsertAndUpdateHashId_Photo() {
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
+
+        // Insert a data with photo mimetype.
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Data.MIMETYPE, Photo.CONTENT_ITEM_TYPE);
+        values.put(Data.DATA1, "testData1");
+        values.put(Data.DATA2, "testData2");
+        Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
+
+        // Check for photo data's hashId is correct or not.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        final ContactsDatabaseHelper helper = cp.getDatabaseHelper(mContext);
+        String hashId = helper.getPhotoHashId();
+        assertStoredValue(dataUri, Data.HASH_ID, hashId);
+
+        // Update the data with new DATA1, and check if hash_id is not changed.
+        values.put(Data.DATA1, "newData1");
+        mResolver.update(dataUri, values, null, null);
+        assertStoredValue(dataUri, Data.DATA1, "newData1");
+        assertStoredValue(dataUri, Data.HASH_ID, hashId);
     }
 
     public void testDataInsertPhoneNumberTooLongIsTrimmed() {

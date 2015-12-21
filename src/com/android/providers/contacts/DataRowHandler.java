@@ -19,6 +19,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
@@ -38,7 +39,7 @@ import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 public abstract class DataRowHandler {
 
     private static final String[] HASH_INPUT_COLUMNS = new String[] {
-            Data.DATA1, Data.DATA2, Data.DATA15 };
+            Data.DATA1, Data.DATA2};
 
     public interface DataDeleteQuery {
         public static final String TABLE = Tables.DATA_JOIN_MIMETYPES;
@@ -196,8 +197,16 @@ public abstract class DataRowHandler {
     public void handleHashIdForInsert(ContentValues values) {
         final String data1 = values.getAsString(Data.DATA1);
         final String data2 = values.getAsString(Data.DATA2);
-        final byte[] data15 = values.getAsByteArray(Data.DATA15);
-        final String hashId = mDbHelper.generateHashId(data1, data2, data15);
+        final String photoHashId= mDbHelper.getPhotoHashId();
+
+        String hashId;
+        if (ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE.equals(mMimetype)) {
+            hashId = photoHashId;
+        } else if (!TextUtils.isEmpty(data1) || !TextUtils.isEmpty(data2)) {
+            hashId = mDbHelper.generateHashId(data1, data2);
+        } else {
+            hashId = null;
+        }
         if (TextUtils.isEmpty(hashId)) {
             values.putNull(Data.HASH_ID);
         } else {
@@ -207,16 +216,15 @@ public abstract class DataRowHandler {
 
     /**
      * Compute hash_id column and add it to values.
-     * If both of data1 and data2 changed, using new values to compute hash_id.
-     * If one of data1 and data2 changed, read another one from DB and compute hash_id.
-     * If both data1 and data2 are null, use data15 to compute hash_id.
+     * If this is not a photo field, and one of data1 and data2 changed, re-compute hash_id with new
+     * data1 and data2.
+     * If this is a photo field, no need to change hash_id.
      */
     private void handleHashIdForUpdate(ContentValues values, long dataId) {
-        if (values.containsKey(Data.DATA1) || values.containsKey(Data.DATA2)
-                || values.containsKey(Data.DATA15)) {
+        if (!ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE.equals(mMimetype)
+                && (values.containsKey(Data.DATA1) || values.containsKey(Data.DATA2))) {
             String data1 = values.getAsString(Data.DATA1);
             String data2 = values.getAsString(Data.DATA2);
-            byte[] data15 = values.getAsByteArray(Data.DATA15);
             mSelectionArgs1[0] = String.valueOf(dataId);
             final Cursor c = mDbHelper.getReadableDatabase().query(Tables.DATA,
                     HASH_INPUT_COLUMNS, Data._ID + "=?", mSelectionArgs1, null, null, null);
@@ -224,12 +232,12 @@ public abstract class DataRowHandler {
                 if (c.moveToFirst()) {
                     data1 = values.containsKey(Data.DATA1) ? data1 : c.getString(0);
                     data2 = values.containsKey(Data.DATA2) ? data2 : c.getString(1);
-                    data15 = values.containsKey(Data.DATA15) ? data15 : c.getBlob(2);
                 }
             } finally {
                 c.close();
             }
-            final String hashId = mDbHelper.generateHashId(data1, data2, data15);
+
+            String hashId = mDbHelper.generateHashId(data1, data2);
             if (TextUtils.isEmpty(hashId)) {
                 values.putNull(Data.HASH_ID);
             } else {
