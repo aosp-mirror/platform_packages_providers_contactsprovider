@@ -24,10 +24,6 @@ import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
-import android.content.ContextWrapper;
-import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
@@ -66,7 +62,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     /** Total number of columns exposed by call_log provider. */
     private static final int NUM_CALLLOG_FIELDS = 29;
 
-    private CallLogProvider mCallLogProvider;
+    private CallLogProviderTestable mCallLogProvider;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -81,8 +77,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        mCallLogProvider = (CallLogProvider) addProvider(TestCallLogProvider.class,
-                CallLog.AUTHORITY);
+        mCallLogProvider = addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
     }
 
     @Override
@@ -451,49 +446,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     private Uri insertVoicemailRecord() {
         return mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, getDefaultVoicemailValues());
-    }
-
-    public static class TestCallLogProvider extends CallLogProvider {
-        private static ContactsDatabaseHelper mDbHelper;
-
-        @Override
-        protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
-            if (mDbHelper == null) {
-                mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
-            }
-            return mDbHelper;
-        }
-
-        @Override
-        protected CallLogInsertionHelper createCallLogInsertionHelper(Context context) {
-            return new CallLogInsertionHelper() {
-                @Override
-                public String getGeocodedLocationFor(String number, String countryIso) {
-                    return "usa";
-                }
-
-                @Override
-                public void addComputedValues(ContentValues values) {
-                    values.put(Calls.COUNTRY_ISO, "us");
-                    values.put(Calls.GEOCODED_LOCATION, "usa");
-                }
-            };
-        }
-
-        @Override
-        protected Context context() {
-            return new ContextWrapper(super.context()) {
-                @Override
-                public PackageManager getPackageManager() {
-                    return super.getPackageManager();
-                }
-
-                @Override
-                public void sendBroadcast(Intent intent, String receiverPermission) {
-                   // Do nothing for now.
-                }
-            };
-        }
     }
 
     private Cursor getTestCallLogCursor() {

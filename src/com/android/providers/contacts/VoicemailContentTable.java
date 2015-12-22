@@ -78,12 +78,12 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .build();
 
     private final String mTableName;
-    private final SQLiteOpenHelper mDbHelper;
+    private final CallLogDatabaseHelper mDbHelper;
     private final Context mContext;
     private final VoicemailTable.DelegateHelper mDelegateHelper;
     private final CallLogInsertionHelper mCallLogInsertionHelper;
 
-    public VoicemailContentTable(String tableName, Context context, SQLiteOpenHelper dbHelper,
+    public VoicemailContentTable(String tableName, Context context, CallLogDatabaseHelper dbHelper,
             VoicemailTable.DelegateHelper contentProviderHelper,
             CallLogInsertionHelper callLogInsertionHelper) {
         mTableName = tableName;

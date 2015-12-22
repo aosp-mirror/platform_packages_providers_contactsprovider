@@ -322,6 +322,11 @@ public class ContactsActor {
             public int getUserId() {
                 return mockUserManager.getUserHandle();
             }
+
+            @Override
+            public void sendBroadcast(Intent intent, String receiverPermission) {
+                // Ignore.
+            }
         };
 
         mMockAccountManager = new MockAccountManager(mProviderContext);

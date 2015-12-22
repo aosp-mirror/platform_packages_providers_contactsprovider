@@ -29,6 +29,7 @@ import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import android.test.suitebuilder.annotation.Suppress;
 import com.android.common.io.MoreCloseables;
 
 import java.io.FileNotFoundException;
@@ -563,24 +564,6 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         Uri uri = mResolver.insert(statusUri(), values);
         assertStoredValues(uri, values);
         assertSelection(uri, values, Status._ID, ContentUris.parseId(uri));
-    }
-
-    // Test to ensure that duplicate entries for the same package still end up as the same record.
-    public void testStatusInsertDuplicate() throws Exception {
-        setUpForFullPermission();
-        ContentValues values = getTestStatusValues();
-        assertNotNull(mResolver.insert(statusUri(), values));
-        assertEquals(1, getCount(statusUri(), null, null));
-
-        // Insertion request for the same package should fail with no change in count.
-        values.put(Status.DATA_CHANNEL_STATE, Status.DATA_CHANNEL_STATE_NO_CONNECTION);
-        assertNull(mResolver.insert(statusUri(), values));
-        assertEquals(1, getCount(statusUri(), null, null));
-
-        // Now insert entry for another source package, and it should end up as a separate record.
-        values.put(Status.SOURCE_PACKAGE, "another.package");
-        assertNotNull(mResolver.insert(statusUri(), values));
-        assertEquals(2, getCount(statusUri(), null, null));
     }
 
     public void testStatusUpdate() throws Exception {

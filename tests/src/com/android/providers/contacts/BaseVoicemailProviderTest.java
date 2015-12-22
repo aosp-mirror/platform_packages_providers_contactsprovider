@@ -166,8 +166,8 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         }
 
         @Override
-        protected ContactsDatabaseHelper getDatabaseHelper(Context context) {
-            return ContactsDatabaseHelper.getNewInstanceForTest(context);
+        protected CallLogDatabaseHelper getDatabaseHelper(Context context) {
+            return new CallLogDatabaseHelperTestable(context, /* contactsDbForMigration = */ null);
         }
 
         @Override

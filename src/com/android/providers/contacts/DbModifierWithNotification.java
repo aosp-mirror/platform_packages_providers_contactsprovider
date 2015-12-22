@@ -43,7 +43,7 @@ import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
 import com.android.common.io.MoreCloseables;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
 
 import java.util.ArrayList;

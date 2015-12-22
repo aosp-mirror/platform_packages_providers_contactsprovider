@@ -152,10 +152,16 @@ public class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
 
         public final String name;
         public final TableColumn[] columns;
+        public final boolean shouldBeInNewDb;
 
         public TableListEntry(String name, TableColumn[] columns) {
+            this(name, columns, /* shouldBeInNewDb = */ true);
+        }
+
+        public TableListEntry(String name, TableColumn[] columns, boolean shouldBeInNewDb) {
             this.name = name;
             this.columns = columns;
+            this.shouldBeInNewDb = shouldBeInNewDb;
         }
     }
 
@@ -171,8 +177,13 @@ public class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
         super.tearDown();
     }
 
-    protected void assertDatabaseStructureSameAsList(TableListEntry[] list) {
+    protected void assertDatabaseStructureSameAsList(TableListEntry[] list, boolean isNewDatabase) {
         for (TableListEntry entry : list) {
+            if (!entry.shouldBeInNewDb) {
+                if (isNewDatabase) {
+                    continue;
+                }
+            }
             TableStructure structure = new TableStructure(mDb, entry.name);
             structure.assertSame(entry.columns);
         }
