@@ -2996,6 +2996,72 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertMetadataNetworkNotified(true);
     }
 
+    public void testUpdateMetadataOnRawContactBackupIdChange() throws Exception {
+        ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
+                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
+        // are using different dbHelpers.
+        contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
+                mActor.provider).getDatabaseHelper(getContext()));
+        // Create an account first.
+        String backupId = "backupId001";
+        String accountType = "accountType";
+        String accountName = "accountName";
+        Account account = new Account(accountName, accountType);
+        createAccount(accountName, accountType, null);
+
+        // Insert a metadata to MetadataSync table.
+        String data = "{\n" +
+                "  \"unique_contact_id\": {\n" +
+                "    \"account_type\": \"CUSTOM_ACCOUNT\",\n" +
+                "    \"custom_account_type\": " + accountType + ",\n" +
+                "    \"account_name\": " + accountName + ",\n" +
+                "    \"contact_id\": " + backupId + ",\n" +
+                "    \"data_set\": \"FOCUS\"\n" +
+                "  },\n" +
+                "  \"contact_prefs\": {\n" +
+                "    \"send_to_voicemail\": true,\n" +
+                "    \"starred\": true,\n" +
+                "    \"pinned\": 1\n" +
+                "  }\n" +
+                "  }";
+
+        ContentValues insertedValues = new ContentValues();
+        insertedValues.put(MetadataSync.RAW_CONTACT_BACKUP_ID, backupId);
+        insertedValues.put(MetadataSync.ACCOUNT_TYPE, accountType);
+        insertedValues.put(MetadataSync.ACCOUNT_NAME, accountName);
+        insertedValues.put(MetadataSync.DATA, data);
+        mResolver.insert(MetadataSync.CONTENT_URI, insertedValues);
+
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+        // Insert a raw contact without backup_id.
+        long rawContactId = RawContactUtil.createRawContact(mResolver, account);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        // Check if the raw contact is not updated because of no backup_id.
+        assertStoredValue(rawContactUri, RawContacts._ID, rawContactId);
+        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, accountType);
+        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, accountName);
+        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "0");
+        assertStoredValue(rawContactUri, RawContacts.STARRED, "0");
+        assertStoredValue(rawContactUri, RawContacts.PINNED, "0");
+
+        // Update the raw contact with backup_id.
+        ContentValues updatedValues = new ContentValues();
+        updatedValues.put(RawContacts.BACKUP_ID, backupId);
+        mResolver.update(RawContacts.CONTENT_URI, updatedValues, null, null);
+        // Check if the raw contact is updated because of backup_id change.
+        assertStoredValue(rawContactUri, RawContacts._ID, rawContactId);
+        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, accountType);
+        assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, accountName);
+        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "1");
+        assertStoredValue(rawContactUri, RawContacts.STARRED, "1");
+        assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
+        // Notify metadata network because of the changed raw contact.
+        assertMetadataNetworkNotified(true);
+    }
+
     public void testDeleteMetadataOnRawContactDelete() throws Exception {
         ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
                 ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
@@ -6827,6 +6893,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
         mResolver.update(rawContactUri, values, null, null);
         assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, 1);
+        assertMetadataDirty(rawContactUri, true);
+        assertMetadataNetworkNotified(true);
+    }
+
+    public void testMarkAsMetadataDirtyForRawContactBackupIdChange() {
+        long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+
+        // Make a metadata change to set metadata_dirty.
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.SEND_TO_VOICEMAIL, "1");
+        mResolver.update(rawContactUri, values, null, null);
+        assertMetadataDirty(rawContactUri, true);
+
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        // Update the backup_id and check metadata network should be notified.
+        values = new ContentValues();
+        values.put(RawContacts.BACKUP_ID, "newBackupId");
+        mResolver.update(rawContactUri, values, null, null);
+        assertStoredValue(rawContactUri, RawContacts.BACKUP_ID, "newBackupId");
         assertMetadataDirty(rawContactUri, true);
         assertMetadataNetworkNotified(true);
     }

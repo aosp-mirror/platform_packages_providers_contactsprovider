@@ -2489,6 +2489,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 updateMetadataOnRawContactInsert(db, rawContactId);
             }
         }
+        if (mMetadataSyncEnabled) {
+            for (long rawContactId : mTransactionContext.get().getBackupIdChangedRawContacts()) {
+                updateMetadataOnRawContactInsert(db, rawContactId);
+            }
+        }
 
         final Set<Long> dirtyRawContacts = mTransactionContext.get().getDirtyRawContactIds();
         if (!dirtyRawContacts.isEmpty()) {
@@ -4501,6 +4506,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final boolean isDataSetChanging = values.containsKey(RawContacts.DATA_SET);
         final boolean isAccountChanging =
                 isAccountNameChanging || isAccountTypeChanging || isDataSetChanging;
+        final boolean isBackupIdChanging = values.containsKey(RawContacts.BACKUP_ID);
 
         int previousDeleted = 0;
         long accountId = 0;
@@ -4566,6 +4572,28 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (shouldMarkMetadataDirtyForRawContact(values)) {
                 mTransactionContext.get().markRawContactMetadataDirty(
                         rawContactId, callerIsMetadataSyncAdapter);
+            }
+            if (isBackupIdChanging) {
+                Cursor cursor = db.query(Tables.RAW_CONTACTS,
+                        new String[] {RawContactsColumns.CONCRETE_METADATA_DIRTY},
+                        selection, mSelectionArgs1, null, null, null);
+                int metadataDirty = 0;
+                try {
+                    if (cursor.moveToFirst()) {
+                        metadataDirty = cursor.getInt(0);
+                    }
+                } finally {
+                    cursor.close();
+                }
+
+                if (metadataDirty == 1) {
+                    // Re-notify metadata network if backup_id is updated and metadata is dirty.
+                    mTransactionContext.get().markRawContactMetadataDirty(
+                            rawContactId, callerIsMetadataSyncAdapter);
+                } else {
+                    // Merge from metadata sync table if backup_id is updated and no dirty change.
+                    mTransactionContext.get().markBackupIdChangedRawContact(rawContactId);
+                }
             }
             if (flagExists(values, RawContacts.STARRED)) {
                 if (!callerIsSyncAdapter) {
