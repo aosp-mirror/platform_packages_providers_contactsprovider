@@ -1625,7 +1625,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataUsageStatColumns.DATA_ID + " INTEGER NOT NULL, " +
                 DataUsageStatColumns.USAGE_TYPE_INT + " INTEGER NOT NULL DEFAULT 0, " +
                 DataUsageStatColumns.TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
-                DataUsageStatColumns.LAST_TIME_USED + " INTERGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
                 "FOREIGN KEY(" + DataUsageStatColumns.DATA_ID + ") REFERENCES "
                         + Tables.DATA + "(" + Data._ID + ")" +
         ");");
@@ -3054,12 +3054,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1108;
         }
 
-        if (oldVersion < 1109) {
+        if (isUpgradeRequired(oldVersion, newVersion, 1109)) {
             upgradeToVersion1109(db);
             oldVersion = 1109;
         }
 
-        if (oldVersion < 1110) {
+        if (isUpgradeRequired(oldVersion, newVersion, 1110)) {
             upgradeToVersion1110(db);
             oldVersion = 1110;
         }
@@ -3109,6 +3109,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             throw new IllegalStateException(
                     "error upgrading the database to version " + newVersion);
         }
+    }
+
+    private static boolean isUpgradeRequired(int oldVersion, int newVersion, int version) {
+        return oldVersion < version && newVersion >= version;
     }
 
     private void upgradeToVersion202(SQLiteDatabase db) {
@@ -4002,7 +4006,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "data_id INTEGER NOT NULL, " +
                 "usage_type INTEGER NOT NULL DEFAULT 0, " +
                 "times_used INTEGER NOT NULL DEFAULT 0, " +
-                "last_time_used INTERGER NOT NULL DEFAULT 0, " +
+                "last_time_used INTEGER NOT NULL DEFAULT 0, " +
                 "FOREIGN KEY(data_id) REFERENCES data(_id));");
         db.execSQL("CREATE UNIQUE INDEX data_usage_stat_index ON " +
                 "data_usage_stat (data_id, usage_type)");
