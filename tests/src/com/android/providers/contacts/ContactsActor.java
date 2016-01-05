@@ -314,6 +314,11 @@ public class ContactsActor {
             }
 
             @Override
+            public String getSystemServiceName(Class<?> serviceClass) {
+                return overallContext.getSystemServiceName(serviceClass);
+            }
+
+            @Override
             public SharedPreferences getSharedPreferences(String name, int mode) {
                 return mPrefs;
             }
