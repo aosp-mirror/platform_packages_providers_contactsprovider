@@ -94,6 +94,7 @@ public class EnterprisePolicyGuard {
             case ContactsProvider2.PHONES_FILTER_ENTERPRISE:
             case ContactsProvider2.CALLABLES_FILTER_ENTERPRISE:
             case ContactsProvider2.EMAILS_FILTER_ENTERPRISE:
+            case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
                 return true;
             default:
                 return false;
@@ -108,6 +109,7 @@ public class EnterprisePolicyGuard {
             case ContactsProvider2.EMAILS_LOOKUP_ENTERPRISE:
             case ContactsProvider2.CONTACTS_ID_PHOTO_CORP:
             case ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO_CORP:
+            case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
                 return true;
             default:
                 return false;
@@ -124,6 +126,7 @@ public class EnterprisePolicyGuard {
             case ContactsProvider2.EMAILS_FILTER_ENTERPRISE:
             case ContactsProvider2.CONTACTS_ID_PHOTO_CORP:
             case ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO_CORP:
+            case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
                 return true;
             default:
                 return false;

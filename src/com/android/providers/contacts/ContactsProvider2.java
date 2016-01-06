@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.annotation.Nullable;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -162,6 +163,7 @@ import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
+import com.android.providers.contacts.enterprise.EnterpriseContactsCursorWrapper;
 import com.android.providers.contacts.enterprise.EnterprisePolicyGuard;
 import com.android.providers.contacts.MetadataEntryParser.AggregationData;
 import com.android.providers.contacts.MetadataEntryParser.FieldData;
@@ -444,6 +446,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     public static final int DELETED_CONTACTS = 23000;
     public static final int DELETED_CONTACTS_ID = 23001;
+
+    public static final int DIRECTORY_FILE_ENTERPRISE = 24000;
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
@@ -1382,6 +1386,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts", DELETED_CONTACTS);
         matcher.addURI(ContactsContract.AUTHORITY, "deleted_contacts/#", DELETED_CONTACTS_ID);
+
+        matcher.addURI(ContactsContract.AUTHORITY, "directory_file_enterprise/*",
+                DIRECTORY_FILE_ENTERPRISE);
     }
 
     private static class DirectoryInfo {
@@ -5846,8 +5853,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (TextUtils.isEmpty(directory)) {
                     throw new IllegalArgumentException("Directory id cannot be null");
                 }
-                final boolean isCorpDirectory =
-                        Directory.isEnterpriseDirectoryId(Long.parseLong(directory));
+                final long dirId = Long.parseLong(directory);
+                final boolean isCorpDirectory = Directory.isEnterpriseDirectoryId(dirId);
                 final Uri localUri = rewriteQueryParameters(
                         Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filterParam)),
                         uri, isCorpDirectory);
@@ -5862,7 +5869,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         return new MatrixCursor(outputProjection);
                     }
                     final Cursor cursor = queryCorpContacts(localUri, projection, selection,
-                            selectionArgs, sortOrder, Contacts._ID);
+                            selectionArgs, sortOrder, Contacts._ID, dirId);
                     return (cursor != null) ? cursor : new MatrixCursor(outputProjection);
                 } else {
                     return queryDirectoryIfNecessary(localUri, projection, selection, selectionArgs,
@@ -7130,98 +7137,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return builder.build();
     }
 
-    private static class EnterpriseContactsCursorWrapper extends CursorWrapper {
-
-        // As some of the columns like PHOTO_URI requires contact id, but original project may not
-        // have it, so caller may use a work projection instead of original project to make the
-        // query. Hence, we need also to restore the cursor to the origianl projection.
-        private final int contactIdIndex;
-        private final boolean isContactIdAppended;
-        private final String[] originalColumnNames;
-
-        public EnterpriseContactsCursorWrapper(Cursor cursor, int contactIdIndex,
-                boolean isContactIdAppended) {
-            super(cursor);
-            this.contactIdIndex = contactIdIndex;
-            this.isContactIdAppended = isContactIdAppended;
-            this.originalColumnNames = isContactIdAppended
-                    ? removeLastColumn(super.getColumnNames()) : super.getColumnNames();
-        }
-
-        private static String[] removeLastColumn(String[] projection) {
-            final String[] newProjection = new String[projection.length - 1];
-            System.arraycopy(projection, 0, newProjection, 0, newProjection.length);
-            return newProjection;
-        }
-
-        @Override
-        public int getColumnCount() {
-            return originalColumnNames.length;
-        }
-
-        @Override
-        public String[] getColumnNames() {
-            return originalColumnNames;
-        }
-
-        @Override
-        public String getString(int columnIndex) {
-            final String result = super.getString(columnIndex);
-            final String columnName = super.getColumnName(columnIndex);
-            final long contactId = super.getLong(contactIdIndex);
-            switch (columnName) {
-                case Contacts.PHOTO_THUMBNAIL_URI:
-                    return getCorpThumbnailUri(contactId, getWrappedCursor());
-                case Contacts.PHOTO_URI:
-                    return getCorpDisplayPhotoUri(contactId, getWrappedCursor());
-                case Data.PHOTO_FILE_ID:
-                case Data.PHOTO_ID:
-                    return null;
-                case Data.CUSTOM_RINGTONE:
-                    String ringtoneUri = super.getString(columnIndex);
-                    // TODO: Remove this conditional block once accessing sounds in corp
-                    // profile becomes possible.
-                    if (ringtoneUri != null
-                            && !Uri.parse(ringtoneUri).isPathPrefixMatch(
-                                    MediaStore.Audio.Media.INTERNAL_CONTENT_URI)) {
-                        ringtoneUri = null;
-                    }
-                    return ringtoneUri;
-                case Contacts.LOOKUP_KEY:
-                    final String lookupKey = super.getString(columnIndex);
-                    if (TextUtils.isEmpty(lookupKey)) {
-                        return null;
-                    } else {
-                        return Contacts.ENTERPRISE_CONTACT_LOOKUP_PREFIX + lookupKey;
-                    }
-                default:
-                    return result;
-            }
-        }
-
-        @Override
-        public int getInt(int column) {
-            return (int) getLong(column);
-        }
-
-        @Override
-        public long getLong(int column) {
-            long result = super.getLong(column);
-            if (column == contactIdIndex) {
-                return result + Contacts.ENTERPRISE_CONTACT_ID_BASE;
-            } else {
-                final String columnName = getColumnName(column);
-                switch (columnName) {
-                    case Data.PHOTO_FILE_ID:
-                    case Data.PHOTO_ID:
-                        return 0;
-                    default:
-                        return result;
-                }
-            }
-        }
-    }
-
     /**
      * Handles {@link Directory#ENTERPRISE_CONTENT_URI}.
      */
@@ -7294,7 +7209,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             final Cursor managedCursor = queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, RawContacts.CONTACT_ID);
+                    selectionArgs, sortOrder, RawContacts.CONTACT_ID, null);
             if (managedCursor == null) {
                 // No corp results.  Just return the local result.
                 return primaryCursor;
@@ -7348,7 +7263,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Query corp CP2 directly.
      */
     private Cursor queryCorpContacts(Uri localUri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, String contactIdColumnName) {
+            String[] selectionArgs, String sortOrder, String contactIdColumnName,
+            @Nullable Long directoryId) {
         final int corpUserId = UserUtils.getCorpUserId(getContext());
         if (corpUserId < 0) {
             return null;
@@ -7377,8 +7293,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 throw th;
             }
         }
-        return new EnterpriseContactsCursorWrapper(managedCursor, columnIdIndex,
-                isContactIdAdded);
+        final String[] originalColumnNames = isContactIdAdded
+                ? removeLastColumn(managedCursor.getColumnNames()) : managedCursor.getColumnNames();
+        return new EnterpriseContactsCursorWrapper(managedCursor, originalColumnNames,
+                columnIdIndex, isContactIdAdded, directoryId);
+    }
+
+    private static String[] removeLastColumn(String[] projection) {
+        final String[] newProjection = new String[projection.length - 1];
+        System.arraycopy(projection, 0, newProjection, 0, newProjection.length);
+        return newProjection;
     }
 
     /**
@@ -7425,7 +7349,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // DB.
         try {
             final Cursor rewrittenCorpCursor = queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, contactIdColumnName);
+                    selectionArgs, sortOrder, contactIdColumnName, null);
             if (rewrittenCorpCursor != null) {
                 local.close();
                 return rewrittenCorpCursor;
@@ -7462,7 +7386,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ContactsContract.DIRECTORY_PARAM_KEY,
                         String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
                 final Cursor cursor = queryCorpContacts(builder.build(), projection, null, null,
-                        null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+                        null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID, directoryId);
                 if (cursor == null) {
                     final String[] outputProjection = (projection != null) ? projection
                             : sPhoneLookupProjectionMap.getColumnNames();
@@ -7483,7 +7407,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
     }
 
-    private static final Set<String> MODIFIED_KEY_SET_FOR_ENTERPRISE_CALLABLE_FILTER =
+    private static final Set<String> MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER =
             new ArraySet<String>(Arrays.asList(new String[] {
                 ContactsContract.DIRECTORY_PARAM_KEY
             }));
@@ -7505,14 +7429,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final long directoryId = Long.parseLong(directory);
         final Uri.Builder builder = initialUri.buildUpon()
                 .appendPath(filterParam);
-        addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_CALLABLE_FILTER);
+        addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER);
         // If the query contains remote directory id, it should query work CP2 or directory
         // provider directory.
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
             builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
             return queryCorpContacts(builder.build(), projection, selection, selectionArgs,
-                    sortOrder, contactIdString);
+                    sortOrder, contactIdString, directoryId);
         } else {
             builder.appendQueryParameter(
                     ContactsContract.DIRECTORY_PARAM_KEY,
@@ -7602,49 +7526,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         }
         return -1;
-    }
-
-    /**
-     * Generate a photo URI for {@link Contacts#PHOTO_THUMBNAIL_URI}.
-     *
-     * Example: "content://com.android.contacts/contacts_corp/ID/photo"
-     *
-     * {@link #openAssetFile} knows how to fetch from this URI.
-     */
-    private static String getCorpThumbnailUri(long contactId, Cursor originalCursor) {
-        // First, check if the contact has a thumbnail.
-        if (originalCursor.isNull(
-                originalCursor.getColumnIndex(Contacts.PHOTO_THUMBNAIL_URI))) {
-            // No thumbnail.  Just return null.
-            return null;
-        }
-        return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
-                .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
-    }
-
-    /**
-     * Generate a photo URI for {@link PhoneLookup#PHOTO_URI}.
-     * Check if it's thumbnail uri, return corp thumbnail uri, otherwise return corp full photo uri.
-     *
-     * Example 1: "content://com.android.contacts/contacts_corp/ID/display_photo"
-     * Example 2: "content://com.android.contacts/contacts_corp/ID/photo"
-     *
-     * {@link #openAssetFile} knows how to fetch from this URI.
-     */
-    private static String getCorpDisplayPhotoUri(long contactId, Cursor originalCursor) {
-        final int photoUriIndex = originalCursor.getColumnIndex(Contacts.PHOTO_URI);
-        final String photoUri = originalCursor.getString(photoUriIndex);
-        if (photoUri == null) {
-            return null;
-        }
-        final int uriCode = sUriMatcher.match(Uri.parse(photoUri));
-        if (uriCode == CONTACTS_ID_PHOTO) {
-            return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
-                    .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
-        } else {
-            return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
-                    .appendPath(Contacts.Photo.DISPLAY_PHOTO).build().toString();
-        }
     }
 
     /**
@@ -9011,10 +8892,76 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return openCorpContactPicture(contactId, uri, mode, /* displayPhoto =*/ true);
             }
 
+            case DIRECTORY_FILE_ENTERPRISE: {
+                return openDirectoryFileEnterprise(uri, mode);
+            }
+
             default:
                 throw new FileNotFoundException(
                         mDbHelper.get().exceptionMessage("File does not exist", uri));
         }
+    }
+
+    private AssetFileDescriptor openDirectoryFileEnterprise(final Uri uri, final String mode)
+            throws FileNotFoundException {
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        if (directory == null) {
+            throw new IllegalArgumentException("Directory id missing in URI: " + uri);
+        }
+
+        final long directoryId = Long.parseLong(directory);
+        if (!Directory.isRemoteDirectory(directoryId)) {
+            throw new IllegalArgumentException("Directory is not a remote directory: " + uri);
+        }
+
+        final Uri remoteUri;
+        if (Directory.isEnterpriseDirectoryId(directoryId)) {
+            final int corpUserId = UserUtils.getCorpUserId(getContext());
+            final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+            if (corpUserId < 0 || !isCrossProfileAllowed) {
+                // No corp profile or the currrent profile is not the personal.
+                throw new FileNotFoundException(uri.toString());
+            }
+
+            // Clone input uri and subtract directory id
+            final Uri.Builder builder = ContactsContract.AUTHORITY_URI.buildUpon();
+            builder.encodedPath(uri.getEncodedPath());
+            builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
+                    String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+            addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER);
+
+            remoteUri = maybeAddUserId(builder.build(), corpUserId);
+        } else {
+            final DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
+            if (directoryInfo == null) {
+                Log.e(TAG, "Invalid directory ID: " + uri);
+                return null;
+            }
+
+            final Uri directoryPhotoUri = Uri.parse(uri.getLastPathSegment());
+            /*
+             * Please read before you modify the below code.
+             *
+             * The code restricts access from personal side to work side. It ONLY allows uri access
+             * to the content provider specified by the directoryInfo.authority.
+             *
+             * DON'T open file descriptor by directoryPhotoUri directly. Otherwise, it will break
+             * the whole sandoxing concept between personal and work side.
+             */
+            Builder builder = new Uri.Builder();
+            builder.scheme(ContentResolver.SCHEME_CONTENT);
+            builder.authority(directoryInfo.authority);
+            builder.encodedPath(directoryPhotoUri.getEncodedPath());
+            addQueryParametersFromUri(builder, directoryPhotoUri, null);
+
+            remoteUri = builder.build();
+        }
+
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "openDirectoryFileEnterprise: " + remoteUri);
+        }
+
+        return getContext().getContentResolver().openAssetFileDescriptor(remoteUri, mode);
     }
 
     /**
@@ -9030,7 +8977,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final int corpUserId = UserUtils.getCorpUserId(getContext());
         final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
         if (corpUserId < 0 || !isCrossProfileAllowed) {
-            // No corp profile or the currrent profile is not the personal.
+            // No corp profile or the current profile is not the personal.
             throw new FileNotFoundException(uri.toString());
         }
         // Convert the URI into:

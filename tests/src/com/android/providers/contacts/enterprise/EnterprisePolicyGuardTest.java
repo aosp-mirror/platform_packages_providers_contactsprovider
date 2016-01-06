@@ -76,6 +76,9 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
             Uri.parse("content://com.android.contacts/directories_enterprise");
     private static final Uri URI_DIRECTORIES_ID_ENTERPRISE =
             Uri.parse("content://com.android.contacts/directories_enterprise/" + DIRECTORY_ID);
+    private static final Uri URI_DIRECTORY_FILE_ENTERPRISE =
+            Uri.parse("content://com.android.contacts/directory_file_enterprise/content%3A%2F%2F"
+                    + "com.google.contacts.gal.provider%2Fphoto%2F?directory=1000000002");
 
     private static final Uri URI_OTHER =
             Uri.parse("content://com.android.contacts/contacts/" + CONTACT_ID);
@@ -101,6 +104,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkDirectorySupport(guard, URI_PHONES_FILTER_ENTERPRISE, true);
         checkDirectorySupport(guard, URI_CALLABLES_FILTER_ENTERPRISE, true);
         checkDirectorySupport(guard, URI_EMAILS_FILTER_ENTERPRISE, true);
+        checkDirectorySupport(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
         checkDirectorySupport(guard, URI_DIRECTORIES_ENTERPRISE, false);
         checkDirectorySupport(guard, URI_DIRECTORIES_ID_ENTERPRISE, false);
         checkDirectorySupport(guard, URI_CONTACTS_ID_PHOTO_CORP, false);
@@ -122,6 +126,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, false);
         checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, false);
         checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, false);
         checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, false);
         checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, false);
         checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, false);
@@ -137,6 +142,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, true);
         checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, true);
         checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, true);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
         checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, true);
         checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, true);
         checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, true);
@@ -152,6 +158,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, false);
         checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, false);
         checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
         checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, true);
         checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, true);
         checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, true);
@@ -167,6 +174,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, true);
         checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, true);
         checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, true);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
         checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, true);
         checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, true);
         checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, true);
@@ -183,6 +191,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, false);
         checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, false);
         checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, false);
         checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, false);
         checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, false);
         checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, false);
