@@ -7578,16 +7578,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Generate a photo URI for {@link PhoneLookup#PHOTO_THUMBNAIL_URI}.
+     * Generate a photo URI for {@link Contacts#PHOTO_THUMBNAIL_URI}.
      *
-     * Example: "content://USER@com.android.contacts/contacts/ID/photo"
+     * Example: "content://com.android.contacts/contacts_corp/ID/photo"
      *
      * {@link #openAssetFile} knows how to fetch from this URI.
      */
     private static String getCorpThumbnailUri(long contactId, Cursor originalCursor) {
         // First, check if the contact has a thumbnail.
         if (originalCursor.isNull(
-                originalCursor.getColumnIndex(PhoneLookup.PHOTO_THUMBNAIL_URI))) {
+                originalCursor.getColumnIndex(Contacts.PHOTO_THUMBNAIL_URI))) {
             // No thumbnail.  Just return null.
             return null;
         }
@@ -7597,20 +7597,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /**
      * Generate a photo URI for {@link PhoneLookup#PHOTO_URI}.
+     * Check if it's thumbnail uri, return corp thumbnail uri, otherwise return corp full photo uri.
      *
-     * Example: "content://USER@com.android.contacts/contacts/ID/display_photo"
+     * Example 1: "content://com.android.contacts/contacts_corp/ID/display_photo"
+     * Example 2: "content://com.android.contacts/contacts_corp/ID/photo"
      *
      * {@link #openAssetFile} knows how to fetch from this URI.
      */
     private static String getCorpDisplayPhotoUri(long contactId, Cursor originalCursor) {
-        // First, check if the contact has a display photo.
-        if (originalCursor.isNull(
-                originalCursor.getColumnIndex(PhoneLookup.PHOTO_FILE_ID))) {
-            // No display photo, fall-back to thumbnail.
-            return getCorpThumbnailUri(contactId, originalCursor);
+        final int photoUriIndex = originalCursor.getColumnIndex(Contacts.PHOTO_URI);
+        final String photoUri = originalCursor.getString(photoUriIndex);
+        if (photoUri == null) {
+            return null;
         }
-        return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
-                .appendPath(Contacts.Photo.DISPLAY_PHOTO).build().toString();
+        final int uriCode = sUriMatcher.match(Uri.parse(photoUri));
+        if (uriCode == CONTACTS_ID_PHOTO) {
+            return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
+                    .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
+        } else {
+            return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
+                    .appendPath(Contacts.Photo.DISPLAY_PHOTO).build().toString();
+        }
     }
 
     /**
