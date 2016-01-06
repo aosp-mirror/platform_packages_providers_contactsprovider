@@ -1849,6 +1849,25 @@ public class ContactAggregator2Test extends BaseContactsProvider2Test {
         assertAggregated(rawContactId2, rawContactId3);
     }
 
+    public void testSeparateExceptionDoesNotBreakJoinPairs(){
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "Ann", "Smith");
+        insertPhoneNumber(rawContactId2, "111");
+        long rawContactId3 = RawContactUtil.createRawContactWithName(mResolver, "Ann", "Smith");
+        insertPhoneNumber(rawContactId3, "111");
+        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
+                rawContactId2, rawContactId3);
+
+        // Action: edit name and phone number to make them same as rawContact2 and rawContact3
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "Ann", "Smith");
+        insertPhoneNumber(rawContactId1, "111");
+        assertNotAggregated(rawContactId1, rawContactId3);
+
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId3, rawContactId1);
+        assertAggregated(rawContactId1, rawContactId3);
+    }
+
     private void assertSuggestions(long contactId, long... suggestions) {
         final Uri aggregateUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri uri = Uri.withAppendedPath(aggregateUri,
