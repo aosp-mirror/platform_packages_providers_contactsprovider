@@ -6320,19 +6320,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case CALLABLES_FILTER_ENTERPRISE:
             case EMAILS_FILTER_ENTERPRISE: {
                 Uri initialUri = null;
-                String columnIdString = null;
+                String contactIdString = null;
                 if (match == PHONES_FILTER_ENTERPRISE) {
                     initialUri = Phone.CONTENT_FILTER_URI;
-                    columnIdString = Phone._ID;
+                    contactIdString = Phone.CONTACT_ID;
                 } else if (match == CALLABLES_FILTER_ENTERPRISE) {
                     initialUri = Callable.CONTENT_FILTER_URI;
-                    columnIdString = Callable._ID;
+                    contactIdString = Callable.CONTACT_ID;
                 } else if (match == EMAILS_FILTER_ENTERPRISE) {
                     initialUri = Email.CONTENT_FILTER_URI;
-                    columnIdString = Email._ID;
+                    contactIdString = Email.CONTACT_ID;
                 }
                 return queryCallableEnterprise(uri, projection, selection, selectionArgs,
-                        sortOrder, initialUri, columnIdString, cancellationSignal);
+                        sortOrder, initialUri, contactIdString, cancellationSignal);
             }
             case EMAILS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
@@ -7467,7 +7467,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
        into personal/work ContactsProvider2.
      */
     private Cursor queryCallableEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, Uri initialUri, String columnIdString,
+            String[] selectionArgs, String sortOrder, Uri initialUri, String contactIdString,
             CancellationSignal cancellationSignal) {
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
@@ -7485,7 +7485,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
             return queryCorpContacts(builder.build(), projection, selection, selectionArgs,
-                    sortOrder, columnIdString);
+                    sortOrder, contactIdString);
         } else {
             builder.appendQueryParameter(
                     ContactsContract.DIRECTORY_PARAM_KEY,
