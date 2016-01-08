@@ -50,6 +50,8 @@ import com.android.providers.contacts.aggregation.util.RawContactMatcher;
 import com.android.providers.contacts.aggregation.util.RawContactMatchingCandidates;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.google.android.collect.Sets;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -424,16 +426,16 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         for (Set<Long> component : tmpSets) {
             final String rawContacts = TextUtils.join(",", component);
             // If "SEPARATE" exception is found inside an connected component [component],
-            // remove the [component] from [connectedRawContacts], and create a new connected
-            // component for each raw contact of [component] and add to [connectedRawContacts].
+            // remove the [component] from [connectedRawContacts], and create new connected
+            // components for all raw contacts of [component] solely based on "JOIN" exceptions
+            // and add them to [connectedRawContacts].
             if (isFirstColumnGreaterThanZero(db, buildExceptionMatchingSql(rawContacts, rawContacts,
                     AggregationExceptions.TYPE_KEEP_SEPARATE, /* countOnly =*/true))) {
+                Multimap<Long, Long> joinPairs = HashMultimap.create();
+                findIdPairs(db, buildExceptionMatchingSql(rawContacts, rawContacts), joinPairs);
                 connectedRawContacts.remove(component);
-                for (Long rId : component) {
-                    final Set<Long> s= new HashSet<>();
-                    s.add(rId);
-                    connectedRawContacts.add(s);
-                }
+                connectedRawContacts.addAll(
+                    ContactAggregatorHelper.findConnectedComponents(component, joinPairs));
             }
         }
     }
