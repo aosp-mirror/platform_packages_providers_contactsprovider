@@ -6898,6 +6898,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testMarkAsMetadataDirtyForRawContactBackupIdChange() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
 
@@ -6906,10 +6910,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(RawContacts.SEND_TO_VOICEMAIL, "1");
         mResolver.update(rawContactUri, values, null, null);
         assertMetadataDirty(rawContactUri, true);
-
-        // Enable metadataSync flag.
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        cp.setMetadataSyncForTest(true);
 
         // Update the backup_id and check metadata network should be notified.
         values = new ContentValues();
