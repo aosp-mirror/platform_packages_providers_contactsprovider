@@ -47,8 +47,8 @@ import android.telecom.TelecomManager;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
+import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
 
@@ -151,7 +151,7 @@ public class CallLogProvider extends ContentProvider {
     private Handler mBackgroundHandler;
     private volatile CountDownLatch mReadAccessLatch;
 
-    private ContactsDatabaseHelper mDbHelper;
+    private CallLogDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
     private boolean mUseStrictPhoneNumberComparation;
     private VoicemailPermissions mVoicemailPermissions;
@@ -197,8 +197,8 @@ public class CallLogProvider extends ContentProvider {
     }
 
     @VisibleForTesting
-    protected ContactsDatabaseHelper getDatabaseHelper(final Context context) {
-        return ContactsDatabaseHelper.getInstance(context);
+    protected CallLogDatabaseHelper getDatabaseHelper(final Context context) {
+        return CallLogDatabaseHelper.getInstance(context);
     }
 
     @Override
@@ -374,12 +374,6 @@ public class CallLogProvider extends ContentProvider {
         }
     }
 
-    // Work around to let the test code override the context. getContext() is final so cannot be
-    // overridden.
-    protected Context context() {
-        return getContext();
-    }
-
     void adjustForNewPhoneAccount(PhoneAccountHandle handle) {
         scheduleBackgroundTask(BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT, handle);
     }
@@ -389,7 +383,7 @@ public class CallLogProvider extends ContentProvider {
      * after the operation is performed.
      */
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
-        return new DbModifierWithNotification(Tables.CALLS, db, context());
+        return new DbModifierWithNotification(Tables.CALLS, db, getContext());
     }
 
     /**
@@ -397,7 +391,7 @@ public class CallLogProvider extends ContentProvider {
      * only.
      */
     private DatabaseModifier getDatabaseModifier(DatabaseUtils.InsertHelper insertHelper) {
-        return new DbModifierWithNotification(Tables.CALLS, insertHelper, context());
+        return new DbModifierWithNotification(Tables.CALLS, insertHelper, getContext());
     }
 
     private static final Integer VOICEMAIL_TYPE = new Integer(Calls.VOICEMAIL_TYPE);

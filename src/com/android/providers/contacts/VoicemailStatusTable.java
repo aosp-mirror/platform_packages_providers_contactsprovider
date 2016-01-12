@@ -23,7 +23,6 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -51,10 +50,10 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
 
     private final String mTableName;
     private final Context mContext;
-    private final SQLiteOpenHelper mDbHelper;
+    private final CallLogDatabaseHelper mDbHelper;
     private final VoicemailTable.DelegateHelper mDelegateHelper;
 
-    public VoicemailStatusTable(String tableName, Context context, SQLiteOpenHelper dbHelper,
+    public VoicemailStatusTable(String tableName, Context context, CallLogDatabaseHelper dbHelper,
             VoicemailTable.DelegateHelper delegateHelper) {
         mTableName = tableName;
         mContext = context;

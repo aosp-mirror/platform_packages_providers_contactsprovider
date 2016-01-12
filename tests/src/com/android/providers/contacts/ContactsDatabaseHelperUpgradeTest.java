@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.BaseColumns;
 import android.provider.CallLog.Calls;
@@ -38,8 +37,7 @@ import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
-import android.test.AndroidTestCase;
-import android.test.suitebuilder.annotation.SmallTest;
+import android.test.suitebuilder.annotation.LargeTest;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
@@ -56,10 +54,10 @@ import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColum
 import com.android.providers.contacts.ContactsDatabaseHelper.PackagesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PreAuthorizedUris;
-import com.android.providers.contacts.ContactsDatabaseHelper.PropertiesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.PropertyUtils;
 
 import junit.framework.AssertionFailedError;
 
@@ -78,7 +76,7 @@ import java.util.HashMap;
  * Run the test like this: <code> runtest -c com.android.providers.contacts.ContactsDatabaseHelperUpgradeTest
  * contactsprov </code>
  */
-@SmallTest
+@LargeTest
 public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgradeTest {
 
     private static final String CONTACTS2_DB_1108_ASSET_NAME = "upgradeTest/contacts2_1108.sql";
@@ -101,13 +99,13 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
 
     public void testDatabaseCreate() {
         mHelper.onCreate(mDb);
-        assertDatabaseStructureSameAsList(TABLE_LIST);
+        assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ true);
     }
 
     public void testDatabaseUpgrade_UpgradeToCurrent() {
         create1108(mDb);
         mHelper.onUpgrade(mDb, 1108, mHelper.DATABASE_VERSION);
-        assertDatabaseStructureSameAsList(TABLE_LIST);
+        assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
     }
 
     /**
@@ -117,15 +115,15 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         create1108(mDb);
         upgradeTo1109();
         upgradeTo1110();
-        assertDatabaseStructureSameAsList(TABLE_LIST);
+        assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
     }
 
     private void upgradeTo1109() {
         mHelper.onUpgrade(mDb, 1108, 1109);
-        TableStructure calls = new TableStructure(mDb, Tables.CALLS);
+        TableStructure calls = new TableStructure(mDb, "calls");
         calls.assertHasColumn(Calls.LAST_MODIFIED, INTEGER, false, "0");
 
-        TableStructure voicemailStatus = new TableStructure(mDb, Tables.VOICEMAIL_STATUS);
+        TableStructure voicemailStatus = new TableStructure(mDb, "voicemail_status");
         voicemailStatus.assertHasColumn(Status.QUOTA_OCCUPIED, INTEGER, false, "-1");
         voicemailStatus.assertHasColumn(Status.QUOTA_TOTAL, INTEGER, false, "-1");
     }
@@ -155,8 +153,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
      * The structure of all tables in current version database.
      */
     private static final TableColumn[] PROPERTIES_COLUMNS = new TableColumn[] {
-            new TableColumn(PropertiesColumns.PROPERTY_KEY, TEXT, false, null),
-            new TableColumn(PropertiesColumns.PROPERTY_VALUE, TEXT, false, null),
+            new TableColumn(PropertyUtils.PropertiesColumns.PROPERTY_KEY, TEXT, false, null),
+            new TableColumn(PropertyUtils.PropertiesColumns.PROPERTY_VALUE, TEXT, false, null),
     };
 
     private static final TableColumn[] ACCOUNTS_COLUMNS = new TableColumn[] {
@@ -481,7 +479,7 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
     };
 
     private static final TableListEntry[] TABLE_LIST = {
-            new TableListEntry(Tables.PROPERTIES, PROPERTIES_COLUMNS),
+            new TableListEntry(PropertyUtils.Tables.PROPERTIES, PROPERTIES_COLUMNS),
             new TableListEntry(Tables.ACCOUNTS, ACCOUNTS_COLUMNS),
             new TableListEntry(Tables.CONTACTS, CONTACTS_COLUMNS),
             new TableListEntry(Tables.DELETED_CONTACTS, DELETED_CONTACTS_COLUMNS),
@@ -500,8 +498,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableListEntry(Tables.SETTINGS, SETTINGS_COLUMNS),
             new TableListEntry(Tables.VISIBLE_CONTACTS, VISIBLE_CONTACTS_COLUMNS),
             new TableListEntry(Tables.DEFAULT_DIRECTORY, DEFAULT_DIRECTORY_COLUMNS),
-            new TableListEntry(Tables.CALLS, CALLS_COLUMNS),
-            new TableListEntry(Tables.VOICEMAIL_STATUS, VOICEMAIL_STATUS_COLUMNS),
+            new TableListEntry("calls", CALLS_COLUMNS, false),
+            new TableListEntry("voicemail_status", VOICEMAIL_STATUS_COLUMNS, false),
             new TableListEntry(Tables.STATUS_UPDATES, STATUS_UPDATES_COLUMNS),
             new TableListEntry(Tables.DIRECTORIES, DIRECTORIES_COLUMNS),
             new TableListEntry(Tables.DATA_USAGE_STAT, DATA_USAGE_STAT_COLUMNS),

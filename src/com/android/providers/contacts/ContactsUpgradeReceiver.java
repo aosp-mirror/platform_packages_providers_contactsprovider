@@ -74,10 +74,13 @@ public class ContactsUpgradeReceiver extends BroadcastReceiver {
                 // in the process.
                 ContactsDatabaseHelper helper = ContactsDatabaseHelper.getInstance(context);
                 ProfileDatabaseHelper profileHelper = ProfileDatabaseHelper.getInstance(context);
+                CallLogDatabaseHelper calllogHelper = CallLogDatabaseHelper.getInstance(context);
+
                 Log.i(TAG, "Creating or opening contacts database");
 
                 helper.getWritableDatabase();
                 profileHelper.getWritableDatabase();
+                calllogHelper.getWritableDatabase();
                 ContactsProvider2.updateLocaleOffline(context, helper, profileHelper);
 
                 // Log the total time taken for the receiver to perform the operation

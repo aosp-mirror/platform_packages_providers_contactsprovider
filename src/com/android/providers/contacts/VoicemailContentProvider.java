@@ -24,7 +24,6 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
@@ -34,7 +33,7 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
@@ -83,8 +82,8 @@ public class VoicemailContentProvider extends ContentProvider
     }
 
     @VisibleForTesting
-    /*package*/ ContactsDatabaseHelper getDatabaseHelper(Context context) {
-        return ContactsDatabaseHelper.getInstance(context);
+    /*package*/ CallLogDatabaseHelper getDatabaseHelper(Context context) {
+        return CallLogDatabaseHelper.getInstance(context);
     }
 
     @VisibleForTesting
