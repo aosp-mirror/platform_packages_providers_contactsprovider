@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import com.android.internal.telephony.CallerInfo;
 import com.android.internal.telephony.PhoneConstants;
+import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 
 import android.content.ComponentName;
@@ -187,6 +188,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
                 40, null);
+        assertNotNull(uri);
+        assertEquals("0@" + CallLog.AUTHORITY, uri.getAuthority());
 
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
@@ -398,27 +401,33 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
     }
 
-    public void testCopyEntriesFromCursor_ReturnsMostRecentEntryTimestamp() {
-        assertEquals(10, mCallLogProvider.copyEntriesFromCursor(getTestCallLogCursor()));
-    }
-
     public void testCopyEntriesFromCursor_AllEntriesSyncedWithoutDuplicatesPresent() {
         assertStoredValues(Calls.CONTENT_URI);
-        mCallLogProvider.copyEntriesFromCursor(getTestCallLogCursor());
+
+        assertEquals(10, mCallLogProvider.copyEntriesFromCursor(
+                getTestCallLogCursor(), 5, /* forShadow =*/ true));
+
         assertStoredValues(Calls.CONTENT_URI,
                 getTestCallLogValues(2),
                 getTestCallLogValues(1),
                 getTestCallLogValues(0));
+        assertEquals(10, mCallLogProvider.getLastSyncTime(/* forShadow =*/ true));
+        assertEquals(0, mCallLogProvider.getLastSyncTime(/* forShadow =*/ false));
     }
 
     public void testCopyEntriesFromCursor_DuplicatesIgnoredCorrectly() {
         mResolver.insert(Calls.CONTENT_URI, getTestCallLogValues(1));
         assertStoredValues(Calls.CONTENT_URI, getTestCallLogValues(1));
-        mCallLogProvider.copyEntriesFromCursor(getTestCallLogCursor());
+
+        assertEquals(10, mCallLogProvider.copyEntriesFromCursor(
+                getTestCallLogCursor(), 5, /* forShadow =*/ false));
+
         assertStoredValues(Calls.CONTENT_URI,
                 getTestCallLogValues(2),
                 getTestCallLogValues(1),
                 getTestCallLogValues(0));
+        assertEquals(0, mCallLogProvider.getLastSyncTime(/* forShadow =*/ true));
+        assertEquals(10, mCallLogProvider.getLastSyncTime(/* forShadow =*/ false));
     }
 
     private ContentValues getDefaultValues(int callType) {

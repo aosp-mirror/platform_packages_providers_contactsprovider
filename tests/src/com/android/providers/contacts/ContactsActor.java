@@ -275,7 +275,28 @@ public class ContactsActor {
 
         resolver = new MockContentResolver();
         context = new RestrictionMockContext(overallContext, packageName, resolver,
-                mGrantedPermissions, mGrantedUriPermissions);
+                mGrantedPermissions, mGrantedUriPermissions) {
+            @Override
+            public Object getSystemService(String name) {
+                if (Context.COUNTRY_DETECTOR.equals(name)) {
+                    return mMockCountryDetector;
+                }
+                if (Context.ACCOUNT_SERVICE.equals(name)) {
+                    return mMockAccountManager;
+                }
+                if (Context.USER_SERVICE.equals(name)) {
+                    return mockUserManager;
+                }
+                // Use overallContext here; super.getSystemService() somehow won't return
+                // DevicePolicyManager.
+                return overallContext.getSystemService(name);
+            }
+
+            @Override
+            public String getSystemServiceName(Class<?> serviceClass) {
+                return overallContext.getSystemServiceName(serviceClass);
+            }
+        };
         this.packageName = packageName;
 
         // Let the Secure class initialize the settings provider, which is done when we first
@@ -357,12 +378,12 @@ public class ContactsActor {
         // info shouldn't have it.
         info.authority = stripOutUserIdFromAuthority(authority);
         provider.attachInfoForTesting(providerContext, info);
-        resolver.addProvider(authority, provider);
 
         // In case of LegacyTest, "authority" here is actually multiple authorities.
         // Register all authority here.
         for (String a : authority.split(";")) {
             resolver.addProvider(a, provider);
+            resolver.addProvider("0@" + a, provider);
         }
         return provider;
     }

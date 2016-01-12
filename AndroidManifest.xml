@@ -54,6 +54,15 @@
             android:writePermission="android.permission.WRITE_CALL_LOG">
         </provider>
 
+        <provider android:name="ShadowCallLogProvider"
+                  android:authorities="call_log_shadow"
+                  android:syncable="false" android:multiprocess="false"
+                  android:exported="true"
+                  android:encryptionAware="true"
+                  android:readPermission="android.permission.MANAGE_USERS"
+                  android:writePermission="android.permission.MANAGE_USERS">
+        </provider>
+
         <provider android:name="VoicemailContentProvider"
             android:authorities="com.android.voicemail"
             android:syncable="false" android:multiprocess="false"

@@ -42,7 +42,12 @@ public class CallLogDatabaseHelper {
 
     private static final String DATABASE_NAME = "calllog.db";
 
+    private static final String SHADOW_DATABASE_NAME = "calllog_shadow.db";
+
     private static CallLogDatabaseHelper sInstance;
+
+    /** Instance for the "shadow" provider. */
+    private static CallLogDatabaseHelper sInstanceForShadow;
 
     private final Context mContext;
 
@@ -55,6 +60,7 @@ public class CallLogDatabaseHelper {
 
     public interface DbProperties {
         String CALL_LOG_LAST_SYNCED = "call_log_last_synced";
+        String CALL_LOG_LAST_SYNCED_FOR_SHADOW = "call_log_last_synced_for_shadow";
         String DATA_MIGRATED = "migrated";
     }
 
@@ -184,6 +190,15 @@ public class CallLogDatabaseHelper {
             sInstance = new CallLogDatabaseHelper(context, DATABASE_NAME);
         }
         return sInstance;
+    }
+
+    public static synchronized CallLogDatabaseHelper getInstanceForShadow(Context context) {
+        if (sInstanceForShadow == null) {
+            // Shadow provider is always encryption-aware.
+            sInstanceForShadow = new CallLogDatabaseHelper(
+                    context.createDeviceEncryptedStorageContext(), SHADOW_DATABASE_NAME);
+        }
+        return sInstanceForShadow;
     }
 
     public SQLiteDatabase getReadableDatabase() {
