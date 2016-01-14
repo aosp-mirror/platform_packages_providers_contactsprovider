@@ -114,6 +114,7 @@ import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Base64;
 import android.util.Log;
@@ -161,6 +162,7 @@ import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
+import com.android.providers.contacts.enterprise.EnterprisePolicyGuard;
 import com.android.providers.contacts.MetadataEntryParser.AggregationData;
 import com.android.providers.contacts.MetadataEntryParser.FieldData;
 import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
@@ -310,138 +312,138 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA =
             "debug.contacts.ksad";
 
-    private static final ProfileAwareUriMatcher sUriMatcher =
+    public static final ProfileAwareUriMatcher sUriMatcher =
             new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
 
     private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.TIMES_USED + " DESC,"
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
 
-    private static final int CONTACTS = 1000;
-    private static final int CONTACTS_ID = 1001;
-    private static final int CONTACTS_LOOKUP = 1002;
-    private static final int CONTACTS_LOOKUP_ID = 1003;
-    private static final int CONTACTS_ID_DATA = 1004;
-    private static final int CONTACTS_FILTER = 1005;
-    private static final int CONTACTS_STREQUENT = 1006;
-    private static final int CONTACTS_STREQUENT_FILTER = 1007;
-    private static final int CONTACTS_GROUP = 1008;
-    private static final int CONTACTS_ID_PHOTO = 1009;
-    private static final int CONTACTS_LOOKUP_PHOTO = 1010;
-    private static final int CONTACTS_LOOKUP_ID_PHOTO = 1011;
-    private static final int CONTACTS_ID_DISPLAY_PHOTO = 1012;
-    private static final int CONTACTS_LOOKUP_DISPLAY_PHOTO = 1013;
-    private static final int CONTACTS_LOOKUP_ID_DISPLAY_PHOTO = 1014;
-    private static final int CONTACTS_AS_VCARD = 1015;
-    private static final int CONTACTS_AS_MULTI_VCARD = 1016;
-    private static final int CONTACTS_LOOKUP_DATA = 1017;
-    private static final int CONTACTS_LOOKUP_ID_DATA = 1018;
-    private static final int CONTACTS_ID_ENTITIES = 1019;
-    private static final int CONTACTS_LOOKUP_ENTITIES = 1020;
-    private static final int CONTACTS_LOOKUP_ID_ENTITIES = 1021;
-    private static final int CONTACTS_ID_STREAM_ITEMS = 1022;
-    private static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1023;
-    private static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1024;
-    private static final int CONTACTS_FREQUENT = 1025;
-    private static final int CONTACTS_DELETE_USAGE = 1026;
-    private static final int CONTACTS_ID_PHOTO_CORP = 1027;
-    private static final int CONTACTS_ID_DISPLAY_PHOTO_CORP = 1028;
-    private static final int CONTACTS_FILTER_ENTERPRISE = 1029;
+    public static final int CONTACTS = 1000;
+    public static final int CONTACTS_ID = 1001;
+    public static final int CONTACTS_LOOKUP = 1002;
+    public static final int CONTACTS_LOOKUP_ID = 1003;
+    public static final int CONTACTS_ID_DATA = 1004;
+    public static final int CONTACTS_FILTER = 1005;
+    public static final int CONTACTS_STREQUENT = 1006;
+    public static final int CONTACTS_STREQUENT_FILTER = 1007;
+    public static final int CONTACTS_GROUP = 1008;
+    public static final int CONTACTS_ID_PHOTO = 1009;
+    public static final int CONTACTS_LOOKUP_PHOTO = 1010;
+    public static final int CONTACTS_LOOKUP_ID_PHOTO = 1011;
+    public static final int CONTACTS_ID_DISPLAY_PHOTO = 1012;
+    public static final int CONTACTS_LOOKUP_DISPLAY_PHOTO = 1013;
+    public static final int CONTACTS_LOOKUP_ID_DISPLAY_PHOTO = 1014;
+    public static final int CONTACTS_AS_VCARD = 1015;
+    public static final int CONTACTS_AS_MULTI_VCARD = 1016;
+    public static final int CONTACTS_LOOKUP_DATA = 1017;
+    public static final int CONTACTS_LOOKUP_ID_DATA = 1018;
+    public static final int CONTACTS_ID_ENTITIES = 1019;
+    public static final int CONTACTS_LOOKUP_ENTITIES = 1020;
+    public static final int CONTACTS_LOOKUP_ID_ENTITIES = 1021;
+    public static final int CONTACTS_ID_STREAM_ITEMS = 1022;
+    public static final int CONTACTS_LOOKUP_STREAM_ITEMS = 1023;
+    public static final int CONTACTS_LOOKUP_ID_STREAM_ITEMS = 1024;
+    public static final int CONTACTS_FREQUENT = 1025;
+    public static final int CONTACTS_DELETE_USAGE = 1026;
+    public static final int CONTACTS_ID_PHOTO_CORP = 1027;
+    public static final int CONTACTS_ID_DISPLAY_PHOTO_CORP = 1028;
+    public static final int CONTACTS_FILTER_ENTERPRISE = 1029;
 
-    private static final int RAW_CONTACTS = 2002;
-    private static final int RAW_CONTACTS_ID = 2003;
-    private static final int RAW_CONTACTS_ID_DATA = 2004;
-    private static final int RAW_CONTACT_ID_ENTITY = 2005;
-    private static final int RAW_CONTACTS_ID_DISPLAY_PHOTO = 2006;
-    private static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2007;
-    private static final int RAW_CONTACTS_ID_STREAM_ITEMS_ID = 2008;
+    public static final int RAW_CONTACTS = 2002;
+    public static final int RAW_CONTACTS_ID = 2003;
+    public static final int RAW_CONTACTS_ID_DATA = 2004;
+    public static final int RAW_CONTACT_ID_ENTITY = 2005;
+    public static final int RAW_CONTACTS_ID_DISPLAY_PHOTO = 2006;
+    public static final int RAW_CONTACTS_ID_STREAM_ITEMS = 2007;
+    public static final int RAW_CONTACTS_ID_STREAM_ITEMS_ID = 2008;
 
-    private static final int DATA = 3000;
-    private static final int DATA_ID = 3001;
-    private static final int PHONES = 3002;
-    private static final int PHONES_ID = 3003;
-    private static final int PHONES_FILTER = 3004;
-    private static final int EMAILS = 3005;
-    private static final int EMAILS_ID = 3006;
-    private static final int EMAILS_LOOKUP = 3007;
-    private static final int EMAILS_FILTER = 3008;
-    private static final int POSTALS = 3009;
-    private static final int POSTALS_ID = 3010;
-    private static final int CALLABLES = 3011;
-    private static final int CALLABLES_ID = 3012;
-    private static final int CALLABLES_FILTER = 3013;
-    private static final int CONTACTABLES = 3014;
-    private static final int CONTACTABLES_FILTER = 3015;
-    private static final int PHONES_ENTERPRISE = 3016;
-    private static final int EMAILS_LOOKUP_ENTERPRISE = 3017;
-    private static final int PHONES_FILTER_ENTERPRISE = 3018;
-    private static final int CALLABLES_FILTER_ENTERPRISE = 3019;
-    private static final int EMAILS_FILTER_ENTERPRISE = 3020;
+    public static final int DATA = 3000;
+    public static final int DATA_ID = 3001;
+    public static final int PHONES = 3002;
+    public static final int PHONES_ID = 3003;
+    public static final int PHONES_FILTER = 3004;
+    public static final int EMAILS = 3005;
+    public static final int EMAILS_ID = 3006;
+    public static final int EMAILS_LOOKUP = 3007;
+    public static final int EMAILS_FILTER = 3008;
+    public static final int POSTALS = 3009;
+    public static final int POSTALS_ID = 3010;
+    public static final int CALLABLES = 3011;
+    public static final int CALLABLES_ID = 3012;
+    public static final int CALLABLES_FILTER = 3013;
+    public static final int CONTACTABLES = 3014;
+    public static final int CONTACTABLES_FILTER = 3015;
+    public static final int PHONES_ENTERPRISE = 3016;
+    public static final int EMAILS_LOOKUP_ENTERPRISE = 3017;
+    public static final int PHONES_FILTER_ENTERPRISE = 3018;
+    public static final int CALLABLES_FILTER_ENTERPRISE = 3019;
+    public static final int EMAILS_FILTER_ENTERPRISE = 3020;
 
-    private static final int PHONE_LOOKUP = 4000;
-    private static final int PHONE_LOOKUP_ENTERPRISE = 4001;
+    public static final int PHONE_LOOKUP = 4000;
+    public static final int PHONE_LOOKUP_ENTERPRISE = 4001;
 
-    private static final int AGGREGATION_EXCEPTIONS = 6000;
-    private static final int AGGREGATION_EXCEPTION_ID = 6001;
+    public static final int AGGREGATION_EXCEPTIONS = 6000;
+    public static final int AGGREGATION_EXCEPTION_ID = 6001;
 
-    private static final int STATUS_UPDATES = 7000;
-    private static final int STATUS_UPDATES_ID = 7001;
+    public static final int STATUS_UPDATES = 7000;
+    public static final int STATUS_UPDATES_ID = 7001;
 
-    private static final int AGGREGATION_SUGGESTIONS = 8000;
+    public static final int AGGREGATION_SUGGESTIONS = 8000;
 
-    private static final int SETTINGS = 9000;
+    public static final int SETTINGS = 9000;
 
-    private static final int GROUPS = 10000;
-    private static final int GROUPS_ID = 10001;
-    private static final int GROUPS_SUMMARY = 10003;
+    public static final int GROUPS = 10000;
+    public static final int GROUPS_ID = 10001;
+    public static final int GROUPS_SUMMARY = 10003;
 
-    private static final int SYNCSTATE = 11000;
-    private static final int SYNCSTATE_ID = 11001;
-    private static final int PROFILE_SYNCSTATE = 11002;
-    private static final int PROFILE_SYNCSTATE_ID = 11003;
+    public static final int SYNCSTATE = 11000;
+    public static final int SYNCSTATE_ID = 11001;
+    public static final int PROFILE_SYNCSTATE = 11002;
+    public static final int PROFILE_SYNCSTATE_ID = 11003;
 
-    private static final int SEARCH_SUGGESTIONS = 12001;
-    private static final int SEARCH_SHORTCUT = 12002;
+    public static final int SEARCH_SUGGESTIONS = 12001;
+    public static final int SEARCH_SHORTCUT = 12002;
 
-    private static final int RAW_CONTACT_ENTITIES = 15001;
-    private static final int RAW_CONTACT_ENTITIES_CORP = 15002;
+    public static final int RAW_CONTACT_ENTITIES = 15001;
+    public static final int RAW_CONTACT_ENTITIES_CORP = 15002;
 
-    private static final int PROVIDER_STATUS = 16001;
+    public static final int PROVIDER_STATUS = 16001;
 
-    private static final int DIRECTORIES = 17001;
-    private static final int DIRECTORIES_ID = 17002;
-    private static final int DIRECTORIES_ENTERPRISE = 17003;
-    private static final int DIRECTORIES_ID_ENTERPRISE = 17004;
+    public static final int DIRECTORIES = 17001;
+    public static final int DIRECTORIES_ID = 17002;
+    public static final int DIRECTORIES_ENTERPRISE = 17003;
+    public static final int DIRECTORIES_ID_ENTERPRISE = 17004;
 
-    private static final int COMPLETE_NAME = 18000;
+    public static final int COMPLETE_NAME = 18000;
 
-    private static final int PROFILE = 19000;
-    private static final int PROFILE_ENTITIES = 19001;
-    private static final int PROFILE_DATA = 19002;
-    private static final int PROFILE_DATA_ID = 19003;
-    private static final int PROFILE_AS_VCARD = 19004;
-    private static final int PROFILE_RAW_CONTACTS = 19005;
-    private static final int PROFILE_RAW_CONTACTS_ID = 19006;
-    private static final int PROFILE_RAW_CONTACTS_ID_DATA = 19007;
-    private static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
-    private static final int PROFILE_STATUS_UPDATES = 19009;
-    private static final int PROFILE_RAW_CONTACT_ENTITIES = 19010;
-    private static final int PROFILE_PHOTO = 19011;
-    private static final int PROFILE_DISPLAY_PHOTO = 19012;
+    public static final int PROFILE = 19000;
+    public static final int PROFILE_ENTITIES = 19001;
+    public static final int PROFILE_DATA = 19002;
+    public static final int PROFILE_DATA_ID = 19003;
+    public static final int PROFILE_AS_VCARD = 19004;
+    public static final int PROFILE_RAW_CONTACTS = 19005;
+    public static final int PROFILE_RAW_CONTACTS_ID = 19006;
+    public static final int PROFILE_RAW_CONTACTS_ID_DATA = 19007;
+    public static final int PROFILE_RAW_CONTACTS_ID_ENTITIES = 19008;
+    public static final int PROFILE_STATUS_UPDATES = 19009;
+    public static final int PROFILE_RAW_CONTACT_ENTITIES = 19010;
+    public static final int PROFILE_PHOTO = 19011;
+    public static final int PROFILE_DISPLAY_PHOTO = 19012;
 
-    private static final int DATA_USAGE_FEEDBACK_ID = 20001;
+    public static final int DATA_USAGE_FEEDBACK_ID = 20001;
 
-    private static final int STREAM_ITEMS = 21000;
-    private static final int STREAM_ITEMS_PHOTOS = 21001;
-    private static final int STREAM_ITEMS_ID = 21002;
-    private static final int STREAM_ITEMS_ID_PHOTOS = 21003;
-    private static final int STREAM_ITEMS_ID_PHOTOS_ID = 21004;
-    private static final int STREAM_ITEMS_LIMIT = 21005;
+    public static final int STREAM_ITEMS = 21000;
+    public static final int STREAM_ITEMS_PHOTOS = 21001;
+    public static final int STREAM_ITEMS_ID = 21002;
+    public static final int STREAM_ITEMS_ID_PHOTOS = 21003;
+    public static final int STREAM_ITEMS_ID_PHOTOS_ID = 21004;
+    public static final int STREAM_ITEMS_LIMIT = 21005;
 
-    private static final int DISPLAY_PHOTO_ID = 22000;
-    private static final int PHOTO_DIMENSIONS = 22001;
+    public static final int DISPLAY_PHOTO_ID = 22000;
+    public static final int PHOTO_DIMENSIONS = 22001;
 
-    private static final int DELETED_CONTACTS = 23000;
-    private static final int DELETED_CONTACTS_ID = 23001;
+    public static final int DELETED_CONTACTS = 23000;
+    public static final int DELETED_CONTACTS_ID = 23001;
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
@@ -1519,6 +1521,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // MetadataSync flag.
     private boolean mMetadataSyncEnabled;
 
+    // Enterprise members
+    private EnterprisePolicyGuard mEnterprisePolicyGuard;
+
     @Override
     public boolean onCreate() {
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
@@ -1587,6 +1592,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         profileInfo.authority = ContactsContract.AUTHORITY;
         mProfileProvider.attachInfo(getContext(), profileInfo);
         mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
+        mEnterprisePolicyGuard = new EnterprisePolicyGuard(getContext());
 
         // Initialize the pre-authorized URI duration.
         mPreAuthorizedUriDuration = DEFAULT_PREAUTHORIZED_URI_EXPIRATION;
@@ -5472,15 +5478,39 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 (directory == null ? -1 :
                 (directory.equals("0") ? Directory.DEFAULT :
                 (directory.equals("1") ? Directory.LOCAL_INVISIBLE : Long.MIN_VALUE)));
+        final boolean isEnterpriseUri = isEnterpriseUriWithDirectorySupport(uri);
 
-        if (isEnterpriseUri(uri) || directoryId > Long.MIN_VALUE) {
+        /*
+         * *** Enterprise Uri ONLY ***
+         * Handler for enterprise uri should handle the case that directory is null themselves.
+         * The below code ONLY guards the case that directory is enterprise directory.
+         * (personal directory should not be guarded by dpm policy.)
+         */
+        if (directoryId == Long.MIN_VALUE && isEnterpriseUri) {
+            final boolean isCorpDirectory =
+                    Directory.isEnterpriseDirectoryId(Long.parseLong(directory));
+
+            if (isCorpDirectory && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)) {
+                return createEmptyCursor(uri, projection);
+            }
+        }
+
+        if (isEnterpriseUri || directoryId > Long.MIN_VALUE) {
             final Cursor cursor = queryLocal(uri, projection, selection, selectionArgs, sortOrder,
                     directoryId, cancellationSignal);
             // Add snippet if it is not an enterprise call
-            return (isEnterpriseUri(uri)) ? cursor : addSnippetExtrasToCursor(uri, cursor);
+            return isEnterpriseUri ? cursor : addSnippetExtrasToCursor(uri, cursor);
         }
         return queryDirectoryAuthority(uri, projection, selection, selectionArgs, sortOrder,
                 directory, cancellationSignal);
+    }
+
+    private static Cursor createEmptyCursor(final Uri uri, String[] projection) {
+        projection = projection == null ? getDefaultProjection(uri) : projection;
+        if (projection == null) {
+            return null;
+        }
+        return new MatrixCursor(projection);
     }
 
     private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
@@ -5826,7 +5856,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (isCorpDirectory) {
                     final String[] outputProjection = (projection != null) ? projection
                             : sContactsProjectionWithSnippetMap.getColumnNames();
-                    final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
+                    final int corpUserId = UserUtils.getCorpUserId(getContext());
                     if (corpUserId < 0) {
                         // No Corp user or policy not allowed, return empty cursor
                         return new MatrixCursor(outputProjection);
@@ -6894,7 +6924,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case RAW_CONTACT_ENTITIES_CORP: {
                 ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
                         INTERACT_ACROSS_USERS);
-                final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
+                final int corpUserId = UserUtils.getCorpUserId(getContext());
                 if (corpUserId < 0) {
                     // No Corp user or policy not allowed, return empty cursor
                     final String[] outputProjection = (projection != null) ? projection
@@ -6953,8 +6983,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // This method will return either primary directory or enterprise directory
                 final long inputDirectoryId = ContentUris.parseId(uri);
                 if (Directory.isEnterpriseDirectoryId(inputDirectoryId)) {
-                    final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
-                    if (corpUserId < 0) {
+                    final int corpUserId = UserUtils.getCorpUserId(getContext());
+                    final boolean isCrossProfileAllowed =
+                            mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+                    if (corpUserId < 0 || !isCrossProfileAllowed) {
                         // No Corp user or policy not allowed, return empty cursor
                         final String[] outputProjection = (projection != null) ? projection
                                 : sDirectoryProjectionMap.getColumnNames();
@@ -7200,8 +7232,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 sortOrder, Directory.DEFAULT, null);
         Cursor corpCursor = null;
         try {
-            final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
-            if (corpUserId < 0) {
+            final int corpUserId = UserUtils.getCorpUserId(getContext());
+            final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+            if (corpUserId < 0 || !isCrossProfileAllowed) {
                 // No Corp user or policy not allowed
                 return primaryCursor;
             }
@@ -7252,7 +7285,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
                 sortOrder, directoryId, null);
         try {
-            final int corpUserId = UserUtils.getCorpUserId(getContext(), false);
+            // PHONES_ENTERPRISE should not be guarded by EnterprisePolicyGuard as Bluetooth app is
+            // responsible to guard it.
+            final int corpUserId = UserUtils.getCorpUserId(getContext());
             if (corpUserId < 0) {
                 // No Corp user or policy not allowed
                 return primaryCursor;
@@ -7300,31 +7335,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Check if uri is an enterprise query.
+     * Check if uri is an enterprise uri with directory param supported.
      *
      * @param uri Uri that we want to check.
      * @return True if it is an enterprise uri.
      */
-    private static boolean isEnterpriseUri(final Uri uri) {
-        final int match = sUriMatcher.match(uri);
-        switch (match) {
-            case CONTACTS_FILTER_ENTERPRISE:
-            case EMAILS_LOOKUP_ENTERPRISE:
-            case PHONES_FILTER_ENTERPRISE:
-            case CALLABLES_FILTER_ENTERPRISE:
-            case PHONE_LOOKUP_ENTERPRISE:
-            case EMAILS_FILTER_ENTERPRISE:
-                return true;
-        }
-        return false;
+    private boolean isEnterpriseUriWithDirectorySupport(final Uri uri) {
+        return mEnterprisePolicyGuard.isEnterpriseUriWithDirectorySupport(uri);
     }
 
     /**
-     * Query corp CP2 lookup API directly.
+     * Query corp CP2 directly.
      */
     private Cursor queryCorpContacts(Uri localUri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String contactIdColumnName) {
-        final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
+        final int corpUserId = UserUtils.getCorpUserId(getContext());
         if (corpUserId < 0) {
             return null;
         }
@@ -7361,7 +7386,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * id.
      */
     private Cursor queryCorpLookupIfNecessary(Uri localUri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, String contactIdColumnName) {
+            String[] selectionArgs, String sortOrder, String contactIdColumnName,
+            boolean isCrossProfileAllowedByPolicy) {
 
         final String directory = getQueryParameter(localUri, ContactsContract.DIRECTORY_PARAM_KEY);
         final long directoryId = (directory != null) ? Long.parseLong(directory)
@@ -7374,7 +7400,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalArgumentException("Directory id must be a local directory id");
         }
 
-        final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
+        final int corpUserId = UserUtils.getCorpUserId(getContext());
         // Step 1. Look at the database on the current profile.
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "queryCorpLookupIfNecessary: local query URI=" + localUri);
@@ -7385,8 +7411,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (VERBOSE_LOGGING) {
                 MoreDatabaseUtils.dumpCursor(TAG, "local", local);
             }
-            // If we found a result or there's no corp profile, just return it as-is.
-            if (local.getCount() > 0 || corpUserId < 0) {
+            // If we found a result / no corp profile / policy disallowed, just return it as-is.
+            if (local.getCount() > 0 || corpUserId < 0 || !isCrossProfileAllowedByPolicy) {
                 return local;
             }
         } catch (Throwable th) { // If something throws, close the cursor.
@@ -7415,7 +7441,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Handles {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
      */
     // TODO Test
-    private Cursor queryPhoneLookupEnterprise(Uri uri, String[] projection, String selection,
+    private Cursor queryPhoneLookupEnterprise(final Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         // Unlike PHONE_LOOKUP, only decode once here even for SIP address. See bug 25900607.
         final String phoneNumber = uri.getLastPathSegment();
@@ -7453,7 +7479,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         // No directory
         return queryCorpLookupIfNecessary(builder.build(), projection, null, null, null,
-                isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID);
+                isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID,
+                mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
     }
 
     private static final Set<String> MODIFIED_KEY_SET_FOR_ENTERPRISE_CALLABLE_FILTER =
@@ -7463,7 +7490,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
 
     /**
-     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE / EMAIL_FILTER_ENTERPRISE 
+     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE / EMAIL_FILTER_ENTERPRISE
        into personal/work ContactsProvider2.
      */
     private Cursor queryCallableEnterprise(Uri uri, String[] projection, String selection,
@@ -7524,7 +7551,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Uri localUri = uri.buildUpon().path(newPathBuilder.toString()).build();
         // TODO: Handle directory lookup
         return queryCorpLookupIfNecessary(localUri, projection, selection, selectionArgs,
-                sortOrder, Data.CONTACT_ID);
+                sortOrder, Data.CONTACT_ID, mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
     }
 
     // TODO: Add test case for this
@@ -9000,8 +9027,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalArgumentException(
                     "Photos retrieved by contact ID can only be read.");
         }
-        final int corpUserId = UserUtils.getCorpUserId(getContext(), true);
-        if (corpUserId < 0) {
+        final int corpUserId = UserUtils.getCorpUserId(getContext());
+        final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+        if (corpUserId < 0 || !isCrossProfileAllowed) {
             // No corp profile or the currrent profile is not the personal.
             throw new FileNotFoundException(uri.toString());
         }
@@ -9333,7 +9361,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private String[] getDefaultProjection(Uri uri) {
+    private static String[] getDefaultProjection(Uri uri) {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case CONTACTS:
@@ -9386,6 +9414,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case DIRECTORIES_ENTERPRISE:
             case DIRECTORIES_ID_ENTERPRISE:
                 return sDirectoryProjectionMap.getColumnNames();
+
+            case CONTACTS_FILTER_ENTERPRISE:
+                return sContactsProjectionWithSnippetMap.getColumnNames();
 
             default:
                 return null;
