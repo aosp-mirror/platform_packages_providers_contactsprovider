@@ -6415,8 +6415,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
             case EMAILS_LOOKUP_ENTERPRISE: {
-                return queryEmailsLookupEnterprise(uri, projection, selection, selectionArgs,
-                        sortOrder);
+                return queryEmailsLookupEnterprise(uri, projection, selection,
+                        selectionArgs, sortOrder, cancellationSignal);
             }
 
             case EMAILS_FILTER: {
@@ -7463,19 +7463,39 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Handles {@link Email#ENTERPRISE_CONTENT_LOOKUP_URI}.
      */
     private Cursor queryEmailsLookupEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder) {
-        final List<String> pathSegments = uri.getPathSegments();
-        final int pathSegmentsSize = pathSegments.size();
-        // Ignore the first 3 path segments: "/data/emails_enterprise/lookup"
-        final StringBuilder newPathBuilder = new StringBuilder(Email.CONTENT_LOOKUP_URI.getPath());
-        for (int i = 3; i < pathSegmentsSize; i++) {
-            newPathBuilder.append('/');
-            newPathBuilder.append(pathSegments.get(i));
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
+        final String email = uri.getLastPathSegment();
+        final Uri.Builder builder = Email.CONTENT_LOOKUP_URI
+                .buildUpon()
+                .appendPath(email);
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        if (!TextUtils.isEmpty(directory)) {
+            final long directoryId = Long.parseLong(directory);
+            if (Directory.isEnterpriseDirectoryId(directoryId)) {
+                // If it has enterprise directory, then query queryCorpContacts directory with
+                // regular directory id.
+                builder.appendQueryParameter(
+                        ContactsContract.DIRECTORY_PARAM_KEY,
+                        String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+                final Cursor corpCursor =
+                        queryCorpContacts(builder.build(), projection, selection, selectionArgs,
+                        sortOrder, Email.CONTACT_ID, directoryId);
+                if (corpCursor == null) {
+                    return new MatrixCursor(sDataProjectionMap.getColumnNames());
+                }
+                return corpCursor;
+            }
+            // Regular directory id
+            builder.appendQueryParameter(
+                    ContactsContract.DIRECTORY_PARAM_KEY,
+                    String.valueOf(directoryId));
+
+            return queryDirectoryIfNecessary(builder.build(), projection, selection,
+                    selectionArgs, sortOrder, cancellationSignal);
         }
-        final Uri localUri = uri.buildUpon().path(newPathBuilder.toString()).build();
-        // TODO: Handle directory lookup
-        return queryCorpLookupIfNecessary(localUri, projection, selection, selectionArgs,
-                sortOrder, Data.CONTACT_ID, mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
+        // No directory
+        return queryCorpLookupIfNecessary(builder.build(), projection, selection, selectionArgs,
+                sortOrder, Email.CONTACT_ID, mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
     }
 
     // TODO: Add test case for this
