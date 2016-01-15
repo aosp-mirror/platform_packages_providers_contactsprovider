@@ -5629,6 +5629,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         PropertyUtils.setProperty(getWritableDatabase(), key, value);
     }
 
+    public void clearDirectoryScanComplete() {
+        setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
+    }
+
     /**
      * Test if the given column appears in the given projection.
      */
