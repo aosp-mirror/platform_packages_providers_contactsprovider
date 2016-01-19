@@ -175,7 +175,7 @@ public class ContactDirectoryManager {
      */
     public void scanAllPackages(boolean rescan) {
         if (rescan || !areTypeResourceIdsValid()) {
-            getDbHelper().setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
+            getDbHelper().clearDirectoryScanComplete();
         }
 
         scanAllPackagesIfNeeded();
