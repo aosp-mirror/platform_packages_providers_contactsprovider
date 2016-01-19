@@ -37,6 +37,7 @@ import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
+
 import com.google.android.collect.Lists;
 
 /**
@@ -173,22 +174,36 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
         mDirectoryManager.scanAllPackages();
 
-        Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
+        Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null,
+                /* order by=*/ Directory.DIRECTORY_AUTHORITY + "," + Directory.ACCOUNT_NAME +
+                "," + Directory._ID );
+
+        TestUtils.dumpCursor(cursor);
         assertEquals(5, cursor.getCount());
 
-        cursor.moveToPosition(2);
+        assertTrue(cursor.moveToPosition(0));
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name1", "account-type1",
                 "display-name1", 1, Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
                 Directory.PHOTO_SUPPORT_FULL_SIZE_ONLY);
 
-        cursor.moveToNext();
+        assertTrue(cursor.moveToPosition(1));
         assertDirectoryRow(cursor, "test.package1", "authority1", "account-name2", "account-type2",
                 "display-name2", 2, Directory.EXPORT_SUPPORT_ANY_ACCOUNT,
                 Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY, Directory.PHOTO_SUPPORT_THUMBNAIL_ONLY);
 
-        cursor.moveToNext();
+        assertTrue(cursor.moveToPosition(2));
         assertDirectoryRow(cursor, "test.package2", "authority2", "account-name3", "account-type3",
                 "display-name3", 3, Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY,
+                Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
+
+        assertTrue(cursor.moveToPosition(3));
+        assertDirectoryRow(cursor, "contactsTestPackage", "com.android.contacts", null, null,
+                null, -1 /* =any */, Directory.EXPORT_SUPPORT_NONE,
+                Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
+
+        assertTrue(cursor.moveToPosition(4));
+        assertDirectoryRow(cursor, "contactsTestPackage", "com.android.contacts", null, null,
+                null, -1 /* =any */, Directory.EXPORT_SUPPORT_NONE,
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         cursor.close();
@@ -623,7 +638,9 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         values.put(Directory.ACCOUNT_NAME, accountName);
         values.put(Directory.ACCOUNT_TYPE, accountType);
         values.put(Directory.DISPLAY_NAME, displayName);
-        values.put(Directory.TYPE_RESOURCE_ID, typeResourceId);
+        if (typeResourceId >= 0) {
+            values.put(Directory.TYPE_RESOURCE_ID, typeResourceId);
+        }
         values.put(Directory.EXPORT_SUPPORT, exportSupport);
         values.put(Directory.SHORTCUT_SUPPORT, shortcutSupport);
         values.put(Directory.PHOTO_SUPPORT, photoSupport);
