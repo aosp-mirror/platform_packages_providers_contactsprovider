@@ -6938,6 +6938,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     return new MatrixCursor(outputProjection);
                 }
                 final Uri remoteUri = maybeAddUserId(RawContactsEntity.CONTENT_URI, corpUserId);
+                // This method is used by Bluetooth Contacts Sharing only, it uses enterprise
+                // contact id to get work contacts info, so work profile should be available at this
+                // moment.
                 return getContext().getContentResolver().query(remoteUri, projection, selection,
                         selectionArgs, sortOrder);
             }
@@ -7004,6 +7007,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             corpUserId);
                     final Cursor cursor = getContext().getContentResolver().query(remoteUri,
                             projection, selection, selectionArgs, sortOrder);
+                    if (cursor == null) {
+                        // Work profile is not available yet
+                        final String[] outputProjection = (projection != null) ? projection
+                                : sDirectoryProjectionMap.getColumnNames();
+                        return new MatrixCursor(outputProjection);
+                    }
                     return rewriteCorpDirectories(cursor);
                 } else {
                     // As it is not an enterprise directory id, fall back to original API
@@ -8949,6 +8958,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
             addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER);
 
+            // If work profile is not available, it will throw FileNotFoundException
             remoteUri = maybeAddUserId(builder.build(), corpUserId);
         } else {
             final DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
@@ -9001,6 +9011,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         // Convert the URI into:
         // content://USER@com.android.contacts/contacts_corp/ID/{photo,display_photo}
+        // If work profile is not available, it will throw FileNotFoundException
         final Uri corpUri = maybeAddUserId(
                 ContentUris.appendId(Contacts.CONTENT_URI.buildUpon(), contactId)
                         .appendPath(displayPhoto ?
