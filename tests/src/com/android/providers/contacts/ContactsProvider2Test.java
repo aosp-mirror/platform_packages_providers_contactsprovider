@@ -4403,7 +4403,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactWithoutPhoneticName() {
-        ContactLocaleUtils.setLocale(Locale.ENGLISH);
+        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
         final long rawContactId = RawContactUtil.createRawContact(mResolver, null);
 
         ContentValues values = new ContentValues();
@@ -4451,7 +4451,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (!hasChineseCollator()) {
             return;
         }
-        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
 
         long rawContactId = RawContactUtil.createRawContact(mResolver, null);
 
@@ -4498,7 +4498,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (!hasJapaneseCollator()) {
             return;
         }
-        ContactLocaleUtils.setLocale(Locale.US);
+        ContactLocaleUtils.setLocaleForTest(Locale.US);
         long rawContactId = RawContactUtil.createRawContact(mResolver, null);
 
         ContentValues values = new ContentValues();
@@ -4518,7 +4518,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (!hasJapaneseCollator()) {
             return;
         }
-        ContactLocaleUtils.setLocale(Locale.JAPAN);
+        ContactLocaleUtils.setLocaleForTest(Locale.JAPAN);
         long rawContactId = RawContactUtil.createRawContact(mResolver, null);
 
         ContentValues values = new ContentValues();
@@ -4652,7 +4652,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (!hasJapaneseCollator()) {
             return;
         }
-        ContactLocaleUtils.setLocale(Locale.JAPAN);
+        ContactLocaleUtils.setLocaleForTest(Locale.JAPAN);
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
         ContentValues values = new ContentValues();
@@ -4680,7 +4680,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         if (!hasChineseCollator()) {
             return;
         }
-        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
 
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);

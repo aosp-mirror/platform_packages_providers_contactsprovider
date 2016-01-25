@@ -110,7 +110,7 @@ public class SearchIndexManagerTest extends BaseContactsProvider2Test {
         if (!Arrays.asList(Collator.getAvailableLocales()).contains(Locale.CHINA)) {
             return;
         }
-        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
 
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = new ContentValues();

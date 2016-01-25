@@ -3545,7 +3545,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void upgradeLocaleData(SQLiteDatabase db, boolean rebuildSqliteStats) {
-        final LocaleSet locales = LocaleSet.getDefault();
+        final LocaleSet locales = LocaleSet.newDefault();
         Log.i(TAG, "Upgrading locale data for " + locales
                 + " (ICU v" + ICU.getIcuVersion() + ")");
         final long start = SystemClock.elapsedRealtime();
@@ -5616,14 +5616,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Returns the value from the {@link Tables#PROPERTIES} table.
+     * Returns the value from the {@link PropertyUtils.Tables#PROPERTIES} table.
      */
     public String getProperty(String key, String defaultValue) {
         return PropertyUtils.getProperty(getReadableDatabase(), key, defaultValue);
     }
 
     /**
-     * Stores a key-value pair in the {@link Tables#PROPERTIES} table.
+     * Stores a key-value pair in the {@link PropertyUtils.Tables#PROPERTIES} table.
      */
     public void setProperty(String key, String value) {
         PropertyUtils.setProperty(getWritableDatabase(), key, value);

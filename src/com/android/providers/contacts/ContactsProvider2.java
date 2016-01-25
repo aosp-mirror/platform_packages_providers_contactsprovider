@@ -1636,40 +1636,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mContactsPhotoStore);
     }
 
-    // Updates the locale set to reflect a new system locale.
-    private static LocaleSet updateLocaleSet(LocaleSet oldLocales, Locale newLocale) {
-        final Locale prevLocale = oldLocales.getPrimaryLocale();
-        // If primary locale is unchanged then no change to locale set.
-        if (newLocale.equals(prevLocale)) {
-            return oldLocales;
-        }
-        // Otherwise, construct a new locale set based on the new locale
-        // and the previous primary locale.
-        return new LocaleSet(newLocale, prevLocale).normalize();
-    }
-
-    private static LocaleSet getProviderPrefLocales(SharedPreferences prefs) {
-        final String providerLocaleString = prefs.getString(PREF_LOCALE, null);
-        return LocaleSet.getLocaleSet(providerLocaleString);
-    }
-
-    // Called by initForDefaultLocale. Returns an updated locale set using the
-    // current system locale.
-    private LocaleSet getLocaleSet() {
-        final Locale curLocale = getLocale();
-        if (mCurrentLocales != null) {
-            return updateLocaleSet(mCurrentLocales, curLocale);
-        }
-        // On startup need to reload the locale set from prefs for update.
-        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        return updateLocaleSet(getProviderPrefLocales(prefs), curLocale);
-    }
-
-    // Static routine called on startup by updateLocaleOffline.
-    private static LocaleSet getLocaleSet(SharedPreferences prefs, Locale curLocale) {
-        return updateLocaleSet(getProviderPrefLocales(prefs), curLocale);
-    }
-
     /**
      * (Re)allocates all locale-sensitive structures.
      */
@@ -1677,7 +1643,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Context context = getContext();
         mLegacyApiSupport =
                 new LegacyApiSupport(context, mContactsHelper, this, mGlobalSearchSupport);
-        mCurrentLocales = getLocaleSet();
+        mCurrentLocales = LocaleSet.newDefault();
         mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocales.getPrimaryLocale());
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocales.getPrimaryLocale());
@@ -1929,7 +1895,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             ContactsDatabaseHelper contactsHelper,
             ProfileDatabaseHelper profileHelper) {
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        final LocaleSet currentLocales = getLocaleSet(prefs, Locale.getDefault());
+        final LocaleSet currentLocales = LocaleSet.newDefault();
         if (!needsToUpdateLocaleData(prefs, currentLocales, contactsHelper, profileHelper)) {
             return;
         }

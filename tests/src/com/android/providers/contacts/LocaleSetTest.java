@@ -22,41 +22,133 @@ import junit.framework.TestCase;
 
 @SmallTest
 public class LocaleSetTest extends TestCase {
-    private void testLocaleStringsHelper(Locale primaryLocale,
-            Locale secondaryLocale, final String expectedString) throws Exception {
-        final LocaleSet locales = new LocaleSet(primaryLocale, secondaryLocale);
-        final String localeString = locales.toString();
-        assertEquals(expectedString, localeString);
+    public void testPrimaryLocale() {
+        final Locale previousDefault = Locale.getDefault();
+        try {
+            assertEquals(Locale.CANADA, LocaleSet.newForTest(Locale.CANADA).getPrimaryLocale());
+            assertEquals(Locale.GERMAN, LocaleSet.newForTest(Locale.GERMAN).getPrimaryLocale());
+            assertEquals(Locale.GERMAN, LocaleSet.newForTest(Locale.GERMAN, Locale.CANADA)
+                    .getPrimaryLocale());
 
-        final LocaleSet parseLocales = LocaleSet.getLocaleSet(localeString);
-        assertEquals(locales, parseLocales);
+            assertEquals(Locale.getDefault(), LocaleSet.newDefault().getPrimaryLocale());
+
+            Locale.setDefault(Locale.JAPANESE);
+
+            assertEquals(Locale.JAPANESE, LocaleSet.newDefault().getPrimaryLocale());
+        } finally {
+            Locale.setDefault(previousDefault);
+        }
     }
 
-    @SmallTest
-    public void testLocaleStrings() throws Exception {
-        testLocaleStringsHelper(Locale.US, null, "en-US");
-        testLocaleStringsHelper(Locale.US, Locale.CHINA, "en-US;zh-CN");
-        testLocaleStringsHelper(Locale.JAPAN, Locale.GERMANY, "ja-JP;de-DE");
+    public void testIsLanguageChinese() {
+        assertTrue(LocaleSet.isLanguageChinese(Locale.CHINESE));
+        assertTrue(LocaleSet.isLanguageChinese(Locale.TRADITIONAL_CHINESE));
+        assertTrue(LocaleSet.isLanguageChinese(Locale.SIMPLIFIED_CHINESE));
+
+        assertFalse(LocaleSet.isLanguageChinese(Locale.JAPANESE));
+        assertFalse(LocaleSet.isLanguageChinese(Locale.ENGLISH));
     }
 
-    private void testNormalizationHelper(String localeString,
-            Locale expectedPrimary, Locale expectedSecondary) throws Exception {
-        final LocaleSet expected = new LocaleSet(expectedPrimary, expectedSecondary);
-        final LocaleSet actual = LocaleSet.getLocaleSet(localeString).normalize();
-        assertEquals(expected, actual);
+    public void testIsLocaleSimplifiedChinese() {
+        assertTrue(LocaleSet.isLocaleSimplifiedChinese(Locale.SIMPLIFIED_CHINESE));
+
+        assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.TRADITIONAL_CHINESE));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.CHINESE));
+        assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.JAPANESE));
+        assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.JAPAN));
+        assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.KOREA));
+        assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.KOREAN));
+        assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.ENGLISH));
+
+        // TODO not sure how to create a Locale with a script set.
     }
 
-    @SmallTest
-    public void testNormalization() throws Exception {
-        // Single locale
-        testNormalizationHelper("en-US", Locale.US, null);
-        // Disallow secondary with same language as primary
-        testNormalizationHelper("fr-CA;fr-FR", Locale.CANADA_FRENCH, null);
-        testNormalizationHelper("en-US;zh-CN", Locale.US, Locale.CHINA);
-        // Disallow both locales CJK
-        testNormalizationHelper("ja-JP;zh-CN", Locale.JAPAN, null);
-        // Disallow en as secondary (happens by default)
-        testNormalizationHelper("zh-CN;en-US", Locale.CHINA, null);
-        testNormalizationHelper("zh-CN;de-DE", Locale.CHINA, Locale.GERMANY);
+    public void testIsLocaleTraditionalChinese() {
+        assertTrue(LocaleSet.isLocaleTraditionalChinese(Locale.TRADITIONAL_CHINESE));
+
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.SIMPLIFIED_CHINESE));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.CHINESE));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.JAPANESE));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.JAPAN));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.KOREA));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.KOREAN));
+        assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.ENGLISH));
+
+        // TODO not sure how to create a Locale with a script set.
+    }
+
+    public void testIsLanguageJapanese() {
+        assertTrue(LocaleSet.isLanguageJapanese(Locale.JAPANESE));
+        assertTrue(LocaleSet.isLanguageJapanese(Locale.JAPAN));
+
+        assertFalse(LocaleSet.isLanguageJapanese(Locale.TRADITIONAL_CHINESE));
+        assertFalse(LocaleSet.isLanguageJapanese(Locale.SIMPLIFIED_CHINESE));
+        assertFalse(LocaleSet.isLanguageJapanese(Locale.ENGLISH));
+    }
+
+    public void testIsLanguageKorean() {
+        assertTrue(LocaleSet.isLanguageKorean(Locale.KOREAN));
+        assertTrue(LocaleSet.isLanguageKorean(Locale.KOREA));
+
+        assertFalse(LocaleSet.isLanguageKorean(Locale.TRADITIONAL_CHINESE));
+        assertFalse(LocaleSet.isLanguageKorean(Locale.SIMPLIFIED_CHINESE));
+        assertFalse(LocaleSet.isLanguageKorean(Locale.JAPANESE));
+        assertFalse(LocaleSet.isLanguageKorean(Locale.JAPAN));
+        assertFalse(LocaleSet.isLanguageKorean(Locale.ENGLISH));
+    }
+
+    public void testIsLocaleCJK() {
+        assertTrue(LocaleSet.isLocaleCJK(Locale.TRADITIONAL_CHINESE));
+        assertTrue(LocaleSet.isLocaleCJK(Locale.SIMPLIFIED_CHINESE));
+        assertTrue(LocaleSet.isLocaleCJK(Locale.JAPANESE));
+        assertTrue(LocaleSet.isLocaleCJK(Locale.JAPAN));
+        assertTrue(LocaleSet.isLocaleCJK(Locale.KOREA));
+        assertTrue(LocaleSet.isLocaleCJK(Locale.KOREAN));
+
+        assertFalse(LocaleSet.isLocaleCJK(Locale.ENGLISH));
+    }
+
+    public void testShouldPreferJapanese() {
+        assertFalse(LocaleSet.newForTest(Locale.ENGLISH)
+                .shouldPreferJapanese());
+
+        assertTrue(LocaleSet.newForTest(Locale.JAPAN)
+                .shouldPreferJapanese());
+        assertTrue(LocaleSet.newForTest(Locale.ENGLISH, Locale.KOREAN, Locale.JAPAN)
+                .shouldPreferJapanese());
+        assertTrue(LocaleSet.newForTest(Locale.JAPAN, Locale.TRADITIONAL_CHINESE)
+                .shouldPreferJapanese());
+        assertTrue(LocaleSet.newForTest(Locale.JAPAN, Locale.SIMPLIFIED_CHINESE)
+                .shouldPreferJapanese());
+        assertTrue(LocaleSet.newForTest(Locale.TRADITIONAL_CHINESE, Locale.JAPAN)
+                .shouldPreferJapanese());
+
+        // Simplified Chinese wins.
+        assertFalse(LocaleSet.newForTest(Locale.SIMPLIFIED_CHINESE, Locale.JAPAN)
+                .shouldPreferJapanese());
+        assertFalse(LocaleSet.newForTest(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE, Locale.JAPAN)
+                .shouldPreferJapanese());
+    }
+
+    public void testShouldPreferSimplifiedChinese() {
+        assertFalse(LocaleSet.newForTest(Locale.ENGLISH)
+                .shouldPreferSimplifiedChinese());
+        assertFalse(LocaleSet.newForTest(Locale.TRADITIONAL_CHINESE)
+                .shouldPreferSimplifiedChinese());
+
+        assertTrue(LocaleSet.newForTest(Locale.SIMPLIFIED_CHINESE)
+                .shouldPreferSimplifiedChinese());
+        assertTrue(LocaleSet.newForTest(Locale.ENGLISH, Locale.KOREAN, Locale.SIMPLIFIED_CHINESE)
+                .shouldPreferSimplifiedChinese());
+        assertTrue(LocaleSet.newForTest(Locale.SIMPLIFIED_CHINESE, Locale.JAPANESE)
+                .shouldPreferSimplifiedChinese());
+        assertTrue(LocaleSet.newForTest(Locale.SIMPLIFIED_CHINESE, Locale.TRADITIONAL_CHINESE)
+                .shouldPreferSimplifiedChinese());
+
+        // Simplified Chinese wins.
+        assertFalse(LocaleSet.newForTest(Locale.JAPAN, Locale.SIMPLIFIED_CHINESE)
+                .shouldPreferSimplifiedChinese());
+        assertFalse(LocaleSet.newForTest(Locale.TRADITIONAL_CHINESE, Locale.SIMPLIFIED_CHINESE)
+                .shouldPreferSimplifiedChinese());
     }
 }

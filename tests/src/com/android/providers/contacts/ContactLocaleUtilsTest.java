@@ -60,26 +60,26 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_JA_JP = {
-        "", "\u3042", "\u304B", "\u3055", "\u305F", "\u306A", "\u306F",
+        "…", "\u3042", "\u304B", "\u3055", "\u305F", "\u306A", "\u306F",
         "\u307E", "\u3084", "\u3089", "\u308F", "\u4ED6",
-        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "…", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_ZH_TW = {
-        "", "1\u5283", "2\u5283", "3\u5283", "4\u5283", "5\u5283", "6\u5283",
+        "…", "1\u5283", "2\u5283", "3\u5283", "4\u5283", "5\u5283", "6\u5283",
         "7\u5283", "8\u5283", "9\u5283", "10\u5283", "11\u5283", "12\u5283",
         "13\u5283", "14\u5283", "15\u5283", "16\u5283", "17\u5283", "18\u5283",
         "19\u5283", "20\u5283", "21\u5283", "22\u5283", "23\u5283", "24\u5283",
         "25\u5283", "26\u5283", "27\u5283", "28\u5283", "29\u5283", "30\u5283",
         "31\u5283", "32\u5283", "33\u5283",
         "35\u5283", "36\u5283", "39\u5283", "48\u5283",
-        "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "…", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
     private static final String[] LABELS_KO = {
-        "", "\u3131", "\u3134", "\u3137", "\u3139", "\u3141", "\u3142",
+        "…", "\u3131", "\u3134", "\u3137", "\u3139", "\u3141", "\u3142",
         "\u3145", "\u3147", "\u3148", "\u314A", "\u314B", "\u314C", "\u314D",
-        "\u314E",
+        "\u314E", "…",
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
@@ -98,39 +98,8 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final Locale LOCALE_ARABIC = new Locale("ar");
     private static final Locale LOCALE_SERBIAN = new Locale("sr");
     private static final Locale LOCALE_UKRAINIAN = new Locale("uk");
-    private boolean hasSimplifiedChineseCollator;
-    private boolean hasTraditionalChineseCollator;
-    private boolean hasJapaneseCollator;
-    private boolean hasKoreanCollator;
-    private boolean hasArabicCollator;
-    private boolean hasGermanCollator;
-    private boolean hasSerbianCollator;
-    private boolean hasUkrainianCollator;
-
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        final Locale locale[] = Collator.getAvailableLocales();
-        for (int i = 0; i < locale.length; i++) {
-            if (LocaleSet.isLocaleSimplifiedChinese(locale[i])) {
-                hasSimplifiedChineseCollator = true;
-            } else if (LocaleSet.isLocaleTraditionalChinese(locale[i])) {
-                hasTraditionalChineseCollator = true;
-            } else if (locale[i].equals(Locale.JAPAN)) {
-                hasJapaneseCollator = true;
-            } else if (locale[i].equals(Locale.KOREA)) {
-                hasKoreanCollator = true;
-            } else if (locale[i].equals(LOCALE_ARABIC)) {
-                hasArabicCollator = true;
-            } else if (locale[i].equals(Locale.GERMANY)) {
-                hasGermanCollator = true;
-            } else if (locale[i].equals(LOCALE_SERBIAN)) {
-                hasSerbianCollator = true;
-            } else if (locale[i].equals(LOCALE_UKRAINIAN)) {
-                hasUkrainianCollator = true;
-            }
-        }
-    }
+    private static final Locale LOCALE_SPANISH = new Locale("es");
+    private static final Locale LOCALE_GREEK = new Locale("el");
 
     private String getLabel(String name) {
         ContactLocaleUtils utils = ContactLocaleUtils.getInstance();
@@ -149,7 +118,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testEnglishContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocale(Locale.ENGLISH);
+        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
@@ -157,29 +126,18 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
         assertEquals("B", getLabel("Bob Smith"));
 
-        if (hasArabicCollator) {
-            assertEquals("\u0646", getLabel(ARABIC_NAME));
-        }
-        if (hasSerbianCollator) {
-            assertEquals("\u0408", getLabel(SERBIAN_NAME));
-        }
-        if (hasUkrainianCollator) {
-            // Updated in CLDR 27/ICU 55:
-            // http://cldr.unicode.org/index/downloads/cldr-27#TOC-Changes-to-Collation
-            assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
-        }
+        assertEquals("\u0646", getLabel(ARABIC_NAME));
+        assertEquals("\u0408", getLabel(SERBIAN_NAME));
+        // Updated in CLDR 27/ICU 55:
+        // http://cldr.unicode.org/index/downloads/cldr-27#TOC-Changes-to-Collation
+        assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
 
         assertNull(getNameLookupKeys(LATIN_NAME, FullNameStyle.UNDEFINED));
         verifyLabels(getLabels(), LABELS_EN_US);
     }
 
     public void testJapaneseContactLocaleUtils() throws Exception {
-        if (!hasJapaneseCollator) {
-            Log.w(TAG, "Japanese collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(Locale.JAPAN);
+        ContactLocaleUtils.setLocaleForTest(Locale.JAPAN);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals(JAPANESE_MISC, getLabel(KANJI_NAME));
@@ -195,12 +153,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testChineseContactLocaleUtils() throws Exception {
-        if (!hasSimplifiedChineseCollator) {
-            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
@@ -209,18 +162,14 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_EN_US);
 
-        if (hasTraditionalChineseCollator) {
-            ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-            assertEquals("#", getLabel(PHONE_NUMBER_1));
-            assertEquals("#", getLabel(PHONE_NUMBER_2));
-            assertEquals("J", getLabel(LATIN_NAME));
-            assertEquals("7\u5283", getLabel(CHINESE_NAME));
-            assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
-        } else {
-            Log.w(TAG, "Traditional Chinese collator not found");
-        }
+        ContactLocaleUtils.setLocaleForTest(Locale.TRADITIONAL_CHINESE);
+        assertEquals("#", getLabel(PHONE_NUMBER_1));
+        assertEquals("#", getLabel(PHONE_NUMBER_2));
+        assertEquals("J", getLabel(LATIN_NAME));
+        assertEquals("7\u5283", getLabel(CHINESE_NAME));
+        assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
 
-        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
                 FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_NAME_KEY);
@@ -231,21 +180,14 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(CHINESE_LATIN_MIX_NAME_2, FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_LATIN_MIX_NAME_2_KEY);
 
-        if (hasTraditionalChineseCollator) {
-            ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-            assertEquals("B", getLabel("Bob Smith"));
-            verifyLabels(getLabels(), LABELS_ZH_TW);
-        }
+        ContactLocaleUtils.setLocaleForTest(Locale.TRADITIONAL_CHINESE);
+        assertEquals("B", getLabel("Bob Smith"));
+        verifyLabels(getLabels(), LABELS_ZH_TW);
     }
 
     public void testPinyinEnabledSecondaryLocale() throws Exception {
-        if (!hasSimplifiedChineseCollator) {
-            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
-            return;
-        }
-
         ContactLocaleUtils.setLocales(
-                new LocaleSet(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE));
+                LocaleSet.newForTest(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE));
         assertEquals("D", getLabel(CHINESE_NAME));
 
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
@@ -254,30 +196,20 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testPinyinDisabledSecondaryLocale() throws Exception {
-        if (!hasSimplifiedChineseCollator) {
-            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
-            return;
-        }
-
         ContactLocaleUtils.setLocales(
-                new LocaleSet(Locale.ENGLISH, Locale.JAPAN));
-        assertEquals("", getLabel(CHINESE_NAME));
+                LocaleSet.newForTest(Locale.ENGLISH, Locale.JAPAN));
+        assertEquals(JAPANESE_MISC, getLabel(CHINESE_NAME));
 
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
     }
 
     public void testChineseStyleNameWithDifferentLocale() throws Exception {
-        if (!hasSimplifiedChineseCollator) {
-            Log.w(TAG, "Simplified Chinese collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(Locale.ENGLISH);
+        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
 
-        ContactLocaleUtils.setLocale(Locale.SIMPLIFIED_CHINESE);
+        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
                 FullNameStyle.CJK);
         verifyKeys(keys, CHINESE_NAME_KEY);
@@ -286,19 +218,12 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(LATIN_NAME_2, FullNameStyle.WESTERN);
         verifyKeys(keys, LATIN_NAME_KEY_2);
 
-        if (hasTraditionalChineseCollator) {
-            ContactLocaleUtils.setLocale(Locale.TRADITIONAL_CHINESE);
-            assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
-        }
+        ContactLocaleUtils.setLocaleForTest(Locale.TRADITIONAL_CHINESE);
+        assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
     }
 
     public void testKoreanContactLocaleUtils() throws Exception {
-        if (!hasKoreanCollator) {
-            Log.w(TAG, "Korean collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(Locale.KOREA);
+        ContactLocaleUtils.setLocaleForTest(Locale.KOREA);
         assertEquals("\u3131", getLabel("\u1100"));
         assertEquals("\u3131", getLabel("\u3131"));
         assertEquals("\u3131", getLabel("\u1101"));
@@ -308,35 +233,20 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testArabicContactLocaleUtils() throws Exception {
-        if (!hasArabicCollator) {
-            Log.w(TAG, "Arabic collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(LOCALE_ARABIC);
+        ContactLocaleUtils.setLocaleForTest(LOCALE_ARABIC);
         assertEquals("\u0646", getLabel(ARABIC_NAME));
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_AR);
     }
 
     public void testSerbianContactLocaleUtils() throws Exception {
-        if (!hasSerbianCollator) {
-            Log.w(TAG, "Serbian collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(LOCALE_SERBIAN);
+        ContactLocaleUtils.setLocaleForTest(LOCALE_SERBIAN);
         assertEquals("\u0408", getLabel(SERBIAN_NAME));
         assertEquals("B", getLabel("Bob Smith"));
     }
 
     public void testUkrainianContactLocaleUtils() throws Exception {
-        if (!hasUkrainianCollator) {
-            Log.w(TAG, "Ukrainian collator not found; skipping test");
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(LOCALE_UKRAINIAN);
+        ContactLocaleUtils.setLocaleForTest(LOCALE_UKRAINIAN);
         assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
         assertEquals("\u0407", getLabel(UKRAINIAN_NAME_2));
         assertEquals("\u0490", getLabel(UKRAINIAN_NAME_3));
@@ -344,17 +254,31 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testGermanContactLocaleUtils() throws Exception {
-        if (!hasGermanCollator) {
-            return;
-        }
-
-        ContactLocaleUtils.setLocale(Locale.GERMANY);
+        ContactLocaleUtils.setLocaleForTest(Locale.GERMANY);
         assertEquals("S", getLabel("Sacher"));
 
         // ICU 51 has labels Sch and St. These were removed in ICU 52
         assertEquals("S", getLabel("Schiller"));
         assertEquals("S", getLabel("Steiff"));
         verifyLabels(getLabels(), LABELS_EN_US);
+    }
+
+    public void testOtherLocales() throws Exception {
+        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
+
+        assertEquals("N", getLabel("n"));
+        assertEquals("N", getLabel("ñ"));
+
+        ContactLocaleUtils.setLocaleForTest(LOCALE_SPANISH);
+
+        assertEquals("N", getLabel("n"));
+        assertEquals("Ñ", getLabel("ñ"));
+
+        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH, LOCALE_SPANISH);
+
+        assertEquals("N", getLabel("n"));
+        assertEquals("N", getLabel("ñ")); // TODO This should ideally return Ñ.
+
     }
 
     private void verifyKeys(final Iterator<String> resultKeys, final String[] expectedKeys)
