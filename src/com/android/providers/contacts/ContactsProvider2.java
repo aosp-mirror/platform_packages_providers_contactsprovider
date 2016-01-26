@@ -7450,8 +7450,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
             builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-            return queryCorpContacts(builder.build(), projection, selection, selectionArgs,
-                    sortOrder, contactIdString, directoryId);
+            final Cursor corpCursor = queryCorpContacts(builder.build(), projection, selection,
+                    selectionArgs, sortOrder, contactIdString, directoryId);
+            if (corpCursor == null) {
+                // No Corp user or policy not allowed, return empty cursor
+                final String[] outputProjection = (projection != null) ? projection
+                        : sDistinctDataProjectionMap.getColumnNames();
+                return new MatrixCursor(outputProjection);
+            }
+            return corpCursor;
         } else {
             builder.appendQueryParameter(
                     ContactsContract.DIRECTORY_PARAM_KEY,
@@ -7496,7 +7503,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         queryCorpContacts(builder.build(), projection, selection, selectionArgs,
                         sortOrder, Email.CONTACT_ID, directoryId);
                 if (corpCursor == null) {
-                    return new MatrixCursor(sDataProjectionMap.getColumnNames());
+                    final String[] outputProjection = (projection != null) ? projection
+                            : sDataProjectionMap.getColumnNames();
+                    return new MatrixCursor(outputProjection);
                 }
                 return corpCursor;
             }
