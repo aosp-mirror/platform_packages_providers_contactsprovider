@@ -33,6 +33,9 @@ import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
 /**
  * Implementation of {@link VoicemailTable.Delegate} for the voicemail status table.
+ *
+ * Public methods of this class are thread-safe as it is used in a content provider, which should
+ * be thread-safe.
  */
 public class VoicemailStatusTable implements VoicemailTable.Delegate {
 
@@ -47,6 +50,8 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             .add(Status.QUOTA_OCCUPIED)
             .add(Status.QUOTA_TOTAL)
             .build();
+
+    private static final Object DATABASE_LOCK = new Object();
 
     private final String mTableName;
     private final Context mContext;
@@ -63,50 +68,69 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
 
     @Override
     public Uri insert(UriData uriData, ContentValues values) {
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        ContentValues copiedValues = new ContentValues(values);
-        mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);
-        long rowId = getDatabaseModifier(db).insert(mTableName, null, copiedValues);
-        if (rowId > 0) {
-            Uri newUri = ContentUris.withAppendedId(uriData.getUri(), rowId);
-            return newUri;
-        } else {
-            return null;
+        synchronized (DATABASE_LOCK) {
+            SQLiteDatabase db = mDbHelper.getWritableDatabase();
+            // Try to update before insert.
+            String combinedClause = uriData.getWhereClause();
+            int rowsChanged = getDatabaseModifier(db)
+                    .update(mTableName, values, combinedClause, null);
+            if (rowsChanged != 0) {
+                final String[] selection = new String[] {Status._ID};
+                Cursor c = db.query(mTableName, selection, combinedClause, null, null, null, null);
+                c.moveToFirst();
+                int rowId = c.getInt(0);
+                return ContentUris.withAppendedId(uriData.getUri(), rowId);
+            }
+            ContentValues copiedValues = new ContentValues(values);
+            mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);
+            long rowId = getDatabaseModifier(db).insert(mTableName, null, copiedValues);
+            if (rowId > 0) {
+                return ContentUris.withAppendedId(uriData.getUri(), rowId);
+            } else {
+                return null;
+            }
         }
     }
 
     @Override
     public int delete(UriData uriData, String selection, String[] selectionArgs) {
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-        return getDatabaseModifier(db).delete(mTableName, combinedClause,
-                selectionArgs);
+        synchronized (DATABASE_LOCK) {
+            SQLiteDatabase db = mDbHelper.getWritableDatabase();
+            String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
+            return getDatabaseModifier(db).delete(mTableName, combinedClause,
+                    selectionArgs);
+        }
     }
 
     @Override
     public Cursor query(UriData uriData, String[] projection, String selection,
             String[] selectionArgs, String sortOrder) {
-        SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        qb.setTables(mTableName);
-        qb.setProjectionMap(sStatusProjectionMap);
-        qb.setStrict(true);
+        synchronized (DATABASE_LOCK) {
+            SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+            qb.setTables(mTableName);
+            qb.setProjectionMap(sStatusProjectionMap);
+            qb.setStrict(true);
 
-        String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-        SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        Cursor c = qb.query(db, projection, combinedClause, selectionArgs, null, null, sortOrder);
-        if (c != null) {
-            c.setNotificationUri(mContext.getContentResolver(), Status.CONTENT_URI);
+            String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
+            SQLiteDatabase db = mDbHelper.getReadableDatabase();
+            Cursor c = qb
+                    .query(db, projection, combinedClause, selectionArgs, null, null, sortOrder);
+            if (c != null) {
+                c.setNotificationUri(mContext.getContentResolver(), Status.CONTENT_URI);
+            }
+            return c;
         }
-        return c;
     }
 
     @Override
     public int update(UriData uriData, ContentValues values, String selection,
             String[] selectionArgs) {
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-        return getDatabaseModifier(db).update(mTableName, values, combinedClause,
-                selectionArgs);
+        synchronized (DATABASE_LOCK) {
+            SQLiteDatabase db = mDbHelper.getWritableDatabase();
+            String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
+            return getDatabaseModifier(db).update(mTableName, values, combinedClause,
+                    selectionArgs);
+        }
     }
 
     @Override
