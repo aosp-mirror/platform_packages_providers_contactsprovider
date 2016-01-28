@@ -22,21 +22,19 @@ import android.icu.text.Transliterator;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
+import android.util.ArraySet;
+import android.util.LocaleList;
 import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.lang.Character.UnicodeBlock;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
 
@@ -54,6 +52,32 @@ public class ContactLocaleUtils {
     public static final Locale LOCALE_SERBIAN = new Locale("sr");
     public static final Locale LOCALE_UKRAINIAN = new Locale("uk");
     public static final Locale LOCALE_THAI = new Locale("th");
+
+    // -- Note for adding locales to sDefaultLabelLocales --
+    //
+    // AlphabeticIndex.getBucketLabel() uses a binary search across
+    // the entire label set so care should be taken about growing this
+    // set too large. The following set determines for which locales
+    // we will show labels other than your primary locale. General rules
+    // of thumb for adding a locale: should be a supported locale; and
+    // should not be included if from a name it is not deterministic
+    // which way to label it (so eg Chinese cannot be added because
+    // the labeling of a Chinese character varies between Simplified,
+    // Traditional, and Japanese locales). Use English only for all
+    // Latin based alphabets. Ukrainian and Serbian are chosen for
+    // Cyrillic because their alphabets are complementary supersets
+    // of Russian.
+    private static final Locale[] sDefaultLabelLocales = new Locale[]{
+            Locale.ENGLISH,
+            Locale.JAPANESE,
+            Locale.KOREAN,
+            LOCALE_THAI,
+            LOCALE_ARABIC,
+            LOCALE_HEBREW,
+            LOCALE_GREEK,
+            LOCALE_UKRAINIAN,
+            LOCALE_SERBIAN,
+    };
 
     /**
      * This class is the default implementation and should be the base class
@@ -74,38 +98,37 @@ public class ContactLocaleUtils {
         private final boolean mUsePinyinTransliterator;
 
         public ContactLocaleUtilsBase(LocaleSet locales) {
-            // AlphabeticIndex.getBucketLabel() uses a binary search across
-            // the entire label set so care should be taken about growing this
-            // set too large. The following set determines for which locales
-            // we will show labels other than your primary locale. General rules
-            // of thumb for adding a locale: should be a supported locale; and
-            // should not be included if from a name it is not deterministic
-            // which way to label it (so eg Chinese cannot be added because
-            // the labeling of a Chinese character varies between Simplified,
-            // Traditional, and Japanese locales). Use English only for all
-            // Latin based alphabets. Ukrainian and Serbian are chosen for
-            // Cyrillic because their alphabets are complementary supersets
-            // of Russian.
-            final Locale secondaryLocale = locales.getSecondaryLocale();
-            mUsePinyinTransliterator = locales.isPrimaryLocaleSimplifiedChinese() ||
-                locales.isSecondaryLocaleSimplifiedChinese();
+            mUsePinyinTransliterator = locales.shouldPreferSimplifiedChinese();
+
+            final ArraySet<Locale> addedLocales = new ArraySet<>();
+
+            // First, add from the primary locale (which may not be the first locale in the locale
+            // list).
             AlphabeticIndex ai = new AlphabeticIndex(locales.getPrimaryLocale())
-                .setMaxLabelCount(300);
-            if (secondaryLocale != null) {
-                ai.addLabels(secondaryLocale);
+                    .setMaxLabelCount(300);
+            addedLocales.add(locales.getPrimaryLocale());
+
+            // Next, add all locale form the locale list.
+            final LocaleList localeList = locales.getAllLocales();
+            for (int i = 0; i < localeList.size(); i++) {
+                addLabels(ai, localeList.get(i), addedLocales);
             }
-            mAlphabeticIndex = ai.addLabels(Locale.ENGLISH)
-                .addLabels(Locale.JAPANESE)
-                .addLabels(Locale.KOREAN)
-                .addLabels(LOCALE_THAI)
-                .addLabels(LOCALE_ARABIC)
-                .addLabels(LOCALE_HEBREW)
-                .addLabels(LOCALE_GREEK)
-                .addLabels(LOCALE_UKRAINIAN)
-                .addLabels(LOCALE_SERBIAN)
-                .buildImmutableIndex();
+            // Then add the default locales.
+            for (int i = 0; i < sDefaultLabelLocales.length; i++) {
+                addLabels(ai, sDefaultLabelLocales[i], addedLocales);
+            }
+            mAlphabeticIndex = ai.buildImmutableIndex();
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
+        }
+
+        private static void addLabels(
+                AlphabeticIndex ai, Locale locale, ArraySet<Locale> addedLocales) {
+            if (addedLocales.contains(locale)) {
+                return;
+            }
+            ai.addLabels(locale);
+            addedLocales.add(locale);
         }
 
         public String getSortKey(String name) {
@@ -411,8 +434,6 @@ public class ContactLocaleUtils {
         }
     }
 
-    private static final String JAPANESE_LANGUAGE = Locale.JAPANESE.getLanguage().toLowerCase();
-
     private static ContactLocaleUtils sSingleton;
 
     private final LocaleSet mLocales;
@@ -420,13 +441,13 @@ public class ContactLocaleUtils {
 
     private ContactLocaleUtils(LocaleSet locales) {
         if (locales == null) {
-            mLocales = LocaleSet.getDefault();
+            mLocales = LocaleSet.newDefault();
         } else {
             mLocales = locales;
         }
-        if (mLocales.isPrimaryLanguage(JAPANESE_LANGUAGE)) {
+        if (mLocales.shouldPreferJapanese()) {
             mUtils = new JapaneseContactUtils(mLocales);
-        } else if (mLocales.isPrimaryLocaleSimplifiedChinese()) {
+        } else if (mLocales.shouldPreferSimplifiedChinese()) {
             mUtils = new SimplifiedChineseContactUtils(mLocales);
         } else {
             mUtils = new ContactLocaleUtilsBase(mLocales);
@@ -441,14 +462,14 @@ public class ContactLocaleUtils {
 
     public static synchronized ContactLocaleUtils getInstance() {
         if (sSingleton == null) {
-            sSingleton = new ContactLocaleUtils(LocaleSet.getDefault());
+            sSingleton = new ContactLocaleUtils(LocaleSet.newDefault());
         }
         return sSingleton;
     }
 
     @VisibleForTesting
-    public static synchronized void setLocale(Locale locale) {
-        setLocales(new LocaleSet(locale));
+    public static synchronized void setLocaleForTest(Locale... locales) {
+        setLocales(LocaleSet.newForTest(locales));
     }
 
     public static synchronized void setLocales(LocaleSet locales) {
@@ -495,7 +516,7 @@ public class ContactLocaleUtils {
      */
     public Iterator<String> getNameLookupKeys(String name, int nameStyle) {
         if (!mLocales.isPrimaryLocaleCJK()) {
-            if (mLocales.isSecondaryLocaleSimplifiedChinese()) {
+            if (mLocales.shouldPreferSimplifiedChinese()) {
                 if (nameStyle == FullNameStyle.CHINESE ||
                         nameStyle == FullNameStyle.CJK) {
                     return SimplifiedChineseContactUtils.getPinyinNameLookupKeys(name);
