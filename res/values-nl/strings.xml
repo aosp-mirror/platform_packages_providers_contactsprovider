@@ -26,10 +26,10 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Overig"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail van "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Contactendatabase kopiëren"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"U staat op het punt 1) een kopie van uw database met alle contactgegevens en oproeplogboeken te maken in de interne opslag, en 2) deze te e-mailen. Verwijder de kopie zodra u deze van het apparaat heeft gekopieerd of de e-mail is ontvangen."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Je staat op het punt 1) een kopie van je database met alle contactgegevens en oproeplogboeken te maken in de interne opslag, en 2) deze te e-mailen. Verwijder de kopie zodra je deze van het apparaat hebt gekopieerd of de e-mail is ontvangen."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Nu verwijderen"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Starten"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Selecteer een programma om uw bestand te verzenden"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Selecteer een programma om je bestand te verzenden"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Contactendatabase bijgevoegd"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"Bijgevoegd is mijn contactendatabase met al mijn contactgegevens. Ga hier zorgvuldig mee om."</string>
 </resources>
