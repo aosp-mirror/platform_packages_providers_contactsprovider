@@ -17,10 +17,10 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android കോർ അപ്ലിക്കേഷനുകൾ"</string>
-    <string name="app_label" msgid="3389954322874982620">"കോൺടാക്റ്റുകളുടെ സംഭരണം"</string>
+    <string name="app_label" msgid="3389954322874982620">"കോൺടാക്റ്റുകളുടെ സ്റ്റോറേജ്"</string>
     <string name="provider_label" msgid="6012150850819899907">"വിലാസങ്ങൾ"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"കോൺ‌ടാക്റ്റുകൾ അപ്‌ഗ്രേഡുചെയ്യാൻ കൂടുതൽ മെമ്മറി ആവശ്യമാണ്."</string>
-    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"കോൺ‌ടാക്റ്റുകൾക്കായുള്ള സംഭരണം അപ്‌ഗ്രേഡുചെയ്യുന്നു"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"കോൺ‌ടാക്റ്റുകൾക്കായുള്ള സ്റ്റോറേജ്  അപ്‌ഗ്രേഡുചെയ്യുന്നു"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"അപ്‌ഗ്രേഡ് പൂർത്തിയാക്കാൻ സ്‌പർശിക്കുക."</string>
     <string name="default_directory" msgid="93961630309570294">"വിലാസങ്ങൾ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"മറ്റുള്ളവ"</string>
