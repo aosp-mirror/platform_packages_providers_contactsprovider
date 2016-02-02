@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.icu.util.ULocale;
 import android.text.TextUtils;
 import android.util.LocaleList;
 
@@ -25,6 +26,9 @@ import com.google.common.annotations.VisibleForTesting;
 import java.util.Locale;
 
 public class LocaleSet {
+    private static final String SCRIPT_SIMPLIFIED_CHINESE = "Hans";
+    private static final String SCRIPT_TRADITIONAL_CHINESE = "Hant";
+
     private final Locale mDefaultLocaleOverrideForTest;
     private final LocaleList mLocaleList;
 
@@ -38,33 +42,24 @@ public class LocaleSet {
                 /*defaultLocaleOverrideForTest= */ null);
     }
 
+    @VisibleForTesting
     public static LocaleSet newForTest(Locale... locales) {
         return new LocaleSet(new LocaleList(locales), locales[0]);
     }
 
-    private static boolean areLanguagesEqual(@Nullable Locale locale1, @Nullable Locale locale2) {
-        if (locale1 == locale2) {
-            return true;
-        }
-        if (locale1 == null || locale2 == null) {
-            return false;
-        }
-        return TextUtils.equals(locale1.getLanguage(), locale2.getLanguage());
-    }
-
     @VisibleForTesting
     static boolean isLanguageChinese(@Nullable Locale locale) {
-        return areLanguagesEqual(Locale.CHINESE, locale);
+        return locale != null && "zh".equals(locale.getLanguage());
     }
 
     @VisibleForTesting
     static boolean isLanguageJapanese(@Nullable Locale locale) {
-        return areLanguagesEqual(Locale.JAPANESE, locale);
+        return locale != null && "ja".equals(locale.getLanguage());
     }
 
     @VisibleForTesting
     static boolean isLanguageKorean(@Nullable Locale locale) {
-        return areLanguagesEqual(Locale.KOREAN, locale);
+        return locale != null && "ko".equals(locale.getLanguage());
     }
 
     @VisibleForTesting
@@ -74,35 +69,30 @@ public class LocaleSet {
                 isLanguageKorean(locale);
     }
 
-    private static final String SCRIPT_SIMPLIFIED_CHINESE = "Hans";
-    private static final String SCRIPT_TRADITIONAL_CHINESE = "Hant";
+    private static String getLikelyScript(Locale locale) {
+        final String script = locale.getScript();
+        if (!script.isEmpty()) {
+            return script;
+        } else {
+            return ULocale.addLikelySubtags(ULocale.forLocale(locale)).getScript();
+        }
+    }
 
+    /**
+     * @return the script if the language is Chinese, and otherwise null.
+     */
     @VisibleForTesting
+    static String getScriptIfChinese(@Nullable Locale locale) {
+        return isLanguageChinese(locale) ? getLikelyScript(locale) : null;
+    }
+
     static boolean isLocaleSimplifiedChinese(@Nullable Locale locale) {
-        // language must match
-        if (!areLanguagesEqual(Locale.CHINESE, locale)) {
-            return false;
-        }
-        // script is optional but if present must match
-        if (!TextUtils.isEmpty(locale.getScript())) {
-            return locale.getScript().equals(SCRIPT_SIMPLIFIED_CHINESE);
-        }
-        // if no script, must match known country
-        return locale.equals(Locale.SIMPLIFIED_CHINESE);
+        return SCRIPT_SIMPLIFIED_CHINESE.equals(getScriptIfChinese(locale));
     }
 
     @VisibleForTesting
     static boolean isLocaleTraditionalChinese(@Nullable Locale locale) {
-        // language must match
-        if (!areLanguagesEqual(Locale.CHINESE, locale)) {
-            return false;
-        }
-        // script is optional but if present must match
-        if (!TextUtils.isEmpty(locale.getScript())) {
-            return locale.getScript().equals(SCRIPT_TRADITIONAL_CHINESE);
-        }
-        // if no script, must match known country
-        return locale.equals(Locale.TRADITIONAL_CHINESE);
+        return SCRIPT_TRADITIONAL_CHINESE.equals(getScriptIfChinese(locale));
     }
 
     /**

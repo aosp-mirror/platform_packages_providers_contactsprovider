@@ -49,8 +49,21 @@ public class LocaleSetTest extends TestCase {
         assertFalse(LocaleSet.isLanguageChinese(Locale.ENGLISH));
     }
 
+    public void testGetScriptIfChinese() {
+        assertEquals("Hans", LocaleSet.getScriptIfChinese(Locale.forLanguageTag("zh")));
+        assertEquals("Hans", LocaleSet.getScriptIfChinese(Locale.forLanguageTag("zh-SG")));
+
+        assertEquals("Hant", LocaleSet.getScriptIfChinese(Locale.forLanguageTag("zh-TW")));
+        assertEquals("Hant", LocaleSet.getScriptIfChinese(Locale.forLanguageTag("zh-HK")));
+
+        assertEquals(null, LocaleSet.getScriptIfChinese(Locale.ENGLISH));
+        assertEquals(null, LocaleSet.getScriptIfChinese(Locale.forLanguageTag("ja")));
+        assertEquals(null, LocaleSet.getScriptIfChinese(Locale.forLanguageTag("ja-JP")));
+    }
+
     public void testIsLocaleSimplifiedChinese() {
         assertTrue(LocaleSet.isLocaleSimplifiedChinese(Locale.SIMPLIFIED_CHINESE));
+        assertTrue(LocaleSet.isLocaleSimplifiedChinese(Locale.forLanguageTag("zh-SG")));
 
         assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.TRADITIONAL_CHINESE));
         assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.CHINESE));
@@ -59,12 +72,11 @@ public class LocaleSetTest extends TestCase {
         assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.KOREA));
         assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.KOREAN));
         assertFalse(LocaleSet.isLocaleSimplifiedChinese(Locale.ENGLISH));
-
-        // TODO not sure how to create a Locale with a script set.
     }
 
     public void testIsLocaleTraditionalChinese() {
         assertTrue(LocaleSet.isLocaleTraditionalChinese(Locale.TRADITIONAL_CHINESE));
+        assertTrue(LocaleSet.isLocaleTraditionalChinese(Locale.forLanguageTag("zh-TW")));
 
         assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.SIMPLIFIED_CHINESE));
         assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.CHINESE));
@@ -73,8 +85,6 @@ public class LocaleSetTest extends TestCase {
         assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.KOREA));
         assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.KOREAN));
         assertFalse(LocaleSet.isLocaleTraditionalChinese(Locale.ENGLISH));
-
-        // TODO not sure how to create a Locale with a script set.
     }
 
     public void testIsLanguageJapanese() {
