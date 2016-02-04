@@ -7695,21 +7695,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.createRawContactWithName(mResolver, "Boo", null);
         RawContactUtil.createRawContactWithName(mResolver, "Mary", null);
         RawContactUtil.createRawContactWithName(mResolver, "Roz", null);
+        // Contacts with null display names get sorted to the end (using the number bucket)
+        RawContactUtil.createRawContactWithName(mResolver, null, null);
 
         Cursor cursor = mResolver.query(uri,
                 new String[]{Contacts.DISPLAY_NAME},
                 null, null, Contacts.SORT_KEY_PRIMARY);
 
-        assertFirstLetterValues(cursor, "", "B", "J", "M", "R", "T");
-        assertFirstLetterCounts(cursor,    1,   1,   1,   2,   2,   1);
+        assertFirstLetterValues(cursor, "B", "J", "M", "R", "T", "#");
+        assertFirstLetterCounts(cursor,  1,   1,   2,   2,   1,   2);
         cursor.close();
 
         cursor = mResolver.query(uri,
                 new String[]{Contacts.DISPLAY_NAME},
                 null, null, Contacts.SORT_KEY_ALTERNATIVE + " COLLATE LOCALIZED DESC");
 
-        assertFirstLetterValues(cursor, "W", "S", "R", "M", "B", "");
-        assertFirstLetterCounts(cursor,   1,   2,   1,   1,   2,    1);
+        assertFirstLetterValues(cursor, "#", "W", "S", "R", "M", "B");
+        assertFirstLetterCounts(cursor,  2,   1,   2,   1,   1,   2);
         cursor.close();
     }
 

@@ -136,6 +136,10 @@ public class ContactLocaleUtils {
             return name;
         }
 
+        public int getNumberBucketIndex() {
+            return mNumberBucketIndex;
+        }
+
         /**
          * Returns the bucket index for the specified string. AlphabeticIndex
          * sorts strings into buckets numbered in order from 0 to N, where the
@@ -485,6 +489,10 @@ public class ContactLocaleUtils {
 
     public int getBucketIndex(String name) {
         return mUtils.getBucketIndex(name);
+    }
+
+    public int getNumberBucketIndex() {
+        return mUtils.getNumberBucketIndex();
     }
 
     public int getBucketCount() {

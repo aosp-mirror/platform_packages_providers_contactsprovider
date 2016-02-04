@@ -46,7 +46,6 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.os.UserManager;
 import android.provider.BaseColumns;
-import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -76,8 +75,6 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.VoicemailContract;
-import android.provider.VoicemailContract.Voicemails;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -128,7 +125,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      * </pre>
      */
-    static final int DATABASE_VERSION = 1110;
+    static final int DATABASE_VERSION = 1111;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -2990,6 +2987,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1110;
         }
 
+        if (isUpgradeRequired(oldVersion, newVersion, 1111)) {
+            upgradeToVersion1111(db);
+            oldVersion = 1111;
+        }
+
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
@@ -4618,6 +4620,23 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return generateHashId(ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE, null);
     }
 
+    @VisibleForTesting
+    public void upgradeToVersion1111(SQLiteDatabase db) {
+        // Re-order contacts with no display name to the phone number bucket and give
+        // them the phone number label. See b/21736630.
+        final ContactLocaleUtils localeUtils = ContactLocaleUtils.getInstance();
+        final int index = localeUtils.getNumberBucketIndex();
+        final String label = localeUtils.getBucketLabel(index);
+        // Note, sort_key = null is equivalent to display_name = null
+        db.execSQL("UPDATE raw_contacts SET phonebook_bucket = " + index +
+                ", phonebook_label='" + label + "' WHERE sort_key IS NULL AND phonebook_bucket=0;");
+        db.execSQL("UPDATE raw_contacts SET phonebook_bucket_alt = " + index +
+                ", phonebook_label_alt='" + label +
+                "' WHERE sort_key_alt IS NULL AND phonebook_bucket_alt=0;");
+
+        FastScrollingIndexCache.getInstance(mContext).invalidate();
+    }
+
     /**
      * This method is only used in upgradeToVersion1101 method, and should not be used in other
      * places now. Because data15 is not used to generate hash_id for photo, and the new generating
@@ -5983,20 +6002,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             sortKeyAlternative = sortNameAlternative;
         }
 
-        String phonebookLabelPrimary = "";
-        String phonebookLabelAlternative = "";
-        int phonebookBucketPrimary = 0;
-        int phonebookBucketAlternative = 0;
-        ContactLocaleUtils localeUtils = ContactLocaleUtils.getInstance();
+        final ContactLocaleUtils localeUtils = ContactLocaleUtils.getInstance();
+        int phonebookBucketPrimary = TextUtils.isEmpty(sortKeyPrimary)
+                ? localeUtils.getNumberBucketIndex()
+                : localeUtils.getBucketIndex(sortKeyPrimary);
+        String phonebookLabelPrimary = localeUtils.getBucketLabel(phonebookBucketPrimary);
 
-        if (sortKeyPrimary != null) {
-            phonebookBucketPrimary = localeUtils.getBucketIndex(sortKeyPrimary);
-            phonebookLabelPrimary = localeUtils.getBucketLabel(phonebookBucketPrimary);
-        }
-        if (sortKeyAlternative != null) {
-            phonebookBucketAlternative = localeUtils.getBucketIndex(sortKeyAlternative);
-            phonebookLabelAlternative = localeUtils.getBucketLabel(phonebookBucketAlternative);
-        }
+        int phonebookBucketAlternative = TextUtils.isEmpty(sortKeyAlternative)
+                ? localeUtils.getNumberBucketIndex()
+                : localeUtils.getBucketIndex(sortKeyAlternative);
+        String phonebookLabelAlternative = localeUtils.getBucketLabel(phonebookBucketAlternative);
 
         if (mRawContactDisplayNameUpdate == null) {
             mRawContactDisplayNameUpdate = db.compileStatement(
