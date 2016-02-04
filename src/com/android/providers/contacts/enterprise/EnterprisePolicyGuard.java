@@ -21,13 +21,18 @@ import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.UriMatcher;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.UserHandle;
+import android.os.UserManager;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.Directory;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.ProfileAwareUriMatcher;
 import com.android.providers.contacts.util.UserUtils;
+
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Digest contacts policy from DevcicePolicyManager and guard enterprise uri
@@ -54,18 +59,27 @@ public class EnterprisePolicyGuard {
      */
     public boolean isCrossProfileAllowed(@NonNull Uri uri) {
         final int uriCode = sUriMatcher.match(uri);
-        final UserHandle workUserHandle = UserUtils.getCorpUserHandle(mContext);
-        if (uriCode == -1 || workUserHandle == null) {
+        final UserHandle currentHandle = new UserHandle(UserUtils.getCurrentUserHandle(mContext));
+        if (uriCode == -1 || currentHandle == null) {
             return false;
         }
 
-        final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(workUserHandle);
+        final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(currentHandle);
         final boolean isContactsSearchEnabled =
-                !mDpm.getCrossProfileContactsSearchDisabled(workUserHandle);
+                !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
+        final boolean isCrossProfileDirectorySupported = isCrossProfileDirectorySupported(uri);
+        final String directory = uri.getQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY);
 
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "isCallerIdEnabled: " + isCallerIdEnabled);
             Log.v(TAG, "isContactsSearchEnabled: " + isContactsSearchEnabled);
+        }
+        if (directory != null) {
+            final long directoryId = Long.parseLong(directory);
+            if (Directory.isRemoteDirectory(directoryId)
+                    && !isCrossProfileDirectorySupported(uri)) {
+                return false;
+            }
         }
 
         // If either guard policy allows access, return true.
@@ -74,26 +88,47 @@ public class EnterprisePolicyGuard {
     }
 
     /**
-     * Check if uri is an enterprise uri with directory param supported.
+     * Check if uri is a cross profile query with directory param supported.
      *
      * @param uri Uri that we want to check.
      * @return True if it is an enterprise uri.
      */
-    public boolean isEnterpriseUriWithDirectorySupport(@NonNull Uri uri) {
+    @VisibleForTesting
+    protected boolean isCrossProfileDirectorySupported(@NonNull Uri uri) {
         final int uriCode = sUriMatcher.match(uri);
         return isDirectorySupported(uriCode);
     }
 
+    public boolean isValidEnterpriseUri(@NonNull Uri uri) {
+        final int uriCode = sUriMatcher.match(uri);
+        return isValidEnterpriseUri(uriCode);
+    }
 
-    /** Private methods **/
     private static boolean isDirectorySupported(int uriCode) {
         switch(uriCode) {
+            case ContactsProvider2.PHONE_LOOKUP:
+            case ContactsProvider2.EMAILS_LOOKUP:
+            case ContactsProvider2.CONTACTS_FILTER:
+            case ContactsProvider2.PHONES_FILTER:
+            case ContactsProvider2.CALLABLES_FILTER:
+            case ContactsProvider2.EMAILS_FILTER:
+            case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isValidEnterpriseUri(int uriCode) {
+        switch (uriCode) {
             case ContactsProvider2.PHONE_LOOKUP_ENTERPRISE:
             case ContactsProvider2.EMAILS_LOOKUP_ENTERPRISE:
             case ContactsProvider2.CONTACTS_FILTER_ENTERPRISE:
             case ContactsProvider2.PHONES_FILTER_ENTERPRISE:
             case ContactsProvider2.CALLABLES_FILTER_ENTERPRISE:
             case ContactsProvider2.EMAILS_FILTER_ENTERPRISE:
+            case ContactsProvider2.DIRECTORIES_ENTERPRISE:
+            case ContactsProvider2.DIRECTORIES_ID_ENTERPRISE:
             case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
                 return true;
             default:
@@ -103,12 +138,12 @@ public class EnterprisePolicyGuard {
 
     private static boolean isCallerIdGuarded(int uriCode) {
         switch(uriCode) {
-            case ContactsProvider2.DIRECTORIES_ENTERPRISE:
-            case ContactsProvider2.DIRECTORIES_ID_ENTERPRISE:
-            case ContactsProvider2.PHONE_LOOKUP_ENTERPRISE:
-            case ContactsProvider2.EMAILS_LOOKUP_ENTERPRISE:
-            case ContactsProvider2.CONTACTS_ID_PHOTO_CORP:
-            case ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO_CORP:
+            case ContactsProvider2.DIRECTORIES:
+            case ContactsProvider2.DIRECTORIES_ID:
+            case ContactsProvider2.PHONE_LOOKUP:
+            case ContactsProvider2.EMAILS_LOOKUP:
+            case ContactsProvider2.CONTACTS_ID_PHOTO:
+            case ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO:
             case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
                 return true;
             default:
@@ -118,14 +153,14 @@ public class EnterprisePolicyGuard {
 
     private static boolean isContactsSearchGuarded(int uriCode) {
         switch(uriCode) {
-            case ContactsProvider2.DIRECTORIES_ENTERPRISE:
-            case ContactsProvider2.DIRECTORIES_ID_ENTERPRISE:
-            case ContactsProvider2.CONTACTS_FILTER_ENTERPRISE:
-            case ContactsProvider2.CALLABLES_FILTER_ENTERPRISE:
-            case ContactsProvider2.PHONES_FILTER_ENTERPRISE:
-            case ContactsProvider2.EMAILS_FILTER_ENTERPRISE:
-            case ContactsProvider2.CONTACTS_ID_PHOTO_CORP:
-            case ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO_CORP:
+            case ContactsProvider2.DIRECTORIES:
+            case ContactsProvider2.DIRECTORIES_ID:
+            case ContactsProvider2.CONTACTS_FILTER:
+            case ContactsProvider2.CALLABLES_FILTER:
+            case ContactsProvider2.PHONES_FILTER:
+            case ContactsProvider2.EMAILS_FILTER:
+            case ContactsProvider2.CONTACTS_ID_PHOTO:
+            case ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO:
             case ContactsProvider2.DIRECTORY_FILE_ENTERPRISE:
                 return true;
             default:

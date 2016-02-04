@@ -5434,6 +5434,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         waitForAccess(mReadAccessLatch);
 
+        if (!isDirectoryParamValid(uri)) {
+            return null;
+        }
+
+        // Check enterprise policy if caller does not come from same profile
+        if (!(isCallerFromSameUser() || mEnterprisePolicyGuard.isCrossProfileAllowed(uri))) {
+            return createEmptyCursor(uri, projection);
+        }
         // Query the profile DB if appropriate.
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -5449,31 +5457,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 cancellationSignal);
     }
 
+    private boolean isCallerFromSameUser() {
+        return Binder.getCallingUserHandle().getIdentifier() == UserUtils
+                .getCurrentUserHandle(getContext());
+    }
+
     private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
-
         final long directoryId =
                 (directory == null ? -1 :
                 (directory.equals("0") ? Directory.DEFAULT :
                 (directory.equals("1") ? Directory.LOCAL_INVISIBLE : Long.MIN_VALUE)));
-        final boolean isEnterpriseUri = isEnterpriseUriWithDirectorySupport(uri);
-
-        /*
-         * *** Enterprise Uri ONLY ***
-         * Handler for enterprise uri should handle the case that directory is null themselves.
-         * The below code ONLY guards the case that directory is enterprise directory.
-         * (personal directory should not be guarded by dpm policy.)
-         */
-        if (directoryId == Long.MIN_VALUE && isEnterpriseUri) {
-            final boolean isCorpDirectory =
-                    Directory.isEnterpriseDirectoryId(Long.parseLong(directory));
-
-            if (isCorpDirectory && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)) {
-                return createEmptyCursor(uri, projection);
-            }
-        }
-
+        final boolean isEnterpriseUri = mEnterprisePolicyGuard.isValidEnterpriseUri(uri);
         if (isEnterpriseUri || directoryId > Long.MIN_VALUE) {
             final Cursor cursor = queryLocal(uri, projection, selection, selectionArgs, sortOrder,
                     directoryId, cancellationSignal);
@@ -5482,6 +5478,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         return queryDirectoryAuthority(uri, projection, selection, selectionArgs, sortOrder,
                 directory, cancellationSignal);
+    }
+
+    @VisibleForTesting
+    protected static boolean isDirectoryParamValid(Uri uri) {
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        if (directory == null) {
+            return true;
+        }
+        try {
+            Long.parseLong(directory);
+            return true;
+        } catch (NumberFormatException e) {
+            Log.e(TAG, "Invalid directory ID: " + directory);
+            // Return null cursor when invalid directory id is provided
+            return false;
+        }
     }
 
     private static Cursor createEmptyCursor(final Uri uri, String[] projection) {
@@ -5544,6 +5556,27 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } finally {
             cursor.close();
         }
+    }
+
+    /**
+     * A helper function to query work CP2. It returns null when work profile is not availabe.
+     */
+    @VisibleForTesting
+    protected Cursor queryCorpContactsProvider(Uri localUri, String[] projection,
+            String selection, String[] selectionArgs, String sortOrder,
+            CancellationSignal cancellationSignal) {
+        final int corpUserId = UserUtils.getCorpUserId(getContext());
+        if (corpUserId < 0) {
+            return null;
+        }
+        // Make sure authority is CP2 not other providers
+        if (!ContactsContract.AUTHORITY.equals(localUri.getAuthority())) {
+            Log.w(TAG, "Invalid authority: " + localUri.getAuthority());
+            return null;
+        }
+        final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+        return getContext().getContentResolver().query(remoteUri, projection, selection,
+                selectionArgs, sortOrder, cancellationSignal);
     }
 
     private Cursor addSnippetExtrasToCursor(Uri uri, Cursor cursor) {
@@ -5841,7 +5874,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         return new MatrixCursor(outputProjection);
                     }
                     final Cursor cursor = queryCorpContacts(localUri, projection, selection,
-                            selectionArgs, sortOrder, Contacts._ID, dirId);
+                            selectionArgs, sortOrder, Contacts._ID, dirId, cancellationSignal);
                     return (cursor != null) ? cursor : new MatrixCursor(outputProjection);
                 } else {
                     return queryDirectoryIfNecessary(localUri, projection, selection, selectionArgs,
@@ -6159,7 +6192,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PHONES_ENTERPRISE: {
                 ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
                         INTERACT_ACROSS_USERS);
-                return queryMergedDataPhones(uri, projection, selection, selectionArgs, sortOrder);
+                return queryMergedDataPhones(uri, projection, selection, selectionArgs, sortOrder,
+                        cancellationSignal);
             }
             case PHONES:
             case CALLABLES: {
@@ -6903,19 +6937,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case RAW_CONTACT_ENTITIES_CORP: {
                 ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
                         INTERACT_ACROSS_USERS);
-                final int corpUserId = UserUtils.getCorpUserId(getContext());
-                if (corpUserId < 0) {
-                    // No Corp user or policy not allowed, return empty cursor
+                final Cursor cursor = queryCorpContactsProvider(
+                        RawContactsEntity.CONTENT_URI, projection, selection, selectionArgs,
+                        sortOrder, cancellationSignal);
+                if (cursor == null) {
                     final String[] outputProjection = (projection != null) ? projection
                             : sRawEntityProjectionMap.getColumnNames();
                     return new MatrixCursor(outputProjection);
                 }
-                final Uri remoteUri = maybeAddUserId(RawContactsEntity.CONTENT_URI, corpUserId);
-                // This method is used by Bluetooth Contacts Sharing only, it uses enterprise
-                // contact id to get work contacts info, so work profile should be available at this
-                // moment.
-                return getContext().getContentResolver().query(remoteUri, projection, selection,
-                        selectionArgs, sortOrder);
+                return cursor;
             }
 
             case RAW_CONTACT_ID_ENTITY: {
@@ -6958,28 +6988,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case DIRECTORIES_ENTERPRISE: {
                 return queryMergedDirectories(uri, projection, selection, selectionArgs,
-                        sortOrder);
+                        sortOrder, cancellationSignal);
             }
 
             case DIRECTORIES_ID_ENTERPRISE: {
                 // This method will return either primary directory or enterprise directory
                 final long inputDirectoryId = ContentUris.parseId(uri);
                 if (Directory.isEnterpriseDirectoryId(inputDirectoryId)) {
-                    final int corpUserId = UserUtils.getCorpUserId(getContext());
-                    final boolean isCrossProfileAllowed =
-                            mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
-                    if (corpUserId < 0 || !isCrossProfileAllowed) {
-                        // No Corp user or policy not allowed, return empty cursor
-                        final String[] outputProjection = (projection != null) ? projection
-                                : sDirectoryProjectionMap.getColumnNames();
-                        return new MatrixCursor(outputProjection);
-                    }
-                    final Uri remoteUri = maybeAddUserId(
+                    final Cursor cursor = queryCorpContactsProvider(
                             ContentUris.withAppendedId(Directory.CONTENT_URI,
-                                    inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
-                            corpUserId);
-                    final Cursor cursor = getContext().getContentResolver().query(remoteUri,
-                            projection, selection, selectionArgs, sortOrder);
+                            inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
+                            projection, selection, selectionArgs, sortOrder, cancellationSignal);
                     if (cursor == null) {
                         // Work profile is not available yet
                         final String[] outputProjection = (projection != null) ? projection
@@ -7122,21 +7141,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Handles {@link Directory#ENTERPRISE_CONTENT_URI}.
      */
     private Cursor queryMergedDirectories(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder) {
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         final Uri localUri = Directory.CONTENT_URI;
         final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
-                sortOrder, Directory.DEFAULT, null);
+                sortOrder, Directory.DEFAULT, cancellationSignal);
         Cursor corpCursor = null;
         try {
-            final int corpUserId = UserUtils.getCorpUserId(getContext());
-            final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
-            if (corpUserId < 0 || !isCrossProfileAllowed) {
-                // No Corp user or policy not allowed
-                return primaryCursor;
-            }
-            final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
-            corpCursor = getContext().getContentResolver().query(remoteUri,
-                    projection, selection, selectionArgs, sortOrder, null);
+            corpCursor = queryCorpContactsProvider(localUri, projection, selection,
+                    selectionArgs, sortOrder, cancellationSignal);
             if (corpCursor == null) {
                 // No corp results. Just return the local result.
                 return primaryCursor;
@@ -7162,7 +7174,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Handles {@link Phone#ENTERPRISE_CONTENT_URI}.
      */
     private Cursor queryMergedDataPhones(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder) {
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         final List<String> pathSegments = uri.getPathSegments();
         final int pathSegmentsSize = pathSegments.size();
         // Ignore the first 2 path segments: "/data_enterprise/phones"
@@ -7190,7 +7202,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             final Cursor managedCursor = queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, RawContacts.CONTACT_ID, null);
+                    selectionArgs, sortOrder, RawContacts.CONTACT_ID, null, cancellationSignal);
             if (managedCursor == null) {
                 // No corp results.  Just return the local result.
                 return primaryCursor;
@@ -7231,26 +7243,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Check if uri is an enterprise uri with directory param supported.
-     *
-     * @param uri Uri that we want to check.
-     * @return True if it is an enterprise uri.
-     */
-    private boolean isEnterpriseUriWithDirectorySupport(final Uri uri) {
-        return mEnterprisePolicyGuard.isEnterpriseUriWithDirectorySupport(uri);
-    }
-
-    /**
      * Query corp CP2 directly.
      */
     private Cursor queryCorpContacts(Uri localUri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String contactIdColumnName,
-            @Nullable Long directoryId) {
-        final int corpUserId = UserUtils.getCorpUserId(getContext());
-        if (corpUserId < 0) {
-            return null;
-        }
-        final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+            @Nullable Long directoryId, CancellationSignal cancellationSignal) {
         // We need contactId in projection, if it doesn't have, we add it in projection as
         // workProjection, and we restore the actual projection in
         // EnterpriseContactsCursorWrapper
@@ -7259,8 +7256,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final boolean isContactIdAdded = (projection == null) ? false
                 : (workProjection.length != projection.length);
         int columnIdIndex = getContactIdColumnIndex(workProjection, contactIdColumnName);
-        final Cursor managedCursor = getContext().getContentResolver().query(remoteUri,
-                workProjection, selection, selectionArgs, sortOrder);
+        final Cursor managedCursor = queryCorpContactsProvider(localUri, workProjection,
+                selection, selectionArgs, sortOrder, cancellationSignal);
         if (managedCursor == null) {
             return null;
         }
@@ -7292,7 +7289,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     private Cursor queryCorpLookupIfNecessary(Uri localUri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String contactIdColumnName,
-            boolean isCrossProfileAllowedByPolicy) {
+            CancellationSignal cancellationSignal) {
 
         final String directory = getQueryParameter(localUri, ContactsContract.DIRECTORY_PARAM_KEY);
         final long directoryId = (directory != null) ? Long.parseLong(directory)
@@ -7317,7 +7314,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 MoreDatabaseUtils.dumpCursor(TAG, "local", local);
             }
             // If we found a result / no corp profile / policy disallowed, just return it as-is.
-            if (local.getCount() > 0 || corpUserId < 0 || !isCrossProfileAllowedByPolicy) {
+            if (local.getCount() > 0 || corpUserId < 0) {
                 return local;
             }
         } catch (Throwable th) { // If something throws, close the cursor.
@@ -7330,7 +7327,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // DB.
         try {
             final Cursor rewrittenCorpCursor = queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, contactIdColumnName, null);
+                    selectionArgs, sortOrder, contactIdColumnName, null, cancellationSignal);
             if (rewrittenCorpCursor != null) {
                 local.close();
                 return rewrittenCorpCursor;
@@ -7367,7 +7364,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ContactsContract.DIRECTORY_PARAM_KEY,
                         String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
                 final Cursor cursor = queryCorpContacts(builder.build(), projection, null, null,
-                        null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID, directoryId);
+                        null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID, directoryId,
+                        cancellationSignal);
                 if (cursor == null) {
                     final String[] outputProjection = (projection != null) ? projection
                             : sPhoneLookupProjectionMap.getColumnNames();
@@ -7384,8 +7382,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         // No directory
         return queryCorpLookupIfNecessary(builder.build(), projection, null, null, null,
-                isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID,
-                mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
+                isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID, cancellationSignal);
     }
 
     private static final Set<String> MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER =
@@ -7417,7 +7414,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
             final Cursor corpCursor = queryCorpContacts(builder.build(), projection, selection,
-                    selectionArgs, sortOrder, contactIdString, directoryId);
+                    selectionArgs, sortOrder, contactIdString, directoryId, cancellationSignal);
             if (corpCursor == null) {
                 // No Corp user or policy not allowed, return empty cursor
                 final String[] outputProjection = (projection != null) ? projection
@@ -7434,7 +7431,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private static final Uri.Builder addQueryParametersFromUri(Uri.Builder builder, Uri uri,
+    @VisibleForTesting
+    protected static final Uri.Builder addQueryParametersFromUri(Uri.Builder builder, Uri uri,
             Set<String> ignoredKeys) {
         Set<String> keys = uri.getQueryParameterNames();
 
@@ -7467,7 +7465,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
                 final Cursor corpCursor =
                         queryCorpContacts(builder.build(), projection, selection, selectionArgs,
-                        sortOrder, Email.CONTACT_ID, directoryId);
+                        sortOrder, Email.CONTACT_ID, directoryId, cancellationSignal);
                 if (corpCursor == null) {
                     final String[] outputProjection = (projection != null) ? projection
                             : sDataProjectionMap.getColumnNames();
@@ -7485,7 +7483,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         // No directory
         return queryCorpLookupIfNecessary(builder.build(), projection, selection, selectionArgs,
-                sortOrder, Email.CONTACT_ID, mEnterprisePolicyGuard.isCrossProfileAllowed(uri));
+                sortOrder, Email.CONTACT_ID, cancellationSignal);
     }
 
     // TODO: Add test case for this
@@ -8633,6 +8631,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
         boolean success = false;
         try {
+            if (!isDirectoryParamValid(uri)){
+                return null;
+            }
+            if (!isCallerFromSameUser() /* From differnt user */
+                    && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)
+                    /* Policy not allowed */){
+                return null;
+            }
             waitForAccess(mode.equals("r") ? mReadAccessLatch : mWriteAccessLatch);
             final AssetFileDescriptor ret;
             if (mapsToProfileDb(uri)) {
@@ -8644,7 +8650,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
             success = true;
             return ret;
-
         } finally {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success +
@@ -8927,8 +8932,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Uri remoteUri;
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
             final int corpUserId = UserUtils.getCorpUserId(getContext());
-            final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
-            if (corpUserId < 0 || !isCrossProfileAllowed) {
+            if (corpUserId < 0) {
                 // No corp profile or the currrent profile is not the personal.
                 throw new FileNotFoundException(uri.toString());
             }
@@ -8986,8 +8990,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "Photos retrieved by contact ID can only be read.");
         }
         final int corpUserId = UserUtils.getCorpUserId(getContext());
-        final boolean isCrossProfileAllowed = mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
-        if (corpUserId < 0 || !isCrossProfileAllowed) {
+        if (corpUserId < 0) {
             // No corp profile or the current profile is not the personal.
             throw new FileNotFoundException(uri.toString());
         }
