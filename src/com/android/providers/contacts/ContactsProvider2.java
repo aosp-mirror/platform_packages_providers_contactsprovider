@@ -3132,7 +3132,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         long postCleanupInsertedStreamId = insertedStreamItemId;
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         Cursor c = db.query(Tables.STREAM_ITEMS, new String[] {StreamItems._ID},
-                StreamItems.RAW_CONTACT_ID + "=?", new String[]{String.valueOf(rawContactId)},
+                StreamItems.RAW_CONTACT_ID + "=?", new String[] {String.valueOf(rawContactId)},
                 null, null, StreamItems.TIMESTAMP + " DESC, " + StreamItems._ID + " DESC");
         try {
             int streamItemCount = c.getCount();
@@ -3906,8 +3906,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final SQLiteDatabase db = mDbHelper.get().getReadableDatabase();
         Cursor c = db.query(Tables.RAW_CONTACTS, Projections.LITERAL_ONE,
                 RawContactsColumns.CONCRETE_ID + "=? AND " +
-                RawContactsColumns.ACCOUNT_ID + "=" + Clauses.LOCAL_ACCOUNT_ID,
-                new String[]{String.valueOf(rawContactId)}, null, null, null);
+                        RawContactsColumns.ACCOUNT_ID + "=" + Clauses.LOCAL_ACCOUNT_ID,
+                new String[] {String.valueOf(rawContactId)}, null, null, null);
         try {
             return c.getCount() > 0;
         } finally {
@@ -5559,7 +5559,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * A helper function to query work CP2. It returns null when work profile is not availabe.
+     * A helper function to query work CP2. It returns null when work profile is not available.
      */
     @VisibleForTesting
     protected Cursor queryCorpContactsProvider(Uri localUri, String[] projection,
@@ -5567,16 +5567,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
             CancellationSignal cancellationSignal) {
         final int corpUserId = UserUtils.getCorpUserId(getContext());
         if (corpUserId < 0) {
-            return null;
+            return createEmptyCursor(localUri, projection);
         }
         // Make sure authority is CP2 not other providers
         if (!ContactsContract.AUTHORITY.equals(localUri.getAuthority())) {
             Log.w(TAG, "Invalid authority: " + localUri.getAuthority());
-            return null;
+            return createEmptyCursor(localUri, projection);
         }
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
-        return getContext().getContentResolver().query(remoteUri, projection, selection,
+        Cursor cursor = getContext().getContentResolver().query(remoteUri, projection, selection,
                 selectionArgs, sortOrder, cancellationSignal);
+        if (cursor == null) {
+            return createEmptyCursor(localUri, projection);
+        }
+        return cursor;
     }
 
     private Cursor addSnippetExtrasToCursor(Uri uri, Cursor cursor) {
@@ -5847,41 +5851,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         snippetDeferred);
                 break;
             }
-
-            case CONTACTS_FILTER_ENTERPRISE: {
-                String filterParam = "";
-                if (uri.getPathSegments().size() > 2) {
-                    filterParam = uri.getLastPathSegment();
-                }
-                final String directory = getQueryParameter(uri,
-                        ContactsContract.DIRECTORY_PARAM_KEY);
-                if (TextUtils.isEmpty(directory)) {
-                    throw new IllegalArgumentException("Directory id cannot be null");
-                }
-                final long dirId = Long.parseLong(directory);
-                final boolean isCorpDirectory = Directory.isEnterpriseDirectoryId(dirId);
-                final Uri localUri = rewriteQueryParameters(
-                        Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, Uri.encode(filterParam)),
-                        uri, isCorpDirectory);
-                // Redirect query to corp CP2 if it uses corp directory, otherwise just call
-                // queryDirectoryIfNecessary directly.
-                if (isCorpDirectory) {
-                    final String[] outputProjection = (projection != null) ? projection
-                            : sContactsProjectionWithSnippetMap.getColumnNames();
-                    final int corpUserId = UserUtils.getCorpUserId(getContext());
-                    if (corpUserId < 0) {
-                        // No Corp user or policy not allowed, return empty cursor
-                        return new MatrixCursor(outputProjection);
-                    }
-                    final Cursor cursor = queryCorpContacts(localUri, projection, selection,
-                            selectionArgs, sortOrder, Contacts._ID, dirId, cancellationSignal);
-                    return (cursor != null) ? cursor : new MatrixCursor(outputProjection);
-                } else {
-                    return queryDirectoryIfNecessary(localUri, projection, selection, selectionArgs,
-                            sortOrder, cancellationSignal);
-                }
-            }
-
             case CONTACTS_STREQUENT_FILTER:
             case CONTACTS_STREQUENT: {
                 // Basically the resultant SQL should look like this:
@@ -6361,7 +6330,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
             case PHONES_FILTER_ENTERPRISE:
             case CALLABLES_FILTER_ENTERPRISE:
-            case EMAILS_FILTER_ENTERPRISE: {
+            case EMAILS_FILTER_ENTERPRISE:
+            case CONTACTS_FILTER_ENTERPRISE: {
                 Uri initialUri = null;
                 String contactIdString = null;
                 if (match == PHONES_FILTER_ENTERPRISE) {
@@ -6373,9 +6343,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 } else if (match == EMAILS_FILTER_ENTERPRISE) {
                     initialUri = Email.CONTENT_FILTER_URI;
                     contactIdString = Email.CONTACT_ID;
+                } else if (match == CONTACTS_FILTER_ENTERPRISE) {
+                    initialUri = Contacts.CONTENT_FILTER_URI;
+                    contactIdString = Contacts._ID;
                 }
-                return queryCallableEnterprise(uri, projection, selection, selectionArgs,
-                        sortOrder, initialUri, contactIdString, cancellationSignal);
+                return queryFilterEnterprise(uri, projection, selection, selectionArgs, sortOrder,
+                        cancellationSignal, initialUri, contactIdString);
             }
             case EMAILS: {
                 setTablesAndProjectionMapForData(qb, uri, projection, false);
@@ -6940,11 +6913,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final Cursor cursor = queryCorpContactsProvider(
                         RawContactsEntity.CONTENT_URI, projection, selection, selectionArgs,
                         sortOrder, cancellationSignal);
-                if (cursor == null) {
-                    final String[] outputProjection = (projection != null) ? projection
-                            : sRawEntityProjectionMap.getColumnNames();
-                    return new MatrixCursor(outputProjection);
-                }
                 return cursor;
             }
 
@@ -6999,12 +6967,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             ContentUris.withAppendedId(Directory.CONTENT_URI,
                             inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
                             projection, selection, selectionArgs, sortOrder, cancellationSignal);
-                    if (cursor == null) {
-                        // Work profile is not available yet
-                        final String[] outputProjection = (projection != null) ? projection
-                                : sDirectoryProjectionMap.getColumnNames();
-                        return new MatrixCursor(outputProjection);
-                    }
                     return rewriteCorpDirectories(cursor);
                 } else {
                     // As it is not an enterprise directory id, fall back to original API
@@ -7099,42 +7061,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.setNotificationUri(getContext().getContentResolver(), ContactsContract.AUTHORITY_URI);
         }
         return c;
-    }
-
-    /**
-     * A helper function to rewrites all parameters from source uri to target uri.
-     * It also helps you to rebase work directory id to regular directory id.
-     * This function also checks if parameters in source uri is valid.
-     * If isCorpDirectory is true, it cannot accept regular directory id in source parameters.
-     * If isCorpDirectory is false, it cannot accept work directory id in source parameters.
-     * @param targetUri A target uri that the parameters from source uri is to be copied.
-     * @param sourceUri A source uri that parameters in URI will be copied to target uri.
-     * @param isCorpDirectory Indicate if sourceUri contains work directory id.
-     * @return An target uri that contains all parameters in source uri.
-     */
-    private static Uri rewriteQueryParameters(Uri targetUri, Uri sourceUri,
-            boolean isCorpDirectory) {
-        final Uri.Builder builder = targetUri.buildUpon();
-        // Copy all parameters to new uri
-        final Set<String> names = sourceUri.getQueryParameterNames();
-        for(String name : names) {
-            final List<String> values = sourceUri.getQueryParameters(name);
-            for (String value : values) {
-                if (name.equals(ContactsContract.DIRECTORY_PARAM_KEY)) {
-                    final long workDirectoryId = Long.parseLong(value);
-                    if (isCorpDirectory != Directory.isEnterpriseDirectoryId(workDirectoryId)) {
-                        throw new IllegalArgumentException("Invalid directory Id");
-                    }
-                    if (isCorpDirectory) {
-                        // Change it back to regular directory id
-                        value = String.valueOf(workDirectoryId
-                                - Directory.ENTERPRISE_DIRECTORY_ID_BASE);
-                    }
-                }
-                builder.appendQueryParameter(name, value);
-            }
-        }
-        return builder.build();
     }
 
     /**
@@ -7258,9 +7184,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         int columnIdIndex = getContactIdColumnIndex(workProjection, contactIdColumnName);
         final Cursor managedCursor = queryCorpContactsProvider(localUri, workProjection,
                 selection, selectionArgs, sortOrder, cancellationSignal);
-        if (managedCursor == null) {
-            return null;
-        }
         if (projection == null) {
             // As projection is null and we didn't append contact id in projection, we need to fix
             // contact id column index.
@@ -7339,99 +7262,58 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return local;
     }
 
-    /**
-     * Handles {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
-     */
-    // TODO Test
-    private Cursor queryPhoneLookupEnterprise(final Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
-        // Unlike PHONE_LOOKUP, only decode once here even for SIP address. See bug 25900607.
-        final String phoneNumber = uri.getLastPathSegment();
-        final boolean isSipAddress = uri.getBooleanQueryParameter(
-                PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
-        final Uri.Builder builder = PhoneLookup.CONTENT_FILTER_URI
-                .buildUpon()
-                .appendPath(phoneNumber)
-                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
-                        String.valueOf(isSipAddress));
-        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
-        if (!TextUtils.isEmpty(directory)) {
-            final long directoryId = Long.parseLong(directory);
-            if (Directory.isEnterpriseDirectoryId(directoryId)) {
-                // If it has enterprise directory, then query queryCorpContacts directory with
-                // regular directory id.
-                builder.appendQueryParameter(
-                        ContactsContract.DIRECTORY_PARAM_KEY,
-                        String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-                final Cursor cursor = queryCorpContacts(builder.build(), projection, null, null,
-                        null, isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID, directoryId,
-                        cancellationSignal);
-                if (cursor == null) {
-                    final String[] outputProjection = (projection != null) ? projection
-                            : sPhoneLookupProjectionMap.getColumnNames();
-                    return new MatrixCursor(outputProjection);
-                }
-                return cursor;
-            }
-            // Regular directory id
-            builder.appendQueryParameter(
-                    ContactsContract.DIRECTORY_PARAM_KEY,
-                    String.valueOf(directoryId));
-            return queryDirectoryIfNecessary(builder.build(), projection, selection,
-                    selectionArgs, sortOrder, cancellationSignal);
-        }
-        // No directory
-        return queryCorpLookupIfNecessary(builder.build(), projection, null, null, null,
-                isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID, cancellationSignal);
-    }
-
     private static final Set<String> MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER =
             new ArraySet<String>(Arrays.asList(new String[] {
                 ContactsContract.DIRECTORY_PARAM_KEY
             }));
 
-
     /**
-     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE / EMAIL_FILTER_ENTERPRISE
-       into personal/work ContactsProvider2.
+     * Redirect CALLABLES_FILTER_ENTERPRISE / PHONES_FILTER_ENTERPRISE / EMAIL_FILTER_ENTERPRISE /
+     * CONTACTS_FILTER_ENTERPRISE into personal/work ContactsProvider2.
      */
-    private Cursor queryCallableEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, Uri initialUri, String contactIdString,
-            CancellationSignal cancellationSignal) {
+    private Cursor queryFilterEnterprise(Uri uri, String[] projection, String selection,
+                                         String[] selectionArgs, String sortOrder,
+                                         CancellationSignal cancellationSignal,
+                                         Uri initialUri, String contactIdString) {
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (directory == null) {
             throw new IllegalArgumentException("Directory id missing in URI: " + uri);
         }
-
-        final String filterParam = uri.getPathSegments().size() > 3 ? uri.getLastPathSegment() : "";
         final long directoryId = Long.parseLong(directory);
-        final Uri.Builder builder = initialUri.buildUpon()
-                .appendPath(filterParam);
-        addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER);
-        // If the query contains remote directory id, it should query work CP2 or directory
+        final Uri localUri = convertToLocalUri(uri, initialUri);
         // provider directory.
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
-            builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
-                    String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-            final Cursor corpCursor = queryCorpContacts(builder.build(), projection, selection,
+            return queryCorpContacts(localUri, projection, selection,
                     selectionArgs, sortOrder, contactIdString, directoryId, cancellationSignal);
-            if (corpCursor == null) {
-                // No Corp user or policy not allowed, return empty cursor
-                final String[] outputProjection = (projection != null) ? projection
-                        : sDistinctDataProjectionMap.getColumnNames();
-                return new MatrixCursor(outputProjection);
-            }
-            return corpCursor;
         } else {
-            builder.appendQueryParameter(
-                    ContactsContract.DIRECTORY_PARAM_KEY,
-                    String.valueOf(directoryId));
-            return queryDirectoryIfNecessary(builder.build(), projection, selection, selectionArgs,
+            return queryDirectoryIfNecessary(localUri, projection, selection, selectionArgs,
                     sortOrder, cancellationSignal);
         }
     }
 
     @VisibleForTesting
+    public static Uri convertToLocalUri(Uri uri, Uri initialUri) {
+        final String filterParam =
+                uri.getPathSegments().size() > initialUri.getPathSegments().size()
+                        ? uri.getLastPathSegment()
+                        : "";
+        final Uri.Builder builder = initialUri.buildUpon().appendPath(filterParam);
+        addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER);
+        final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
+        if (!TextUtils.isEmpty(directory)) {
+            final long directoryId = Long.parseLong(directory);
+            if (Directory.isEnterpriseDirectoryId(directoryId)) {
+                builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
+                        String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+            } else {
+                builder.appendQueryParameter(
+                        ContactsContract.DIRECTORY_PARAM_KEY,
+                        String.valueOf(directoryId));
+            }
+        }
+        return builder.build();
+    }
+
     protected static final Uri.Builder addQueryParametersFromUri(Uri.Builder builder, Uri uri,
             Set<String> ignoredKeys) {
         Set<String> keys = uri.getQueryParameterNames();
@@ -7446,48 +7328,54 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Handles {@link Email#ENTERPRISE_CONTENT_LOOKUP_URI}.
+     * Handles {@link PhoneLookup#ENTERPRISE_CONTENT_FILTER_URI}.
      */
+    // TODO Test
+    private Cursor queryPhoneLookupEnterprise(final Uri uri, String[] projection, String selection,
+                                              String[] selectionArgs, String sortOrder,
+                                              CancellationSignal cancellationSignal) {
+        // Unlike PHONE_LOOKUP, only decode once here even for SIP address. See bug 25900607.
+        final boolean isSipAddress = uri.getBooleanQueryParameter(
+                PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
+        final String columnIdName = isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID;
+        return queryLookupEnterprise(uri, projection, selection, selectionArgs, sortOrder,
+                cancellationSignal, PhoneLookup.CONTENT_FILTER_URI, columnIdName);
+    }
+
     private Cursor queryEmailsLookupEnterprise(Uri uri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
-        final String email = uri.getLastPathSegment();
-        final Uri.Builder builder = Email.CONTENT_LOOKUP_URI
-                .buildUpon()
-                .appendPath(email);
+                                             String[] selectionArgs, String sortOrder,
+                                             CancellationSignal cancellationSignal) {
+        return queryLookupEnterprise(uri, projection, selection, selectionArgs, sortOrder,
+                cancellationSignal, Email.CONTENT_LOOKUP_URI, Email.CONTACT_ID);
+    }
+
+    private Cursor queryLookupEnterprise(Uri uri, String[] projection, String selection,
+                                         String[] selectionArgs, String sortOrder,
+                                         CancellationSignal cancellationSignal,
+                                         Uri originalUri, String columnIdName) {
+        final Uri localUri = convertToLocalUri(uri, originalUri);
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (!TextUtils.isEmpty(directory)) {
             final long directoryId = Long.parseLong(directory);
             if (Directory.isEnterpriseDirectoryId(directoryId)) {
                 // If it has enterprise directory, then query queryCorpContacts directory with
                 // regular directory id.
-                builder.appendQueryParameter(
-                        ContactsContract.DIRECTORY_PARAM_KEY,
-                        String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
-                final Cursor corpCursor =
-                        queryCorpContacts(builder.build(), projection, selection, selectionArgs,
-                        sortOrder, Email.CONTACT_ID, directoryId, cancellationSignal);
-                if (corpCursor == null) {
-                    final String[] outputProjection = (projection != null) ? projection
-                            : sDataProjectionMap.getColumnNames();
-                    return new MatrixCursor(outputProjection);
-                }
-                return corpCursor;
+                return queryCorpContacts(localUri, projection, selection, selectionArgs,
+                        sortOrder, columnIdName, directoryId, cancellationSignal);
             }
-            // Regular directory id
-            builder.appendQueryParameter(
-                    ContactsContract.DIRECTORY_PARAM_KEY,
-                    String.valueOf(directoryId));
-
-            return queryDirectoryIfNecessary(builder.build(), projection, selection,
+            return queryDirectoryIfNecessary(localUri, projection, selection,
                     selectionArgs, sortOrder, cancellationSignal);
         }
         // No directory
-        return queryCorpLookupIfNecessary(builder.build(), projection, selection, selectionArgs,
-                sortOrder, Email.CONTACT_ID, cancellationSignal);
+        return queryCorpLookupIfNecessary(localUri, projection, selection, selectionArgs,
+                sortOrder, columnIdName, cancellationSignal);
     }
 
     // TODO: Add test case for this
-    static Cursor rewriteCorpDirectories(Cursor original) {
+    static Cursor rewriteCorpDirectories(@Nullable Cursor original) {
+        if (original == null) {
+            return null;
+        }
         final String[] projection = original.getColumnNames();
         final MatrixCursor ret = new MatrixCursor(projection);
         original.moveToPosition(-1);
@@ -9349,12 +9237,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_RAW_CONTACTS_ID:
                 return sRawContactsProjectionMap.getColumnNames();
 
+            case RAW_CONTACT_ENTITIES:
+            case RAW_CONTACT_ENTITIES_CORP:
+                return sRawEntityProjectionMap.getColumnNames();
+
             case DATA_ID:
             case PHONES:
             case PHONES_ENTERPRISE:
             case PHONES_ID:
             case EMAILS:
             case EMAILS_ID:
+            case EMAILS_LOOKUP:
+            case EMAILS_LOOKUP_ENTERPRISE:
             case POSTALS:
             case POSTALS_ID:
             case PROFILE_DATA:
@@ -9380,6 +9274,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case CONTACTS_FILTER_ENTERPRISE:
                 return sContactsProjectionWithSnippetMap.getColumnNames();
 
+            case CALLABLES_FILTER:
+            case CALLABLES_FILTER_ENTERPRISE:
+            case PHONES_FILTER:
+            case PHONES_FILTER_ENTERPRISE:
+            case EMAILS_FILTER:
+            case EMAILS_FILTER_ENTERPRISE:
+                return sDistinctDataProjectionMap.getColumnNames();
             default:
                 return null;
         }

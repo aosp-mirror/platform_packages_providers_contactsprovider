@@ -128,6 +128,53 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private static final String TAG = ContactsProvider2Test.class.getSimpleName();
 
+    public void testConvertEnterpriseUriWithEnterpriseDirectoryToLocalUri() {
+        String phoneNumber = "886";
+        String directory = String.valueOf(Directory.ENTERPRISE_DEFAULT);
+        boolean isSip = true;
+        Uri enterpriseUri = Phone.ENTERPRISE_CONTENT_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY, directory)
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSip)).build();
+        Uri localUri = ContactsProvider2.convertToLocalUri(enterpriseUri, Phone.CONTENT_URI);
+        Uri expectedUri = Phone.CONTENT_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
+                        String.valueOf(Directory.DEFAULT))
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSip)).build();
+        assertUriEquals(expectedUri, localUri);
+    }
+
+    public void testConvertEnterpriseUriWithPersonalDirectoryToLocalUri() {
+        String phoneNumber = "886";
+        String directory = String.valueOf(Directory.DEFAULT);
+        boolean isSip = true;
+        Uri enterpriseUri = Phone.ENTERPRISE_CONTENT_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY, directory)
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSip)).build();
+        Uri localUri = ContactsProvider2.convertToLocalUri(enterpriseUri, Phone.CONTENT_URI);
+        Uri expectedUri = Phone.CONTENT_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
+                        String.valueOf(Directory.DEFAULT))
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSip)).build();
+        assertUriEquals(expectedUri, localUri);
+    }
+
+    public void testConvertEnterpriseUriWithoutDirectoryToLocalUri() {
+        String phoneNumber = "886";
+        boolean isSip = true;
+        Uri enterpriseUri = Phone.ENTERPRISE_CONTENT_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSip)).build();
+        Uri localUri = ContactsProvider2.convertToLocalUri(enterpriseUri, Phone.CONTENT_URI);
+        Uri expectedUri = Phone.CONTENT_URI.buildUpon().appendPath(phoneNumber)
+                .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS,
+                        String.valueOf(isSip)).build();
+        assertUriEquals(expectedUri, localUri);
+    }
+
     public void testContactsProjection() {
         assertProjection(Contacts.CONTENT_URI, new String[]{
                 Contacts._ID,
@@ -9225,13 +9272,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 cv(Contacts._ID, i1.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED)
         );
 
-        ContactsContract.PinnedPositions.pin(mResolver,  i1.mContactId, 5);
+        ContactsContract.PinnedPositions.pin(mResolver, i1.mContactId, 5);
 
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
                 cv(Contacts._ID, i1.mContactId, Contacts.PINNED, 5)
         );
 
-        ContactsContract.PinnedPositions.pin(mResolver,  i1.mContactId, PinnedPositions.UNPINNED);
+        ContactsContract.PinnedPositions.pin(mResolver, i1.mContactId, PinnedPositions.UNPINNED);
 
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
                 cv(Contacts._ID, i1.mContactId, Contacts.PINNED, PinnedPositions.UNPINNED)
@@ -9348,9 +9395,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private Cursor queryGroupMemberships(Account account) {
         Cursor c = mResolver.query(TestUtil.maybeAddAccountQueryParameters(Data.CONTENT_URI,
-                account),
-                new String[]{GroupMembership.GROUP_ROW_ID, GroupMembership.RAW_CONTACT_ID},
-                Data.MIMETYPE + "=?", new String[]{GroupMembership.CONTENT_ITEM_TYPE},
+                        account),
+                new String[] {GroupMembership.GROUP_ROW_ID, GroupMembership.RAW_CONTACT_ID},
+                Data.MIMETYPE + "=?", new String[] {GroupMembership.CONTENT_ITEM_TYPE},
                 GroupMembership.GROUP_SOURCE_ID);
         return c;
     }
@@ -9569,5 +9616,25 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             }
         }
         return false;
+    }
+
+
+    /**
+     * Asserts the equality of two Uri objects, ignoring the order of the query parameters.
+     */
+    public static void assertUriEquals(Uri expected, Uri actual) {
+        assertEquals(expected.getScheme(), actual.getScheme());
+        assertEquals(expected.getAuthority(), actual.getAuthority());
+        assertEquals(expected.getPath(), actual.getPath());
+        assertEquals(expected.getFragment(), actual.getFragment());
+        Set<String> expectedParameterNames = expected.getQueryParameterNames();
+        Set<String> actualParameterNames = actual.getQueryParameterNames();
+        assertEquals(expectedParameterNames.size(), actualParameterNames.size());
+        assertTrue(expectedParameterNames.containsAll(actualParameterNames));
+        for (String parameterName : expectedParameterNames) {
+            assertEquals(expected.getQueryParameter(parameterName),
+                    actual.getQueryParameter(parameterName));
+        }
+
     }
 }
