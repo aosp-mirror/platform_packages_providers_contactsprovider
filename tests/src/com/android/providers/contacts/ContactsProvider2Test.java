@@ -72,6 +72,7 @@ import android.provider.OpenableColumns;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
+import android.util.ArraySet;
 
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsActor.AlteringUserContext;
@@ -97,6 +98,7 @@ import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.util.NullContentProvider;
+import com.android.providers.contacts.util.UserUtils;
 
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
@@ -2617,6 +2619,58 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // account3@email.com should be the first.
         assertStoredValuesOrderly(filterUri1, new ContentValues[] { v3, v1, v2 });
         assertStoredValuesOrderly(filterUri3, new ContentValues[] { v3, v1, v2 });
+    }
+
+    public void testAddQueryParametersFromUri() {
+        final ContactsProvider2 provider = (ContactsProvider2) getProvider();
+        final Uri originalUri = Phone.CONTENT_FILTER_URI.buildUpon()
+                .appendQueryParameter("a", "a")
+                .appendQueryParameter("b", "b")
+                .appendQueryParameter("c", "c").build();
+        final Uri.Builder targetBuilder = Phone.CONTENT_FILTER_URI.buildUpon();
+        provider.addQueryParametersFromUri(targetBuilder, originalUri,
+                new ArraySet<String>(Arrays.asList(new String[] {
+                        "b"
+                })));
+        final Uri targetUri = targetBuilder.build();
+        assertEquals(1, targetUri.getQueryParameters("a").size());
+        assertEquals(0, targetUri.getQueryParameters("b").size());
+        assertEquals(1, targetUri.getQueryParameters("c").size());
+    }
+
+    private Uri buildContactsFilterUriWithDirectory(String directory) {
+        return Contacts.CONTENT_FILTER_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY, directory).build();
+    }
+
+    public void testTestInvalidDirectory() throws Exception {
+        final ContactsProvider2 provider = (ContactsProvider2) getProvider();
+        assertTrue(provider.isDirectoryParamValid(Contacts.CONTENT_FILTER_URI));
+        assertFalse(provider.isDirectoryParamValid(buildContactsFilterUriWithDirectory("")));
+        assertTrue(provider.isDirectoryParamValid(buildContactsFilterUriWithDirectory("0")));
+        assertTrue(provider.isDirectoryParamValid(buildContactsFilterUriWithDirectory("123")));
+        assertFalse(provider.isDirectoryParamValid(buildContactsFilterUriWithDirectory("abc")));
+    }
+
+    public void testQueryCorpContactsProvider() throws Exception {
+        final ContactsProvider2 provider = (ContactsProvider2) getProvider();
+        final MockUserManager um = mActor.mockUserManager;
+        final Uri enterpriseUri =
+                Uri.withAppendedPath(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI, "408-222-2222");
+        final Uri invalidAuthorityUri = android.provider.Settings.Secure.CONTENT_URI;
+
+        // No corp user.  Primary only.
+        assertEquals(-1, UserUtils.getCorpUserId(mActor.getProviderContext()));
+        assertNull(provider.queryCorpContactsProvider(enterpriseUri, null, null, null,
+                null, null));
+
+        final SynchronousContactsProvider2 corpCp2 = setUpCorpProvider();
+        // Primary + corp
+        um.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.CORP_USER);
+        assertNotNull(provider.queryCorpContactsProvider(enterpriseUri, null, null, null,
+                null, null));
+        assertNull(provider.queryCorpContactsProvider(invalidAuthorityUri, null, null,
+                null, null, null));
     }
 
     /**
