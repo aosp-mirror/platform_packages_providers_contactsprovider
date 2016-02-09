@@ -90,6 +90,8 @@ public class ContactMetadataProvider extends ContentProvider {
     private ContactsDatabaseHelper mDbHelper;
     private ContactsProvider2 mContactsProvider;
 
+    private String mAllowedPackage;
+
     @Override
     public boolean onCreate() {
         final Context context = getContext();
@@ -99,6 +101,8 @@ public class ContactMetadataProvider extends ContentProvider {
         final ContentProvider provider = ContentProvider.coerceToLocalContentProvider(
                 iContentProvider);
         mContactsProvider = (ContactsProvider2) provider;
+
+        mAllowedPackage = getContext().getResources().getString(R.string.metadata_sync_pacakge);
         return true;
     }
 
@@ -115,13 +119,14 @@ public class ContactMetadataProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
 
+        ensureCaller();
+
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
-
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         String limit = getLimit(uri);
 
@@ -172,6 +177,9 @@ public class ContactMetadataProvider extends ContentProvider {
      * Insert or update if the raw is already existing.
      */
     public Uri insert(Uri uri, ContentValues values) {
+
+        ensureCaller();
+
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
@@ -200,6 +208,9 @@ public class ContactMetadataProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
+
+        ensureCaller();
+
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
@@ -245,6 +256,9 @@ public class ContactMetadataProvider extends ContentProvider {
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+
+        ensureCaller();
+
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
@@ -275,6 +289,9 @@ public class ContactMetadataProvider extends ContentProvider {
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
+
+        ensureCaller();
+
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "applyBatch: " + operations.size() + " ops");
         }
@@ -291,6 +308,9 @@ public class ContactMetadataProvider extends ContentProvider {
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
+
+        ensureCaller();
+
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "bulkInsert: " + values.length + " inserts");
         }
@@ -410,5 +430,14 @@ public class ContactMetadataProvider extends ContentProvider {
         values.remove(MetadataSync.DATA_SET);
 
         return id;
+    }
+
+    @VisibleForTesting
+    void ensureCaller() {
+        final String caller = getCallingPackage();
+        if (mAllowedPackage.equals(caller)) {
+            return; // Okay.
+        }
+        throw new SecurityException("Caller " + caller + " can't access ContactMetadataProvider");
     }
 }
