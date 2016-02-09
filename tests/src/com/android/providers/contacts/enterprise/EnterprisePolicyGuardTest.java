@@ -26,6 +26,7 @@ import android.test.AndroidTestCase;
 import android.test.mock.MockContext;
 import android.test.suitebuilder.annotation.SmallTest;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 
@@ -55,28 +56,28 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
     private static final String CONTACT_PHONE = "+1234567890";
     private static final long DIRECTORY_ID = Directory.ENTERPRISE_DEFAULT;
 
-    private static final Uri URI_CONTACTS_ID_PHOTO_CORP =
-            Uri.parse("content://com.android.contacts/contacts_corp/" + CONTACT_ID + "/photo");
-    private static final Uri URI_CONTACTS_ID_DISPLAY_PHOTO_CORP = Uri
-            .parse("content://com.android.contacts/contacts_corp/" + CONTACT_ID + "/display_photo");
-    private static final Uri URI_CONTACTS_FILTER_ENTERPRISE =
-            Uri.parse("content://com.android.contacts/contacts/filter_enterprise/" + CONTACT_NAME);
-    private static final Uri URI_PHONES_FILTER_ENTERPRISE = Uri
-            .parse("content://com.android.contacts/data/phones/filter_enterprise/" + CONTACT_NAME);
-    private static final Uri URI_CALLABLES_FILTER_ENTERPRISE = Uri.parse(
-            "content://com.android.contacts/data/callables/filter_enterprise/" + CONTACT_NAME);
-    private static final Uri URI_EMAILS_FILTER_ENTERPRISE = Uri
-            .parse("content://com.android.contacts/data/emails/filter_enterprise/" + CONTACT_NAME);
-    private static final Uri URI_EMAILS_LOOKUP_ENTERPRISE =
-            Uri.parse("content://com.android.contacts/data/emails/lookup_enterprise/"
+    private static final Uri URI_CONTACTS_ID_PHOTO =
+            Uri.parse("content://com.android.contacts/contacts/" + CONTACT_ID + "/photo");
+    private static final Uri URI_CONTACTS_ID_DISPLAY_PHOTO = Uri
+            .parse("content://com.android.contacts/contacts/" + CONTACT_ID + "/display_photo");
+    private static final Uri URI_CONTACTS_FILTER =
+            Uri.parse("content://com.android.contacts/contacts/filter/" + CONTACT_NAME);
+    private static final Uri URI_PHONES_FILTER = Uri
+            .parse("content://com.android.contacts/data/phones/filter/" + CONTACT_NAME);
+    private static final Uri URI_CALLABLES_FILTER = Uri.parse(
+            "content://com.android.contacts/data/callables/filter/" + CONTACT_NAME);
+    private static final Uri URI_EMAILS_FILTER = Uri
+            .parse("content://com.android.contacts/data/emails/filter/" + CONTACT_NAME);
+    private static final Uri URI_EMAILS_LOOKUP =
+            Uri.parse("content://com.android.contacts/data/emails/lookup/"
                     + Uri.encode(CONTACT_EMAIL));
-    private static final Uri URI_PHONE_LOOKUP_ENTERPRISE = Uri.parse(
-            "content://com.android.contacts/phone_lookup_enterprise/" + Uri.encode(CONTACT_PHONE));
-    private static final Uri URI_DIRECTORIES_ENTERPRISE =
-            Uri.parse("content://com.android.contacts/directories_enterprise");
-    private static final Uri URI_DIRECTORIES_ID_ENTERPRISE =
-            Uri.parse("content://com.android.contacts/directories_enterprise/" + DIRECTORY_ID);
-    private static final Uri URI_DIRECTORY_FILE_ENTERPRISE =
+    private static final Uri URI_PHONE_LOOKUP = Uri.parse(
+            "content://com.android.contacts/phone_lookup/" + Uri.encode(CONTACT_PHONE));
+    private static final Uri URI_DIRECTORIES =
+            Uri.parse("content://com.android.contacts/directories");
+    private static final Uri URI_DIRECTORIES_ID =
+            Uri.parse("content://com.android.contacts/directories/" + DIRECTORY_ID);
+    private static final Uri URI_DIRECTORY_FILE =
             Uri.parse("content://com.android.contacts/directory_file_enterprise/content%3A%2F%2F"
                     + "com.google.contacts.gal.provider%2Fphoto%2F?directory=1000000002");
 
@@ -98,17 +99,17 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
 
     public void testDirectorySupport() {
         EnterprisePolicyGuard guard = new EnterprisePolicyGuard(getContext());
-        checkDirectorySupport(guard, URI_PHONE_LOOKUP_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_EMAILS_LOOKUP_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_CONTACTS_FILTER_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_PHONES_FILTER_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_CALLABLES_FILTER_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_EMAILS_FILTER_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
-        checkDirectorySupport(guard, URI_DIRECTORIES_ENTERPRISE, false);
-        checkDirectorySupport(guard, URI_DIRECTORIES_ID_ENTERPRISE, false);
-        checkDirectorySupport(guard, URI_CONTACTS_ID_PHOTO_CORP, false);
-        checkDirectorySupport(guard, URI_CONTACTS_ID_DISPLAY_PHOTO_CORP, false);
+        checkDirectorySupport(guard, URI_PHONE_LOOKUP, true);
+        checkDirectorySupport(guard, URI_EMAILS_LOOKUP, true);
+        checkDirectorySupport(guard, URI_CONTACTS_FILTER, true);
+        checkDirectorySupport(guard, URI_PHONES_FILTER, true);
+        checkDirectorySupport(guard, URI_CALLABLES_FILTER, true);
+        checkDirectorySupport(guard, URI_EMAILS_FILTER, true);
+        checkDirectorySupport(guard, URI_DIRECTORY_FILE, true);
+        checkDirectorySupport(guard, URI_DIRECTORIES, false);
+        checkDirectorySupport(guard, URI_DIRECTORIES_ID, false);
+        checkDirectorySupport(guard, URI_CONTACTS_ID_PHOTO, false);
+        checkDirectorySupport(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, false);
         checkDirectorySupport(guard, URI_OTHER, false);
     }
 
@@ -117,85 +118,69 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         Context context;
         EnterprisePolicyGuard guard;
 
-        // No corp user
-        context = getMockContext(/* managedProfileExists= */ false, true, true);
+        // All enabled.
+        context = getMockContext(true, true);
         guard = new EnterprisePolicyGuard(context);
-        checkCrossProfile(guard, URI_PHONE_LOOKUP_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_EMAILS_LOOKUP_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CONTACTS_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, false);
-        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO_CORP, false);
-        checkCrossProfile(guard, URI_OTHER, false);
-
-        // All enabled. Corp user enabled
-        context = getMockContext(/* managedProfileExists= */ true, true, true);
-        guard = new EnterprisePolicyGuard(context);
-        checkCrossProfile(guard, URI_PHONE_LOOKUP_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_EMAILS_LOOKUP_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CONTACTS_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, true);
-        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO_CORP, true);
+        checkCrossProfile(guard, URI_PHONE_LOOKUP, true);
+        checkCrossProfile(guard, URI_EMAILS_LOOKUP, true);
+        checkCrossProfile(guard, URI_CONTACTS_FILTER, true);
+        checkCrossProfile(guard, URI_PHONES_FILTER, true);
+        checkCrossProfile(guard, URI_CALLABLES_FILTER, true);
+        checkCrossProfile(guard, URI_EMAILS_FILTER, true);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE, true);
+        checkCrossProfile(guard, URI_DIRECTORIES, true);
+        checkCrossProfile(guard, URI_DIRECTORIES_ID, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, true);
         checkCrossProfile(guard, URI_OTHER, false);
 
         // Only ContactsSearch is disabled
-        context = getMockContext(true, true, /* isContactsSearchEnabled= */ false);
+        context = getMockContext(true, /* isContactsSearchEnabled= */ false);
         guard = new EnterprisePolicyGuard(context);
-        checkCrossProfile(guard, URI_PHONE_LOOKUP_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_EMAILS_LOOKUP_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CONTACTS_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, true);
-        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO_CORP, true);
+        checkCrossProfile(guard, URI_PHONE_LOOKUP, true);
+        checkCrossProfile(guard, URI_EMAILS_LOOKUP, true);
+        checkCrossProfile(guard, URI_CONTACTS_FILTER, false);
+        checkCrossProfile(guard, URI_PHONES_FILTER, false);
+        checkCrossProfile(guard, URI_CALLABLES_FILTER, false);
+        checkCrossProfile(guard, URI_EMAILS_FILTER, false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE, true);
+        checkCrossProfile(guard, URI_DIRECTORIES, true);
+        checkCrossProfile(guard, URI_DIRECTORIES_ID, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, true);
         checkCrossProfile(guard, URI_OTHER, false);
 
         // Only CallerId is disabled
-        context = getMockContext(true, /* isCallerIdEnabled= */ false, true);
+        context = getMockContext(/* isCallerIdEnabled= */ false, true);
         guard = new EnterprisePolicyGuard(context);
-        checkCrossProfile(guard, URI_PHONE_LOOKUP_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_EMAILS_LOOKUP_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CONTACTS_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, true);
-        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, true);
-        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO_CORP, true);
+        checkCrossProfile(guard, URI_PHONE_LOOKUP, false);
+        checkCrossProfile(guard, URI_EMAILS_LOOKUP, false);
+        checkCrossProfile(guard, URI_CONTACTS_FILTER, true);
+        checkCrossProfile(guard, URI_PHONES_FILTER, true);
+        checkCrossProfile(guard, URI_CALLABLES_FILTER, true);
+        checkCrossProfile(guard, URI_EMAILS_FILTER, true);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE, true);
+        checkCrossProfile(guard, URI_DIRECTORIES, true);
+        checkCrossProfile(guard, URI_DIRECTORIES_ID, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, true);
         checkCrossProfile(guard, URI_OTHER, false);
 
         // CallerId and ContactsSearch are disabled
-        context = getMockContext(true, /* isCallerIdEnabled= */ false,
+        context = getMockContext(/* isCallerIdEnabled= */ false,
                 /* isContactsSearchEnabled= */ false);
         guard = new EnterprisePolicyGuard(context);
-        checkCrossProfile(guard, URI_PHONE_LOOKUP_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_EMAILS_LOOKUP_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CONTACTS_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_PHONES_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CALLABLES_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_EMAILS_FILTER_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORY_FILE_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORIES_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_DIRECTORIES_ID_ENTERPRISE, false);
-        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO_CORP, false);
-        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO_CORP, false);
+        checkCrossProfile(guard, URI_PHONE_LOOKUP, false);
+        checkCrossProfile(guard, URI_EMAILS_LOOKUP, false);
+        checkCrossProfile(guard, URI_CONTACTS_FILTER, false);
+        checkCrossProfile(guard, URI_PHONES_FILTER, false);
+        checkCrossProfile(guard, URI_CALLABLES_FILTER, false);
+        checkCrossProfile(guard, URI_EMAILS_FILTER, false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE, false);
+        checkCrossProfile(guard, URI_DIRECTORIES, false);
+        checkCrossProfile(guard, URI_DIRECTORIES_ID, false);
+        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, false);
+        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, false);
         checkCrossProfile(guard, URI_OTHER, false);
     }
 
@@ -203,14 +188,12 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
             boolean expected) {
         if (expected) {
             assertTrue("Expected true but got false for uri: " + uri,
-                    guard.isEnterpriseUriWithDirectorySupport(uri));
+                    guard.isCrossProfileDirectorySupported(uri));
         } else {
             assertFalse("Expected false but got true for uri: " + uri,
-                    guard.isEnterpriseUriWithDirectorySupport(uri));
-
+                    guard.isCrossProfileDirectorySupported(uri));
         }
     }
-
 
     private static void checkCrossProfile(EnterprisePolicyGuard guard, Uri uri, boolean expected) {
         if (expected) {
@@ -236,16 +219,14 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
             Arrays.asList(new UserInfo[] {CURRENT_USER_INFO, WORK_USER_INFO});
 
 
-    private Context getMockContext(boolean managedProfileExists, boolean isCallerIdEnabled,
-            boolean isContactsSearchEnabled) {
+    private Context getMockContext(boolean isCallerIdEnabled, boolean isContactsSearchEnabled) {
         DevicePolicyManager mockDpm = mock(DevicePolicyManager.class);
         when(mockDpm.getCrossProfileCallerIdDisabled(Matchers.<UserHandle>any()))
                 .thenReturn(!isCallerIdEnabled);
         when(mockDpm.getCrossProfileContactsSearchDisabled(Matchers.<UserHandle>any()))
                 .thenReturn(!isContactsSearchEnabled);
 
-        List<UserInfo> userInfos =
-                managedProfileExists ? MANAGED_USERINFO_LIST : NORMAL_USERINFO_LIST;
+        List<UserInfo> userInfos = MANAGED_USERINFO_LIST;
         UserManager mockUm = mock(UserManager.class);
         when(mockUm.getUserHandle()).thenReturn(CURRENT_USER_ID);
         when(mockUm.getUsers()).thenReturn(userInfos);
