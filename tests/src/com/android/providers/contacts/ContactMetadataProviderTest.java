@@ -99,8 +99,8 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        mContactMetadataProvider = (ContactMetadataProvider) addProvider(
-                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        mContactMetadataProvider = addProvider(
+                ContactMetadataProviderTestable.class, MetadataSync.METADATA_AUTHORITY);
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         mContactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
