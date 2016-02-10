@@ -67,7 +67,6 @@ public class EnterprisePolicyGuard {
         final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(currentHandle);
         final boolean isContactsSearchEnabled =
                 !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
-        final boolean isCrossProfileDirectorySupported = isCrossProfileDirectorySupported(uri);
         final String directory = uri.getQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY);
 
         if (VERBOSE_LOGGING) {

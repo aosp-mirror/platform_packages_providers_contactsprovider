@@ -46,17 +46,6 @@ public final class UserUtils {
 
     /**
      * @param context Context
-     * @return {@link UserHandle} of the corp user that is linked to the current user,
-     *         if any. If there's no such user or cross-user contacts access is
-     *         disallowed by policy, returns null.
-     */
-    public static UserHandle getCorpUserHandle(Context context) {
-        final UserInfo ui = getCorpUserInfo(context);
-        return ui == null ? null : ui.getUserHandle();
-    }
-
-    /**
-     * @param context Context
      * @return {@link UserInfo} of the corp user that is linked to the current user,
      *         if any. If there's no such user or cross-user contacts access is
      *         disallowed by policy, returns null.
