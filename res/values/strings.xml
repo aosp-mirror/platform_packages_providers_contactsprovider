@@ -32,8 +32,8 @@
     <!-- Title for the notification shown when updating contacts fails because of memory shortage -->
     <string name="upgrade_out_of_memory_notification_title">Upgrading storage for contacts</string>
 
-    <!-- Text for the notification shown when updating contacts fails because of memory shortage -->
-    <string name="upgrade_out_of_memory_notification_text">Touch to complete the upgrade.</string>
+    <!-- Text for the notification shown when updating contacts fails because of memory shortage [CHAR_LIMIT=50] -->
+    <string name="upgrade_out_of_memory_notification_text">Tap to complete the upgrade.</string>
 
     <!-- The name of the default contact directory -->
     <string name="default_directory">Contacts</string>
