@@ -2899,8 +2899,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testUpdateMetadataOnRawContactInsert() throws Exception {
-        ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
-                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        ContactMetadataProvider contactMetadataProvider = addProvider(
+                ContactMetadataProviderTestable.class, MetadataSync.METADATA_AUTHORITY);
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
@@ -2955,8 +2955,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testUpdateMetadataOnRawContactBackupIdChange() throws Exception {
-        ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
-                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        ContactMetadataProvider contactMetadataProvider = addProvider(
+                ContactMetadataProviderTestable.class, MetadataSync.METADATA_AUTHORITY);
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
@@ -3021,8 +3021,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDeleteMetadataOnRawContactDelete() throws Exception {
-        ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
-                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        ContactMetadataProvider contactMetadataProvider = addProvider(
+                ContactMetadataProviderTestable.class, MetadataSync.METADATA_AUTHORITY);
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
@@ -6630,8 +6630,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mActor.setAccounts(new Account[]{doomedAccount, safeAccount});
         cp.onAccountsUpdated(new Account[]{doomedAccount, safeAccount});
 
-        ContactMetadataProvider contactMetadataProvider = (ContactMetadataProvider) addProvider(
-                ContactMetadataProvider.class, MetadataSync.METADATA_AUTHORITY);
+        ContactMetadataProvider contactMetadataProvider = addProvider(
+                ContactMetadataProviderTestable.class, MetadataSync.METADATA_AUTHORITY);
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
