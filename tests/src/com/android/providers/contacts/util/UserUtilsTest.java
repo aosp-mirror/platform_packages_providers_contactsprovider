@@ -48,18 +48,15 @@ public class UserUtilsTest extends AndroidTestCase {
 
         // No corp user.  Primary only.
         assertEquals(-1, UserUtils.getCorpUserId(c));
-        assertNull(UserUtils.getCorpUserHandle(c));
 
         // Primary + corp
         um.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.CORP_USER);
 
         um.myUser = MockUserManager.PRIMARY_USER.id;
         assertEquals(MockUserManager.CORP_USER.id, UserUtils.getCorpUserId(c));
-        assertNotNull(UserUtils.getCorpUserHandle(c));
 
         um.myUser = MockUserManager.CORP_USER.id;
         assertEquals(-1, UserUtils.getCorpUserId(c));
-        assertNull(UserUtils.getCorpUserHandle(c));
 
         // Primary + secondary + corp
         um.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.SECONDARY_USER,
@@ -67,25 +64,20 @@ public class UserUtilsTest extends AndroidTestCase {
 
         um.myUser = MockUserManager.PRIMARY_USER.id;
         assertEquals(MockUserManager.CORP_USER.id, UserUtils.getCorpUserId(c));
-        assertNotNull(UserUtils.getCorpUserHandle(c));
 
         um.myUser = MockUserManager.CORP_USER.id;
         assertEquals(-1, UserUtils.getCorpUserId(c));
-        assertNull(UserUtils.getCorpUserHandle(c));
 
         um.myUser = MockUserManager.SECONDARY_USER.id;
         assertEquals(-1, UserUtils.getCorpUserId(c));
-        assertNull(UserUtils.getCorpUserHandle(c));
 
         // Primary + secondary
         um.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.SECONDARY_USER);
 
         um.myUser = MockUserManager.PRIMARY_USER.id;
         assertEquals(-1, UserUtils.getCorpUserId(c));
-        assertNull(UserUtils.getCorpUserHandle(c));
 
         um.myUser = MockUserManager.SECONDARY_USER.id;
         assertEquals(-1, UserUtils.getCorpUserId(c));
-        assertNull(UserUtils.getCorpUserHandle(c));
     }
 }

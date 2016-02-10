@@ -5572,7 +5572,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Make sure authority is CP2 not other providers
         if (!ContactsContract.AUTHORITY.equals(localUri.getAuthority())) {
             Log.w(TAG, "Invalid authority: " + localUri.getAuthority());
-            return createEmptyCursor(localUri, projection);
+            throw new IllegalArgumentException(
+                    "Authority " + localUri.getAuthority() + " is not a valid CP2 authority.");
         }
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
         Cursor cursor = getContext().getContentResolver().query(remoteUri, projection, selection,
