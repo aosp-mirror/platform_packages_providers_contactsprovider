@@ -2596,7 +2596,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     protected void notifyChange() {
-        notifyChange(mSyncToNetwork, mMetadataSyncEnabled);
+        notifyChange(mSyncToNetwork, mSyncToMetadataNetWork);
         mSyncToNetwork = false;
         mSyncToMetadataNetWork = false;
     }
