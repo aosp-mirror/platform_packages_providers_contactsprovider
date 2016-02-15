@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"পরিচিতিগুলি"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"পরিচিতিগুলি আপগ্রেড করার জন্য আরো সঞ্চয়স্থানের দরকার৷"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"পরিচিতিগুলির জন্য সঞ্চয়স্থান আপগ্রেড করা হচ্ছে"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"আপগ্রেড সম্পূর্ণ করতে স্পর্শ করুন৷"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"আপগ্রেড সম্পূর্ণ করতে আলতো চাপ দিন৷"</string>
     <string name="default_directory" msgid="93961630309570294">"পরিচিতিগুলি"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"অন্যান্য"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"এর থেকে ভয়েসমেল "</string>
