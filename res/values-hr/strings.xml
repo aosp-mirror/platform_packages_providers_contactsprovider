@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"Kontakti"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Za nadogradnju kontakata potrebno je više memorije."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Nadogradnja pohrane za kontakte"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Dodirnite da biste dovršili nadogradnju."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Dodirnite da biste dovršili nadogradnju."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakti"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Drugo"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta od "</string>
