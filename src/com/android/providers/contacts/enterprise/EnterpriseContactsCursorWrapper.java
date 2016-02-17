@@ -32,6 +32,7 @@ import android.provider.ContactsContract.PhoneLookup;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsProvider2;
 
 /**
@@ -47,8 +48,7 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
     // As some of the columns like PHOTO_URI requires contact id, but original projection may not
     // have it, so caller may use a work projection instead of original project to make the
     // query. Hence, we need also to restore the cursor to the origianl projection.
-    private final int contactIdIndex;
-    private final boolean isContactIdAppended;
+    private final int[] contactIdIndices;
 
     // Derived Fields
     private final Long mDirectoryId;
@@ -56,10 +56,9 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
     private final String[] originalColumnNames;
 
     public EnterpriseContactsCursorWrapper(Cursor cursor, String[] originalColumnNames,
-            int contactIdIndex, boolean isContactIdAppended, @Nullable Long directoryId) {
+            int[] contactIdIndices, @Nullable Long directoryId) {
         super(cursor);
-        this.contactIdIndex = contactIdIndex;
-        this.isContactIdAppended = isContactIdAppended;
+        this.contactIdIndices = contactIdIndices;
         this.originalColumnNames = originalColumnNames;
         this.mDirectoryId = directoryId;
         this.mIsDirectoryRemote = directoryId != null
@@ -80,7 +79,7 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
     public String getString(int columnIndex) {
         final String result = super.getString(columnIndex);
         final String columnName = super.getColumnName(columnIndex);
-        final long contactId = super.getLong(contactIdIndex);
+        final long contactId = super.getLong(contactIdIndices[0]);
         switch (columnName) {
             case Contacts.PHOTO_THUMBNAIL_URI:
                 if(mIsDirectoryRemote) {
@@ -127,7 +126,7 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
     @Override
     public long getLong(int column) {
         long result = super.getLong(column);
-        if (column == contactIdIndex) {
+        if (ArrayUtils.contains(contactIdIndices, column)) {
             return result + Contacts.ENTERPRISE_CONTACT_ID_BASE;
         } else {
             final String columnName = getColumnName(column);

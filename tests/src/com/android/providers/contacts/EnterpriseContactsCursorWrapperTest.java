@@ -30,38 +30,40 @@ import com.android.providers.contacts.enterprise.EnterpriseContactsCursorWrapper
 public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
 
     public void testWrappedResults() {
-        // 19 columns
         final String[] projection = new String[] {
                 /* column 0 */ PhoneLookup._ID,
-                /* column 1 */ PhoneLookup.LOOKUP_KEY,
-                /* column 2 */ PhoneLookup.DISPLAY_NAME,
-                /* column 3 */ PhoneLookup.LAST_TIME_CONTACTED,
-                /* column 4 */ PhoneLookup.TIMES_CONTACTED,
-                /* column 5 */ PhoneLookup.STARRED,
-                /* column 6 */ PhoneLookup.IN_DEFAULT_DIRECTORY,
-                /* column 7 */ PhoneLookup.IN_VISIBLE_GROUP,
-                /* column 8 */ PhoneLookup.PHOTO_FILE_ID,
-                /* column 9 */ PhoneLookup.PHOTO_ID,
-                /* column 10 */ PhoneLookup.PHOTO_URI,
-                /* column 11 */ PhoneLookup.PHOTO_THUMBNAIL_URI,
-                /* column 12 */ PhoneLookup.CUSTOM_RINGTONE,
-                /* column 13 */ PhoneLookup.HAS_PHONE_NUMBER,
-                /* column 14 */ PhoneLookup.SEND_TO_VOICEMAIL,
-                /* column 15 */ PhoneLookup.NUMBER,
-                /* column 16 */ PhoneLookup.TYPE,
-                /* column 17 */ PhoneLookup.LABEL,
-                /* column 18 */ PhoneLookup.NORMALIZED_NUMBER
+                /* column 1 */ PhoneLookup.CONTACT_ID,
+                /* column 2 */ PhoneLookup.LOOKUP_KEY,
+                /* column 3 */ PhoneLookup.DISPLAY_NAME,
+                /* column 4 */ PhoneLookup.LAST_TIME_CONTACTED,
+                /* column 5 */ PhoneLookup.TIMES_CONTACTED,
+                /* column 6 */ PhoneLookup.STARRED,
+                /* column 7 */ PhoneLookup.IN_DEFAULT_DIRECTORY,
+                /* column 8 */ PhoneLookup.IN_VISIBLE_GROUP,
+                /* column 9 */ PhoneLookup.PHOTO_FILE_ID,
+                /* column 10 */ PhoneLookup.PHOTO_ID,
+                /* column 11 */ PhoneLookup.PHOTO_URI,
+                /* column 12 */ PhoneLookup.PHOTO_THUMBNAIL_URI,
+                /* column 13 */ PhoneLookup.CUSTOM_RINGTONE,
+                /* column 14 */ PhoneLookup.HAS_PHONE_NUMBER,
+                /* column 15 */ PhoneLookup.SEND_TO_VOICEMAIL,
+                /* column 16 */ PhoneLookup.NUMBER,
+                /* column 17 */ PhoneLookup.TYPE,
+                /* column 18 */ PhoneLookup.LABEL,
+                /* column 19 */ PhoneLookup.NORMALIZED_NUMBER
         };
         final MatrixCursor c = new MatrixCursor(projection);
 
         // First, convert and make sure it returns an empty cursor.
-        Cursor rewritten = new EnterpriseContactsCursorWrapper(c, projection, 0, false, null);
+        Cursor rewritten = new EnterpriseContactsCursorWrapper(c, projection,
+                new int[] {0, 1}, null);
 
         assertEquals(0, rewritten.getCount());
-        assertEquals(19, rewritten.getColumnCount());
+        assertEquals(projection.length, rewritten.getColumnCount());
 
         c.addRow(new Object[] {
                 1L, // PhoneLookup._ID,
+                1L, // PhoneLookup.CONTACT_ID,
                 null, // PhoneLookup.LOOKUP_KEY,
                 null, // PhoneLookup.DISPLAY_NAME,
                 null, // PhoneLookup.LAST_TIME_CONTACTED,
@@ -84,6 +86,7 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
 
         c.addRow(new Object[] {
                 10L, // PhoneLookup._ID,
+                10L, // PhoneLookup.CONTACT_ID,
                 "key", // PhoneLookup.LOOKUP_KEY,
                 "name", // PhoneLookup.DISPLAY_NAME,
                 123, // PhoneLookup.LAST_TIME_CONTACTED,
@@ -103,12 +106,15 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
                 "label", // PhoneLookup.LABEL,
                 "+1234", // PhoneLookup.NORMALIZED_NUMBER
         });
-        rewritten = new EnterpriseContactsCursorWrapper(c, projection, 0, false, null);
+        rewritten = new EnterpriseContactsCursorWrapper(c, projection, new int[] {0, 1}, null);
         assertEquals(2, rewritten.getCount());
-        assertEquals(19, rewritten.getColumnCount());
+        assertEquals(projection.length, rewritten.getColumnCount());
 
-        rewritten.moveToPosition(0);
+        rewritten.moveToFirst();
+
+        // Verify the first row.
         int column = 0;
+        assertEquals(1000000001L, rewritten.getLong(column++)); // We offset ID for corp contacts.
         assertEquals(1000000001L, rewritten.getLong(column++)); // We offset ID for corp contacts.
         assertEquals(null, rewritten.getString(column++));
         assertEquals(null, rewritten.getString(column++));
@@ -130,8 +136,10 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
         assertEquals(null, rewritten.getString(column++));
 
 
+        // Verify the second row.
         rewritten.moveToNext();
         column = 0;
+        assertEquals(1000000010L, rewritten.getLong(column++)); // With offset.
         assertEquals(1000000010L, rewritten.getLong(column++)); // With offset.
         assertEquals("c-key", rewritten.getString(column++));
         assertEquals("name", rewritten.getString(column++));
@@ -153,25 +161,5 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
         assertEquals(1, rewritten.getInt(column++));
         assertEquals("label", rewritten.getString(column++));
         assertEquals("+1234", rewritten.getString(column++));
-
-
-        rewritten = new EnterpriseContactsCursorWrapper(c, projection, 0, false, null);
-
-        assertEquals(2, rewritten.getCount());
-        assertEquals(19, rewritten.getColumnCount());
-
-        rewritten.moveToPosition(0);
-
-        assertEquals(null, rewritten.getString(10));
-        assertEquals(null, rewritten.getString(11));
-
-
-        rewritten.moveToNext();
-        column = 0;
-        assertEquals("content://com.android.contacts/contacts_corp/10/display_photo",
-                rewritten.getString(10));
-        assertEquals("content://com.android.contacts/contacts_corp/10/photo",
-                rewritten.getString(11));
     }
 }
-
