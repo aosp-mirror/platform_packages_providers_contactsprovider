@@ -158,9 +158,11 @@ public class MetadataEntryParser {
 
             // Parse contactPrefs to get sendToVoicemail, starred, pinned.
             final JSONObject contactPrefs = root.getJSONObject(CONTACT_PREFS);
-            final boolean sendToVoicemail = contactPrefs.getBoolean(SEND_TO_VOICEMAIL);
-            final boolean starred = contactPrefs.getBoolean(STARRED);
-            final int pinned = contactPrefs.getInt(PINNED);
+            final boolean sendToVoicemail = contactPrefs.has(SEND_TO_VOICEMAIL)
+                    ? contactPrefs.getBoolean(SEND_TO_VOICEMAIL) : false;
+            final boolean starred = contactPrefs.has(STARRED)
+                    ? contactPrefs.getBoolean(STARRED) : false;
+            final int pinned = contactPrefs.has(PINNED) ? contactPrefs.getInt(PINNED) : 0;
 
             // Parse aggregationDatas
             final ArrayList<AggregationData> aggregationsList = new ArrayList<AggregationData>();
