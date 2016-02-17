@@ -182,6 +182,8 @@ import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.primitives.Ints;
+
 import libcore.io.IoUtils;
 
 import java.io.BufferedWriter;
@@ -926,6 +928,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /** Contains columns in PhoneLookup which are not contained in the data view. */
     private static final ProjectionMap sSipLookupColumns = ProjectionMap.builder()
+            .add(PhoneLookup.DATA_ID, Data._ID)
             .add(PhoneLookup.NUMBER, SipAddress.SIP_ADDRESS)
             .add(PhoneLookup.TYPE, "0")
             .add(PhoneLookup.LABEL, "NULL")
@@ -976,6 +979,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /** Contains the data and contacts columns, for joined tables */
     private static final ProjectionMap sPhoneLookupProjectionMap = ProjectionMap.builder()
             .add(PhoneLookup._ID, "contacts_view." + Contacts._ID)
+            .add(PhoneLookup.CONTACT_ID, "contacts_view." + Contacts._ID)
+            .add(PhoneLookup.DATA_ID, PhoneLookup.DATA_ID)
             .add(PhoneLookup.LOOKUP_KEY, "contacts_view." + Contacts.LOOKUP_KEY)
             .add(PhoneLookup.DISPLAY_NAME, "contacts_view." + Contacts.DISPLAY_NAME)
             .add(PhoneLookup.LAST_TIME_CONTACTED, "contacts_view." + Contacts.LAST_TIME_CONTACTED)
@@ -7129,7 +7134,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             final Cursor managedCursor = queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, RawContacts.CONTACT_ID, null, cancellationSignal);
+                    selectionArgs, sortOrder, new String[] {RawContacts.CONTACT_ID}, null,
+                    cancellationSignal);
             if (managedCursor == null) {
                 // No corp results.  Just return the local result.
                 return primaryCursor;
@@ -7153,19 +7159,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private static String[] addColumnIfNotPresent(String[] projection, String columnName) {
+    private static String[] addContactIdColumnIfNotPresent(String[] projection,
+                                                           String[] contactIdColumnNames) {
         if (projection == null) {
             return null;
         }
         final int projectionLength = projection.length;
         for (int i = 0; i < projectionLength; i++) {
-            if (columnName.equals(projection[i])) {
+            if (ArrayUtils.contains(contactIdColumnNames, projection[i])) {
                 return projection;
             }
         }
         String[] newProjection = new String[projectionLength + 1];
         System.arraycopy(projection, 0, newProjection, 0, projectionLength);
-        newProjection[projection.length] = columnName;
+        newProjection[projection.length] = contactIdColumnNames[0];
         return newProjection;
     }
 
@@ -7173,32 +7180,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * Query corp CP2 directly.
      */
     private Cursor queryCorpContacts(Uri localUri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, String contactIdColumnName,
+            String[] selectionArgs, String sortOrder, String[] contactIdColumnNames,
             @Nullable Long directoryId, CancellationSignal cancellationSignal) {
         // We need contactId in projection, if it doesn't have, we add it in projection as
         // workProjection, and we restore the actual projection in
         // EnterpriseContactsCursorWrapper
-        String[] workProjection = addColumnIfNotPresent(projection, contactIdColumnName);
+        String[] workProjection = addContactIdColumnIfNotPresent(projection, contactIdColumnNames);
         // Projection is changed only when projection is non-null and does not have contact id
         final boolean isContactIdAdded = (projection == null) ? false
                 : (workProjection.length != projection.length);
-        int columnIdIndex = getContactIdColumnIndex(workProjection, contactIdColumnName);
         final Cursor managedCursor = queryCorpContactsProvider(localUri, workProjection,
                 selection, selectionArgs, sortOrder, cancellationSignal);
-        if (projection == null) {
-            // As projection is null and we didn't append contact id in projection, we need to fix
-            // contact id column index.
-            try {
-                columnIdIndex = managedCursor.getColumnIndex(contactIdColumnName);
-            } catch (Throwable th) {
-                managedCursor.close();
-                throw th;
-            }
+        int[] columnIdIndices = getContactIdColumnIndices(managedCursor, contactIdColumnNames);
+        if (columnIdIndices.length == 0) {
+            throw new IllegalStateException("column id is missing in the returned cursor.");
         }
         final String[] originalColumnNames = isContactIdAdded
                 ? removeLastColumn(managedCursor.getColumnNames()) : managedCursor.getColumnNames();
         return new EnterpriseContactsCursorWrapper(managedCursor, originalColumnNames,
-                columnIdIndex, isContactIdAdded, directoryId);
+                columnIdIndices, directoryId);
     }
 
     private static String[] removeLastColumn(String[] projection) {
@@ -7212,7 +7212,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * id.
      */
     private Cursor queryCorpLookupIfNecessary(Uri localUri, String[] projection, String selection,
-            String[] selectionArgs, String sortOrder, String contactIdColumnName,
+            String[] selectionArgs, String sortOrder, String[] contactIdColumnNames,
             CancellationSignal cancellationSignal) {
 
         final String directory = getQueryParameter(localUri, ContactsContract.DIRECTORY_PARAM_KEY);
@@ -7251,7 +7251,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // DB.
         try {
             final Cursor rewrittenCorpCursor = queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, contactIdColumnName, null, cancellationSignal);
+                    selectionArgs, sortOrder, contactIdColumnNames, null, cancellationSignal);
             if (rewrittenCorpCursor != null) {
                 local.close();
                 return rewrittenCorpCursor;
@@ -7285,7 +7285,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // provider directory.
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
             return queryCorpContacts(localUri, projection, selection,
-                    selectionArgs, sortOrder, contactIdString, directoryId, cancellationSignal);
+                    selectionArgs, sortOrder, new String[] {contactIdString}, directoryId,
+                    cancellationSignal);
         } else {
             return queryDirectoryIfNecessary(localUri, projection, selection, selectionArgs,
                     sortOrder, cancellationSignal);
@@ -7338,22 +7339,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Unlike PHONE_LOOKUP, only decode once here even for SIP address. See bug 25900607.
         final boolean isSipAddress = uri.getBooleanQueryParameter(
                 PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, false);
-        final String columnIdName = isSipAddress ? Data.CONTACT_ID : PhoneLookup._ID;
+        final String[] columnIdNames = isSipAddress ? new String[] {PhoneLookup.CONTACT_ID}
+                : new String[] {PhoneLookup._ID, PhoneLookup.CONTACT_ID};
         return queryLookupEnterprise(uri, projection, selection, selectionArgs, sortOrder,
-                cancellationSignal, PhoneLookup.CONTENT_FILTER_URI, columnIdName);
+                cancellationSignal, PhoneLookup.CONTENT_FILTER_URI, columnIdNames);
     }
 
     private Cursor queryEmailsLookupEnterprise(Uri uri, String[] projection, String selection,
                                              String[] selectionArgs, String sortOrder,
                                              CancellationSignal cancellationSignal) {
         return queryLookupEnterprise(uri, projection, selection, selectionArgs, sortOrder,
-                cancellationSignal, Email.CONTENT_LOOKUP_URI, Email.CONTACT_ID);
+                cancellationSignal, Email.CONTENT_LOOKUP_URI, new String[] {Email.CONTACT_ID});
     }
 
     private Cursor queryLookupEnterprise(Uri uri, String[] projection, String selection,
                                          String[] selectionArgs, String sortOrder,
                                          CancellationSignal cancellationSignal,
-                                         Uri originalUri, String columnIdName) {
+                                         Uri originalUri, String[] columnIdNames) {
         final Uri localUri = convertToLocalUri(uri, originalUri);
         final String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         if (!TextUtils.isEmpty(directory)) {
@@ -7362,14 +7364,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // If it has enterprise directory, then query queryCorpContacts directory with
                 // regular directory id.
                 return queryCorpContacts(localUri, projection, selection, selectionArgs,
-                        sortOrder, columnIdName, directoryId, cancellationSignal);
+                        sortOrder, columnIdNames, directoryId, cancellationSignal);
             }
             return queryDirectoryIfNecessary(localUri, projection, selection,
                     selectionArgs, sortOrder, cancellationSignal);
         }
         // No directory
         return queryCorpLookupIfNecessary(localUri, projection, selection, selectionArgs,
-                sortOrder, columnIdName, cancellationSignal);
+                sortOrder, columnIdNames, cancellationSignal);
     }
 
     // TODO: Add test case for this
@@ -7413,16 +7415,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return ret;
     }
 
-    private static int getContactIdColumnIndex(String projection[], String columnIdName) {
-        if (projection == null) {
-            return -1;
-        }
-        for (int i = 0; i < projection.length; i++) {
-            if (columnIdName.equals(projection[i])) {
-                return i;
+    private static int[] getContactIdColumnIndices(Cursor cursor, String[] columnIdNames) {
+        List<Integer> indices = new ArrayList<>();
+        if (cursor != null) {
+            for (String columnIdName : columnIdNames) {
+                int index = cursor.getColumnIndex(columnIdName);
+                if (index != -1) {
+                    indices.add(index);
+                }
             }
         }
-        return -1;
+        return Ints.toArray(indices);
     }
 
     /**

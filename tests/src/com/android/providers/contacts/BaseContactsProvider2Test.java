@@ -71,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -1328,6 +1329,16 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         String[] actualProjection = cursor.getColumnNames();
         MoreAsserts.assertEquals("Incorrect projection for URI: " + uri,
                 Sets.newHashSet(expectedProjection), Sets.newHashSet(actualProjection));
+        cursor.close();
+    }
+
+    protected void assertContainProjection(Uri uri, String[] mustHaveProjection) {
+        Cursor cursor = mResolver.query(uri, null, "0", null, null);
+        String[] actualProjection = cursor.getColumnNames();
+        Set<String> actualProjectionSet = Sets.newHashSet(actualProjection);
+        Set<String> mustHaveProjectionSet = Sets.newHashSet(mustHaveProjection);
+        actualProjectionSet.retainAll(mustHaveProjectionSet);
+        MoreAsserts.assertEquals(mustHaveProjectionSet, actualProjectionSet);
         cursor.close();
     }
 
