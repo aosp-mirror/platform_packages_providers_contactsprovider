@@ -708,6 +708,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertProjection(PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath("123").build(),
             new String[]{
                 PhoneLookup._ID,
+                PhoneLookup.CONTACT_ID,
+                PhoneLookup.DATA_ID,
                 PhoneLookup.LOOKUP_KEY,
                 PhoneLookup.DISPLAY_NAME,
                 PhoneLookup.LAST_TIME_CONTACTED,
@@ -734,6 +736,68 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         .buildUpon().appendPath("123").build(),
                 new String[]{
                         PhoneLookup._ID,
+                        PhoneLookup.CONTACT_ID,
+                        PhoneLookup.DATA_ID,
+                        PhoneLookup.LOOKUP_KEY,
+                        PhoneLookup.DISPLAY_NAME,
+                        PhoneLookup.LAST_TIME_CONTACTED,
+                        PhoneLookup.TIMES_CONTACTED,
+                        PhoneLookup.STARRED,
+                        PhoneLookup.IN_DEFAULT_DIRECTORY,
+                        PhoneLookup.IN_VISIBLE_GROUP,
+                        PhoneLookup.PHOTO_FILE_ID,
+                        PhoneLookup.PHOTO_ID,
+                        PhoneLookup.PHOTO_URI,
+                        PhoneLookup.PHOTO_THUMBNAIL_URI,
+                        PhoneLookup.CUSTOM_RINGTONE,
+                        PhoneLookup.HAS_PHONE_NUMBER,
+                        PhoneLookup.SEND_TO_VOICEMAIL,
+                        PhoneLookup.NUMBER,
+                        PhoneLookup.TYPE,
+                        PhoneLookup.LABEL,
+                        PhoneLookup.NORMALIZED_NUMBER,
+                });
+    }
+
+    public void testSipPhoneLookupProjection() {
+        assertContainProjection(PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath("123")
+                        .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, "1")
+                        .build(),
+                new String[] {
+                        PhoneLookup._ID,
+                        PhoneLookup.CONTACT_ID,
+                        PhoneLookup.DATA_ID,
+                        PhoneLookup.LOOKUP_KEY,
+                        PhoneLookup.DISPLAY_NAME,
+                        PhoneLookup.LAST_TIME_CONTACTED,
+                        PhoneLookup.TIMES_CONTACTED,
+                        PhoneLookup.STARRED,
+                        PhoneLookup.IN_DEFAULT_DIRECTORY,
+                        PhoneLookup.IN_VISIBLE_GROUP,
+                        PhoneLookup.PHOTO_FILE_ID,
+                        PhoneLookup.PHOTO_ID,
+                        PhoneLookup.PHOTO_URI,
+                        PhoneLookup.PHOTO_THUMBNAIL_URI,
+                        PhoneLookup.CUSTOM_RINGTONE,
+                        PhoneLookup.HAS_PHONE_NUMBER,
+                        PhoneLookup.SEND_TO_VOICEMAIL,
+                        PhoneLookup.NUMBER,
+                        PhoneLookup.TYPE,
+                        PhoneLookup.LABEL,
+                        PhoneLookup.NORMALIZED_NUMBER,
+                });
+    }
+
+    public void testSipPhoneLookupEnterpriseProjection() {
+        assertContainProjection(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI
+                        .buildUpon()
+                        .appendPath("123")
+                        .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, "1")
+                        .build(),
+                new String[] {
+                        PhoneLookup._ID,
+                        PhoneLookup.CONTACT_ID,
+                        PhoneLookup.DATA_ID,
                         PhoneLookup.LOOKUP_KEY,
                         PhoneLookup.DISPLAY_NAME,
                         PhoneLookup.LAST_TIME_CONTACTED,
@@ -1540,7 +1604,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId = ContentUris.parseId(rawContactUri);
 
         DataUtil.insertStructuredName(mResolver, rawContactId, "Hot", "Tamale");
-        insertPhoneNumber(rawContactId, "18004664411");
+        long dataId =
+                Long.parseLong(insertPhoneNumber(rawContactId, "18004664411").getLastPathSegment());
 
         // We'll create two lookup records, 18004664411 and +18004664411, and the below lookup
         // will match both.
@@ -1549,6 +1614,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         values.clear();
         values.put(PhoneLookup._ID, queryContactId(rawContactId));
+        values.put(PhoneLookup.CONTACT_ID, queryContactId(rawContactId));
+        values.put(PhoneLookup.DATA_ID, dataId);
         values.put(PhoneLookup.DISPLAY_NAME, "Hot Tamale");
         values.put(PhoneLookup.NUMBER, "18004664411");
         values.put(PhoneLookup.TYPE, Phone.TYPE_HOME);
@@ -1564,6 +1631,35 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // A wrong area code 799 vs 800 should not be matched
         lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "7994664411");
+        assertEquals(0, getCount(lookupUri2, null, null));
+    }
+
+    public void testSipPhoneLookup() {
+        ContentValues values = new ContentValues();
+
+        Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        long rawContactId = ContentUris.parseId(rawContactUri);
+
+        DataUtil.insertStructuredName(mResolver, rawContactId, "Hot", "Tamale");
+        long dataId =
+                Long.parseLong(insertSipAddress(rawContactId, "abc@sip").getLastPathSegment());
+
+        Uri lookupUri1 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "abc@sip")
+                            .buildUpon()
+                            .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, "1")
+                            .build();
+
+        values.clear();
+        values.put(PhoneLookup._ID, dataId);
+        values.put(PhoneLookup.CONTACT_ID, queryContactId(rawContactId));
+        values.put(PhoneLookup.DATA_ID, dataId);
+        values.put(PhoneLookup.DISPLAY_NAME, "Hot Tamale");
+        values.put(PhoneLookup.NUMBER, "abc@sip");
+        values.putNull(PhoneLookup.LABEL);
+        assertStoredValues(lookupUri1, null, null, new ContentValues[] {values});
+
+        // A wrong sip address should not be matched
+        Uri lookupUri2 = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, "wrong@sip");
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 
