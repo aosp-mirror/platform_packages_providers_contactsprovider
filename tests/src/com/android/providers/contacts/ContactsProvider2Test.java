@@ -2953,8 +2953,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         String usageTypeString = "CALL";
         int lastTimeUsed = 1111111;
         int timesUsed = 5;
-        String aggregationTypeString = "SEPARATE";
-        int aggregationType = AggregationExceptions.TYPE_KEEP_SEPARATE;
+        String aggregationTypeString = "TOGETHER";
+        int aggregationType = AggregationExceptions.TYPE_KEEP_TOGETHER;
 
         RawContactInfo rawContactInfo = new RawContactInfo(
                 backupId, accountType1, accountName1, null);
@@ -3016,6 +3016,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 rawContactId2);
         assertStoredValue(AggregationExceptions.CONTENT_URI, AggregationExceptions.TYPE,
                 aggregationType);
+
+        // After aggregation, check if rawContacts.starred/send_to_voicemail
+        // were copied to contacts table.
+        final long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        // The merged contact should be starred if any of the rawcontact is starred.
+        assertStoredValue(contactUri, Contacts.STARRED, 1);
+        // The merged contact should be send_to_voicemail
+        // if all of the rawcontact is send_to_voicemail.
+        assertStoredValue(contactUri, Contacts.SEND_TO_VOICEMAIL, 0);
     }
 
     public void testUpdateMetadataOnRawContactInsert() throws Exception {
@@ -6962,15 +6972,33 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cp.setMetadataSyncForTest(true);
 
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
-        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
-
-        Uri uri = DataUtil.insertStructuredName(mResolver, rawContactId, "John", "Doe");
-        clearMetadataDirty(rawContactUri);
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
         ContentValues values = new ContentValues();
-        values.put(RawContacts.SEND_TO_VOICEMAIL, 1);
-        mResolver.update(rawContactUri, values, null, null);
-        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, 1);
+        values.put(Contacts.STARRED, 1);
+        mResolver.update(contactUri, values, null, null);
+        assertStoredValue(contactUri, Contacts.STARRED, 1);
+
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertMetadataDirty(rawContactUri, true);
+        assertMetadataNetworkNotified(true);
+
+        clearMetadataDirty(rawContactUri);
+        values = new ContentValues();
+        values.put(Contacts.PINNED, 1);
+        mResolver.update(contactUri, values, null, null);
+        assertStoredValue(contactUri, Contacts.PINNED, 1);
+
+        assertMetadataDirty(rawContactUri, true);
+        assertMetadataNetworkNotified(true);
+
+        clearMetadataDirty(rawContactUri);
+        values = new ContentValues();
+        values.put(Contacts.SEND_TO_VOICEMAIL, 1);
+        mResolver.update(contactUri, values, null, null);
+        assertStoredValue(contactUri, Contacts.SEND_TO_VOICEMAIL, 1);
+
         assertMetadataDirty(rawContactUri, true);
         assertMetadataNetworkNotified(true);
     }

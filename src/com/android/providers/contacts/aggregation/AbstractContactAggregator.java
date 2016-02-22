@@ -161,6 +161,7 @@ public abstract class AbstractContactAggregator {
     protected SQLiteStatement mDisplayNameUpdate;
     protected SQLiteStatement mLookupKeyUpdate;
     protected SQLiteStatement mStarredUpdate;
+    protected SQLiteStatement mSendToVoicemailUpdate;
     protected SQLiteStatement mPinnedUpdate;
     protected SQLiteStatement mContactIdAndMarkAggregatedUpdate;
     protected SQLiteStatement mContactIdUpdate;
@@ -341,6 +342,15 @@ public abstract class AbstractContactAggregator {
                 + ")=0 THEN 0 ELSE 1 END) FROM " + Tables.RAW_CONTACTS + " WHERE "
                 + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " AND "
                 + RawContacts.STARRED + "=1)" + " WHERE " + Contacts._ID + "=?");
+
+        mSendToVoicemailUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
+                + Contacts.SEND_TO_VOICEMAIL + "=(CASE WHEN (SELECT COUNT( "
+                + RawContacts.SEND_TO_VOICEMAIL + ") FROM " + Tables.RAW_CONTACTS
+                + " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + " AND "
+                + RawContacts.SEND_TO_VOICEMAIL + "=1) = (SELECT COUNT("
+                + RawContacts.SEND_TO_VOICEMAIL + ") FROM " + Tables.RAW_CONTACTS + " WHERE "
+                + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID
+                + ") THEN 1 ELSE 0 END)" + " WHERE " + Contacts._ID + "=?");
 
         mPinnedUpdate = db.compileStatement("UPDATE " + Tables.CONTACTS + " SET "
                 + Contacts.PINNED + " = IFNULL((SELECT MIN(" + RawContacts.PINNED + ") FROM "
@@ -1903,6 +1913,20 @@ public abstract class AbstractContactAggregator {
 
         mStarredUpdate.bindLong(1, contactId);
         mStarredUpdate.execute();
+    }
+
+    /**
+     * Execute {@link SQLiteStatement} that will update the
+     * {@link Contacts#SEND_TO_VOICEMAIL} flag for the given {@link RawContacts#_ID}.
+     */
+    public final void updateSendToVoicemail(long rawContactId) {
+        long contactId = mDbHelper.getContactId(rawContactId);
+        if (contactId == 0) {
+            return;
+        }
+
+        mSendToVoicemailUpdate.bindLong(1, contactId);
+        mSendToVoicemailUpdate.execute();
     }
 
     /**
