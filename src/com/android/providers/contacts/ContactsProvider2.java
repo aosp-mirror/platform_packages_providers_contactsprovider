@@ -4603,6 +4603,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     updateFavoritesMembership(rawContactId, starred);
                 }
             }
+            if (flagExists(values, RawContacts.SEND_TO_VOICEMAIL)) {
+                aggregator.updateSendToVoicemail(rawContactId);
+            }
 
             // if this raw contact is being associated with an account, then add a
             // group membership to the group marked as AutoAdd, if any.
@@ -4756,15 +4759,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
         db.update(Tables.RAW_CONTACTS, values, RawContacts.CONTACT_ID + "=?"
                 + " AND " + RawContacts.RAW_CONTACT_IS_READ_ONLY + "=0", mSelectionArgs1);
 
-        if (hasStarredValue && !callerIsSyncAdapter) {
+        if (!callerIsSyncAdapter) {
             Cursor cursor = db.query(Views.RAW_CONTACTS,
                     new String[] { RawContacts._ID }, RawContacts.CONTACT_ID + "=?",
                     mSelectionArgs1, null, null, null);
             try {
                 while (cursor.moveToNext()) {
                     long rawContactId = cursor.getLong(0);
-                    updateFavoritesMembership(rawContactId,
-                            flagIsSet(values, RawContacts.STARRED));
+                    if (hasStarredValue) {
+                        updateFavoritesMembership(rawContactId,
+                                flagIsSet(values, RawContacts.STARRED));
+                    }
+
+                    if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
+                        mTransactionContext.get().markRawContactMetadataDirty(rawContactId,
+                                false /*callerIsMetadataSyncAdapter*/);
+                    }
                 }
             } finally {
                 cursor.close();
