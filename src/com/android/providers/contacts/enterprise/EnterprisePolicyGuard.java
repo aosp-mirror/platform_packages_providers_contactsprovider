@@ -64,6 +64,10 @@ public class EnterprisePolicyGuard {
             return false;
         }
 
+        if (isUriWhitelisted(uriCode)) {
+            return true;
+        }
+
         final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(currentHandle);
         final boolean isContactsSearchEnabled =
                 !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
@@ -84,6 +88,17 @@ public class EnterprisePolicyGuard {
         // If either guard policy allows access, return true.
         return (isCallerIdGuarded(uriCode) && isCallerIdEnabled)
                 || (isContactsSearchGuarded(uriCode) && isContactsSearchEnabled);
+    }
+
+    private boolean isUriWhitelisted(int uriCode) {
+        switch (uriCode) {
+            case ContactsProvider2.PROFILE_AS_VCARD:
+            case ContactsProvider2.CONTACTS_AS_VCARD:
+            case ContactsProvider2.CONTACTS_AS_MULTI_VCARD:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /**
