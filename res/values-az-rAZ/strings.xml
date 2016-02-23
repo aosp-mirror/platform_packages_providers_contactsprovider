@@ -19,14 +19,11 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core Apps"</string>
     <string name="app_label" msgid="3389954322874982620">"Kontakt Yaddaşı"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontaktlar"</string>
-    <string name="upgrade_msg" msgid="8640807392794309950">"Kontakt data bazası təkmilləşdirilir."</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Kontakt təkmilləşdirməsi əlavə yaddaş tələb edir."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Kontakt üçün yaddaş təkmilləşdirilir."</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Təkmilləşdirməni tamamlamaq üçün toxunun."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontaktlar"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Digər"</string>
-    <string name="read_write_all_voicemail_label" msgid="4557216100818257560">"Bütün səsli məktublara giriş"</string>
-    <string name="read_write_all_voicemail_description" msgid="8029809937805761356">"Tətbiqə bu cihazın giriş əldə edə biləcəyi bütün səsli məktubları saxlamağa və əldə etməyə imkan verir."</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Səsli mesaj göndərən: "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontakt data bazasını kopyalayın"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Siz 1) informasiyaya və daxili yaddaş ehtiyatındakı zəng jurnalına bağlı data bazanızın nüsxəsini hazırlamaq 2) və onu e-poçt ilə göndərmək üzrəsiniz. Onu cihazdan kənarda və ya alınmış e-məktubda uğurla kopyalayandan sonra nüsxəsini silməyi unutmayın."</string>

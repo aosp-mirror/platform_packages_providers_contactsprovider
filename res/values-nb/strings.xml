@@ -23,7 +23,7 @@
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Oppgraderer lagring for kontakter"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Trykk for å fullføre oppgraderingen."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakter"</string>
-    <string name="local_invisible_directory" msgid="705244318477396120">"Andre"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Annet"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Talemelding fra "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiér kontaktdatabasen"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Du er i ferd med å 1) lage en kopi av databasen som omfatter all kontaktrelatert informasjon og alle anropslogger til den interne lagringsplassen, og 2) sende kopien med e-post. Husk å slette kopien så snart du har kopiert den fra enheten eller når e-posten er mottatt."</string>
