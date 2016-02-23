@@ -5230,11 +5230,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         updateSendToVoicemailAndRingtone(contactId, true, "foo");
         assertSendToVoicemailAndRingtone(contactId, true, "foo");
-        assertNetworkNotified(false);
+        assertNetworkNotified(true);
+        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), true);
 
         updateSendToVoicemailAndRingtoneWithSelection(contactId, false, "bar");
         assertSendToVoicemailAndRingtone(contactId, false, "bar");
-        assertNetworkNotified(false);
+        assertNetworkNotified(true);
+        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), true);
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
@@ -5290,6 +5292,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId1), true, "foo");
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
+    }
+
+    public void testMarkDirtyAfterAggregation() {
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "i", "j");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "k", "l");
+
+        // Aggregate them
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1), true);
+        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2), true);
+        assertNetworkNotified(true);
     }
 
     public void testStatusUpdateInsert() {
@@ -6875,6 +6890,21 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(false);
     }
 
+    public void testDirtyWhenRawContactInsert() {
+        long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertDirty(rawContactUri, false);
+        assertNetworkNotified(true);
+
+        ContentValues values = new ContentValues();
+        values.put(ContactsContract.RawContacts.STARRED, 1);
+        values.put(ContactsContract.RawContacts.ACCOUNT_NAME, mAccount.name);
+        values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccount.type);
+        Uri rawContactId2Uri = mResolver.insert(RawContacts.CONTENT_URI, values);
+        assertDirty(rawContactId2Uri, true);
+        assertNetworkNotified(true);
+    }
+
     public void testRawContactDirtyAndVersion() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId);
@@ -6890,8 +6920,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, mResolver.update(uri, values, null, null));
         assertEquals(version, getVersion(uri));
 
-        assertDirty(uri, false);
-        assertNetworkNotified(false);
+        // Mark dirty when send_to_voicemail/starred was set.
+        assertDirty(uri, true);
+        assertNetworkNotified(true);
 
         Uri emailUri = insertEmail(rawContactId, "goo@woo.com");
         assertDirty(uri, true);
@@ -8648,6 +8679,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    public void testMarkDirtyWhenDataUsageUpdate() {
+        final long rid1 = RawContactUtil.createRawContactWithName(mResolver, "contact", "a");
+        final long did1a = ContentUris.parseId(insertEmail(rid1, "email_1_a@email.com"));
+        updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, did1a);
+
+        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rid1), true);
+        assertNetworkNotified(true);
+    }
+
     public void testDataUsageFeedbackAndDelete() {
 
         sMockClock.install();
@@ -8852,6 +8892,17 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Clean up
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
+    }
+
+    public void testContactUpdate_dirtyForMetadataChange() {
+        DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
+
+        ContentValues values = new ContentValues();
+        values.put(Contacts.PINNED, 1);
+
+        ContactUtil.update(mResolver, ids.mContactId, values);
+        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, ids.mRawContactId), true);
+        assertNetworkNotified(true);
     }
 
     public void testContactUpdate_updatesContactUpdatedTimestamp() {
