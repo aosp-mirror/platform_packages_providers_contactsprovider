@@ -2891,6 +2891,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (needToUpdateMetadata) {
             mTransactionContext.get().markRawContactMetadataDirty(rawContactId,
                     /* isMetadataSyncAdapter =*/false);
+            mTransactionContext.get().markRawContactDirtyAndChanged(
+                    rawContactId, callerIsSyncAdapter);
         }
         // If the new raw contact is inserted by a sync adapter, mark mSyncToMetadataNetWork as true
         // so that it can trigger the metadata syncing from the server.
@@ -4049,6 +4051,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE: {
                 invalidateFastScrollingIndexCache();
                 count = updateContactOptions(values, selection, selectionArgs, callerIsSyncAdapter);
+                if (count > 0) {
+                    mSyncToNetwork |= !callerIsSyncAdapter;
+                }
                 break;
             }
 
@@ -4056,6 +4061,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 invalidateFastScrollingIndexCache();
                 count = updateContactOptions(db, ContentUris.parseId(uri), values,
                         callerIsSyncAdapter);
+                if (count > 0) {
+                    mSyncToNetwork |= !callerIsSyncAdapter;
+                }
                 break;
             }
 
@@ -4118,6 +4126,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 invalidateFastScrollingIndexCache();
                 selection = appendAccountIdToSelection(uri, selection);
                 count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter);
+                if (count > 0) {
+                    mSyncToNetwork |= !callerIsSyncAdapter;
+                }
                 break;
             }
 
@@ -4133,6 +4144,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     mSelectionArgs1[0] = String.valueOf(rawContactId);
                     count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1,
                             callerIsSyncAdapter);
+                }
+                if (count > 0) {
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 break;
             }
@@ -4159,9 +4173,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                count = updateAggregationException(db, values,
+                count = updateAggregationException(db, values, callerIsSyncAdapter,
                         /* callerIsMetadataSyncAdapter =*/false);
                 invalidateFastScrollingIndexCache();
+                if (count > 0) {
+                    mSyncToNetwork |= !callerIsSyncAdapter;
+                }
                 break;
             }
 
@@ -4227,7 +4244,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case DATA_USAGE_FEEDBACK_ID: {
-                count = handleDataUsageFeedback(uri) ? 1 : 0;
+                count = handleDataUsageFeedback(uri, callerIsSyncAdapter) ? 1 : 0;
+                if (count > 0) {
+                    mSyncToNetwork |= !callerIsSyncAdapter;
+                }
                 break;
             }
 
@@ -4562,6 +4582,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (shouldMarkMetadataDirtyForRawContact(values)) {
                 mTransactionContext.get().markRawContactMetadataDirty(
                         rawContactId, callerIsMetadataSyncAdapter);
+                mTransactionContext.get().markRawContactDirtyAndChanged(
+                        rawContactId, callerIsSyncAdapter);
             }
             if (isBackupIdChanging) {
                 Cursor cursor = db.query(Tables.RAW_CONTACTS,
@@ -4746,11 +4768,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final boolean hasStarredValue = flagExists(values, RawContacts.STARRED);
         final boolean hasPinnedValue = flagExists(values, RawContacts.PINNED);
         final boolean hasVoiceMailValue = flagExists(values, RawContacts.SEND_TO_VOICEMAIL);
-        if (hasStarredValue) {
+        if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
             // Mark dirty when changing starred to trigger sync.
             values.put(RawContacts.DIRTY, 1);
-        }
-        if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
             // Mark dirty to trigger metadata syncing.
             values.put(RawContacts.METADATA_DIRTY, 1);
         }
@@ -4818,7 +4838,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateAggregationException(SQLiteDatabase db, ContentValues values,
-            boolean callerIsMetadataSyncAdapter) {
+            boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
         Integer exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
         Long rcId1 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID1);
         Long rcId2 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID2);
@@ -4861,6 +4881,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 callerIsMetadataSyncAdapter);
         mTransactionContext.get().markRawContactMetadataDirty(rawContactId2,
                 callerIsMetadataSyncAdapter);
+
+        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId1,
+                callerIsSyncAdapter);
+        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId2,
+                callerIsSyncAdapter);
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
@@ -5069,7 +5094,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
             values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
             values.put(AggregationExceptions.TYPE, typeInt);
-            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
+            updateAggregationException(db, values, /*callerIsSyncAdapter=*/true,
+                    /* callerIsMetadataSyncAdapter =*/true);
             if (rawContactId1 != rawContactId) {
                 aggregationRawContactIdsInServer.add(rawContactId1);
             }
@@ -5087,7 +5113,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId);
             values.put(AggregationExceptions.RAW_CONTACT_ID2, deleteRawContactId);
             values.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE_AUTOMATIC);
-            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
+            updateAggregationException(db, values, /*callerIsSyncAdapter=*/true,
+                    /* callerIsMetadataSyncAdapter =*/true);
         }
     }
 
@@ -9676,7 +9703,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         db.execSQL(UNDEMOTE_RAW_CONTACT, arg);
     }
 
-    private boolean handleDataUsageFeedback(Uri uri) {
+    private boolean handleDataUsageFeedback(Uri uri, boolean callerIsSyncAdapter) {
         final long currentTimeMillis = Clock.getInstance().currentTimeMillis();
         final String usageType = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
         final String[] ids = uri.getLastPathSegment().trim().split(",");
@@ -9715,6 +9742,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final long rid =   cursor.getLong(0);
                 mTransactionContext.get().markRawContactMetadataDirty(rid,
                         /* isMetadataSyncAdapter =*/false);
+                mTransactionContext.get().markRawContactDirtyAndChanged(rid, callerIsSyncAdapter);
                 rawContactIds.add(rid);
             }
         } finally {
