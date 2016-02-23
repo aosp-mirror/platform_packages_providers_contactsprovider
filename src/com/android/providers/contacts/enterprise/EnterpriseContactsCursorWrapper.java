@@ -166,14 +166,21 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
      * {@link ContentProvider#openAssetFile} knows how to fetch from this URI.
      */
     private static String getCorpThumbnailUri(long contactId, Cursor originalCursor) {
-        // First, check if the contact has a thumbnail.
-        if (originalCursor.isNull(
-                originalCursor.getColumnIndex(Contacts.PHOTO_THUMBNAIL_URI))) {
-            // No thumbnail.  Just return null.
+        final int thumbnailUriIndex = originalCursor.getColumnIndex(Contacts.PHOTO_THUMBNAIL_URI);
+        final String thumbnailUri = originalCursor.getString(thumbnailUriIndex);
+        if (thumbnailUri == null) {
+            // No thumbnail. Just return null.
             return null;
         }
-        return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
-                .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
+
+        final int uriCode = sUriMatcher.match(Uri.parse(thumbnailUri));
+        if (uriCode == ContactsProvider2.CONTACTS_ID_PHOTO) {
+            return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
+                    .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
+        } else {
+            Log.e(TAG, "EnterpriseContactsCursorWrapper contains invalid PHOTO_THUMBNAIL_URI");
+            return null;
+        }
     }
 
     /**
@@ -195,9 +202,12 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
         if (uriCode == ContactsProvider2.CONTACTS_ID_PHOTO) {
             return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
                     .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
-        } else {
+        } else if (uriCode == ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO) {
             return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
                     .appendPath(Contacts.Photo.DISPLAY_PHOTO).build().toString();
+        } else {
+            Log.e(TAG, "EnterpriseContactsCursorWrapper contains invalid PHOTO_URI");
+            return null;
         }
     }
 }
