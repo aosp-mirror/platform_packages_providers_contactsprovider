@@ -106,8 +106,55 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
                 "label", // PhoneLookup.LABEL,
                 "+1234", // PhoneLookup.NORMALIZED_NUMBER
         });
+
+        c.addRow(new Object[] {
+                11L, // PhoneLookup._ID,
+                11L, // PhoneLookup.CONTACT_ID,
+                null, // PhoneLookup.LOOKUP_KEY,
+                null, // PhoneLookup.DISPLAY_NAME,
+                null, // PhoneLookup.LAST_TIME_CONTACTED,
+                null, // PhoneLookup.TIMES_CONTACTED,
+                null, // PhoneLookup.STARRED,
+                null, // PhoneLookup.IN_DEFAULT_DIRECTORY,
+                null, // PhoneLookup.IN_VISIBLE_GROUP,
+                null, // PhoneLookup.PHOTO_FILE_ID,
+                null, // PhoneLookup.PHOTO_ID,
+                "content://com.android.contacts/contacts/11/display_photo", // PhoneLookup.PHOTO_URI,
+                "content://com.android.contacts/contacts/11/photo", // PhoneLookup.PHOTO_THUMBNAIL_URI,
+                null, // PhoneLookup.CUSTOM_RINGTONE,
+                null, // PhoneLookup.HAS_PHONE_NUMBER,
+                null, // PhoneLookup.SEND_TO_VOICEMAIL,
+                null, // PhoneLookup.NUMBER,
+                null, // PhoneLookup.TYPE,
+                null, // PhoneLookup.LABEL,
+                null, // PhoneLookup.NORMALIZED_NUMBER
+        });
+
+        c.addRow(new Object[] {
+                12L, // PhoneLookup._ID,
+                12L, // PhoneLookup.CONTACT_ID,
+                null, // PhoneLookup.LOOKUP_KEY,
+                null, // PhoneLookup.DISPLAY_NAME,
+                null, // PhoneLookup.LAST_TIME_CONTACTED,
+                null, // PhoneLookup.TIMES_CONTACTED,
+                null, // PhoneLookup.STARRED,
+                null, // PhoneLookup.IN_DEFAULT_DIRECTORY,
+                null, // PhoneLookup.IN_VISIBLE_GROUP,
+                null, // PhoneLookup.PHOTO_FILE_ID,
+                null, // PhoneLookup.PHOTO_ID,
+                "content://com.android.contacts/contacts/12/photo", // PhoneLookup.PHOTO_URI,
+                "content://com.android.contacts/contacts/12/photo", // PhoneLookup.PHOTO_THUMBNAIL_URI,
+                null, // PhoneLookup.CUSTOM_RINGTONE,
+                null, // PhoneLookup.HAS_PHONE_NUMBER,
+                null, // PhoneLookup.SEND_TO_VOICEMAIL,
+                null, // PhoneLookup.NUMBER,
+                null, // PhoneLookup.TYPE,
+                null, // PhoneLookup.LABEL,
+                null, // PhoneLookup.NORMALIZED_NUMBER
+        });
+
         rewritten = new EnterpriseContactsCursorWrapper(c, projection, new int[] {0, 1}, null);
-        assertEquals(2, rewritten.getCount());
+        assertEquals(4, rewritten.getCount());
         assertEquals(projection.length, rewritten.getColumnCount());
 
         rewritten.moveToFirst();
@@ -150,9 +197,9 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
         assertEquals(1, rewritten.getInt(column++));
         assertEquals(null, rewritten.getString(column++)); // photo file id
         assertEquals(null, rewritten.getString(column++)); // photo id
-        assertEquals("content://com.android.contacts/contacts_corp/10/display_photo",
+        assertEquals(null,
                 rewritten.getString(column++));
-        assertEquals("content://com.android.contacts/contacts_corp/10/photo",
+        assertEquals(null,
                 rewritten.getString(column++));
         assertEquals(null, rewritten.getString(column++)); // ringtone
         assertEquals(1, rewritten.getInt(column++));
@@ -161,5 +208,19 @@ public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
         assertEquals(1, rewritten.getInt(column++));
         assertEquals("label", rewritten.getString(column++));
         assertEquals("+1234", rewritten.getString(column++));
+
+        // Verify the 3rd row.
+        rewritten.moveToNext();
+        assertEquals("content://com.android.contacts/contacts_corp/11/display_photo",
+                rewritten.getString(11));
+        assertEquals("content://com.android.contacts/contacts_corp/11/photo",
+                rewritten.getString(12));
+
+        // Verify the 4th row.
+        rewritten.moveToNext();
+        assertEquals("content://com.android.contacts/contacts_corp/12/photo",
+                rewritten.getString(11));
+        assertEquals("content://com.android.contacts/contacts_corp/12/photo",
+                rewritten.getString(12));
     }
 }
