@@ -19,11 +19,8 @@ package com.android.providers.contacts.enterprise;
 import android.annotation.NonNull;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
-import android.content.UriMatcher;
 import android.net.Uri;
-import android.os.Binder;
 import android.os.UserHandle;
-import android.os.UserManager;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
 import android.util.Log;
@@ -31,7 +28,6 @@ import android.util.Log;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.ProfileAwareUriMatcher;
 import com.android.providers.contacts.util.UserUtils;
-
 import com.google.common.annotations.VisibleForTesting;
 
 /**
@@ -67,11 +63,14 @@ public class EnterprisePolicyGuard {
         final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(currentHandle);
         final boolean isContactsSearchEnabled =
                 !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
+        final boolean isBluetoothContactSharingEnabled =
+                !mDpm.getBluetoothContactSharingDisabled(currentHandle);
         final String directory = uri.getQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY);
 
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "isCallerIdEnabled: " + isCallerIdEnabled);
             Log.v(TAG, "isContactsSearchEnabled: " + isContactsSearchEnabled);
+            Log.v(TAG, "isBluetoothContactSharingEnabled: " + isBluetoothContactSharingEnabled);
         }
         if (directory != null) {
             final long directoryId = Long.parseLong(directory);
@@ -83,7 +82,8 @@ public class EnterprisePolicyGuard {
 
         // If either guard policy allows access, return true.
         return (isCallerIdGuarded(uriCode) && isCallerIdEnabled)
-                || (isContactsSearchGuarded(uriCode) && isContactsSearchEnabled);
+                || (isContactsSearchGuarded(uriCode) && isContactsSearchEnabled)
+                || (isBluetoothContactSharing(uriCode) && isBluetoothContactSharingEnabled);
     }
 
     /**
@@ -167,4 +167,13 @@ public class EnterprisePolicyGuard {
         }
     }
 
+    private static boolean isBluetoothContactSharing(int uriCode) {
+        switch(uriCode) {
+            case ContactsProvider2.PHONES:
+            case ContactsProvider2.RAW_CONTACT_ENTITIES:
+                return true;
+            default:
+                return false;
+        }
+    }
 }
