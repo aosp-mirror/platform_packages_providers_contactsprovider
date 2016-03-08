@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.net.Uri;
-
 import java.util.ArrayList;
 
 /**
@@ -152,6 +150,9 @@ public class ContactLookupKey {
                 lookupType = LOOKUP_TYPE_DISPLAY_NAME;
             } else if (c == 'r') {
                 lookupType = LOOKUP_TYPE_RAW_CONTACT_ID;
+            } else if (c == 'c') {
+                    throw new IllegalArgumentException(
+                            "Work contact lookup key is not accepted here: " + lookupKey);
             } else {
                 throw new IllegalArgumentException("Invalid lookup id: " + lookupKey);
             }
