@@ -191,7 +191,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -9092,10 +9094,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
         try {
             stream.flush();
 
-            final byte[] byteData = stream.toByteArray();
-            return makeAssetFileDescriptor(
-                    ParcelFileDescriptor.fromData(byteData, CONTACT_MEMORY_FILE_NAME),
-                    byteData.length);
+            final ParcelFileDescriptor[] fds = ParcelFileDescriptor.createPipe();
+            final FileDescriptor outFd = fds[1].getFileDescriptor();
+
+            AsyncTask<Object, Object, Object> task = new AsyncTask<Object, Object, Object>() {
+                @Override
+                protected Object doInBackground(Object... params) {
+                    try (FileOutputStream fout = new FileOutputStream(outFd)) {
+                        fout.write(stream.toByteArray());
+                    } catch (IOException|RuntimeException e) {
+                        Log.w(TAG, "Failure closing pipe", e);
+                    }
+                    IoUtils.closeQuietly(outFd);
+                    return null;
+                }
+            };
+            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Object[])null);
+
+            return makeAssetFileDescriptor(fds[0]);
         } catch (IOException e) {
             Log.w(TAG, "Problem writing stream into an ParcelFileDescriptor: " + e.toString());
             return null;
