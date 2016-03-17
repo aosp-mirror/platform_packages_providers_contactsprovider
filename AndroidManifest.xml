@@ -59,7 +59,7 @@
                   android:authorities="call_log_shadow"
                   android:syncable="false" android:multiprocess="false"
                   android:exported="true"
-                  android:encryptionAware="true"
+                  android:directBootAware="true"
                   android:readPermission="android.permission.MANAGE_USERS"
                   android:writePermission="android.permission.MANAGE_USERS">
         </provider>

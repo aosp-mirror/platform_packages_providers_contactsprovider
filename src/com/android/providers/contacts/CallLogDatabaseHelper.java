@@ -196,7 +196,7 @@ public class CallLogDatabaseHelper {
         if (sInstanceForShadow == null) {
             // Shadow provider is always encryption-aware.
             sInstanceForShadow = new CallLogDatabaseHelper(
-                    context.createDeviceEncryptedStorageContext(), SHADOW_DATABASE_NAME);
+                    context.createDeviceProtectedStorageContext(), SHADOW_DATABASE_NAME);
         }
         return sInstanceForShadow;
     }
