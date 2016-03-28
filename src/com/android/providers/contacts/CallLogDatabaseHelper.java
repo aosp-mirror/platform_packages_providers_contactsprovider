@@ -36,7 +36,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -115,6 +115,7 @@ public class CallLogDatabaseHelper {
                     Calls.NUMBER_PRESENTATION + " INTEGER NOT NULL DEFAULT " +
                     Calls.PRESENTATION_ALLOWED + "," +
                     Calls.POST_DIAL_DIGITS + " TEXT NOT NULL DEFAULT ''," +
+                    Calls.VIA_NUMBER + " TEXT NOT NULL DEFAULT ''," +
                     Calls.DATE + " INTEGER," +
                     Calls.DURATION + " INTEGER," +
                     Calls.DATA_USAGE + " INTEGER," +
@@ -175,7 +176,9 @@ public class CallLogDatabaseHelper {
                 Log.d(TAG, "onUpgrade");
             }
 
-            // Initial version, so no upgrade steps yet.
+            if (oldVersion < 2) {
+                upgradeToVersion2(db);
+            }
         }
     }
 
@@ -215,6 +218,14 @@ public class CallLogDatabaseHelper {
 
     public void setProperty(String key, String value) {
         PropertyUtils.setProperty(getWritableDatabase(), key, value);
+    }
+
+    /**
+     * Add the {@link Calls.VIA_NUMBER} Column to the CallLog Database.
+     */
+    private void upgradeToVersion2(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE " + Tables.CALLS + " ADD " + Calls.VIA_NUMBER +
+                " TEXT NOT NULL DEFAULT ''");
     }
 
     /**
