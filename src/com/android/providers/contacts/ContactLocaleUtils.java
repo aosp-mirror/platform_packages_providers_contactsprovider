@@ -45,8 +45,7 @@ import java.util.Set;
 public class ContactLocaleUtils {
     public static final String TAG = "ContactLocale";
 
-    // Urdu is a superset of Arabic and Persian.
-    public static final Locale LOCALE_URDU = new Locale("ur");
+    public static final Locale LOCALE_ARABIC = new Locale("ar");
     public static final Locale LOCALE_GREEK = new Locale("el");
     public static final Locale LOCALE_HEBREW = new Locale("he");
     // Serbian and Ukrainian labels are complementary supersets of Russian
@@ -73,7 +72,7 @@ public class ContactLocaleUtils {
             Locale.JAPANESE,
             Locale.KOREAN,
             LOCALE_THAI,
-            LOCALE_URDU,
+            LOCALE_ARABIC,
             LOCALE_HEBREW,
             LOCALE_GREEK,
             LOCALE_UKRAINIAN,
