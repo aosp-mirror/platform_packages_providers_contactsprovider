@@ -202,7 +202,8 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
         if (uriCode == ContactsProvider2.CONTACTS_ID_PHOTO) {
             return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
                     .appendPath(Contacts.Photo.CONTENT_DIRECTORY).build().toString();
-        } else if (uriCode == ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO) {
+        } else if (uriCode == ContactsProvider2.CONTACTS_ID_DISPLAY_PHOTO
+                || uriCode == ContactsProvider2.DISPLAY_PHOTO_ID) {
             return ContentUris.appendId(Contacts.CORP_CONTENT_URI.buildUpon(), contactId)
                     .appendPath(Contacts.Photo.DISPLAY_PHOTO).build().toString();
         } else {
