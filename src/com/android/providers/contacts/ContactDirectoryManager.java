@@ -112,19 +112,6 @@ public class ContactDirectoryManager {
     }
 
     /**
-     * Scans all packages owned by the specified calling UID looking for contact
-     * directory providers.
-     */
-    public void scanPackagesByUid(int callingUid) {
-        final String[] callerPackages = mPackageManager.getPackagesForUid(callingUid);
-        if (callerPackages != null) {
-            for (int i = 0; i < callerPackages.length; i++) {
-                onPackageChanged(callerPackages[i]);
-            }
-        }
-    }
-
-    /**
      * Scans through existing directories to see if the cached resource IDs still
      * match their original resource names.  If not - plays it safe by refreshing all directories.
      *
