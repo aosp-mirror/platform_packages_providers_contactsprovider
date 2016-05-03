@@ -4240,7 +4240,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case DIRECTORIES: {
-                mContactDirectoryManager.scanPackagesByUid(Binder.getCallingUid());
+                scanPackagesByUid(Binder.getCallingUid());
                 count = 1;
                 break;
             }
@@ -4260,6 +4260,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         return count;
+    }
+
+    /**
+     * Scans all packages owned by the specified calling UID looking for contact directory
+     * providers.
+     */
+    private void scanPackagesByUid(int callingUid) {
+        final PackageManager pm = getContext().getPackageManager();
+        final String[] callerPackages = pm.getPackagesForUid(callingUid);
+        if (callerPackages != null) {
+            for (int i = 0; i < callerPackages.length; i++) {
+                onPackageChanged(callerPackages[i]);
+            }
+        }
     }
 
     private int updateStatusUpdate(ContentValues values, String selection, String[] selectionArgs) {
