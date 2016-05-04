@@ -23,12 +23,15 @@ import android.net.Uri;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.ProfileAwareUriMatcher;
 import com.android.providers.contacts.util.UserUtils;
 import com.google.common.annotations.VisibleForTesting;
+
+import static android.provider.Settings.Secure.MANAGED_PROFILE_CONTACT_REMOTE_SEARCH;
 
 /**
  * Digest contacts policy from DevcicePolicyManager and guard enterprise uri
@@ -65,28 +68,39 @@ public class EnterprisePolicyGuard {
         }
 
         final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(currentHandle);
-        final boolean isContactsSearchEnabled =
+        final boolean isContactsSearchPolicyEnabled =
                 !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
         final boolean isBluetoothContactSharingEnabled =
                 !mDpm.getBluetoothContactSharingDisabled(currentHandle);
+        final boolean isContactRemoteSearchUserEnabled =
+                Settings.Secure.getInt(
+                        mContext.getContentResolver(),
+                        MANAGED_PROFILE_CONTACT_REMOTE_SEARCH, 0) == 1;
+
         final String directory = uri.getQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY);
 
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "isCallerIdEnabled: " + isCallerIdEnabled);
-            Log.v(TAG, "isContactsSearchEnabled: " + isContactsSearchEnabled);
+            Log.v(TAG, "isContactsSearchPolicyEnabled: " + isContactsSearchPolicyEnabled);
             Log.v(TAG, "isBluetoothContactSharingEnabled: " + isBluetoothContactSharingEnabled);
+            Log.v(TAG, "isContactRemoteSearchUserEnabled: " + isContactRemoteSearchUserEnabled);
         }
+
+        // If it is a remote directory, it is allowed only when
+        // (i) The uri supports directory
+        // (ii) User enables it in settings
         if (directory != null) {
             final long directoryId = Long.parseLong(directory);
             if (Directory.isRemoteDirectory(directoryId)
-                    && !isCrossProfileDirectorySupported(uri)) {
+                    && !(isCrossProfileDirectorySupported(uri)
+                    && isContactRemoteSearchUserEnabled)) {
                 return false;
             }
         }
 
         // If either guard policy allows access, return true.
         return (isCallerIdGuarded(uriCode) && isCallerIdEnabled)
-                || (isContactsSearchGuarded(uriCode) && isContactsSearchEnabled)
+                || (isContactsSearchGuarded(uriCode) && isContactsSearchPolicyEnabled)
                 || (isBluetoothContactSharing(uriCode) && isBluetoothContactSharingEnabled);
     }
 
