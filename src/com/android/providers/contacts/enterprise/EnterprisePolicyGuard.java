@@ -91,7 +91,7 @@ public class EnterprisePolicyGuard {
         // (ii) User enables it in settings
         if (directory != null) {
             final long directoryId = Long.parseLong(directory);
-            if (Directory.isRemoteDirectory(directoryId)
+            if (Directory.isRemoteDirectoryId(directoryId)
                     && !(isCrossProfileDirectorySupported(uri)
                     && isContactRemoteSearchUserEnabled)) {
                 return false;
