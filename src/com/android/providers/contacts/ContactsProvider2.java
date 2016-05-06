@@ -7275,7 +7275,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (Directory.isEnterpriseDirectoryId(directoryId)) {
             throw new IllegalArgumentException("Directory id must be a current profile id");
         }
-        if (Directory.isRemoteDirectory(directoryId)) {
+        if (Directory.isRemoteDirectoryId(directoryId)) {
             throw new IllegalArgumentException("Directory id must be a local directory id");
         }
 
@@ -8870,7 +8870,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         final long directoryId = Long.parseLong(directory);
-        if (!Directory.isRemoteDirectory(directoryId)) {
+        if (!Directory.isRemoteDirectoryId(directoryId)) {
             throw new IllegalArgumentException("Directory is not a remote directory: " + uri);
         }
 

@@ -62,7 +62,7 @@ public class EnterpriseContactsCursorWrapper extends CursorWrapper {
         this.originalColumnNames = originalColumnNames;
         this.mDirectoryId = directoryId;
         this.mIsDirectoryRemote = directoryId != null
-                && Directory.isRemoteDirectory(directoryId);
+                && Directory.isRemoteDirectoryId(directoryId);
     }
 
     @Override
