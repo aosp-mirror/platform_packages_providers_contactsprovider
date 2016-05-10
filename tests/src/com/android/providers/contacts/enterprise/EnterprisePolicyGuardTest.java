@@ -16,31 +16,25 @@
 package com.android.providers.contacts.enterprise;
 
 import android.app.admin.DevicePolicyManager;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.UserInfo;
 import android.net.Uri;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
 import android.test.AndroidTestCase;
 import android.test.mock.MockContext;
 import android.test.suitebuilder.annotation.SmallTest;
 
-import java.lang.reflect.Method;
+import org.mockito.Matchers;
+
 import java.util.Arrays;
 import java.util.List;
 
-import org.mockito.Matchers;
-import org.mockito.stubbing.Answer;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.MockitoAnnotations;
-
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
 
 /**
@@ -84,6 +78,10 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
     private static final Uri URI_OTHER =
             Uri.parse("content://com.android.contacts/contacts/" + CONTACT_ID);
 
+    // Please notice that the directory id should be < ENTERPRISE_BASE because the id should be
+    // substracted before passing to enterprise side.
+    private static final int REMOTE_DIRECTORY_ID = 10;
+
     @Override
     protected void setUp() throws Exception {
         super.setUp();
@@ -98,7 +96,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
     }
 
     public void testDirectorySupport() {
-        EnterprisePolicyGuard guard = new EnterprisePolicyGuard(getContext());
+        EnterprisePolicyGuard guard = new EnterprisePolicyGuardTestable(getContext(), true);
         checkDirectorySupport(guard, URI_PHONE_LOOKUP, true);
         checkDirectorySupport(guard, URI_EMAILS_LOOKUP, true);
         checkDirectorySupport(guard, URI_CONTACTS_FILTER, true);
@@ -114,13 +112,12 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
     }
 
 
-    public void testCrossProfile() {
+    public void testCrossProfile_userSettingOn() {
         Context context;
         EnterprisePolicyGuard guard;
-
         // All enabled.
         context = getMockContext(true, true);
-        guard = new EnterprisePolicyGuard(context);
+        guard = new EnterprisePolicyGuardTestable(context, true);
         checkCrossProfile(guard, URI_PHONE_LOOKUP, true);
         checkCrossProfile(guard, URI_EMAILS_LOOKUP, true);
         checkCrossProfile(guard, URI_CONTACTS_FILTER, true);
@@ -136,7 +133,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
 
         // Only ContactsSearch is disabled
         context = getMockContext(true, /* isContactsSearchEnabled= */ false);
-        guard = new EnterprisePolicyGuard(context);
+        guard = new EnterprisePolicyGuardTestable(context, true);
         checkCrossProfile(guard, URI_PHONE_LOOKUP, true);
         checkCrossProfile(guard, URI_EMAILS_LOOKUP, true);
         checkCrossProfile(guard, URI_CONTACTS_FILTER, false);
@@ -152,7 +149,7 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
 
         // Only CallerId is disabled
         context = getMockContext(/* isCallerIdEnabled= */ false, true);
-        guard = new EnterprisePolicyGuard(context);
+        guard = new EnterprisePolicyGuardTestable(context, true);
         checkCrossProfile(guard, URI_PHONE_LOOKUP, false);
         checkCrossProfile(guard, URI_EMAILS_LOOKUP, false);
         checkCrossProfile(guard, URI_CONTACTS_FILTER, true);
@@ -168,8 +165,8 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
 
         // CallerId and ContactsSearch are disabled
         context = getMockContext(/* isCallerIdEnabled= */ false,
-                /* isContactsSearchEnabled= */ false);
-        guard = new EnterprisePolicyGuard(context);
+            /* isContactsSearchEnabled= */ false);
+        guard = new EnterprisePolicyGuardTestable(context, true);
         checkCrossProfile(guard, URI_PHONE_LOOKUP, false);
         checkCrossProfile(guard, URI_EMAILS_LOOKUP, false);
         checkCrossProfile(guard, URI_CONTACTS_FILTER, false);
@@ -183,6 +180,45 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
         checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, false);
         checkCrossProfile(guard, URI_OTHER, false);
     }
+
+    public void testCrossProfile_userSettingOff() {
+        // All enabled.
+        Context context = getMockContext(true, true);
+        EnterprisePolicyGuard guard = new EnterprisePolicyGuardTestable(context, false);
+        // All directory supported Uris with remote directory id should not allowed.
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_PHONE_LOOKUP), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_EMAILS_LOOKUP), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_CONTACTS_FILTER), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_PHONES_FILTER), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_CALLABLES_FILTER), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_EMAILS_FILTER), false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE, false);
+
+        // Always allow uri with no directory support.
+        checkCrossProfile(guard, URI_DIRECTORIES, true);
+        checkCrossProfile(guard, URI_DIRECTORIES_ID, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, true);
+        checkCrossProfile(guard, URI_OTHER, false);
+
+        // Always allow uri with no remote directory id.
+        checkCrossProfile(guard, URI_PHONE_LOOKUP, true);
+        checkCrossProfile(guard, URI_EMAILS_LOOKUP, true);
+        checkCrossProfile(guard, URI_CONTACTS_FILTER, true);
+        checkCrossProfile(guard, URI_PHONES_FILTER, true);
+        checkCrossProfile(guard, URI_CALLABLES_FILTER, true);
+        checkCrossProfile(guard, URI_EMAILS_FILTER, true);
+    }
+
+    private static Uri appendRemoteDirectoryId(Uri uri) {
+        return appendDirectoryId(uri, REMOTE_DIRECTORY_ID);
+    }
+
+    private static Uri appendDirectoryId(Uri uri, int directoryId) {
+        return uri.buildUpon().appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
+                String.valueOf(directoryId)).build();
+    }
+
 
     private static void checkDirectorySupport(EnterprisePolicyGuard guard, Uri uri,
             boolean expected) {
@@ -261,6 +297,21 @@ public class EnterprisePolicyGuardTest extends AndroidTestCase {
 
         public String getSystemServiceName(Class<?> serviceClass) {
             return mRealContext.getSystemServiceName(serviceClass);
+        }
+    }
+
+    private static class EnterprisePolicyGuardTestable extends EnterprisePolicyGuard {
+        private boolean mIsContactRemoteSearchUserSettingEnabled;
+
+        public EnterprisePolicyGuardTestable(Context context,
+                boolean isContactRemoteSearchUserSettingEnabled) {
+            super(context);
+            mIsContactRemoteSearchUserSettingEnabled = isContactRemoteSearchUserSettingEnabled;
+        }
+
+        @Override
+        protected boolean isContactRemoteSearchUserSettingEnabled() {
+            return mIsContactRemoteSearchUserSettingEnabled;
         }
     }
 
