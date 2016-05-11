@@ -72,10 +72,7 @@ public class EnterprisePolicyGuard {
                 !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
         final boolean isBluetoothContactSharingEnabled =
                 !mDpm.getBluetoothContactSharingDisabled(currentHandle);
-        final boolean isContactRemoteSearchUserEnabled =
-                Settings.Secure.getInt(
-                        mContext.getContentResolver(),
-                        MANAGED_PROFILE_CONTACT_REMOTE_SEARCH, 0) == 1;
+        final boolean isContactRemoteSearchUserEnabled = isContactRemoteSearchUserSettingEnabled();
 
         final String directory = uri.getQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY);
 
@@ -204,5 +201,11 @@ public class EnterprisePolicyGuard {
             default:
                 return false;
         }
+    }
+
+    protected boolean isContactRemoteSearchUserSettingEnabled() {
+        return Settings.Secure.getInt(
+                mContext.getContentResolver(),
+                MANAGED_PROFILE_CONTACT_REMOTE_SEARCH, 0) == 1;
     }
 }
