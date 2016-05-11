@@ -1581,7 +1581,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
 
         mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
-                getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC, 0) == 1;
+                getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC_ENABLED, 0) == 1;
 
         mContactsHelper = getDatabaseHelper(getContext());
         mDbHelper.set(mContactsHelper);
