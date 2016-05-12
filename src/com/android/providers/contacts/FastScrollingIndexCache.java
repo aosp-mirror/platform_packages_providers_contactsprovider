@@ -21,6 +21,7 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.StrictMode;
 import android.preference.PreferenceManager;
 import android.provider.ContactsContract.Contacts;
 import android.text.TextUtils;
@@ -89,8 +90,13 @@ public class FastScrollingIndexCache {
 
     public static FastScrollingIndexCache getInstance(Context context) {
         if (sSingleton == null) {
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-            sSingleton = new FastScrollingIndexCache(prefs);
+            final StrictMode.ThreadPolicy old = StrictMode.allowThreadDiskReads();
+            try {
+                SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                sSingleton = new FastScrollingIndexCache(prefs);
+            } finally {
+                StrictMode.setThreadPolicy(old);
+            }
         }
         return sSingleton;
     }
