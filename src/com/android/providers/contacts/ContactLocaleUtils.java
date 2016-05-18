@@ -21,9 +21,9 @@ import android.icu.text.AlphabeticIndex.ImmutableIndex;
 import android.icu.text.Transliterator;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
+import android.os.LocaleList;
 import android.text.TextUtils;
 import android.util.ArraySet;
-import android.util.LocaleList;
 import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
