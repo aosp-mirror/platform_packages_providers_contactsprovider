@@ -19,8 +19,8 @@ package com.android.providers.contacts;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.icu.util.ULocale;
+import android.os.LocaleList;
 import android.text.TextUtils;
-import android.util.LocaleList;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.util.Locale;
