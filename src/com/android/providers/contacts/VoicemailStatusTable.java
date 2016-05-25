@@ -49,6 +49,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             .add(Status.VOICEMAIL_ACCESS_URI)
             .add(Status.QUOTA_OCCUPIED)
             .add(Status.QUOTA_TOTAL)
+            .add(Status.SOURCE_TYPE)
             .build();
 
     private static final Object DATABASE_LOCK = new Object();
