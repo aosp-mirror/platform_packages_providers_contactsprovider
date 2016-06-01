@@ -29,7 +29,6 @@ import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
-import android.test.suitebuilder.annotation.Suppress;
 import com.android.common.io.MoreCloseables;
 
 import java.io.FileNotFoundException;
@@ -572,6 +571,8 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Status.DATA_CHANNEL_STATE, Status.DATA_CHANNEL_STATE_NO_CONNECTION);
         values.put(Status.NOTIFICATION_CHANNEL_STATE,
                 Status.NOTIFICATION_CHANNEL_STATE_MESSAGE_WAITING);
+        values.put(Status.SOURCE_TYPE,
+                "vvm_type_test2");
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
@@ -753,6 +754,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Status.CONFIGURATION_STATE, Status.CONFIGURATION_STATE_OK);
         values.put(Status.DATA_CHANNEL_STATE, Status.DATA_CHANNEL_STATE_OK);
         values.put(Status.NOTIFICATION_CHANNEL_STATE, Status.NOTIFICATION_CHANNEL_STATE_OK);
+        values.put(Status.SOURCE_TYPE, "vvm_type_test");
         return values;
     }
 

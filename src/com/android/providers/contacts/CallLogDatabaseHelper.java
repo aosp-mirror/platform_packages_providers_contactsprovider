@@ -24,6 +24,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
+import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
 
@@ -36,7 +37,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -164,7 +165,8 @@ public class CallLogDatabaseHelper {
                     VoicemailContract.Status.DATA_CHANNEL_STATE + " INTEGER," +
                     VoicemailContract.Status.NOTIFICATION_CHANNEL_STATE + " INTEGER," +
                     VoicemailContract.Status.QUOTA_OCCUPIED + " INTEGER DEFAULT -1," +
-                    VoicemailContract.Status.QUOTA_TOTAL + " INTEGER DEFAULT -1" +
+                    VoicemailContract.Status.QUOTA_TOTAL + " INTEGER DEFAULT -1," +
+                    VoicemailContract.Status.SOURCE_TYPE + " TEXT" +
                     ");");
 
             migrateFromLegacyTables(db);
@@ -178,6 +180,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 2) {
                 upgradeToVersion2(db);
+            }
+
+            if (oldVersion < 3) {
+                upgradeToVersion3(db);
             }
         }
     }
@@ -226,6 +232,14 @@ public class CallLogDatabaseHelper {
     private void upgradeToVersion2(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE " + Tables.CALLS + " ADD " + Calls.VIA_NUMBER +
                 " TEXT NOT NULL DEFAULT ''");
+    }
+
+    /**
+     * Add the {@link Status.SOURCE_TYPE} Column to the VoicemailStatus Database.
+     */
+    private void upgradeToVersion3(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE " + Tables.VOICEMAIL_STATUS + " ADD " + Status.SOURCE_TYPE +
+                " TEXT");
     }
 
     /**
