@@ -26,8 +26,8 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Otro"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mensaje de voz de "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de datos de contactos"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Estás a punto de 1) copiar tu base datos, que incluye información de todos los contactos y el registro de todas las llamadas, en el almacenamiento interno; y de 2) enviar la copia por correo. Recuerda eliminar la copia inmediatamente después de guardarla fuera del dispositivo o de que se reciba el correo."</string>
-    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eliminar ahora"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Estás a punto de 1) copiar tu base datos, que incluye información de todos los contactos y el registro de todas las llamadas, en el almacenamiento interno; y de 2) enviar la copia por correo. Recuerda borrar la copia inmediatamente después de guardarla fuera del dispositivo o de que se reciba el correo."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Borrar ahora"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Comenzar"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Elige un programa para enviar el archivo."</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Base de datos de contactos adjunta"</string>
