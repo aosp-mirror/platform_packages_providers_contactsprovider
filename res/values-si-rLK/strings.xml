@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"සම්බන්ධතා"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"සම්බන්ධතා උත්ශ්‍රේණි කිරීමට තව මතකය අවශ්‍යයි."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"සම්බන්ධතා සඳහා ආචයනය උත්ශ්‍රේණි කරමින්"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"උත්ශ්‍රේණි කිරීම සම්පූර්ණ කිරීමට ස්පර්ශ කරන්න."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"උත්ශ්‍රේණි කිරීම සම්පූර්ණ කිරීමට තට්ටු කරන්න."</string>
     <string name="default_directory" msgid="93961630309570294">"සම්බන්ධතා"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"වෙනත්"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"හඬ තැපෑල ලැබෙන්නේ "</string>

@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"Kontaktet"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Përmirësimi i kontakteve ka nevojë për më shumë memorie."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Po përmirëson hapësirën ruajtëse për kontaktet"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Prek për të përfunduar përmirësimin."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Trokit për të përfunduar përmirësimin."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontaktet"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Tjetër"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Postë zanore nga "</string>
