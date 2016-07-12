@@ -80,6 +80,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
                 Cursor c = db.query(mTableName, selection, combinedClause, null, null, null, null);
                 c.moveToFirst();
                 int rowId = c.getInt(0);
+                c.close();
                 return ContentUris.withAppendedId(uriData.getUri(), rowId);
             }
             ContentValues copiedValues = new ContentValues(values);
