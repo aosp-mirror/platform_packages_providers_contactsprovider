@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"Androidပင်မ အပ်ပလီကေးရှင်းများ"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Androidပင်မ အက်ပ်များ"</string>
     <string name="app_label" msgid="3389954322874982620">"လိပ်စာများသိမ်းဆည်းသောအပ်ပလီကေးရှင်း"</string>
     <string name="provider_label" msgid="6012150850819899907">"အဆက်အသွယ်များ"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"အဆက်အသွယ်များ အဆင့်မြှင့်ခြင်းအတွက် မှတ်ဉာဏ်စွမ်းရည်ပိုလိုအပ်သည်"</string>
