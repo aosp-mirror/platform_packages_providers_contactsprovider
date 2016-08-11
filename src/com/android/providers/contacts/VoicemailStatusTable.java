@@ -27,7 +27,6 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.VoicemailContract.Status;
-
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
@@ -41,6 +40,8 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
 
     private static final ProjectionMap sStatusProjectionMap = new ProjectionMap.Builder()
             .add(Status._ID)
+            .add(Status.PHONE_ACCOUNT_COMPONENT_NAME)
+            .add(Status.PHONE_ACCOUNT_ID)
             .add(Status.CONFIGURATION_STATE)
             .add(Status.DATA_CHANNEL_STATE)
             .add(Status.NOTIFICATION_CHANNEL_STATE)
