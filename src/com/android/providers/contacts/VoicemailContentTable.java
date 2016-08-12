@@ -19,15 +19,12 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
-import com.google.common.collect.ImmutableSet;
-
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -35,11 +32,10 @@ import android.provider.CallLog.Calls;
 import android.provider.OpenableColumns;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
-
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import com.android.providers.contacts.util.CloseUtils;
-
+import com.google.common.collect.ImmutableSet;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -48,7 +44,8 @@ import java.io.IOException;
  * Implementation of {@link VoicemailTable.Delegate} for the voicemail content table.
  */
 public class VoicemailContentTable implements VoicemailTable.Delegate {
-    private static final String TAG = "VoicemailContentProvider";
+
+    private static final String TAG = "VmContentProvider";
     private final ProjectionMap mVoicemailProjectionMap;
 
     /** The private directory in which to store the data associated with the voicemail. */
@@ -251,7 +248,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         // URI that include message Id. I think we do want to support bulk update.
         String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
                 getCallTypeClause());
-        return getDatabaseModifier(db).update(mTableName, values, combinedClause,
+        return getDatabaseModifier(db).update(uriData.getUri(), mTableName, values, combinedClause,
                 selectionArgs);
     }
 
@@ -285,4 +282,5 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
         return new DbModifierWithNotification(mTableName, db, mContext);
     }
+
 }

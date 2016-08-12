@@ -20,6 +20,7 @@ package com.android.providers.contacts;
 import android.content.ContentValues;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 
 /**
  * An interface which wraps key database modify operations (insert, update, delete) to perform
@@ -41,7 +42,7 @@ public interface DatabaseModifier {
      * Use this method to update a table which you would otherwise do using the
      * {@link SQLiteDatabase#update(String, ContentValues, String, String[])} method.
      */
-    public abstract int update(String table, ContentValues values,
+    public abstract int update(Uri uri, String table, ContentValues values,
             String whereClause, String[] whereArgs);
     /**
      * Use this method to delete entries from a table which you would otherwise do using the
