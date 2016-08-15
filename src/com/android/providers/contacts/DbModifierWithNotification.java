@@ -20,9 +20,6 @@ package com.android.providers.contacts;
 import static android.Manifest.permission.ADD_VOICEMAIL;
 import static android.Manifest.permission.READ_VOICEMAIL;
 
-import com.google.android.collect.Lists;
-import com.google.common.collect.Iterables;
-
 import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -35,17 +32,16 @@ import android.database.DatabaseUtils.InsertHelper;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Binder;
-import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
-
 import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
-
+import com.google.android.collect.Lists;
+import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -155,12 +151,14 @@ public class DbModifierWithNotification implements DatabaseModifier {
     }
 
     @Override
-    public int update(String table, ContentValues values, String whereClause, String[] whereArgs) {
+    public int update(Uri uri, String table, ContentValues values, String whereClause,
+            String[] whereArgs) {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
         packagesModified.addAll(getModifiedPackages(values));
 
         boolean isVoicemail = packagesModified.size() != 0;
 
+        boolean hasMarkedRead = false;
         if (mIsCallsTable) {
             values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
 
@@ -171,6 +169,15 @@ public class DbModifierWithNotification implements DatabaseModifier {
                 // so that the corresponding sync adapter knows they need to be synced.
                 final int isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
                 values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
+
+                if (isDirty == 0 && values.containsKey(Calls.IS_READ) && getAsBoolean(values,
+                        Calls.IS_READ)) {
+                    // If the server has set the IS_READ, it should also unset the new flag
+                    if (!values.containsKey(Calls.NEW)) {
+                        values.put(Calls.NEW, 0);
+                        hasMarkedRead = true;
+                    }
+                }
             }
         }
 
@@ -180,6 +187,14 @@ public class DbModifierWithNotification implements DatabaseModifier {
         }
         if (count > 0 && mIsCallsTable) {
             notifyCallLogChange();
+        }
+        if (hasMarkedRead) {
+            // A "New" voicemail has been marked as read by the server. This voicemail is no longer
+            // new but the content consumer might still think it is. ACTION_NEW_VOICEMAIL should
+            // trigger a rescan of new voicemails.
+            mContext.sendBroadcast(
+                    new Intent(VoicemailContract.ACTION_NEW_VOICEMAIL, uri),
+                    READ_VOICEMAIL);
         }
         return count;
     }
@@ -328,5 +343,24 @@ public class DbModifierWithNotification implements DatabaseModifier {
             return null;
         }
         return Lists.newArrayList(mContext.getPackageManager().getPackagesForUid(caller));
+    }
+
+    /**
+     * A variant of {@link ContentValues#getAsBoolean(String)} that also treat the string "0" as
+     * false and other integer string as true. 0, 1, false, true, "0", "1", "false", "true" might
+     * all be inserted into the ContentValues as a boolean, but "0" and "1" are not handled by
+     * {@link ContentValues#getAsBoolean(String)}
+     */
+    private static Boolean getAsBoolean(ContentValues values, String key) {
+        Object value = values.get(key);
+        if (value instanceof CharSequence) {
+            try {
+                int intValue = Integer.parseInt(value.toString());
+                return intValue != 0;
+            } catch (NumberFormatException nfe) {
+                // Do nothing.
+            }
+        }
+        return values.getAsBoolean(key);
     }
 }
