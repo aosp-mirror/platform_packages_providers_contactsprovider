@@ -32,13 +32,11 @@ import android.provider.BaseColumns;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
-
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
 import com.google.common.annotations.VisibleForTesting;
-
 import java.io.FileNotFoundException;
 import java.util.List;
 
@@ -56,8 +54,8 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public boolean onCreate() {
-        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
-            Log.d(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate start");
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.INFO)) {
+            Log.i(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate start");
         }
         Context context = context();
 
@@ -70,8 +68,8 @@ public class VoicemailContentProvider extends ContentProvider
                 getDatabaseHelper(context), this, createCallLogInsertionHelper(context));
         mVoicemailStatusTable = new VoicemailStatusTable(Tables.VOICEMAIL_STATUS, context,
                 getDatabaseHelper(context), this);
-        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
-            Log.d(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate finish");
+        if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.INFO)) {
+            Log.i(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate finish");
         }
         return true;
     }

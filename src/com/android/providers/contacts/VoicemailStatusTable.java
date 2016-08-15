@@ -75,7 +75,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             // Try to update before insert.
             String combinedClause = uriData.getWhereClause();
             int rowsChanged = getDatabaseModifier(db)
-                    .update(mTableName, values, combinedClause, null);
+                    .update(uriData.getUri(), mTableName, values, combinedClause, null);
             if (rowsChanged != 0) {
                 final String[] selection = new String[] {Status._ID};
                 Cursor c = db.query(mTableName, selection, combinedClause, null, null, null, null);
@@ -131,8 +131,8 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
         synchronized (DATABASE_LOCK) {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-            return getDatabaseModifier(db).update(mTableName, values, combinedClause,
-                    selectionArgs);
+            return getDatabaseModifier(db)
+                    .update(uriData.getUri(), mTableName, values, combinedClause, selectionArgs);
         }
     }
 
