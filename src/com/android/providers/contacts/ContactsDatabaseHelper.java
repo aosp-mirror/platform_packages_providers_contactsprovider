@@ -986,34 +986,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private long mMimeTypeIdStructuredName;
     private long mMimeTypeIdStructuredPostal;
 
-    /** Compiled statements for querying and inserting mappings */
-    private SQLiteStatement mContactIdQuery;
-    private SQLiteStatement mAggregationModeQuery;
-    private SQLiteStatement mDataMimetypeQuery;
-
-    /** Precompiled SQL statement for setting a data record to the primary. */
-    private SQLiteStatement mSetPrimaryStatement;
-    /** Precompiled SQL statement for setting a data record to the super primary. */
-    private SQLiteStatement mSetSuperPrimaryStatement;
-    /** Precompiled SQL statement for clearing super primary of a single record. */
-    private SQLiteStatement mClearSuperPrimaryStatement;
-    /** Precompiled SQL statement for updating a contact display name */
-    private SQLiteStatement mRawContactDisplayNameUpdate;
-
-    private SQLiteStatement mNameLookupInsert;
-    private SQLiteStatement mNameLookupDelete;
-    private SQLiteStatement mStatusUpdateAutoTimestamp;
-    private SQLiteStatement mStatusUpdateInsert;
-    private SQLiteStatement mStatusUpdateReplace;
-    private SQLiteStatement mStatusAttributionUpdate;
-    private SQLiteStatement mStatusUpdateDelete;
-    private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
-    private SQLiteStatement mContactInDefaultDirectoryQuery;
-    private SQLiteStatement mMetadataSyncInsert;
-    private SQLiteStatement mMetadataSyncUpdate;
-
-    private StringBuilder mSb = new StringBuilder();
-
     private MessageDigest mMessageDigest;
     {
         try {
@@ -1068,23 +1040,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * @param db target database
      */
     private void refreshDatabaseCaches(SQLiteDatabase db) {
-        mStatusUpdateDelete = null;
-        mStatusUpdateReplace = null;
-        mStatusUpdateInsert = null;
-        mStatusUpdateAutoTimestamp = null;
-        mStatusAttributionUpdate = null;
-        mResetNameVerifiedForOtherRawContacts = null;
-        mRawContactDisplayNameUpdate = null;
-        mSetPrimaryStatement = null;
-        mClearSuperPrimaryStatement = null;
-        mSetSuperPrimaryStatement = null;
-        mNameLookupInsert = null;
-        mNameLookupDelete = null;
-        mDataMimetypeQuery = null;
-        mContactIdQuery = null;
-        mAggregationModeQuery = null;
-        mContactInDefaultDirectoryQuery = null;
-
         initializeCache(db);
     }
 
@@ -3060,7 +3015,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         updateIndexStats(db, Tables.PHONE_LOOKUP,
                 "phone_lookup_min_match_index", "10000 2 2 1");
 
-        SQLiteStatement update = db.compileStatement(
+        final SQLiteStatement update = db.compileStatement(
                 "UPDATE " + Tables.PHONE_LOOKUP +
                 " SET " + PhoneLookupColumns.MIN_MATCH + "=?" +
                 " WHERE " + PhoneLookupColumns.DATA_ID + "=?");
@@ -3175,7 +3130,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         NameSplitter splitter = createNameSplitter();
 
-        SQLiteStatement rawContactUpdate = db.compileStatement(
+        final SQLiteStatement rawContactUpdate = db.compileStatement(
                 "UPDATE " + Tables.RAW_CONTACTS +
                 " SET " +
                         RawContacts.DISPLAY_NAME_PRIMARY + "=?," +
@@ -3218,7 +3173,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             return;
         }
 
-        SQLiteStatement structuredNameUpdate = db.compileStatement(
+        final SQLiteStatement structuredNameUpdate = db.compileStatement(
                 "UPDATE " + Tables.DATA +
                         " SET " +
                         StructuredName.FULL_NAME_STYLE + "=?," +
@@ -3304,7 +3259,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             SQLiteDatabase db, SQLiteStatement rawContactUpdate, NameSplitter splitter) {
 
         final long mimeType = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
-        SQLiteStatement organizationUpdate = db.compileStatement(
+        final SQLiteStatement organizationUpdate = db.compileStatement(
                 "UPDATE " + Tables.DATA +
                 " SET " +
                         Organization.PHONETIC_NAME_STYLE + "=?" +
@@ -3618,7 +3573,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void insertNameLookup(SQLiteDatabase db) {
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP);
 
-        SQLiteStatement nameLookupInsert = db.compileStatement(
+        final SQLiteStatement nameLookupInsert = db.compileStatement(
                 "INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                         + NameLookupColumns.RAW_CONTACT_ID + ","
                         + NameLookupColumns.DATA_ID + ","
@@ -5159,17 +5114,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Find the mimetype for the given {@link Data#_ID}.
      */
     public String getDataMimeType(long dataId) {
-        if (mDataMimetypeQuery == null) {
-            mDataMimetypeQuery = getWritableDatabase().compileStatement(
+        final SQLiteStatement dataMimetypeQuery = getWritableDatabase().compileStatement(
                     "SELECT " + MimetypesColumns.MIMETYPE +
                     " FROM " + Tables.DATA_JOIN_MIMETYPES +
                     " WHERE " + Tables.DATA + "." + Data._ID + "=?");
-        }
         try {
             // Try database query to find mimetype
-            DatabaseUtils.bindObjectToProgram(mDataMimetypeQuery, 1, dataId);
-            String mimetype = mDataMimetypeQuery.simpleQueryForString();
-            return mimetype;
+            dataMimetypeQuery.bindLong(1, dataId);
+            return dataMimetypeQuery.simpleQueryForString();
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return null
             return null;
@@ -5351,14 +5303,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public boolean isContactInDefaultDirectory(SQLiteDatabase db, long contactId) {
-        if (mContactInDefaultDirectoryQuery == null) {
-            mContactInDefaultDirectoryQuery = db.compileStatement(
+        final SQLiteStatement contactInDefaultDirectoryQuery = db.compileStatement(
                     "SELECT EXISTS (" +
                             "SELECT 1 FROM " + Tables.DEFAULT_DIRECTORY +
                             " WHERE " + Contacts._ID + "=?)");
-        }
-        mContactInDefaultDirectoryQuery.bindLong(1, contactId);
-        return mContactInDefaultDirectoryQuery.simpleQueryForLong() != 0;
+        contactInDefaultDirectoryQuery.bindLong(1, contactId);
+        return contactInDefaultDirectoryQuery.simpleQueryForLong() != 0;
     }
 
     /**
@@ -5400,30 +5350,26 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Returns contact ID for the given contact or zero if it is NULL.
      */
     public long getContactId(long rawContactId) {
-        if (mContactIdQuery == null) {
-            mContactIdQuery = getWritableDatabase().compileStatement(
+        final SQLiteStatement contactIdQuery = getWritableDatabase().compileStatement(
                     "SELECT " + RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + RawContacts._ID + "=?");
-        }
         try {
-            DatabaseUtils.bindObjectToProgram(mContactIdQuery, 1, rawContactId);
-            return mContactIdQuery.simpleQueryForLong();
+            contactIdQuery.bindLong(1, rawContactId);
+            return contactIdQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
             return 0;  // No valid mapping found.
         }
     }
 
     public int getAggregationMode(long rawContactId) {
-        if (mAggregationModeQuery == null) {
-            mAggregationModeQuery = getWritableDatabase().compileStatement(
+        final SQLiteStatement aggregationModeQuery = getWritableDatabase().compileStatement(
                     "SELECT " + RawContacts.AGGREGATION_MODE +
                     " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + RawContacts._ID + "=?");
-        }
         try {
-            DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, rawContactId);
-            return (int)mAggregationModeQuery.simpleQueryForLong();
+            aggregationModeQuery.bindLong(1, rawContactId);
+            return (int) aggregationModeQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
             return RawContacts.AGGREGATION_MODE_DISABLED;  // No valid row found.
         }
@@ -5580,7 +5526,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             return;
         }
 
-        SQLiteStatement nicknameLookupInsert = db.compileStatement("INSERT INTO "
+        final SQLiteStatement nicknameLookupInsert = db.compileStatement("INSERT INTO "
                 + Tables.NICKNAME_LOOKUP + "(" + NicknameLookupColumns.NAME + ","
                 + NicknameLookupColumns.CLUSTER + ") VALUES (?,?)");
 
@@ -5590,9 +5536,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 for (String name : names) {
                     String normalizedName = NameNormalizer.normalize(name);
                     try {
-                        DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 1, normalizedName);
-                        DatabaseUtils.bindObjectToProgram(
-                                nicknameLookupInsert, 2, String.valueOf(clusterId));
+                        nicknameLookupInsert.bindString(1, normalizedName);
+                        nicknameLookupInsert.bindString(2, String.valueOf(clusterId));
                         nicknameLookupInsert.executeInsert();
                     } catch (SQLiteException e) {
                         // Print the exception and keep going (this is not a fatal error).
@@ -5733,19 +5678,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void deleteStatusUpdate(long dataId) {
-        if (mStatusUpdateDelete == null) {
-            mStatusUpdateDelete = getWritableDatabase().compileStatement(
+        final SQLiteStatement statusUpdateDelete = getWritableDatabase().compileStatement(
                     "DELETE FROM " + Tables.STATUS_UPDATES +
                     " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
-        }
-        mStatusUpdateDelete.bindLong(1, dataId);
-        mStatusUpdateDelete.execute();
+        statusUpdateDelete.bindLong(1, dataId);
+        statusUpdateDelete.execute();
     }
 
     public void replaceStatusUpdate(Long dataId, long timestamp, String status, String resPackage,
             Integer iconResource, Integer labelResource) {
-        if (mStatusUpdateReplace == null) {
-            mStatusUpdateReplace = getWritableDatabase().compileStatement(
+        final SQLiteStatement statusUpdateReplace = getWritableDatabase().compileStatement(
                     "INSERT OR REPLACE INTO " + Tables.STATUS_UPDATES + "("
                             + StatusUpdatesColumns.DATA_ID + ", "
                             + StatusUpdates.STATUS_TIMESTAMP + ","
@@ -5754,20 +5696,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             + StatusUpdates.STATUS_ICON + ","
                             + StatusUpdates.STATUS_LABEL + ")" +
                     " VALUES (?,?,?,?,?,?)");
-        }
-        mStatusUpdateReplace.bindLong(1, dataId);
-        mStatusUpdateReplace.bindLong(2, timestamp);
-        bindString(mStatusUpdateReplace, 3, status);
-        bindString(mStatusUpdateReplace, 4, resPackage);
-        bindLong(mStatusUpdateReplace, 5, iconResource);
-        bindLong(mStatusUpdateReplace, 6, labelResource);
-        mStatusUpdateReplace.execute();
+        statusUpdateReplace.bindLong(1, dataId);
+        statusUpdateReplace.bindLong(2, timestamp);
+        bindString(statusUpdateReplace, 3, status);
+        bindString(statusUpdateReplace, 4, resPackage);
+        bindLong(statusUpdateReplace, 5, iconResource);
+        bindLong(statusUpdateReplace, 6, labelResource);
+        statusUpdateReplace.execute();
     }
 
     public void insertStatusUpdate(Long dataId, String status, String resPackage,
             Integer iconResource, Integer labelResource) {
-        if (mStatusUpdateInsert == null) {
-            mStatusUpdateInsert = getWritableDatabase().compileStatement(
+        final SQLiteStatement statusUpdateInsert = getWritableDatabase().compileStatement(
                     "INSERT INTO " + Tables.STATUS_UPDATES + "("
                             + StatusUpdatesColumns.DATA_ID + ", "
                             + StatusUpdates.STATUS + ","
@@ -5775,45 +5715,41 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             + StatusUpdates.STATUS_ICON + ","
                             + StatusUpdates.STATUS_LABEL + ")" +
                     " VALUES (?,?,?,?,?)");
-        }
         try {
-            mStatusUpdateInsert.bindLong(1, dataId);
-            bindString(mStatusUpdateInsert, 2, status);
-            bindString(mStatusUpdateInsert, 3, resPackage);
-            bindLong(mStatusUpdateInsert, 4, iconResource);
-            bindLong(mStatusUpdateInsert, 5, labelResource);
-            mStatusUpdateInsert.executeInsert();
+            statusUpdateInsert.bindLong(1, dataId);
+            bindString(statusUpdateInsert, 2, status);
+            bindString(statusUpdateInsert, 3, resPackage);
+            bindLong(statusUpdateInsert, 4, iconResource);
+            bindLong(statusUpdateInsert, 5, labelResource);
+            statusUpdateInsert.executeInsert();
         } catch (SQLiteConstraintException e) {
             // The row already exists - update it
-            if (mStatusUpdateAutoTimestamp == null) {
-                mStatusUpdateAutoTimestamp = getWritableDatabase().compileStatement(
+            final SQLiteStatement statusUpdateAutoTimestamp = getWritableDatabase()
+                    .compileStatement(
                         "UPDATE " + Tables.STATUS_UPDATES +
                         " SET " + StatusUpdates.STATUS_TIMESTAMP + "=?,"
                                 + StatusUpdates.STATUS + "=?" +
                         " WHERE " + StatusUpdatesColumns.DATA_ID + "=?"
                                 + " AND " + StatusUpdates.STATUS + "!=?");
-            }
 
             long timestamp = System.currentTimeMillis();
-            mStatusUpdateAutoTimestamp.bindLong(1, timestamp);
-            bindString(mStatusUpdateAutoTimestamp, 2, status);
-            mStatusUpdateAutoTimestamp.bindLong(3, dataId);
-            bindString(mStatusUpdateAutoTimestamp, 4, status);
-            mStatusUpdateAutoTimestamp.execute();
+            statusUpdateAutoTimestamp.bindLong(1, timestamp);
+            bindString(statusUpdateAutoTimestamp, 2, status);
+            statusUpdateAutoTimestamp.bindLong(3, dataId);
+            bindString(statusUpdateAutoTimestamp, 4, status);
+            statusUpdateAutoTimestamp.execute();
 
-            if (mStatusAttributionUpdate == null) {
-                mStatusAttributionUpdate = getWritableDatabase().compileStatement(
+            final SQLiteStatement statusAttributionUpdate = getWritableDatabase().compileStatement(
                         "UPDATE " + Tables.STATUS_UPDATES +
                         " SET " + StatusUpdates.STATUS_RES_PACKAGE + "=?,"
                                 + StatusUpdates.STATUS_ICON + "=?,"
                                 + StatusUpdates.STATUS_LABEL + "=?" +
                         " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
-            }
-            bindString(mStatusAttributionUpdate, 1, resPackage);
-            bindLong(mStatusAttributionUpdate, 2, iconResource);
-            bindLong(mStatusAttributionUpdate, 3, labelResource);
-            mStatusAttributionUpdate.bindLong(4, dataId);
-            mStatusAttributionUpdate.execute();
+            bindString(statusAttributionUpdate, 1, resPackage);
+            bindLong(statusAttributionUpdate, 2, iconResource);
+            bindLong(statusAttributionUpdate, 3, labelResource);
+            statusAttributionUpdate.bindLong(4, dataId);
+            statusAttributionUpdate.execute();
         }
     }
 
@@ -6013,8 +5949,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 : localeUtils.getBucketIndex(sortKeyAlternative);
         String phonebookLabelAlternative = localeUtils.getBucketLabel(phonebookBucketAlternative);
 
-        if (mRawContactDisplayNameUpdate == null) {
-            mRawContactDisplayNameUpdate = db.compileStatement(
+        final SQLiteStatement rawContactDisplayNameUpdate = db.compileStatement(
                     "UPDATE " + Tables.RAW_CONTACTS +
                     " SET " +
                             RawContacts.DISPLAY_NAME_SOURCE + "=?," +
@@ -6029,21 +5964,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + "=?," +
                             RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + "=?" +
                     " WHERE " + RawContacts._ID + "=?");
-        }
 
-        mRawContactDisplayNameUpdate.bindLong(1, bestDisplayNameSource);
-        bindString(mRawContactDisplayNameUpdate, 2, displayNamePrimary);
-        bindString(mRawContactDisplayNameUpdate, 3, displayNameAlternative);
-        bindString(mRawContactDisplayNameUpdate, 4, bestPhoneticName);
-        mRawContactDisplayNameUpdate.bindLong(5, bestPhoneticNameStyle);
-        bindString(mRawContactDisplayNameUpdate, 6, sortKeyPrimary);
-        bindString(mRawContactDisplayNameUpdate, 7, phonebookLabelPrimary);
-        mRawContactDisplayNameUpdate.bindLong(8, phonebookBucketPrimary);
-        bindString(mRawContactDisplayNameUpdate, 9, sortKeyAlternative);
-        bindString(mRawContactDisplayNameUpdate, 10, phonebookLabelAlternative);
-        mRawContactDisplayNameUpdate.bindLong(11, phonebookBucketAlternative);
-        mRawContactDisplayNameUpdate.bindLong(12, rawContactId);
-        mRawContactDisplayNameUpdate.execute();
+        rawContactDisplayNameUpdate.bindLong(1, bestDisplayNameSource);
+        bindString(rawContactDisplayNameUpdate, 2, displayNamePrimary);
+        bindString(rawContactDisplayNameUpdate, 3, displayNameAlternative);
+        bindString(rawContactDisplayNameUpdate, 4, bestPhoneticName);
+        rawContactDisplayNameUpdate.bindLong(5, bestPhoneticNameStyle);
+        bindString(rawContactDisplayNameUpdate, 6, sortKeyPrimary);
+        bindString(rawContactDisplayNameUpdate, 7, phonebookLabelPrimary);
+        rawContactDisplayNameUpdate.bindLong(8, phonebookBucketPrimary);
+        bindString(rawContactDisplayNameUpdate, 9, sortKeyAlternative);
+        bindString(rawContactDisplayNameUpdate, 10, phonebookLabelAlternative);
+        rawContactDisplayNameUpdate.bindLong(11, phonebookBucketAlternative);
+        rawContactDisplayNameUpdate.bindLong(12, rawContactId);
+        rawContactDisplayNameUpdate.execute();
     }
 
     /**
@@ -6054,17 +5988,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * flag of all data items of this raw contacts
      */
     public void setIsPrimary(long rawContactId, long dataId, long mimeTypeId) {
-        if (mSetPrimaryStatement == null) {
-            mSetPrimaryStatement = getWritableDatabase().compileStatement(
+        final SQLiteStatement setPrimaryStatement = getWritableDatabase().compileStatement(
                     "UPDATE " + Tables.DATA +
                     " SET " + Data.IS_PRIMARY + "=(_id=?)" +
                     " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
                     "   AND " + Data.RAW_CONTACT_ID + "=?");
-        }
-        mSetPrimaryStatement.bindLong(1, dataId);
-        mSetPrimaryStatement.bindLong(2, mimeTypeId);
-        mSetPrimaryStatement.bindLong(3, rawContactId);
-        mSetPrimaryStatement.execute();
+        setPrimaryStatement.bindLong(1, dataId);
+        setPrimaryStatement.bindLong(2, mimeTypeId);
+        setPrimaryStatement.bindLong(3, rawContactId);
+        setPrimaryStatement.execute();
     }
 
     /**
@@ -6072,16 +6004,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * other raw contacts of the same joined aggregate
      */
     public void clearSuperPrimary(long rawContactId, long mimeTypeId) {
-        if (mClearSuperPrimaryStatement == null) {
-            mClearSuperPrimaryStatement = getWritableDatabase().compileStatement(
+        final SQLiteStatement clearSuperPrimaryStatement = getWritableDatabase().compileStatement(
                     "UPDATE " + Tables.DATA +
                     " SET " + Data.IS_SUPER_PRIMARY + "=0" +
                     " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
                     "   AND " + Data.RAW_CONTACT_ID + "=?");
-        }
-        mClearSuperPrimaryStatement.bindLong(1, mimeTypeId);
-        mClearSuperPrimaryStatement.bindLong(2, rawContactId);
-        mClearSuperPrimaryStatement.execute();
+        clearSuperPrimaryStatement.bindLong(1, mimeTypeId);
+        clearSuperPrimaryStatement.bindLong(2, rawContactId);
+        clearSuperPrimaryStatement.execute();
     }
 
     /**
@@ -6091,8 +6021,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * @param dataId the id of the data record to be set to primary.
      */
     public void setIsSuperPrimary(long rawContactId, long dataId, long mimeTypeId) {
-        if (mSetSuperPrimaryStatement == null) {
-            mSetSuperPrimaryStatement = getWritableDatabase().compileStatement(
+        final SQLiteStatement setSuperPrimaryStatement = getWritableDatabase().compileStatement(
                     "UPDATE " + Tables.DATA +
                     " SET " + Data.IS_SUPER_PRIMARY + "=(" + Data._ID + "=?)" +
                     " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
@@ -6103,11 +6032,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                                     "SELECT " + RawContacts.CONTACT_ID +
                                     " FROM " + Tables.RAW_CONTACTS +
                                     " WHERE " + RawContacts._ID + "=?))");
-        }
-        mSetSuperPrimaryStatement.bindLong(1, dataId);
-        mSetSuperPrimaryStatement.bindLong(2, mimeTypeId);
-        mSetSuperPrimaryStatement.bindLong(3, rawContactId);
-        mSetSuperPrimaryStatement.execute();
+        setSuperPrimaryStatement.bindLong(1, dataId);
+        setSuperPrimaryStatement.bindLong(2, mimeTypeId);
+        setSuperPrimaryStatement.bindLong(3, rawContactId);
+        setSuperPrimaryStatement.execute();
     }
 
     /**
@@ -6118,33 +6046,29 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             return;
         }
 
-        if (mNameLookupInsert == null) {
-            mNameLookupInsert = getWritableDatabase().compileStatement(
+        final SQLiteStatement nameLookupInsert = getWritableDatabase().compileStatement(
                     "INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                             + NameLookupColumns.RAW_CONTACT_ID + ","
                             + NameLookupColumns.DATA_ID + ","
                             + NameLookupColumns.NAME_TYPE + ","
                             + NameLookupColumns.NORMALIZED_NAME
                     + ") VALUES (?,?,?,?)");
-        }
-        mNameLookupInsert.bindLong(1, rawContactId);
-        mNameLookupInsert.bindLong(2, dataId);
-        mNameLookupInsert.bindLong(3, lookupType);
-        bindString(mNameLookupInsert, 4, name);
-        mNameLookupInsert.executeInsert();
+        nameLookupInsert.bindLong(1, rawContactId);
+        nameLookupInsert.bindLong(2, dataId);
+        nameLookupInsert.bindLong(3, lookupType);
+        bindString(nameLookupInsert, 4, name);
+        nameLookupInsert.executeInsert();
     }
 
     /**
      * Deletes all {@link Tables#NAME_LOOKUP} table rows associated with the specified data element.
      */
     public void deleteNameLookup(long dataId) {
-        if (mNameLookupDelete == null) {
-            mNameLookupDelete = getWritableDatabase().compileStatement(
+        final SQLiteStatement nameLookupDelete = getWritableDatabase().compileStatement(
                     "DELETE FROM " + Tables.NAME_LOOKUP +
                     " WHERE " + NameLookupColumns.DATA_ID + "=?");
-        }
-        mNameLookupDelete.bindLong(1, dataId);
-        mNameLookupDelete.execute();
+        nameLookupDelete.bindLong(1, dataId);
+        nameLookupDelete.execute();
     }
 
     public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {
@@ -6224,20 +6148,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public long upsertMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
-        if (mMetadataSyncInsert == null) {
-            mMetadataSyncInsert = getWritableDatabase().compileStatement(
+        final SQLiteStatement metadataSyncInsert = getWritableDatabase().compileStatement(
                     "INSERT OR REPLACE INTO " + Tables.METADATA_SYNC + "("
                             + MetadataSync.RAW_CONTACT_BACKUP_ID + ", "
                             + MetadataSyncColumns.ACCOUNT_ID + ", "
                             + MetadataSync.DATA + ","
                             + MetadataSync.DELETED + ")" +
                             " VALUES (?,?,?,?)");
-        }
-        mMetadataSyncInsert.bindString(1, backupId);
-        mMetadataSyncInsert.bindLong(2, accountId);
+        metadataSyncInsert.bindString(1, backupId);
+        metadataSyncInsert.bindLong(2, accountId);
         data = (data == null) ? "" : data;
-        mMetadataSyncInsert.bindString(3, data);
-        mMetadataSyncInsert.bindLong(4, deleted);
-        return mMetadataSyncInsert.executeInsert();
+        metadataSyncInsert.bindString(3, data);
+        metadataSyncInsert.bindLong(4, deleted);
+        return metadataSyncInsert.executeInsert();
     }
 }
