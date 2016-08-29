@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -44,6 +45,8 @@ import java.util.Set;
  */
 public class ContactLocaleUtils {
     public static final String TAG = "ContactLocale";
+
+    private static final boolean DEBUG = false; // don't submit with true
 
     public static final Locale LOCALE_ARABIC = new Locale("ar");
     public static final Locale LOCALE_GREEK = new Locale("el");
@@ -97,38 +100,84 @@ public class ContactLocaleUtils {
         private final int mNumberBucketIndex;
         private final boolean mUsePinyinTransliterator;
 
-        public ContactLocaleUtilsBase(LocaleSet locales) {
-            mUsePinyinTransliterator = locales.shouldPreferSimplifiedChinese();
+        public ContactLocaleUtilsBase(LocaleSet systemLocales) {
+            mUsePinyinTransliterator = systemLocales.shouldPreferSimplifiedChinese();
 
-            final ArraySet<Locale> addedLocales = new ArraySet<>();
+            // Build the index buckets based on the current system locale set and
+            // sDefaultLabelLocales.
+            if (DEBUG) {
+                Log.d(TAG, "Building index buckets...");
+            }
+            final List<Locale> locales = getLocalesForBuckets(systemLocales);
 
-            // First, add from the primary locale (which may not be the first locale in the locale
-            // list).
-            AlphabeticIndex ai = new AlphabeticIndex(locales.getPrimaryLocale())
+            AlphabeticIndex ai = new AlphabeticIndex(locales.get(0))
                     .setMaxLabelCount(300);
-            addedLocales.add(locales.getPrimaryLocale());
+            for (int i = 1; i < locales.size(); i++) {
+                ai.addLabels(locales.get(i));
+            }
 
-            // Next, add all locale form the locale list.
-            final LocaleList localeList = locales.getAllLocales();
-            for (int i = 0; i < localeList.size(); i++) {
-                addLabels(ai, localeList.get(i), addedLocales);
-            }
-            // Then add the default locales.
-            for (int i = 0; i < sDefaultLabelLocales.length; i++) {
-                addLabels(ai, sDefaultLabelLocales[i], addedLocales);
-            }
             mAlphabeticIndex = ai.buildImmutableIndex();
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
+            if (DEBUG) {
+                final StringBuilder labels = new StringBuilder();
+                String sep = "";
+                for (int i = 0; i < mAlphabeticIndexBucketCount; i++) {
+                    labels.append(sep);
+                    labels.append(mAlphabeticIndex.getBucket(i).getLabel());
+                    sep = ",";
+                }
+                Log.d(TAG, "Labels=[" + labels + "]");
+            }
         }
 
-        private static void addLabels(
-                AlphabeticIndex ai, Locale locale, ArraySet<Locale> addedLocales) {
-            if (addedLocales.contains(locale)) {
-                return;
+        static List<Locale> getLocalesForBuckets(LocaleSet systemLocales) {
+
+            // Create a list of locales that should be used to generate the index buckets.
+            // - Source: the system locales and sDefaultLabelLocales.
+            // - Rules:
+            //   - Don't add the same locale multiple times.
+            //   - Also special rules for Chinese (b/31115382):
+            //     - Don't add multiple Chinese locales.
+            //     - Don't add any Chinese locales after Japanese.
+
+            // First, collect all the locales (allowing duplicates).
+            final LocaleList localeList = systemLocales.getAllLocales();
+
+            final List<Locale> locales = new ArrayList<>(
+                    localeList.size() + sDefaultLabelLocales.length);
+            for (int i = 0; i < localeList.size(); i++) {
+                locales.add(localeList.get(i));
             }
-            ai.addLabels(locale);
-            addedLocales.add(locale);
+            for (int i = 0; i < sDefaultLabelLocales.length; i++) {
+                locales.add(sDefaultLabelLocales[i]);
+            }
+
+            // Then apply the rules to generate the final list.
+            final List<Locale> ret = new ArrayList<>(locales.size());
+            boolean allowChinese = true;
+
+            for (int i = 0; i < locales.size(); i++) {
+                final Locale locale = locales.get(i);
+
+                if (ret.contains(locale)) {
+                    continue;
+                }
+                if (LocaleSet.isLanguageChinese(locale)) {
+                    if (!allowChinese) {
+                        continue;
+                    }
+                    allowChinese = false;
+                }
+                if (LocaleSet.isLanguageJapanese(locale)) {
+                    allowChinese = false;
+                }
+                if (DEBUG) {
+                    Log.d(TAG, "  Adding locale: " + locale);
+                }
+                ret.add(locale);
+            }
+            return ret;
         }
 
         public String getSortKey(String name) {
@@ -472,12 +521,20 @@ public class ContactLocaleUtils {
     }
 
     @VisibleForTesting
+    public static ContactLocaleUtils newInstanceForTest(Locale... locales) {
+        return new ContactLocaleUtils(LocaleSet.newForTest(locales));
+    }
+
+    @VisibleForTesting
     public static synchronized void setLocaleForTest(Locale... locales) {
         setLocales(LocaleSet.newForTest(locales));
     }
 
     public static synchronized void setLocales(LocaleSet locales) {
         if (sSingleton == null || !sSingleton.isLocale(locales)) {
+            if (DEBUG) {
+                Log.d(TAG, "Setting locale(s) to " + locales);
+            }
             sSingleton = new ContactLocaleUtils(locales);
         }
     }
