@@ -24,6 +24,7 @@ import android.text.TextUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.util.Locale;
+import java.util.Objects;
 
 public class LocaleSet {
     private static final String SCRIPT_SIMPLIFIED_CHINESE = "Hans";
@@ -153,6 +154,13 @@ public class LocaleSet {
             }
         }
         return false;
+    }
+
+    /**
+     * @return true if the instance contains the current system locales.
+     */
+    public boolean isCurrent() {
+        return Objects.equals(mLocaleList, LocaleList.getDefault());
     }
 
     @Override

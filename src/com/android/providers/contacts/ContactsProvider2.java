@@ -16,10 +16,10 @@
 
 package com.android.providers.contacts;
 
-import android.annotation.Nullable;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
+import android.annotation.Nullable;
 import android.app.AppOpsManager;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
@@ -41,7 +41,6 @@ import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.database.AbstractCursor;
 import android.database.Cursor;
-import android.database.CursorWrapper;
 import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
@@ -107,18 +106,15 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.MediaStore;
-import android.provider.MediaStore.Audio.Media;
 import android.provider.OpenableColumns;
 import android.provider.Settings.Global;
 import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.util.ArrayMap;
 import android.util.ArraySet;
-import android.util.Base64;
 import android.util.Log;
+
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
@@ -153,6 +149,11 @@ import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.ViewGroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.MetadataEntryParser.AggregationData;
+import com.android.providers.contacts.MetadataEntryParser.FieldData;
+import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
+import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
+import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator.AggregationSuggestionParameter;
@@ -165,11 +166,6 @@ import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.enterprise.EnterpriseContactsCursorWrapper;
 import com.android.providers.contacts.enterprise.EnterprisePolicyGuard;
-import com.android.providers.contacts.MetadataEntryParser.AggregationData;
-import com.android.providers.contacts.MetadataEntryParser.FieldData;
-import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
-import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
-import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.DbQueryUtils;
@@ -177,14 +173,15 @@ import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
+
+import libcore.io.IoUtils;
+
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
-
-import libcore.io.IoUtils;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
@@ -193,15 +190,10 @@ import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
-import java.lang.reflect.Array;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -1891,6 +1883,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mSearchIndexManager.updateIndex(true);
         prefs.edit().putString(PREF_LOCALE, currentLocales.toString()).commit();
         setProviderStatus(providerStatus);
+
+        // The system locale set might have changed while we've being updating the locales.
+        // So double check.
+        if (!mCurrentLocales.isCurrent()) {
+            scheduleBackgroundTask(BACKGROUND_TASK_CHANGE_LOCALE);
+        }
     }
 
     // Static update routine for use by ContactsUpgradeReceiver during startup.
