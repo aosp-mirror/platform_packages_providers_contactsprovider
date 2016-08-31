@@ -37,28 +37,37 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final String PHONE_NUMBER_2 = "650-555-1212";
     private static final String LATIN_NAME = "John Smith";
     private static final String LATIN_NAME_2 = "John Paul Jones";
-    private static final String KANJI_NAME = "\u65e5";
-    private static final String ARABIC_NAME = "\u0646\u0648\u0631"; /* Noor */
-    private static final String CHINESE_NAME = "\u675C\u9D51";
-    private static final String SERBIAN_NAME = "\u0408\u0435\u043B\u0435\u043D\u0430";
-    private static final String UKRAINIAN_NAME = "\u0406";
-    private static final String UKRAINIAN_NAME_2 = "\u0407";
-    private static final String UKRAINIAN_NAME_3 = "\u0490";
-    private static final String CHINESE_LATIN_MIX_NAME_1 = "D\u675C\u9D51";
-    private static final String CHINESE_LATIN_MIX_NAME_2 = "MARY \u675C\u9D51";
-    private static final String[] CHINESE_NAME_KEY = {"\u9D51", "\u675C\u9D51", "JUAN", "DUJUAN",
-            "J", "DJ"};
-    private static final String[] CHINESE_LATIN_MIX_NAME_1_KEY = {"\u9D51", "\u675C\u9D51",
-        "D \u675C\u9D51", "JUAN", "DUJUAN", "J", "DJ", "D DUJUAN", "DDJ"};
-    private static final String[] CHINESE_LATIN_MIX_NAME_2_KEY = {"\u9D51", "\u675C\u9D51",
-        "MARY \u675C\u9D51", "JUAN", "DUJUAN", "MARY DUJUAN", "J", "DJ", "MDJ"};
+    private static final String KANJI_NAME = "\u65e5"; // 日
+    private static final String ARABIC_NAME = "\u0646\u0648\u0631"; /* Noor نور */
+    private static final String CHINESE_NAME = "\u675C\u9D51"; // 杜鵑
+    private static final String SERBIAN_NAME = "\u0408\u0435\u043B\u0435\u043D\u0430"; // Јелена
+    private static final String UKRAINIAN_NAME = "\u0406"; // І
+    private static final String UKRAINIAN_NAME_2 = "\u0407"; // Ї
+    private static final String UKRAINIAN_NAME_3 = "\u0490"; // Ґ
+    private static final String CHINESE_LATIN_MIX_NAME_1 = "D\u675C\u9D51"; // D杜鵑
+    private static final String CHINESE_LATIN_MIX_NAME_2 = "MARY \u675C\u9D51"; // MARY 杜鵑
+    private static final String[] CHINESE_NAME_KEY = {
+            "\u9D51",// 鵑
+            "\u675C\u9D51", // 杜鵑
+            "JUAN", "DUJUAN", "J", "DJ"};
+    private static final String[] CHINESE_LATIN_MIX_NAME_1_KEY = {
+            "\u9D51", // 鵑
+            "\u675C\u9D51", // 杜鵑
+            "D \u675C\u9D51", // D 杜鵑
+            "JUAN", "DUJUAN", "J", "DJ", "D DUJUAN", "DDJ"};
+    private static final String[] CHINESE_LATIN_MIX_NAME_2_KEY = {
+            "\u9D51", // 鵑
+            "\u675C\u9D51", // 杜鵑
+            "MARY \u675C\u9D51", // MARY 杜鵑
+            "JUAN", "DUJUAN", "MARY DUJUAN", "J", "DJ", "MDJ"};
     private static final String[] LATIN_NAME_KEY = {"John Smith", "Smith", "JS", "S"};
     private static final String[] LATIN_NAME_KEY_2 = {
-        "John Paul Jones", "Paul Jones", "Jones", "JPJ", "PJ", "J"};
+            "John Paul Jones", "Paul Jones", "Jones", "JPJ", "PJ", "J"};
     private static final String[] LABELS_EN_US = {
-        "\u2026", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-        "#", ""};
+            "\u2026", // …
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+            "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+            "#", ""};
     private static final String[] LABELS_JA_JP = {
         "…", "\u3042", "\u304B", "\u3055", "\u305F", "\u306A", "\u306F",
         "\u307E", "\u3084", "\u3089", "\u308F", "\u4ED6",
@@ -93,7 +102,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "#", ""};
 
-    private static final String JAPANESE_MISC = "\u4ed6";
+    private static final String JAPANESE_MISC = "\u4ed6"; // 他
 
     private static final Locale LOCALE_ARABIC = new Locale("ar");
     private static final Locale LOCALE_SERBIAN = new Locale("sr");
@@ -101,24 +110,27 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     private static final Locale LOCALE_SPANISH = new Locale("es");
     private static final Locale LOCALE_GREEK = new Locale("el");
 
+    private ContactLocaleUtils mTargetUtils;
+
+    private void setLocales(Locale... locales) {
+        mTargetUtils = ContactLocaleUtils.newInstanceForTest(locales);
+    }
+
     private String getLabel(String name) {
-        ContactLocaleUtils utils = ContactLocaleUtils.getInstance();
-        int bucketIndex = utils.getBucketIndex(name);
-        return utils.getBucketLabel(bucketIndex);
+        int bucketIndex = mTargetUtils.getBucketIndex(name);
+        return mTargetUtils.getBucketLabel(bucketIndex);
     }
 
     private Iterator<String> getNameLookupKeys(String name, int nameStyle) {
-        ContactLocaleUtils utils = ContactLocaleUtils.getInstance();
-        return utils.getNameLookupKeys(name, nameStyle);
+        return mTargetUtils.getNameLookupKeys(name, nameStyle);
     }
 
     private ArrayList<String> getLabels() {
-        ContactLocaleUtils utils = ContactLocaleUtils.getInstance();
-        return utils.getLabels();
+        return mTargetUtils.getLabels();
     }
 
     public void testEnglishContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
+        setLocales(Locale.ENGLISH);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
@@ -137,7 +149,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testJapaneseContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.JAPAN);
+        setLocales(Locale.JAPAN);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals(JAPANESE_MISC, getLabel(KANJI_NAME));
@@ -153,7 +165,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testChineseContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
+        setLocales(Locale.SIMPLIFIED_CHINESE);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
@@ -162,14 +174,14 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_EN_US);
 
-        ContactLocaleUtils.setLocaleForTest(Locale.TRADITIONAL_CHINESE);
+        setLocales(Locale.TRADITIONAL_CHINESE);
         assertEquals("#", getLabel(PHONE_NUMBER_1));
         assertEquals("#", getLabel(PHONE_NUMBER_2));
         assertEquals("J", getLabel(LATIN_NAME));
         assertEquals("7\u5283", getLabel(CHINESE_NAME));
         assertEquals("D", getLabel(CHINESE_LATIN_MIX_NAME_1));
 
-        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
+        setLocales(Locale.SIMPLIFIED_CHINESE);
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
                 FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_NAME_KEY);
@@ -180,14 +192,13 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(CHINESE_LATIN_MIX_NAME_2, FullNameStyle.CHINESE);
         verifyKeys(keys, CHINESE_LATIN_MIX_NAME_2_KEY);
 
-        ContactLocaleUtils.setLocaleForTest(Locale.TRADITIONAL_CHINESE);
+        setLocales(Locale.TRADITIONAL_CHINESE);
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_ZH_TW);
     }
 
     public void testPinyinEnabledSecondaryLocale() throws Exception {
-        ContactLocaleUtils.setLocales(
-                LocaleSet.newForTest(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE));
+        setLocales(Locale.ENGLISH, Locale.SIMPLIFIED_CHINESE);
         assertEquals("D", getLabel(CHINESE_NAME));
 
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
@@ -196,20 +207,35 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testPinyinDisabledSecondaryLocale() throws Exception {
-        ContactLocaleUtils.setLocales(
-                LocaleSet.newForTest(Locale.ENGLISH, Locale.JAPAN));
+        setLocales(Locale.ENGLISH, Locale.JAPAN);
         assertEquals(JAPANESE_MISC, getLabel(CHINESE_NAME));
 
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
     }
 
+    public void testChineseChinese() throws Exception {
+        setLocales(Locale.SIMPLIFIED_CHINESE, Locale.TRADITIONAL_CHINESE);
+        assertEquals("D", getLabel(CHINESE_NAME)); // Prefer pinyin
+
+        setLocales(Locale.TRADITIONAL_CHINESE, Locale.SIMPLIFIED_CHINESE);
+        assertEquals("7\u5283", getLabel(CHINESE_NAME)); // 7劃 -- Prefer # of strokes
+    }
+
+    public void testJapaneseChinese() throws Exception {
+        setLocales(Locale.JAPAN, Locale.TRADITIONAL_CHINESE);
+        assertEquals(JAPANESE_MISC, getLabel(CHINESE_NAME)); // Prefer Japanese
+
+        setLocales(Locale.JAPAN, Locale.SIMPLIFIED_CHINESE);
+        assertEquals(JAPANESE_MISC, getLabel(CHINESE_NAME)); // Prefer Japanese
+    }
+
     public void testChineseStyleNameWithDifferentLocale() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
+        setLocales(Locale.ENGLISH);
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CHINESE));
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
 
-        ContactLocaleUtils.setLocaleForTest(Locale.SIMPLIFIED_CHINESE);
+        setLocales(Locale.SIMPLIFIED_CHINESE);
         Iterator<String> keys = getNameLookupKeys(CHINESE_NAME,
                 FullNameStyle.CJK);
         verifyKeys(keys, CHINESE_NAME_KEY);
@@ -218,12 +244,12 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
         keys = getNameLookupKeys(LATIN_NAME_2, FullNameStyle.WESTERN);
         verifyKeys(keys, LATIN_NAME_KEY_2);
 
-        ContactLocaleUtils.setLocaleForTest(Locale.TRADITIONAL_CHINESE);
+        setLocales(Locale.TRADITIONAL_CHINESE);
         assertNull(getNameLookupKeys(CHINESE_NAME, FullNameStyle.CJK));
     }
 
     public void testKoreanContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.KOREA);
+        setLocales(Locale.KOREA);
         assertEquals("\u3131", getLabel("\u1100"));
         assertEquals("\u3131", getLabel("\u3131"));
         assertEquals("\u3131", getLabel("\u1101"));
@@ -233,20 +259,20 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testArabicContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(LOCALE_ARABIC);
+        setLocales(LOCALE_ARABIC);
         assertEquals("\u0646", getLabel(ARABIC_NAME));
         assertEquals("B", getLabel("Bob Smith"));
         verifyLabels(getLabels(), LABELS_AR);
     }
 
     public void testSerbianContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(LOCALE_SERBIAN);
+        setLocales(LOCALE_SERBIAN);
         assertEquals("\u0408", getLabel(SERBIAN_NAME));
         assertEquals("B", getLabel("Bob Smith"));
     }
 
     public void testUkrainianContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(LOCALE_UKRAINIAN);
+        setLocales(LOCALE_UKRAINIAN);
         assertEquals("\u0406", getLabel(UKRAINIAN_NAME));
         assertEquals("\u0407", getLabel(UKRAINIAN_NAME_2));
         assertEquals("\u0490", getLabel(UKRAINIAN_NAME_3));
@@ -254,7 +280,7 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testGermanContactLocaleUtils() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.GERMANY);
+        setLocales(Locale.GERMANY);
         assertEquals("S", getLabel("Sacher"));
 
         // ICU 51 has labels Sch and St. These were removed in ICU 52
@@ -264,17 +290,17 @@ public class ContactLocaleUtilsTest extends AndroidTestCase {
     }
 
     public void testOtherLocales() throws Exception {
-        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
+        setLocales(Locale.ENGLISH);
 
         assertEquals("N", getLabel("n"));
         assertEquals("N", getLabel("ñ"));
 
-        ContactLocaleUtils.setLocaleForTest(LOCALE_SPANISH);
+        setLocales(LOCALE_SPANISH);
 
         assertEquals("N", getLabel("n"));
         assertEquals("Ñ", getLabel("ñ"));
 
-        ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH, LOCALE_SPANISH);
+        setLocales(Locale.ENGLISH, LOCALE_SPANISH);
 
         assertEquals("N", getLabel("n"));
         assertEquals("N", getLabel("ñ")); // TODO This should ideally return Ñ.
