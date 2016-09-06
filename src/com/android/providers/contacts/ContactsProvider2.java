@@ -10120,4 +10120,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public void switchToProfileModeForTest() {
         switchToProfileMode();
     }
+
+    @Override
+    public void shutdown() {
+        if (mBackgroundHandler != null) {
+            mBackgroundHandler.getLooper().quit();
+            try {
+                mBackgroundThread.join();
+            } catch (InterruptedException ignore) {
+            }
+        }
+    }
 }

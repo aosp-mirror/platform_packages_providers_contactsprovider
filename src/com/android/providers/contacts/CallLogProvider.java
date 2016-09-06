@@ -711,4 +711,15 @@ public class CallLogProvider extends ContentProvider {
             adjustForNewPhoneAccountInternal((PhoneAccountHandle) arg);
         }
     }
+
+    @Override
+    public void shutdown() {
+        if (mBackgroundHandler != null) {
+            mBackgroundHandler.getLooper().quit();
+            try {
+                mBackgroundThread.join();
+            } catch (InterruptedException ignore) {
+            }
+        }
+    }
 }

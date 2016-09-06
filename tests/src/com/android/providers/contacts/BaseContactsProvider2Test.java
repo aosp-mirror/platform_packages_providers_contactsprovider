@@ -143,6 +143,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
 
     @Override
     protected void tearDown() throws Exception {
+        mActor.shutdown();
         sMockClock.uninstall();
         super.tearDown();
     }

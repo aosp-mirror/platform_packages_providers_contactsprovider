@@ -23,7 +23,6 @@ import android.accounts.AccountManagerFuture;
 import android.accounts.AuthenticatorException;
 import android.accounts.OnAccountsUpdateListener;
 import android.accounts.OperationCanceledException;
-import android.app.admin.DevicePolicyManager;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -45,7 +44,6 @@ import android.location.CountryListener;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IUserManager;
 import android.os.Looper;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -63,7 +61,6 @@ import android.test.IsolatedContext;
 import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
-import android.util.Log;
 
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.MockSharedPreferences;
@@ -102,6 +99,8 @@ public class ContactsActor {
 
     private Set<String> mGrantedPermissions = Sets.newHashSet();
     private final Set<Uri> mGrantedUriPermissions = Sets.newHashSet();
+
+    private List<ContentProvider> mAllProviders = new ArrayList<>();
 
     private CountryDetector mMockCountryDetector = new CountryDetector(null){
         @Override
@@ -385,6 +384,7 @@ public class ContactsActor {
             resolver.addProvider(a, provider);
             resolver.addProvider("0@" + a, provider);
         }
+        mAllProviders.add(provider);
         return provider;
     }
 
@@ -726,5 +726,11 @@ public class ContactsActor {
         };
 
         static final int COL_CONTACTS_ID = 0;
+    }
+
+    public void shutdown() {
+        for (ContentProvider provider : mAllProviders) {
+            provider.shutdown();
+        }
     }
 }
