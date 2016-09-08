@@ -130,7 +130,7 @@ public class LocaleSetTest extends TestCase {
                 .shouldPreferJapanese());
         assertTrue(LocaleSet.newForTest(Locale.JAPAN, Locale.SIMPLIFIED_CHINESE)
                 .shouldPreferJapanese());
-        assertTrue(LocaleSet.newForTest(Locale.TRADITIONAL_CHINESE, Locale.JAPAN)
+        assertFalse(LocaleSet.newForTest(Locale.TRADITIONAL_CHINESE, Locale.JAPAN)
                 .shouldPreferJapanese());
 
         // Simplified Chinese wins.
