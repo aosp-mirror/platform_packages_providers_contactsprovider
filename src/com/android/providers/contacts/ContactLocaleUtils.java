@@ -19,14 +19,14 @@ package com.android.providers.contacts;
 import android.icu.text.AlphabeticIndex;
 import android.icu.text.AlphabeticIndex.ImmutableIndex;
 import android.icu.text.Transliterator;
+import android.os.LocaleList;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
-import android.os.LocaleList;
 import android.text.TextUtils;
-import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import java.lang.Character.UnicodeBlock;
@@ -82,6 +82,18 @@ public class ContactLocaleUtils {
             LOCALE_SERBIAN,
     };
 
+    @VisibleForTesting
+    static void dumpIndex(ImmutableIndex index) {
+        final StringBuilder labels = new StringBuilder();
+        String sep = "";
+        for (int i = 0; i < index.getBucketCount(); i++) {
+            labels.append(sep);
+            labels.append(index.getBucket(i).getLabel());
+            sep = ",";
+        }
+        Log.d(TAG, "Labels=[" + labels + "]");
+    }
+
     /**
      * This class is the default implementation and should be the base class
      * for other locales.
@@ -120,14 +132,7 @@ public class ContactLocaleUtils {
             mAlphabeticIndexBucketCount = mAlphabeticIndex.getBucketCount();
             mNumberBucketIndex = mAlphabeticIndexBucketCount - 1;
             if (DEBUG) {
-                final StringBuilder labels = new StringBuilder();
-                String sep = "";
-                for (int i = 0; i < mAlphabeticIndexBucketCount; i++) {
-                    labels.append(sep);
-                    labels.append(mAlphabeticIndex.getBucket(i).getLabel());
-                    sep = ",";
-                }
-                Log.d(TAG, "Labels=[" + labels + "]");
+                dumpIndex(mAlphabeticIndex);
             }
         }
 
@@ -173,7 +178,7 @@ public class ContactLocaleUtils {
                     allowChinese = false;
                 }
                 if (DEBUG) {
-                    Log.d(TAG, "  Adding locale: " + locale);
+                    Log.d(TAG, "  Adding locale: " + locale.toLanguageTag());
                 }
                 ret.add(locale);
             }

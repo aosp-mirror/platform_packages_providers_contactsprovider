@@ -127,7 +127,7 @@ public class LocaleSet {
             if (isLanguageJapanese(l)) {
                 return true;
             }
-            if (isLocaleSimplifiedChinese(l)) {
+            if (isLanguageChinese(l)) {
                 return false;
             }
         }
