@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.app.ActivityManagerNative;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
