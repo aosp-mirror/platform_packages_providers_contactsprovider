@@ -17,8 +17,6 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.util.PropertyUtils;
-import com.google.android.collect.Sets;
-import com.google.common.annotations.VisibleForTesting;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -49,14 +47,19 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Event;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Relation;
 import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.ContactsContract.CommonDataKinds.Website;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
@@ -81,10 +84,13 @@ import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
+import android.util.ArrayMap;
+import android.util.ArraySet;
 import android.util.Base64;
 import android.util.Log;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
@@ -97,7 +103,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -964,27 +969,34 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     private static ContactsDatabaseHelper sSingleton = null;
 
-    /** In-memory cache of previously found MIME-type mappings */
+    /** In-memory map of commonly found MIME-types to their ids in the MIMETYPES table */
     @VisibleForTesting
-    final ConcurrentHashMap<String, Long> mMimetypeCache = new ConcurrentHashMap<>();
+    final ArrayMap<String, Long> mCommonMimeTypeIdsCache = new ArrayMap<>();
 
-    /** In-memory cache the packages table */
     @VisibleForTesting
-    final ConcurrentHashMap<String, Long> mPackageCache = new ConcurrentHashMap<>();
+    static final String[] COMMON_MIME_TYPES = {
+            Email.CONTENT_ITEM_TYPE,
+            Im.CONTENT_ITEM_TYPE,
+            Nickname.CONTENT_ITEM_TYPE,
+            Organization.CONTENT_ITEM_TYPE,
+            Phone.CONTENT_ITEM_TYPE,
+            SipAddress.CONTENT_ITEM_TYPE,
+            StructuredName.CONTENT_ITEM_TYPE,
+            StructuredPostal.CONTENT_ITEM_TYPE,
+            Identity.CONTENT_ITEM_TYPE,
+            android.provider.ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE,
+            GroupMembership.CONTENT_ITEM_TYPE,
+            Note.CONTENT_ITEM_TYPE,
+            Event.CONTENT_ITEM_TYPE,
+            Website.CONTENT_ITEM_TYPE,
+            Relation.CONTENT_ITEM_TYPE,
+            "vnd.com.google.cursor.item/contact_misc"
+    };
 
     private final Context mContext;
     private final boolean mDatabaseOptimizationEnabled;
     private final SyncStateContentProviderHelper mSyncState;
     private final CountryMonitor mCountryMonitor;
-
-    private long mMimeTypeIdEmail;
-    private long mMimeTypeIdIm;
-    private long mMimeTypeIdNickname;
-    private long mMimeTypeIdOrganization;
-    private long mMimeTypeIdPhone;
-    private long mMimeTypeIdSip;
-    private long mMimeTypeIdStructuredName;
-    private long mMimeTypeIdStructuredPostal;
 
     private MessageDigest mMessageDigest;
     {
@@ -1035,39 +1047,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Clear all the cached database information and re-initialize it.
+     * Populate ids of known mimetypes into a map for easy access
      *
      * @param db target database
      */
-    private void refreshDatabaseCaches(SQLiteDatabase db) {
-        initializeCache(db);
-    }
-
-    /**
-     * (Re-)initialize the cached database information.
-     *
-     * @param db target database
-     */
-    private void initializeCache(SQLiteDatabase db) {
-        mMimetypeCache.clear();
-        mPackageCache.clear();
-
-        // TODO: This could be optimized into one query instead of 7
-        //        Also: We shouldn't have those fields in the first place. This should just be
-        //        in the cache
-        mMimeTypeIdEmail = lookupMimeTypeId(Email.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdIm = lookupMimeTypeId(Im.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdNickname = lookupMimeTypeId(Nickname.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdOrganization = lookupMimeTypeId(Organization.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdPhone = lookupMimeTypeId(Phone.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdSip = lookupMimeTypeId(SipAddress.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdStructuredName = lookupMimeTypeId(StructuredName.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdStructuredPostal = lookupMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE, db);
+    private void prepopulateCommonMimeTypes(SQLiteDatabase db) {
+        mCommonMimeTypeIdsCache.clear();
+        for(String commonMimeType: COMMON_MIME_TYPES) {
+            mCommonMimeTypeIdsCache.put(commonMimeType, insertMimeType(db, commonMimeType));
+        }
     }
 
     @Override
     public void onOpen(SQLiteDatabase db) {
-        refreshDatabaseCaches(db);
+        prepopulateCommonMimeTypes(db);
         mSyncState.onDatabaseOpened(db);
         // Deleting any state from the presence tables to mimic their behavior from the time they
         // were in-memory tables
@@ -2261,12 +2254,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // table's schema changes, we should try to preserve the data, because it was entered
             // by the user and has never been synched to the server.
             db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
-
             onCreate(db);
             return;
         }
 
         Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion);
+
+        prepopulateCommonMimeTypes(db);
 
         boolean upgradeViewsAndTriggers = false;
         boolean upgradeNameLookup = false;
@@ -2338,7 +2332,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
 
         if (oldVersion == 205) {
-            upgrateToVersion206(db);
+            upgradeToVersion206(db);
             upgradeViewsAndTriggers = true;
             oldVersion++;
         }
@@ -3315,7 +3309,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         rawContactUpdate.execute();
     }
 
-    private void upgrateToVersion206(SQLiteDatabase db) {
+    private void upgradeToVersion206(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
                 + " ADD name_verified INTEGER NOT NULL DEFAULT 0;");
     }
@@ -3516,7 +3510,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         Log.i(TAG, "Upgrading locale data for " + locales
                 + " (ICU v" + ICU.getIcuVersion() + ")");
         final long start = SystemClock.elapsedRealtime();
-        initializeCache(db);
         rebuildLocaleData(db, locales, rebuildSqliteStats);
         Log.i(TAG, "Locale update completed in " + (SystemClock.elapsedRealtime() - start) + "ms");
     }
@@ -3875,15 +3868,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void upgradeToVersion504(SQLiteDatabase db) {
-        initializeCache(db);
-
         // Find all names with prefixes and recreate display name
         Cursor cursor = db.rawQuery(
                 "SELECT " + StructuredName.RAW_CONTACT_ID +
                 " FROM " + Tables.DATA +
                 " WHERE " + DataColumns.MIMETYPE_ID + "=?"
                         + " AND " + StructuredName.PREFIX + " NOT NULL",
-                new String[] {String.valueOf(mMimeTypeIdStructuredName)});
+                new String[] {
+                        String.valueOf(
+                                mCommonMimeTypeIdsCache.get(StructuredName.CONTENT_ITEM_TYPE))
+                });
 
         try {
             while(cursor.moveToNext()) {
@@ -4084,7 +4078,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         // Migrate account_name/account_type/data_set to accounts table
 
-        final Set<AccountWithDataSet> accountsWithDataSets = Sets.newHashSet();
+        final ArraySet<AccountWithDataSet> accountsWithDataSets = new ArraySet<>();
         upgradeToVersion626_findAccountsWithDataSets(accountsWithDataSets, db, "raw_contacts");
         upgradeToVersion626_findAccountsWithDataSets(accountsWithDataSets, db, "groups");
 
@@ -4676,20 +4670,52 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return tokens[0].getAddress().trim();
     }
 
-    private static long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
-        try {
-            return DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + mimeType + "'", null);
-        } catch (SQLiteDoneException e) {
-            // No rows of this type in the database.
-            return -1;
+    /**
+     * Inserts a new mimetype into the table Tables.MIMETYPES and returns its id. Use
+     * {@link #lookupMimeTypeId(SQLiteDatabase, String)} to lookup id of a mimetype that is
+     * guaranteed to be in the database
+     *
+     * @param db the SQLiteDatabase object returned by {@link #getWritableDatabase()}
+     * @param mimeType The mimetype to insert
+     * @return the id of the newly inserted row
+     */
+    private long insertMimeType(SQLiteDatabase db, String mimeType) {
+        final String insert = "INSERT INTO " + Tables.MIMETYPES + "("
+                + MimetypesColumns.MIMETYPE +
+                ") VALUES (?)";
+        long id = insertWithOneArgAndReturnId(db, insert, mimeType);
+        if (id >= 0) {
+            return id;
         }
+        return lookupMimeTypeId(db, mimeType);
     }
 
-    private void bindString(SQLiteStatement stmt, int index, String value) {
+    /**
+     * Looks up Tables.MIMETYPES for the mime type and returns its id. Returns -1 if the mime type
+     * is not found. Use {@link #insertMimeType(SQLiteDatabase, String)} when it is doubtful whether
+     * the mimetype already exists in the table or not.
+     *
+     * @param db
+     * @param mimeType
+     * @return the id of the row containing the mime type or -1 if the mime type was not found.
+     */
+    private long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
+        Long id = mCommonMimeTypeIdsCache.get(mimeType);
+        if (id != null) {
+            return id;
+        }
+        final String query = "SELECT " +
+                MimetypesColumns._ID + " FROM " + Tables.MIMETYPES + " WHERE "
+                + MimetypesColumns.MIMETYPE +
+                "=?";
+        id = queryIdWithOneArg(db, query, mimeType);
+        if (id < 0) {
+            Log.e(TAG, "Mimetype " + mimeType + " not found in the MIMETYPES table");
+        }
+        return id;
+    }
+
+    private static void bindString(SQLiteStatement stmt, int index, String value) {
         if (value == null) {
             stmt.bindNull(index);
         } else {
@@ -4874,9 +4900,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, "search_index_segdir",
                     "sqlite_autoindex_search_index_segdir_1", "9 5 1");
 
-            updateIndexStats(db, Tables.PRESENCE, "presenceIndex", "0 0");
-            updateIndexStats(db, Tables.PRESENCE, "presenceIndex2", "0 0");
-            updateIndexStats(db, Tables.AGGREGATED_PRESENCE, null, "0");
+            updateIndexStats(db, Tables.PRESENCE, "presenceIndex", "1 1");
+            updateIndexStats(db, Tables.PRESENCE, "presenceIndex2", "1 1");
+            updateIndexStats(db, Tables.AGGREGATED_PRESENCE, null, "1");
 
             // Force SQLite to reload sqlite_stat1.
             db.execSQL("ANALYZE sqlite_master;");
@@ -4930,8 +4956,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.PRESENCE + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATED_PRESENCE + ";");
 
-        initializeCache(db);
-
+        prepopulateCommonMimeTypes(db);
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
 
@@ -4961,53 +4986,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    /**
-     * Internal method used by {@link #getPackageId} and {@link #getMimeTypeId}.
-     *
-     * Note in the contacts provider we avoid using synchronization because it could risk deadlocks.
-     * So here, instead of using locks, we use ConcurrentHashMap + retry.
-     *
-     * Note we can't use a transaction here becuause this method is called from
-     * onCommitTransaction() too, unfortunately.
-     */
-    private static long getIdCached(SQLiteDatabase db, ConcurrentHashMap<String, Long> cache,
-            String querySql, String insertSql, String value) {
-        // First, try the in-memory cache.
-        if (cache.containsKey(value)) {
-            return cache.get(value);
-        }
-
-        // Then, try the database.
-        long id = queryIdWithOneArg(db, querySql, value);
-        if (id >= 0) {
-            cache.put(value, id);
-            return id;
-        }
-
-        // Not found in the database.  Try inserting.
-        id = insertWithOneArgAndReturnId(db, insertSql, value);
-        if (id >= 0) {
-            cache.put(value, id);
-            return id;
-        }
-
-        // Insert failed, which means a race.  Let's retry...
-
-        // We log here to detect an infinity loop (which shouldn't happen).
-        // Conflicts should be pretty rare, so it shouldn't spam logcat.
-        Log.i(TAG, "Cache conflict detected: value=" + value);
-        try {
-            Thread.sleep(1); // Just wait a little bit before retry.
-        } catch (InterruptedException ignore) {
-        }
-        return getIdCached(db, cache, querySql, insertSql, value);
-    }
-
     @VisibleForTesting
     static long queryIdWithOneArg(SQLiteDatabase db, String sql, String sqlArgument) {
         final SQLiteStatement query = db.compileStatement(sql);
         try {
-            DatabaseUtils.bindObjectToProgram(query, 1, sqlArgument);
+            bindString(query, 1, sqlArgument);
             try {
                 return query.simpleQueryForLong();
             } catch (SQLiteDoneException notFound) {
@@ -5022,7 +5005,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     static long insertWithOneArgAndReturnId(SQLiteDatabase db, String sql, String sqlArgument) {
         final SQLiteStatement insert = db.compileStatement(sql);
         try {
-            DatabaseUtils.bindObjectToProgram(insert, 1, sqlArgument);
+            bindString(insert, 1, sqlArgument);
             try {
                 return insert.executeInsert();
             } catch (SQLiteConstraintException conflict) {
@@ -5047,57 +5030,59 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "INSERT INTO " + Tables.PACKAGES + "("
                         + PackagesColumns.PACKAGE +
                 ") VALUES (?)";
-        return getIdCached(getWritableDatabase(), mPackageCache, query, insert, packageName);
+
+        SQLiteDatabase db = getWritableDatabase();
+        long id = queryIdWithOneArg(db, query, packageName);
+        if (id >= 0) {
+            return id;
+        }
+        id = insertWithOneArgAndReturnId(db, insert, packageName);
+        if (id >= 0) {
+            return id;
+        }
+        // just in case there was a race while doing insert above
+        return queryIdWithOneArg(db, query, packageName);
     }
 
     /**
      * Convert a mimetype into an integer, using {@link Tables#MIMETYPES} for
      * lookups and possible allocation of new IDs as needed.
      */
-    public long getMimeTypeId(String mimetype) {
-        return lookupMimeTypeId(mimetype, getWritableDatabase());
-    }
-
-    private long lookupMimeTypeId(String mimetype, SQLiteDatabase db) {
-        final String query =
-                "SELECT " + MimetypesColumns._ID +
-                " FROM " + Tables.MIMETYPES +
-                " WHERE " + MimetypesColumns.MIMETYPE + "=?";
-
-        final String insert =
-                "INSERT INTO " + Tables.MIMETYPES + "("
-                        + MimetypesColumns.MIMETYPE +
-                ") VALUES (?)";
-
-        return getIdCached(db, mMimetypeCache, query, insert, mimetype);
+    public long getMimeTypeId(String mimeType) {
+        SQLiteDatabase db = getWritableDatabase();
+        long id = lookupMimeTypeId(db, mimeType);
+        if (id < 0) {
+            return insertMimeType(db, mimeType);
+        }
+        return id;
     }
 
     public long getMimeTypeIdForStructuredName() {
-        return mMimeTypeIdStructuredName;
+        return lookupMimeTypeId(getWritableDatabase(), StructuredName.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForStructuredPostal() {
-        return mMimeTypeIdStructuredPostal;
+        return lookupMimeTypeId(getWritableDatabase(), StructuredPostal.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForOrganization() {
-        return mMimeTypeIdOrganization;
+        return lookupMimeTypeId(getWritableDatabase(), Organization.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForIm() {
-        return mMimeTypeIdIm;
+        return lookupMimeTypeId(getWritableDatabase(), Im.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForEmail() {
-        return mMimeTypeIdEmail;
+        return lookupMimeTypeId(getWritableDatabase(), Email.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForPhone() {
-        return mMimeTypeIdPhone;
+        return lookupMimeTypeId(getWritableDatabase(), Phone.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForSip() {
-        return mMimeTypeIdSip;
+        return lookupMimeTypeId(getWritableDatabase(), SipAddress.CONTENT_ITEM_TYPE);
     }
 
     /**
@@ -5108,19 +5093,19 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * {@code STRUCTURED_PHONETIC_NAME}.
      */
     private int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
-        if (mimeTypeId == mMimeTypeIdStructuredName) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(StructuredName.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.STRUCTURED_NAME;
         }
-        if (mimeTypeId == mMimeTypeIdEmail) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Email.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.EMAIL;
         }
-        if (mimeTypeId == mMimeTypeIdPhone) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Phone.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.PHONE;
         }
-        if (mimeTypeId == mMimeTypeIdOrganization) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Organization.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.ORGANIZATION;
         }
-        if (mimeTypeId == mMimeTypeIdNickname) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Nickname.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.NICKNAME;
         }
         return DisplayNameSources.UNDEFINED;
@@ -5144,18 +5129,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    public void invalidateAllCache() {
-        Log.w(TAG, "invalidateAllCache: [" + getClass().getSimpleName() + "]");
-
-        mMimetypeCache.clear();
-        mPackageCache.clear();
-    }
-
     /**
      * Gets all accounts in the accounts table.
      */
     public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
-        final Set<AccountWithDataSet> result = Sets.newHashSet();
+        final ArraySet<AccountWithDataSet> result = new ArraySet<>();
         Cursor c = getReadableDatabase().rawQuery(
                 "SELECT DISTINCT " +  AccountsColumns._ID + "," + AccountsColumns.ACCOUNT_NAME +
                 "," + AccountsColumns.ACCOUNT_TYPE + "," + AccountsColumns.DATA_SET +
