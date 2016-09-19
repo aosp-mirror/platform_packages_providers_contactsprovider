@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
+import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.util.PropertyUtils;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
@@ -95,6 +97,7 @@ import libcore.icu.ICU;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1002,6 +1005,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
     private NameSplitter mNameSplitter;
 
+    private volatile boolean mEnableSqlCheck = false;
+
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
             sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true);
@@ -1013,7 +1018,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Returns a new instance for unit tests.
      */
     @NeededForTesting
-    static ContactsDatabaseHelper getNewInstanceForTest(Context context) {
+    public static ContactsDatabaseHelper getNewInstanceForTest(Context context) {
         return new ContactsDatabaseHelper(context, null, false);
     }
 
@@ -6177,5 +6182,64 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         metadataSyncInsert.bindString(3, data);
         metadataSyncInsert.bindLong(4, deleted);
         return metadataSyncInsert.executeInsert();
+    }
+
+    public void setSqlCheckEnabled(boolean enabled) {
+        mEnableSqlCheck = enabled;
+    }
+
+    private SqlChecker mCachedSqlChecker;
+
+    private SqlChecker getSqlChecker() {
+        // No need for synchronization on mCachedSqlChecker, because worst-case we'll just
+        // initialize it twice.
+        if (mCachedSqlChecker != null) {
+            return mCachedSqlChecker;
+        }
+        final ArrayList<String> invalidTokens = new ArrayList<>();
+
+        // Disallow referring to tables and views.  However, we exempt tables whose names are
+        // also used as column names of any tables.  (Right now it's only 'data'.)
+        invalidTokens.addAll(DatabaseAnalyzer.findTableViewsAllowingColumns(getReadableDatabase()));
+
+        // Disallow token "select" to disallow subqueries.
+        invalidTokens.add("select");
+
+        // TODO Add hidden columns if needed.
+
+        mCachedSqlChecker = new SqlChecker(invalidTokens);
+
+        return mCachedSqlChecker;
+    }
+
+    /**
+     * Ensure (a piece of) SQL is valid and doesn't contain disallowed tokens.
+     */
+    public void validateSql(String sqlPiece) {
+        if (mEnableSqlCheck) {
+            getSqlChecker().ensureNoInvalidTokens(sqlPiece);
+        }
+    }
+
+    /**
+     * Ensure all keys in {@code values} are valid. (i.e. they're all single token.)
+     */
+    public void validateContentValues(ContentValues values) {
+        if (mEnableSqlCheck) {
+            for (String key : values.keySet()) {
+                getSqlChecker().ensureSingleTokenOnly(key);
+            }
+        }
+    }
+
+    /**
+     * Ensure all column names in {@code projection} are valid. (i.e. they're all single token.)
+     */
+    public void validateProjection(String[] projection) {
+        if (mEnableSqlCheck && projection != null) {
+            for (String column : projection) {
+                getSqlChecker().ensureSingleTokenOnly(column);
+            }
+        }
     }
 }

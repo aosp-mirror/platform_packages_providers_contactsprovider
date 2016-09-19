@@ -1582,7 +1582,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
                 getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC_ENABLED, 0) == 1;
 
+        // STOPSHIP Move the constant to Settings.
+        final boolean enableSqlCheck = android.provider.Settings.Global.getInt(
+                getContext().getContentResolver(), "contact_sql_check_enabled", 1) == 1;
+
         mContactsHelper = getDatabaseHelper(getContext());
+        mContactsHelper.setSqlCheckEnabled(enableSqlCheck);
         mDbHelper.set(mContactsHelper);
 
         // Set up the DB helper for keeping transactions serialized.
@@ -2240,6 +2245,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
 
+        mContactsHelper.validateContentValues(values);
+
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
             switchToProfileMode();
             return mProfileProvider.insert(uri, values);
@@ -2252,6 +2259,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
 
+        mContactsHelper.validateContentValues(values);
+        mContactsHelper.validateSql(selection);
+
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
             return mProfileProvider.update(uri, values, selection, selectionArgs);
@@ -2263,6 +2273,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
+
+        mContactsHelper.validateSql(selection);
 
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -5495,6 +5507,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
+
+        mContactsHelper.validateProjection(projection);
+        mContactsHelper.validateSql(selection);
+        mContactsHelper.validateSql(sortOrder);
+
         waitForAccess(mReadAccessLatch);
 
         if (!isDirectoryParamValid(uri)) {
@@ -10137,5 +10154,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } catch (InterruptedException ignore) {
             }
         }
+    }
+
+    @VisibleForTesting
+    public ContactsDatabaseHelper getContactsDatabaseHelperForTest() {
+        return mContactsHelper;
     }
 }
