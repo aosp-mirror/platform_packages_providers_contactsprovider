@@ -123,9 +123,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 Lollipop
      *   1000-1099 M
      *   1100-1199 N
+     *   1200-1299 O
      * </pre>
      */
-    static final int DATABASE_VERSION = 1111;
+    static final int DATABASE_VERSION = 1200;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -960,7 +961,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "ContactsDatabaseHelper";
 
     private static final String DATABASE_NAME = "contacts2.db";
-    private static final String DATABASE_PRESENCE = "presence_db";
 
     private static ContactsDatabaseHelper sSingleton = null;
 
@@ -1068,11 +1068,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onOpen(SQLiteDatabase db) {
         refreshDatabaseCaches(db);
-
         mSyncState.onDatabaseOpened(db);
+        // Deleting any state from the presence tables to mimic their behavior from the time they
+        // were in-memory tables
+        db.execSQL("DELETE FROM " + Tables.PRESENCE + ";");
+        db.execSQL("DELETE FROM " + Tables.AGGREGATED_PRESENCE + ";");
+    }
 
-        db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
-        db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
+    private void createPresenceTables(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.PRESENCE + " ("+
                 StatusUpdates.DATA_ID + " INTEGER PRIMARY KEY REFERENCES data(_id)," +
                 StatusUpdates.PROTOCOL + " INTEGER NOT NULL," +
                 StatusUpdates.CUSTOM_PROTOCOL + " TEXT," +
@@ -1086,21 +1090,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + ", " + StatusUpdates.IM_HANDLE + ", " + StatusUpdates.IM_ACCOUNT + ")" +
         ");");
 
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex" + " ON "
+        db.execSQL("CREATE INDEX IF NOT EXISTS presenceIndex" + " ON "
                 + Tables.PRESENCE + " (" + PresenceColumns.RAW_CONTACT_ID + ");");
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex2" + " ON "
+        db.execSQL("CREATE INDEX IF NOT EXISTS presenceIndex2" + " ON "
                 + Tables.PRESENCE + " (" + PresenceColumns.CONTACT_ID + ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS "
-                + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
+                + Tables.AGGREGATED_PRESENCE + " ("+
                 AggregatedPresenceColumns.CONTACT_ID
                         + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
                 StatusUpdates.PRESENCE + " INTEGER," +
                 StatusUpdates.CHAT_CAPABILITY + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
-        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_deleted"
-                + " BEFORE DELETE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS " + Tables.PRESENCE + "_deleted"
+                + " BEFORE DELETE ON " + Tables.PRESENCE
                 + " BEGIN "
                 + "   DELETE FROM " + Tables.AGGREGATED_PRESENCE
                 + "     WHERE " + AggregatedPresenceColumns.CONTACT_ID + " = " +
@@ -1139,14 +1143,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + ")"
                 + " AND " + PresenceColumns.CONTACT_ID + "=NEW." + PresenceColumns.CONTACT_ID + ";";
 
-        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_inserted"
-                + " AFTER INSERT ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS " + Tables.PRESENCE + "_inserted"
+                + " AFTER INSERT ON " + Tables.PRESENCE
                 + " BEGIN "
                 + replaceAggregatePresenceSql
                 + " END");
 
-        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_updated"
-                + " AFTER UPDATE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS " + Tables.PRESENCE + "_updated"
+                + " AFTER UPDATE ON " + Tables.PRESENCE
                 + " BEGIN "
                 + replaceAggregatePresenceSql
                 + " END");
@@ -1546,6 +1550,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         createGroupsView(db);
         createContactsTriggers(db);
         createContactsIndexes(db, false /* we build stats table later */);
+        createPresenceTables(db);
 
         loadNicknameLookupTable(db);
 
@@ -2945,6 +2950,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (isUpgradeRequired(oldVersion, newVersion, 1111)) {
             upgradeToVersion1111(db);
             oldVersion = 1111;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1200)) {
+            createPresenceTables(db);
+            oldVersion = 1200;
         }
 
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
@@ -4864,6 +4874,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, "search_index_segdir",
                     "sqlite_autoindex_search_index_segdir_1", "9 5 1");
 
+            updateIndexStats(db, Tables.PRESENCE, "presenceIndex", "0 0");
+            updateIndexStats(db, Tables.PRESENCE, "presenceIndex2", "0 0");
+            updateIndexStats(db, Tables.AGGREGATED_PRESENCE, null, "0");
+
             // Force SQLite to reload sqlite_stat1.
             db.execSQL("ANALYZE sqlite_master;");
         } catch (SQLException e) {
@@ -4913,6 +4927,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.DELETED_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.MIMETYPES + ";");
         db.execSQL("DELETE FROM " + Tables.PACKAGES + ";");
+        db.execSQL("DELETE FROM " + Tables.PRESENCE + ";");
+        db.execSQL("DELETE FROM " + Tables.AGGREGATED_PRESENCE + ";");
 
         initializeCache(db);
 
