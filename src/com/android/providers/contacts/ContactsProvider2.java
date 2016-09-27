@@ -2472,8 +2472,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } else {
             switchToContactMode();
         }
-
-        mDbHelper.get().invalidateAllCache();
     }
 
     private void updateSearchIndexInTransaction() {

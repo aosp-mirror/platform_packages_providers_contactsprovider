@@ -156,13 +156,9 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
     }
 
     /**
-     * Test for {@link ContactsDatabaseHelper#getPackageId(String)} and
-     * {@link ContactsDatabaseHelper#getMimeTypeId(String)}.
-     *
-     * We test them at the same time here, to make sure they're not mixing up the caches.
+     * Test for {@link ContactsDatabaseHelper#getPackageId(String)}
      */
-    public void testGetPackageId_getMimeTypeId() {
-
+    public void testGetPackageId() {
         // Test for getPackageId.
         final long packageId1 = mDbHelper.getPackageId("value1");
         final long packageId2 = mDbHelper.getPackageId("value2");
@@ -173,44 +169,51 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         set.add(packageId1);
         set.add(packageId2);
         set.add(packageId3);
-
         assertEquals(3, set.size());
 
+        // Make sure that repeated calls return the same value
+        assertEquals(packageId1, mDbHelper.getPackageId("value1"));
+    }
+
+    /**
+     * Test for {@link ContactsDatabaseHelper#getMimeTypeId(String)}
+     */
+    public void testGetMimeTypeId() {
         // Test for getMimeTypeId.
         final long mimetypeId1 = mDbHelper.getMimeTypeId("value1");
         final long mimetypeId2 = mDbHelper.getMimeTypeId("value2");
         final long mimetypeId3 = mDbHelper.getMimeTypeId("value3");
 
         // Make sure they're all different.
+        final HashSet<Long> set = new HashSet<>();
         set.clear();
         set.add(mimetypeId1);
         set.add(mimetypeId2);
         set.add(mimetypeId3);
-
         assertEquals(3, set.size());
 
-        // Call with the same values and make sure they return the cached value.
-        final long packageId1b = mDbHelper.getPackageId("value1");
-        final long mimetypeId1b = mDbHelper.getMimeTypeId("value1");
-
-        assertEquals(packageId1, packageId1b);
-        assertEquals(mimetypeId1, mimetypeId1b);
-
-        // Make sure the caches are also updated.
-        assertEquals(packageId2, (long) mDbHelper.mPackageCache.get("value2"));
-        assertEquals(mimetypeId2, (long) mDbHelper.mMimetypeCache.get("value2"));
-
-        // Clear the cache, but they should still return the values, selecting from the database.
-        mDbHelper.mPackageCache.clear();
-        mDbHelper.mMimetypeCache.clear();
-        assertEquals(packageId1, mDbHelper.getPackageId("value1"));
+        // Make sure repeated calls return the same value
         assertEquals(mimetypeId1, mDbHelper.getMimeTypeId("value1"));
+    }
 
-        // Empty the table
-        mDb.execSQL("DELETE FROM " + Tables.MIMETYPES);
+    /**
+     * Test for cache {@link ContactsDatabaseHelper#mCommonMimeTypeIdsCache} which stores ids for
+     * common mime types for faster access.
+     */
+    public void testGetCommonMimeTypeIds() {
+        // getMimeTypeId should return the same value as the value stored in the cache
+        for (String commonMimeType : ContactsDatabaseHelper.COMMON_MIME_TYPES) {
+            assertEquals(mDbHelper.mCommonMimeTypeIdsCache.get(commonMimeType).longValue(),
+                    mDbHelper.getMimeTypeId(commonMimeType));
+        }
 
-        // We should still have the cached value.
-        assertEquals(mimetypeId1, mDbHelper.getMimeTypeId("value1"));
+        // The ids should be available even after deleting them from the table
+        mDb.execSQL("DELETE FROM " + Tables.MIMETYPES + ";");
+
+        for (String commonMimeType : ContactsDatabaseHelper.COMMON_MIME_TYPES) {
+            assertEquals(mDbHelper.mCommonMimeTypeIdsCache.get(commonMimeType).longValue(),
+                    mDbHelper.getMimeTypeId(commonMimeType));
+        }
     }
 
     /**
