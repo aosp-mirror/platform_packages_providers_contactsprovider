@@ -40,6 +40,7 @@ import android.provider.VoicemailContract.Voicemails;
 import android.test.suitebuilder.annotation.LargeTest;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -54,6 +55,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColum
 import com.android.providers.contacts.ContactsDatabaseHelper.PackagesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PreAuthorizedUris;
+import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
@@ -113,13 +115,14 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
      */
     public void testDatabaseUpgrade_Incremental() {
         create1108(mDb);
-        upgradeTo1109();
-        upgradeTo1110();
+        upgradeTo1109(1108);
+        upgradeTo1110(1109);
+        upgradeTo1200(1110);
         assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
     }
 
-    private void upgradeTo1109() {
-        mHelper.onUpgrade(mDb, 1108, 1109);
+    private void upgradeTo1109(int upgradeFrom) {
+        mHelper.onUpgrade(mDb, upgradeFrom, 1109);
         TableStructure calls = new TableStructure(mDb, "calls");
         calls.assertHasColumn(Calls.LAST_MODIFIED, INTEGER, false, "0");
 
@@ -128,9 +131,13 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         voicemailStatus.assertHasColumn(Status.QUOTA_TOTAL, INTEGER, false, "-1");
     }
 
-    private void upgradeTo1110() {
-        mHelper.onUpgrade(mDb, 1109, 1110);
+    private void upgradeTo1110(int upgradeFrom) {
+        mHelper.onUpgrade(mDb, upgradeFrom, 1110);
         // TODO: Test this upgrade.
+    }
+
+    private void upgradeTo1200(int upgradeFrom) {
+        mHelper.onUpgrade(mDb, upgradeFrom, 1200);
     }
 
     /**
@@ -478,6 +485,24 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(MetadataSyncState.STATE, BLOB, false, null),
     };
 
+    private static final TableColumn[] PRESENCE_COLUMNS = new TableColumn[] {
+            new TableColumn(StatusUpdates.DATA_ID, INTEGER, false, null),
+            new TableColumn(StatusUpdates.PROTOCOL, INTEGER, true, null),
+            new TableColumn(StatusUpdates.CUSTOM_PROTOCOL, TEXT, false, null),
+            new TableColumn(StatusUpdates.IM_HANDLE, TEXT, false, null),
+            new TableColumn(StatusUpdates.IM_ACCOUNT, TEXT, false, null),
+            new TableColumn(PresenceColumns.CONTACT_ID, INTEGER, false, null),
+            new TableColumn(PresenceColumns.RAW_CONTACT_ID, INTEGER, false, null),
+            new TableColumn(StatusUpdates.PRESENCE, INTEGER, false, null),
+            new TableColumn(StatusUpdates.CHAT_CAPABILITY, INTEGER, true, "0")
+    };
+
+    private static final TableColumn[] AGGREGATED_PRESENCE_COLUMNS = new TableColumn[] {
+            new TableColumn(AggregatedPresenceColumns.CONTACT_ID, INTEGER, false, null),
+            new TableColumn(StatusUpdates.PRESENCE, INTEGER, false, null),
+            new TableColumn(StatusUpdates.CHAT_CAPABILITY, INTEGER, true, "0")
+    };
+
     private static final TableListEntry[] TABLE_LIST = {
             new TableListEntry(PropertyUtils.Tables.PROPERTIES, PROPERTIES_COLUMNS),
             new TableListEntry(Tables.ACCOUNTS, ACCOUNTS_COLUMNS),
@@ -506,6 +531,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableListEntry(Tables.METADATA_SYNC, METADATA_SYNC_COLUMNS),
             new TableListEntry(Tables.PRE_AUTHORIZED_URIS, PRE_AUTHORIZED_URIS_COLUMNS),
             new TableListEntry(Tables.METADATA_SYNC_STATE, METADATA_SYNC_STATE_COLUMNS),
+            new TableListEntry(Tables.PRESENCE, PRESENCE_COLUMNS),
+            new TableListEntry(Tables.AGGREGATED_PRESENCE, AGGREGATED_PRESENCE_COLUMNS)
     };
 
 }
