@@ -2341,7 +2341,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (uri.getQueryParameter(PREAUTHORIZED_URI_TOKEN) != null) {
             final long now = Clock.getInstance().currentTimeMillis();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-            db.beginTransaction();
+            db.beginTransactionNonExclusive();
             try {
                 // First delete any pre-authorization URIs that are no longer valid. Unfortunately,
                 // this operation will grab a write lock for readonly queries. Since this only
@@ -9695,7 +9695,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // just bump the aggregation algorithm version and let the provider start normally.
             try {
                 final SQLiteDatabase db =  mContactsHelper.getWritableDatabase();
-                db.beginTransaction();
+                db.beginTransactionNonExclusive();
                 try {
                     updateAggregationAlgorithmVersion();
                     db.setTransactionSuccessful();

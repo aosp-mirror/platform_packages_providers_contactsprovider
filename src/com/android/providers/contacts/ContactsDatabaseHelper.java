@@ -1040,10 +1040,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             Context context, String databaseName, boolean optimizationEnabled,
             boolean isTestInstance) {
         super(context, databaseName, null, DATABASE_VERSION);
+        boolean enableWal = android.provider.Settings.Global.getInt(context.getContentResolver(),
+                android.provider.Settings.Global.CONTACTS_DATABASE_WAL_ENABLED, 1) == 1;
+        setWriteAheadLoggingEnabled(enableWal);
         mDatabaseOptimizationEnabled = optimizationEnabled;
         mIsTestInstance = isTestInstance;
         Resources resources = context.getResources();
-
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
         mCountryMonitor = new CountryMonitor(context);
@@ -1069,6 +1071,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onOpen(SQLiteDatabase db) {
+        Log.d(TAG, "WAL enabled for " + getDatabaseName() + ": " + db.isWriteAheadLoggingEnabled());
         prepopulateCommonMimeTypes(db);
         mSyncState.onDatabaseOpened(db);
         // Deleting any state from the presence tables to mimic their behavior from the time they
@@ -1608,7 +1611,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void createSearchIndexTable(SQLiteDatabase db, boolean rebuildSqliteStats) {
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
             db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
