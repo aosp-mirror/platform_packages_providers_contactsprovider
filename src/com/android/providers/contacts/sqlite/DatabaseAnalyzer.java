@@ -44,7 +44,7 @@ public class DatabaseAnalyzer {
         try (final Cursor c = db.rawQuery(
                 "SELECT name FROM sqlite_master WHERE type in (\"table\", \"view\")", null)) {
             while (c.moveToNext()) {
-                ret.add(c.getString(0));
+                ret.add(c.getString(0).toLowerCase());
             }
         }
         return ret;
@@ -61,7 +61,7 @@ public class DatabaseAnalyzer {
         try {
             // Collect the column names.
             for (int i = 0; i < c.getColumnCount(); i++) {
-                ret.add(c.getColumnName(i));
+                ret.add(c.getColumnName(i).toLowerCase());
             }
         } finally {
             c.close();

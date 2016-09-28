@@ -1582,12 +1582,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
                 getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC_ENABLED, 0) == 1;
 
-        // STOPSHIP Move the constant to Settings.
-        final boolean enableSqlCheck = android.provider.Settings.Global.getInt(
-                getContext().getContentResolver(), "contact_sql_check_enabled", 1) == 1;
-
         mContactsHelper = getDatabaseHelper(getContext());
-        mContactsHelper.setSqlCheckEnabled(enableSqlCheck);
         mDbHelper.set(mContactsHelper);
 
         // Set up the DB helper for keeping transactions serialized.
@@ -2245,7 +2240,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
 
-        mContactsHelper.validateContentValues(values);
+        mContactsHelper.validateContentValues(getCallingPackage(), values);
 
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
             switchToProfileMode();
@@ -2259,8 +2254,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
 
-        mContactsHelper.validateContentValues(values);
-        mContactsHelper.validateSql(selection);
+        mContactsHelper.validateContentValues(getCallingPackage(), values);
+        mContactsHelper.validateSql(getCallingPackage(), selection);
 
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -2274,7 +2269,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
 
-        mContactsHelper.validateSql(selection);
+        mContactsHelper.validateSql(getCallingPackage(), selection);
 
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -5508,9 +5503,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
-        mContactsHelper.validateProjection(projection);
-        mContactsHelper.validateSql(selection);
-        mContactsHelper.validateSql(sortOrder);
+        mContactsHelper.validateProjection(getCallingPackage(), projection);
+        mContactsHelper.validateSql(getCallingPackage(), selection);
+        mContactsHelper.validateSql(getCallingPackage(), sortOrder);
 
         waitForAccess(mReadAccessLatch);
 
