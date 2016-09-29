@@ -47,13 +47,15 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-
-        getContactsProvider().getContactsDatabaseHelperForTest().setSqlCheckEnabled(true);
     }
 
-    public void testPhoneQueryValid() {
+    public void testQueryValid() {
         assertQueryValid(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
                 Phone.NUMBER + "='555-123-4567'", null);
+
+        // The following tables are whitelisted.
+        assertQueryValid(Data.CONTENT_URI, null,
+                "data._id in default_directory", null);
     }
 
     public void testPhoneQueryBadProjection() {
@@ -73,7 +75,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
                 "0=1) UNION SELECT _id FROM view_data--", null);
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, ";delete from contacts", null);
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
-                "_id in default_directory", null);
+                "_id in data_usage_stat", null);
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
                 "_id in (select _id from default_directory)", null);
     }
@@ -83,7 +85,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
                 PHONE_ID_PROJECTION, null, "_id UNION SELECT _id FROM view_data--");
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null, ";delete from contacts");
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null,
-                "_id in default_directory");
+                "_id in data_usage_stat");
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
                 null, "exists (select _id from default_directory)");
     }
@@ -127,7 +129,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
             mResolver.delete(Contacts.CONTENT_URI, ";delete from contacts;--", null);
         });
         assertThrows(IllegalArgumentException.class, () -> {
-            mResolver.delete(Contacts.CONTENT_URI, "_id in default_directory", null);
+            mResolver.delete(Contacts.CONTENT_URI, "_id in data_usage_stat", null);
         });
     }
 
@@ -136,7 +138,7 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
             mResolver.update(Data.CONTENT_URI, cv(), ";delete from contacts;--", null);
         });
         assertThrows(IllegalArgumentException.class, () -> {
-            mResolver.update(Data.CONTENT_URI, cv(), "_id in default_directory", null);
+            mResolver.update(Data.CONTENT_URI, cv(), "_id in data_usage_stat", null);
         });
         assertThrows(IllegalArgumentException.class, () -> {
             mResolver.update(Data.CONTENT_URI, cv("_id/**/", 1), null, null);

@@ -43,17 +43,19 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
      */
     @NeededForTesting
     public static ProfileDatabaseHelper getNewInstanceForTest(Context context) {
-        return new ProfileDatabaseHelper(context, null, false);
+        return new ProfileDatabaseHelper(context, null, false, /* isTestInstance=*/ true);
     }
 
     private ProfileDatabaseHelper(
-            Context context, String databaseName, boolean optimizationEnabled) {
-        super(context, databaseName, optimizationEnabled);
+            Context context, String databaseName, boolean optimizationEnabled,
+            boolean isTestInstance) {
+        super(context, databaseName, optimizationEnabled, isTestInstance);
     }
 
     public static synchronized ProfileDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new ProfileDatabaseHelper(context, DATABASE_NAME, true);
+            sSingleton = new ProfileDatabaseHelper(context, DATABASE_NAME, true,
+                    /* isTestInstance=*/ false);
         }
         return sSingleton;
     }

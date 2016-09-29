@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
 import com.android.providers.contacts.sqlite.SqlChecker;
+import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.PropertyUtils;
 
 import android.content.ContentResolver;
@@ -90,6 +91,7 @@ import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Base64;
 import android.util.Log;
+import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.internal.annotations.VisibleForTesting;
@@ -998,6 +1000,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     private final Context mContext;
     private final boolean mDatabaseOptimizationEnabled;
+    private final boolean mIsTestInstance;
     private final SyncStateContentProviderHelper mSyncState;
     private final CountryMonitor mCountryMonitor;
 
@@ -1017,11 +1020,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
     private NameSplitter mNameSplitter;
 
-    private volatile boolean mEnableSqlCheck = false;
-
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true);
+            sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true,
+                    /* isTestInstance=*/ false);
         }
         return sSingleton;
     }
@@ -1031,13 +1033,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     @NeededForTesting
     public static ContactsDatabaseHelper getNewInstanceForTest(Context context) {
-        return new ContactsDatabaseHelper(context, null, false);
+        return new ContactsDatabaseHelper(context, null, false, /* isTestInstance=*/ true);
     }
 
     protected ContactsDatabaseHelper(
-            Context context, String databaseName, boolean optimizationEnabled) {
+            Context context, String databaseName, boolean optimizationEnabled,
+            boolean isTestInstance) {
         super(context, databaseName, null, DATABASE_VERSION);
         mDatabaseOptimizationEnabled = optimizationEnabled;
+        mIsTestInstance = isTestInstance;
         Resources resources = context.getResources();
 
         mContext = context;
@@ -6162,10 +6166,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return metadataSyncInsert.executeInsert();
     }
 
-    public void setSqlCheckEnabled(boolean enabled) {
-        mEnableSqlCheck = enabled;
-    }
-
     private SqlChecker mCachedSqlChecker;
 
     private SqlChecker getSqlChecker() {
@@ -6183,7 +6183,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // Disallow token "select" to disallow subqueries.
         invalidTokens.add("select");
 
-        // TODO Add hidden columns if needed.
+        // Allow the use of "default_directory" for now, as it used to be sort of commonly used...
+        invalidTokens.remove(Tables.DEFAULT_DIRECTORY.toLowerCase());
 
         mCachedSqlChecker = new SqlChecker(invalidTokens);
 
@@ -6193,31 +6194,50 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     /**
      * Ensure (a piece of) SQL is valid and doesn't contain disallowed tokens.
      */
-    public void validateSql(String sqlPiece) {
-        if (mEnableSqlCheck) {
-            getSqlChecker().ensureNoInvalidTokens(sqlPiece);
-        }
+    public void validateSql(String callerPackage, String sqlPiece) {
+        runSqlValidation(callerPackage, () -> getSqlChecker().ensureNoInvalidTokens(sqlPiece));
     }
 
     /**
      * Ensure all keys in {@code values} are valid. (i.e. they're all single token.)
      */
-    public void validateContentValues(ContentValues values) {
-        if (mEnableSqlCheck) {
+    public void validateContentValues(String callerPackage, ContentValues values) {
+        runSqlValidation(callerPackage, () -> {
             for (String key : values.keySet()) {
                 getSqlChecker().ensureSingleTokenOnly(key);
             }
-        }
-    }
+        });
+   }
 
     /**
      * Ensure all column names in {@code projection} are valid. (i.e. they're all single token.)
      */
-    public void validateProjection(String[] projection) {
-        if (mEnableSqlCheck && projection != null) {
-            for (String column : projection) {
-                getSqlChecker().ensureSingleTokenOnly(column);
-            }
+    public void validateProjection(String callerPackage, String[] projection) {
+        if (projection != null) {
+            runSqlValidation(callerPackage, () -> {
+                for (String column : projection) {
+                    getSqlChecker().ensureSingleTokenOnly(column);
+                }
+            });
         }
+    }
+
+    private void runSqlValidation(String callerPackage, Runnable r) {
+        // STOPSHIP Allow certain system apps to access it
+        try {
+            r.run();
+        } catch (InvalidSqlException e) {
+            reportInvalidSql(callerPackage, e);
+        }
+    }
+
+    private void reportInvalidSql(String callerPackage, InvalidSqlException e) {
+        final String message = String.format("%s caller=%s", e.getMessage(), callerPackage);
+        if (mIsTestInstance) {
+            Slog.w(TAG, "[Test mode, warning only] " + message);
+        } else {
+            Slog.wtfStack(TAG, message);
+        }
+        throw e; // STOPSHIP Don't throw for pre-O apps.
     }
 }
