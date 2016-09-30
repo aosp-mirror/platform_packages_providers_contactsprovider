@@ -23,8 +23,6 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.test.mock.MockContentResolver;
-import com.android.providers.contacts.AccountWithDataSet;
 
 import java.util.List;
 
@@ -98,11 +96,11 @@ public class RawContactUtil {
     }
 
     public static long createRawContactWithAccountDataSet(ContentResolver resolver,
-            AccountWithDataSet accountWithDataSet, String... extras) {
+            String accountName, String accountType, String dataSet, String... extras) {
         ContentValues values = new ContentValues();
         CommonDatabaseUtils.extrasVarArgsToValues(values, extras);
         final Uri uri = TestUtil.maybeAddAccountWithDataSetQueryParameters(
-                ContactsContract.RawContacts.CONTENT_URI, accountWithDataSet);
+                ContactsContract.RawContacts.CONTENT_URI, accountName, accountType, dataSet);
         Uri contactUri = resolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
     }

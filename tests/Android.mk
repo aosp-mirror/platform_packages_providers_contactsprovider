@@ -5,6 +5,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE_TAGS := tests
 
 LOCAL_STATIC_JAVA_LIBRARIES := \
+    ContactsProviderTestUtils \
     android-support-test \
     mockito-target-minus-junit4
 

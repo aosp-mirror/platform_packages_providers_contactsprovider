@@ -107,10 +107,6 @@ public class LegacyApiSupport {
     private static final int SEARCH_SUGGESTIONS = 32;
     private static final int SEARCH_SHORTCUT = 33;
     private static final int PHONES_FILTER = 34;
-    private static final int LIVE_FOLDERS_PEOPLE = 35;
-    private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = 36;
-    private static final int LIVE_FOLDERS_PEOPLE_WITH_PHONES = 37;
-    private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
     private static final int CONTACTMETHODS_EMAIL = 39;
     private static final int GROUP_NAME_MEMBERS = 40;
     private static final int GROUP_SYSTEM_ID_MEMBERS = 41;
@@ -184,15 +180,6 @@ public class LegacyApiSupport {
                     + " END)"
                 + " ELSE " + Tables.DATA + "." + Email.DATA
                 + " END)";
-
-    private static final Uri LIVE_FOLDERS_CONTACTS_URI = Uri.withAppendedPath(
-            ContactsContract.AUTHORITY_URI, "live_folders/contacts");
-
-    private static final Uri LIVE_FOLDERS_CONTACTS_WITH_PHONES_URI = Uri.withAppendedPath(
-            ContactsContract.AUTHORITY_URI, "live_folders/contacts_with_phones");
-
-    private static final Uri LIVE_FOLDERS_CONTACTS_FAVORITES_URI = Uri.withAppendedPath(
-            ContactsContract.AUTHORITY_URI, "live_folders/favorites");
 
     private static final String CONTACTS_UPDATE_LASTTIMECONTACTED =
             "UPDATE " + Tables.CONTACTS +
@@ -356,15 +343,6 @@ public class LegacyApiSupport {
         matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
                 SEARCH_SHORTCUT);
         matcher.addURI(authority, "settings", SETTINGS);
-
-        matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
-        matcher.addURI(authority, "live_folders/people/*",
-                LIVE_FOLDERS_PEOPLE_GROUP_NAME);
-        matcher.addURI(authority, "live_folders/people_with_phones",
-                LIVE_FOLDERS_PEOPLE_WITH_PHONES);
-        matcher.addURI(authority, "live_folders/favorites",
-                LIVE_FOLDERS_PEOPLE_FAVORITES);
-
 
         HashMap<String, String> peopleProjectionMap = new HashMap<String, String>();
         peopleProjectionMap.put(People.NAME, People.NAME);
@@ -1884,23 +1862,6 @@ public class LegacyApiSupport {
                         db, projection, lookupKey, filter, null);
             }
 
-            case LIVE_FOLDERS_PEOPLE:
-                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_URI,
-                        projection, selection, selectionArgs, sortOrder);
-
-            case LIVE_FOLDERS_PEOPLE_WITH_PHONES:
-                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_WITH_PHONES_URI,
-                        projection, selection, selectionArgs, sortOrder);
-
-            case LIVE_FOLDERS_PEOPLE_FAVORITES:
-                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_FAVORITES_URI,
-                        projection, selection, selectionArgs, sortOrder);
-
-            case LIVE_FOLDERS_PEOPLE_GROUP_NAME:
-                return mContactsProvider.query(Uri.withAppendedPath(LIVE_FOLDERS_CONTACTS_URI,
-                        Uri.encode(uri.getLastPathSegment())),
-                        projection, selection, selectionArgs, sortOrder);
-
             case DELETED_PEOPLE:
             case DELETED_GROUPS:
                 throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
@@ -1985,7 +1946,6 @@ public class LegacyApiSupport {
      * a group with a particular system id. The projection map of the query must include
      * {@link People#_ID}.
      *
-     * @param groupName The name of the group
      * @return The where clause.
      */
     private String buildGroupSystemIdMatchWhereClause(String systemId) {
