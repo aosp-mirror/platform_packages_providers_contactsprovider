@@ -115,29 +115,30 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
      */
     public void testDatabaseUpgrade_Incremental() {
         create1108(mDb);
-        upgradeTo1109(1108);
-        upgradeTo1110(1109);
-        upgradeTo1200(1110);
+
+        int oldVersion = 1108;
+        oldVersion = upgradeTo1109(oldVersion);
+        oldVersion = upgrade(oldVersion, ContactsDatabaseHelper.DATABASE_VERSION);
+        assertEquals(ContactsDatabaseHelper.DATABASE_VERSION, oldVersion);
         assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
     }
 
-    private void upgradeTo1109(int upgradeFrom) {
-        mHelper.onUpgrade(mDb, upgradeFrom, 1109);
+    private int upgradeTo1109(int upgradeFrom) {
+        final int MY_VERSION = 1109;
+        mHelper.onUpgrade(mDb, upgradeFrom, MY_VERSION);
         TableStructure calls = new TableStructure(mDb, "calls");
         calls.assertHasColumn(Calls.LAST_MODIFIED, INTEGER, false, "0");
 
         TableStructure voicemailStatus = new TableStructure(mDb, "voicemail_status");
         voicemailStatus.assertHasColumn(Status.QUOTA_OCCUPIED, INTEGER, false, "-1");
         voicemailStatus.assertHasColumn(Status.QUOTA_TOTAL, INTEGER, false, "-1");
+
+        return MY_VERSION;
     }
 
-    private void upgradeTo1110(int upgradeFrom) {
-        mHelper.onUpgrade(mDb, upgradeFrom, 1110);
-        // TODO: Test this upgrade.
-    }
-
-    private void upgradeTo1200(int upgradeFrom) {
-        mHelper.onUpgrade(mDb, upgradeFrom, 1200);
+    private int upgrade(int upgradeFrom, int upgradeTo) {
+        mHelper.onUpgrade(mDb, upgradeFrom, upgradeTo);
+        return upgradeTo;
     }
 
     /**
