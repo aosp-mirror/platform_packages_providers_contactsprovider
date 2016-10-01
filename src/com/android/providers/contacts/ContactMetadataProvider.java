@@ -181,7 +181,7 @@ public class ContactMetadataProvider extends ContentProvider {
         ensureCaller();
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             final int matchedUriId = sURIMatcher.match(uri);
             switch (matchedUriId) {
@@ -212,7 +212,7 @@ public class ContactMetadataProvider extends ContentProvider {
         ensureCaller();
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             final int matchedUriId = sURIMatcher.match(uri);
             int numDeletes = 0;
@@ -260,7 +260,7 @@ public class ContactMetadataProvider extends ContentProvider {
         ensureCaller();
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             final int matchedUriId = sURIMatcher.match(uri);
             switch (matchedUriId) {
@@ -296,7 +296,7 @@ public class ContactMetadataProvider extends ContentProvider {
             Log.v(TAG, "applyBatch: " + operations.size() + " ops");
         }
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             ContentProviderResult[] results = super.applyBatch(operations);
             db.setTransactionSuccessful();
@@ -315,7 +315,7 @@ public class ContactMetadataProvider extends ContentProvider {
             Log.v(TAG, "bulkInsert: " + values.length + " inserts");
         }
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             final int numValues = super.bulkInsert(uri, values);
             db.setTransactionSuccessful();
