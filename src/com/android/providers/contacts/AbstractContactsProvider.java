@@ -84,7 +84,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
     /**
      * The DB helper to use for this content provider.
      */
-    private SQLiteOpenHelper mDbHelper;
+    private ContactsDatabaseHelper mDbHelper;
 
     /**
      * The database helper to serialize all transactions on.  If non-null, any new transaction
@@ -133,12 +133,12 @@ public abstract class AbstractContactsProvider extends ContentProvider
     @Override
     public boolean onCreate() {
         Context context = getContext();
-        mDbHelper = getDatabaseHelper(context);
+        mDbHelper = newDatabaseHelper(context);
         mTransactionHolder = getTransactionHolder();
         return true;
     }
 
-    public SQLiteOpenHelper getDatabaseHelper() {
+    public ContactsDatabaseHelper getDatabaseHelper() {
         return mDbHelper;
     }
 
@@ -345,8 +345,9 @@ public abstract class AbstractContactsProvider extends ContentProvider
 
     /**
      * Gets the database helper for this contacts provider.  This is called once, during onCreate().
+     * Do not call in other places.
      */
-    protected abstract SQLiteOpenHelper getDatabaseHelper(Context context);
+    protected abstract ContactsDatabaseHelper newDatabaseHelper(Context context);
 
     /**
      * Gets the thread-local transaction holder to use for keeping track of the transaction.  This

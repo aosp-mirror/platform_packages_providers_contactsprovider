@@ -42,8 +42,8 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
      * Returns a new instance for unit tests.
      */
     @NeededForTesting
-    public static ProfileDatabaseHelper getNewInstanceForTest(Context context) {
-        return new ProfileDatabaseHelper(context, null, false, /* isTestInstance=*/ true);
+    public static ProfileDatabaseHelper getNewInstanceForTest(Context context, String filename) {
+        return new ProfileDatabaseHelper(context, filename, false, /* isTestInstance=*/ true);
     }
 
     private ProfileDatabaseHelper(

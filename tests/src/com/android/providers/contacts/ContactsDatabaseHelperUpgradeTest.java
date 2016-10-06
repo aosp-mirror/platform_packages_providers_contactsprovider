@@ -59,6 +59,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.util.PropertyUtils;
 
 import junit.framework.AssertionFailedError;
@@ -89,7 +90,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        mHelper = ContactsDatabaseHelper.getNewInstanceForTest(getContext());
+        mHelper = ContactsDatabaseHelper.getNewInstanceForTest(getContext(),
+                TestUtils.getContactsDatabaseFilename(getContext()));
         mHelper.onConfigure(mDb);
     }
 

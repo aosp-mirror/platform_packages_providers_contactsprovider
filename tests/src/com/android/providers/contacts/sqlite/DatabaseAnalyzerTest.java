@@ -19,13 +19,15 @@ package com.android.providers.contacts.sqlite;
 import android.test.AndroidTestCase;
 
 import com.android.providers.contacts.ContactsDatabaseHelper;
+import com.android.providers.contacts.TestUtils;
 
 import java.util.List;
 
 public class DatabaseAnalyzerTest extends AndroidTestCase {
     public void testFindTableViewsAllowingColumns() {
         final ContactsDatabaseHelper dbh =
-                ContactsDatabaseHelper.getNewInstanceForTest(getContext());
+                ContactsDatabaseHelper.getNewInstanceForTest(getContext(),
+                        TestUtils.getContactsDatabaseFilename(getContext()));
         try {
             final List<String> list =  DatabaseAnalyzer.findTableViewsAllowingColumns(
                     dbh.getReadableDatabase());

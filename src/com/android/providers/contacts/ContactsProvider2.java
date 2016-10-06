@@ -1582,7 +1582,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
                 getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC_ENABLED, 0) == 1;
 
-        mContactsHelper = getDatabaseHelper(getContext());
+        mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
 
         // Set up the DB helper for keeping transactions serialized.
@@ -1611,7 +1611,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         ProviderInfo profileInfo = new ProviderInfo();
         profileInfo.authority = ContactsContract.AUTHORITY;
         mProfileProvider.attachInfo(getContext(), profileInfo);
-        mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
+        mProfileHelper = mProfileProvider.getDatabaseHelper();
         mEnterprisePolicyGuard = new EnterprisePolicyGuard(getContext());
 
         // Initialize the pre-authorized URI duration.
@@ -2060,7 +2060,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     @Override
-    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper newDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
     }
 

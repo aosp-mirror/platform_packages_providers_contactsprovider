@@ -19,6 +19,8 @@ package com.android.providers.contacts;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.os.FileUtils;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import junit.framework.Assert;
@@ -28,7 +30,87 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 
 public class TestUtils {
+    private static final String TAG = "ContactsTestUtils";
+
     private TestUtils() {
+    }
+
+    /**
+     * We normally use in-memory DBs in unit tests, because that's faster, but it's impossible to
+     * look at intermediate databases when something is failing.  When this flag is set to true,
+     * we'll switch to file-based DBs, so we can call {@link #createDatabaseSnapshot}
+     * , pull the snapshot DBs and take a look at them.
+     */
+    public static final boolean ENABLE_DATABASE_SNAPSHOT = false; // DO NOT SUBMIT WITH TRUE.
+
+    private static final Object sDatabasePathLock = new Object();
+    private static File sDatabasePath = null;
+
+    private static String getDatabaseFile(Context context, @Nullable String name) {
+        if (!ENABLE_DATABASE_SNAPSHOT) {
+            return null; // Use the in-memory DB.
+        }
+        synchronized (sDatabasePathLock) {
+            if (sDatabasePath == null) {
+                final File path = new File(context.getCacheDir(), "test-db");
+                if (path.exists()) {
+                    Assert.assertTrue("Unable to delete directory: " + path,
+                            FileUtils.deleteContents(path));
+                } else {
+                    Assert.assertTrue("Unable to create directory: " + path, path.mkdirs());
+                }
+
+                sDatabasePath = path;
+            }
+            if (name == null) {
+                return sDatabasePath.getAbsolutePath();
+            } else {
+                return new File(sDatabasePath, name).getAbsolutePath();
+            }
+        }
+    }
+
+    public static String getContactsDatabaseFilename(Context context) {
+        return getContactsDatabaseFilename(context, "");
+    }
+
+    public static String getContactsDatabaseFilename(Context context, String suffix) {
+        return getDatabaseFile(context, "contacts2" + suffix + ".db");
+    }
+
+    public static String getProfileDatabaseFilename(Context context) {
+        return getProfileDatabaseFilename(context, "");
+    }
+
+    public static String getProfileDatabaseFilename(Context context, String suffix) {
+        return getDatabaseFile(context, "profile.db" + suffix + ".db");
+    }
+
+    public static void createDatabaseSnapshot(Context context, String name) {
+        Assert.assertTrue(
+                "ENABLE_DATABASE_SNAPSHOT must be set to true to create database snapshot",
+                ENABLE_DATABASE_SNAPSHOT);
+
+        final File fromDir = new File(getDatabaseFile(context, null));
+        final File toDir = new File(context.getCacheDir(), "snapshot-" + name);
+        if (toDir.exists()) {
+            Assert.assertTrue("Unable to delete directory: " + toDir,
+                    FileUtils.deleteContents(toDir));
+        } else {
+            Assert.assertTrue("Unable to create directory: " + toDir, toDir.mkdirs());
+        }
+
+        Log.w(TAG, "Copying database files into '" + toDir + "'...");
+
+        for (File file : fromDir.listFiles()) {
+            try {
+                final File to = new File(toDir, file.getName());
+                FileUtils.copyFileOrThrow(file, to);
+                Log.i(TAG, "Created: " + to);
+            } catch (IOException e) {
+                Assert.fail("Failed to copy file: " + e.toString());
+            }
+        }
     }
 
     /** Convenient method to create a ContentValues */

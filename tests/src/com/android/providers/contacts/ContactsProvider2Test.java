@@ -1173,7 +1173,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri dataUri = mResolver.insert(Data.CONTENT_URI, values);
 
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper helper = cp.getDatabaseHelper(mContext);
+        final ContactsDatabaseHelper helper = cp.getDatabaseHelper();
         String data1 = values.getAsString(Data.DATA1);
         String data2 = values.getAsString(Data.DATA2);
         String combineString = data1+data2;
@@ -1234,7 +1234,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Check for photo data's hashId is correct or not.
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper helper = cp.getDatabaseHelper(mContext);
+        final ContactsDatabaseHelper helper = cp.getDatabaseHelper();
         String hashId = helper.getPhotoHashId();
         assertStoredValue(dataUri, Data.HASH_ID, hashId);
 
@@ -2067,10 +2067,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Note here we use a standalone CP2 so it'll have its own db helper.
         // Also use AlteringUserContext here to report the corp user id.
+        final int userId = MockUserManager.CORP_USER.id;
         SynchronousContactsProvider2 provider = mActor.addProvider(
-                StandaloneContactsProvider2.class,
-                "" + MockUserManager.CORP_USER.id + "@com.android.contacts",
-                new AlteringUserContext(mActor.getProviderContext(), MockUserManager.CORP_USER.id));
+                new SecondaryUserContactsProvider2(userId),
+                "" + userId + "@com.android.contacts",
+                new AlteringUserContext(mActor.getProviderContext(), userId));
         provider.wipeData();
         return provider;
     }
@@ -3046,7 +3047,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
-                mActor.provider).getDatabaseHelper(getContext()));
+                mActor.provider).getDatabaseHelper());
         // Create an account first.
         String backupId = "backupId001";
         String accountType = "accountType";
@@ -3102,7 +3103,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
-                mActor.provider).getDatabaseHelper(getContext()));
+                mActor.provider).getDatabaseHelper());
         // Create an account first.
         String backupId = "backupId001";
         String accountType = "accountType";
@@ -3168,7 +3169,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
-                mActor.provider).getDatabaseHelper(getContext()));
+                mActor.provider).getDatabaseHelper());
         // Enable metadataSync flag.
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
         cp.setMetadataSyncForTest(true);
@@ -6792,7 +6793,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         contactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
-                mActor.provider).getDatabaseHelper(getContext()));
+                mActor.provider).getDatabaseHelper());
 
         // Create a doomed metadata.
         String backupId = "backupIdForDoomed";

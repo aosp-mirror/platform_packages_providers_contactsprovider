@@ -103,7 +103,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         mContactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
-                mActor.provider).getDatabaseHelper(getContext()));
+                mActor.provider).getDatabaseHelper());
         setupData();
     }
 

@@ -41,7 +41,7 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        mDbHelper = getContactsProvider().getDatabaseHelper(getContext());
+        mDbHelper = getContactsProvider().getDatabaseHelper();
         mDb = mDbHelper.getWritableDatabase();
     }
 

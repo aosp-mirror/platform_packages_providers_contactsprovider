@@ -58,7 +58,6 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.test.IsolatedContext;
-import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
 
@@ -370,7 +369,11 @@ public class ContactsActor {
 
     public <T extends ContentProvider> T addProvider(Class<T> providerClass,
             String authority, Context providerContext) throws Exception {
-        T provider = providerClass.newInstance();
+        return addProvider(providerClass.newInstance(), authority, providerContext);
+    }
+
+    public <T extends ContentProvider> T addProvider(T provider,
+            String authority, Context providerContext) throws Exception {
         ProviderInfo info = new ProviderInfo();
 
         // Here, authority can have "user-id@".  We want to use it for addProvider, but provider

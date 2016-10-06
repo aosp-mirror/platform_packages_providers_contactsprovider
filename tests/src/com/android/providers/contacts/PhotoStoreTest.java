@@ -56,7 +56,7 @@ public class PhotoStoreTest extends PhotoLoadingTestCase {
         mProvider = ((SynchronousContactsProvider2) mActor.provider);
         mPhotoStore = mProvider.getPhotoStore();
         mProvider.wipeData();
-        mDb = mProvider.getDatabaseHelper(getContext()).getReadableDatabase();
+        mDb = mProvider.getDatabaseHelper().getReadableDatabase();
     }
 
     @Override

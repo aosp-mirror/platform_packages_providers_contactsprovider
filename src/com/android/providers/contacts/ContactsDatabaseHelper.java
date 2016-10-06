@@ -1032,8 +1032,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Returns a new instance for unit tests.
      */
     @NeededForTesting
-    public static ContactsDatabaseHelper getNewInstanceForTest(Context context) {
-        return new ContactsDatabaseHelper(context, null, false, /* isTestInstance=*/ true);
+    public static ContactsDatabaseHelper getNewInstanceForTest(Context context, String filename) {
+        return new ContactsDatabaseHelper(context, filename, false, /* isTestInstance=*/ true);
     }
 
     protected ContactsDatabaseHelper(

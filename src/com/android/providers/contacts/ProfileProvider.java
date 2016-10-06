@@ -48,8 +48,12 @@ public class ProfileProvider extends AbstractContactsProvider {
     }
 
     @Override
-    protected ProfileDatabaseHelper getDatabaseHelper(Context context) {
+    protected ProfileDatabaseHelper newDatabaseHelper(Context context) {
         return ProfileDatabaseHelper.getInstance(context);
+    }
+
+    public ProfileDatabaseHelper getDatabaseHelper() {
+        return (ProfileDatabaseHelper) super.getDatabaseHelper();
     }
 
     @Override
